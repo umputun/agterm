@@ -87,10 +87,16 @@ struct WorkspaceSidebar: NSViewRepresentable {
         context.coordinator.rebuildAndReload()
         context.coordinator.expandAll()
         context.coordinator.syncSelection()
+        // on launch AppKit makes the sidebar the window's initial first responder; hand
+        // focus to the terminal once the window + surface are attached (retries internally).
+        context.coordinator.focusActiveTerminal()
 
         let scroll = NSScrollView()
         scroll.documentView = outline
         scroll.hasVerticalScroller = true
+        // transparent: the window's backgroundColor (the terminal color, set by
+        // WindowAppearance) shows through the sidebar's translucent material so the whole
+        // column — including the strip behind the titlebar — reads as one dark surface.
         scroll.drawsBackground = false
         scroll.borderType = .noBorder
         return scroll
@@ -274,6 +280,29 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 return
             }
             store.selectSession(node.id)
+        }
+
+        /// Returns keyboard focus to the active session's terminal after a sidebar
+        /// interaction, so the sidebar never keeps focus (typing always reaches the
+        /// terminal). Mirrors macterm's `FocusRestoration`: the target surface may not be
+        /// attached to the window yet (a just-selected session's view is still
+        /// materializing), so retry on the run loop until it is, with a bounded cap.
+        /// Skipped while a rename field is the first responder or an edit is in progress.
+        func focusActiveTerminal(attempt: Int = 0) {
+            // never steal focus from an in-progress rename.
+            if editing { return }
+            let window = outlineView?.window
+            if let window, window.firstResponder is NSText { return }
+            if let window, let surface = store.activeSession?.surface as? GhosttySurfaceView, surface.window === window {
+                window.makeFirstResponder(surface)
+                return
+            }
+            // window or surface not attached yet (launch, or a just-selected session still
+            // materializing) — retry on the run loop until ready, with a bounded cap.
+            guard attempt < 20 else { return }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
+                self?.focusActiveTerminal(attempt: attempt + 1)
+            }
         }
 
         // MARK: - NSOutlineViewDataSource
@@ -646,5 +675,13 @@ final class SidebarOutlineView: NSOutlineView {
         // select the right-clicked row so the menu's context matches
         if row >= 0 { selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false) }
         return (delegate as? WorkspaceSidebar.Coordinator)?.menu(forRow: row)
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        super.mouseDown(with: event)
+        // after the click is handled (selection, expand/collapse, drag), hand keyboard
+        // focus back to the terminal so the sidebar never keeps it. row selection persists
+        // (model state); only first responder moves. skipped mid-rename by the coordinator.
+        (delegate as? WorkspaceSidebar.Coordinator)?.focusActiveTerminal()
     }
 }

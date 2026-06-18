@@ -29,9 +29,13 @@ struct ContentView: View {
                 }
             }
         }
-        // keep the system title bar showing the active session's name (NSWindow.title)
-        // and surface the window un-minimized on launch.
-        .background(WindowAccessor(title: windowTitle))
+        // native two-line titlebar title (session name bold + working-directory subtitle),
+        // driven through SwiftUI so it isn't clobbered by NavigationSplitView.
+        .navigationTitle(windowTitle)
+        .navigationSubtitle(windowSubtitle)
+        // blend the title bar with the terminal; surface the window un-minimized on launch.
+        // the title token makes updateNSView re-run the blend on a session switch.
+        .background(WindowAccessor(titleToken: windowTitle))
     }
 
     /// The active session's terminal, or a placeholder when nothing is selected.
@@ -63,10 +67,15 @@ struct ContentView: View {
         .background(.bar)
     }
 
-    /// The titlebar text: the active session's display name, or "agt" when nothing
-    /// is selected.
+    /// The titlebar title (first line): the active session's display name, or "agt"
+    /// when nothing is selected.
     private var windowTitle: String {
         store.activeSession?.displayName ?? "agt"
+    }
+
+    /// The titlebar subtitle (second line): the active session's working directory.
+    private var windowSubtitle: String {
+        store.activeSession?.effectiveCwd ?? ""
     }
 
     /// Two distinct add controls, source-list style: add a workspace, and a menu
@@ -142,43 +151,54 @@ struct ContentView: View {
     }
 }
 
-/// Sets the hosting `NSWindow.title` from SwiftUI. The scene is
-/// `Window("agt", id: "main")` — a fixed string literal that owns the titlebar —
-/// so `.navigationTitle` does not reliably override it; writing `window.title`
-/// directly is the primary path.
-///
-/// The probe view's `window` is nil at make time, so the title cannot be applied
-/// synchronously. Rather than a one-shot deferred read (which silently drops the
-/// title if the window attaches after the block runs), `TitleProbeView` re-applies
-/// the stored title from `viewDidMoveToWindow`, which fires exactly when the view
-/// attaches to its window. `updateNSView` also re-applies whenever `title` changes
-/// (the active session is renamed or switched).
+/// Blends the window title bar with the terminal (the title text itself is set by
+/// SwiftUI's `.navigationTitle`/`.navigationSubtitle`). The probe's `window` is nil at
+/// make time, so the blend is applied from `viewDidMoveToWindow` (window attachment) and
+/// re-applied on every `titleToken` change (session switch) and on the window key/
+/// fullscreen transitions where AppKit rebuilds the titlebar subviews.
 private struct WindowAccessor: NSViewRepresentable {
-    let title: String
+    /// Changes when the active session changes, so `updateNSView` re-runs the blend.
+    let titleToken: String
 
     func makeNSView(context _: Context) -> TitleProbeView {
-        let view = TitleProbeView()
-        view.desiredTitle = title
-        return view
+        TitleProbeView()
     }
 
     func updateNSView(_ nsView: TitleProbeView, context _: Context) {
-        nsView.desiredTitle = title
+        _ = titleToken
+        nsView.reapplyBlend()
     }
 
-    /// A zero-content probe that applies `desiredTitle` to its hosting window. It
-    /// applies on `viewDidMoveToWindow` (window attachment) and on every
-    /// `desiredTitle` change, so a launch where the window attaches late still lands
-    /// the right title instead of leaving the scene's literal "agt".
     final class TitleProbeView: NSView {
-        var desiredTitle: String = "" {
-            didSet { window?.title = desiredTitle }
+        /// Observer tokens for window key/fullscreen transitions, after which AppKit
+        /// rebuilds the titlebar subviews and the blend must be re-applied.
+        nonisolated(unsafe) private var titlebarObservers: [NSObjectProtocol] = []
+
+        /// Re-apply the blend (called from `updateNSView` on a session switch).
+        func reapplyBlend() {
+            if let window { applyTitlebarBlend(window) }
         }
 
         override func viewDidMoveToWindow() {
             super.viewDidMoveToWindow()
+            titlebarObservers.forEach(NotificationCenter.default.removeObserver)
+            titlebarObservers.removeAll()
             guard let window else { return }
-            window.title = desiredTitle
+            applyTitlebarBlend(window)
+            // the private titlebar subviews may not exist yet / get rebuilt after layout.
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let window = self.window else { return }
+                self.applyTitlebarBlend(window)
+            }
+            // AppKit rebuilds the titlebar subviews on key/main/fullscreen transitions
+            // (becomeKey fires right at launch), undoing the cleared layer — re-apply.
+            for name in [NSWindow.didBecomeKeyNotification, NSWindow.didBecomeMainNotification, NSWindow.didExitFullScreenNotification] {
+                let token = NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                    guard let self, let window = self.window else { return }
+                    self.applyTitlebarBlend(window)
+                }
+                titlebarObservers.append(token)
+            }
             // a window restored in a miniaturized state isn't on-screen, so a fresh
             // launch shows nothing and UI-test automation has nothing to hit. bring it
             // forward un-minimized; re-assert next tick because state restoration can
@@ -187,9 +207,19 @@ private struct WindowAccessor: NSViewRepresentable {
             DispatchQueue.main.async { [weak self] in self?.bringForward(window) }
         }
 
+        deinit {
+            titlebarObservers.forEach(NotificationCenter.default.removeObserver)
+        }
+
         private func bringForward(_ window: NSWindow) {
             if window.isMiniaturized { window.deminiaturize(nil) }
             window.makeKeyAndOrderFront(nil)
+        }
+
+        private func applyTitlebarBlend(_ window: NSWindow) {
+            let background = GhosttyApp.shared.terminalBackgroundColor
+                ?? NSColor(srgbRed: 0.157, green: 0.173, blue: 0.204, alpha: 1)
+            WindowAppearance.sync(window: window, background: background)
         }
     }
 }

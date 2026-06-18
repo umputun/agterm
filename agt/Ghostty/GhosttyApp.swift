@@ -14,6 +14,10 @@ final class GhosttyApp {
 
     private(set) var app: ghostty_app_t?
     private(set) var config: ghostty_config_t?
+    /// The terminal background color parsed from the resolved config. Used to tint the
+    /// window so the title bar blends with the terminal instead of drawing the default
+    /// titlebar material. Nil if the color couldn't be read.
+    private(set) var terminalBackgroundColor: NSColor?
     private var tickTimer: Timer?
     let callbacks = GhosttyCallbacks()
     private var resourcesDir: String?
@@ -50,6 +54,7 @@ final class GhosttyApp {
         }
         app = createdApp
         config = cfg
+        terminalBackgroundColor = Self.backgroundColor(from: cfg)
 
         // A main-RunLoop timer is proven to fire on the main thread, so
         // `assumeIsolated` is valid here (and ONLY here). 120Hz keeps latency
@@ -97,6 +102,18 @@ final class GhosttyApp {
             }
         }
         return cfg
+    }
+
+    /// Reads the `background` color from the resolved config as an opaque `NSColor`.
+    private static func backgroundColor(from config: ghostty_config_t) -> NSColor? {
+        let key = "background"
+        var color = ghostty_config_color_s()
+        let got = key.withCString { ghostty_config_get(config, &color, $0, UInt(key.utf8.count)) }
+        guard got else { return nil }
+        return NSColor(srgbRed: CGFloat(color.r) / 255.0,
+                       green: CGFloat(color.g) / 255.0,
+                       blue: CGFloat(color.b) / 255.0,
+                       alpha: 1)
     }
 
     // MARK: - Resources
