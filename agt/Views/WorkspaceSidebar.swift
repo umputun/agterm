@@ -6,10 +6,11 @@ import SwiftUI
 /// drags (within the outline) use this to identify the session being moved.
 private let sessionPasteboardType = NSPasteboard.PasteboardType("com.umputun.agt.session")
 
-/// An `NSTableCellView` with a trailing token field alongside the name field.
-/// The name field is `cell.textField` (rename and selection wiring operate on it);
-/// `tokenField` shows the session's `gitStatus?.compact` and stays whole while the
-/// name truncates first.
+/// An `NSTableCellView` with a leading icon, the name field, and a trailing token field.
+/// The icon is the inherited `cell.imageView` (a filled folder for a workspace, an outlined
+/// terminal for a session), so AppKit re-tints it white on a selected row. The name field is `cell.textField`
+/// (rename and selection wiring operate on it); `tokenField` shows the session's
+/// `gitStatus?.compact` and stays whole while the name truncates first.
 private final class SidebarCellView: NSTableCellView {
     let tokenField = NSTextField(labelWithString: "")
 }
@@ -382,12 +383,16 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 field.setAccessibilityIdentifier("workspace-row")
                 // expose the workspace name so app.staticTexts["workspace 1"] resolves
                 field.setAccessibilityLabel(name)
+                cell.imageView?.image = workspaceIcon
+                cell.imageView?.setAccessibilityIdentifier("workspace-icon")
             case .session:
                 field.stringValue = displayName(forSession: node.id)
                 field.font = .preferredFont(forTextStyle: .body)
                 field.setAccessibilityIdentifier("session-row")
                 field.setAccessibilityLabel(nil)
                 applyToken(toCell: cell, status: gitStatus(forSession: node.id))
+                cell.imageView?.image = sessionIcon
+                cell.imageView?.setAccessibilityIdentifier("session-icon")
             }
             return cell
         }
@@ -418,14 +423,38 @@ struct WorkspaceSidebar: NSViewRepresentable {
             cell.setAccessibilityValue(compact)
         }
 
-        /// Builds a view-based outline cell: an `SidebarCellView` with a leading name
-        /// `NSTextField` (`cell.textField`, editable on demand by `beginEditing`) and a
-        /// trailing token field for the git compact string. The name hugs and resists
-        /// compression weakly while the token hugs and resists strongly, so the name
-        /// truncates first and the tokens stay whole.
+        /// Leading row icons: a filled folder for a workspace, an outlined terminal for a session,
+        /// rendered as monochrome template symbols tinted to `secondaryLabelColor`. The
+        /// filled-vs-outline contrast keeps the two readily distinguishable at row size. Cached
+        /// because only two distinct symbols exist and every row reuses them.
+        private lazy var workspaceIcon = Self.rowIcon("folder.fill")
+        private lazy var sessionIcon = Self.rowIcon("terminal")
+
+        private static func rowIcon(_ symbolName: String) -> NSImage? {
+            let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
+            let image = NSImage(systemSymbolName: symbolName, accessibilityDescription: nil)?
+                .withSymbolConfiguration(config)
+            image?.isTemplate = true
+            return image
+        }
+
+        /// Builds a view-based outline cell: an `SidebarCellView` with a leading icon
+        /// (`cell.imageView`), the name `NSTextField` (`cell.textField`, editable on demand by
+        /// `beginEditing`), and a trailing token field for the git compact string. The name hugs
+        /// and resists compression weakly while the icon and token hug and resist strongly, so the
+        /// name truncates first and the icon and tokens stay whole.
         private func makeCell(identifier: NSUserInterfaceItemIdentifier) -> SidebarCellView {
             let cell = SidebarCellView()
             cell.identifier = identifier
+
+            let icon = NSImageView()
+            icon.translatesAutoresizingMaskIntoConstraints = false
+            icon.imageScaling = .scaleProportionallyUpOrDown
+            icon.contentTintColor = .secondaryLabelColor
+            icon.setContentHuggingPriority(.required, for: .horizontal)
+            icon.setContentCompressionResistancePriority(.required, for: .horizontal)
+            cell.addSubview(icon)
+            cell.imageView = icon
 
             let field = NSTextField(labelWithString: "")
             field.translatesAutoresizingMaskIntoConstraints = false
@@ -452,7 +481,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
             cell.addSubview(token)
 
             NSLayoutConstraint.activate([
-                field.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
+                icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
+                icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                icon.widthAnchor.constraint(equalToConstant: 16),
+                icon.heightAnchor.constraint(equalToConstant: 16),
+                field.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
                 field.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
                 token.leadingAnchor.constraint(equalTo: field.trailingAnchor, constant: 6),
                 token.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2),

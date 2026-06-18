@@ -128,6 +128,16 @@ final class SidebarUITests: XCTestCase {
                       "session should move to workspace 2 via drag-and-drop")
     }
 
+    func testRowsShowKindIcons() throws {
+        XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
+        // the leading row icons (folder for a workspace, terminal for a session) carry stable
+        // identifiers on their image views; match across element types like the other rows do.
+        let workspaceIcon = app.descendants(matching: .any).matching(identifier: "workspace-icon").firstMatch
+        XCTAssertTrue(workspaceIcon.waitForExistence(timeout: 5), "workspace row should show its folder icon")
+        let sessionIcon = app.descendants(matching: .any).matching(identifier: "session-icon").firstMatch
+        XCTAssertTrue(sessionIcon.waitForExistence(timeout: 5), "session row should show its terminal icon")
+    }
+
     func testNewSessionButton() throws {
         XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
         // bottom-bar add-session menu (a SwiftUI Menu may surface as a popup, not a
