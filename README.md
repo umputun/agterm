@@ -52,6 +52,7 @@ xcodebuild test -project agt.xcodeproj -scheme agt -destination 'platform=macOS'
 - A Ctrl-Tab session switcher (macOS app-switcher style): hold Ctrl and tap Tab to walk a most-recently-used list of sessions across all workspaces (the previous session pre-selected on top, Ctrl+Shift+Tab reverses), then release Ctrl to switch. A quick tap of Ctrl+Tab flips straight to the previously visited session.
 - A Settings window (Cmd+,) with **General**, **Appearance**, and **Key Mapping** tabs (Key Mapping is a placeholder for now). **General** toggles macOS notification banners. **Appearance → Terminal** sets the terminal font family, default font size, and ghostty theme (any of the 512 bundled themes); **Appearance → Window** sets background opacity and blur (a translucent, optionally blurred window — the sidebar's Liquid Glass tints to match on macOS 26). Changes persist and apply live to open terminals. Applying a font/theme change resets per-session cmd-+/- zoom to the default.
 - Terminal desktop notifications: a program's OSC 9 / 777 notification from any session or pane surfaces as a macOS banner and an unseen-count badge on the sidebar row (rolled up onto a collapsed workspace row). Clicking the banner brings agt forward and focuses the exact pane; focusing a session clears its badge and dismisses its delivered banners. A notification from the pane you're already focused on is suppressed. Banners can be turned off in General settings — the badge still tracks notifications either way.
+- Named windows: a window is a top-level bundle of workspaces and sessions, each in its own on-screen macOS window. Keep a library of windows (for example "work" and "personal"), open one per on-screen window, and create, rename, or delete them from the **File** menu (New Window ⌥⌘N, Open Window ▸, Rename Window…, Delete Window) or the action palette. Each bundle shows in exactly one window. The set of windows open at quit reopens on the next launch, with their frames restored.
 - Auto-persist on every change and on quit; restore the tree, names, selection, each session's working directory and font size, the split state, and the status-bar visibility on the next launch.
 
 ## Scripting agt
@@ -107,6 +108,32 @@ A session's terminal surface is created lazily — it does not exist until the s
 ```sh
 id=$(agtctl session new --cwd ~/src/agt)
 agtctl session type --target "$id" --select $'echo hello\n'
+```
+
+`agtctl window` drives the named windows. `window list` prints `id  name  [open]  [active]` (raw with `--json`); the other subcommands take a window id, a unique prefix, or `active` (the frontmost):
+
+```sh
+agtctl window list                            # id  name  [open]  [active]
+w=$(agtctl window new work)                   # create and open a window, capture its id
+agtctl window select "$w"                     # raise it (opening it first if it was closed)
+agtctl window rename "$w" personal            # rename it
+agtctl window close "$w"                      # close its on-screen window (the bundle is kept)
+agtctl window delete "$w"                     # delete it (the last window can't be deleted)
+```
+
+A global `--window <id>` option on the session, workspace, `tree`, and `font` commands targets a *specific* window's tree instead of the frontmost one (the window must be open). Without it, those commands act on the frontmost window:
+
+```sh
+agtctl tree --window "$w"                              # the tree of window $w
+agtctl session new --window "$w" --cwd ~/src/agt       # open a session in window $w
+```
+
+Inside a session's shell, `agt` injects environment variables a script can read: `AGT_ENABLED=1`, `AGT_WINDOW_ID`, `AGT_WORKSPACE_ID`, `AGT_SESSION_ID`, and `AGT_SOCKET` (the live control-socket path). So a script running in a session can drive its own window without hard-coding ids:
+
+```sh
+agtctl session new --window "$AGT_WINDOW_ID" --cwd .   # open a sibling session in this window
+agtctl session type --target "$AGT_SESSION_ID" $'\n'   # type into this very session
+agtctl tree --socket "$AGT_SOCKET"                     # reach the same agt this shell runs in
 ```
 
 ## Restore limitations
