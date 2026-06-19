@@ -299,6 +299,24 @@ final class ControlServer {
             return splitSession(request.target, mode: request.args?.mode)
         case .sessionCopy:
             return copySelection(request.target)
+        case .sessionOverlayOpen:
+            guard let command = request.args?.command, !command.isEmpty else {
+                return ControlResponse(ok: false, error: "session.overlay.open requires a command")
+            }
+            return resolveSession(request.target) { id in
+                guard store.openOverlay(id, command: command, cwd: request.args?.cwd,
+                                        wait: request.args?.wait ?? false) else {
+                    return ControlResponse(ok: false, error: "overlay already open")
+                }
+                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+            }
+        case .sessionOverlayClose:
+            return resolveSession(request.target) { id in
+                guard store.closeOverlay(id) else {
+                    return ControlResponse(ok: false, error: "no overlay")
+                }
+                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+            }
         case .quick:
             return setQuickTerminal(mode: request.args?.mode)
         case .statusbar:
@@ -438,7 +456,7 @@ final class ControlServer {
             let sessions = workspace.sessions.map { session in
                 ControlSessionNode(id: session.id.uuidString, name: session.displayName,
                                    cwd: session.effectiveCwd, active: session.id == activeID,
-                                   split: session.isSplit)
+                                   split: session.isSplit, overlay: session.overlayActive)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID, sessions: sessions)

@@ -117,6 +117,7 @@ public final class AppStore {
         let removed = workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex)
         removed.surface?.teardown()
         removed.splitSurface?.teardown()
+        removed.overlaySurface?.teardown()
         sessionRecency.remove(sessionID)
         if wasActive {
             selectedSessionID = reselectionTarget(after: location)
@@ -141,6 +142,7 @@ public final class AppStore {
         for session in workspaces[index].sessions {
             session.surface?.teardown()
             session.splitSurface?.teardown()
+            session.overlaySurface?.teardown()
             sessionRecency.remove(session.id)
         }
         workspaces.remove(at: index)
@@ -170,6 +172,34 @@ public final class AppStore {
         session.splitSurface?.teardown()
         session.splitSurface = nil
         save()
+    }
+
+    /// Opens an ephemeral overlay terminal on a session running `command` (e.g. a TUI). The overlay
+    /// surface is created lazily by the detail pane and runs the command as its process; when the
+    /// program exits, `closeOverlay` tears it down. No-op (returns false) when the session is unknown
+    /// or already has an overlay open. NOT persisted — the overlay never survives a relaunch.
+    @discardableResult public func openOverlay(_ sessionID: UUID, command: String, cwd: String? = nil,
+                                               wait: Bool = false) -> Bool {
+        guard let session = session(withID: sessionID), !session.overlayActive else { return false }
+        session.overlayCommand = command
+        session.overlayCwd = cwd
+        session.overlayWait = wait
+        session.overlayActive = true
+        return true
+    }
+
+    /// Closes the overlay terminal: hides it AND tears down its surface (unlike the split, the overlay
+    /// is never kept alive — it is ephemeral). Used both on explicit close and when the overlay's
+    /// program exits on its own. No-op (returns false) when there is no overlay.
+    @discardableResult public func closeOverlay(_ sessionID: UUID) -> Bool {
+        guard let session = session(withID: sessionID), session.overlayActive else { return false }
+        session.overlayActive = false
+        session.overlaySurface?.teardown()
+        session.overlaySurface = nil
+        session.overlayCommand = nil
+        session.overlayCwd = nil
+        session.overlayWait = false
+        return true
     }
 
     /// Moves a session to another workspace (or reorders within the same one),

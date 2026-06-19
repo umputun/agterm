@@ -140,8 +140,8 @@ struct SocketClient {
             lines.append("\(mark) \(workspace.name)  [\(workspace.id)]")
             for session in workspace.sessions {
                 let smark = session.active ? "*" : " "
-                let split = session.split ? " (split)" : ""
-                lines.append("  \(smark) \(session.name)\(split)  [\(session.id)]  \(session.cwd)")
+                let tags = (session.split ? " (split)" : "") + (session.overlay ? " (overlay)" : "")
+                lines.append("  \(smark) \(session.name)\(tags)  [\(session.id)]  \(session.cwd)")
             }
         }
         return lines.joined(separator: "\n")

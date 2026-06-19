@@ -35,6 +35,7 @@ struct agtApp: App {
                 store: store,
                 makeSurface: { Self.makeSurface(for: $0, store: store, service: gitStatusService) },
                 makeSplitSurface: { Self.makeSplitSurface(for: $0, store: store) },
+                makeOverlaySurface: { Self.makeOverlaySurface(for: $0, store: store) },
                 quickTerminal: QuickTerminalController.shared,
                 actions: actions,
                 palette: palette,
@@ -174,6 +175,21 @@ struct agtApp: App {
         let sessionID = session.id
         view.onExit = { store.closeSplit(sessionID) }
         view.onFocusChange = { focused in if focused { store.session(withID: sessionID)?.splitFocused = true } }
+        return view
+    }
+
+    /// Overlay-terminal surface factory: an ephemeral surface running the session's `overlayCommand`
+    /// as its process in `overlayCwd` (default the session's current dir). Like the split, it is NOT
+    /// wired to the session (no `view.session`), so its PWD reports don't clobber the session's
+    /// cwd/git. When the command exits, the surface's process-exit fires `onExit` → `closeOverlay`,
+    /// which tears the surface down and hides the overlay — so the program's exit makes it vanish.
+    @MainActor
+    private static func makeOverlaySurface(for session: Session, store: AppStore) -> GhosttySurfaceView {
+        let view = GhosttySurfaceView(workingDirectory: session.overlayCwd ?? session.effectiveCwd,
+                                      fontSize: session.fontSize.map(Float.init), command: session.overlayCommand,
+                                      waitAfterCommand: session.overlayWait, autoFocus: true)
+        let sessionID = session.id
+        view.onExit = { store.closeOverlay(sessionID) }
         return view
     }
 }

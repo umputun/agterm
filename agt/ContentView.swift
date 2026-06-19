@@ -14,6 +14,7 @@ struct ContentView: View {
     @Bindable var store: AppStore
     let makeSurface: (Session) -> GhosttySurfaceView
     let makeSplitSurface: (Session) -> GhosttySurfaceView
+    let makeOverlaySurface: (Session) -> GhosttySurfaceView
     let quickTerminal: QuickTerminalController
     let actions: AppActions
     let palette: PaletteController
@@ -97,18 +98,26 @@ struct ContentView: View {
     /// its surface survives (owned by the session), so the shell isn't destroyed.
     @ViewBuilder private var detailPane: some View {
         if let active = store.activeSession {
-            if active.isSplit {
-                HSplitView {
+            ZStack {
+                if active.isSplit {
+                    HSplitView {
+                        TerminalView(session: active, surfaceKeyPath: \.surface, makeSurface: makeSurface)
+                            .overlay { paneDim(active.splitFocused) }
+                            .id(active.id)
+                        TerminalView(session: active, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface)
+                            .overlay { paneDim(!active.splitFocused) }
+                            .id("\(active.id.uuidString)-split")
+                    }
+                } else {
                     TerminalView(session: active, surfaceKeyPath: \.surface, makeSurface: makeSurface)
-                        .overlay { paneDim(active.splitFocused) }
                         .id(active.id)
-                    TerminalView(session: active, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface)
-                        .overlay { paneDim(!active.splitFocused) }
-                        .id("\(active.id.uuidString)-split")
                 }
-            } else {
-                TerminalView(session: active, surfaceKeyPath: \.surface, makeSurface: makeSurface)
-                    .id(active.id)
+                // an ephemeral overlay terminal on top, at full single-pane size, hiding the
+                // single/split content underneath while its one program runs.
+                if active.overlayActive {
+                    TerminalView(session: active, surfaceKeyPath: \.overlaySurface, makeSurface: makeOverlaySurface)
+                        .id("\(active.id.uuidString)-overlay")
+                }
             }
         } else {
             Text("No session selected")

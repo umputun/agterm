@@ -17,6 +17,8 @@ public enum Command: String, Codable, Sendable {
     case sessionType = "session.type"
     case sessionSplit = "session.split"
     case sessionCopy = "session.copy"
+    case sessionOverlayOpen = "session.overlay.open"
+    case sessionOverlayClose = "session.overlay.close"
     case quick
     case fontInc = "font.inc"
     case fontDec = "font.dec"
@@ -39,15 +41,22 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var select: Bool?
     /// Mode for `session.split` / `quick` / `statusbar` (`on|off|toggle`, `show|hide|toggle` for quick).
     public var mode: String?
+    /// The program the overlay terminal runs for `session.overlay.open` (e.g. `revdiff`).
+    public var command: String?
+    /// Whether `session.overlay.open` keeps the overlay open after its command exits (showing the
+    /// "press any key to close" prompt) instead of closing immediately.
+    public var wait: Bool?
 
-    public init(name: String? = nil, cwd: String? = nil, workspace: String? = nil,
-                text: String? = nil, select: Bool? = nil, mode: String? = nil) {
+    public init(name: String? = nil, cwd: String? = nil, workspace: String? = nil, text: String? = nil,
+                select: Bool? = nil, mode: String? = nil, command: String? = nil, wait: Bool? = nil) {
         self.name = name
         self.cwd = cwd
         self.workspace = workspace
         self.text = text
         self.select = select
         self.mode = mode
+        self.command = command
+        self.wait = wait
     }
 }
 
@@ -72,13 +81,15 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let cwd: String
     public let active: Bool
     public let split: Bool
+    public let overlay: Bool
 
-    public init(id: String, name: String, cwd: String, active: Bool, split: Bool) {
+    public init(id: String, name: String, cwd: String, active: Bool, split: Bool, overlay: Bool = false) {
         self.id = id
         self.name = name
         self.cwd = cwd
         self.active = active
         self.split = split
+        self.overlay = overlay
     }
 }
 

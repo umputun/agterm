@@ -39,6 +39,8 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionRename, target: "active", args: ControlArgs(name: "build")),
             ControlRequest(cmd: .sessionMove, target: "9f3c", args: ControlArgs(workspace: "other")),
             ControlRequest(cmd: .sessionCopy, target: "9f3c"),
+            ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c", args: ControlArgs(cwd: "/b", command: "revdiff")),
+            ControlRequest(cmd: .sessionOverlayClose, target: "9f3c"),
         ]
         for request in cases {
             #expect(try roundTrip(request) == request)

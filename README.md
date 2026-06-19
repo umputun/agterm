@@ -93,6 +93,17 @@ agtctl session type --target work --select "$sel"  # paste it into another sessi
 
 With no selection it exits non-zero with `no selection`. The selection must be made in the terminal (drag/Shift-click); `session copy` only reads it.
 
+`session overlay open` runs a program in an ephemeral terminal on top of a session (full size, hiding the single/split content underneath). It is meant for launching an interactive program over a session — the overlay grabs focus, and when the program exits the overlay vanishes and the session reappears unchanged:
+
+```sh
+agtctl session overlay open "revdiff HEAD~3" --target 9f3c  # review the last 3 commits over session 9f3c
+agtctl session overlay open "htop"                          # on the active session
+agtctl session overlay open "make test" --wait              # keep the overlay open after exit (press a key to close)
+agtctl session overlay close --target 9f3c                  # close it from a script
+```
+
+The overlay renders only for the active session, so select it first (or target `active`). By default it closes the instant the program exits; `--wait` keeps it on a "press any key to close" prompt so you can read the program's final output. A `*` `(overlay)` tag in `agtctl tree` marks a session whose overlay is open.
+
 A session's terminal surface is created lazily — it does not exist until the session has been shown at least once. Injecting text into a never-shown session therefore fails with `session not realized` unless you pass `--select`, which selects the session (realizing its surface) before injecting:
 
 ```sh

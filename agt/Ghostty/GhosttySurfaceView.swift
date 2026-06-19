@@ -17,6 +17,21 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
     private let workingDirectory: String
 
+    /// The command the surface runs as its process instead of the login shell, or nil for the login
+    /// shell. A creation input (like `workingDirectory`): read in `createSurface`. Used by the overlay
+    /// surface to run one program (e.g. a TUI) whose exit closes the overlay.
+    private let command: String?
+
+    /// Whether, when a `command` exits, libghostty keeps the surface open with its "press any key to
+    /// close" prompt (`true`) instead of closing immediately (`false`). Only meaningful with `command`.
+    private let waitAfterCommand: Bool
+
+    /// Whether this surface grabs first responder as soon as it is created. The overlay needs it: it is
+    /// added on top of an already-focused session, and `TerminalView.focusIfNeeded` only grabs focus if
+    /// the view is in a window at the first `updateNSView` — which the deferred overlay surface is not,
+    /// and no later update fires. So the overlay focuses itself once its surface exists (in a window).
+    private let autoFocus: Bool
+
     /// The initial font size in points to create the surface with, or nil to use the
     /// ghostty config default. A creation input (like `workingDirectory`): read in
     /// `createSurface`, which may run after construction, so it's fixed at init.
@@ -60,15 +75,30 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// recreate a surface (e.g. from a stray viewDidMoveToWindow).
     private var isDestroyed = false
 
+    /// Guards `handleProcessExit` so the close runs once. Both the `SHOW_CHILD_EXITED` action and the
+    /// `close_surface_cb` can fire for one exit (ghostty documents no ordering/exclusivity between them).
+    private var didHandleProcessExit = false
+
+    /// Auto-focus retry state (the overlay path). `makeFirstResponder` loses to the SwiftUI/AppKit
+    /// responder race if called once too early, so it retries on the run loop until it sticks.
+    private var autoFocusInFlight = false
+    private var didAutoFocus = false
+    private static let autoFocusMaxAttempts = 40
+    private static let autoFocusRetryInterval: TimeInterval = 0.05
+
     private var _markedRange = NSRange(location: NSNotFound, length: 0)
     private var _selectedRange = NSRange(location: NSNotFound, length: 0)
     private var keyTextAccumulator: [String] = []
     private var currentKeyEvent: NSEvent?
     private var currentTrackingArea: NSTrackingArea?
 
-    init(workingDirectory: String, fontSize: Float? = nil) {
+    init(workingDirectory: String, fontSize: Float? = nil, command: String? = nil,
+         waitAfterCommand: Bool = false, autoFocus: Bool = false) {
         self.workingDirectory = workingDirectory
         self.initialFontSize = fontSize
+        self.command = command
+        self.waitAfterCommand = waitAfterCommand
+        self.autoFocus = autoFocus
         super.init(frame: .zero)
         wantsLayer = true
         setupTrackingArea()
@@ -106,11 +136,18 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     }
 
     func handleProcessExit() {
-        // Already on the main actor (the close callback hops via
-        // DispatchQueue.main.async). Ask the app to close the owning session,
-        // which tears down this surface and removes its sidebar row.
+        // Already on the main actor (the close callbacks hop via DispatchQueue.main.async). Ask the app
+        // to close the owning session/overlay, which tears down this surface and removes its sidebar row.
+        // Idempotent: the SHOW_CHILD_EXITED action and close_surface_cb can both fire for one exit.
+        guard !didHandleProcessExit else { return }
+        didHandleProcessExit = true
         onExit?()
     }
+
+    /// Whether a child-exit should close this surface immediately (suppressing ghostty's "press any key"
+    /// prompt). True only for a command surface (the overlay) that did NOT opt into the wait prompt; a
+    /// `waitAfterCommand` overlay keeps the prompt and closes via `close_surface_cb` after the keypress.
+    var shouldCloseOnChildExitAction: Bool { command != nil && !waitAfterCommand }
 
     /// Types `text` into this surface's pty (the control channel's `session.type`) as literal keystrokes,
     /// the same path the keyboard uses (`ghostty_surface_key` with `.text` set — see `insertText`). It does
@@ -223,7 +260,17 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
             configCStrings.append(p)
             config.working_directory = UnsafePointer(p)
         }
-        config.command = nil // login shell
+        // a command runs as the surface's process (the overlay's one program) instead of the login
+        // shell; its strdup'd buffer joins the same `configCStrings` lifetime as working_directory.
+        // wait_after_command controls whether the surface lingers on the "press any key" prompt when
+        // the command exits; default false so the overlay vanishes immediately (opt-in via the API).
+        if let command, let p = strdup(command) {
+            configCStrings.append(p)
+            config.command = UnsafePointer(p)
+            config.wait_after_command = waitAfterCommand
+        } else {
+            config.command = nil // login shell
+        }
         // a persisted/restored size overrides the config default; nil leaves
         // config_new's default (the ghostty config font-size) in place.
         if let initialFontSize { config.font_size = initialFontSize }
@@ -239,6 +286,46 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
             ghostty_surface_set_display_id(surface, displayID)
         }
         ghostty_surface_set_focus(surface, isFocused)
+
+        // the overlay grabs first responder itself (TerminalView's once-on-attach grab misses the
+        // deferred overlay surface); a bounded run-loop retry beats the SwiftUI/AppKit responder race.
+        requestAutoFocus(in: window)
+    }
+
+    /// Marks the surface focused in both AppKit (already first responder) and libghostty. Used by the
+    /// auto-focus retry; mirrors what `becomeFirstResponder` does, made explicit so the state is
+    /// deterministic after a retried `makeFirstResponder`.
+    private func notifySurfaceFocused() {
+        isFocused = true
+        if let surface { ghostty_surface_set_focus(surface, true) }
+    }
+
+    /// Starts the bounded auto-focus retry (overlay only), if not already done/in-flight.
+    private func requestAutoFocus(in window: NSWindow?) {
+        guard autoFocus, !didAutoFocus, !autoFocusInFlight, let window else { return }
+        autoFocusInFlight = true
+        restoreAutoFocus(in: window, attempt: 0)
+    }
+
+    /// Retries `makeFirstResponder` on the run loop until this view is in `window` with a surface and
+    /// actually holds first responder, then marks it focused. Bounded so it never spins forever; gives
+    /// up if the view is torn down or moved windows. macterm's FocusRestoration pattern.
+    private func restoreAutoFocus(in window: NSWindow, attempt: Int) {
+        guard autoFocus, !didAutoFocus, !isDestroyed else { autoFocusInFlight = false; return }
+        if self.window === window, surface != nil {
+            if window.firstResponder !== self { window.makeFirstResponder(self) }
+            if window.firstResponder === self {
+                didAutoFocus = true
+                autoFocusInFlight = false
+                notifySurfaceFocused()
+                return
+            }
+        }
+        guard attempt < Self.autoFocusMaxAttempts else { autoFocusInFlight = false; return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.autoFocusRetryInterval) { [weak self, weak window] in
+            guard let self, let window else { return }
+            self.restoreAutoFocus(in: window, attempt: attempt + 1)
+        }
     }
 
     func destroySurface() {
@@ -272,8 +359,10 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
             ghostty_surface_set_focus(surface, isFocused)
         }
         updateMetalLayerSize()
-        // Focus is driven by TerminalView.updateNSView when this surface becomes
-        // the active session's detail view, so it isn't grabbed here.
+        // Focus is driven by TerminalView.updateNSView when this surface becomes the active session's
+        // detail view, so it isn't grabbed here — except an auto-focus (overlay) surface, which drives
+        // its own bounded retry since the representable's once-on-attach grab misses the deferred surface.
+        requestAutoFocus(in: window)
     }
 
     override func setFrameSize(_ newSize: NSSize) {
@@ -315,20 +404,27 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
     override func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()
-        if result, let surface {
+        if result {
+            // track focus even before the surface exists: the overlay grabs first responder while
+            // its surface creation is still deferred (zero backing size), and createSurface reads
+            // `isFocused` to set the initial focus — so a stale false would leave it unfocused.
             isFocused = true
-            ghostty_surface_set_focus(surface, true)
-            onFocusChange?(true)
+            if let surface {
+                ghostty_surface_set_focus(surface, true)
+                onFocusChange?(true)
+            }
         }
         return result
     }
 
     override func resignFirstResponder() -> Bool {
         let result = super.resignFirstResponder()
-        if result, let surface {
+        if result {
             isFocused = false
-            ghostty_surface_set_focus(surface, false)
-            onFocusChange?(false)
+            if let surface {
+                ghostty_surface_set_focus(surface, false)
+                onFocusChange?(false)
+            }
         }
         return result
     }

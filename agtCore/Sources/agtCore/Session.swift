@@ -49,6 +49,30 @@ public final class Session: Identifiable {
     /// it is read imperatively at surface creation and captured by `snapshot()`.
     @ObservationIgnored public var fontSize: Double?
 
+    /// Whether an ephemeral overlay terminal is shown on top of this session (full single-pane
+    /// size, hiding the single/split content underneath). Observed, so the detail pane shows/hides
+    /// the overlay. Driven only by the control channel; NOT persisted (absent from `snapshot()`), so
+    /// the overlay never survives a relaunch — it exists only to run one program and vanish.
+    public var overlayActive: Bool = false
+
+    /// The overlay's surface, created when the overlay opens and torn down when its program exits or
+    /// the control channel closes it (unlike the split, which is kept alive when hidden). The shell
+    /// runs `overlayCommand`; on its exit the surface's process-exit closes the overlay.
+    @ObservationIgnored public var overlaySurface: (any TerminalSurface)?
+
+    /// The command the overlay runs as its process (e.g. `revdiff`); read by the overlay surface
+    /// factory at creation. `@ObservationIgnored`: read imperatively, not reactive.
+    @ObservationIgnored public var overlayCommand: String?
+
+    /// The overlay's working directory, or nil to inherit `effectiveCwd`. Read by the factory at
+    /// creation. `@ObservationIgnored`.
+    @ObservationIgnored public var overlayCwd: String?
+
+    /// Whether the overlay keeps its surface open after the command exits, showing libghostty's
+    /// "press any key to close" prompt (useful to read a command's final output) instead of closing
+    /// immediately. Read by the factory at creation. `@ObservationIgnored`.
+    @ObservationIgnored public var overlayWait: Bool = false
+
     public init(id: UUID = UUID(), initialCwd: String, customName: String? = nil) {
         self.id = id
         self.initialCwd = initialCwd

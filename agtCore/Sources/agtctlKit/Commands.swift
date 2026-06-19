@@ -122,7 +122,7 @@ struct Workspace: ParsableCommand {
 struct Session: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Session commands.",
-        subcommands: [New.self, Close.self, Select.self, Rename.self, Move.self, TypeText.self, Split.self, Copy.self]
+        subcommands: [New.self, Close.self, Select.self, Rename.self, Move.self, TypeText.self, Split.self, Copy.self, Overlay.self]
     )
 
     struct New: RequestCommand {
@@ -220,6 +220,37 @@ struct Session: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionCopy, target: target.target)
+        }
+    }
+
+    struct Overlay: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Open or close an ephemeral overlay terminal on a session.",
+            subcommands: [Open.self, Close.self]
+        )
+
+        struct Open: RequestCommand {
+            static let configuration = CommandConfiguration(abstract: "Open an overlay running COMMAND; it closes when COMMAND exits.")
+            @Argument(help: "Program to run in the overlay (e.g. revdiff).") var command: String
+            @Option(name: .long, help: "Working directory (default: the session's current directory).") var cwd: String?
+            @Flag(name: .long, help: "Keep the overlay open after COMMAND exits (press any key to close).") var wait = false
+            @OptionGroup var target: TargetOptions
+            @OptionGroup var options: ClientOptions
+
+            func makeRequest() throws -> ControlRequest {
+                ControlRequest(cmd: .sessionOverlayOpen, target: target.target,
+                               args: ControlArgs(cwd: cwd, command: command, wait: wait ? true : nil))
+            }
+        }
+
+        struct Close: RequestCommand {
+            static let configuration = CommandConfiguration(abstract: "Close the overlay terminal (destroys it).")
+            @OptionGroup var target: TargetOptions
+            @OptionGroup var options: ClientOptions
+
+            func makeRequest() throws -> ControlRequest {
+                ControlRequest(cmd: .sessionOverlayClose, target: target.target)
+            }
         }
     }
 }

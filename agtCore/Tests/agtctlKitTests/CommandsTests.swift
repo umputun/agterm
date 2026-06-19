@@ -98,6 +98,27 @@ struct CommandsTests {
         #expect(try request(["session", "copy", "--target", "9f3c"]) == ControlRequest(cmd: .sessionCopy, target: "9f3c"))
     }
 
+    @Test func sessionOverlayOpenWithCommandAndCwd() throws {
+        let expected = ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c",
+                                      args: ControlArgs(cwd: "/b", command: "revdiff"))
+        #expect(try request(["session", "overlay", "open", "revdiff", "--cwd", "/b", "--target", "9f3c"]) == expected)
+    }
+
+    @Test func sessionOverlayOpenDefaultsActiveNoCwd() throws {
+        let expected = ControlRequest(cmd: .sessionOverlayOpen, target: "active", args: ControlArgs(command: "revdiff"))
+        #expect(try request(["session", "overlay", "open", "revdiff"]) == expected)
+    }
+
+    @Test func sessionOverlayOpenWithWait() throws {
+        let expected = ControlRequest(cmd: .sessionOverlayOpen, target: "active",
+                                      args: ControlArgs(command: "revdiff", wait: true))
+        #expect(try request(["session", "overlay", "open", "revdiff", "--wait"]) == expected)
+    }
+
+    @Test func sessionOverlayClose() throws {
+        #expect(try request(["session", "overlay", "close"]) == ControlRequest(cmd: .sessionOverlayClose, target: "active"))
+    }
+
     @Test func quickDefaultsToggle() throws {
         #expect(try request(["quick"]) == ControlRequest(cmd: .quick, args: ControlArgs(mode: "toggle")))
     }

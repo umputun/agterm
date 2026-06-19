@@ -238,6 +238,46 @@ struct AppStoreTests {
         #expect(split.teardownCount == 1)
     }
 
+    @Test func openOverlaySetsCommandAndFlag() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        #expect(store.openOverlay(session.id, command: "revdiff", cwd: "/b") == true)
+        #expect(session.overlayActive == true)
+        #expect(session.overlayCommand == "revdiff")
+        #expect(session.overlayCwd == "/b")
+        // a second open while one is active is a no-op.
+        #expect(store.openOverlay(session.id, command: "other") == false)
+        #expect(session.overlayCommand == "revdiff")
+    }
+
+    @Test func closeOverlayTearsDownAndClears() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openOverlay(session.id, command: "revdiff")
+        let overlay = SpySurface()
+        session.overlaySurface = overlay
+        #expect(store.closeOverlay(session.id) == true)
+        #expect(session.overlayActive == false)
+        #expect(session.overlaySurface == nil)
+        #expect(session.overlayCommand == nil)
+        #expect(overlay.teardownCount == 1)
+        // closing again is a no-op.
+        #expect(store.closeOverlay(session.id) == false)
+    }
+
+    @Test func closeSessionTearsDownOverlaySurface() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openOverlay(session.id, command: "revdiff")
+        let overlay = SpySurface()
+        session.overlaySurface = overlay
+        store.closeSession(session.id)
+        #expect(overlay.teardownCount == 1)
+    }
+
     @Test func selectionUpdatesRecencyMostRecentFirst() {
         let store = Self.makeStore()
         let ws = store.addWorkspace(name: "work")

@@ -180,6 +180,53 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertEqual(response["error"] as? String, "no selection", "should report no selection: \(response)")
     }
 
+    // session.overlay.open requires a command.
+    func testOverlayOpenRequiresCommand() throws {
+        let response = try sendCommand(#"{"cmd":"session.overlay.open","target":"active"}"#)
+        XCTAssertEqual(response["ok"] as? Bool, false, "open with no command should fail: \(response)")
+        XCTAssertEqual(response["error"] as? String, "session.overlay.open requires a command", "\(response)")
+    }
+
+    // session.overlay open/close lifecycle and the guards: a long-lived command (cat waits on stdin)
+    // keeps the overlay up, so a second open errors; after close, closing again errors. The overlay
+    // actually rendering and running a TUI is verified manually (the Metal surface is not in the tree).
+    func testOverlayOpenCloseLifecycle() throws {
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
+        let id = try XCTUnwrap(result["id"] as? String, "session.new should return the new id")
+
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"command":"cat"}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
+
+        let again = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"command":"cat"}}"#)
+        XCTAssertEqual(again["ok"] as? Bool, false, "a second open while active should fail: \(again)")
+        XCTAssertEqual(again["error"] as? String, "overlay already open", "\(again)")
+
+        let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
+
+        let closeAgain = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
+        XCTAssertEqual(closeAgain["ok"] as? Bool, false, "closing with no overlay should fail: \(closeAgain)")
+        XCTAssertEqual(closeAgain["error"] as? String, "no overlay", "\(closeAgain)")
+    }
+
+    // the overlay auto-closes when its command exits (the SHOW_CHILD_EXITED path): open an overlay
+    // running a command that writes a marker then exits — the marker proves the command ran inside the
+    // overlay, and the tree's overlay flag clearing proves the overlay vanished with no key press.
+    func testOverlayAutoClosesWhenCommandExits() throws {
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
+        let id = try XCTUnwrap(result["id"] as? String, "session.new should return the new id")
+
+        let marker = markerDir.appendingPathComponent("overlay-ran")
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"command":"sh -c 'echo ran > \#(marker.path)'"}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
+
+        XCTAssertNotNil(pollMarker(marker, timeout: 12), "the overlay command should run inside the overlay")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: false, timeout: 10),
+                      "the overlay should auto-close when the command exits (no press-any-key prompt)")
+    }
+
     // statusbar toggle flips statusBarHidden in workspaces.json.
     func testStatusBarToggle() throws {
         XCTAssertTrue(pollStatusBarHidden(false, timeout: 10), "status bar should start visible")
@@ -459,6 +506,27 @@ final class ControlAPIUITests: XCTestCase {
                let sessions = workspaces.first?["sessions"] as? [[String: Any]],
                (sessions.first?["isSplit"] as? Bool ?? false) == expected {
                 return true
+            }
+            usleep(200_000)
+        }
+        return false
+    }
+
+    /// Polls `tree` (overlay state is not persisted to workspaces.json) until the session with `id` has
+    /// `overlay` equal to `expected`. Absent/nil treated as false.
+    private func pollSessionOverlay(id: String, expected: Bool, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let tree = try? sendCommand(#"{"cmd":"tree"}"#),
+               let result = tree["result"] as? [String: Any],
+               let t = result["tree"] as? [String: Any],
+               let workspaces = t["workspaces"] as? [[String: Any]] {
+                for ws in workspaces {
+                    let sessions = ws["sessions"] as? [[String: Any]] ?? []
+                    for s in sessions where (s["id"] as? String)?.lowercased() == id.lowercased() {
+                        if (s["overlay"] as? Bool ?? false) == expected { return true }
+                    }
+                }
             }
             usleep(200_000)
         }
