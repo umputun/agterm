@@ -43,6 +43,45 @@ final class ControlServer {
     /// The background queue running the blocking accept loop.
     private let acceptQueue = DispatchQueue(label: "com.umputun.agt.control.accept")
 
+    /// Thread-safe cached window list, refreshed on the main actor after every dispatched command and
+    /// read (under the lock) from the background accept loop. Lets `window.list` / `tree --window`
+    /// queries be answered without the main actor, so a brief main-thread stall after a window close
+    /// can't make the serial control server unresponsive to polls.
+    private let cacheLock = NSLock()
+    nonisolated(unsafe) private var cachedWindowNodes: [ControlWindowNode] = []
+
+    nonisolated private func cachedWindows() -> [ControlWindowNode] {
+        cacheLock.lock(); defer { cacheLock.unlock() }
+        return cachedWindowNodes
+    }
+
+    @MainActor func refreshWindowCache() {
+        let nodes = buildWindowList()
+        cacheLock.lock(); cachedWindowNodes = nodes; cacheLock.unlock()
+    }
+
+    /// A cache-only response for read-only window queries, or nil to fall through to the main actor.
+    /// Falls through on a cold cache (the main-actor path will populate it) and for `tree --window`
+    /// targeting an OPEN window (building the tree needs the main actor); only the closed-window error
+    /// and `window.list` are answered here.
+    nonisolated func fastPathResponse(for request: ControlRequest) -> ControlResponse? {
+        let nodes = cachedWindows()
+        guard !nodes.isEmpty else { return nil }
+        switch request.cmd {
+        case .windowList:
+            return ControlResponse(ok: true, result: ControlResult(windows: nodes))
+        case .tree:
+            guard let target = request.args?.window, !target.isEmpty else { return nil }
+            let candidates = nodes.compactMap { UUID(uuidString: $0.id) }
+            let active = nodes.first { $0.active }.flatMap { UUID(uuidString: $0.id) }
+            guard case .resolved(let id) = ControlResolve.resolve(target, candidates: candidates, active: active),
+                  let node = nodes.first(where: { $0.id == id.uuidString }), !node.open else { return nil }
+            return ControlResponse(ok: false, error: "window not open — window.select it first")
+        default:
+            return nil
+        }
+    }
+
     /// 1 MiB cap on a single request line — far above any realistic `session.type` payload. A line that
     /// exceeds it is rejected and the connection closed, so a bad client can never grow the buffer
     /// unbounded.
@@ -52,6 +91,11 @@ final class ControlServer {
         self.library = library
         self.actions = actions
         self.socketPath = socketPath ?? ControlServer.defaultSocketPath()
+        // keep the read cache's `active` flag fresh across async frontmost changes (this server lives
+        // for the app's lifetime, so the observer doesn't need removal).
+        NotificationCenter.default.addObserver(forName: .agtWindowFrontmostChanged, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshWindowCache() }
+        }
     }
 
     /// The socket path the app and the CLI rendezvous on. `AGT_CONTROL_SOCKET` is an explicit override
@@ -154,6 +198,10 @@ final class ControlServer {
     /// than crashing. Runs on the background queue (called from `acceptLoop`).
     nonisolated private static func handleConnection(_ conn: Int32, server: ControlServer) {
         defer { close(conn) }
+        // never let a write to a client that already hung up raise SIGPIPE (default-fatal) — that would
+        // take the whole app down mid-request; SO_NOSIGPIPE turns it into a normal EPIPE write error.
+        var noSigPipe: Int32 = 1
+        setsockopt(conn, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
 
         guard let line = readLine(conn) else {
             writeResponse(conn, ControlResponse(ok: false, error: "request too large or read failed"))
@@ -168,7 +216,17 @@ final class ControlServer {
             return
         }
 
-        // hop to the main actor to execute, blocking this background thread until it returns.
+        // fast-path read-only window queries from a thread-safe cache, WITHOUT hopping to the main
+        // actor: a window close can briefly stall the main thread (surface teardown / re-render), and
+        // the serial accept loop would otherwise go unresponsive to `window.list` polls behind it.
+        if let cached = server.fastPathResponse(for: request) {
+            writeResponse(conn, cached)
+            return
+        }
+
+        // hop to the main actor to execute, blocking this background thread until it returns. dispatch
+        // refreshes the window cache itself (single main-actor execution), so the fast path reflects
+        // this command's mutations without a second hop that could queue behind a post-close stall.
         let response = runBlocking { await server.dispatch(request) }
         writeResponse(conn, response)
     }
@@ -181,7 +239,10 @@ final class ControlServer {
         while true {
             let n = read(conn, &byte, 1)
             if n == 0 { return buffer.isEmpty ? nil : buffer } // EOF: accept a trailing line without newline.
-            if n < 0 { return nil }
+            if n < 0 {
+                if errno == EINTR { continue } // a signal interrupted the blocking read; retry
+                return nil
+            }
             if byte == UInt8(ascii: "\n") { return buffer }
             buffer.append(byte)
             if buffer.count > maxLineBytes { return nil }
@@ -197,7 +258,11 @@ final class ControlServer {
             let base = raw.bindMemory(to: UInt8.self).baseAddress!
             while offset < data.count {
                 let n = write(conn, base + offset, data.count - offset)
-                if n <= 0 { return }
+                if n < 0 {
+                    if errno == EINTR { continue } // retry an interrupted write
+                    return
+                }
+                if n == 0 { return }
                 offset += n
             }
         }
@@ -227,6 +292,9 @@ final class ControlServer {
     /// Execute a request against the store/actions seam. Never throws across the socket: any failure is a
     /// `{"ok":false,"error":…}` response.
     private func dispatch(_ request: ControlRequest) async -> ControlResponse {
+        // refresh the read cache within this same main-actor execution (a window mutation just ran), so
+        // the background fast path sees the new state without a separate hop that could stall.
+        defer { refreshWindowCache() }
         switch request.cmd {
         case .tree:
             return resolvePlacementStore(request.args?.window) { store in
@@ -665,8 +733,17 @@ final class ControlServer {
         switch resolveWindowID(target) {
         case .failure(let response): return response
         case .success(let id):
-            WindowRegistry.shared.close(id)
-            await pollUntil { !self.library.isOpen(id) }
+            // close the on-screen window if it's registered (drives the willClose teardown), then a
+            // semantic fallback: if it isn't registered yet (window.close racing window.new before the
+            // NSWindow attaches) or willClose hasn't flipped the flag, drop the store directly so the
+            // window is reliably marked closed regardless of the attach timing.
+            let hadWindow = WindowRegistry.shared.close(id)
+            if hadWindow {
+                await pollUntil { !self.library.isOpen(id) }
+            }
+            if library.isOpen(id) {
+                library.closeWindow(id)
+            }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

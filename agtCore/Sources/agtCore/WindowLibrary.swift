@@ -286,8 +286,13 @@ public final class WindowLibrary {
     /// (app target) tears down the window's surfaces first — `WindowLibrary` only drops the store.
     /// No-op for an unknown/closed id, or while terminating (the open-set must survive for reopen-all).
     public func closeWindow(_ id: UUID) {
-        guard !isTerminating, stores[id] != nil else { return }
+        guard !isTerminating else { return }
+        // cancel any queued claim for this id so a window still attaching can't re-open it after a
+        // close that raced its registration (window.new immediately followed by window.close).
+        pendingClaim.removeAll { $0 == id }
+        guard stores[id] != nil else { return }
         stores[id] = nil
+        if frontmostWindowID == id { frontmostWindowID = activeWindowID }
         saveIndex()
     }
 

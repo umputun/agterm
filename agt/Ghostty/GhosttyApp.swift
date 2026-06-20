@@ -214,4 +214,9 @@ extension Notification.Name {
     /// sidebar) re-read the new `GhosttyApp.terminalBackgroundColor` immediately instead of waiting
     /// for the window to re-key.
     static let agtAppearanceChanged = Notification.Name("agt.appearanceChanged")
+
+    /// Posted when a window becomes frontmost (the active-window change is async, via the window's
+    /// didBecomeKey), so the control server can refresh its cached `window.list` — whose `active` flag
+    /// would otherwise stay stale until the next dispatched command.
+    static let agtWindowFrontmostChanged = Notification.Name("agt.windowFrontmostChanged")
 }

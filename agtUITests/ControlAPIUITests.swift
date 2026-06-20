@@ -915,7 +915,11 @@ final class ControlAPIUITests: XCTestCase {
         var byte: UInt8 = 0
         while true {
             let n = read(fd, &byte, 1)
-            if n <= 0 { return buffer }
+            if n < 0 {
+                if errno == EINTR { continue } // a signal interrupted the blocking read; retry, don't treat as EOF
+                return buffer
+            }
+            if n == 0 { return buffer } // EOF
             if byte == UInt8(ascii: "\n") { return buffer }
             buffer.append(byte)
         }

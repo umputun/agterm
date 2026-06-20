@@ -28,10 +28,8 @@ enum WindowAppearance {
     static func sync(window: NSWindow, background: NSColor, chrome: Chrome) {
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none
-        // the visible title is our custom titlebar row; blank the OS window title and hide AppKit's
-        // title text so "agt" (the fallback since we dropped navigationTitle) never shows through,
-        // including after a split re-lays out the titlebar.
-        window.title = ""
+        // the visible title is our custom titlebar row; hide AppKit's own title text so the OS window
+        // title (set by the accessor for the window menu / XCUITest) never shows beside the header.
         window.titleVisibility = .hidden
         window.styleMask.insert(.fullSizeContentView)
 

@@ -319,7 +319,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         scheduleRestoredWindowReconciliation(reason: "did-finish-launching")
     }
 
-    private func scheduleUITestWindowActivationRetries() {
+    func scheduleUITestWindowActivationRetries() {
         let delays: [TimeInterval] = [0, 0.1, 0.3, 0.6, 1.0, 1.5, 2.0]
         for delay in delays {
             DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
@@ -339,13 +339,23 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         NSApp.setActivationPolicy(.regular)
         NSApp.unhide(nil)
+        // present the launch window ONCE (FB11763863), then latch off. The windows are
+        // isRestorable=false so they won't re-minimize, and continuing to re-front every tick would
+        // oscillate the key window and fight a deliberate window.select (which made multi-window control
+        // tests flaky). A runtime window.new presents via its own per-window retry instead.
+        guard !didPresentUITestWindow else { return }
         NSApp.activate()
         for window in NSApp.windows where window.canBecomeKey {
             if window.isMiniaturized { window.deminiaturize(nil) }
             window.orderFrontRegardless()
             window.makeKeyAndOrderFront(nil)
+            didPresentUITestWindow = true
         }
     }
+
+    /// One-shot latch: true once the launch UI-test window has been presented, so the activation retry
+    /// schedule stops re-fronting (which would oscillate the key window).
+    private var didPresentUITestWindow = false
 
     private var didForceReopen = false
 
@@ -416,6 +426,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
-        true
+        // key termination off the model open-set, NOT AppKit's transient window count: closing one
+        // window (or a re-render that briefly drops the surviving NSWindow) can leave a momentary
+        // zero-window state while the library still has an open window, and quitting there would kill
+        // the app (and the control server) mid-session. Quit only when no window is open in the model.
+        guard let library else { return true }
+        return library.openIDs().isEmpty
     }
 }

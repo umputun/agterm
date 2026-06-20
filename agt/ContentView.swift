@@ -573,8 +573,7 @@ private struct WindowAccessor: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: TitleProbeView, context _: Context) {
-        _ = titleToken
-        nsView.reapplyBlend()
+        nsView.reapplyBlend(title: titleToken)
     }
 
     final class TitleProbeView: NSView {
@@ -602,8 +601,14 @@ private struct WindowAccessor: NSViewRepresentable {
         @available(*, unavailable)
         required init?(coder _: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-        /// Re-apply the blend (called from `updateNSView` on a session switch).
-        func reapplyBlend() {
+        /// The current window title ("session — window"). Set on the OS window (for the window menu
+        /// and XCUITest title-matching) but kept visually hidden via titleVisibility, since our custom
+        /// header renders the visible title.
+        private var latestTitle = ""
+
+        /// Re-apply the blend with the latest title (called from `updateNSView` on a session switch).
+        func reapplyBlend(title: String) {
+            latestTitle = title
             if let window { applyTitlebarBlend(window) }
         }
 
@@ -641,6 +646,16 @@ private struct WindowAccessor: NSViewRepresentable {
             DispatchQueue.main.async { [weak self, weak window] in
                 guard let self, let window, self.window === window else { return }
                 self.restoreSavedFrame(window)
+            }
+            // attach-race guard: if a window.close dropped this window's store while it was still
+            // attaching (window.new immediately followed by window.close), it's a zombie — close it
+            // rather than register and leave an orphaned on-screen window for a now-closed id.
+            guard library.isOpen(windowID) else {
+                DispatchQueue.main.async { [weak window] in
+                    window?.orderOut(nil)
+                    window?.close()
+                }
+                return
             }
             // register the NSWindow so the app can raise an already-open window for this id (dedup)
             // instead of spawning a second; install the confirm-before-close delegate proxy.
@@ -731,6 +746,9 @@ private struct WindowAccessor: NSViewRepresentable {
             guard library.frontmostWindowID != id else { return }
             library.frontmostWindowID = id
             library.saveIndex()
+            // the active-window change is async; let the control server refresh its cached window list
+            // so a `window.list` poll sees the new `active` flag without waiting for the next command.
+            NotificationCenter.default.post(name: .agtWindowFrontmostChanged, object: nil)
         }
 
         private func bringForward(_ window: NSWindow) {
@@ -780,15 +798,25 @@ private struct WindowAccessor: NSViewRepresentable {
             }
         }
 
+        /// One-shot latch so the per-window retry presents this window at most once.
+        private var didPresentForUITests = false
         private func bringForwardForUITests(_ window: NSWindow) {
+            // present a window that isn't on screen yet (FB11763863: created minimized/background), then
+            // latch off. Re-fronting on later ticks (or a momentary !isVisible during a re-render) would
+            // fight a deliberate window.select and oscillate the key window, flapping the "active" flag.
+            guard !didPresentForUITests, window.isMiniaturized || !window.isVisible else { return }
             NSApp.unhide(nil)
             NSApp.activate()
             if window.isMiniaturized { window.deminiaturize(nil) }
             window.orderFrontRegardless()
             window.makeKeyAndOrderFront(nil)
+            didPresentForUITests = true
         }
 
         private func applyTitlebarBlend(_ window: NSWindow) {
+            // set the OS window title (kept hidden via titleVisibility in the sync) so the window menu
+            // and XCUITest title-matching see it, even though our custom header shows the visible title.
+            window.title = latestTitle
             let background = GhosttyApp.shared.terminalBackgroundColor
                 ?? NSColor(srgbRed: 0.157, green: 0.173, blue: 0.204, alpha: 1)
             WindowAppearance.sync(window: window, background: background,
@@ -814,6 +842,9 @@ final class WindowRegistry {
     func register(_ id: WindowInfo.ID, window: NSWindow) {
         windows[id] = window
     }
+
+    /// Whether an on-screen window is registered for `id` (i.e. its NSWindow has attached).
+    func isRegistered(_ id: WindowInfo.ID) -> Bool { windows[id] != nil }
 
     func unregister(_ id: WindowInfo.ID) {
         windows[id] = nil
