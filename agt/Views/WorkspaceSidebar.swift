@@ -14,6 +14,20 @@ private final class SidebarCellView: NSTableCellView {
     /// Trailing unseen-notification count for the row (a session's `unseenCount`, or a collapsed
     /// workspace's roll-up), drawn as a small accent capsule. Hidden when 0.
     let badge = BadgeView()
+
+    /// Color the row text/icon from the terminal theme: a selected row pairs with the selection
+    /// foreground (over the selection-background pill the row draws), or white over the soft wash when
+    /// the theme exposes no selection color; an unselected row uses the theme foreground, icons dimmed.
+    /// Driven by the coordinator from the real selection state (not `backgroundStyle`, which AppKit only
+    /// flips while the table is first responder).
+    func setColors(selected: Bool) {
+        let app = GhosttyApp.shared
+        let color = selected
+            ? (app.terminalSelectionForegroundColor ?? .white)
+            : (app.terminalForegroundColor ?? .labelColor)
+        textField?.textColor = color
+        imageView?.contentTintColor = color.withAlphaComponent(selected ? 0.85 : 0.6)
+    }
 }
 
 /// A small filled accent capsule showing an unseen-notification count, custom-drawn (not an
@@ -64,29 +78,33 @@ private final class BadgeView: NSView {
     }
 }
 
-/// Row view that draws its own selection fill so the highlight brightness is tunable and consistent
-/// across key/non-key windows. The system source-list selection only has two states — emphasized
-/// (too bright in the active window) and non-emphasized (too dark in a background window once the
-/// sidebar has an opaque dark background) — with no middle ground. Instead: a soft fill for the key
-/// window, a dimmer one for a background window, with the text kept emphasized (white) on both. The
-/// `isEmphasized` override makes AppKit's key-change emphasis update redraw the row (the empty-looking
-/// setter still marks `needsDisplay`), so the brightness re-evaluates the instant focus moves.
+/// Row view that draws its own selection pill in `drawBackground`, so the selection is the terminal's
+/// `selection-background` color in every state. The table's `selectionHighlightStyle` is `.none` (set
+/// in `makeNSView`), so AppKit draws nothing of its own — otherwise it paints a gray unemphasized fill
+/// whenever the sidebar isn't first responder (the normal case, since focus lives in the terminal),
+/// which would override a custom `drawSelection`. `isEmphasized` is overridden so the row redraws when
+/// the window's key state changes (the brightness dims for a background window).
 private final class SidebarRowView: NSTableRowView {
-    /// Selection-fill opacity (white over the dark sidebar): brighter for the key window, dimmer for
-    /// a background one. Tunable — these are the two knobs for the highlight brightness.
+    /// White-wash fallback opacity (themes with no selection color): brighter for the key window,
+    /// dimmer for a background one.
     private static let keyAlpha: CGFloat = 0.13
     private static let inactiveAlpha: CGFloat = 0.07
-
-    override var interiorBackgroundStyle: NSView.BackgroundStyle { isSelected ? .emphasized : .normal }
 
     override var isEmphasized: Bool {
         get { window?.isKeyWindow ?? false }
         set { needsDisplay = true }
     }
 
-    override func drawSelection(in _: NSRect) {
+    override func drawBackground(in dirtyRect: NSRect) {
+        super.drawBackground(in: dirtyRect)
         guard isSelected else { return }
-        NSColor(white: 1, alpha: isEmphasized ? Self.keyAlpha : Self.inactiveAlpha).setFill()
+        if let selection = GhosttyApp.shared.terminalSelectionBackgroundColor {
+            // the terminal's own selection color; dim it for a background (non-key) window.
+            selection.withAlphaComponent(isEmphasized ? 1 : 0.55).setFill()
+        } else {
+            // no theme selection color: a soft white wash, brighter for the key window.
+            NSColor(white: 1, alpha: isEmphasized ? Self.keyAlpha : Self.inactiveAlpha).setFill()
+        }
         NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1.5), xRadius: 7, yRadius: 7).fill()
     }
 }
@@ -137,6 +155,10 @@ struct WorkspaceSidebar: NSViewRepresentable {
         outline.target = context.coordinator
         outline.doubleAction = #selector(Coordinator.handleDoubleClick(_:))
         if #available(macOS 11.0, *) { outline.style = .sourceList }
+        // disable AppKit's own selection drawing: it would paint a gray unemphasized capsule whenever
+        // the sidebar isn't first responder (focus normally lives in the terminal). SidebarRowView
+        // draws the themed selection pill itself in drawBackground for every state.
+        outline.selectionHighlightStyle = .none
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("main"))
         column.resizingMask = .autoresizingMask
@@ -224,9 +246,26 @@ struct WorkspaceSidebar: NSViewRepresentable {
                                                    name: .agtBeginRenameSession, object: nil)
             NotificationCenter.default.addObserver(self, selector: #selector(beginRenameWorkspaceNotified),
                                                    name: .agtBeginRenameWorkspace, object: nil)
+            // a theme change (new terminal foreground) re-tints the visible rows in place.
+            NotificationCenter.default.addObserver(self, selector: #selector(appearanceChanged),
+                                                   name: .agtAppearanceChanged, object: nil)
         }
 
         deinit { NotificationCenter.default.removeObserver(self) }
+
+        /// Re-tint the visible rows' text/icon to the current selection state and redraw the selection
+        /// pills, without a reloadData — used both when the selection changes (AppKit doesn't redraw on
+        /// its own with selectionHighlightStyle == .none) and on a live theme change.
+        func refreshSelectionAppearance() {
+            guard let outline = outlineView else { return }
+            for row in 0 ..< outline.numberOfRows {
+                let selected = outline.selectedRowIndexes.contains(row)
+                (outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView)?.setColors(selected: selected)
+            }
+            outline.enumerateAvailableRowViews { rowView, _ in rowView.needsDisplay = true }
+        }
+
+        @objc private func appearanceChanged() { refreshSelectionAppearance() }
 
         @objc private func beginRenameSessionNotified() {
             guard let id = store.selectedSessionID, let node = nodeCache[id] else { return }
@@ -363,6 +402,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
         }
 
         func outlineViewSelectionDidChange(_ notification: Notification) {
+            // repaint the selection pill + row text colors for the new selection (with .none highlight
+            // style AppKit won't redraw rows on its own).
+            refreshSelectionAppearance()
             guard !applyingSelection, let outline = outlineView else { return }
             let row = outline.selectedRow
             guard row >= 0, let node = outline.item(atRow: row) as? SidebarNode, node.kind == .session else {
@@ -464,6 +506,10 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 cell.imageView?.image = sessionIcon
                 cell.imageView?.setAccessibilityIdentifier("session-icon")
             }
+            // text/icon colors track the terminal theme; a selected row uses the selection foreground.
+            // refreshSelectionAppearance re-runs this for all rows on selection and theme changes.
+            let selected = outlineView.selectedRowIndexes.contains(outlineView.row(forItem: item))
+            cell.setColors(selected: selected)
             return cell
         }
 

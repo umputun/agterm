@@ -165,6 +165,10 @@ private struct WindowContentView: View {
     /// Mirror of `GhosttyApp.compactToolbar`: when true the cwd subtitle is dropped so the title bar
     /// collapses to a single line. Refreshed on `.agtAppearanceChanged`, like `terminalColor`.
     @State private var compactToolbar: Bool = WindowContentView.resolvedCompactToolbar()
+    /// The terminal theme's foreground color, mirrored from `GhosttyApp` and used for the chrome text
+    /// (title bar text + buttons, sidebar bottom bar) so non-terminal text tracks the theme. Refreshed
+    /// on `.agtAppearanceChanged`, like `terminalColor`.
+    @State private var chromeText: Color = WindowContentView.resolvedChromeText()
     /// Custom sidebar state (we own the split now, not NavigationSplitView): show/hide via the toolbar
     /// toggle, and a drag-resizable width. Not yet persisted (experiment).
     @State private var sidebarVisible = true
@@ -212,6 +216,7 @@ private struct WindowContentView: View {
         .onReceive(NotificationCenter.default.publisher(for: .agtAppearanceChanged)) { _ in
             terminalColor = WindowContentView.resolvedTerminalColor()
             compactToolbar = WindowContentView.resolvedCompactToolbar()
+            chromeText = WindowContentView.resolvedChromeText()
         }
         // blend the title bar with the terminal; report frontmost/close to the library; surface the
         // window un-minimized on launch. the title token makes updateNSView re-run the blend on a
@@ -351,6 +356,12 @@ private struct WindowContentView: View {
         GhosttyApp.shared.compactToolbar
     }
 
+    /// The terminal theme's foreground color (a light fallback if libghostty hasn't reported one),
+    /// mirrored into view state so a theme change re-tints the chrome text live.
+    private static func resolvedChromeText() -> Color {
+        Color(nsColor: GhosttyApp.shared.terminalForegroundColor ?? .labelColor)
+    }
+
     /// The titlebar title (first line): the active session's display name, suffixed with the window
     /// name as "session — window" when the window has a custom (user-set) name, so a renamed window
     /// is identifiable at a glance. Auto "window N" names are omitted. "agt" when nothing is selected.
@@ -376,7 +387,7 @@ private struct WindowContentView: View {
             if !compactToolbar, !windowSubtitle.isEmpty {
                 Text(windowSubtitle)
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(chromeText.opacity(0.6))
             }
         }
     }
@@ -408,6 +419,9 @@ private struct WindowContentView: View {
             .padding(.trailing, 14)
         }
         .buttonStyle(.plain)
+        // tint the title text and the toolbar buttons with the terminal theme's foreground so the
+        // chrome tracks the theme (the cwd subtitle dims itself to 0.6 over this).
+        .foregroundStyle(chromeText)
         // larger icons in the taller non-compact row, smaller in the compact row (imageScale hits the
         // SF Symbols, not the title text).
         .imageScale(compactToolbar ? .medium : .large)
@@ -536,6 +550,8 @@ private struct WindowContentView: View {
                     .contentShape(Rectangle())
             }
             .menuStyle(.borderlessButton)
+            // a borderless Menu ignores foregroundStyle on its glyph but follows the accent tint.
+            .tint(chromeText)
             .menuIndicator(.hidden)
             .fixedSize()
             .help("New Session")
@@ -546,6 +562,8 @@ private struct WindowContentView: View {
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)
+        // the add buttons track the terminal theme's foreground, matching the sidebar rows above.
+        .foregroundStyle(chromeText)
         // no explicit background: the sidebar is transparent (the window's terminal color shows
         // through), so a `.bar` material here would paint a mismatched darker strip.
     }

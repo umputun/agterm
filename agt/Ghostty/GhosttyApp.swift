@@ -19,6 +19,17 @@ final class GhosttyApp {
     /// window so the title bar blends with the terminal instead of drawing the default
     /// titlebar material. Nil if the color couldn't be read.
     private(set) var terminalBackgroundColor: NSColor?
+    /// The terminal foreground (text) color parsed from the resolved config. The chrome (sidebar row
+    /// text + icons, title bar text + buttons) uses it so non-terminal text tracks the theme instead
+    /// of the system label color. Nil if the color couldn't be read.
+    private(set) var terminalForegroundColor: NSColor?
+    /// The terminal selection-background color (theme `selection-background`). The selected sidebar row
+    /// draws its pill in this color so it matches the terminal's own selection. Nil if the theme
+    /// doesn't set it (the row falls back to a soft white wash).
+    private(set) var terminalSelectionBackgroundColor: NSColor?
+    /// The selected sidebar row's text color: the theme `selection-foreground`, or a black/white
+    /// contrast of the selection-background when the theme sets only the background. Nil if neither set.
+    private(set) var terminalSelectionForegroundColor: NSColor?
     /// Window translucency the chrome composites at the AppKit level — the background opacity
     /// (0...1) and CGS blur radius the Settings window last applied. NOT ghostty-resolved:
     /// `WindowAppearance.sync` reads these, `SettingsModel` writes them. Defaults are opaque.
@@ -63,7 +74,7 @@ final class GhosttyApp {
         }
         app = createdApp
         config = cfg
-        terminalBackgroundColor = Self.backgroundColor(from: cfg)
+        resolveThemeColors(from: cfg)
 
         // A main-RunLoop timer is proven to fire on the main thread, so
         // `assumeIsolated` is valid here (and ONLY here). 120Hz keeps latency
@@ -113,7 +124,90 @@ final class GhosttyApp {
         ghostty_app_update_config(app, newConfig)
         for surface in surfaces { surface.applyConfig(newConfig) }
         config = newConfig
-        terminalBackgroundColor = Self.backgroundColor(from: newConfig)
+        resolveThemeColors(from: newConfig)
+    }
+
+    /// Re-read the chrome colors (background, foreground, selection background/foreground) from a
+    /// resolved config. Called at init and on every settings reload. `background`/`foreground` come
+    /// from the resolved config; the selection colors are resolved separately (see below) because
+    /// `ghostty_config_get` does not expose the optional `selection-*` keys.
+    private func resolveThemeColors(from config: ghostty_config_t) {
+        terminalBackgroundColor = Self.color(from: config, key: "background")
+        terminalForegroundColor = Self.color(from: config, key: "foreground")
+        let (selectionBackground, selectionForeground) = Self.resolveSelectionColors()
+        terminalSelectionBackgroundColor = selectionBackground
+        terminalSelectionForegroundColor = selectionForeground
+            ?? selectionBackground.map(Self.contrastingText(for:))
+    }
+
+    /// The selection colors can't be read back through `ghostty_config_get` (it doesn't expose the
+    /// optional `selection-background`/`selection-foreground` keys), so resolve them by reading the
+    /// same config sources `loadConfig` loads — in the same order — plus the active theme file. An
+    /// explicit `selection-*` line wins over the theme's; either color may be nil when unset.
+    private static func resolveSelectionColors() -> (NSColor?, NSColor?) {
+        var sources: [String] = []
+        if let defaults = Bundle.main.url(forResource: "ghostty-defaults", withExtension: "conf") {
+            sources.append(defaults.path)
+        }
+        sources.append((NSHomeDirectory() as NSString).appendingPathComponent(".config/ghostty/config"))
+        sources.append(settingsConfigURL.path)
+
+        var themeName: String?
+        var selBg: NSColor?
+        var selFg: NSColor?
+        for path in sources {
+            for (key, value) in keyValues(ofFileAt: path) {
+                switch key {
+                case "theme": themeName = value
+                case "selection-background": selBg = parseHexColor(value)
+                case "selection-foreground": selFg = parseHexColor(value)
+                default: break
+                }
+            }
+        }
+        // the theme file fills any selection color not set explicitly above.
+        if (selBg == nil || selFg == nil), let themeName, !themeName.isEmpty,
+           let themesDir = Bundle.main.url(forResource: "ghostty", withExtension: nil)?
+               .appendingPathComponent("themes", isDirectory: true) {
+            for (key, value) in keyValues(ofFileAt: themesDir.appendingPathComponent(themeName).path) {
+                if key == "selection-background", selBg == nil { selBg = parseHexColor(value) }
+                if key == "selection-foreground", selFg == nil { selFg = parseHexColor(value) }
+            }
+        }
+        return (selBg, selFg)
+    }
+
+    /// Parse a ghostty-style config file into its `key = value` pairs in file order, skipping blank
+    /// and `#` comment lines. Missing/unreadable files yield no pairs.
+    private static func keyValues(ofFileAt path: String) -> [(String, String)] {
+        guard let text = try? String(contentsOfFile: path, encoding: .utf8) else { return [] }
+        return text.split(separator: "\n").compactMap { raw in
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty, !line.hasPrefix("#"), let eq = line.firstIndex(of: "=") else { return nil }
+            let key = line[..<eq].trimmingCharacters(in: .whitespaces)
+            let value = line[line.index(after: eq)...].trimmingCharacters(in: .whitespaces)
+            return (key, value)
+        }
+    }
+
+    /// Parse a `#rrggbb` or `#rgb` hex color (with or without the leading `#`) to an opaque sRGB
+    /// `NSColor`, or nil if it isn't a valid hex triplet.
+    private static func parseHexColor(_ value: String) -> NSColor? {
+        var hex = value.hasPrefix("#") ? String(value.dropFirst()) : value
+        if hex.count == 3 { hex = hex.map { "\($0)\($0)" }.joined() }
+        guard hex.count == 6, let int = UInt32(hex, radix: 16) else { return nil }
+        return NSColor(srgbRed: CGFloat((int >> 16) & 0xFF) / 255.0,
+                       green: CGFloat((int >> 8) & 0xFF) / 255.0,
+                       blue: CGFloat(int & 0xFF) / 255.0,
+                       alpha: 1)
+    }
+
+    /// Black or white, whichever contrasts better with `color` by perceived luminance. The selected-row
+    /// text falls back to this when the theme sets a selection-background but no selection-foreground.
+    private static func contrastingText(for color: NSColor) -> NSColor {
+        let c = color.usingColorSpace(.sRGB) ?? color
+        let luminance = 0.299 * c.redComponent + 0.587 * c.greenComponent + 0.114 * c.blueComponent
+        return luminance > 0.6 ? .black : .white
     }
 
     private func loadConfig() -> ghostty_config_t? {
@@ -155,9 +249,9 @@ final class GhosttyApp {
         return cfg
     }
 
-    /// Reads the `background` color from the resolved config as an opaque `NSColor`.
-    private static func backgroundColor(from config: ghostty_config_t) -> NSColor? {
-        let key = "background"
+    /// Reads a named color key (e.g. `background`, `foreground`) from the resolved config as an
+    /// opaque `NSColor`, or nil if the key isn't set.
+    private static func color(from config: ghostty_config_t, key: String) -> NSColor? {
         var color = ghostty_config_color_s()
         let got = key.withCString { ghostty_config_get(config, &color, $0, UInt(key.utf8.count)) }
         guard got else { return nil }
