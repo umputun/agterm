@@ -325,33 +325,52 @@ private struct WindowContentView: View {
     /// only the visible deck entry, and within a split only the focused pane.
     @ViewBuilder private func sessionDetail(_ session: Session, isActive: Bool) -> some View {
         ZStack {
-            if session.isSplit {
-                HSplitView {
-                    TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
-                                 isActive: isActive && !session.splitFocused)
-                        .overlay { paneDim(session.splitFocused) }
-                        .id(session.id)
+            // the session's pane(s). hidden (opacity 0) but kept MOUNTED — shells stay alive, like the deck
+            // does for inactive sessions — while an overlay is up, so the translucent overlay reveals the
+            // window backing (desktop, tint + blur), not the session content behind it.
+            Group {
+                if session.isSplit {
+                    HSplitView {
+                        TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
+                                     isActive: isActive && !session.splitFocused && !session.overlayActive)
+                            .overlay { paneDim(session.splitFocused) }
+                            .id(session.id)
+                        TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
+                                     isActive: isActive && session.splitFocused && !session.overlayActive)
+                            .overlay { paneDim(!session.splitFocused) }
+                            .id("\(session.id.uuidString)-split")
+                    }
+                    // per-session identity: without it SwiftUI reuses one NSSplitView across session
+                    // switches and the divider (and arranged subviews) leak between sessions.
+                    .id("\(session.id.uuidString)-hsplit")
+                } else if session.splitFocused, session.splitSurface != nil {
+                    // split hidden while the right pane had focus: show that pane maximized.
                     TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
-                                 isActive: isActive && session.splitFocused)
-                        .overlay { paneDim(!session.splitFocused) }
+                                 isActive: isActive && !session.overlayActive)
                         .id("\(session.id.uuidString)-split")
+                } else {
+                    TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
+                                 isActive: isActive && !session.overlayActive)
+                        .id(session.id)
                 }
-                // per-session identity: without it SwiftUI reuses one NSSplitView across session
-                // switches and the divider (and arranged subviews) leak between sessions.
-                .id("\(session.id.uuidString)-hsplit")
-            } else if session.splitFocused, session.splitSurface != nil {
-                // split hidden while the right pane had focus: show that pane maximized.
-                TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface, isActive: isActive)
-                    .id("\(session.id.uuidString)-split")
-            } else {
-                TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface, isActive: isActive)
-                    .id(session.id)
             }
-            // an ephemeral overlay terminal on top, hiding the single/split content while its program runs.
+            .opacity(session.overlayActive ? 0 : 1)
+            .allowsHitTesting(!session.overlayActive)
+            // an ephemeral overlay terminal on top, running its program. with the pane(s) hidden behind it,
+            // it draws translucent + blurred exactly like a regular pane (no opaque backing) — its
+            // transparency reveals the window backing, not the session. zIndex keeps it above the pane(s).
             if session.overlayActive {
                 TerminalView(session: session, surfaceKeyPath: \.overlaySurface, makeSurface: makeOverlaySurface, isActive: isActive)
                     .id("\(session.id.uuidString)-overlay")
+                    .zIndex(1)
             }
+        }
+        // when the overlay closes, the underlying pane must reclaim first responder. the pane re-activating
+        // only does a single makeFirstResponder, which loses the race with the overlay view's teardown/
+        // re-host — so drive the bounded retry the split-collapse survivor uses. gated on isActive so only
+        // the visible session reclaims focus.
+        .onChange(of: session.overlayActive) { _, isOpen in
+            if !isOpen, isActive { (session.activeSurface as? GhosttySurfaceView)?.focusAfterReparent() }
         }
     }
 

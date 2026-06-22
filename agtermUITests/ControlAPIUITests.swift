@@ -257,6 +257,59 @@ final class ControlAPIUITests: XCTestCase {
                       "the overlay should auto-close when the command exits (no press-any-key prompt)")
     }
 
+    // closing an overlay must hand keyboard focus back to the underlying session terminal. this test is
+    // DISCRIMINATING: it first proves the overlay actually grabbed keyboard focus (an overlay shell
+    // `read` captures a typed line), so the after-close assertion is meaningful — then proves the same
+    // keystrokes reach the underlying session shell once the overlay is gone. (overlay rendering/opacity
+    // is verified manually; this asserts the focus handoff, which is automatable.)
+    func testOverlayCloseReturnsFocusToSession() throws {
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let root = try XCTUnwrap(treeResult["tree"] as? [String: Any], "result should carry a tree")
+        let workspaces = try XCTUnwrap(root["workspaces"] as? [[String: Any]], "tree should list workspaces")
+        let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
+        let id = try XCTUnwrap(sessions.first?["id"] as? String, "should have a seeded session id")
+
+        // the session's tty, captured by injecting into its surface directly (independent of focus).
+        let sessionTTY = markerDir.appendingPathComponent("session-tty")
+        XCTAssertEqual(try sendCommand(typeRequest(text: "tty > '\(sessionTTY.path)'\n", target: id, select: false))["ok"] as? Bool,
+                       true, "typing tty into the session should succeed")
+        let sessionTtyValue = try XCTUnwrap(pollMarker(sessionTTY, timeout: 12), "the session should report its tty")
+
+        // open an overlay whose shell captures one keyboard line, then stays alive (cat) so the overlay
+        // remains up until we close it. the captured line proves the overlay holds keyboard focus.
+        let ovlMarker = markerDir.appendingPathComponent("overlay-keys")
+        let ovlCmd = "sh -c 'IFS= read -r x; printf %s \"$x\" > \(ovlMarker.path); cat'"
+        let ovlJSON = try! JSONSerialization.data(withJSONObject:
+            ["cmd": "session.overlay.open", "target": id, "args": ["command": ovlCmd]])
+        let open = try sendCommand(String(data: ovlJSON, encoding: .utf8)!)
+        XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the overlay should be up")
+
+        // type via the KEYBOARD while the overlay is up; the overlay shell's `read` should capture it,
+        // proving the overlay (not the session) holds first responder.
+        usleep(800_000) // let the overlay surface attach, grab focus, and the shell reach `read`
+        app.typeText("OVLFOCUS")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertEqual(pollMarker(ovlMarker, timeout: 12), "OVLFOCUS",
+                       "the overlay must hold keyboard focus while open (else this test can't assert the handoff)")
+
+        let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: false, timeout: 10), "the overlay should be gone")
+
+        // let focus settle after the overlay tears down, then type via the keyboard again: it must now
+        // reach the underlying session shell (same tty), proving focus returned.
+        usleep(800_000)
+        let afterTTY = markerDir.appendingPathComponent("after-close-tty")
+        app.typeText("tty > '\(afterTTY.path)'")
+        app.typeKey(.return, modifierFlags: [])
+
+        let afterValue = try XCTUnwrap(pollMarker(afterTTY, timeout: 12),
+                                       "after overlay close, keyboard focus should return to the session terminal")
+        XCTAssertEqual(afterValue, sessionTtyValue, "focus should return to the SAME session terminal, not be lost")
+    }
+
     // session.split toggle shows split:true in the tree; off hides it (keep-alive, mirrors ⌘D — the
     // pane's surface is NOT destroyed, only closeSplit on shell-exit does that), clearing split:false.
     func testSessionSplitToggle() throws {
