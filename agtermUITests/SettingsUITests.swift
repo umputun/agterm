@@ -66,6 +66,11 @@ final class SettingsUITests: XCTestCase {
                       "turning compact toolbar on should persist compactToolbar=true")
     }
 
+    // NOTE: no UI test for the General → Scrolling stepper. A SwiftUI `Stepper` (→ NSStepper) does not
+    // expose a stable element for its accessibilityIdentifier to XCUITest (the id resolves transiently
+    // then vanishes at interaction time), the same reason the existing `settings-font-size` stepper has
+    // none. The value → `mouse-scroll-multiplier` config logic is covered host-free in AppSettingsTests.
+
     // MARK: - Helpers
 
     /// Opens the Settings window (Cmd+,) if needed, switches to `tab`, and returns the control with

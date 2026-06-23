@@ -61,6 +61,16 @@ private struct GeneralSettingsView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
+
+            Section("Scrolling") {
+                Stepper(value: mouseScrollMultiplier, in: 1 ... 10, step: 1) {
+                    Text("Scroll speed: \(Int(model.settings.mouseScrollMultiplier ?? 3))x")
+                }
+                .accessibilityIdentifier("settings-scroll-speed")
+                Text("Mouse-wheel and trackpad scroll-speed multiplier. Higher is faster; the default is 3.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .padding()
@@ -78,6 +88,13 @@ private struct GeneralSettingsView: View {
     private var notificationBadgeEnabled: Binding<Bool> {
         Binding(get: { model.settings.notificationBadgeEnabled ?? true },
                 set: { model.setNotificationBadgeEnabled($0 ? nil : false) })
+    }
+
+    /// nil (the default) reads as 3; stepping back to 3 stores nil so settings.json stays minimal. The
+    /// config always emits 3 either way, so the default speed is effective regardless.
+    private var mouseScrollMultiplier: Binding<Double> {
+        Binding(get: { model.settings.mouseScrollMultiplier ?? 3 },
+                set: { model.setMouseScrollMultiplier($0 == 3 ? nil : $0) })
     }
 }
 

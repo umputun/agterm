@@ -19,8 +19,10 @@ struct AppSettingsTests {
         #expect(decoded.theme == nil)
     }
 
-    @Test func emptySettingsProduceNoConfigLines() {
-        #expect(AppSettings().ghosttyConfigLines().isEmpty)
+    @Test func emptySettingsEmitOnlyScrollDefault() {
+        // every other field is unset (omitted); only mouse-scroll-multiplier is always emitted, at its
+        // default of 3.
+        #expect(AppSettings().ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
     }
 
     @Test func configLinesCoverSetFieldsRawNoQuoting() {
@@ -34,12 +36,13 @@ struct AppSettingsTests {
 
     @Test func configLinesOmitUnsetFields() {
         let lines = AppSettings(theme: "Alabaster").ghosttyConfigLines()
-        #expect(lines == ["theme = Alabaster"])
+        // theme is set; font lines omitted; the scroll default is always present.
+        #expect(lines == ["theme = Alabaster", "mouse-scroll-multiplier = 3"])
     }
 
     @Test func fractionalFontSizeKeepsDecimal() {
         let lines = AppSettings(fontSize: 13.5).ghosttyConfigLines()
-        #expect(lines == ["font-size = 13.5"])
+        #expect(lines == ["font-size = 13.5", "mouse-scroll-multiplier = 3"])
     }
 
     @Test func backgroundFieldsRoundTrip() throws {
@@ -55,11 +58,30 @@ struct AppSettingsTests {
     }
 
     @Test func opaqueOrUnsetOpacityEmitsNoBackgroundPins() {
-        // full opacity, unset opacity, and a blur with no translucency all render normally:
-        // ghostty paints its own background (blur needs opacity < 1 to be visible).
-        #expect(AppSettings(backgroundOpacity: 1).ghosttyConfigLines().isEmpty)
-        #expect(AppSettings().ghosttyConfigLines().isEmpty)
-        #expect(AppSettings(backgroundBlur: 40).ghosttyConfigLines().isEmpty)
+        // full opacity, unset opacity, and a blur with no translucency all render normally: ghostty
+        // paints its own background (blur needs opacity < 1 to be visible). none emit the background
+        // pins (the always-present scroll default means the line set is not empty).
+        for settings in [AppSettings(backgroundOpacity: 1), AppSettings(), AppSettings(backgroundBlur: 40)] {
+            let lines = settings.ghosttyConfigLines()
+            #expect(!lines.contains("background-opacity = 0"))
+            #expect(!lines.contains("background-blur = 0"))
+        }
+    }
+
+    @Test func mouseScrollMultiplierAlwaysEmittedAtDefaultThree() {
+        // unset → the default 3 is emitted (NOT omitted), so the default speed is effective.
+        #expect(AppSettings().ghosttyConfigLines().contains("mouse-scroll-multiplier = 3"))
+    }
+
+    @Test func mouseScrollMultiplierEmitsSetValue() {
+        #expect(AppSettings(mouseScrollMultiplier: 5).ghosttyConfigLines().contains("mouse-scroll-multiplier = 5"))
+        // fractional keeps the decimal via the shared format helper
+        #expect(AppSettings(mouseScrollMultiplier: 1.5).ghosttyConfigLines().contains("mouse-scroll-multiplier = 1.5"))
+    }
+
+    @Test func mouseScrollMultiplierRoundTrips() throws {
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(mouseScrollMultiplier: 4)))
+        #expect(decoded.mouseScrollMultiplier == 4)
     }
 
     @Test func statusColorFieldsRoundTripAndAreNotGhosttyKeys() throws {
@@ -67,22 +89,24 @@ struct AppSettingsTests {
                                    completedStatusColorHex: "#778899")
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
         #expect(decoded == original)
-        // the glyph colors are applied at the AppKit level, never as ghostty config keys
-        #expect(decoded.ghosttyConfigLines().isEmpty)
+        // the glyph colors are applied at the AppKit level, never as ghostty config keys — so the only
+        // line is the always-present scroll default.
+        #expect(decoded.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
     }
 
     @Test func notificationsEnabledRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(notificationsEnabled: false)))
         #expect(decoded.notificationsEnabled == false)
-        // it's an app-level toggle, never a ghostty config key
-        #expect(AppSettings(notificationsEnabled: false).ghosttyConfigLines().isEmpty)
+        // it's an app-level toggle, never a ghostty config key — only the scroll default is emitted.
+        #expect(AppSettings(notificationsEnabled: false).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
     }
 
     @Test func compactToolbarRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(compactToolbar: true)))
         #expect(decoded.compactToolbar == true)
-        // window-chrome toggle applied at the AppKit level, never a ghostty config key
-        #expect(AppSettings(compactToolbar: true).ghosttyConfigLines().isEmpty)
+        // window-chrome toggle applied at the AppKit level, never a ghostty config key — only the
+        // scroll default is emitted.
+        #expect(AppSettings(compactToolbar: true).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
     }
 
     @Test func notificationBadgeEnabledDefaultsNil() {
@@ -92,16 +116,16 @@ struct AppSettingsTests {
     @Test func notificationBadgeEnabledRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(notificationBadgeEnabled: false)))
         #expect(decoded.notificationBadgeEnabled == false)
-        // app-level sidebar render toggle, never a ghostty config key
-        #expect(AppSettings(notificationBadgeEnabled: false).ghosttyConfigLines().isEmpty)
+        // app-level sidebar render toggle, never a ghostty config key — only the scroll default is emitted.
+        #expect(AppSettings(notificationBadgeEnabled: false).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
     }
 
     @Test func configDirectoryRoundTripsAndIsNotAConfigLine() throws {
         let original = AppSettings(configDirectory: "/tmp/agterm-config")
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
         #expect(decoded.configDirectory == "/tmp/agterm-config")
-        // app-level path, never a ghostty config key
-        #expect(decoded.ghosttyConfigLines().isEmpty)
+        // app-level path, never a ghostty config key — only the always-emitted scroll default appears.
+        #expect(decoded.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
     }
 
     @Test func configDirectoryDecodesNilWhenAbsent() throws {

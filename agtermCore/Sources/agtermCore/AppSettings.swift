@@ -45,12 +45,20 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// (`~/.config/agterm`). Resolved by `ConfigPaths.configDirectory(setting:stateDir:home:)`; an
     /// app-level path, never a ghostty key.
     public var configDirectory: String?
+    /// Mouse scroll speed multiplier (ghostty `mouse-scroll-multiplier`), applied as a bare value to
+    /// both the notched wheel and the trackpad. nil means agterm's default of 3. UNLIKE the other
+    /// fields, this key is ALWAYS emitted (nil emits `= 3`), so the default is effective rather than
+    /// deferring to ghostty's per-device defaults (discrete 3 / precision 1) — a fresh install scrolls
+    /// at 3, which speeds the trackpad up out of the box. Consequence: it overrides any
+    /// `mouse-scroll-multiplier` set in the user's own `~/.config/ghostty/config`.
+    public var mouseScrollMultiplier: Double?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 backgroundOpacity: Double? = nil, backgroundBlur: Int? = nil, notificationsEnabled: Bool? = nil,
                 compactToolbar: Bool? = nil, notificationBadgeEnabled: Bool? = nil,
                 activeStatusColorHex: String? = nil, blockedStatusColorHex: String? = nil,
-                completedStatusColorHex: String? = nil, configDirectory: String? = nil) {
+                completedStatusColorHex: String? = nil, configDirectory: String? = nil,
+                mouseScrollMultiplier: Double? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -63,6 +71,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.blockedStatusColorHex = blockedStatusColorHex
         self.completedStatusColorHex = completedStatusColorHex
         self.configDirectory = configDirectory
+        self.mouseScrollMultiplier = mouseScrollMultiplier
     }
 
     /// The ghostty config lines for the set fields, one `key = value` per line, suitable for a
@@ -81,6 +90,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
             lines.append("background-opacity = 0")
             lines.append("background-blur = 0")
         }
+        // always emitted (nil = agterm's default of 3), so the default speed is effective rather than
+        // ghostty's per-device defaults. a bare value sets both the wheel and the trackpad.
+        lines.append("mouse-scroll-multiplier = \(Self.format(mouseScrollMultiplier ?? 3))")
         return lines
     }
 
