@@ -21,11 +21,16 @@ public enum ConfigPaths {
         configDirectory.appendingPathComponent("keymap.conf")
     }
 
-    /// The shell command that opens `keymapPath` in the user's editor: `$VISUAL` else `$EDITOR` else
-    /// `vi`, with the path single-quoted for safe `/bin/sh` interpolation. Meant to run in the overlay's
-    /// login shell, so an `$EDITOR`/`$VISUAL` exported from the user's login-shell startup is honored
-    /// (one set only in `~/.zshrc` is not, since the overlay's inner shell is non-interactive).
+    /// The shell command that opens `keymapPath` in the user's editor (`$VISUAL` else `$EDITOR` else
+    /// `vi`). It runs the editor through the user's INTERACTIVE login shell (`$SHELL -ilc`) so the editor
+    /// resolves exactly as in a normal terminal — including an `$EDITOR`/`$VISUAL` set only in `~/.zshrc`.
+    /// The overlay's own process is a bare non-interactive `/bin/sh` that sources NONE of the user's shell
+    /// config (so a direct `${EDITOR:-vi}` there always fell back to `vi`); re-invoking `$SHELL -ilc` is
+    /// what sources `.zshrc`/`.zprofile`/`.zshenv`. The path rides as a positional arg (`$1`):
+    /// single-quoted at the eval level and double-quoted inside the `-c` script, so spaces and embedded
+    /// quotes survive both layers without interpolating into the script.
     public static func editorCommand(forKeymapPath keymapPath: String) -> String {
-        "${VISUAL:-${EDITOR:-vi}} '\(keymapPath.replacingOccurrences(of: "'", with: "'\\''"))'"
+        let quoted = "'\(keymapPath.replacingOccurrences(of: "'", with: "'\\''"))'"
+        return "${SHELL:-/bin/zsh} -ilc '${VISUAL:-${EDITOR:-vi}} \"$1\"' agterm-keymap-edit \(quoted)"
     }
 }
