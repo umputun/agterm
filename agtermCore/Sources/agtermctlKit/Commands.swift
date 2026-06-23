@@ -76,7 +76,7 @@ public struct Agtermctl: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "agtermctl",
         abstract: "Drive agterm over its control socket.",
-        subcommands: [Tree.self, Workspace.self, Session.self, Window.self, Quick.self, Notify.self, Font.self]
+        subcommands: [Tree.self, Workspace.self, Session.self, Window.self, Quick.self, Notify.self, Font.self, Keymap.self]
     )
 
     public init() {}
@@ -508,6 +508,23 @@ struct Window: ParsableCommand {
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .windowMove, target: id, args: ControlArgs(x: x, y: y, display: display))
         }
+    }
+}
+
+// MARK: - keymap
+
+struct Keymap: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Keymap commands.",
+        subcommands: [Reload.self]
+    )
+
+    struct Reload: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Re-read and apply keymap.conf (prints the diagnostic count).")
+        // keymap.reload is app-global (the frontmost window's settings model), so no `--window` selector.
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .keymapReload) }
     }
 }
 

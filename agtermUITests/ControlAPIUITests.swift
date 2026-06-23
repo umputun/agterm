@@ -1013,6 +1013,29 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertTrue(settled, "the remaining open window should become the single active window after closing the frontmost")
     }
 
+    // MARK: - Keymap
+
+    // keymap.reload re-reads keymap.conf and returns the parse-diagnostic count. With no keymap file
+    // seeded (the auto-created starter is all comments), a reload reports zero diagnostics.
+    func testKeymapReloadReportsZeroDiagnostics() throws {
+        let response = try sendCommand(#"{"cmd":"keymap.reload"}"#)
+        XCTAssertEqual(response["ok"] as? Bool, true, "keymap.reload should succeed: \(response)")
+        let result = try XCTUnwrap(response["result"] as? [String: Any], "keymap.reload should carry a result")
+        XCTAssertEqual(result["count"] as? Int, 0, "the all-comment starter keymap should have no diagnostics: \(response)")
+    }
+
+    // a keymap.conf with a broken line seeded under <stateDir>/config surfaces in the diagnostic count
+    // keymap.reload returns: relaunch with the broken file in place (so the starter isn't created over
+    // it), then keymap.reload reports a non-zero count.
+    func testKeymapReloadReportsDiagnosticsForBrokenFile() throws {
+        try relaunch(withKeymap: "bogus verb here\n")
+        let response = try sendCommand(#"{"cmd":"keymap.reload"}"#)
+        XCTAssertEqual(response["ok"] as? Bool, true, "keymap.reload should succeed even with a broken file: \(response)")
+        let result = try XCTUnwrap(response["result"] as? [String: Any], "keymap.reload should carry a result")
+        let count = try XCTUnwrap(result["count"] as? Int, "keymap.reload should return a diagnostic count: \(response)")
+        XCTAssertGreaterThanOrEqual(count, 1, "a broken keymap line should yield at least one diagnostic: \(response)")
+    }
+
     // MARK: - Window oracles
 
     /// Sends `window.list` and returns the windows array.
@@ -1131,6 +1154,21 @@ final class ControlAPIUITests: XCTestCase {
         app.launchEnvironment["AGTERM_CONTROL_SOCKET"] = socketPath
         app.launchForUITest()
         XCTAssertTrue(app.staticTexts["session-row"].waitForExistence(timeout: 30), "restored session should exist")
+    }
+
+    /// Terminate the running app, write `keymap` to `<stateDir>/config/keymap.conf`, and relaunch with the
+    /// same isolated state dir + socket. Writing the file before relaunch means `ensureStarterKeymap()`
+    /// finds it present and never overwrites it, so the seeded content is what gets parsed.
+    private func relaunch(withKeymap keymap: String) throws {
+        app.terminate()
+        let configDir = stateDir.appendingPathComponent("config", isDirectory: true)
+        try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
+        try Data(keymap.utf8).write(to: configDir.appendingPathComponent("keymap.conf"))
+        app = XCUIApplication()
+        app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
+        app.launchEnvironment["AGTERM_CONTROL_SOCKET"] = socketPath
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["session-row"].waitForExistence(timeout: 30), "seeded session should exist")
     }
 
     /// Build a `session.type` request line with JSON-escaped `text` (covers the newline and the quoted path).

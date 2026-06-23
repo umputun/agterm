@@ -20,6 +20,7 @@ final class ControlServer {
     /// regardless of which window is frontmost. The `window.*` commands drive the library itself.
     private let library: WindowLibrary
     private let actions: AppActions
+    private let settingsModel: SettingsModel
     private let socketPath: String
 
     /// The frontmost open window's store — the default target of a placement/`active` command. Falls
@@ -88,9 +89,10 @@ final class ControlServer {
     /// unbounded.
     nonisolated private static let maxLineBytes = 1 << 20
 
-    init(library: WindowLibrary, actions: AppActions, socketPath: String? = nil) {
+    init(library: WindowLibrary, actions: AppActions, settingsModel: SettingsModel, socketPath: String? = nil) {
         self.library = library
         self.actions = actions
+        self.settingsModel = settingsModel
         self.socketPath = socketPath ?? ControlServer.defaultSocketPath()
         // keep the read cache's `active` flag fresh across async frontmost changes (this server lives
         // for the app's lifetime, so the observer doesn't need removal).
@@ -475,6 +477,8 @@ final class ControlServer {
             return windowResize(request.target, width: request.args?.width, height: request.args?.height)
         case .windowMove:
             return windowMove(request.target, x: request.args?.x, y: request.args?.y, display: request.args?.display)
+        case .keymapReload:
+            return reloadKeymap()
         }
     }
 
@@ -938,6 +942,18 @@ final class ControlServer {
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
+
+    // MARK: - Keymap
+
+    /// Re-read and re-parse `keymap.conf`, returning the count of parse diagnostics. The SAME
+    /// `reloadKeymap()` path the GUI's View ▸ Reload Keymap menu/palette item drives, so the menu/palette
+    /// and `keymap.reload` never diverge — control-native here only in the count it reports back.
+    private func reloadKeymap() -> ControlResponse {
+        settingsModel.reloadKeymap()
+        return ControlResponse(ok: true, result: ControlResult(count: settingsModel.keymapDiagnostics.count))
+    }
+
+    // MARK: - Window commands (cont.)
 
     /// Resolve a window id and rename it (the name lives in the index). Requires a name. Returns the id.
     private func windowRename(_ target: String?, name: String?) -> ControlResponse {

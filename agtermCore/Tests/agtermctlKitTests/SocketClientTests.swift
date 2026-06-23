@@ -154,6 +154,17 @@ struct SocketClientTests {
         #expect(SocketClient.formatResponse(response, json: false) == "selected\nlines")
     }
 
+    @Test func formatResponseZeroCountIsOk() {
+        // keymap.reload reports a parse-diagnostic count; 0 reads as a clean reload.
+        let response = ControlResponse(ok: true, result: ControlResult(count: 0))
+        #expect(SocketClient.formatResponse(response, json: false) == "ok")
+    }
+
+    @Test func formatResponseNonZeroCountPluralizes() {
+        let response = ControlResponse(ok: true, result: ControlResult(count: 3))
+        #expect(SocketClient.formatResponse(response, json: false) == "3 diagnostic(s)")
+    }
+
     @Test func formatResponseError() {
         #expect(SocketClient.formatResponse(ControlResponse(ok: false, error: "boom"), json: false) == "error: boom")
     }

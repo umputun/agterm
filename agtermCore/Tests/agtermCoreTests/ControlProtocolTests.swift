@@ -180,6 +180,26 @@ struct ControlProtocolTests {
         }
     }
 
+    @Test func keymapReloadRequestRoundTrips() throws {
+        let request = ControlRequest(cmd: .keymapReload)
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.cmd == .keymapReload)
+    }
+
+    @Test func keymapReloadRawStringMapsToCommand() throws {
+        let json = #"{"cmd":"keymap.reload"}"#
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8))
+        #expect(decoded.cmd == .keymapReload)
+    }
+
+    @Test func responseOkWithCountRoundTrips() throws {
+        let response = ControlResponse(ok: true, result: ControlResult(count: 3))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.count == 3)
+    }
+
     @Test func sessionCommandWithWindowArgRoundTrips() throws {
         let request = ControlRequest(cmd: .sessionSelect, target: "9f3c", args: ControlArgs(window: "main"))
         let decoded = try roundTrip(request)

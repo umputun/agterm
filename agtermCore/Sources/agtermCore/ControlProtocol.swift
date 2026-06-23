@@ -37,6 +37,7 @@ public enum Command: String, Codable, Sendable {
     case windowDelete = "window.delete"
     case windowResize = "window.resize"
     case windowMove = "window.move"
+    case keymapReload = "keymap.reload"
 }
 
 /// A bag of optional command parameters. Each command reads only the fields it needs; the rest stay
@@ -203,14 +204,18 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var windows: [ControlWindowNode]?
     /// The overlay program's exit status for `session.overlay.result` (nil until the program exits).
     public var exitCode: Int?
+    /// A count payload for commands whose result is a number, e.g. the keymap-diagnostic count for
+    /// `keymap.reload`.
+    public var count: Int?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
-                windows: [ControlWindowNode]? = nil, exitCode: Int? = nil) {
+                windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil) {
         self.id = id
         self.tree = tree
         self.text = text
         self.windows = windows
         self.exitCode = exitCode
+        self.count = count
     }
 }
 

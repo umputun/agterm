@@ -132,6 +132,10 @@ struct SocketClient {
         if let exitCode = response.result?.exitCode {
             return "exit \(exitCode)"
         }
+        if let count = response.result?.count {
+            // keymap.reload reports its parse-diagnostic count; 0 reads as a clean reload.
+            return count == 0 ? "ok" : "\(count) diagnostic(s)"
+        }
         if echoID, let id = response.result?.id {
             return id
         }
