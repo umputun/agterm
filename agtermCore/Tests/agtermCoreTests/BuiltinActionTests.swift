@@ -1,0 +1,71 @@
+import Foundation
+import Testing
+@testable import agtermCore
+
+struct BuiltinActionTests {
+    @Test func everyRawNameRoundTrips() {
+        for action in BuiltinAction.allCases {
+            #expect(BuiltinAction(rawValue: action.rawValue) == action)
+        }
+    }
+
+    @Test func rawNamesAreTheKittyStyleNames() {
+        // spot-check the documented raw names so a rename can't drift silently.
+        #expect(BuiltinAction.newWindow.rawValue == "new_window")
+        #expect(BuiltinAction.toggleSplit.rawValue == "toggle_split")
+        #expect(BuiltinAction.commandPalette.rawValue == "command_palette")
+        #expect(BuiltinAction.allCases.count == 24)
+    }
+
+    @Test func rejectsUnknownName() {
+        #expect(BuiltinAction(rawValue: "not_an_action") == nil)
+        #expect(BuiltinAction(rawValue: "") == nil)
+        #expect(BuiltinAction(rawValue: "New_Window") == nil)
+    }
+
+    @Test func defaultChordMatchesShippedTable() {
+        let expected: [BuiltinAction: Chord?] = [
+            .newWindow: Chord(mods: [.command, .option], key: "n"),
+            .renameWindow: nil,
+            .deleteWindow: nil,
+            .newWorkspace: Chord(mods: [.command, .shift], key: "n"),
+            .renameWorkspace: nil,
+            .deleteWorkspace: nil,
+            .newSession: Chord(mods: [.command], key: "n"),
+            .openDirectory: Chord(mods: [.command], key: "o"),
+            .renameSession: nil,
+            .closeSession: Chord(mods: [.command], key: "w"),
+            .clearStatus: nil,
+            .increaseFontSize: Chord(mods: [.command], key: "+"),
+            .decreaseFontSize: Chord(mods: [.command], key: "-"),
+            .resetFontSize: Chord(mods: [.command], key: "0"),
+            .toggleSplit: Chord(mods: [.command], key: "d"),
+            .focusLeftPane: nil,    // ⌘⌥← — arrow, not expressible as a parsed Chord
+            .focusRightPane: nil,   // ⌘⌥→ — arrow
+            .previousSession: nil,  // ⌥⌘↑ — arrow
+            .nextSession: nil,      // ⌥⌘↓ — arrow
+            .firstSession: nil,
+            .lastSession: nil,
+            .quickTerminal: Chord(mods: [.control], key: "`"),
+            .sessionPalette: Chord(mods: [.control], key: "p"),
+            .commandPalette: Chord(mods: [.control, .shift], key: "p"),
+        ]
+        // the table must cover every case so a new action can't be added without a documented default.
+        #expect(expected.count == BuiltinAction.allCases.count)
+        for action in BuiltinAction.allCases {
+            #expect(expected[action] == action.defaultChord, "default chord mismatch for \(action.rawValue)")
+        }
+    }
+
+    @Test func keylessActionsHaveNilDefault() {
+        let keyless: Set<BuiltinAction> = [
+            .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .clearStatus,
+            .firstSession, .lastSession,
+            // arrow-bound actions are also nil here (arrows can't round-trip through parseKeybind).
+            .focusLeftPane, .focusRightPane, .previousSession, .nextSession,
+        ]
+        for action in keyless {
+            #expect(action.defaultChord == nil, "expected nil default for \(action.rawValue)")
+        }
+    }
+}

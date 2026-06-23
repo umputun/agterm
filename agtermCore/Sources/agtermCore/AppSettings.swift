@@ -41,12 +41,16 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var activeStatusColorHex: String?
     public var blockedStatusColorHex: String?
     public var completedStatusColorHex: String?
+    /// Directory holding the user-editable keymap config (`keymap.conf`), or nil for the default
+    /// (`~/.config/agterm`). Resolved by `ConfigPaths.configDirectory(setting:stateDir:home:)`; an
+    /// app-level path, never a ghostty key.
+    public var configDirectory: String?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 backgroundOpacity: Double? = nil, backgroundBlur: Int? = nil, notificationsEnabled: Bool? = nil,
                 compactToolbar: Bool? = nil, notificationBadgeEnabled: Bool? = nil,
                 activeStatusColorHex: String? = nil, blockedStatusColorHex: String? = nil,
-                completedStatusColorHex: String? = nil) {
+                completedStatusColorHex: String? = nil, configDirectory: String? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -58,6 +62,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.activeStatusColorHex = activeStatusColorHex
         self.blockedStatusColorHex = blockedStatusColorHex
         self.completedStatusColorHex = completedStatusColorHex
+        self.configDirectory = configDirectory
     }
 
     /// The ghostty config lines for the set fields, one `key = value` per line, suitable for a

@@ -95,4 +95,19 @@ struct AppSettingsTests {
         // app-level sidebar render toggle, never a ghostty config key
         #expect(AppSettings(notificationBadgeEnabled: false).ghosttyConfigLines().isEmpty)
     }
+
+    @Test func configDirectoryRoundTripsAndIsNotAConfigLine() throws {
+        let original = AppSettings(configDirectory: "/tmp/agterm-config")
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
+        #expect(decoded.configDirectory == "/tmp/agterm-config")
+        // app-level path, never a ghostty config key
+        #expect(decoded.ghosttyConfigLines().isEmpty)
+    }
+
+    @Test func configDirectoryDecodesNilWhenAbsent() throws {
+        // a settings.json written before `configDirectory` existed still decodes.
+        let json = #"{ "fontSize": 16 }"#
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(json.utf8))
+        #expect(decoded.configDirectory == nil)
+    }
 }
