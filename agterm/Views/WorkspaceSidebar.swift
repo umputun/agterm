@@ -971,6 +971,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         private func addSession(toWorkspace workspaceID: UUID, cwd: String) {
             if let session = store.addSession(toWorkspace: workspaceID, cwd: cwd) {
                 store.selectSession(session.id)
+                actions.focusActiveSession()
             }
         }
 

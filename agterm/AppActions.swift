@@ -64,6 +64,7 @@ final class AppActions {
                                              cwd: FileManager.default.homeDirectoryForCurrentUser.path)
         else { return }
         store.selectSession(session.id)
+        focusActiveSession()
     }
 
     func openDirectory() {
@@ -78,11 +79,13 @@ final class AppActions {
               let session = store.addSession(toWorkspace: workspaceID, cwd: url.path)
         else { return }
         store.selectSession(session.id)
+        focusActiveSession()
     }
 
     func closeActiveSession() {
         guard let store, let id = store.selectedSessionID else { return }
         store.closeSession(id)
+        focusActiveSession()
     }
 
     /// Clear the active session's agent-status indicator back to idle (the same effect as `agtermctl
@@ -396,10 +399,12 @@ final class AppActions {
     /// Move first responder back to the active session's focused pane (used after the quick terminal
     /// or a palette closes). Targets `activeSurface` so a collapsed split that shows the right pane
     /// gets focus, not the hidden primary. Re-asserts briefly since the target view may not be
-    /// on-window yet. Bails while the quick terminal is up — it owns focus, so don't steal it back.
+    /// on-window yet. Bails while the quick terminal OR an overlay is up — each owns focus, so don't
+    /// steal it back (e.g. opening the keymap editor from the palette, whose close fires this restore).
     func focusActiveSession(attempt: Int = 0) {
         if renamePending { return }
         if frontmostQuickTerminal?.isVisible == true { return }
+        if store?.activeSession?.overlayActive == true { return }
         if let view = store?.activeSession?.activeSurface as? GhosttySurfaceView, let window = view.window {
             window.makeFirstResponder(view)
         }
