@@ -1,8 +1,9 @@
+import agtermCore
 import AppKit
 import SwiftUI
 
 /// The Settings window (Cmd+,): three tabs — General (notifications), Appearance (font/theme +
-/// window translucency), and Key Mapping (a placeholder for a later phase).
+/// window translucency), and Key Mapping (the config directory + keymap diagnostics + Reload).
 struct SettingsView: View {
     let model: SettingsModel
 
@@ -12,7 +13,7 @@ struct SettingsView: View {
                 .tabItem { Label("General", systemImage: "gearshape") }
             AppearanceSettingsView(model: model)
                 .tabItem { Label("Appearance", systemImage: "paintbrush") }
-            PlaceholderSettings(message: "Key mapping coming soon.")
+            KeyMappingSettingsView(model: model)
                 .tabItem { Label("Key Mapping", systemImage: "keyboard") }
         }
         .frame(width: 480, height: 420)
@@ -207,12 +208,95 @@ private struct AppearanceSettingsView: View {
     }
 }
 
-private struct PlaceholderSettings: View {
-    let message: String
+/// Key Mapping tab: the config directory holding `keymap.conf` (with a directory picker + "Use
+/// Default"), a read-only list of parse diagnostics, and a Reload button. The directory and Reload
+/// route through `SettingsModel`, which re-reads + re-parses the keymap and posts the change so the
+/// data-driven menu shortcuts, the custom-command runner, and the action palette all update.
+private struct KeyMappingSettingsView: View {
+    let model: SettingsModel
+
+    /// The resolved config directory shown in the field: the explicit setting when set, else the
+    /// default location (`AGTERM_STATE_DIR/config` under test isolation, else `~/.config/agterm`),
+    /// matching `SettingsModel`'s own resolution.
+    private var configDirectoryPath: String {
+        ConfigPaths.configDirectory(
+            setting: model.settings.configDirectory,
+            stateDir: ProcessInfo.processInfo.environment["AGTERM_STATE_DIR"],
+            home: FileManager.default.homeDirectoryForCurrentUser).path
+    }
 
     var body: some View {
-        Text(message)
-            .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+        Form {
+            Section("Config Directory") {
+                HStack {
+                    Text(configDirectoryPath)
+                        .font(.system(size: 12).monospaced())
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                        .textSelection(.enabled)
+                        .accessibilityIdentifier("settings-keymap-directory")
+                    Spacer()
+                    Button("Choose…") { chooseDirectory() }
+                        .accessibilityIdentifier("settings-keymap-choose")
+                    if model.settings.configDirectory != nil {
+                        Button("Use Default") { model.setConfigDirectory(nil) }
+                            .accessibilityIdentifier("settings-keymap-default")
+                    }
+                }
+                Text("The directory holding keymap.conf. Changing it reloads the keymap.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
+
+            Section("Diagnostics") {
+                if model.keymapDiagnostics.isEmpty {
+                    Text("No issues.")
+                        .foregroundStyle(.secondary)
+                        .accessibilityIdentifier("settings-keymap-diagnostics")
+                        .accessibilityValue(diagnosticsSummary)
+                } else {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(Array(model.keymapDiagnostics.enumerated()), id: \.offset) { _, diagnostic in
+                            Text(diagnosticLine(diagnostic))
+                                .font(.system(size: 12).monospaced())
+                                .foregroundStyle(.secondary)
+                                .textSelection(.enabled)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("settings-keymap-diagnostics")
+                    .accessibilityValue(diagnosticsSummary)
+                }
+                Button("Reload") { model.reloadKeymap() }
+                    .accessibilityIdentifier("settings-keymap-reload")
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+    }
+
+    /// A diagnostic as one line: "line N: message". A whole-file/cross-section diagnostic (line 0)
+    /// drops the line number, showing just the message.
+    private func diagnosticLine(_ diagnostic: KeymapDiagnostic) -> String {
+        diagnostic.line > 0 ? "line \(diagnostic.line): \(diagnostic.message)" : diagnostic.message
+    }
+
+    /// The diagnostics exposed as one accessibility value (each line joined), so a UI test can read
+    /// the full content from the container without scrolling each row into view. "No issues." when empty.
+    private var diagnosticsSummary: String {
+        model.keymapDiagnostics.isEmpty ? "No issues." : model.keymapDiagnostics.map(diagnosticLine).joined(separator: " | ")
+    }
+
+    /// Pick a config directory with the standard open panel (directories only), then persist + reload.
+    private func chooseDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.message = "Choose a directory for keymap.conf"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        model.setConfigDirectory(url.path)
     }
 }

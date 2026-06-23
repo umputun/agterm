@@ -331,4 +331,9 @@ extension Notification.Name {
     /// didBecomeKey), so the control server can refresh its cached `window.list` — whose `active` flag
     /// would otherwise stay stale until the next dispatched command.
     static let agtermWindowFrontmostChanged = Notification.Name("agterm.windowFrontmostChanged")
+
+    /// Posted after `keymap.conf` is (re)loaded and reparsed, so the custom-command runner rebuilds its
+    /// matcher and the action palette re-reads the custom commands. The data-driven menu shortcuts
+    /// re-render on their own because they read the `@Observable` keymap directly.
+    static let agtermKeymapChanged = Notification.Name("agterm.keymapChanged")
 }

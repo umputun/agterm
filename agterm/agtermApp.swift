@@ -16,6 +16,7 @@ struct agtermApp: App {
     @State private var paneShortcuts: PaneShortcuts
     @State private var settingsModel: SettingsModel
     @State private var controlServer: ControlServer
+    @State private var customCommandRunner: CustomCommandRunner
 
     /// The plain `WindowGroup`'s scene id, used by `openWindow(id:)` to spawn additional windows.
     private static let windowGroupID = "terminal"
@@ -25,13 +26,67 @@ struct agtermApp: App {
         _library = State(initialValue: library)
         let actions = AppActions(library: library)
         _actions = State(initialValue: actions)
-        _controlServer = State(initialValue: ControlServer(library: library, actions: actions))
-        _sessionSwitcher = State(initialValue: SessionSwitcher(library: library))
-        _paneShortcuts = State(initialValue: PaneShortcuts(library: library, actions: actions))
-        // settings persist alongside the workspace snapshot (same AGTERM_STATE_DIR override).
+        // settings persist alongside the workspace snapshot (same AGTERM_STATE_DIR override). Built
+        // before the control server so the server can drive `keymap.reload` on it (both depend only on
+        // the library, so this reorder is safe).
         let settingsStore = ProcessInfo.processInfo.environment["AGTERM_STATE_DIR"]
             .map { SettingsStore(directory: URL(fileURLWithPath: $0, isDirectory: true)) } ?? SettingsStore()
-        _settingsModel = State(initialValue: SettingsModel(library: library, settingsStore: settingsStore))
+        let settingsModel = SettingsModel(library: library, settingsStore: settingsStore)
+        _settingsModel = State(initialValue: settingsModel)
+        let controlServer = ControlServer(library: library, actions: actions, settingsModel: settingsModel)
+        _controlServer = State(initialValue: controlServer)
+        _sessionSwitcher = State(initialValue: SessionSwitcher(library: library))
+        _paneShortcuts = State(initialValue: PaneShortcuts(library: library, actions: actions))
+        // the custom-command runner needs the keymap (settings) and the bound socket path (control
+        // server) for the `{AGT_SOCKET}` token; built last so both are available.
+        _customCommandRunner = State(initialValue: CustomCommandRunner(
+            library: library, settings: settingsModel,
+            socketProvider: { controlServer.resolvedSocketPath }))
+    }
+
+    /// The active SwiftUI shortcut for a built-in action, driven by the keymap: the user override when
+    /// one is `map`ped, else the action's shipped default. `nil` when neither exists (a keyless action,
+    /// or one of the four arrow-bound actions whose default can't round-trip through the keymap grammar)
+    /// — the menu drops the shortcut for those (the arrow actions supply their own hardcoded fallback).
+    /// Because `keymap` is `@Observable`, reading it here re-renders the menu shortcut on a reload.
+    private func shortcut(for action: BuiltinAction) -> KeyboardShortcut? {
+        settingsModel.keymap.equivalent(for: action).map(Self.toShortcut)
+    }
+
+    /// The shortcut for one of the four arrow-bound actions: the user override when `map`ped, else the
+    /// hardcoded arrow default. Those defaults can't round-trip through the keymap grammar (`parseKeybind`
+    /// has no arrow keys), so `defaultChord` is nil and the fallback lives here in one place — keyed by
+    /// action so every arrow call site reads uniformly and the fallback set has a single home.
+    private func arrowShortcut(for action: BuiltinAction) -> KeyboardShortcut {
+        if let override = shortcut(for: action) { return override }
+        switch action {
+        case .focusLeftPane: return KeyboardShortcut(.leftArrow, modifiers: [.command, .option])
+        case .focusRightPane: return KeyboardShortcut(.rightArrow, modifiers: [.command, .option])
+        case .previousSession: return KeyboardShortcut(.upArrow, modifiers: [.command, .option])
+        case .nextSession: return KeyboardShortcut(.downArrow, modifiers: [.command, .option])
+        default: return KeyboardShortcut(.upArrow, modifiers: [.command, .option])
+        }
+    }
+
+    /// Map a host-free `Chord` to a SwiftUI `KeyboardShortcut`. The base key is a single printable
+    /// character (`Character`) or one of the named keys the grammar allows (`tab`/`space`/`return`/
+    /// `delete`); the modifiers map one-for-one. This is the menu-side mirror of the runner's
+    /// `NSEvent`→`Chord` mapping.
+    private static func toShortcut(_ chord: Chord) -> KeyboardShortcut {
+        let key: KeyEquivalent
+        switch chord.key {
+        case "tab": key = .tab
+        case "space": key = .space
+        case "return": key = .return
+        case "delete": key = .delete
+        default: key = KeyEquivalent(Character(chord.key))
+        }
+        var modifiers: EventModifiers = []
+        if chord.mods.contains(.control) { modifiers.insert(.control) }
+        if chord.mods.contains(.command) { modifiers.insert(.command) }
+        if chord.mods.contains(.option) { modifiers.insert(.option) }
+        if chord.mods.contains(.shift) { modifiers.insert(.shift) }
+        return KeyboardShortcut(key, modifiers: modifiers)
     }
 
     var body: some Scene {
@@ -75,12 +130,29 @@ struct agtermApp: App {
                     sessionSwitcher.start()
                     // install the Ctrl-1/Ctrl-2 direct pane-focus key monitor (idempotent).
                     paneShortcuts.start()
+                    // install the custom-command key monitor (idempotent); rebuilds its matcher from
+                    // the keymap on `.agtermKeymapChanged`. Hand the delegate a reference so it can
+                    // remove the monitor on terminate.
+                    appDelegate.customCommandRunner = customCommandRunner
+                    customCommandRunner.start()
+                    // wire the keymap + runner into the action hub so the command palette can list the
+                    // custom commands and run them (both are built after `actions`, so they're set here
+                    // rather than in the init, mirroring the NotificationManager wiring below).
+                    actions.settingsModel = settingsModel
+                    actions.customCommandRunner = customCommandRunner
                     // register the notification delegate + request authorization (idempotent), and
                     // hand it the action hub + library so a banner click can navigate to the firing
                     // pane and the capture side can stamp the firing window id into the identity.
                     NotificationManager.shared.actions = actions
                     NotificationManager.shared.library = library
                     NotificationManager.shared.start()
+                    // surface keymap parse errors / conflicts loaded at SettingsModel init (too early to
+                    // post then — before notification registration above). Only on the launch window:
+                    // `hasReopened` is still false here for the first window's `.task` (reopenWindows()
+                    // below flips it), so subsequent windows don't repost the same banner.
+                    if !library.hasReopened, !settingsModel.keymapDiagnostics.isEmpty {
+                        NotificationManager.shared.notifyKeymapDiagnostics(count: settingsModel.keymapDiagnostics.count)
+                    }
                     // reopen every window that was open at quit. SwiftUI auto-opened one window
                     // (this one) at launch, which claimed the launch id; open one more per remaining
                     // open id. runs once (the .task fires per window) via the library latch.
@@ -102,7 +174,7 @@ struct agtermApp: App {
                 // the library with a checkmark on already-open ones (picking a closed one opens it,
                 // an open one raises it). Delete is disabled with one window left (keep-at-least-one).
                 Button("New Window") { actions.newWindow() }
-                    .keyboardShortcut("n", modifiers: [.command, .option])
+                    .keyboardShortcut(shortcut(for: .newWindow))
                 Menu("Open Window") {
                     ForEach(library.windows) { window in
                         Button {
@@ -117,33 +189,39 @@ struct agtermApp: App {
                     }
                 }
                 Button("Rename Window…") { actions.renameActiveWindow() }
+                    .keyboardShortcut(shortcut(for: .renameWindow))
                 Button("Delete Window") { actions.deleteActiveWindow() }
+                    .keyboardShortcut(shortcut(for: .deleteWindow))
                     .disabled(!library.canRemoveWindow)
 
                 Divider()
                 // Workspace.
                 Button("New Workspace") { actions.newWorkspace() }
-                    .keyboardShortcut("n", modifiers: [.command, .shift])
+                    .keyboardShortcut(shortcut(for: .newWorkspace))
                 Button("Rename Workspace") { actions.renameActiveWorkspace() }
+                    .keyboardShortcut(shortcut(for: .renameWorkspace))
                     .disabled(library.activeStore?.currentWorkspaceID == nil)
                 Button("Delete Workspace") { actions.deleteActiveWorkspace() }
+                    .keyboardShortcut(shortcut(for: .deleteWorkspace))
                     .disabled(library.activeStore?.canRemoveWorkspace != true)
 
                 Divider()
                 // Session. Open Directory… opens a new session rooted at a chosen folder; Close
                 // Session is terminal-style ⌘W (closes the active session, or the window when none).
                 Button("New Session") { actions.newSession() }
-                    .keyboardShortcut("n", modifiers: .command)
+                    .keyboardShortcut(shortcut(for: .newSession))
                 Button("Open Directory…") { actions.openDirectory() }
-                    .keyboardShortcut("o", modifiers: .command)
+                    .keyboardShortcut(shortcut(for: .openDirectory))
                 Button("Rename Session") { actions.renameActiveSession() }
+                    .keyboardShortcut(shortcut(for: .renameSession))
                     .disabled(library.activeStore?.activeSession == nil)
                 Button("Close Session") {
                     if library.activeStore?.activeSession != nil { actions.closeActiveSession() }
                     else { NSApp.keyWindow?.performClose(nil) }
                 }
-                .keyboardShortcut("w", modifiers: .command)
+                .keyboardShortcut(shortcut(for: .closeSession))
                 Button("Clear Status") { actions.clearActiveSessionStatus() }
+                    .keyboardShortcut(shortcut(for: .clearStatus))
                     .disabled(library.activeStore?.activeSession == nil)
             }
             // View: font zoom (drives ghostty on the focused terminal), the status-bar toggle, and
@@ -152,26 +230,30 @@ struct agtermApp: App {
             // otherwise they render as blank, indented slots.
             CommandGroup(after: .toolbar) {
                 Button { actions.increaseFontSize() } label: { Label("Increase Font Size", systemImage: "textformat.size.larger") }
-                    .keyboardShortcut("+", modifiers: .command)
+                    .keyboardShortcut(shortcut(for: .increaseFontSize))
                 Button { actions.decreaseFontSize() } label: { Label("Decrease Font Size", systemImage: "textformat.size.smaller") }
-                    .keyboardShortcut("-", modifiers: .command)
+                    .keyboardShortcut(shortcut(for: .decreaseFontSize))
                 Button { actions.resetFontSize() } label: { Label("Actual Size", systemImage: "textformat.size") }
-                    .keyboardShortcut("0", modifiers: .command)
+                    .keyboardShortcut(shortcut(for: .resetFontSize))
                 Divider()
                 Button { actions.toggleSplit() } label: {
                     Label(library.activeStore?.activeSession?.isSplit == true ? "Hide Split" : "Split Right", systemImage: "rectangle.split.2x1")
                 }
-                .keyboardShortcut("d", modifiers: .command)
+                .keyboardShortcut(shortcut(for: .toggleSplit))
                 .disabled(library.activeStore?.activeSession == nil)
+                // arrow-bound actions: their default ⌘⌥←/→ can't round-trip through the keymap grammar
+                // (parseKeybind has no arrow keys), so defaultChord is nil and the hardcoded arrow is the
+                // FALLBACK — a user override (a parseable chord) wins. arrowShortcut(for:) owns the four
+                // fallbacks in one place.
                 Button { actions.focusPane(.main) } label: {
                     Label("Focus Left Pane", systemImage: "rectangle.lefthalf.filled")
                 }
-                .keyboardShortcut(.leftArrow, modifiers: [.command, .option])
+                .keyboardShortcut(arrowShortcut(for: .focusLeftPane))
                 .disabled(library.activeStore?.activeSession?.isSplit != true)
                 Button { actions.focusPane(.split) } label: {
                     Label("Focus Right Pane", systemImage: "rectangle.righthalf.filled")
                 }
-                .keyboardShortcut(.rightArrow, modifiers: [.command, .option])
+                .keyboardShortcut(arrowShortcut(for: .focusRightPane))
                 .disabled(library.activeStore?.activeSession?.isSplit != true)
                 Divider()
                 // step between sessions in the sidebar's flattened order. Prev/Next ride ⌥⌘↑/↓ (NOT bare
@@ -180,22 +262,28 @@ struct agtermApp: App {
                 // First/Last get no key (menu + palette + control only). Real menu items so AppKit menu
                 // dispatch swallows the shortcut before libghostty — never leaked to the shell.
                 Button { actions.selectPreviousSession() } label: { Label("Previous Session", systemImage: "chevron.up") }
-                    .keyboardShortcut(.upArrow, modifiers: [.command, .option])
+                    .keyboardShortcut(arrowShortcut(for: .previousSession))
                     .disabled(library.activeStore?.activeSession == nil)
                 Button { actions.selectNextSession() } label: { Label("Next Session", systemImage: "chevron.down") }
-                    .keyboardShortcut(.downArrow, modifiers: [.command, .option])
+                    .keyboardShortcut(arrowShortcut(for: .nextSession))
                     .disabled(library.activeStore?.activeSession == nil)
                 Button { actions.selectFirstSession() } label: { Label("First Session", systemImage: "chevron.up.to.line") }
+                    .keyboardShortcut(shortcut(for: .firstSession))
                     .disabled(library.activeStore?.activeSession == nil)
                 Button { actions.selectLastSession() } label: { Label("Last Session", systemImage: "chevron.down.to.line") }
+                    .keyboardShortcut(shortcut(for: .lastSession))
                     .disabled(library.activeStore?.activeSession == nil)
                 Divider()
                 Button { actions.toggleQuickTerminal() } label: { Label("Quick Terminal", systemImage: "terminal") }
-                    .keyboardShortcut("`", modifiers: .control)
+                    .keyboardShortcut(shortcut(for: .quickTerminal))
                 Button { palette.toggle(.sessions) } label: { Label("Go to Session", systemImage: "rectangle.stack") }
-                    .keyboardShortcut("p", modifiers: .control)
+                    .keyboardShortcut(shortcut(for: .sessionPalette))
                 Button { palette.toggle(.actions) } label: { Label("Command Palette", systemImage: "command") }
-                    .keyboardShortcut("p", modifiers: [.control, .shift])
+                    .keyboardShortcut(shortcut(for: .commandPalette))
+                Divider()
+                // re-read keymap.conf and apply (menu shortcuts re-render, the runner + palette
+                // rebuild). Keyless — a future BuiltinAction could give it a default chord.
+                Button { actions.reloadKeymap() } label: { Label("Reload Keymap", systemImage: "keyboard") }
             }
             CommandGroup(replacing: .help) {
                 Button("Install Command Line Tool…") { CLIInstaller.run() }
@@ -351,6 +439,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// stop the listener and unlink the socket on terminate.
     var controlServer: ControlServer?
 
+    /// The custom-command key-monitor runner, handed over once the scene appears so the delegate can
+    /// remove its `NSEvent` monitor and observer on terminate.
+    var customCommandRunner: CustomCommandRunner?
+
     private var restoreObserver: NSObjectProtocol?
     private var scheduledReconciliationReasons: Set<String> = []
 
@@ -487,6 +579,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_: Notification) {
         controlServer?.stop()
+        customCommandRunner?.stop()
         // mark terminating so the per-window willClose close-reporting can't zero the open-set as each
         // window tears down during quit — the set must survive for the next launch's reopen-all.
         library?.isTerminating = true

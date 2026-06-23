@@ -102,6 +102,34 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         UNUserNotificationCenter.current().removeDeliveredNotifications(withIdentifiers: identifiers)
     }
 
+    /// Post a failure banner for a custom command that exited non-zero or failed to spawn. Unlike a
+    /// terminal notification it isn't tied to a surface, so it always posts when banners are enabled
+    /// (no focus/window gating); a fixed identifier coalesces repeated failures of the same command.
+    func notifyCommandFailure(name: String, detail: String) {
+        guard bannersEnabled else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Command failed"
+        content.body = "\(name) (\(detail))"
+        let request = UNNotificationRequest(identifier: "command-failure:\(name)", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error { logger.error("command-failure banner add failed: \(error.localizedDescription, privacy: .public)") }
+        }
+    }
+
+    /// Post a banner when the keymap parsed with problems (parse errors or cross-section conflicts), so
+    /// they're visible without opening Settings. Session-less and app-level, like `notifyCommandFailure`:
+    /// no focus/window gating; a fixed identifier coalesces repeated reloads to a single banner.
+    func notifyKeymapDiagnostics(count: Int) {
+        guard bannersEnabled else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Keymap"
+        content.body = "\(count) issue\(count == 1 ? "" : "s") — see Settings ▸ Key Mapping"
+        let request = UNNotificationRequest(identifier: "keymap-diagnostics", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error { logger.error("keymap-diagnostics banner add failed: \(error.localizedDescription, privacy: .public)") }
+        }
+    }
+
     /// Which of the session's surfaces fired, by identity against its three slots.
     private func paneRole(of view: GhosttySurfaceView, in session: Session) -> PaneRole {
         if view === (session.splitSurface as? GhosttySurfaceView) { return .split }

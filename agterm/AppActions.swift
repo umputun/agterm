@@ -36,6 +36,17 @@ final class AppActions {
     /// closed. Nil before the scene `.task` runs (no window to reveal into yet anyway).
     var openWindow: ((WindowInfo.ID) -> Void)?
 
+    /// The settings model, holding the parsed keymap whose custom commands feed the action palette.
+    /// Both this and `customCommandRunner` are constructed AFTER `actions` in `agtermApp.init`, so they
+    /// are settable properties wired in the scene `.task` (like `NotificationManager.shared.actions`)
+    /// rather than init parameters — keeping the `init(library:)` signature and dodging the init-order
+    /// break. Nil before the scene `.task` runs (no custom commands in the palette yet).
+    var settingsModel: SettingsModel?
+
+    /// The custom-command runner that the palette's custom items invoke (`run(_:)`). Wired in the
+    /// scene `.task` alongside `settingsModel` for the same construction-order reason.
+    var customCommandRunner: CustomCommandRunner?
+
     init(library: WindowLibrary) {
         self.library = library
     }
@@ -80,6 +91,12 @@ final class AppActions {
         guard let store, let id = store.selectedSessionID else { return }
         store.setAgentIndicator(AgentIndicator(), forSession: id)
     }
+
+    /// Re-read and re-parse `keymap.conf`, re-rendering the data-driven menu shortcuts and rebuilding
+    /// the custom-command runner + the palette's custom items. Shared by the View menu item, the
+    /// action palette, and the control channel (`keymap.reload`). No-op before the scene wires the
+    /// settings model.
+    func reloadKeymap() { settingsModel?.reloadKeymap() }
 
     /// Step the selection to the previous/next session, or jump to the first/last, in the sidebar's
     /// flattened visual order (`navigateSession` owns the logic so the GUI, palette, and control
@@ -202,39 +219,77 @@ final class AppActions {
 
     // MARK: - Command palettes
 
+    /// The palette shortcut hint for a rebindable built-in: its currently-bound chord in kitty syntax
+    /// (so it tracks rebinds and stays consistent with how custom commands display their shortcut),
+    /// or `nil` when the action has no chord. The four arrow-bound actions fall back to their hardcoded
+    /// arrow glyph when no override is set — `defaultChord` is nil for them (arrows can't round-trip
+    /// through `parseKeybind`), mirroring `agtermApp.arrowShortcut(for:)`.
+    private func paletteHint(for action: BuiltinAction) -> String? {
+        if let chord = settingsModel?.keymap.equivalent(for: action) {
+            // a chord whose key is a grammar separator (`+`/`>`) renders as an unparseable kitty
+            // string (e.g. increase_font_size's default `cmd++`), which reads as broken in the
+            // palette; show a readable glyph for those instead of `displayString`.
+            return glyphHint(for: chord) ?? chord.displayString
+        }
+        switch action {
+        case .focusLeftPane: return "⌘⌥←"
+        case .focusRightPane: return "⌘⌥→"
+        case .previousSession: return "⌥⌘↑"
+        case .nextSession: return "⌥⌘↓"
+        default: return nil
+        }
+    }
+
+    /// A readable glyph for a chord whose key can't round-trip through `parseKeybind` (a grammar
+    /// separator like `+`/`>`, e.g. the font-size defaults). Returns `nil` for an expressible chord so
+    /// the caller falls back to the kitty `displayString`. Only the separator keys agterm actually
+    /// ships as defaults (`+`/`-`/`0` for font size) need a glyph; the modifier order matches macOS
+    /// (⌃⌥⇧⌘key).
+    private func glyphHint(for chord: Chord) -> String? {
+        guard parseKeybind(chord.displayString) != [chord] else { return nil }
+        var glyph = ""
+        if chord.mods.contains(.control) { glyph += "⌃" }
+        if chord.mods.contains(.option) { glyph += "⌥" }
+        if chord.mods.contains(.shift) { glyph += "⇧" }
+        if chord.mods.contains(.command) { glyph += "⌘" }
+        return glyph + chord.key
+    }
+
     /// The app's commands as palette items, sharing the same logic as the menu/buttons. Includes a
     /// "Move Session to …" item per other workspace (when there's an active session to move).
     func paletteActions() -> [PaletteItem] {
-        // shortcut glyphs are kept in sync by hand with the `.commands` keyboard shortcuts in `agtermApp`.
+        // built-in shortcut hints read the live keymap (`paletteHint`) so a rebind updates them too,
+        // matching the data-driven menu key-equivalents; custom commands show their raw shortcut below.
         var items: [PaletteItem] = [
-            PaletteItem(title: "New Session", shortcut: "⌘N") { [weak self] in self?.newSession() },
-            PaletteItem(title: "New Workspace", shortcut: "⌘⇧N") { [weak self] in self?.newWorkspace() },
-            PaletteItem(title: "Open Directory…", shortcut: "⌘O") { [weak self] in self?.openDirectory() },
-            PaletteItem(title: "Rename Session") { [weak self] in self?.renameActiveSession() },
-            PaletteItem(title: "Rename Workspace") { [weak self] in self?.renameActiveWorkspace() },
-            PaletteItem(title: "Close Session", shortcut: "⌘W") { [weak self] in self?.closeActiveSession() },
-            PaletteItem(title: "Clear Status") { [weak self] in self?.clearActiveSessionStatus() },
-            PaletteItem(title: "Previous Session", shortcut: "⌥⌘↑") { [weak self] in self?.selectPreviousSession() },
-            PaletteItem(title: "Next Session", shortcut: "⌥⌘↓") { [weak self] in self?.selectNextSession() },
-            PaletteItem(title: "First Session") { [weak self] in self?.selectFirstSession() },
-            PaletteItem(title: "Last Session") { [weak self] in self?.selectLastSession() },
-            PaletteItem(title: "Toggle Split", shortcut: "⌘D") { [weak self] in self?.toggleSplit() },
-            PaletteItem(title: "Quick Terminal", shortcut: "⌃`") { [weak self] in self?.toggleQuickTerminal() },
-            PaletteItem(title: "Increase Font Size", shortcut: "⌘+") { [weak self] in self?.increaseFontSize() },
-            PaletteItem(title: "Decrease Font Size", shortcut: "⌘−") { [weak self] in self?.decreaseFontSize() },
-            PaletteItem(title: "Actual Font Size", shortcut: "⌘0") { [weak self] in self?.resetFontSize() },
+            PaletteItem(title: "New Session", shortcut: paletteHint(for: .newSession)) { [weak self] in self?.newSession() },
+            PaletteItem(title: "New Workspace", shortcut: paletteHint(for: .newWorkspace)) { [weak self] in self?.newWorkspace() },
+            PaletteItem(title: "Open Directory…", shortcut: paletteHint(for: .openDirectory)) { [weak self] in self?.openDirectory() },
+            PaletteItem(title: "Rename Session", shortcut: paletteHint(for: .renameSession)) { [weak self] in self?.renameActiveSession() },
+            PaletteItem(title: "Rename Workspace", shortcut: paletteHint(for: .renameWorkspace)) { [weak self] in self?.renameActiveWorkspace() },
+            PaletteItem(title: "Close Session", shortcut: paletteHint(for: .closeSession)) { [weak self] in self?.closeActiveSession() },
+            PaletteItem(title: "Clear Status", shortcut: paletteHint(for: .clearStatus)) { [weak self] in self?.clearActiveSessionStatus() },
+            PaletteItem(title: "Previous Session", shortcut: paletteHint(for: .previousSession)) { [weak self] in self?.selectPreviousSession() },
+            PaletteItem(title: "Next Session", shortcut: paletteHint(for: .nextSession)) { [weak self] in self?.selectNextSession() },
+            PaletteItem(title: "First Session", shortcut: paletteHint(for: .firstSession)) { [weak self] in self?.selectFirstSession() },
+            PaletteItem(title: "Last Session", shortcut: paletteHint(for: .lastSession)) { [weak self] in self?.selectLastSession() },
+            PaletteItem(title: "Toggle Split", shortcut: paletteHint(for: .toggleSplit)) { [weak self] in self?.toggleSplit() },
+            PaletteItem(title: "Quick Terminal", shortcut: paletteHint(for: .quickTerminal)) { [weak self] in self?.toggleQuickTerminal() },
+            PaletteItem(title: "Increase Font Size", shortcut: paletteHint(for: .increaseFontSize)) { [weak self] in self?.increaseFontSize() },
+            PaletteItem(title: "Decrease Font Size", shortcut: paletteHint(for: .decreaseFontSize)) { [weak self] in self?.decreaseFontSize() },
+            PaletteItem(title: "Actual Font Size", shortcut: paletteHint(for: .resetFontSize)) { [weak self] in self?.resetFontSize() },
+            PaletteItem(title: "Reload Keymap") { [weak self] in self?.reloadKeymap() },
         ]
         if store?.canRemoveWorkspace == true {
-            items.append(PaletteItem(title: "Delete Workspace") { [weak self] in self?.deleteActiveWorkspace() })
+            items.append(PaletteItem(title: "Delete Workspace", shortcut: paletteHint(for: .deleteWorkspace)) { [weak self] in self?.deleteActiveWorkspace() })
         }
         if store?.activeSession?.isSplit == true {
-            items.append(PaletteItem(title: "Focus Left Pane", shortcut: "⌘⌥←") { [weak self] in self?.focusPane(.main) })
-            items.append(PaletteItem(title: "Focus Right Pane", shortcut: "⌘⌥→") { [weak self] in self?.focusPane(.split) })
+            items.append(PaletteItem(title: "Focus Left Pane", shortcut: paletteHint(for: .focusLeftPane)) { [weak self] in self?.focusPane(.main) })
+            items.append(PaletteItem(title: "Focus Right Pane", shortcut: paletteHint(for: .focusRightPane)) { [weak self] in self?.focusPane(.split) })
         }
-        items.append(PaletteItem(title: "New Window", shortcut: "⌘⌥N") { [weak self] in self?.newWindow() })
-        items.append(PaletteItem(title: "Rename Window") { [weak self] in self?.renameActiveWindow() })
+        items.append(PaletteItem(title: "New Window", shortcut: paletteHint(for: .newWindow)) { [weak self] in self?.newWindow() })
+        items.append(PaletteItem(title: "Rename Window", shortcut: paletteHint(for: .renameWindow)) { [weak self] in self?.renameActiveWindow() })
         if library.canRemoveWindow {
-            items.append(PaletteItem(title: "Delete Window") { [weak self] in self?.deleteActiveWindow() })
+            items.append(PaletteItem(title: "Delete Window", shortcut: paletteHint(for: .deleteWindow)) { [weak self] in self?.deleteActiveWindow() })
         }
         // one "Open Window: <name>" per closed window — open ones are already on screen.
         for window in library.windows where !library.isOpen(window.id) {
@@ -250,6 +305,15 @@ final class AppActions {
                     self?.moveSession(sessionID, toWorkspace: target)
                 })
             }
+        }
+        // user-defined keymap commands: marked `custom`, showing the bound chord (if any). Running one
+        // delegates to the runner, which resolves the active session's context and spawns the shell line.
+        for command in settingsModel?.keymap.commands ?? [] {
+            items.append(PaletteItem(id: "custom-\(command.id)", title: command.name,
+                                     shortcut: command.shortcut.isEmpty ? nil : command.shortcut,
+                                     badge: "custom") { [weak self] in
+                self?.customCommandRunner?.run(command)
+            })
         }
         return items
     }

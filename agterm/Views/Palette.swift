@@ -7,16 +7,22 @@ struct PaletteItem: Identifiable {
     let id: String
     let title: String
     let subtitle: String?
-    /// The action's keyboard shortcut as display glyphs (e.g. `⌘N`), shown right-aligned. nil for
-    /// items with no shortcut. Kept in sync by hand with the `.commands` keyboard shortcuts in `agtermApp`.
+    /// The action's keyboard shortcut hint shown right-aligned, nil for items with no shortcut.
+    /// Rebindable built-ins read the live keymap (`AppActions.paletteHint`) so it tracks rebinds;
+    /// custom commands show their raw kitty shortcut string. Both render in kitty syntax (e.g.
+    /// `cmd+shift+e`), except the four arrow-bound actions which keep their glyph fallback.
     let shortcut: String?
+    /// A small trailing badge label (e.g. `custom` for user-defined keymap commands), nil for none.
+    let badge: String?
     let run: () -> Void
 
-    init(id: String? = nil, title: String, subtitle: String? = nil, shortcut: String? = nil, run: @escaping () -> Void) {
+    init(id: String? = nil, title: String, subtitle: String? = nil, shortcut: String? = nil,
+         badge: String? = nil, run: @escaping () -> Void) {
         self.id = id ?? title
         self.title = title
         self.subtitle = subtitle
         self.shortcut = shortcut
+        self.badge = badge
         self.run = run
     }
 }
@@ -157,6 +163,16 @@ struct CommandPalette: View {
                 }
             }
             Spacer(minLength: 8)
+            if let badge = item.badge {
+                Text(badge)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Color.secondary.opacity(0.2), in: Capsule())
+                    .accessibilityIdentifier("palette-badge")
+                    .accessibilityValue(badge)
+            }
             if let shortcut = item.shortcut {
                 Text(shortcut)
                     .font(.callout)
