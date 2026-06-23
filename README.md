@@ -66,7 +66,7 @@ xcodebuild test -project agterm.xcodeproj -scheme agterm -destination 'platform=
 - A standard macOS menu bar mirrors the in-app actions with keyboard shortcuts: **File** — New Session (⌘N), New Workspace (⇧⌘N), Open Directory… (⌘O), Rename Session/Workspace, Delete Workspace, Close Session (⌘W, terminal-style: closes the active session); **View** — Split (⌘D), Quick Terminal (⌃`), the command palettes, Previous/Next Session (⌥⌘↑/⌥⌘↓), First/Last Session (menu and palette only, no hotkey), Increase/Decrease/Actual font size (⌘+/⌘−/⌘0).
 - Two fuzzy-search command palettes (type to filter, ↑/↓ to move, Enter to run, Esc to dismiss): the **session switcher** (⌃P) jumps between open sessions by name or working directory, and the **action palette** (⌃⇧P) runs any command (new/rename/close, delete workspace, split, quick terminal, font size, move session to a workspace, …). Results sort by match quality then alphabetically. Both are also in the View menu.
 - A Ctrl-Tab session switcher (macOS app-switcher style): hold Ctrl and tap Tab to walk a most-recently-used list of sessions across all workspaces (the previous session pre-selected on top, Ctrl+Shift+Tab reverses), then release Ctrl to switch. A quick tap of Ctrl+Tab flips straight to the previously visited session.
-- A Settings window (Cmd+,) with **General**, **Appearance**, and **Key Mapping** tabs (Key Mapping is a placeholder for now). **General** toggles macOS notification banners and the sidebar notification count badges. **Appearance → Terminal** sets the terminal font family, default font size, and ghostty theme (any of the 512 bundled themes); **Appearance → Window** sets background opacity and blur (a translucent, optionally blurred window — the sidebar's Liquid Glass tints to match on macOS 26). Changes persist and apply live to open terminals. Applying a font/theme change resets per-session cmd-+/- zoom to the default.
+- A Settings window (Cmd+,) with **General**, **Appearance**, and **Key Mapping** tabs. **General** toggles macOS notification banners and the sidebar notification count badges. **Appearance → Terminal** sets the terminal font family, default font size, and ghostty theme (any of the 512 bundled themes); **Appearance → Window** sets background opacity and blur (a translucent, optionally blurred window — the sidebar's Liquid Glass tints to match on macOS 26). **Key Mapping** points at the config directory holding `keymap.conf` (see Customizing keys), lists any parse diagnostics, and has a Reload button. Changes persist and apply live to open terminals. Applying a font/theme change resets per-session cmd-+/- zoom to the default.
 - Terminal desktop notifications: a program's OSC 9 / 777 notification from any session or pane surfaces as a macOS banner and an unseen-count badge on the sidebar row (rolled up onto a collapsed workspace row). Clicking the banner brings agterm forward and focuses the exact pane; focusing a session clears its badge and dismisses its delivered banners. A notification from the pane you're already focused on is suppressed. Banners can be turned off with the **Show notification banners** toggle in General settings; the red count badges can be hidden separately with **Show notification badges** — the count keeps tracking either way (it reappears with the current count when re-enabled), and the agent-status indicator is unaffected.
 - Named windows: a window is a top-level bundle of workspaces and sessions, each in its own on-screen macOS window. Keep a library of windows (for example "work" and "personal"), open one per on-screen window, and create, rename, or delete them from the **File** menu (New Window ⌥⌘N, Open Window ▸, Rename Window…, Delete Window) or the action palette. Each bundle shows in exactly one window. The set of windows open at quit reopens on the next launch, with their frames restored.
 - Auto-persist on every change and on quit; restore the tree, names, selection, each session's working directory and font size, the split state, and the status-bar visibility on the next launch.
@@ -164,9 +164,63 @@ agtermctl session type --target "$AGTERM_SESSION_ID" $'\n'   # type into this ve
 agtermctl tree --socket "$AGTERM_SOCKET"                     # reach the same agterm this shell runs in
 ```
 
+## Customizing keys
+
+`agterm` reads a user-editable, kitty-flavored keymap file at `~/.config/agterm/keymap.conf`. It does two things: rebind the built-in menu shortcuts, and define custom shell commands bound to keys (and listed in the action palette). The file is optional — the app ships with working defaults, and a commented starter `keymap.conf` is written on first launch. The directory holding it can be changed in **Settings ▸ Key Mapping** (the field shows the active path, with a "Choose…" picker and "Use Default").
+
+The format is line-based with two verbs. Blank lines and lines starting with `#` are ignored:
+
+```
+# rebind a built-in to a single chord (mods joined by +; no leader sequences for built-ins)
+map cmd+shift+d   toggle_split
+map ctrl+shift+k  command_palette
+
+# define custom commands ("name" shows in the palette; chord is optional)
+command "Open in Zed"  cmd+shift+e  open -a Zed {AGT_SESSION_PWD}
+command "Lazygit"      ctrl+a>g     lazygit
+command "Deploy"                    ./deploy.sh
+```
+
+A chord is modifier words joined by `+` and a base key, e.g. `cmd+shift+e` or `ctrl+\``. The modifiers are `ctrl`, `cmd`, `opt`, and `shift`. The base key is a single character or one of `tab`, `space`, `return`, `delete`. A custom command's chord may also be a leader sequence — chords separated by `>`, e.g. `ctrl+a>g` (press `ctrl+a`, then `g`). A `command` with no chord is palette-only.
+
+The bindable built-in action names are:
+
+```
+new_window         rename_window      delete_window
+new_workspace      rename_workspace   delete_workspace
+new_session        open_directory     rename_session
+close_session      clear_status
+increase_font_size decrease_font_size reset_font_size
+toggle_split       focus_left_pane    focus_right_pane
+previous_session   next_session       first_session      last_session
+quick_terminal     session_palette    command_palette
+```
+
+The shell line of a `command` may use these `{AGT_X}` tokens, expanded at fire time (the same values are also exported as `$AGT_X` environment variables on the spawned process):
+
+```
+{AGT_SESSION_ID}   {AGT_SESSION_NAME}   {AGT_SESSION_PWD}
+{AGT_WORKSPACE_ID} {AGT_WORKSPACE_NAME}
+{AGT_WINDOW_ID}    {AGT_WINDOW_NAME}
+{AGT_SELECTION}    {AGT_SOCKET}
+```
+
+The context is resolved from the focused pane's session, so a custom command runs in that session's working directory and can read its current selection. A custom command runs as a detached `/bin/sh -c`; a non-zero exit (or a spawn failure) posts a notification banner.
+
+A `{AGT_X}` token is substituted **raw** into the shell line — convenient, but unsafe for dynamic content (e.g. `{AGT_SELECTION}`, which could contain shell syntax). For untrusted content prefer the matching `$AGT_X` environment variable, quoted, e.g. `"$AGT_SELECTION"` — the shell quotes it for you so it can't inject syntax.
+
+After editing the file, apply it with **View ▸ Reload Keymap**, the action palette (⌃⇧P → "Reload Keymap"), or `agtermctl keymap reload`. A malformed line never discards the rest of the file — it surfaces in the diagnostics list in Settings ▸ Key Mapping (and `keymap.reload` returns the diagnostic count) while the good lines still apply.
+
+v1 limitations:
+
+- Built-in rebinds are single-chord only; leader sequences (`ctrl+a>g`) work only for custom commands.
+- A few keys are not expressible in the file because they clash with the grammar's separators: the arrow keys, `+` (the chord-joiner, so `increase_font_size`'s default ⌘+ can't be written), and `>` (the leader separator). The arrow-bound actions (`focus_left_pane`, `focus_right_pane`, `previous_session`, `next_session`) and `increase_font_size` keep their default shortcuts unless you `map` them to a parseable chord.
+- The Ctrl-Tab MRU session switcher and Ctrl-1/Ctrl-2 pane focus are not rebindable yet; they keep their current keys.
+- The action palette shows chords as live kitty syntax (e.g. `cmd+shift+e`) for both custom commands and built-in shortcuts; only chords that can't be expressed in the file fall back to a glyph (the arrow-bound actions and `increase_font_size`'s ⌘+).
+
 ## Agent status
 
-A coding agent running in a session can flag its status on that session's sidebar row, so you can tell at a glance which of many concurrent agents needs you. The status shows as a small tinted SF Symbol just left of the notification badge: `active` is a blue ellipsis, `blocked` an amber exclamation, `completed` a green check, and `idle` is nothing. The icon appears only on a session you are *not* looking at — it is hidden on the selected session of the frontmost window and re-appears when you switch away, so a status you're already watching doesn't clutter the row.
+A coding agent running in a session can flag its status on that session's sidebar row, so you can tell at a glance which of many concurrent agents needs you. The status shows as a small tinted SF Symbol just left of the notification badge: `active` is a blue ellipsis, `blocked` an amber exclamation, `completed` a green check, and `idle` is nothing. The glyph shows on every non-idle session, the selected one included. A one-time `completed` flash auto-clears once you visit the session.
 
 An agent sets it over the control channel:
 
