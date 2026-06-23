@@ -336,6 +336,7 @@ struct agtermApp: App {
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
+        view.onUserInputClearsStatus = { store.setAgentIndicator(AgentIndicator(), forSession: sessionID) }
         view.onFontSizeChange = { store.setFontSize(sessionID, $0) }
         return view
     }
@@ -366,6 +367,7 @@ struct agtermApp: App {
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
+        view.onUserInputClearsStatus = { store.setAgentIndicator(AgentIndicator(), forSession: sessionID) }
         return view
     }
 

@@ -464,6 +464,38 @@ final class ControlAPIUITests: XCTestCase {
                       "visiting a completed --auto-reset session should clear its icon")
     }
 
+    // typing into a session flagged for your attention (`blocked` or `completed`) clears the glyph — the
+    // input-driven clear. blocked covers the Esc-decline case Claude Code fires no hook for; completed clears
+    // the finished flash once you re-engage. wired off GhosttySurfaceView.keyDown, so it MUST be driven by the
+    // real keyboard: `session.type`/inject calls ghostty_surface_key directly, bypassing keyDown.
+    func testTypingClearsBlockedOrCompletedStatus() throws {
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let root = try XCTUnwrap(treeResult["tree"] as? [String: Any], "result should carry a tree")
+        let workspaces = try XCTUnwrap(root["workspaces"] as? [[String: Any]], "tree should list workspaces")
+        let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
+        let seeded = try XCTUnwrap(sessions.first?["id"] as? String, "should have a seeded session id")
+
+        // press a real key into the focused terminal until the glyph clears. keyboard focus return can be
+        // async, so retry (mirrors keyboardTypeUntilMarker's retry idiom).
+        func typeUntilGlyphCleared() -> Bool {
+            for _ in 0..<8 {
+                app.typeKey(.escape, modifierFlags: [])
+                if app.staticTexts["agent-status"].waitForNonExistence(timeout: 2) { return true }
+            }
+            return false
+        }
+
+        // both attention states clear on a keystroke; active would NOT (agent still working), idle has no glyph.
+        for state in ["blocked", "completed"] {
+            let set = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"\#(state)"}}"#)
+            XCTAssertEqual(set["ok"] as? Bool, true, "session.status \(state) should succeed: \(set)")
+            XCTAssertTrue(app.staticTexts["agent-status"].waitForExistence(timeout: 12),
+                          "\(state) should show the agent-status glyph")
+            XCTAssertTrue(typeUntilGlyphCleared(), "typing into a \(state) session should clear its glyph")
+        }
+    }
+
     // the General → "Show notification badges" toggle gates the red count pill's RENDERING (the count
     // keeps tracking either way): fire a notification on a non-selected session so notify-badge shows,
     // toggle the setting off → the badge hides, toggle on → it reappears with the same count.

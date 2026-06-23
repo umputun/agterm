@@ -24,14 +24,17 @@ struct AgentHooksInstallTests {
         (entry["hooks"] as? [[String: Any]])?.first?["command"] as? String
     }
 
-    @Test func mergeWhenAbsentAddsAllThreeHooks() throws {
+    @Test func mergeWhenAbsentAddsAllFourHooks() throws {
         let result = try AgentHooksInstall.mergeClaudeSettings(existing: nil, scriptDir: scriptDir)
         #expect(result.changed)
         let evts = events(result.json)
         #expect(evts["UserPromptSubmit"]?.count == 1)
+        #expect(evts["PostToolUse"]?.count == 1)
         #expect(evts["Stop"]?.count == 1)
         #expect(evts["Notification"]?.count == 1)
         #expect(command(evts["UserPromptSubmit"]![0])?.hasSuffix("agent-status.sh' active --blink") == true)
+        // PostToolUse re-asserts active after every tool, clearing a lingering blocked on resume
+        #expect(command(evts["PostToolUse"]![0])?.hasSuffix("agent-status.sh' active --blink") == true)
         // only the Stop hook passes --auto-reset (clear-on-visit); active/blocked stay keep-state
         #expect(command(evts["Stop"]![0])?.hasSuffix("agent-status.sh' completed --auto-reset") == true)
         #expect(command(evts["Notification"]![0])?.hasSuffix("agent-status.sh' blocked") == true)
@@ -40,6 +43,7 @@ struct AgentHooksInstallTests {
         #expect(evts["Notification"]![0]["matcher"] as? String == "permission_prompt")
         // the unmatched events carry no matcher key
         #expect(evts["UserPromptSubmit"]![0]["matcher"] == nil)
+        #expect(evts["PostToolUse"]![0]["matcher"] == nil)
     }
 
     @Test func mergeWhenPresentIsNoOp() throws {
@@ -76,7 +80,8 @@ struct AgentHooksInstallTests {
         let commands = evts["UserPromptSubmit"]!.compactMap { command($0) }
         #expect(commands.contains("/usr/bin/other-hook.sh"))
         #expect(commands.contains { $0.hasSuffix("agent-status.sh' active --blink") })
-        // Stop + Notification are still added fresh
+        // PostToolUse + Stop + Notification are still added fresh
+        #expect(evts["PostToolUse"]?.count == 1)
         #expect(evts["Stop"]?.count == 1)
         #expect(evts["Notification"]?.count == 1)
     }
@@ -107,13 +112,13 @@ struct AgentHooksInstallTests {
         // a whitespace-only file has no content to lose, so it starts fresh like an empty file
         let result = try AgentHooksInstall.mergeClaudeSettings(existing: "   \n\t\n", scriptDir: scriptDir)
         #expect(result.changed)
-        #expect(events(result.json).count == 3)
+        #expect(events(result.json).count == 4)
     }
 
     @Test func mergeHandlesEmptyExisting() throws {
         let result = try AgentHooksInstall.mergeClaudeSettings(existing: "", scriptDir: scriptDir)
         #expect(result.changed)
-        #expect(events(result.json).count == 3)
+        #expect(events(result.json).count == 4)
     }
 
     @Test func appendShellRCAddsLineAndMarkersOnce() {

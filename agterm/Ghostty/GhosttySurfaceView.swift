@@ -76,6 +76,14 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// responder, so the app can track which split pane is active. Set by the factory.
     var onFocusChange: ((Bool) -> Void)?
 
+    /// Called on the main actor when a key is pressed into this surface while the owning session's
+    /// agent-status is an attention state — `blocked` (waiting on you) or `completed` (finished). Typing
+    /// into the session, including the very Esc/answer keystroke that resolves a permission prompt, means
+    /// you've engaged with it, so the factory wires this to clear the stale glyph to idle. `active` is left
+    /// alone (the agent is still working). The status is otherwise control-driven; this is the one
+    /// input-driven clear, covering the decline case Claude Code fires no hook for.
+    var onUserInputClearsStatus: (() -> Void)?
+
     /// Called on the main actor with the surface's current font size (points) when it
     /// changes (cmd +/-), so the app can persist it. Set by the factory on the primary
     /// surface only. libghostty has no font-size getter or change event, so this is driven
@@ -565,6 +573,12 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         guard let surface else {
             super.keyDown(with: event)
             return
+        }
+        // typing in a session flagged for your attention — blocked (waiting on you) or completed (finished)
+        // — means you've engaged with it, so clear the glyph to idle. active is left alone (agent still
+        // working). fires once: the status drops to idle, so the gate skips on the next key.
+        if let status = session?.agentIndicator.status, status == .blocked || status == .completed {
+            onUserInputClearsStatus?()
         }
         let action: ghostty_input_action_e = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)

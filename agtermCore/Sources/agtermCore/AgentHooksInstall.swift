@@ -17,11 +17,16 @@ public enum AgentHooksInstall {
     public static let rcMarkerEnd = "# <<< agterm agent-status <<<"
 
     /// The Claude Code hook events the merge installs, paired with the agent state (plus any flags)
-    /// each maps to. `Notification` additionally carries the `permission_prompt` matcher (the others are
-    /// unmatched). Only the `Stop`→`completed` hook passes `--auto-reset` (it clears on visit); `active`
-    /// and `blocked` stay keep-state.
+    /// each maps to. `UserPromptSubmit` and `PostToolUse` both set `active`: the former on a new prompt,
+    /// the latter after every tool runs so the status returns to `active` when work RESUMES after a
+    /// `blocked` permission prompt (Claude Code has no "permission answered" event, and the gated tool's
+    /// own `PreToolUse` already fired BEFORE `blocked` was set — so the approved tool's `PostToolUse` is
+    /// the first hook to fire afterwards). `Notification` additionally carries the `permission_prompt`
+    /// matcher (the others are unmatched). Only the `Stop`→`completed` hook passes `--auto-reset` (it
+    /// clears on visit); `active` and `blocked` stay keep-state.
     static let claudeHooks: [(event: String, matcher: String?, state: String)] = [
         ("UserPromptSubmit", nil, "active --blink"),
+        ("PostToolUse", nil, "active --blink"),
         ("Stop", nil, "completed --auto-reset"),
         ("Notification", "permission_prompt", "blocked"),
     ]
@@ -30,7 +35,7 @@ public enum AgentHooksInstall {
     /// JSON object: the installer refuses to overwrite a hand-maintained file it cannot safely parse.
     public enum MergeError: Error { case malformedExistingSettings }
 
-    /// merge the three agent-status hooks into an existing Claude Code `settings.json`.
+    /// merge the four agent-status hooks into an existing Claude Code `settings.json`.
     ///
     /// `existing` is the current file contents (nil or empty = no file yet); `scriptDir` is the
     /// directory the wrapper script was installed into. Returns the new JSON text and whether it
