@@ -70,13 +70,35 @@ struct KeymapTests {
         #expect(command.command == "./deploy.sh")
     }
 
-    @Test func parseCommandFirstTokenIsChordWhenParseable() {
-        // a lone single-letter token after the name parses as a chord, so it is consumed as the chord.
+    @Test func parseCommandBareKeyRejectedAsShortcut() {
+        // a modifier-less first token (a bare key) is NOT consumed as a shortcut: it would shadow that
+        // key in the terminal, so the line stays palette-only with the token kept in the shell line and
+        // a diagnostic is emitted.
         let (keymap, diagnostics) = parseKeymap("command \"X\" a echo hi")
+        #expect(keymap.commands.count == 1)
+        #expect(keymap.commands[0].shortcut.isEmpty)
+        #expect(keymap.commands[0].command == "a echo hi")
+        #expect(diagnostics.count == 1)
+        #expect(diagnostics[0].message.contains("must include a modifier"))
+    }
+
+    @Test func parseCommandModifierShortcutAccepted() {
+        // a single chord WITH a modifier is a valid custom shortcut.
+        let (keymap, diagnostics) = parseKeymap("command \"X\" cmd+e echo hi")
         #expect(diagnostics.isEmpty)
         #expect(keymap.commands.count == 1)
-        #expect(keymap.commands[0].shortcut == "a")
+        #expect(keymap.commands[0].shortcut == "cmd+e")
         #expect(keymap.commands[0].command == "echo hi")
+    }
+
+    @Test func parseCommandPaletteOnlyShellTokenNotSwallowed() {
+        // the trap: a palette-only command whose shell line starts with a single-char token (`[`, `:`,
+        // a one-letter alias) must NOT have that token silently bound as a shortcut.
+        let (keymap, diagnostics) = parseKeymap("command \"Check\" [ -f /tmp ] && echo ok")
+        #expect(keymap.commands.count == 1)
+        #expect(keymap.commands[0].shortcut.isEmpty)
+        #expect(keymap.commands[0].command == "[ -f /tmp ] && echo ok")
+        #expect(diagnostics.count == 1)
     }
 
     @Test func parseCommandPreservesAgtTokens() {

@@ -181,7 +181,7 @@ command "Lazygit"      ctrl+a>g     lazygit
 command "Deploy"                    ./deploy.sh
 ```
 
-A chord is modifier words joined by `+` and a base key, e.g. `cmd+shift+e` or `ctrl+\``. The modifiers are `ctrl`, `cmd`, `opt`, and `shift`. The base key is a single character or one of `tab`, `space`, `return`, `delete`. A custom command's chord may also be a leader sequence — chords separated by `>`, e.g. `ctrl+a>g` (press `ctrl+a`, then `g`). A `command` with no chord is palette-only.
+A chord is modifier words joined by `+` and a base key, e.g. `cmd+shift+e` or `ctrl+\``. The modifiers are `ctrl`, `cmd`, `opt`, and `shift`. The base key is a single character or one of `tab`, `space`, `return`, `delete`. A custom command's chord may also be a leader sequence — chords separated by `>`, e.g. `ctrl+a>g` (press `ctrl+a`, then `g`). A `command` with no chord is palette-only. A custom command's chord must include a modifier: a bare key like `a` is rejected with a diagnostic and the line is treated as palette-only, so a binding can't silently shadow a plain terminal key (and a palette-only shell line that happens to start with a single-character token isn't swallowed as a binding).
 
 The bindable built-in action names are:
 
@@ -207,7 +207,7 @@ The shell line of a `command` may use these `{AGT_X}` tokens, expanded at fire t
 
 The context is resolved from the focused pane's session, so a custom command runs in that session's working directory and can read its current selection. A custom command runs as a detached `/bin/sh -c`; a non-zero exit (or a spawn failure) posts a notification banner.
 
-A `{AGT_X}` token is substituted **raw** into the shell line — convenient, but unsafe for dynamic content (e.g. `{AGT_SELECTION}`, which could contain shell syntax). For untrusted content prefer the matching `$AGT_X` environment variable, quoted, e.g. `"$AGT_SELECTION"` — the shell quotes it for you so it can't inject syntax.
+A `{AGT_X}` token is substituted **raw** into the shell line — convenient, but unsafe for content you don't control. `{AGT_SELECTION}` is the obvious case, but a remote host can also set the session title (OSC) and report the working directory (OSC 7), so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are equally unsafe to interpolate raw. For any such content prefer the matching `$AGT_X` environment variable, quoted, e.g. `"$AGT_SELECTION"` — the shell quotes it for you so it can't inject syntax.
 
 After editing the file, apply it with **View ▸ Reload Keymap**, the action palette (⌃⇧P → "Reload Keymap"), or `agtermctl keymap reload`. A malformed line never discards the rest of the file — it surfaces in the diagnostics list in Settings ▸ Key Mapping (and `keymap.reload` returns the diagnostic count) while the good lines still apply.
 

@@ -336,14 +336,22 @@ private func parseCommandLine(_ rest: String, line: Int, commands: inout [Custom
     let name = String(rest[rest.index(after: rest.startIndex)..<closeQuote])
     let afterName = String(rest[rest.index(after: closeQuote)...]).trimmingCharacters(in: .whitespaces)
 
-    // the token right after the closing quote is the chord iff parseKeybind accepts it; otherwise
-    // the whole remainder is the shell line (palette-only).
+    // the token right after the closing quote is the chord iff parseKeybind accepts it AND it carries
+    // a modifier; otherwise the whole remainder is the shell line (palette-only). a modifier is
+    // required so a custom shortcut can't be a bare key that shadows that key in the terminal — and so
+    // a palette-only shell line that happens to start with a single-char token (`[`, `:`, a one-letter
+    // alias) isn't silently swallowed as a binding.
     let firstToken = String(afterName.prefix(while: { !$0.isWhitespace }))
     var shortcut = ""
     var shellLine = afterName
-    if !firstToken.isEmpty, parseKeybind(firstToken) != nil {
-        shortcut = firstToken
-        shellLine = String(afterName.dropFirst(firstToken.count)).trimmingCharacters(in: .whitespaces)
+    if !firstToken.isEmpty, let keybind = parseKeybind(firstToken) {
+        if keybind.first?.mods.isEmpty == false {
+            shortcut = firstToken
+            shellLine = String(afterName.dropFirst(firstToken.count)).trimmingCharacters(in: .whitespaces)
+        } else {
+            diagnostics.append(KeymapDiagnostic(line: line,
+                message: "command '\(name)' shortcut '\(firstToken)' must include a modifier; treating the line as palette-only"))
+        }
     }
 
     // an empty shell line (just a name, or a name + chord with no command) is a no-op binding; skip it.

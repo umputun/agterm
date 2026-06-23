@@ -162,8 +162,9 @@ final class SettingsModel {
         #   command "<name>" [chord] <shell...>
         #       Define a custom command, shown in the action palette marked `custom`. The quoted
         #       name may contain spaces. An optional chord (single chord OR a leader like `ctrl+a>g`)
-        #       binds it to a key; omit it for a palette-only command. The rest of the line is run via
-        #       `/bin/sh -c`. Examples:
+        #       binds it to a key; the chord MUST include a modifier (a bare key is rejected and the
+        #       line becomes palette-only). Omit the chord for a palette-only command. The rest of the
+        #       line is run via `/bin/sh -c`. Examples:
         #
         #           command "Open in Zed"  cmd+shift+e  open -a Zed {AGT_SESSION_PWD}
         #           command "Lazygit"      ctrl+a>g     lazygit
@@ -178,8 +179,10 @@ final class SettingsModel {
         \(tokenLines)
         #
         # NOTE: a {AGT_X} token is substituted RAW into the /bin/sh line — convenient, but unsafe for
-        # dynamic content (e.g. {AGT_SELECTION}) that could contain shell syntax. For untrusted content
-        # prefer the matching $AGT_X environment variable, QUOTED, e.g. "$AGT_SELECTION".
+        # content you don't control. {AGT_SELECTION} is the obvious case, but a remote host can also set
+        # the session title (OSC) and the working directory (OSC 7), so {AGT_SESSION_NAME} and
+        # {AGT_SESSION_PWD} are equally unsafe raw. For any such content prefer the matching $AGT_X
+        # environment variable, QUOTED, e.g. "$AGT_SELECTION".
         #
         # Uncomment and edit a line below to start.
         # map cmd+shift+d toggle_split
