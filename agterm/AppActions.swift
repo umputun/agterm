@@ -400,23 +400,31 @@ final class AppActions {
 
     // MARK: - Search (on the surface that opened it)
 
-    /// The search-capable target: the focused surface IFF it is searchable (the main/split pane), else the
-    /// active session's focused pane (always searchable). A quick-terminal/scratch/overlay surface is NOT
-    /// searchable (no bar, no close lifecycle), so it falls back to the session pane behind it.
+    /// The search-capable target. A covering SCRATCH wins FIRST — the scratch surface (`topmostSurface` while
+    /// `scratchActive` with no overlay) — so a ⌘F while the scratch covers the session always opens the bar on
+    /// the scratch, never on the hidden pane underneath, even when key-window focus sits off the surface (e.g.
+    /// the sidebar), where `focusedSurface()` would otherwise fall back to the hidden `activeSurface`. Else the
+    /// focused surface IFF it is searchable (the main/split pane), else the active session's focused pane. The
+    /// full overlay/quick terminal are not searchable (blocked by `coverHidesActiveSession`); a FLOATING
+    /// overlay leaves the pane visible, so search targets the pane behind it (not the unsearchable overlay).
     private func searchTarget() -> GhosttySurfaceView? {
+        if let session = store?.activeSession, session.scratchActive, !session.overlayActive {
+            return session.topmostSurface as? GhosttySurfaceView
+        }
         if let view = focusedSurface(), view.isSearchable { return view }
         return store?.activeSession?.activeSurface as? GhosttySurfaceView
     }
 
-    /// Whether a covering surface hides the active session's panes — the frontmost window's quick terminal
-    /// is up, or the active session shows a scratch/overlay. While one is up, ⌘F must NOT open the bar over
-    /// the hidden pane (a covered, focus-stealing bar). The ⌘F-again CLOSE still runs (no cover blocks it).
+    /// Whether a covering surface hides the active session in a way that BLOCKS ⌘F — the frontmost window's
+    /// quick terminal is up, or the active session shows a FULL overlay. Neither is searchable, so opening the
+    /// bar would strand it over a hidden pane. The scratch is NOT a blocker: it IS searchable now, so ⌘F opens
+    /// the bar over the scratch itself. The ⌘F-again CLOSE still runs regardless (no cover blocks it).
     private var coverHidesActiveSession: Bool {
         if frontmostQuickTerminal?.isVisible == true { return true }
         guard let session = store?.activeSession else { return false }
         // a FLOATING overlay (overlaySizePercent != nil) leaves the session visible, so only a FULL
-        // overlay hides it; the scratch is always full-coverage.
-        return session.scratchActive || (session.overlayActive && session.overlaySizePercent == nil)
+        // overlay hides it (and is not searchable).
+        return session.overlayActive && session.overlaySizePercent == nil
     }
 
     /// Toggle the search bar for the active session. CLOSE branch (search already active): send

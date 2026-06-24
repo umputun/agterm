@@ -328,9 +328,14 @@ public final class AppStore {
     /// fresh shell). Used on the scratch shell's own `exit` and on session/workspace/window teardown.
     /// No-op (returns false) when there is no scratch surface.
     @discardableResult public func closeScratch(_ sessionID: UUID) -> Bool {
-        guard let session = session(withID: sessionID), session.scratchSurface != nil else { return false }
+        guard let session = session(withID: sessionID), let scratch = session.scratchSurface else { return false }
         session.scratchActive = false
-        session.scratchSurface?.teardown()
+        // if the open search bar is pinned to the scratch being torn down, reset search rather than leave a
+        // stuck, no-op bar (the weak `searchSurface` zeroes but `searchActive` stays true) — mirrors the
+        // closeSplit/closePrimaryPane handling. Guarded on identity so a search owned by the main/split pane
+        // (the scratch can cover a session whose pane opened search) survives the scratch teardown.
+        if session.searchSurface === scratch { session.clearSearch() }
+        scratch.teardown()
         session.scratchSurface = nil
         return true
     }

@@ -109,7 +109,8 @@ struct agtermApp: App {
                     let qtVisible = library.windowID(forSession: session.id)
                         .flatMap { QuickTerminalRegistry.shared.controller(for: $0) }?.isVisible ?? false
                     return Self.makeScratchSurface(for: session, store: store, env: surfaceEnv(for: session),
-                                                   suppressAutoFocus: session.overlayActive || qtVisible)
+                                                   suppressAutoFocus: session.overlayActive || qtVisible,
+                                                   library: library)
                 },
                 quickTerminalEnv: { quickTerminalEnv(for: $0) },
                 actions: actions,
@@ -508,7 +509,7 @@ struct agtermApp: App {
     /// the next show spawns a fresh shell. Seeds from the session's current dir + inherits its env ids.
     @MainActor
     private static func makeScratchSurface(for session: Session, store: AppStore, env: [String: String],
-                                          suppressAutoFocus: Bool) -> GhosttySurfaceView {
+                                          suppressAutoFocus: Bool, library: WindowLibrary) -> GhosttySurfaceView {
         // autoFocus on creation gives the first show reliable focus — but suppress it when another
         // surface already owns focus above the scratch (a full overlay, or the window-level quick
         // terminal), so a scratch created under one can't steal first responder. Re-shows are focused
@@ -518,6 +519,10 @@ struct agtermApp: App {
                                       autoFocus: !suppressAutoFocus, env: env)
         let sessionID = session.id
         view.onExit = { store.closeScratch(sessionID) }
+        // the scratch supports in-terminal search (⌘F), so wire the four onSearch* callbacks and mark it
+        // searchable — pinned to the same session, like the main/split panes. Unlike the overlay/quick
+        // terminal, the scratch behaves like a real pane (kept alive across hides), so a bar over it is safe.
+        Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
         return view
     }
 

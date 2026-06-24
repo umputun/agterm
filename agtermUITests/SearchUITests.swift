@@ -72,20 +72,35 @@ final class SearchUITests: XCTestCase {
                        "⌘F while the quick terminal covers the session must NOT open a hidden search bar")
     }
 
-    // While the scratch terminal covers the session, ⌘F must NOT open the search bar over the hidden pane.
-    func testSearchDoesNotOpenWhileScratchCovers() throws {
+    // Search works IN the scratch terminal: with the scratch shown, ⌘F opens the bar over the scratch
+    // surface (not the hidden pane underneath), and typing a needle that appears in the scratch's
+    // scrollback round-trips through start_search + search:<needle> so the counter reports matches.
+    func testSearchOpensOverScratch() throws {
         selectSeededSession()
 
-        // open the scratch terminal — a full-coverage layer over the session.
+        // open the scratch terminal — a full-coverage layer over the session; autoFocus puts first
+        // responder in the scratch shell, so typeText goes to it.
         let scratchButton = app.buttons["scratch-toggle"]
         XCTAssertTrue(scratchButton.waitForExistence(timeout: 5), "scratch toolbar button should exist")
         scratchButton.click()
         RunLoop.current.run(until: Date().addingTimeInterval(0.9))
 
+        // put a known, repeated token in the SCRATCH scrollback: the typed line and its echoed output
+        // both carry "scratchFINDME", guaranteeing at least two matches.
+        app.typeText("echo scratchFINDME scratchFINDME")
+        app.typeKey(.return, modifierFlags: [])
+
+        // ⌘F now opens the bar over the scratch (the cover gate no longer blocks it for the scratch).
         app.typeKey("f", modifierFlags: .command)
         let field = app.textFields["search-field"]
-        XCTAssertFalse(field.waitForExistence(timeout: 3),
-                       "⌘F while the scratch terminal covers the session must NOT open a hidden search bar")
+        XCTAssertTrue(field.waitForExistence(timeout: 5),
+                      "⌘F while the scratch terminal is shown SHOULD open the search bar over the scratch")
+
+        // the needle matches against the SCRATCH content, confirming search targets the scratch surface.
+        let label = waitForMatchLabel(field: field, needle: "scratchFINDME", timeout: 12)
+        let resolved = try XCTUnwrap(label, "the search counter should report a match against the scratch content")
+        XCTAssertTrue(resolved.contains("of") || resolved.contains("matches"),
+                      "counter should read 'N of M' or 'M matches', got '\(resolved)'")
     }
 
     // Esc closes the bar: the close path sends end_search, the END_SEARCH callback clears the fields

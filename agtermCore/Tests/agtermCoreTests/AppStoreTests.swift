@@ -627,6 +627,46 @@ struct AppStoreTests {
         #expect(store.closeScratch(session.id) == false)
     }
 
+    @Test func closeScratchClearsStuckSearchWhenScratchOwnsIt() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.scratchActive = true
+        let scratch = SpySurface()
+        session.scratchSurface = scratch
+        // search opened on the scratch, pinned as the owner — its teardown must reset search.
+        session.searchActive = true
+        session.searchNeedle = "needle"
+        session.searchTotal = 4
+        session.searchSelected = 2
+        session.searchSurface = scratch
+        #expect(store.closeScratch(session.id) == true)
+        #expect(session.searchActive == false)
+        #expect(session.searchNeedle == "")
+        #expect(session.searchTotal == nil)
+        #expect(session.searchSelected == nil)
+        #expect(session.searchSurface == nil)
+    }
+
+    @Test func closeScratchLeavesSearchOwnedByMainPane() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let primary = SpySurface(); session.surface = primary
+        session.scratchActive = true
+        let scratch = SpySurface()
+        session.scratchSurface = scratch
+        // search is owned by the MAIN pane, not the scratch covering the session — tearing the scratch
+        // down must not nuke a valid main-pane search.
+        session.searchActive = true
+        session.searchNeedle = "needle"
+        session.searchSurface = primary
+        #expect(store.closeScratch(session.id) == true)
+        #expect(session.searchActive == true)
+        #expect(session.searchNeedle == "needle")
+        #expect(session.searchSurface === primary)
+    }
+
     @Test func toggleScratchUnknownSessionIsNoop() {
         let store = Self.makeStore()
         let ws = store.addWorkspace(name: "work")
