@@ -16,14 +16,15 @@ public enum SkillInstall {
     /// One install destination: which agent, and the `…/skills/agterm` directory to write.
     public struct Target: Equatable, Sendable {
         public let agent: String          // human label, e.g. "Claude Code"
-        public let skillDirectory: String // <home>/.<agent>/skills/agterm
+        public let skillDirectory: String // the install path, e.g. <home>/.claude/skills/agterm
         public init(agent: String, skillDirectory: String) {
             self.agent = agent
             self.skillDirectory = skillDirectory
         }
     }
 
-    /// The skill destination for one agent base, `<home>/.<base>/skills/agterm`.
+    /// The skill destination under an agent base dir. `base` is the dotted directory name (e.g.
+    /// `.claude` or `.codex`), so the result is `<home>/<base>/skills/agterm`.
     public static func skillDirectory(home: String, base: String) -> String {
         home + "/" + base + "/skills/" + skillName
     }
