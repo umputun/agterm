@@ -702,7 +702,7 @@ final class ControlServer {
         case "toggle": want = !store.sidebarVisible
         default: return ControlResponse(ok: false, error: "invalid sidebar mode: \(mode)")
         }
-        store.sidebarVisible = want
+        if want != store.sidebarVisible { store.sidebarVisible = want }
         return ControlResponse(ok: true)
     }
 
