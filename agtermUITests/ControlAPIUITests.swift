@@ -371,6 +371,29 @@ final class ControlAPIUITests: XCTestCase {
                        "should report the allowed modes: \(response)")
     }
 
+    // an EMPTY needle clears the query: libghostty tears the search thread down (emitting no fresh count),
+    // so the arm returns ok with NO count and resets the bar's counter to nil — and a subsequent non-empty
+    // query must still find matches, proving the empty needle left the surface in a clean searchable state
+    // rather than a broken one. seeds a token, queries it, clears, then re-queries.
+    func testSessionSearchEmptyNeedleClearsThenRecovers() throws {
+        let needle = "agtermCLEARME"
+        let typed = try sendCommand(typeRequest(text: "echo \(needle) \(needle)\n", target: nil, select: false))
+        XCTAssertEqual(typed["ok"] as? Bool, true, "typing the needle should succeed: \(typed)")
+
+        _ = try settledSearchCount(needle: needle) // open + settle a real count first
+
+        // clear the query with an empty needle: ok, and no count in the result (counter blanks).
+        let cleared = try sendCommand(#"{"cmd":"session.search","target":"active","args":{"text":""}}"#)
+        XCTAssertEqual(cleared["ok"] as? Bool, true, "an empty needle should succeed (clears the query): \(cleared)")
+        let clearedResult = try XCTUnwrap(cleared["result"] as? [String: Any], "empty-needle search should carry a result")
+        XCTAssertNil(clearedResult["count"], "an empty needle should report no count (the counter is cleared): \(cleared)")
+
+        // re-query the same needle: it must find matches again (the clear didn't break search).
+        let recovered = try settledSearchCount(needle: needle)
+        XCTAssertGreaterThanOrEqual(recovered, 1, "search must still find the needle after an empty-needle clear")
+        try sendCloseSearch()
+    }
+
     /// The 1-based selected index from a "S of N" display string (nil for "M matches" / "no matches" /
     /// other shapes), so a nav test can assert the index moved.
     private func selectedIndex(of display: String?) -> Int? {

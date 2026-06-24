@@ -440,10 +440,16 @@ final class AppActions {
     /// Set the current query: mirror it into the active session's `searchNeedle` (so the bar's field stays
     /// in sync) then send `search:<needle>` to the session's pinned `searchSurface`, which replies with the
     /// new match count. Driving the pinned owner (not a re-resolved focused surface) keeps the bar bound to
-    /// the pane that opened search even after split focus moves.
+    /// the pane that opened search even after split focus moves. Clearing the field (empty needle) clears
+    /// the count/selected eagerly so the counter blanks at once rather than flashing the stale "N of M"
+    /// until libghostty's async teardown callback lands.
     func updateSearchNeedle(_ needle: String) {
         guard let session = store?.activeSession else { return }
         session.searchNeedle = needle
+        if needle.isEmpty {
+            session.searchTotal = nil
+            session.searchSelected = nil
+        }
         (session.searchSurface as? GhosttySurfaceView)?.sendSearchQuery(needle)
     }
 

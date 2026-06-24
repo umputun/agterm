@@ -789,6 +789,15 @@ final class ControlServer {
             }
             session.searchNeedle = text
             surface.sendSearchQuery(text)
+            // an explicitly-empty needle clears the query: libghostty tears the search thread down and
+            // emits no fresh SEARCH_TOTAL (its quit event resets the count), so reset the count/selected
+            // here and skip the settle-poll below — there is nothing to wait for, and polling would just
+            // burn the full timeout reading a count that never lands.
+            if text.isEmpty {
+                session.searchTotal = nil
+                session.searchSelected = nil
+                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+            }
         }
         switch to {
         case "next": surface.navigateSearch(.next)
