@@ -78,6 +78,8 @@ xcodebuild test -project agterm.xcodeproj -scheme agterm -destination 'platform=
 
 The app bundles `agtermctl` inside `agterm.app`. The easiest way to put it on your PATH is **Help ▸ Install Command Line Tool…**, which symlinks the bundled binary into `/usr/local/bin` (the first entry in macOS's default PATH). When that directory is user-writable it installs silently; otherwise it asks once for an administrator password.
 
+To let a coding agent drive agterm without you explaining the API, install the bundled agent skill with **Help ▸ Install Agent Skill…**. Claude Code and Codex share the same skill format, so it installs to whichever you have, `~/.claude/skills/agterm/` and/or `~/.codex/skills/agterm/`. The skill teaches the agent the control model and the full `agtermctl` command set, so an agent running inside agterm can create sessions, run overlays, manage windows, and reload the keymap on its own. It drives the app through `agtermctl`, so install the CLI too.
+
 `agtermctl` also lives in the `agtermCore` Swift package and builds standalone without Xcode or libghostty:
 
 ```sh

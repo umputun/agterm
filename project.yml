@@ -48,6 +48,7 @@ targets:
           - "Resources/ghostty"
           - "Resources/terminfo"
           - "Resources/agent-status"
+          - "Resources/agent-skill"
       # Ghostty resources (themes + shell-integration), downloaded by setup.sh.
       # Folder reference (not the default "group") because the contents are
       # extensionless files Xcode would otherwise skip. Lands at
@@ -71,6 +72,12 @@ targets:
       # Lands at Contents/Resources/agent-status — the installer copies it from
       # there to ~/.config/agterm/agent-status.
       - path: agterm/Resources/agent-status
+        type: folder
+        buildPhase: resources
+      # Claude Code skill package (SKILL.md + reference.md + examples.md). Folder reference so the
+      # whole dir copies verbatim to Contents/Resources/agent-skill; the installer copies it from
+      # there to ~/.claude/skills/agterm.
+      - path: agterm/Resources/agent-skill
         type: folder
         buildPhase: resources
     settings:
