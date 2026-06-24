@@ -285,8 +285,10 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         _ = ghostty_surface_binding_action(surface, action, UInt(action.utf8.count))
     }
 
-    /// The direction `navigateSearch` steps through matches; the raw value feeds `navigate_search:<dir>`.
-    enum SearchDirection: String { case next, previous }
+    /// The direction `navigateSearch` steps the selection. The pure enum (with its libghostty mapping)
+    /// lives host-free in `agtermCore.SearchDirection`; this alias keeps the existing
+    /// `GhosttySurfaceView.SearchDirection` call sites unchanged.
+    typealias SearchDirection = agtermCore.SearchDirection
 
     /// Enters search mode on this surface (the `start_search` binding action). libghostty replies with a
     /// START_SEARCH action carrying the current needle; sending it again while search is active closes it.
@@ -296,8 +298,12 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// and SEARCH_SELECTED actions for the new match set.
     func sendSearchQuery(_ needle: String) { performBindingAction("search:\(needle)") }
 
-    /// Steps to the next/previous match (the `navigate_search:<dir>` binding action).
-    func navigateSearch(_ direction: SearchDirection) { performBindingAction("navigate_search:\(direction.rawValue)") }
+    /// Steps the selection one match. The agterm direction is INVERTED to libghostty's `navigate_search`
+    /// string by `SearchDirection.ghosttyAction` (see `agtermCore.SearchDirection`), so the DOWN chevron /
+    /// Enter / `--next` move visually down and the UP chevron / Shift-Enter / `--prev` move visually up.
+    func navigateSearch(_ direction: SearchDirection) {
+        performBindingAction(direction.ghosttyAction)
+    }
 
     /// Exits search mode on this surface (the `end_search` binding action). libghostty replies with an
     /// END_SEARCH action.

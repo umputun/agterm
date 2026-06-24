@@ -13,3 +13,24 @@ public protocol TerminalSurface: AnyObject {
     /// owning session is closed.
     func teardown()
 }
+
+/// The direction the search selection steps, in agterm's natural convention:
+/// `next` = forward = visually DOWN the screen (toward newer output), `previous` = back = visually UP
+/// (toward older scrollback). Host-free so the inversion to libghostty's own `navigate_search` strings is
+/// unit-testable without GhosttyKit.
+public enum SearchDirection: String, Sendable {
+    case next
+    case previous
+
+    /// The libghostty `navigate_search:<dir>` argument for this direction. libghostty's own `next` walks
+    /// matches newest→oldest (visually UP) and its `previous` walks oldest→newest (visually DOWN), the
+    /// OPPOSITE of agterm's convention — so agterm's `.next` (down) maps to `previous` and `.previous`
+    /// (up) maps to `next`. Centralizing the inversion here keeps the DOWN chevron / Enter / `--next`
+    /// moving visually down and the UP chevron / Shift-Enter / `--prev` moving visually up.
+    public var ghosttyAction: String {
+        switch self {
+        case .next: return "navigate_search:previous"
+        case .previous: return "navigate_search:next"
+        }
+    }
+}
