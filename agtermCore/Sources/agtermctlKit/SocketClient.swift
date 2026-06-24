@@ -146,10 +146,10 @@ struct SocketClient {
     }
 
     /// Render the `theme.list` payload as one theme name per line, the current theme marked with `* `
-    /// and a leading "Default" entry for the no-theme case (no trailing newline).
+    /// and a leading "default ghostty" entry for the no-theme (ghostty built-in) case (no trailing newline).
     static func formatThemes(_ themes: [String], current: String?) -> String {
         func line(_ name: String?, _ label: String) -> String { (name == current ? "* " : "  ") + label }
-        return ([line(nil, "Default")] + themes.map { line($0, $0) }).joined(separator: "\n")
+        return ([line(nil, "default ghostty")] + themes.map { line($0, $0) }).joined(separator: "\n")
     }
 
     /// Render the `window.list` payload as one `id  name  [open]  [active]` line per window (no trailing

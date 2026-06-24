@@ -577,8 +577,8 @@ struct Theme: ParsableCommand {
     )
 
     struct Set: RequestCommand {
-        static let configuration = CommandConfiguration(abstract: "Set + persist the terminal theme (omit NAME for the default).")
-        @Argument(help: "Theme name (a bundled theme); omit for the default theme.") var name: String?
+        static let configuration = CommandConfiguration(abstract: "Set + persist the terminal theme (omit NAME for ghostty's built-in default).")
+        @Argument(help: "Theme name (a bundled theme); omit for ghostty's built-in default.") var name: String?
         // theme is app-global (one settings model), so no `--window` selector.
         @OptionGroup var options: BasicOptions
 

@@ -132,11 +132,15 @@ agtermctl keymap reload          # prints the parse-diagnostic count (0 = clean)
 
 ## Set the terminal theme
 
+The app default is the bundled `agterm` theme; the "default ghostty" option (no theme) is ghostty's
+own built-in colors.
+
 ```bash
 agtermctl theme list                         # bundled themes, the current one marked *
 agtermctl theme list --json | jq -r '.result.themes[]'   # just the names
 agtermctl theme set "Dracula"                # set + persist it app-wide (unknown name errors)
-agtermctl theme set                          # back to the default theme
+agtermctl theme set "agterm"                 # back to the app default theme
+agtermctl theme set                          # ghostty's built-in default (no theme)
 ```
 
 ## Targeting another window's tree

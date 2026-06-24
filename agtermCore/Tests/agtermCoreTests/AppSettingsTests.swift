@@ -134,4 +134,13 @@ struct AppSettingsTests {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(json.utf8))
         #expect(decoded.configDirectory == nil)
     }
+
+    @Test func defaultThemeIsAgtermButNotBakedIntoAppSettings() {
+        #expect(AppSettings.defaultTheme == "agterm")
+        // the seed lives in SettingsStore.load, NOT the memberwise default — AppSettings() stays
+        // theme-less so "nil = no theme line" holds (the ghostty built-in / "default ghostty" case).
+        #expect(AppSettings().theme == nil)
+        #expect(!AppSettings().ghosttyConfigLines().contains { $0.hasPrefix("theme = ") })
+        #expect(AppSettings(theme: AppSettings.defaultTheme).ghosttyConfigLines().contains("theme = agterm"))
+    }
 }

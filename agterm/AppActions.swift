@@ -384,7 +384,9 @@ final class AppActions {
                 self?.commitThemePreview()
             }
         }
-        var items = [item(nil, title: "Default")]
+        // the nil row is ghostty's built-in default (no theme file); the app's own default is the
+        // bundled "agterm" theme, which appears in the named list like any other.
+        var items = [item(nil, title: "default ghostty")]
         items.append(contentsOf: SettingsCatalog.themeNames().map { item($0, title: $0) })
         return items
     }

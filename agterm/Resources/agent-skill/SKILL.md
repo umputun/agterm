@@ -120,7 +120,8 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 **keymap** — `keymap reload` — re-read `keymap.conf` (prints the parse-diagnostic count).
 
 **theme** — `theme list` (bundled themes, current marked `*`) · `theme set [name]` — set + persist the
-terminal theme app-wide (omit the name for the default; an unknown name errors).
+terminal theme app-wide. The app default is the bundled **agterm** theme; omit the name for ghostty's
+built-in default ("default ghostty"); an unknown name errors.
 
 ## Reference files
 

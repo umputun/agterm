@@ -243,15 +243,15 @@ struct SocketClientTests {
         let response = ControlResponse(ok: true, result: ControlResult(theme: "Nord", themes: ["Dracula", "Nord"]))
         let out = SocketClient.formatResponse(response, json: false)
         let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        #expect(lines == ["  Default", "  Dracula", "* Nord"])
+        #expect(lines == ["  default ghostty", "  Dracula", "* Nord"])
     }
 
-    @Test func formatResponseThemesMarksDefaultWhenCurrent() {
-        // nil current theme = the default is active, so the leading "Default" row carries the mark.
+    @Test func formatResponseThemesMarksGhosttyDefaultWhenCurrent() {
+        // nil current theme = ghostty's built-in is active, so the leading "default ghostty" row is marked.
         let response = ControlResponse(ok: true, result: ControlResult(theme: nil, themes: ["Dracula"]))
         let out = SocketClient.formatResponse(response, json: false)
         let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
-        #expect(lines == ["* Default", "  Dracula"])
+        #expect(lines == ["* default ghostty", "  Dracula"])
     }
 
     @Test func formatResponseThemeSetIsBareOk() {

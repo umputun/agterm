@@ -180,15 +180,19 @@ Built-in action names for `map` include: `new_window`, `new_workspace`, `new_ses
 
 ## theme
 
+The app's out-of-the-box default theme is the bundled **agterm** theme (a fresh install opens on it).
+A separate **default ghostty** entry means "no theme" — ghostty's own built-in colors (`theme` absent).
+
 `agtermctl theme list` — list the bundled theme names; returns `result.themes` (the names) and
-`result.theme` (the current one, absent = the default). Human output prints one name per line with the
-current marked `* `.
+`result.theme` (the current one, absent = ghostty's built-in / "default ghostty"). Human output prints
+one name per line with a leading "default ghostty" row, the current one marked `* `.
 
 `agtermctl theme set [name]` — set and persist the terminal theme app-wide (the same change as Settings
-▸ Appearance ▸ Theme). Omit the name to select the default theme; an unknown name returns
-`unknown theme: <name>`. Returns `result.theme` = the applied name (absent = default); human output
-prints `ok`. App-global (no `--window`). The GUI's live-preview picker (View ▸ Select Theme…) is
-keyboard-only; over the socket `theme set` is the commit, with no preview.
+▸ Appearance ▸ Theme). Pass a bundled name (e.g. `agterm`); omit the name for ghostty's built-in
+default ("default ghostty"). An unknown name returns `unknown theme: <name>`. Returns `result.theme`
+= the applied name (absent = ghostty built-in); human output prints `ok`. App-global (no `--window`).
+The GUI's live-preview picker (View ▸ Select Theme…) is keyboard-only; over the socket `theme set` is
+the commit, with no preview.
 
 ## Errors you may see
 

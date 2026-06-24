@@ -69,21 +69,21 @@ final class PaletteUITests: XCTestCase {
     }
 
     func testThemePickerCommitsOnEnterAndRevertsOnEsc() throws {
-        // commit: open the picker, filter to the bundled "agterm" theme, Enter persists it to settings.json
+        // commit: open the picker, filter to a non-default theme, Enter persists it to settings.json
         // (the live color change is a Metal-surface visual, verified manually; the persistence is the
-        // observable contract here).
+        // observable contract here). "Dracula" differs from the seeded agterm default, so it proves a change.
         openThemePicker()
-        typeIntoPalette("agterm")
+        typeIntoPalette("Dracula")
         app.typeKey(.return, modifierFlags: [])
-        XCTAssertTrue(poll { self.settingsTheme() == "agterm" }, "Enter on a theme should persist it to settings.json")
+        XCTAssertTrue(poll { self.settingsTheme() == "Dracula" }, "Enter on a theme should persist it to settings.json")
 
         // revert: open again, filter to a different theme (which previews it live), Esc. The preview is
         // never persisted, so settings.json keeps the previously committed theme.
         openThemePicker()
-        typeIntoPalette("Dracula")
+        typeIntoPalette("Nord")
         app.typeKey(.escape, modifierFlags: [])
         usleep(500_000) // the cancel-revert is synchronous; give any stray write a beat to disprove it
-        XCTAssertEqual(settingsTheme(), "agterm", "Esc discards the preview without persisting it")
+        XCTAssertEqual(settingsTheme(), "Dracula", "Esc discards the preview without persisting it")
     }
 
     func testThemePickerAutoFocusesFieldFromActionPaletteLauncher() throws {

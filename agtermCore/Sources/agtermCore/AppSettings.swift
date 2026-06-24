@@ -7,6 +7,11 @@ import Foundation
 /// there is no version field (a version bump would only add a discard-on-mismatch path that wipes
 /// the user's settings).
 public struct AppSettings: Codable, Equatable, Sendable {
+    /// The app's out-of-the-box theme — a bundled theme applied on a fresh install (no saved
+    /// settings), seeded by `SettingsStore.load()`. Distinct from `theme == nil`, which means
+    /// ghostty's built-in default (the "default ghostty" entry in the theme picker).
+    public static let defaultTheme = "agterm"
+
     /// Terminal font family name (e.g. `SF Mono`), or nil for the ghostty default.
     public var fontFamily: String?
     /// Default terminal font size in points, or nil for the ghostty default.
