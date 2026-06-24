@@ -595,7 +595,10 @@ final class ControlAPIUITests: XCTestCase {
         // type via the real keyboard: with the fix it reaches the visible active session A (writing A's tty);
         // with the bug it goes to B's hidden overlay (writing ovlMarker, then swallowed by cat).
         let afterTTY = markerDir.appendingPathComponent("after-type-tty")
-        let afterValue = keyboardTypeUntilMarker("tty > '\(afterTTY.path)'", file: afterTTY)
+        // unwrap first so a nil (active session never received the keystrokes — the bug) reads clearly,
+        // distinct from a non-nil-but-wrong tty (keystrokes reached some other surface).
+        let afterValue = try XCTUnwrap(keyboardTypeUntilMarker("tty > '\(afterTTY.path)'", file: afterTTY),
+                                       "keyboard input must reach the active session (its tty marker should be written)")
         XCTAssertEqual(afterValue, ttyAValue,
                        "keyboard input must reach the visible active session, not the background overlay")
         XCTAssertNil(pollMarker(ovlMarker, timeout: 2),
