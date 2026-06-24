@@ -64,7 +64,8 @@ xcodebuild test -project agterm.xcodeproj -scheme agterm -destination 'platform=
 - Move a session between workspaces by dragging it onto another workspace, or via the row's `Move to` menu. The session keeps running across the move, with its shell and scrollback intact. Reorder a session within its workspace by dragging it up or down, and reorder workspaces by dragging them. Dropping between two rows places the dragged row at that exact position rather than just appending it.
 - A quick terminal: a single scratch terminal overlaid at 90% of the window (toolbar button next to the split toggle), opening in the active session's directory. Click the button again or the surrounding margin to dismiss; hiding keeps its shell alive. It is not persisted across launches.
 - A per-session scratch terminal (⌘J, the toolbar button next to the split toggle, View ▸ Show/Hide Scratch, or the action palette): a third shell for the session that covers it full-screen like an overlay but, like the split, is always available and just hidden — toggling it back keeps the same shell alive. It opens in the session's directory; typing `exit` closes it, and the next toggle starts a fresh shell. Each session has its own; it is not persisted across launches.
-- A standard macOS menu bar mirrors the in-app actions with keyboard shortcuts: **File** — New Session (⌘N), New Workspace (⇧⌘N), Open Directory… (⌘O), Rename Session/Workspace, Delete Workspace, Close Session (⌘W, terminal-style: closes the active session); **View** — Split (⌘D), Scratch (⌘J), Quick Terminal (⌃`), the command palettes, Previous/Next Session (⌥⌘↑/⌥⌘↓), Previous/Next Attention Session (⌃⌥↑/⌃⌥↓, jump between sessions with a blocked/completed status glyph), First/Last Session (menu and palette only, no hotkey), Increase/Decrease/Actual font size (⌘+/⌘−/⌘0).
+- In-terminal text search (⌘F, View ▸ Find…, or the action palette): a small search bar opens at the top of the focused terminal. Typing a query highlights matches in the live scrollback and shows an "N of M" counter; Enter steps to the next match, Shift-Enter to the previous (or click the up/down buttons), and Esc (or ⌘F again) closes and returns focus to the terminal.
+- A standard macOS menu bar mirrors the in-app actions with keyboard shortcuts: **File** — New Session (⌘N), New Workspace (⇧⌘N), Open Directory… (⌘O), Rename Session/Workspace, Delete Workspace, Close Session (⌘W, terminal-style: closes the active session); **View** — Split (⌘D), Scratch (⌘J), Find… (⌘F), Quick Terminal (⌃`), the command palettes, Previous/Next Session (⌥⌘↑/⌥⌘↓), Previous/Next Attention Session (⌃⌥↑/⌃⌥↓, jump between sessions with a blocked/completed status glyph), First/Last Session (menu and palette only, no hotkey), Increase/Decrease/Actual font size (⌘+/⌘−/⌘0).
 - Two fuzzy-search command palettes (type to filter, ↑/↓ to move, Enter to run, Esc to dismiss): the **session switcher** (⌃P) jumps between open sessions by name or working directory, and the **action palette** (⌃⇧P) runs any command (new/rename/close, delete workspace, split, scratch, quick terminal, font size, move session to a workspace, …). Results sort by match quality then alphabetically. Both are also in the View menu.
 - A Ctrl-Tab session switcher (macOS app-switcher style): hold Ctrl and tap Tab to walk a most-recently-used list of sessions across all workspaces (the previous session pre-selected on top, Ctrl+Shift+Tab reverses), then release Ctrl to switch. A quick tap of Ctrl+Tab flips straight to the previously visited session.
 - A Settings window (Cmd+,) with **General**, **Appearance**, and **Key Mapping** tabs. **General** toggles macOS notification banners and the sidebar notification count badges, and sets the mouse-wheel/trackpad scroll speed (a multiplier, default 3). **Appearance → Terminal** sets the terminal font family, default font size, and ghostty theme (any of the 512 bundled themes); **Appearance → Window** sets background opacity and blur (a translucent, optionally blurred window — the sidebar's Liquid Glass tints to match on macOS 26). **Key Mapping** points at the config directory holding `keymap.conf` (see Customizing keys), lists any parse diagnostics, and has a Reload button. Changes persist and apply live to open terminals. Applying a font/theme change resets per-session cmd-+/- zoom to the default.
@@ -104,6 +105,8 @@ agtermctl session move "$ws"                      # relocate the active session 
 agtermctl workspace move --to top                # reorder a workspace among its siblings (up|down|top|bottom)
 agtermctl session split toggle                   # split the active session
 agtermctl session scratch toggle                 # show/hide the active session's scratch terminal (on|off|toggle)
+agtermctl session search "error"                 # open the search bar and highlight matches; prints the "N of M" counter
+agtermctl session search --next                  # step to the next match (--prev steps back, --close hides the bar)
 agtermctl quick toggle                           # toggle the quick terminal
 agtermctl font inc                               # increase the active surface's font size
 ```
@@ -196,7 +199,8 @@ new_workspace      rename_workspace   delete_workspace
 new_session        open_directory     rename_session
 close_session      clear_status
 increase_font_size decrease_font_size reset_font_size
-toggle_split       toggle_scratch     focus_left_pane    focus_right_pane
+toggle_split       toggle_scratch     toggle_search
+focus_left_pane    focus_right_pane
 previous_session   next_session       first_session      last_session
 previous_attention_session            next_attention_session
 quick_terminal     session_palette    command_palette

@@ -84,6 +84,19 @@ sel=$(agtermctl session copy --json | jq -r '.result.text')
 agtermctl session type "$sel" --target "$other"
 ```
 
+## Search the terminal scrollback
+
+`session search` opens a search bar over the focused terminal and highlights matches in the live
+output. It returns the "N of M" counter; step matches with `--next`/`--prev`, close with `--close`.
+
+```bash
+agtermctl session search "error"          # highlight matches, print the counter (e.g. "1 of 7")
+agtermctl session search --next           # step to the next match
+agtermctl session search --prev           # step back
+n=$(agtermctl session search "warn" --json | jq -r '.result.count')   # how many matches
+agtermctl session search --close          # close the search bar
+```
+
 ## Notify the user in a specific session
 
 ```bash

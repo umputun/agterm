@@ -70,6 +70,14 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 - `session copy [--target] [--window W]` — returns `result.text` with the session's current selection.
   Does NOT touch the system clipboard (pipe the returned text into another `session type`). No/empty
   selection → `no selection` error. Selection is readable on any realized session regardless of focus.
+- `session search [needle] [--next|--prev|--close] [--target] [--window W]` — search the target
+  session's live terminal scrollback. Selects the target first (so the search bar and match highlights
+  render). With a `needle` it sets the query (opening the bar if needed) and highlights matches; with no
+  needle and no flag it just opens the empty bar. `--next`/`--prev` step the selected match;
+  `--close` closes the bar (the three flags are mutually exclusive). Returns `result.count` (total
+  matches) and `result.text` (the counter string: "N of M", "M matches", or "no matches"); the count
+  settles asynchronously, so the command waits briefly for it. Without `--json` it prints `result.text`
+  (or `ok` on close / an empty bar).
 - `session split [on|off|toggle] [--target] [--window W]` — side-by-side second shell. `off` HIDES it
   but keeps the shell alive (mirrors ⌘D); the pane's surface is torn down only when its shell exits.
   Unknown mode errors.
