@@ -260,7 +260,8 @@ struct agtermApp: App {
                 .disabled(library.activeStore?.activeSession == nil)
                 let scratchShown = library.activeStore?.activeSession?.scratchActive == true
                 Button { actions.toggleScratch() } label: {
-                    Label(scratchShown ? "Hide Scratch" : "Show Scratch", systemImage: "rectangle.inset.filled")
+                    // static neutral icon like the Split menu item above; state is shown by the label text.
+                    Label(scratchShown ? "Hide Scratch" : "Show Scratch", systemImage: "rectangle")
                 }
                 .keyboardShortcut(shortcut(for: .toggleScratch))
                 .disabled(library.activeStore?.activeSession == nil)
