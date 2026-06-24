@@ -183,11 +183,20 @@ private struct WindowContentView: View {
     var body: some View {
         ZStack(alignment: .top) {
             // the split's AppKit HSplitView overruns its frame up into the titlebar zone and would
-            // steal the header's clicks; keep the header in front (drawn last in the ZStack) and inset
-            // the split content below it so the buttons stay hittable in split mode.
+            // steal the header's clicks; keep the header in front (highest zIndex) and inset the split
+            // content below it so the buttons stay hittable in split mode.
             splitRoot
                 .padding(.top, titlebarHeight)
+            // the window overlays (quick terminal / palettes / switcher) sit BELOW the titlebar, inset by
+            // its height — NOT as a body-level `.overlay` above EVERYTHING. A full-window overlay's dim
+            // scrim composites OVER the transparent custom titlebar (whose AppKit backing is deliberately
+            // hidden for translucency, WindowAppearance), darkening + seaming the tall non-compact titlebar
+            // (the corruption). Keeping the titlebar at the highest zIndex means a scrim can never cover it.
+            windowOverlayLayer
+                .padding(.top, titlebarHeight)
+                .zIndex(1)
             customTitlebar
+                .zIndex(2)
         }
         // with the title bar hidden (.hiddenTitleBar), pull our header to the very top so the traffic
         // lights overlay it as one row; no system title bar is left to clip the content.
@@ -199,13 +208,6 @@ private struct WindowContentView: View {
                 DispatchQueue.main.async { NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil) }
             }
         }
-        // the quick terminal: an in-app overlay above the whole split view (sidebar + terminal),
-        // so it covers everything but the title bar (the toolbar button stays reachable to toggle).
-        .overlay { quickTerminalOverlay }
-        // the command palettes (actions / sessions): a top-centered overlay above everything.
-        .overlay { commandPaletteOverlay }
-        // the Ctrl-Tab most-recently-used session switcher.
-        .overlay { sessionSwitcherOverlay }
         // when the quick terminal hides, return focus to the active session's terminal.
         .onChange(of: quickTerminal.isVisible) { _, visible in
             if !visible { actions.focusActiveSession() }
@@ -661,6 +663,22 @@ private struct WindowContentView: View {
     /// can't cover the AppKit title bar, so a dim would shade the body but not the chrome. Rendered
     /// only while visible; the surface it hosts is owned by the controller, so hiding keeps the
     /// shell alive.
+    /// The window-level overlays (quick terminal, command palettes, Ctrl-Tab switcher) as one layer,
+    /// rendered as a ZStack sibling INSIDE the body's root ZStack rather than as body-level `.overlay`s —
+    /// so it can be inset below the titlebar and ordered BELOW `customTitlebar` (which a body-level
+    /// `.overlay` cannot). Each child is conditional, so when none is showing this is empty (an empty
+    /// frame is not hit-testable, so the terminal below stays interactive); each overlay's own
+    /// `GeometryReader` fills the inset area. Order here = z-order (switcher on top of palette on top of
+    /// quick terminal), matching the previous `.overlay` stacking.
+    private var windowOverlayLayer: some View {
+        ZStack {
+            quickTerminalOverlay
+            commandPaletteOverlay
+            sessionSwitcherOverlay
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
     @ViewBuilder private var quickTerminalOverlay: some View {
         if quickTerminal.isVisible {
             GeometryReader { geo in
