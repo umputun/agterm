@@ -188,7 +188,7 @@ struct Workspace: ParsableCommand {
 struct Session: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Session commands.",
-        subcommands: [New.self, Close.self, Select.self, Go.self, Rename.self, Move.self, TypeText.self, Split.self, Scratch.self, Focus.self, Copy.self, Status.self, Overlay.self]
+        subcommands: [New.self, Close.self, Select.self, Go.self, Rename.self, Move.self, TypeText.self, Split.self, Scratch.self, Focus.self, Copy.self, Status.self, Search.self, Overlay.self]
     )
 
     struct New: RequestCommand {
@@ -348,6 +348,34 @@ struct Session: ParsableCommand {
             ControlRequest(cmd: .sessionStatus, target: target.target,
                            args: options.withWindow(ControlArgs(status: state, blink: blink ? true : nil,
                                                                  autoReset: autoReset ? true : nil)))
+        }
+    }
+
+    struct Search: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Search a session's terminal output (open the bar, set a needle, or step matches).")
+        @Argument(help: "Needle to search for (omit to just open the bar).") var needle: String?
+        @Flag(name: .long, help: "Step to the next match.") var next = false
+        @Flag(name: .long, help: "Step to the previous match.") var prev = false
+        @Flag(name: .long, help: "Close the search bar.") var close = false
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        // the three navigation flags are mutually exclusive; reject 2+ at parse time so it's a clean
+        // usage error, unit-testable without a socket. a needle alongside --close is also rejected: close
+        // ignores the needle, so the combo is a usage error rather than a silent no-op.
+        func validate() throws {
+            if [next, prev, close].filter({ $0 }).count > 1 {
+                throw ValidationError("--next, --prev, and --close are mutually exclusive")
+            }
+            if close, needle != nil {
+                throw ValidationError("--close cannot be combined with a needle")
+            }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            let to = next ? "next" : prev ? "prev" : close ? "close" : nil
+            return ControlRequest(cmd: .sessionSearch, target: target.target,
+                                  args: options.withWindow(ControlArgs(text: needle, to: to)))
         }
     }
 

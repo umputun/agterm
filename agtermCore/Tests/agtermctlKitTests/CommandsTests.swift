@@ -209,6 +209,54 @@ struct CommandsTests {
                                       args: ControlArgs(status: "completed", autoReset: true)))
     }
 
+    @Test func sessionSearchWithNeedle() throws {
+        let expected = ControlRequest(cmd: .sessionSearch, target: "active", args: ControlArgs(text: "error"))
+        #expect(try request(["session", "search", "error"]) == expected)
+    }
+
+    @Test func sessionSearchOpensWithoutNeedleOrFlag() throws {
+        // a bare `session search` opens the bar: no needle, no direction (an empty args bag, since the
+        // command always passes a base ControlArgs to withWindow).
+        let expected = ControlRequest(cmd: .sessionSearch, target: "active", args: ControlArgs())
+        #expect(try request(["session", "search"]) == expected)
+    }
+
+    @Test func sessionSearchNext() throws {
+        let expected = ControlRequest(cmd: .sessionSearch, target: "active", args: ControlArgs(to: "next"))
+        #expect(try request(["session", "search", "--next"]) == expected)
+    }
+
+    @Test func sessionSearchPrev() throws {
+        let expected = ControlRequest(cmd: .sessionSearch, target: "active", args: ControlArgs(to: "prev"))
+        #expect(try request(["session", "search", "--prev"]) == expected)
+    }
+
+    @Test func sessionSearchClose() throws {
+        let expected = ControlRequest(cmd: .sessionSearch, target: "s1", args: ControlArgs(to: "close"))
+        #expect(try request(["session", "search", "--close", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionSearchNeedleWithNext() throws {
+        let expected = ControlRequest(cmd: .sessionSearch, target: "active", args: ControlArgs(text: "foo", to: "next"))
+        #expect(try request(["session", "search", "foo", "--next"]) == expected)
+    }
+
+    @Test(arguments: [["--next", "--close"], ["--next", "--prev"], ["--prev", "--close"]])
+    func sessionSearchRejectsFlagCombos(_ flags: [String]) {
+        // the three navigation flags are mutually exclusive — validate() rejects combining any two.
+        #expect(validationMessage(["session", "search"] + flags) == "--next, --prev, and --close are mutually exclusive")
+    }
+
+    @Test func sessionSearchRejectsNeedleWithClose() {
+        // --close ignores the needle, so the combo is a usage error rather than a silent no-op.
+        #expect(validationMessage(["session", "search", "foo", "--close"]) == "--close cannot be combined with a needle")
+    }
+
+    @Test func sessionSearchWithWindow() throws {
+        let expected = ControlRequest(cmd: .sessionSearch, target: "active", args: ControlArgs(text: "foo", window: "w1"))
+        #expect(try request(["session", "search", "foo", "--window", "w1"]) == expected)
+    }
+
     @Test func sessionOverlayOpenWithCommandAndCwd() throws {
         let expected = ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c",
                                       args: ControlArgs(cwd: "/b", command: "revdiff"))

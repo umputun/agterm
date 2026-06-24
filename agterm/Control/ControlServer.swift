@@ -420,6 +420,16 @@ final class ControlServer {
                                     autoReset: request.args?.autoReset)
         case .sessionCopy:
             return copySelection(request.target, window: request.args?.window)
+        case .sessionSearch:
+            // resolve first (cross-window when no `args.window`), then select + realize the surface; the
+            // realize path is async (bounded poll), so this can't go through the synchronous
+            // `resolveSession` helper. error strings stay in sync with `resolve(...)`.
+            switch resolveSessionTarget(request.target, window: request.args?.window) {
+            case .failure(let response):
+                return response
+            case .success(let (store, id)):
+                return await searchSession(id, store: store, text: request.args?.text, to: request.args?.to)
+            }
         case .sessionOverlayOpen:
             guard let command = request.args?.command, !command.isEmpty else {
                 return ControlResponse(ok: false, error: "session.overlay.open requires a command")
@@ -701,6 +711,100 @@ final class ControlServer {
             }
             return ControlResponse(ok: true, result: ControlResult(text: text))
         }
+    }
+
+    /// Drive in-terminal search on the session `id`, mirroring the GUI bar and the
+    /// `session.type`/floating-overlay arms. On the `close` path it drives the session's pinned
+    /// `searchSurface` WITHOUT selecting (so closing a background session's bar never yanks the user's
+    /// visible selection — `endSearch()` is a side-effect-free exit, like `session.copy`). For
+    /// open/needle/navigate it SELECTS the target so the bar + highlights are visible and the surface
+    /// mounts, opens search on the focused pane if not already active (`startSearch`, whose START callback
+    /// pins it as `searchSurface`; bounded realize-poll if a never-shown session), then sets the needle if
+    /// `text` is present (`sendSearchQuery`) and steps the selection if `to == next|prev` (`navigateSearch`)
+    /// — both on the PINNED owner, so a split focus move after open can't retarget them.
+    /// `to` must be one of next/prev/close (else an `invalid` error). The match count lands asynchronously
+    /// via libghostty's SEARCH_TOTAL callback; `searchTotal`/`searchSelected` are cleared before the query so
+    /// the bounded main-actor poll waits for the FRESH count (not a stale prior needle's), then `count` + the
+    /// "N of M" display string are returned in `text`.
+    private func searchSession(_ id: UUID, store: AppStore, text: String?, to: String?) async -> ControlResponse {
+        // validate `to` up front so a bad mode errors before touching the surface.
+        if let to, !["next", "prev", "close"].contains(to) {
+            return ControlResponse(ok: false, error: "session.search --to must be next|prev|close")
+        }
+        guard let session = store.session(withID: id) else {
+            return ControlResponse(ok: false, error: "no such session")
+        }
+
+        // close exits search without selecting: a background session's surface is already realized while
+        // hidden, and end_search has no visible side effect, so don't disturb the user's active session.
+        // drive the PINNED `searchSurface` (the pane that opened search), not a re-resolved `activeSurface`
+        // — if split focus moved after open, `activeSurface` is the wrong pane and would strand the owner.
+        // with no open search there's no owner, so close is a clean no-op.
+        if to == "close" {
+            (session.searchSurface as? GhosttySurfaceView)?.endSearch()
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+
+        // open/needle/navigate need the bar + highlights visible, so select the target (also realizes a
+        // never-shown surface). the OPEN uses the focused pane (the factory pins it as `searchSurface`);
+        // once open, needle/navigate target the pinned owner so they can't drift off a focus move.
+        store.selectSession(id)
+        var openSurface = session.activeSurface as? GhosttySurfaceView
+        if openSurface == nil {
+            // a never-shown session realizes a beat after select — bounded poll like `injectText`.
+            for _ in 0..<12 {
+                try? await Task.sleep(nanoseconds: 30_000_000)
+                if let realized = session.activeSurface as? GhosttySurfaceView {
+                    openSurface = realized
+                    break
+                }
+            }
+        }
+        guard let openSurface else {
+            return ControlResponse(ok: false, error: "session not realized")
+        }
+
+        // `searchActive` here means a prior open settled (set by the async START callback); two rapid
+        // scripted opens could mis-toggle, but the GUI's single-⌘F path is the common case.
+        if !session.searchActive { openSurface.startSearch() }
+        // all post-open drives go to the pinned owner; before the first START callback lands it is nil, so
+        // fall back to the just-opened focused pane (which the factory is about to pin to the same surface).
+        let surface = (session.searchSurface as? GhosttySurfaceView) ?? openSurface
+        let needleChanged = text != nil && text != session.searchNeedle
+        if let text {
+            // on a needle CHANGE, an OLDER query's SEARCH_TOTAL callback can still be queued on the main
+            // loop (callbacks hop via DispatchQueue.main.async). drain one run-loop turn FIRST so any such
+            // stale callback is delivered, THEN clear — so the settle-poll below waits for THIS needle's
+            // callback (sent AFTER the clear) rather than reading a stale count. re-sending the SAME needle
+            // must NOT drain/clear: libghostty does not re-emit SEARCH_TOTAL for an unchanged query, so
+            // clearing would leave the count nil (the retry idiom re-sends the same needle while the
+            // scrollback renders). residual race: a stale callback delivered more than one run-loop turn
+            // late (blocked behind heavy render work) could still land after the clear; a per-query epoch
+            // through libghostty would close it fully but is out of scope here.
+            if needleChanged {
+                await Task.yield()
+                try? await Task.sleep(nanoseconds: 30_000_000)
+                session.searchTotal = nil
+                session.searchSelected = nil
+            }
+            session.searchNeedle = text
+            surface.sendSearchQuery(text)
+        }
+        switch to {
+        case "next": surface.navigateSearch(.next)
+        case "prev": surface.navigateSearch(.previous)
+        default: break
+        }
+        // let the SEARCH_TOTAL callback land before reporting (the overlay-result / realize poll idiom).
+        for _ in 0..<16 {
+            try? await Task.sleep(nanoseconds: 30_000_000)
+            if session.searchTotal != nil { break }
+        }
+        // an empty display string (the bar opened with no query yet) maps to a nil `text` so the CLI
+        // prints `ok` rather than a blank line; the count is nil until a query runs.
+        let display = session.searchDisplayText
+        return ControlResponse(ok: true, result: ControlResult(text: display.isEmpty ? nil : display,
+                                                               count: session.searchTotal))
     }
 
     /// Inject `text` into the session `id`'s surface. A session's surface is created lazily (deferred until
