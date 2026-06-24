@@ -253,6 +253,131 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertEqual(response["error"] as? String, "no selection", "should report no selection: \(response)")
     }
 
+    // session.search over the active session's scrollback: seed the screen with repeated needle text via
+    // session.type (the surface's own shell renders it), then session.search "<needle>" reports a match
+    // count + the "N of M" / "M matches" display string. --next/--prev step the selection and --close exits
+    // search. The needle's render timing is async (the shell echo + the SEARCH_TOTAL callback), so the
+    // open-with-needle call is retried until the count settles (the surface-readiness retry idiom).
+    func testSessionSearch() throws {
+        let needle = "agtermFINDME"
+        // seed the screen: echo the needle several times so there are matches in the live surface. type into
+        // the seeded active session (realized + visible at launch), and let the shell render it.
+        let typed = try sendCommand(typeRequest(text: "echo \(needle) \(needle) \(needle)\n", target: nil, select: false))
+        XCTAssertEqual(typed["ok"] as? Bool, true, "typing the needle into the active session should succeed: \(typed)")
+
+        // open search with the needle. the echoed line + the async SEARCH_TOTAL callback can lag the first
+        // call, so retry until the count settles (>= 1 match), re-sending the needle each attempt.
+        var count: Int?
+        var displayText: String?
+        for _ in 0..<20 {
+            let search = try sendCommand(#"{"cmd":"session.search","target":"active","args":{"text":"\#(needle)"}}"#)
+            XCTAssertEqual(search["ok"] as? Bool, true, "session.search should succeed: \(search)")
+            let result = try XCTUnwrap(search["result"] as? [String: Any], "session.search should carry a result")
+            if let c = result["count"] as? Int, c >= 1 {
+                count = c
+                displayText = result["text"] as? String
+                break
+            }
+            usleep(250_000)
+        }
+        XCTAssertNotNil(count, "session.search should report at least one match for the seeded needle")
+        XCTAssertGreaterThanOrEqual(count ?? 0, 1, "the seeded needle should match at least once")
+        let display = try XCTUnwrap(displayText, "session.search should return a display string with a match count")
+        XCTAssertTrue(display.contains("of") || display.contains("match"),
+                      "the display string should report 'N of M' or 'M matches', got: \(display)")
+
+        // step the selection forward: the "N of M" selected index must ADVANCE (observable effect, not
+        // just ok==true). it may lag a beat, so poll the next display until the index moves off the open's.
+        let openIndex = selectedIndex(of: display)
+        var advanced: String?
+        for _ in 0..<12 {
+            let next = try sendCommand(#"{"cmd":"session.search","target":"active","args":{"to":"next"}}"#)
+            XCTAssertEqual(next["ok"] as? Bool, true, "session.search --next should succeed: \(next)")
+            if let t = (next["result"] as? [String: Any])?["text"] as? String,
+               let idx = selectedIndex(of: t), idx != openIndex {
+                advanced = t
+                break
+            }
+            usleep(150_000)
+        }
+        let advancedDisplay = try XCTUnwrap(advanced, "session.search --next should advance the selected match index off \(display)")
+
+        // step back: the index must return toward the open position (observable, not just ok).
+        let prev = try sendCommand(#"{"cmd":"session.search","target":"active","args":{"to":"prev"}}"#)
+        XCTAssertEqual(prev["ok"] as? Bool, true, "session.search --prev should succeed: \(prev)")
+        if let prevText = (prev["result"] as? [String: Any])?["text"] as? String, let prevIdx = selectedIndex(of: prevText) {
+            XCTAssertNotEqual(prevIdx, selectedIndex(of: advancedDisplay),
+                              "--prev should move the selected index back off the --next position")
+        }
+
+        // close, then confirm search actually exited: a re-open settles a fresh count again, proving the
+        // close left the surface in a clean searchable state (the tree carries no search flag, so a
+        // re-search is the best available socket oracle for a successful close).
+        let close = try sendCommand(#"{"cmd":"session.search","target":"active","args":{"to":"close"}}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "session.search --close should succeed: \(close)")
+        var reopened: Int?
+        for _ in 0..<12 {
+            let reopen = try sendCommand(#"{"cmd":"session.search","target":"active","args":{"text":"\#(needle)"}}"#)
+            XCTAssertEqual(reopen["ok"] as? Bool, true, "re-opening search after close should succeed: \(reopen)")
+            if let c = (reopen["result"] as? [String: Any])?["count"] as? Int, c >= 1 { reopened = c; break }
+            usleep(250_000)
+        }
+        XCTAssertNotNil(reopened, "search should still find the needle after a --close (close left a clean state)")
+    }
+
+    // a SECOND search with a DIFFERENT needle must report the NEW needle's count, not the previous
+    // query's stale count. the two needles are seeded with a clearly different number of occurrences, so
+    // a stale count (the bar already open → searchTotal not reset → the settle-poll breaks on the prior
+    // value) would return the first needle's count and the comparison would fail.
+    func testSessionSearchSecondNeedleReportsFreshCount() throws {
+        let rare = "agtermRARE"     // appears few times
+        let common = "agtermCOMMON" // appears many more times
+        // echo rare once and common five times on one line: both render in the command line + its echoed
+        // output, so common matches markedly more than rare.
+        let line = "echo \(rare) \(common) \(common) \(common) \(common) \(common)\n"
+        let typed = try sendCommand(typeRequest(text: line, target: nil, select: false))
+        XCTAssertEqual(typed["ok"] as? Bool, true, "typing the two needles should succeed: \(typed)")
+
+        let rareCount = try settledSearchCount(needle: rare)
+        let commonCount = try settledSearchCount(needle: common)
+        XCTAssertGreaterThan(commonCount, rareCount,
+                             "the second search must report the common needle's (larger) count, not the rare needle's stale count")
+        try sendCloseSearch()
+    }
+
+    /// Opens search for `needle` and polls until a non-zero count settles, returning it. Re-sends the
+    /// needle each attempt (the echo render + the async SEARCH_TOTAL callback can lag the first call).
+    private func settledSearchCount(needle: String) throws -> Int {
+        for _ in 0..<24 {
+            let search = try sendCommand(#"{"cmd":"session.search","target":"active","args":{"text":"\#(needle)"}}"#)
+            XCTAssertEqual(search["ok"] as? Bool, true, "session.search for \(needle) should succeed: \(search)")
+            if let c = (search["result"] as? [String: Any])?["count"] as? Int, c >= 1 { return c }
+            usleep(250_000)
+        }
+        XCTFail("session.search for \(needle) never settled a non-zero count")
+        return 0
+    }
+
+    private func sendCloseSearch() throws {
+        _ = try sendCommand(#"{"cmd":"session.search","target":"active","args":{"to":"close"}}"#)
+    }
+
+    // invalid `to` (not next|prev|close) errors before touching the surface — the mode-bearing guard,
+    // matching the sibling focus/scratch/status error arms.
+    func testSessionSearchRejectsInvalidDirection() throws {
+        let response = try sendCommand(#"{"cmd":"session.search","target":"active","args":{"to":"sideways"}}"#)
+        XCTAssertEqual(response["ok"] as? Bool, false, "an invalid --to should fail: \(response)")
+        XCTAssertEqual(response["error"] as? String, "session.search --to must be next|prev|close",
+                       "should report the allowed modes: \(response)")
+    }
+
+    /// The 1-based selected index from a "S of N" display string (nil for "M matches" / "no matches" /
+    /// other shapes), so a nav test can assert the index moved.
+    private func selectedIndex(of display: String?) -> Int? {
+        guard let display, let ofRange = display.range(of: " of ") else { return nil }
+        return Int(display[display.startIndex..<ofRange.lowerBound].trimmingCharacters(in: .whitespaces))
+    }
+
     // session.overlay.open requires a command.
     func testOverlayOpenRequiresCommand() throws {
         let response = try sendCommand(#"{"cmd":"session.overlay.open","target":"active"}"#)
