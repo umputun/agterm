@@ -52,10 +52,10 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// to primary on collapse.
     var isSplitPane = false
 
-    /// Whether this surface has the search lifecycle callbacks wired (the main/split factory sets it).
-    /// Only these surfaces drive a visible bar and the END close path, so `AppActions.toggleSearch`
-    /// refuses to start search on a quick-terminal/scratch/overlay surface that lacks them (which would
-    /// otherwise enter libghostty search mode with no bar and no way to close).
+    /// Whether this surface has the search lifecycle callbacks wired (the main/split AND scratch factories
+    /// set it). Only these surfaces drive a visible bar and the END close path, so `AppActions.toggleSearch`
+    /// refuses to start search on a quick-terminal/overlay surface that lacks them (which would otherwise
+    /// enter libghostty search mode with no bar and no way to close).
     var isSearchable = false
 
     /// Called on the main actor when the shell process exits, so the app can

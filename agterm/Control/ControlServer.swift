@@ -746,15 +746,18 @@ final class ControlServer {
         }
 
         // open/needle/navigate need the bar + highlights visible, so select the target (also realizes a
-        // never-shown surface). the OPEN uses the focused pane (the factory pins it as `searchSurface`);
-        // once open, needle/navigate target the pinned owner so they can't drift off a focus move.
+        // never-shown surface). the OPEN uses the search target — a covering scratch (scratchActive, no
+        // overlay) wins, mirroring AppActions.searchTarget(), else the focused pane; the factory pins it as
+        // `searchSurface`, and once open needle/navigate target the pinned owner so they can't drift.
         store.selectSession(id)
-        var openSurface = session.activeSurface as? GhosttySurfaceView
+        // a covering scratch is searchable and sits above the pane, so drive it, not the hidden pane beneath.
+        let coverIsScratch = session.scratchActive && !session.overlayActive
+        var openSurface = (coverIsScratch ? session.topmostSurface : session.activeSurface) as? GhosttySurfaceView
         if openSurface == nil {
             // a never-shown session realizes a beat after select — bounded poll like `injectText`.
             for _ in 0..<12 {
                 try? await Task.sleep(nanoseconds: 30_000_000)
-                if let realized = session.activeSurface as? GhosttySurfaceView {
+                if let realized = (coverIsScratch ? session.topmostSurface : session.activeSurface) as? GhosttySurfaceView {
                     openSurface = realized
                     break
                 }
