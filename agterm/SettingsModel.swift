@@ -279,7 +279,7 @@ final class SettingsModel {
             .compactMap { library.store(for: $0) }
             .flatMap(\.workspaces)
             .flatMap(\.sessions)
-            .flatMap { [$0.surface, $0.splitSurface] }
+            .flatMap { [$0.surface, $0.splitSurface, $0.scratchSurface] }
             .compactMap { $0 as? GhosttySurfaceView }
         views += QuickTerminalRegistry.shared.allControllers().compactMap { $0.currentSurface() }
         return views

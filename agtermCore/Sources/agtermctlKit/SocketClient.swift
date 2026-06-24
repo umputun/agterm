@@ -160,6 +160,7 @@ struct SocketClient {
             for session in workspace.sessions {
                 let smark = session.active ? "*" : " "
                 let tags = (session.split ? " (split)" : "") + (session.overlay ? " (overlay)" : "")
+                    + (session.scratch ? " (scratch)" : "")
                 lines.append("  \(smark) \(session.name)\(tags)  [\(session.id)]  \(session.cwd)")
             }
         }

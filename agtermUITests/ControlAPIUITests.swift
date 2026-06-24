@@ -415,6 +415,56 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertTrue(pollActiveSessionSplit(false, timeout: 10), "off should clear the split")
     }
 
+    // session.scratch toggle shows scratch:true in the tree; off hides it (keep-alive — the shell's
+    // surface is NOT destroyed, only the shell's own `exit` does that), clearing scratch:false. An
+    // unknown mode is rejected.
+    func testSessionScratchToggle() throws {
+        let on = try sendCommand(#"{"cmd":"session.scratch","target":"active","args":{"mode":"toggle"}}"#)
+        XCTAssertEqual(on["ok"] as? Bool, true, "session.scratch toggle should succeed: \(on)")
+        XCTAssertTrue(pollActiveSessionScratch(true, timeout: 10), "the active session should report scratch:true")
+
+        // `on` while already shown is idempotent (the delta guard skips the redundant toggle, so it does
+        // NOT flip back to hidden).
+        let onAgain = try sendCommand(#"{"cmd":"session.scratch","target":"active","args":{"mode":"on"}}"#)
+        XCTAssertEqual(onAgain["ok"] as? Bool, true, "session.scratch on (already on) should succeed: \(onAgain)")
+        XCTAssertTrue(pollActiveSessionScratch(true, timeout: 10), "on while shown stays scratch:true")
+
+        let off = try sendCommand(#"{"cmd":"session.scratch","target":"active","args":{"mode":"off"}}"#)
+        XCTAssertEqual(off["ok"] as? Bool, true, "session.scratch off should succeed: \(off)")
+        XCTAssertTrue(pollActiveSessionScratch(false, timeout: 10), "off should hide the scratch")
+
+        // `off` while already hidden is idempotent.
+        let offAgain = try sendCommand(#"{"cmd":"session.scratch","target":"active","args":{"mode":"off"}}"#)
+        XCTAssertEqual(offAgain["ok"] as? Bool, true, "session.scratch off (already off) should succeed: \(offAgain)")
+        XCTAssertTrue(pollActiveSessionScratch(false, timeout: 10), "off while hidden stays scratch:false")
+
+        let bad = try sendCommand(#"{"cmd":"session.scratch","target":"active","args":{"mode":"bogus"}}"#)
+        XCTAssertEqual(bad["ok"] as? Bool, false, "invalid scratch mode should fail: \(bad)")
+        XCTAssertTrue((bad["error"] as? String ?? "").contains("invalid scratch mode"), "should report invalid mode: \(bad)")
+    }
+
+    // session.scratch on a NON-active target selects it first (the scratch is full-coverage and grabs
+    // focus on show, so it must be the visible session), then shows the scratch on it.
+    func testSessionScratchOnSelectsTarget() throws {
+        // the seeded session is active; capture its id.
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let result = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let t = try XCTUnwrap(result["tree"] as? [String: Any], "result should carry a tree")
+        let ws = try XCTUnwrap((t["workspaces"] as? [[String: Any]])?.first, "should have a workspace")
+        let seededID = try XCTUnwrap((ws["sessions"] as? [[String: Any]])?.first?["id"] as? String, "should have a seeded session")
+
+        // create a second session — session.new focuses it, so the seeded one is no longer active.
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let newID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return an id")
+        XCTAssertNotEqual(newID.lowercased(), seededID.lowercased(), "the new session is distinct")
+
+        // show scratch on the non-active seeded session: it should become active AND report scratch:true.
+        let on = try sendCommand(#"{"cmd":"session.scratch","target":"\#(seededID)","args":{"mode":"on"}}"#)
+        XCTAssertEqual(on["ok"] as? Bool, true, "session.scratch on a non-active target should succeed: \(on)")
+        XCTAssertTrue(pollSessionActiveAndScratch(id: seededID, timeout: 10),
+                      "showing scratch should select the target and report scratch:true")
+    }
+
     // session.focus errors on a non-split session, succeeds on each pane once split, and rejects an
     // unknown pane.
     func testSessionFocusPane() throws {
@@ -1385,6 +1435,48 @@ final class ControlAPIUITests: XCTestCase {
                     let sessions = ws["sessions"] as? [[String: Any]] ?? []
                     for s in sessions where (s["id"] as? String)?.lowercased() == id.lowercased() {
                         if (s["overlay"] as? Bool ?? false) == expected { return true }
+                    }
+                }
+            }
+            usleep(200_000)
+        }
+        return false
+    }
+
+    /// Polls `tree` (scratch state is not persisted to workspaces.json) until the ACTIVE session has
+    /// `scratch` equal to `expected`. Absent/nil treated as false.
+    private func pollActiveSessionScratch(_ expected: Bool, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let tree = try? sendCommand(#"{"cmd":"tree"}"#),
+               let result = tree["result"] as? [String: Any],
+               let t = result["tree"] as? [String: Any],
+               let workspaces = t["workspaces"] as? [[String: Any]] {
+                for ws in workspaces {
+                    let sessions = ws["sessions"] as? [[String: Any]] ?? []
+                    for s in sessions where (s["active"] as? Bool ?? false) {
+                        if (s["scratch"] as? Bool ?? false) == expected { return true }
+                    }
+                }
+            }
+            usleep(200_000)
+        }
+        return false
+    }
+
+    /// Polls `tree` until the session with `id` is BOTH active and has `scratch == true` (used to verify
+    /// session.scratch on a non-active target selects it before showing).
+    private func pollSessionActiveAndScratch(id: String, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let tree = try? sendCommand(#"{"cmd":"tree"}"#),
+               let result = tree["result"] as? [String: Any],
+               let t = result["tree"] as? [String: Any],
+               let workspaces = t["workspaces"] as? [[String: Any]] {
+                for ws in workspaces {
+                    for s in (ws["sessions"] as? [[String: Any]] ?? [])
+                    where (s["id"] as? String)?.lowercased() == id.lowercased() {
+                        if (s["active"] as? Bool ?? false) && (s["scratch"] as? Bool ?? false) { return true }
                     }
                 }
             }

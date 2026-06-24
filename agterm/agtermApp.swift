@@ -103,6 +103,14 @@ struct agtermApp: App {
                 makeSurface: { Self.makeSurface(for: $0, store: $1, env: surfaceEnv(for: $0)) },
                 makeSplitSurface: { Self.makeSplitSurface(for: $0, store: $1, env: surfaceEnv(for: $0)) },
                 makeOverlaySurface: { Self.makeOverlaySurface(for: $0, store: $1, env: surfaceEnv(for: $0)) },
+                makeScratchSurface: { session, store in
+                    // suppress the scratch's creation autoFocus when a full overlay OR this window's quick
+                    // terminal is already up — each renders above the scratch and owns focus.
+                    let qtVisible = library.windowID(forSession: session.id)
+                        .flatMap { QuickTerminalRegistry.shared.controller(for: $0) }?.isVisible ?? false
+                    return Self.makeScratchSurface(for: session, store: store, env: surfaceEnv(for: session),
+                                                   suppressAutoFocus: session.overlayActive || qtVisible)
+                },
                 quickTerminalEnv: { quickTerminalEnv(for: $0) },
                 actions: actions,
                 palette: palette,
@@ -249,6 +257,12 @@ struct agtermApp: App {
                     Label(library.activeStore?.activeSession?.isSplit == true ? "Hide Split" : "Split Right", systemImage: "rectangle.split.2x1")
                 }
                 .keyboardShortcut(shortcut(for: .toggleSplit))
+                .disabled(library.activeStore?.activeSession == nil)
+                let scratchShown = library.activeStore?.activeSession?.scratchActive == true
+                Button { actions.toggleScratch() } label: {
+                    Label(scratchShown ? "Hide Scratch" : "Show Scratch", systemImage: "rectangle.inset.filled")
+                }
+                .keyboardShortcut(shortcut(for: .toggleScratch))
                 .disabled(library.activeStore?.activeSession == nil)
                 // arrow-bound actions: their default ⌘⌥←/→ can't round-trip through the keymap grammar
                 // (parseKeybind has no arrow keys), so defaultChord is nil and the hardcoded arrow is the
@@ -421,6 +435,27 @@ struct agtermApp: App {
         // removes the session first, so this no-ops there — but the result is unqueryable after that anyway.
         view.onExitCodeCaptured = { store.recordOverlayExit(sessionID, code: $0) }
         view.onExit = { store.closeOverlay(sessionID) }
+        return view
+    }
+
+    /// Scratch-terminal surface factory: a third per-session login shell, full-overlay rendered. Like
+    /// the overlay it is NOT wired to the session (no `view.session`/`isSplitPane`), so its PWD/title
+    /// never clobber the session's sidebar name; unlike the overlay it runs a plain login shell (no
+    /// command) and is kept alive when hidden. `autoFocus` grabs first responder on show (winning the
+    /// SwiftUI/AppKit responder race); on the shell's `exit`, `closeScratch` hides + tears it down so
+    /// the next show spawns a fresh shell. Seeds from the session's current dir + inherits its env ids.
+    @MainActor
+    private static func makeScratchSurface(for session: Session, store: AppStore, env: [String: String],
+                                          suppressAutoFocus: Bool) -> GhosttySurfaceView {
+        // autoFocus on creation gives the first show reliable focus — but suppress it when another
+        // surface already owns focus above the scratch (a full overlay, or the window-level quick
+        // terminal), so a scratch created under one can't steal first responder. Re-shows are focused
+        // via the `scratchActive` onChange (which also defers to those covers).
+        let view = GhosttySurfaceView(workingDirectory: session.effectiveCwd,
+                                      fontSize: session.fontSize.map(Float.init),
+                                      autoFocus: !suppressAutoFocus, env: env)
+        let sessionID = session.id
+        view.onExit = { store.closeScratch(sessionID) }
         return view
     }
 

@@ -410,6 +410,8 @@ final class ControlServer {
             }
         case .sessionSplit:
             return splitSession(request.target, window: request.args?.window, mode: request.args?.mode)
+        case .sessionScratch:
+            return scratchSession(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionFocus:
             return focusSessionPane(request.target, window: request.args?.window, pane: request.args?.pane)
         case .sessionStatus:
@@ -514,6 +516,36 @@ final class ControlServer {
                 store.toggleSplit(id) // mirror ⌘D: keep-alive hide/show, never destroys the hidden pane
             }
             actions.focusSplitPane(session, wantSplit: session.splitFocused)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    /// Resolve the target session and show/hide its scratch terminal — a third, full-overlay login
+    /// shell. `mode` is `on|off|toggle`, computed against the session's current `scratchActive` so
+    /// `on`/`off` are idempotent. Like the split, hiding keeps the shell alive (`toggleScratch`);
+    /// `closeScratch` (tear down) is reserved for the shell's own `exit`.
+    private func scratchSession(_ target: String?, window: String?, mode: String?) -> ControlResponse {
+        let mode = mode ?? "toggle"
+        return resolveSession(target, window: window) { store, id in
+            guard let session = store.session(withID: id) else {
+                return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
+            }
+            let want: Bool
+            switch mode {
+            case "on": want = true
+            case "off": want = false
+            case "toggle": want = !session.scratchActive
+            default: return ControlResponse(ok: false, error: "invalid scratch mode: \(mode)")
+            }
+            if want, store.selectedSessionID != id {
+                // the scratch is a full-coverage surface that grabs focus on show; it only makes sense on
+                // the visible session, so select the target first (mirrors the floating-overlay arm).
+                // Otherwise a non-active target's scratch surface would steal first responder while hidden.
+                store.selectSession(id)
+            }
+            if want != session.scratchActive {
+                store.toggleScratch(id) // keep-alive hide/show, mirrors ⌘J; never tears the shell down
+            }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
@@ -707,7 +739,8 @@ final class ControlServer {
             let sessions = workspace.sessions.map { session in
                 ControlSessionNode(id: session.id.uuidString, name: session.displayName,
                                    cwd: session.effectiveCwd, active: session.id == activeID,
-                                   split: session.isSplit, overlay: session.overlayActive)
+                                   split: session.isSplit, overlay: session.overlayActive,
+                                   scratch: session.scratchActive)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID, sessions: sessions)

@@ -15,7 +15,7 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.toggleSplit.rawValue == "toggle_split")
         #expect(BuiltinAction.commandPalette.rawValue == "command_palette")
         #expect(BuiltinAction.nextAttentionSession.rawValue == "next_attention_session")
-        #expect(BuiltinAction.allCases.count == 26)
+        #expect(BuiltinAction.allCases.count == 27)
     }
 
     @Test func rejectsUnknownName() {
@@ -41,6 +41,7 @@ struct BuiltinActionTests {
             .decreaseFontSize: Chord(mods: [.command], key: "-"),
             .resetFontSize: Chord(mods: [.command], key: "0"),
             .toggleSplit: Chord(mods: [.command], key: "d"),
+            .toggleScratch: Chord(mods: [.command], key: "j"),
             .focusLeftPane: nil,    // ⌘⌥← — arrow, not expressible as a parsed Chord
             .focusRightPane: nil,   // ⌘⌥→ — arrow
             .previousSession: nil,  // ⌥⌘↑ — arrow

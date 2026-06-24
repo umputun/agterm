@@ -19,6 +19,7 @@ public enum Command: String, Codable, Sendable {
     case sessionType = "session.type"
     case sessionStatus = "session.status"
     case sessionSplit = "session.split"
+    case sessionScratch = "session.scratch"
     case sessionFocus = "session.focus"
     case sessionCopy = "session.copy"
     case sessionOverlayOpen = "session.overlay.open"
@@ -144,14 +145,17 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let active: Bool
     public let split: Bool
     public let overlay: Bool
+    public let scratch: Bool
 
-    public init(id: String, name: String, cwd: String, active: Bool, split: Bool, overlay: Bool = false) {
+    public init(id: String, name: String, cwd: String, active: Bool, split: Bool, overlay: Bool = false,
+                scratch: Bool = false) {
         self.id = id
         self.name = name
         self.cwd = cwd
         self.active = active
         self.split = split
         self.overlay = overlay
+        self.scratch = scratch
     }
 }
 

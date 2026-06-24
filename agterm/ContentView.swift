@@ -15,6 +15,7 @@ struct ContentView: View {
     let makeSurface: (Session, AppStore) -> GhosttySurfaceView
     let makeSplitSurface: (Session, AppStore) -> GhosttySurfaceView
     let makeOverlaySurface: (Session, AppStore) -> GhosttySurfaceView
+    let makeScratchSurface: (Session, AppStore) -> GhosttySurfaceView
     /// The `AGTERM_*` environment a window's quick terminal exposes (ENABLED + WINDOW_ID + SOCKET),
     /// resolved per window id. Threaded down so `WindowContentView` can bind its quick terminal's
     /// `envProvider` with its own window id.
@@ -58,6 +59,7 @@ struct ContentView: View {
                     makeSurface: { makeSurface($0, store) },
                     makeSplitSurface: { makeSplitSurface($0, store) },
                     makeOverlaySurface: { makeOverlaySurface($0, store) },
+                    makeScratchSurface: { makeScratchSurface($0, store) },
                     quickTerminalEnv: quickTerminalEnv,
                     actions: actions,
                     palette: palette,
@@ -150,6 +152,7 @@ private struct WindowContentView: View {
     let makeSurface: (Session) -> GhosttySurfaceView
     let makeSplitSurface: (Session) -> GhosttySurfaceView
     let makeOverlaySurface: (Session) -> GhosttySurfaceView
+    let makeScratchSurface: (Session) -> GhosttySurfaceView
     let quickTerminalEnv: (WindowInfo.ID) -> [String: String]
     let actions: AppActions
     let palette: PaletteController
@@ -332,6 +335,13 @@ private struct WindowContentView: View {
         // FLOATING overlay (overlaySizePercent set) leaves the session VISIBLE and draws a smaller
         // opaque framed panel on top. Either way the pane(s) stay non-interactive while an overlay is up.
         let fullOverlay = session.overlayActive && session.overlaySizePercent == nil
+        // the scratch terminal is a full-coverage overlay too, so it hides the pane(s) exactly like a
+        // FULL overlay; `hideForOverlay` drives opacity + hit-testing. `overlaid` (any overlay OR scratch)
+        // is what owns focus, so it gates the pane(s)' `isActive` (focus goes to the overlay/scratch, not
+        // the pane). NOTE `hideForOverlay` stays false for a FLOATING overlay — preserving the rule that
+        // this subtree's shape/hit-testing must not change when a floating overlay opens (NSSplitView overrun).
+        let hideForOverlay = fullOverlay || session.scratchActive
+        let overlaid = session.overlayActive || session.scratchActive
         ZStack {
             // the session's pane(s), kept MOUNTED while an overlay is up — shells stay alive, like the deck
             // does for inactive sessions. a FULL overlay hides them (opacity 0) so its translucency reveals the
@@ -340,11 +350,11 @@ private struct WindowContentView: View {
                 if session.isSplit {
                     HSplitView {
                         TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
-                                     isActive: isActive && !session.splitFocused && !session.overlayActive)
+                                     isActive: isActive && !session.splitFocused && !overlaid)
                             .overlay { paneDim(session.splitFocused) }
                             .id(session.id)
                         TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
-                                     isActive: isActive && session.splitFocused && !session.overlayActive)
+                                     isActive: isActive && session.splitFocused && !overlaid)
                             .overlay { paneDim(!session.splitFocused) }
                             .id("\(session.id.uuidString)-split")
                     }
@@ -354,44 +364,69 @@ private struct WindowContentView: View {
                 } else if session.splitFocused, session.splitSurface != nil {
                     // split hidden while the right pane had focus: show that pane maximized.
                     TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
-                                 isActive: isActive && !session.overlayActive)
+                                 isActive: isActive && !overlaid)
                         .id("\(session.id.uuidString)-split")
                 } else {
                     TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
-                                 isActive: isActive && !session.overlayActive)
+                                 isActive: isActive && !overlaid)
                         .id(session.id)
                 }
             }
-            .opacity(fullOverlay ? 0 : 1)
-            // gate hit-testing on `fullOverlay`, NOT `session.overlayActive`: this modifier must NOT change
-            // when a floating overlay opens, or the AppKit NSSplitView re-lays-out and overruns up into the
-            // titlebar (same class of perturbation as adding a sibling). a floating overlay therefore leaves
-            // the panes hit-testable here; `floatingOverlayLayer`'s transparent catcher absorbs clicks around
-            // the panel so they can't reach the panes and steal the overlay's focus.
-            .allowsHitTesting(!fullOverlay)
-            // the FULL overlay renders here, in-deck, above the (hidden) pane(s). The FLOATING overlay is
-            // deliberately NOT a ZStack sibling: adding a conditional child to this HSplitView-hosting
-            // subtree makes the AppKit NSSplitView overrun up into the titlebar (Codex-confirmed). It renders
-            // as an `.overlay` on `detailPane` instead (`floatingOverlayLayer`), so this subtree's shape is
-            // identical whether a floating overlay is open or not — the split's frame never moves.
+            .opacity(hideForOverlay ? 0 : 1)
+            // gate hit-testing on `hideForOverlay` (full overlay OR scratch), NOT `session.overlayActive`:
+            // this modifier must NOT change when a floating overlay opens, or the AppKit NSSplitView
+            // re-lays-out and overruns up into the titlebar (same class of perturbation as adding a sibling).
+            // a floating overlay therefore leaves the panes hit-testable here; `floatingOverlayLayer`'s
+            // transparent catcher absorbs clicks around the panel so they can't reach the panes.
+            .allowsHitTesting(!hideForOverlay)
+            // the scratch terminal renders here, in-deck, above the (hidden) pane(s) — like the FULL overlay,
+            // a full-coverage sibling is safe (the panes go opacity 0, the split's frame is hidden). It sits
+            // BELOW the ephemeral overlay (zIndex 1 vs 2) so a normal overlay launched over the scratch is on
+            // top. The FLOATING overlay is deliberately NOT a sibling here (it renders as a `detailPane`
+            // `.overlay`), since adding a child while the panes stay VISIBLE overruns the NSSplitView.
+            if session.scratchActive {
+                // gate focus on every surface that covers the scratch — a full overlay (renders above it,
+                // zIndex 2) AND the window-level quick terminal — so the deck's focusIfNeeded can't grab the
+                // scratch behind them. When the cover goes away, isActive flips true and the deck re-grabs it.
+                // (matches the autoFocus suppression in makeScratchSurface.)
+                TerminalView(session: session, surfaceKeyPath: \.scratchSurface, makeSurface: makeScratchSurface,
+                             isActive: isActive && !session.overlayActive && !quickTerminal.isVisible)
+                    .id("\(session.id.uuidString)-scratch")
+                    .zIndex(1)
+            }
             if fullOverlay {
                 TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                              makeSurface: makeOverlaySurface, isActive: isActive)
                     .id("\(session.id.uuidString)-overlay")
-                    .zIndex(1)
+                    .zIndex(2)
             }
         }
         // when the overlay closes, the underlying pane must reclaim first responder. the pane re-activating
         // only does a single makeFirstResponder, which loses the race with the overlay view's teardown/
         // re-host — so drive the bounded retry the split-collapse survivor uses. gated on isActive so only
         // the visible session reclaims focus.
+        // on overlay close, refocus the topmost remaining surface (scratch if still shown, else the pane)
+        // via the shared `topmostSurface` precedence — never a pane hidden under the scratch, and not at all
+        // while the quick terminal covers the window (it owns focus; its own hide restores the session).
         .onChange(of: session.overlayActive) { _, isOpen in
-            if !isOpen, isActive { (session.activeSurface as? GhosttySurfaceView)?.focusAfterReparent() }
+            if !isOpen, isActive, !quickTerminal.isVisible {
+                (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
+            }
             // a keymap-edit overlay just closed → reapply the edited keymap.
             if !isOpen, actions.keymapEditOverlaySession == session.id {
                 actions.keymapEditOverlaySession = nil
                 actions.reloadKeymap()
             }
+        }
+        // scratch show AND hide both need the bounded focus retry: the surface is kept alive across hides,
+        // so a re-show remounts it and `autoFocus`'s one-shot latch won't re-fire (same remount race as the
+        // split-collapse survivor). `topmostSurface` routes focus correctly either way — on show it is the
+        // scratch (or a still-open overlay above it), on hide the overlay-if-up else the pane.
+        .onChange(of: session.scratchActive) { _, _ in
+            // skip while the quick terminal covers the window — it owns focus above the session layers
+            // (mirrors focusActiveSession); the deck re-grabs the scratch when the quick terminal hides.
+            guard isActive, !quickTerminal.isVisible else { return }
+            (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
         }
     }
 
@@ -514,7 +549,10 @@ private struct WindowContentView: View {
             titleLabel
             Spacer(minLength: 12)
             HStack(spacing: 14) {
+                scratchButton.labelStyle(.iconOnly)
                 splitButton.labelStyle(.iconOnly)
+                // separates the per-session view toggles (scratch/split) from the window-level quick terminal.
+                Rectangle().fill(chromeText.opacity(0.25)).frame(width: 1, height: 16)
                 quickTerminalButton.labelStyle(.iconOnly)
             }
             .padding(.trailing, 14)
@@ -555,6 +593,21 @@ private struct WindowContentView: View {
         .help(isSplit ? "Hide split" : (hasSplit ? "Show split" : "Split right"))
         .disabled(store.activeSession == nil)
         .accessibilityIdentifier("split-toggle")
+    }
+
+    /// Toolbar button that toggles the active session's scratch terminal — a third, full-overlay login
+    /// shell, kept alive when hidden. 2-state glyph (filled while shown): unlike the split there is no
+    /// "hidden but exists" indicator, since the shell's own `exit` clears it and the next show is fresh.
+    private var scratchButton: some View {
+        let active = store.activeSession?.scratchActive ?? false
+        return Button {
+            actions.toggleScratch()
+        } label: {
+            Label("Scratch", systemImage: active ? "rectangle.inset.filled" : "rectangle")
+        }
+        .help(active ? "Hide scratch terminal" : "Show scratch terminal")
+        .disabled(store.activeSession == nil)
+        .accessibilityIdentifier("scratch-toggle")
     }
 
     /// Toolbar button (next to the split toggle) that toggles the quick terminal: a single
@@ -832,6 +885,7 @@ private struct WindowAccessor: NSViewRepresentable {
                         session.surface?.teardown()
                         session.splitSurface?.teardown()
                         session.overlaySurface?.teardown()
+                        session.scratchSurface?.teardown()
                     }
                     library.closeWindow(windowID)
                 }

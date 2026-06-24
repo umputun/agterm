@@ -529,6 +529,78 @@ struct AppStoreTests {
         #expect(overlay.teardownCount == 1)
     }
 
+    @Test func toggleScratchFlipsFlagAndKeepsSurfaceAlive() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        #expect(session.scratchActive == false)
+        store.toggleScratch(session.id)
+        #expect(session.scratchActive == true)
+        // the detail pane lazily creates the surface on show; simulate that.
+        let scratch = SpySurface()
+        session.scratchSurface = scratch
+        // hiding keeps the shell alive (slot retained), so a re-show reuses it.
+        store.toggleScratch(session.id)
+        #expect(session.scratchActive == false)
+        #expect(session.scratchSurface === scratch)
+        #expect(scratch.teardownCount == 0)
+        store.toggleScratch(session.id)
+        #expect(session.scratchActive == true)
+        #expect(session.scratchSurface === scratch)
+    }
+
+    @Test func closeScratchTearsDownAndClears() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.scratchActive = true
+        let scratch = SpySurface()
+        session.scratchSurface = scratch
+        #expect(store.closeScratch(session.id) == true)
+        #expect(session.scratchActive == false)
+        #expect(session.scratchSurface == nil)
+        #expect(scratch.teardownCount == 1)
+        // closing again (no surface) is a no-op.
+        #expect(store.closeScratch(session.id) == false)
+    }
+
+    @Test func toggleScratchUnknownSessionIsNoop() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.toggleScratch(UUID()) // unknown id
+        #expect(session.scratchActive == false) // existing session untouched
+    }
+
+    @Test func closeScratchUnknownSessionReturnsFalse() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        _ = store.addSession(toWorkspace: ws.id, cwd: "/a")
+        #expect(store.closeScratch(UUID()) == false) // unknown id, no surface
+    }
+
+    @Test func closeSessionTearsDownScratchSurface() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let scratch = SpySurface()
+        session.scratchSurface = scratch
+        store.closeSession(session.id)
+        #expect(scratch.teardownCount == 1)
+    }
+
+    @Test func removeWorkspaceTearsDownScratchSurface() {
+        let store = Self.makeStore()
+        let keep = store.addWorkspace(name: "keep")
+        _ = store.addSession(toWorkspace: keep.id, cwd: "/k")
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let scratch = SpySurface()
+        session.scratchSurface = scratch
+        store.removeWorkspace(ws.id)
+        #expect(scratch.teardownCount == 1)
+    }
+
     @Test func selectionUpdatesRecencyMostRecentFirst() {
         let store = Self.makeStore()
         let ws = store.addWorkspace(name: "work")

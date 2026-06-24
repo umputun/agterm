@@ -194,6 +194,16 @@ struct SocketClientTests {
         #expect(lines[1] == "  * shell (split)  [s1]  /tmp")
     }
 
+    @Test func formatTreeShowsScratchTag() {
+        let session = ControlSessionNode(id: "s3", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         overlay: false, scratch: true)
+        let workspace = ControlWorkspaceNode(id: "w3", name: "work", active: true, sessions: [session])
+        let tree = ControlTree(workspaces: [workspace])
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(tree: tree)), json: false)
+        let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        #expect(lines[1] == "  * shell (scratch)  [s3]  /tmp")
+    }
+
     @Test func formatTreeMarksInactive() {
         let session = ControlSessionNode(id: "s2", name: "logs", cwd: "/var", active: false, split: false)
         let workspace = ControlWorkspaceNode(id: "w2", name: "other", active: false, sessions: [session])

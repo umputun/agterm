@@ -102,6 +102,8 @@ struct ControlProtocolTests {
     @Test func modeBearingCommandsRoundTrip() throws {
         let cases: [ControlRequest] = [
             ControlRequest(cmd: .sessionSplit, target: "active", args: ControlArgs(mode: "toggle")),
+            ControlRequest(cmd: .sessionScratch, target: "active", args: ControlArgs(mode: "toggle")),
+            ControlRequest(cmd: .sessionScratch, target: "9f3c", args: ControlArgs(mode: "on")),
             ControlRequest(cmd: .quick, args: ControlArgs(mode: "show")),
         ]
         for request in cases {

@@ -125,6 +125,16 @@ struct CommandsTests {
         #expect(try request(["session", "split", "on"]) == expected)
     }
 
+    @Test func sessionScratchDefaultsToggle() throws {
+        let expected = ControlRequest(cmd: .sessionScratch, target: "active", args: ControlArgs(mode: "toggle"))
+        #expect(try request(["session", "scratch"]) == expected)
+    }
+
+    @Test func sessionScratchOff() throws {
+        let expected = ControlRequest(cmd: .sessionScratch, target: "active", args: ControlArgs(mode: "off"))
+        #expect(try request(["session", "scratch", "off"]) == expected)
+    }
+
     @Test func sessionFocusDefaultsOther() throws {
         let expected = ControlRequest(cmd: .sessionFocus, target: "active", args: ControlArgs(pane: "other"))
         #expect(try request(["session", "focus"]) == expected)

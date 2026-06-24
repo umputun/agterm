@@ -286,6 +286,7 @@ final class AppActions {
             PaletteItem(title: "First Session", shortcut: paletteHint(for: .firstSession)) { [weak self] in self?.selectFirstSession() },
             PaletteItem(title: "Last Session", shortcut: paletteHint(for: .lastSession)) { [weak self] in self?.selectLastSession() },
             PaletteItem(title: "Toggle Split", shortcut: paletteHint(for: .toggleSplit)) { [weak self] in self?.toggleSplit() },
+            PaletteItem(title: "Toggle Scratch", shortcut: paletteHint(for: .toggleScratch)) { [weak self] in self?.toggleScratch() },
             PaletteItem(title: "Quick Terminal", shortcut: paletteHint(for: .quickTerminal)) { [weak self] in self?.toggleQuickTerminal() },
             PaletteItem(title: "Increase Font Size", shortcut: paletteHint(for: .increaseFontSize)) { [weak self] in self?.increaseFontSize() },
             PaletteItem(title: "Decrease Font Size", shortcut: paletteHint(for: .decreaseFontSize)) { [weak self] in self?.decreaseFontSize() },
@@ -360,6 +361,14 @@ final class AppActions {
         focusSplitPane(session, wantSplit: session.splitFocused)
     }
 
+    /// Show/hide the active session's scratch terminal — a third, full-overlay login shell. Focus is
+    /// handled by the surface's `autoFocus` on show and the detail pane's scratch-hide focus reclaim,
+    /// so this just flips the flag. The control channel drives `AppStore.toggleScratch` directly.
+    func toggleScratch() {
+        guard let store, let session = store.activeSession else { return }
+        store.toggleScratch(session.id)
+    }
+
     /// Move keyboard focus to a pane of the active session's split: `.split` -> the right pane,
     /// anything else -> the left/primary. No-op when the active session isn't split. Drives the
     /// keyboard shortcuts, the View menu items, and the action palette.
@@ -390,16 +399,16 @@ final class AppActions {
 
     // MARK: - Focus
 
-    /// Move first responder back to the active session's focused pane (used after the quick terminal
-    /// or a palette closes). Targets `activeSurface` so a collapsed split that shows the right pane
-    /// gets focus, not the hidden primary. Re-asserts briefly since the target view may not be
-    /// on-window yet. Bails while the quick terminal OR an overlay is up — each owns focus, so don't
-    /// steal it back (e.g. opening the keymap editor from the palette, whose close fires this restore).
+    /// Move first responder back to the active session's topmost surface (used after the quick terminal
+    /// or a palette/rename field closes). Targets `topmostSurface` (overlay > scratch > active pane) so a
+    /// palette close re-focuses whatever is actually visible — the scratch or overlay if one is up, else
+    /// the focused pane — never a pane hidden under a cover. Re-asserts briefly since the target view may
+    /// not be on-window yet. Bails only for the quick terminal: it is a window-level cover that owns focus
+    /// and re-focuses the session on its own hide, so don't fight it here.
     func focusActiveSession(attempt: Int = 0) {
         if renamePending { return }
         if frontmostQuickTerminal?.isVisible == true { return }
-        if store?.activeSession?.overlayActive == true { return }
-        if let view = store?.activeSession?.activeSurface as? GhosttySurfaceView, let window = view.window {
+        if let view = store?.activeSession?.topmostSurface as? GhosttySurfaceView, let window = view.window {
             window.makeFirstResponder(view)
         }
         guard attempt < 12 else { return }
@@ -410,10 +419,19 @@ final class AppActions {
 
     /// Move first responder to the split (right) pane on open, or the primary on close.
     /// Re-asserts over a short window because the split surface materializes a beat after the
-    /// toggle and the HSplitView collapse churns the primary view.
+    /// toggle and the HSplitView collapse churns the primary view. While a full-coverage surface
+    /// (scratch or overlay) is up, the requested pane is hidden beneath it, so keep first responder on
+    /// the visible `topmostSurface` instead — the caller has already set `splitFocused`, so the correct
+    /// pane shows once the cover is dismissed.
     func focusSplitPane(_ session: Session, wantSplit: Bool, attempt: Int = 0) {
-        if let view = (wantSplit ? session.splitSurface : session.surface) as? GhosttySurfaceView,
-           let window = view.window {
+        // the quick terminal is a window-level cover above the session; while it's up it owns focus, so
+        // don't move first responder to a pane behind it (its own hide restores the session). The caller
+        // has already set `splitFocused`, so the right pane shows once the quick terminal is dismissed.
+        if frontmostQuickTerminal?.isVisible == true { return }
+        let target: (any TerminalSurface)? = (session.overlayActive || session.scratchActive)
+            ? session.topmostSurface
+            : (wantSplit ? session.splitSurface : session.surface)
+        if let view = target as? GhosttySurfaceView, let window = view.window {
             window.makeFirstResponder(view)
         }
         guard attempt < 12 else { return }

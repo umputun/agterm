@@ -188,6 +188,28 @@ struct SessionTests {
         session.splitSurface = nil
         #expect(session.activeSurface === primary)
     }
+
+    @Test func topmostSurfacePrefersOverlayThenScratchThenPane() {
+        let session = Session(initialCwd: "/repo")
+        let primary = FakeSurface(), scratch = FakeSurface(), overlay = FakeSurface()
+        session.surface = primary
+        session.scratchSurface = scratch
+        session.overlaySurface = overlay
+        // no cover active: the active pane.
+        #expect(session.topmostSurface === primary)
+        // scratch shown: scratch is on top.
+        session.scratchActive = true
+        #expect(session.topmostSurface === scratch)
+        // overlay over the scratch: the overlay wins (it renders above the scratch).
+        session.overlayActive = true
+        #expect(session.topmostSurface === overlay)
+        // overlay closed, scratch still up: back to the scratch.
+        session.overlayActive = false
+        #expect(session.topmostSurface === scratch)
+        // scratch hidden too: the active pane again.
+        session.scratchActive = false
+        #expect(session.topmostSurface === primary)
+    }
 }
 
 private final class FakeSurface: TerminalSurface {

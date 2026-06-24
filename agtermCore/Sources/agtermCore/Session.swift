@@ -122,6 +122,19 @@ public final class Session: Identifiable {
     /// Set at open, cleared on close; never persisted.
     public var overlaySizePercent: Int?
 
+    /// Whether the scratch terminal is shown on top of this session (full single-pane size, hiding
+    /// the single/split content underneath, like a full overlay). The scratch is a third per-session
+    /// shell that — unlike the ephemeral overlay — behaves like the split: hiding it keeps the shell
+    /// alive (`scratchSurface` retained), so a re-show reuses it. Observed, so the detail pane shows/
+    /// hides the scratch. NOT persisted (absent from `snapshot()`), so it never survives a relaunch.
+    public var scratchActive: Bool = false
+
+    /// The scratch terminal's surface: a plain login shell, lazily created on first show and kept
+    /// alive across hides (`scratchSurface != nil` is "alive but hidden"). Freed only on
+    /// `closeScratch` (an explicit close, the shell's own `exit`, or session/workspace/window
+    /// teardown) — after which the next show spawns a fresh shell. `@ObservationIgnored` like `surface`.
+    @ObservationIgnored public var scratchSurface: (any TerminalSurface)?
+
     public init(id: UUID = UUID(), initialCwd: String, customName: String? = nil) {
         self.id = id
         self.initialCwd = initialCwd
@@ -174,6 +187,16 @@ public final class Session: Identifiable {
     /// maximized, and the focus helpers target it, so focus/typing always reaches the visible pane.
     public var activeSurface: (any TerminalSurface)? {
         splitFocused && splitSurface != nil ? splitSurface : surface
+    }
+
+    /// The surface currently on top and owning keyboard focus: a full overlay, else the scratch, else
+    /// the active pane. Both the overlay and the scratch are full-coverage layers (panes hidden beneath
+    /// them), and the overlay renders above the scratch — so every focus path routes through this to keep
+    /// first responder on the visible top surface and never on a covered pane/scratch.
+    public var topmostSurface: (any TerminalSurface)? {
+        if overlayActive { return overlaySurface }
+        if scratchActive { return scratchSurface }
+        return activeSurface
     }
 }
 

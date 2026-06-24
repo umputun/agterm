@@ -188,7 +188,7 @@ struct Workspace: ParsableCommand {
 struct Session: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Session commands.",
-        subcommands: [New.self, Close.self, Select.self, Go.self, Rename.self, Move.self, TypeText.self, Split.self, Focus.self, Copy.self, Status.self, Overlay.self]
+        subcommands: [New.self, Close.self, Select.self, Go.self, Rename.self, Move.self, TypeText.self, Split.self, Scratch.self, Focus.self, Copy.self, Status.self, Overlay.self]
     )
 
     struct New: RequestCommand {
@@ -301,6 +301,17 @@ struct Session: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionSplit, target: target.target, args: options.withWindow(ControlArgs(mode: mode)))
+        }
+    }
+
+    struct Scratch: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Show or hide a session scratch terminal (on|off|toggle).")
+        @Argument(help: "Mode: on (show), off (hide), or toggle (default). The hidden scratch shell stays alive.") var mode: String = "toggle"
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sessionScratch, target: target.target, args: options.withWindow(ControlArgs(mode: mode)))
         }
     }
 

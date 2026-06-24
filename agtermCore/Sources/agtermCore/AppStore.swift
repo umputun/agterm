@@ -164,6 +164,7 @@ public final class AppStore {
         removed.surface?.teardown()
         removed.splitSurface?.teardown()
         removed.overlaySurface?.teardown()
+        removed.scratchSurface?.teardown()
         sessionRecency.remove(sessionID)
         if wasActive {
             selectedSessionID = reselectionTarget(after: location)
@@ -189,6 +190,7 @@ public final class AppStore {
             session.surface?.teardown()
             session.splitSurface?.teardown()
             session.overlaySurface?.teardown()
+            session.scratchSurface?.teardown()
             sessionRecency.remove(session.id)
         }
         workspaces.remove(at: index)
@@ -304,6 +306,26 @@ public final class AppStore {
         session.overlayCwd = nil
         session.overlayWait = false
         session.overlaySizePercent = nil
+        return true
+    }
+
+    /// Toggles the scratch terminal for a session — a third, full-overlay login shell. The scratch
+    /// surface is created lazily by the detail pane on first show and, like the split, kept alive when
+    /// hidden (this only flips `scratchActive`), so a re-show reuses the same shell. Not persisted, so
+    /// no `save()`. No-op for an unknown session.
+    public func toggleScratch(_ sessionID: UUID) {
+        guard let session = session(withID: sessionID) else { return }
+        session.scratchActive.toggle()
+    }
+
+    /// Closes the scratch terminal: hides it AND tears down its surface (so a subsequent show starts a
+    /// fresh shell). Used on the scratch shell's own `exit` and on session/workspace/window teardown.
+    /// No-op (returns false) when there is no scratch surface.
+    @discardableResult public func closeScratch(_ sessionID: UUID) -> Bool {
+        guard let session = session(withID: sessionID), session.scratchSurface != nil else { return false }
+        session.scratchActive = false
+        session.scratchSurface?.teardown()
+        session.scratchSurface = nil
         return true
     }
 
