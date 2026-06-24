@@ -104,6 +104,14 @@ final class PaletteUITests: XCTestCase {
                       "the auto-focused picker should filter on the typed text and commit that theme")
     }
 
+    func testFreshLaunchAppliesAgtermDefaultThemeWithoutAnyChange() throws {
+        // a fresh install must apply the seeded agterm default at LAUNCH, not only after a settings change
+        // triggers a config rewrite. SettingsModel.init writes the ghostty config before GhosttyApp boots,
+        // so <stateDir>/ghostty-settings.conf carries the theme with NO interaction.
+        XCTAssertTrue(poll { self.appliedGhosttyTheme()?.contains("agterm") == true },
+                      "a fresh launch should write the agterm default into the live ghostty config")
+    }
+
     func testThemePickerPreviewsTopMatchOnFilterWithoutNavigating() throws {
         // typing to filter must preview the new top match live — even with no arrow navigation. The live
         // preview writes the applied theme into <stateDir>/ghostty-settings.conf, so that file is the

@@ -29,6 +29,13 @@ final class SettingsModel {
         self.library = library
         self.settingsStore = settingsStore
         self.settings = settingsStore.load()
+        // write the ghostty config from the loaded settings NOW — before GhosttyApp boots and reads it
+        // (its loadConfig runs in applicationDidFinishLaunching, AFTER this App.init). The SEEDED default
+        // theme (agterm) lives only in memory (load() seeds it; it isn't in settings.json), so without
+        // this the launch config carries no theme line and the terminal renders ghostty's built-in until
+        // the first settings change rewrites the conf. Idempotent: writeGhosttyConfig no-ops when the file
+        // already matches (e.g. a user with an explicit theme already has it on disk).
+        _ = writeGhosttyConfig()
         // mirror the persisted window translucency + notification toggle + compact toolbar + badge
         // toggle into their shared channels at launch, before any settings change fires.
         applyWindowTranslucency()
