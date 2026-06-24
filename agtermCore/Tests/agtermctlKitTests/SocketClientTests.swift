@@ -238,6 +238,27 @@ struct SocketClientTests {
         // a present-but-empty `windows` payload still takes the windows branch.
         #expect(out == "")
     }
+
+    @Test func formatResponseThemesMarksCurrent() {
+        let response = ControlResponse(ok: true, result: ControlResult(theme: "Nord", themes: ["Dracula", "Nord"]))
+        let out = SocketClient.formatResponse(response, json: false)
+        let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        #expect(lines == ["  Default", "  Dracula", "* Nord"])
+    }
+
+    @Test func formatResponseThemesMarksDefaultWhenCurrent() {
+        // nil current theme = the default is active, so the leading "Default" row carries the mark.
+        let response = ControlResponse(ok: true, result: ControlResult(theme: nil, themes: ["Dracula"]))
+        let out = SocketClient.formatResponse(response, json: false)
+        let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        #expect(lines == ["* Default", "  Dracula"])
+    }
+
+    @Test func formatResponseThemeSetIsBareOk() {
+        // theme.set returns only `theme` (no `themes` array), so it prints `ok` like other mutations.
+        let response = ControlResponse(ok: true, result: ControlResult(theme: "Dracula"))
+        #expect(SocketClient.formatResponse(response, json: false) == "ok")
+    }
 }
 
 /// An in-process unix-socket server for the round-trip tests: binds a short temp path, accepts one

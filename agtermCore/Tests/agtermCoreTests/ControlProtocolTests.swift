@@ -243,6 +243,44 @@ struct ControlProtocolTests {
         #expect(decoded.result?.count == 3)
     }
 
+    @Test func themeSetRequestRoundTrips() throws {
+        let request = ControlRequest(cmd: .themeSet, args: ControlArgs(name: "Dracula"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.cmd == .themeSet)
+        #expect(decoded.args?.name == "Dracula")
+    }
+
+    @Test func themeSetRawStringMapsToCommand() throws {
+        let json = #"{"cmd":"theme.set","args":{"name":"Nord"}}"#
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8))
+        #expect(decoded.cmd == .themeSet)
+        #expect(decoded.args?.name == "Nord")
+    }
+
+    @Test func themeListRequestRoundTrips() throws {
+        let request = ControlRequest(cmd: .themeList)
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.cmd == .themeList)
+    }
+
+    @Test func themeListResponseRoundTrips() throws {
+        let response = ControlResponse(ok: true, result: ControlResult(theme: "Nord", themes: ["Dracula", "Nord"]))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.theme == "Nord")
+        #expect(decoded.result?.themes == ["Dracula", "Nord"])
+    }
+
+    @Test func themeSetResponseEchoesAppliedTheme() throws {
+        let response = ControlResponse(ok: true, result: ControlResult(theme: "Dracula"))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.theme == "Dracula")
+        #expect(decoded.result?.themes == nil)
+    }
+
     @Test func sessionCommandWithWindowArgRoundTrips() throws {
         let request = ControlRequest(cmd: .sessionSelect, target: "9f3c", args: ControlArgs(window: "main"))
         let decoded = try roundTrip(request)

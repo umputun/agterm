@@ -76,7 +76,7 @@ public struct Agtermctl: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "agtermctl",
         abstract: "Drive agterm over its control socket.",
-        subcommands: [Tree.self, Workspace.self, Session.self, Window.self, Quick.self, Sidebar.self, Notify.self, Font.self, Keymap.self]
+        subcommands: [Tree.self, Workspace.self, Session.self, Window.self, Quick.self, Sidebar.self, Notify.self, Font.self, Keymap.self, Theme.self]
     )
 
     public init() {}
@@ -565,6 +565,33 @@ struct Keymap: ParsableCommand {
         @OptionGroup var options: BasicOptions
 
         func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .keymapReload) }
+    }
+}
+
+// MARK: - theme
+
+struct Theme: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Theme commands.",
+        subcommands: [Set.self, List.self]
+    )
+
+    struct Set: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Set + persist the terminal theme (omit NAME for the default).")
+        @Argument(help: "Theme name (a bundled theme); omit for the default theme.") var name: String?
+        // theme is app-global (one settings model), so no `--window` selector.
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .themeSet, args: ControlArgs(name: name))
+        }
+    }
+
+    struct List: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "List bundled themes (the current one marked).")
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .themeList) }
     }
 }
 

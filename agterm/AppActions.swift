@@ -47,6 +47,16 @@ final class AppActions {
     /// scene `.task` alongside `settingsModel` for the same construction-order reason.
     var customCommandRunner: CustomCommandRunner?
 
+    /// The command-palette controller, so the "Select Theme…" action and the View menu item can open
+    /// the `.themes` palette. Wired in the scene `.task` (the controller is `agtermApp` `@State`).
+    var palette: PaletteController?
+
+    /// The theme captured when the theme picker opened, restored on Esc/cancel. `themePreviewActive`
+    /// gates the preview/commit/cancel so the hooks are inert outside the picker (the palette's other
+    /// modes never touch them).
+    private var themePreviewActive = false
+    private var themePreviewOriginal: String?
+
     init(library: WindowLibrary) {
         self.library = library
     }
@@ -293,6 +303,7 @@ final class AppActions {
             PaletteItem(title: "Increase Font Size", shortcut: paletteHint(for: .increaseFontSize)) { [weak self] in self?.increaseFontSize() },
             PaletteItem(title: "Decrease Font Size", shortcut: paletteHint(for: .decreaseFontSize)) { [weak self] in self?.decreaseFontSize() },
             PaletteItem(title: "Actual Font Size", shortcut: paletteHint(for: .resetFontSize)) { [weak self] in self?.resetFontSize() },
+            PaletteItem(title: "Select Theme…", shortcut: paletteHint(for: .selectTheme)) { [weak self] in self?.openThemePalette() },
             PaletteItem(title: "Edit Keymap") { [weak self] in self?.editKeymap() },
             PaletteItem(title: "Reload Keymap") { [weak self] in self?.reloadKeymap() },
         ]
@@ -350,6 +361,80 @@ final class AppActions {
             }
         }
     }
+
+    // MARK: - Theme picker
+
+    /// Open the `.themes` command palette (the live-preview theme picker). Invoked by the action-palette
+    /// "Select Theme…" launcher and the View ▸ Select Theme… menu item. Opened on the next runloop tick:
+    /// when launched from the open action palette, that palette's run handler closes itself right after
+    /// this returns, so reopening async lets `.themes` survive the close (the rename actions reopen the
+    /// same way).
+    func openThemePalette() {
+        DispatchQueue.main.async { [weak self] in self?.palette?.open(.themes) }
+    }
+
+    /// Theme rows for the `.themes` palette: a leading "Default" entry plus one per bundled theme,
+    /// the current one badged. Navigating a row previews it live (`onSelect`); Enter/click commits it.
+    func paletteThemes() -> [PaletteItem] {
+        let current = settingsModel?.settings.theme
+        func item(_ name: String?, title: String) -> PaletteItem {
+            PaletteItem(id: themeID(name), title: title, badge: name == current ? "current" : nil,
+                        onSelect: { [weak self] in self?.previewTheme(name) }) { [weak self] in
+                self?.previewTheme(name)
+                self?.commitThemePreview()
+            }
+        }
+        var items = [item(nil, title: "Default")]
+        items.append(contentsOf: SettingsCatalog.themeNames().map { item($0, title: $0) })
+        return items
+    }
+
+    /// The palette-item id of the currently-applied theme, so the picker opens with that row selected
+    /// (and previews it — a no-op — rather than jumping to "Default").
+    var currentThemeID: String { themeID(settingsModel?.settings.theme) }
+
+    private func themeID(_ name: String?) -> String { name.map { "theme:\($0)" } ?? "theme:__default__" }
+
+    /// Capture the live theme so Esc/cancel can restore it. Idempotent while a preview is active.
+    func beginThemePreview() {
+        guard let settingsModel, !themePreviewActive else { return }
+        themePreviewOriginal = settingsModel.settings.theme
+        themePreviewActive = true
+    }
+
+    /// Apply a theme live without persisting (the navigation preview). No-op outside an active picker.
+    func previewTheme(_ name: String?) {
+        guard themePreviewActive else { return }
+        settingsModel?.previewTheme(name)
+    }
+
+    /// Persist the previewed theme (Enter/click). Ends the preview so the subsequent palette close
+    /// can't revert it.
+    func commitThemePreview() {
+        guard themePreviewActive else { return }
+        settingsModel?.commitTheme()
+        themePreviewActive = false
+        themePreviewOriginal = nil
+    }
+
+    /// Re-apply the captured original theme and end the preview (Esc / scrim / mode switch / unmount
+    /// without a commit). No-op when no preview is active (e.g. right after a commit).
+    func cancelThemePreview() {
+        guard themePreviewActive else { return }
+        settingsModel?.previewTheme(themePreviewOriginal)
+        themePreviewActive = false
+        themePreviewOriginal = nil
+    }
+
+    /// Set + persist a theme by name — the control channel's `theme.set` (no live preview; it's the
+    /// same persist+apply path as the Settings picker). A nil/empty name selects the default theme.
+    func setTheme(_ name: String?) { settingsModel?.setTheme(name) }
+
+    /// The bundled theme names, for the control channel's `theme.list` and its name validation.
+    func availableThemes() -> [String] { SettingsCatalog.themeNames() }
+
+    /// The currently-applied theme (nil = default), for the control channel's `theme.list`.
+    var currentTheme: String? { settingsModel?.settings.theme }
 
     // MARK: - Split
 
@@ -491,6 +576,11 @@ final class AppActions {
     /// and re-focuses the session on its own hide, so don't fight it here.
     func focusActiveSession(attempt: Int = 0) {
         if renamePending { return }
+        // never grab terminal focus while a command palette is open — the palette owns the keyboard.
+        // this also kills the retry loop the instant a palette (re)opens, so the action-palette "Select
+        // Theme…" launcher (which closes the action palette, then opens the .themes picker a tick later)
+        // can't have its field focus stolen back by the close-restore's retry.
+        if palette?.mode != nil { return }
         if frontmostQuickTerminal?.isVisible == true { return }
         if let view = store?.activeSession?.topmostSurface as? GhosttySurfaceView, let window = view.window {
             window.makeFirstResponder(view)

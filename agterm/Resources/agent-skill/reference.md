@@ -175,12 +175,24 @@ Built-in action names for `map` include: `new_window`, `new_workspace`, `new_ses
 `decrease_font_size`, `reset_font_size`, `toggle_split`, `toggle_scratch`, `toggle_sidebar`, `quick_terminal`,
 `session_palette`, `command_palette`, and the navigation actions (`previous_session`, `next_session`,
 `first_session`, `last_session`, `previous_attention_session`, `next_attention_session`,
-`focus_left_pane`, `focus_right_pane`). Editing the keymap from a terminal: open `keymap.conf` in
-`$EDITOR`, then `agtermctl keymap reload`.
+`focus_left_pane`, `focus_right_pane`, `select_theme`). Editing the keymap from a terminal: open
+`keymap.conf` in `$EDITOR`, then `agtermctl keymap reload`.
+
+## theme
+
+`agtermctl theme list` — list the bundled theme names; returns `result.themes` (the names) and
+`result.theme` (the current one, absent = the default). Human output prints one name per line with the
+current marked `* `.
+
+`agtermctl theme set [name]` — set and persist the terminal theme app-wide (the same change as Settings
+▸ Appearance ▸ Theme). Omit the name to select the default theme; an unknown name returns
+`unknown theme: <name>`. Returns `result.theme` = the applied name (absent = default); human output
+prints `ok`. App-global (no `--window`). The GUI's live-preview picker (View ▸ Select Theme…) is
+keyboard-only; over the socket `theme set` is the commit, with no preview.
 
 ## Errors you may see
 
 `notFound` / `ambiguous` (target resolution), `no such session`, `invalid split mode` /
 `invalid scratch mode`, `not split` (focus), `no selection` (copy), `overlay already open` /
 `no overlay` / `still running` / `no result` (overlay), `invalid sidebar mode` (sidebar), `no open window` (quick/sidebar), `window not open`
-(resize/move/`--window`). Unknown commands fail to decode and return a structured error, never a crash.
+(resize/move/`--window`), `unknown theme: <name>` (theme set). Unknown commands fail to decode and return a structured error, never a crash.

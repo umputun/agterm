@@ -500,6 +500,11 @@ final class ControlServer {
             return windowMove(request.target, x: request.args?.x, y: request.args?.y, display: request.args?.display)
         case .keymapReload:
             return reloadKeymap()
+        case .themeSet:
+            return setTheme(name: request.args?.name)
+        case .themeList:
+            return ControlResponse(ok: true, result: ControlResult(theme: actions.currentTheme,
+                                                                    themes: actions.availableThemes()))
         }
     }
 
@@ -1128,6 +1133,23 @@ final class ControlServer {
     private func reloadKeymap() -> ControlResponse {
         settingsModel.reloadKeymap()
         return ControlResponse(ok: true, result: ControlResult(count: settingsModel.keymapDiagnostics.count))
+    }
+
+    // MARK: - Theme
+
+    /// Set + persist a theme by name — the control half of the Settings picker / the `.themes` palette
+    /// commit (no live preview over the socket). A nil/empty name selects the default theme; any other
+    /// name must be a bundled theme, else an error (a typo silently doing nothing is worse than a fail).
+    /// Returns the applied theme in `result.theme` (nil = default). App-global: one `SettingsModel`, so
+    /// no `--window` selector.
+    private func setTheme(name: String?) -> ControlResponse {
+        let trimmed = name?.trimmingCharacters(in: .whitespaces)
+        let resolved = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        if let resolved, !actions.availableThemes().contains(resolved) {
+            return ControlResponse(ok: false, error: "unknown theme: \(resolved)")
+        }
+        actions.setTheme(resolved)
+        return ControlResponse(ok: true, result: ControlResult(theme: resolved))
     }
 
     // MARK: - Window commands (cont.)

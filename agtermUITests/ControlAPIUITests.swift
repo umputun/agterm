@@ -1425,6 +1425,37 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(count, 1, "a broken keymap line should yield at least one diagnostic: \(response)")
     }
 
+    func testThemeListAndSet() throws {
+        // list: a non-empty set of bundled themes, including the repo's own "agterm" theme; the current
+        // theme is the default (nil), so the response carries no `theme` field yet.
+        let listed = try sendCommand(#"{"cmd":"theme.list"}"#)
+        XCTAssertEqual(listed["ok"] as? Bool, true, "theme.list should succeed: \(listed)")
+        let listResult = try XCTUnwrap(listed["result"] as? [String: Any], "theme.list should carry a result")
+        let themes = try XCTUnwrap(listResult["themes"] as? [String], "theme.list should return themes")
+        XCTAssertTrue(themes.contains("agterm"), "the bundled theme set should include the repo's agterm theme")
+        XCTAssertNil(listResult["theme"], "no theme set yet, so the default (nil) is current")
+
+        // set a known theme and get it echoed back.
+        let set = try sendCommand(#"{"cmd":"theme.set","args":{"name":"agterm"}}"#)
+        XCTAssertEqual(set["ok"] as? Bool, true, "theme.set should succeed: \(set)")
+        XCTAssertEqual((set["result"] as? [String: Any])?["theme"] as? String, "agterm", "theme.set echoes the applied theme")
+
+        // list again: the just-set theme is now current.
+        let after = try sendCommand(#"{"cmd":"theme.list"}"#)
+        XCTAssertEqual((after["result"] as? [String: Any])?["theme"] as? String, "agterm", "theme.list marks the current theme")
+
+        // an unknown theme name is rejected, not silently ignored.
+        let bad = try sendCommand(#"{"cmd":"theme.set","args":{"name":"NotARealTheme"}}"#)
+        XCTAssertEqual(bad["ok"] as? Bool, false, "an unknown theme should fail: \(bad)")
+        XCTAssertTrue((bad["error"] as? String ?? "").contains("unknown theme"), "the error should name the cause: \(bad)")
+
+        // no name selects the default theme again (nil current).
+        let cleared = try sendCommand(#"{"cmd":"theme.set"}"#)
+        XCTAssertEqual(cleared["ok"] as? Bool, true, "theme.set with no name should select the default: \(cleared)")
+        let afterClear = try sendCommand(#"{"cmd":"theme.list"}"#)
+        XCTAssertNil((afterClear["result"] as? [String: Any])?["theme"], "default theme is current again (nil)")
+    }
+
     // MARK: - Window oracles
 
     /// Sends `window.list` and returns the windows array.

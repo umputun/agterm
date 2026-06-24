@@ -54,6 +54,17 @@ final class SettingsModel {
     func setBlockedStatusColorHex(_ hex: String?) { settings.blockedStatusColorHex = hex; persistAndApply() }
     func setCompletedStatusColorHex(_ hex: String?) { settings.completedStatusColorHex = hex; persistAndApply() }
 
+    /// Apply a theme live WITHOUT persisting it — the live-preview half of the action-palette theme
+    /// picker. Runs the same apply path as a real change (config rewrite + surface reload + chrome
+    /// refresh) but skips `settingsStore.save`, so navigating themes in the picker doesn't touch
+    /// `settings.json`; the picker commits with `commitTheme()` on Enter or reverts (re-previewing the
+    /// original) on Esc.
+    func previewTheme(_ value: String?) { settings.theme = value; apply() }
+
+    /// Persist the current settings — the commit half of the theme picker, called on Enter after one
+    /// or more `previewTheme` applies. The theme is already live; this only writes `settings.json`.
+    func commitTheme() { try? settingsStore.save(settings) }
+
     /// Clear all three agent-status colors back to the system defaults (the "Reset to defaults" button).
     func resetStatusColors() {
         settings.activeStatusColorHex = nil
@@ -214,6 +225,14 @@ final class SettingsModel {
 
     private func persistAndApply() {
         try? settingsStore.save(settings)
+        apply()
+    }
+
+    /// Apply the current `settings` to the running app WITHOUT persisting: rewrite the ghostty config
+    /// and rebroadcast it to every live surface (only when the generated text changed), then refresh
+    /// the window translucency, toggles, and chrome. Split out of `persistAndApply` so the theme
+    /// picker can preview-apply without writing `settings.json`.
+    private func apply() {
         // only rebuild + rebroadcast the ghostty config (which resets every surface to the default
         // font size) when the generated config TEXT actually changed. A window-opacity drag within
         // the translucent range, or a blur change, leaves the config identical — re-syncing the

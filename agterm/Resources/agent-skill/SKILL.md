@@ -13,7 +13,8 @@ when_to_use: >
   session.split, session.scratch, session.focus, session.go, session.copy, session.search, session.status,
   session.overlay, workspace.new, workspace.select, workspace.move, window.new, window.list,
   window.select, window.resize, window.move, quick terminal, sidebar, notify, font.inc, keymap.reload,
-  edit keymap, AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm.
+  theme.set, theme.list, select theme, edit keymap, AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive
+  or script agterm.
 user-invocable: false
 allowed-tools: Bash(agtermctl *)
 ---
@@ -80,7 +81,7 @@ a global `--window <id|prefix|active>` to operate on a specific window's tree (d
 
 Scripts rarely type ids: create with `*.new` (capture the returned id), or act on `active`.
 
-## Command summary (37 commands)
+## Command summary (39 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -117,6 +118,9 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 **font** — `font inc|dec|reset` — font size on the focused surface.
 
 **keymap** — `keymap reload` — re-read `keymap.conf` (prints the parse-diagnostic count).
+
+**theme** — `theme list` (bundled themes, current marked `*`) · `theme set [name]` — set + persist the
+terminal theme app-wide (omit the name for the default; an unknown name errors).
 
 ## Reference files
 

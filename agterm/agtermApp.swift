@@ -151,6 +151,8 @@ struct agtermApp: App {
                     // rather than in the init, mirroring the NotificationManager wiring below).
                     actions.settingsModel = settingsModel
                     actions.customCommandRunner = customCommandRunner
+                    // the action hub opens the .themes palette for the "Select Theme…" launcher + menu.
+                    actions.palette = palette
                     // register the notification delegate + request authorization (idempotent), and
                     // hand it the action hub + library so a banner click can navigate to the firing
                     // pane and the capture side can stamp the firing window id into the identity.
@@ -253,6 +255,10 @@ struct agtermApp: App {
                     .keyboardShortcut(shortcut(for: .decreaseFontSize))
                 Button { actions.resetFontSize() } label: { Label("Actual Size", systemImage: "textformat.size") }
                     .keyboardShortcut(shortcut(for: .resetFontSize))
+                // open the live-preview theme picker (the .themes palette). Keyless by default like Edit
+                // Keymap; rebindable via select_theme. The control half is theme.set / theme.list.
+                Button { actions.openThemePalette() } label: { Label("Select Theme…", systemImage: "paintpalette") }
+                    .keyboardShortcut(shortcut(for: .selectTheme))
                 Divider()
                 let sidebarShown = library.activeStore?.sidebarVisible ?? true
                 Button { actions.toggleSidebar() } label: {

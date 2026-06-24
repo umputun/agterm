@@ -130,6 +130,15 @@ $EDITOR ~/.config/agterm/keymap.conf
 agtermctl keymap reload          # prints the parse-diagnostic count (0 = clean)
 ```
 
+## Set the terminal theme
+
+```bash
+agtermctl theme list                         # bundled themes, the current one marked *
+agtermctl theme list --json | jq -r '.result.themes[]'   # just the names
+agtermctl theme set "Dracula"                # set + persist it app-wide (unknown name errors)
+agtermctl theme set                          # back to the default theme
+```
+
 ## Targeting another window's tree
 
 ```bash

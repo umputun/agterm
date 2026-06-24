@@ -14,24 +14,31 @@ struct PaletteItem: Identifiable {
     let shortcut: String?
     /// A small trailing badge label (e.g. `custom` for user-defined keymap commands), nil for none.
     let badge: String?
+    /// Fired when this item BECOMES the selection (keyboard navigation), distinct from `run` (Enter/
+    /// click). Only the `.themes` palette sets it — it drives the live theme preview; nil everywhere
+    /// else, so the other palettes have no selection side effect.
+    let onSelect: (() -> Void)?
     let run: () -> Void
 
     init(id: String? = nil, title: String, subtitle: String? = nil, shortcut: String? = nil,
-         badge: String? = nil, run: @escaping () -> Void) {
+         badge: String? = nil, onSelect: (() -> Void)? = nil, run: @escaping () -> Void) {
         self.id = id ?? title
         self.title = title
         self.subtitle = subtitle
         self.shortcut = shortcut
         self.badge = badge
+        self.onSelect = onSelect
         self.run = run
     }
 }
 
 /// Which palette is open. `actions` fuzzy-searches the app's commands; `sessions` fuzzy-searches
-/// the open sessions to jump between them.
+/// the open sessions to jump between them; `themes` fuzzy-searches the bundled themes with a live
+/// preview on navigation (Enter commits, Esc reverts).
 enum PaletteMode {
     case actions
     case sessions
+    case themes
 }
 
 /// Drives the command palettes: `mode` is nil when closed, else the open palette. App-global, set
@@ -45,6 +52,10 @@ final class PaletteController {
     func toggle(_ mode: PaletteMode) {
         self.mode = (self.mode == mode) ? nil : mode
     }
+
+    /// Open a specific palette unconditionally (used by the theme picker's launcher/menu item, which
+    /// must open `.themes` rather than toggle it closed if it happened to already be the mode).
+    func open(_ mode: PaletteMode) { self.mode = mode }
 
     func close() { mode = nil }
 }
@@ -68,6 +79,7 @@ struct CommandPalette: View {
         switch controller.mode {
         case .actions: return actions.paletteActions()
         case .sessions: return actions.paletteSessions()
+        case .themes: return actions.paletteThemes()
         case .none: return []
         }
     }
@@ -92,7 +104,21 @@ struct CommandPalette: View {
     }
 
     private var placeholder: String {
-        controller.mode == .sessions ? "Go to session…" : "Run an action…"
+        switch controller.mode {
+        case .sessions: return "Go to session…"
+        case .themes: return "Select a theme…"
+        default: return "Run an action…"
+        }
+    }
+
+    /// Enter/leave the live-preview theme session as the palette opens, switches mode, or closes:
+    /// entering `.themes` captures the current theme (so Esc can revert) and starts the selection on
+    /// the current theme's row; leaving it (to another mode or closed) reverts any uncommitted preview.
+    /// Idempotent — `AppActions` guards begin/cancel on its active flag.
+    private func syncThemeSession() {
+        guard controller.mode == .themes else { actions.cancelThemePreview(); return }
+        actions.beginThemePreview()
+        if let index = filtered.firstIndex(where: { $0.id == actions.currentThemeID }) { selection = index }
     }
 
     var body: some View {
@@ -117,7 +143,7 @@ struct CommandPalette: View {
                     .textFieldStyle(.plain)
                     .focused($fieldFocused)
                     .onSubmit { runSelected() }
-                    .onChange(of: query) { selection = 0; updateFiltered() }
+                    .onChange(of: query) { selection = 0; updateFiltered(); previewSelected() }
                     .onKeyPress(.downArrow) { move(1); return .handled }
                     .onKeyPress(.upArrow) { move(-1); return .handled }
                     .onKeyPress(.escape) { controller.close(); return .handled }
@@ -130,8 +156,9 @@ struct CommandPalette: View {
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.1)))
         .shadow(radius: 24)
         .accessibilityIdentifier("command-palette")
-        .onAppear { fieldFocused = true; updateFiltered() }
-        .onChange(of: controller.mode) { selection = 0; updateFiltered() }
+        .onAppear { fieldFocused = true; updateFiltered(); syncThemeSession() }
+        .onChange(of: controller.mode) { selection = 0; updateFiltered(); syncThemeSession() }
+        .onDisappear { actions.cancelThemePreview() }
     }
 
     private var results: some View {
@@ -148,6 +175,9 @@ struct CommandPalette: View {
             .frame(maxHeight: 320)
             .onChange(of: selection) { _, sel in
                 guard filtered.indices.contains(sel) else { return }
+                // live theme preview: navigating a row applies it (no-op for non-theme palettes,
+                // whose items carry no onSelect).
+                filtered[sel].onSelect?()
                 withAnimation(.easeOut(duration: 0.1)) { proxy.scrollTo(filtered[sel].id, anchor: .center) }
             }
         }
@@ -189,6 +219,14 @@ struct CommandPalette: View {
     private func move(_ delta: Int) {
         guard !filtered.isEmpty else { return }
         selection = max(0, min(selection + delta, filtered.count - 1))
+    }
+
+    /// Preview the currently-selected item (fires its `onSelect`). Called after a filter re-orders the
+    /// list so the new top match previews even when `selection` stayed 0 (no `onChange(of: selection)`).
+    /// A no-op for non-theme palettes — only theme rows carry an `onSelect`.
+    private func previewSelected() {
+        guard filtered.indices.contains(selection) else { return }
+        filtered[selection].onSelect?()
     }
 
     private func runSelected() {

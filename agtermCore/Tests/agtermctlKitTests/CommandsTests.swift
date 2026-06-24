@@ -346,6 +346,25 @@ struct CommandsTests {
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["keymap", "reload", "--window", "w1"]) }
     }
 
+    // MARK: - theme subcommands
+
+    @Test func themeSetWithName() throws {
+        #expect(try request(["theme", "set", "Dracula"]) == ControlRequest(cmd: .themeSet, args: ControlArgs(name: "Dracula")))
+    }
+
+    @Test func themeSetWithoutNameSelectsDefault() throws {
+        #expect(try request(["theme", "set"]) == ControlRequest(cmd: .themeSet, args: ControlArgs(name: nil)))
+    }
+
+    @Test func themeList() throws {
+        #expect(try request(["theme", "list"]) == ControlRequest(cmd: .themeList))
+    }
+
+    @Test func themeRejectsWindowSelector() {
+        // theme is app-global (one settings model), so --window is meaningless and must not be accepted.
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["theme", "set", "Nord", "--window", "w1"]) }
+    }
+
     // MARK: - window subcommands
 
     @Test func windowNewWithName() throws {

@@ -17,7 +17,8 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.commandPalette.rawValue == "command_palette")
         #expect(BuiltinAction.nextAttentionSession.rawValue == "next_attention_session")
         #expect(BuiltinAction.toggleSidebar.rawValue == "toggle_sidebar")
-        #expect(BuiltinAction.allCases.count == 29)
+        #expect(BuiltinAction.selectTheme.rawValue == "select_theme")
+        #expect(BuiltinAction.allCases.count == 30)
     }
 
     @Test func rejectsUnknownName() {
@@ -46,6 +47,7 @@ struct BuiltinActionTests {
             .toggleScratch: Chord(mods: [.command], key: "j"),
             .toggleSearch: Chord(mods: [.command], key: "f"),
             .toggleSidebar: Chord(mods: [.command, .control], key: "s"),
+            .selectTheme: nil,      // keyless — gains a key only when the user maps one
             .focusLeftPane: nil,    // ⌘⌥← — arrow, not expressible as a parsed Chord
             .focusRightPane: nil,   // ⌘⌥→ — arrow
             .previousSession: nil,  // ⌥⌘↑ — arrow
@@ -84,7 +86,7 @@ struct BuiltinActionTests {
     @Test func keylessActionsHaveNilDefault() {
         let keyless: Set<BuiltinAction> = [
             .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .clearStatus,
-            .firstSession, .lastSession,
+            .firstSession, .lastSession, .selectTheme,
             // arrow-bound actions are also nil here (arrows can't round-trip through parseKeybind).
             .focusLeftPane, .focusRightPane, .previousSession, .nextSession,
             .previousAttentionSession, .nextAttentionSession,

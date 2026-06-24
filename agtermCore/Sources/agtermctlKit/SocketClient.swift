@@ -126,6 +126,9 @@ struct SocketClient {
         if let windows = response.result?.windows {
             return formatWindows(windows)
         }
+        if let themes = response.result?.themes {
+            return formatThemes(themes, current: response.result?.theme)
+        }
         if let text = response.result?.text {
             return text
         }
@@ -140,6 +143,13 @@ struct SocketClient {
             return id
         }
         return "ok"
+    }
+
+    /// Render the `theme.list` payload as one theme name per line, the current theme marked with `* `
+    /// and a leading "Default" entry for the no-theme case (no trailing newline).
+    static func formatThemes(_ themes: [String], current: String?) -> String {
+        func line(_ name: String?, _ label: String) -> String { (name == current ? "* " : "  ") + label }
+        return ([line(nil, "Default")] + themes.map { line($0, $0) }).joined(separator: "\n")
     }
 
     /// Render the `window.list` payload as one `id  name  [open]  [active]` line per window (no trailing

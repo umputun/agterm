@@ -68,7 +68,79 @@ final class PaletteUITests: XCTestCase {
         XCTAssertTrue(poll { self.selectedID() == first }, "Go to Session → zeta should select the first session")
     }
 
+    func testThemePickerCommitsOnEnterAndRevertsOnEsc() throws {
+        // commit: open the picker, filter to the bundled "agterm" theme, Enter persists it to settings.json
+        // (the live color change is a Metal-surface visual, verified manually; the persistence is the
+        // observable contract here).
+        openThemePicker()
+        typeIntoPalette("agterm")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(poll { self.settingsTheme() == "agterm" }, "Enter on a theme should persist it to settings.json")
+
+        // revert: open again, filter to a different theme (which previews it live), Esc. The preview is
+        // never persisted, so settings.json keeps the previously committed theme.
+        openThemePicker()
+        typeIntoPalette("Dracula")
+        app.typeKey(.escape, modifierFlags: [])
+        usleep(500_000) // the cancel-revert is synchronous; give any stray write a beat to disprove it
+        XCTAssertEqual(settingsTheme(), "agterm", "Esc discards the preview without persisting it")
+    }
+
+    func testThemePickerAutoFocusesFieldFromActionPaletteLauncher() throws {
+        // open the picker the way a keyboard user does: the action palette → "Select Theme…" → Enter.
+        // that path closes the action palette (whose close-restore re-grabs terminal focus) and opens the
+        // .themes picker a tick later; the picker must AUTO-FOCUS its field so typing filters it.
+        openPalette("Command Palette")
+        typeIntoPalette("Select Theme") // clicking the ACTION-palette field is fine — not the focus under test
+        app.typeKey(.return, modifierFlags: [])
+
+        // the picker is open; type WITHOUT clicking its field. If focus stayed on the terminal behind it
+        // (the bug), this text would reach the shell, the selection would stay on the current theme, and
+        // Enter would commit the wrong one — so the commit assertion is the focus oracle.
+        XCTAssertTrue(app.textFields.firstMatch.waitForExistence(timeout: 5), "the theme picker field should appear")
+        app.typeText("agterm")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(poll { self.settingsTheme() == "agterm" },
+                      "the auto-focused picker should filter on the typed text and commit that theme")
+    }
+
+    func testThemePickerPreviewsTopMatchOnFilterWithoutNavigating() throws {
+        // typing to filter must preview the new top match live — even with no arrow navigation. The live
+        // preview writes the applied theme into <stateDir>/ghostty-settings.conf, so that file is the
+        // oracle (the Metal recolor itself isn't observable). No Enter, no arrows.
+        openThemePicker()
+        typeIntoPalette("Hot Dog") // top match: the vivid "Hot Dog Stand" theme
+        XCTAssertTrue(poll { self.appliedGhosttyTheme()?.contains("Hot Dog Stand") == true },
+                      "filtering should preview the top match live, before any navigation")
+        app.typeKey(.escape, modifierFlags: []) // revert the preview
+    }
+
     // MARK: - Helpers
+
+    /// The theme line the live config currently applies, read from <stateDir>/ghostty-settings.conf
+    /// (the file the preview rewrites on every apply). nil when no theme line is present.
+    private func appliedGhosttyTheme() -> String? {
+        let file = stateDir.appendingPathComponent("ghostty-settings.conf")
+        guard let text = try? String(contentsOf: file, encoding: .utf8) else { return nil }
+        return text.split(separator: "\n").first { $0.hasPrefix("theme = ") }.map(String.init)
+    }
+
+    /// Open the live-preview theme picker via View ▸ Select Theme… It opens on the next runloop tick
+    /// (async, so it survives the launching palette's close), so wait for the field to appear.
+    private func openThemePicker() {
+        app.menuBars.menuBarItems["View"].click()
+        let item = app.menuItems["Select Theme…"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "View menu should offer Select Theme…")
+        item.click()
+        XCTAssertTrue(app.textFields.firstMatch.waitForExistence(timeout: 5), "the theme picker field should appear")
+    }
+
+    private func settingsTheme() -> String? {
+        let file = stateDir.appendingPathComponent("settings.json")
+        guard let data = try? Data(contentsOf: file),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return obj["theme"] as? String
+    }
 
     private func openPalette(_ menuTitle: String) {
         app.menuBars.menuBarItems["View"].click()
