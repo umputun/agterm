@@ -27,6 +27,7 @@ public enum Command: String, Codable, Sendable {
     case sessionOverlayClose = "session.overlay.close"
     case sessionOverlayResult = "session.overlay.result"
     case quick
+    case sidebar
     case notify
     case fontInc = "font.inc"
     case fontDec = "font.dec"

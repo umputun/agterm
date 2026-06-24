@@ -12,7 +12,7 @@ when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.scratch, session.focus, session.go, session.copy, session.search, session.status,
   session.overlay, workspace.new, workspace.select, workspace.move, window.new, window.list,
-  window.select, window.resize, window.move, quick terminal, notify, font.inc, keymap.reload,
+  window.select, window.resize, window.move, quick terminal, sidebar, notify, font.inc, keymap.reload,
   edit keymap, AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm.
 user-invocable: false
 allowed-tools: Bash(agtermctl *)
@@ -80,7 +80,7 @@ a global `--window <id|prefix|active>` to operate on a specific window's tree (d
 
 Scripts rarely type ids: create with `*.new` (capture the returned id), or act on `active`.
 
-## Command summary (36 commands)
+## Command summary (37 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -109,6 +109,8 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 `delete <id>` · `resize <id> --width W --height H` · `move <id> --x X --y Y [--display N]`.
 
 **quick** — `[show|hide|toggle]` — the window's quick terminal.
+
+**sidebar** — `[show|hide|toggle]` — the frontmost window's sidebar.
 
 **notify** — `notify <body> [--title T]` — post a desktop notification attributed to a session.
 

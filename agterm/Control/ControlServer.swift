@@ -471,6 +471,8 @@ final class ControlServer {
             }
         case .quick:
             return setQuickTerminal(mode: request.args?.mode)
+        case .sidebar:
+            return setSidebar(mode: request.args?.mode)
         case .notify:
             return sendNotification(request.target, window: request.args?.window,
                                     title: request.args?.title, body: request.args?.body)
@@ -682,6 +684,25 @@ final class ControlServer {
         if want != controller.isVisible {
             if want { controller.show() } else { controller.hide() }
         }
+        return ControlResponse(ok: true)
+    }
+
+    /// Show / hide / toggle the frontmost window's sidebar (the custom split owns visibility, so there's
+    /// no system toggle). Flips only when the requested state differs; an unknown mode is an error, and no
+    /// open window is an error rather than a silent no-op.
+    private func setSidebar(mode: String?) -> ControlResponse {
+        let mode = mode ?? "toggle"
+        guard let store = library.activeStore else {
+            return ControlResponse(ok: false, error: "no open window")
+        }
+        let want: Bool
+        switch mode {
+        case "show": want = true
+        case "hide": want = false
+        case "toggle": want = !store.sidebarVisible
+        default: return ControlResponse(ok: false, error: "invalid sidebar mode: \(mode)")
+        }
+        store.sidebarVisible = want
         return ControlResponse(ok: true)
     }
 

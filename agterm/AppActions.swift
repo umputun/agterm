@@ -287,6 +287,7 @@ final class AppActions {
             PaletteItem(title: "Last Session", shortcut: paletteHint(for: .lastSession)) { [weak self] in self?.selectLastSession() },
             PaletteItem(title: "Toggle Split", shortcut: paletteHint(for: .toggleSplit)) { [weak self] in self?.toggleSplit() },
             PaletteItem(title: "Toggle Scratch", shortcut: paletteHint(for: .toggleScratch)) { [weak self] in self?.toggleScratch() },
+            PaletteItem(title: "Toggle Sidebar", shortcut: paletteHint(for: .toggleSidebar)) { [weak self] in self?.toggleSidebar() },
             PaletteItem(title: "Find…", shortcut: paletteHint(for: .toggleSearch)) { [weak self] in self?.toggleSearch() },
             PaletteItem(title: "Quick Terminal", shortcut: paletteHint(for: .quickTerminal)) { [weak self] in self?.toggleQuickTerminal() },
             PaletteItem(title: "Increase Font Size", shortcut: paletteHint(for: .increaseFontSize)) { [weak self] in self?.increaseFontSize() },
@@ -369,6 +370,11 @@ final class AppActions {
         guard let store, let session = store.activeSession else { return }
         store.toggleScratch(session.id)
     }
+
+    /// Show/hide the frontmost window's sidebar. The custom split owns visibility (no system toggle), so
+    /// this flips the active store's `sidebarVisible`; the view animates the change. Shared by the toolbar
+    /// button, the View menu item, the palette, and the `sidebar` control command.
+    func toggleSidebar() { store?.sidebarVisible.toggle() }
 
     /// Move keyboard focus to a pane of the active session's split: `.split` -> the right pane,
     /// anything else -> the left/primary. No-op when the active session isn't split. Drives the

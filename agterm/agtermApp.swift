@@ -254,6 +254,11 @@ struct agtermApp: App {
                 Button { actions.resetFontSize() } label: { Label("Actual Size", systemImage: "textformat.size") }
                     .keyboardShortcut(shortcut(for: .resetFontSize))
                 Divider()
+                let sidebarShown = library.activeStore?.sidebarVisible ?? true
+                Button { actions.toggleSidebar() } label: {
+                    Label(sidebarShown ? "Hide Sidebar" : "Show Sidebar", systemImage: "sidebar.left")
+                }
+                .keyboardShortcut(shortcut(for: .toggleSidebar))
                 Button { actions.toggleSplit() } label: {
                     Label(library.activeStore?.activeSession?.isSplit == true ? "Hide Split" : "Split Right", systemImage: "rectangle.split.2x1")
                 }

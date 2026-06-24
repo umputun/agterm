@@ -172,9 +172,9 @@ private struct WindowContentView: View {
     /// (title bar text + buttons, sidebar bottom bar) so non-terminal text tracks the theme. Refreshed
     /// on `.agtermAppearanceChanged`, like `terminalColor`.
     @State private var chromeText: Color = WindowContentView.resolvedChromeText()
-    /// Custom sidebar state (we own the split now, not NavigationSplitView): show/hide via the toolbar
-    /// toggle, and a drag-resizable width. Not yet persisted (experiment).
-    @State private var sidebarVisible = true
+    /// Custom sidebar width (we own the split now, not NavigationSplitView): drag-resizable, not persisted.
+    /// Show/hide lives on `store.sidebarVisible` (ephemeral per-window) so the toolbar button, the View
+    /// menu, the palette, and the `sidebar` control command share one flag.
     @State private var sidebarWidth: CGFloat = 220
     /// Height of the custom titlebar row: one short line in compact mode, two lines (title + cwd)
     /// otherwise. The split content is inset by this so it sits below the row.
@@ -194,7 +194,7 @@ private struct WindowContentView: View {
         .ignoresSafeArea(.container, edges: .top)
         // re-tint the sidebar after a collapse/expand: the re-attached NSScrollView comes back with a
         // default (lighter) background until the next WindowAppearance sync; nudge that sync now.
-        .onChange(of: sidebarVisible) { _, visible in
+        .onChange(of: store.sidebarVisible) { _, visible in
             if visible {
                 DispatchQueue.main.async { NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil) }
             }
@@ -243,7 +243,7 @@ private struct WindowContentView: View {
     /// toolbar style. A plain `HStack` gives the sidebar tree + a themed draggable divider + the terminal.
     @ViewBuilder private var splitRoot: some View {
         HStack(spacing: 0) {
-            if sidebarVisible {
+            if store.sidebarVisible {
                 sidebarColumn
                     .frame(width: sidebarWidth)
                 sidebarDivider
@@ -251,6 +251,9 @@ private struct WindowContentView: View {
             detailColumn
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+        // animate the collapse/expand uniformly, whatever flips the flag (toolbar button, menu, palette,
+        // control), now that the toggle no longer wraps its own `withAnimation`.
+        .animation(.easeInOut(duration: 0.15), value: store.sidebarVisible)
     }
 
     private var sidebarColumn: some View {
@@ -563,7 +566,7 @@ private struct WindowContentView: View {
     private var customTitlebar: some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: 78) // system traffic lights
-            if sidebarVisible {
+            if store.sidebarVisible {
                 HStack(spacing: 0) {
                     Spacer(minLength: 0)
                     sidebarToggleButton.labelStyle(.iconOnly)
@@ -599,7 +602,7 @@ private struct WindowContentView: View {
     /// Our own sidebar show/hide toggle (the custom split has no system one). Animated collapse.
     private var sidebarToggleButton: some View {
         Button {
-            withAnimation(.easeInOut(duration: 0.15)) { sidebarVisible.toggle() }
+            actions.toggleSidebar()
         } label: {
             Label("Toggle Sidebar", systemImage: "sidebar.left")
         }

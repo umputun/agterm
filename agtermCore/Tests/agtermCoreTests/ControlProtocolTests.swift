@@ -105,6 +105,7 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionScratch, target: "active", args: ControlArgs(mode: "toggle")),
             ControlRequest(cmd: .sessionScratch, target: "9f3c", args: ControlArgs(mode: "on")),
             ControlRequest(cmd: .quick, args: ControlArgs(mode: "show")),
+            ControlRequest(cmd: .sidebar, args: ControlArgs(mode: "hide")),
         ]
         for request in cases {
             #expect(try roundTrip(request) == request)

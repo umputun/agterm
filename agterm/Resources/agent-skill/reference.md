@@ -123,6 +123,13 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 terminal at 90% of the window, not in the tree; its shell stays alive across hides). Errors with
 `no open window` when none is open.
 
+## sidebar
+
+`agtermctl sidebar [show|hide|toggle]` — show/hide the frontmost window's workspace/session sidebar
+(the custom split has no system toggle). `toggle` is the default; an unknown mode is an error, and
+`no open window` when none is open. The GUI half is the title-bar button, View ▸ Show/Hide Sidebar,
+the ⌃⇧P palette "Toggle Sidebar", and the ⌃⌘S keymap action (`toggle_sidebar`).
+
 ## notify
 
 `agtermctl notify <body> [--title T] [--target] [--window W]` — post a macOS desktop notification
@@ -165,7 +172,7 @@ for untrusted content):
 
 Built-in action names for `map` include: `new_window`, `new_workspace`, `new_session`,
 `open_directory`, `rename_session`, `close_session`, `clear_status`, `increase_font_size`,
-`decrease_font_size`, `reset_font_size`, `toggle_split`, `toggle_scratch`, `quick_terminal`,
+`decrease_font_size`, `reset_font_size`, `toggle_split`, `toggle_scratch`, `toggle_sidebar`, `quick_terminal`,
 `session_palette`, `command_palette`, and the navigation actions (`previous_session`, `next_session`,
 `first_session`, `last_session`, `previous_attention_session`, `next_attention_session`,
 `focus_left_pane`, `focus_right_pane`). Editing the keymap from a terminal: open `keymap.conf` in
@@ -175,5 +182,5 @@ Built-in action names for `map` include: `new_window`, `new_workspace`, `new_ses
 
 `notFound` / `ambiguous` (target resolution), `no such session`, `invalid split mode` /
 `invalid scratch mode`, `not split` (focus), `no selection` (copy), `overlay already open` /
-`no overlay` / `still running` / `no result` (overlay), `no open window` (quick), `window not open`
+`no overlay` / `still running` / `no result` (overlay), `invalid sidebar mode` (sidebar), `no open window` (quick/sidebar), `window not open`
 (resize/move/`--window`). Unknown commands fail to decode and return a structured error, never a crash.

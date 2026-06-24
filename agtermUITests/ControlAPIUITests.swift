@@ -605,6 +605,26 @@ final class ControlAPIUITests: XCTestCase {
                      "the background session's overlay must NOT capture keyboard input")
     }
 
+    // the `sidebar` control command shows/hides the custom sidebar (the custom split has no system
+    // toggle). hiding removes the session rows from the AX tree; showing restores them. mode is
+    // show|hide|toggle on the frontmost window, and an unknown mode is an error.
+    func testSidebarShowHideToggle() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].waitForExistence(timeout: 10), "sidebar should start visible")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"sidebar","args":{"mode":"hide"}}"#)["ok"] as? Bool, true,
+                       "sidebar hide should succeed")
+        XCTAssertTrue(app.staticTexts["session-row"].waitForNonExistence(timeout: 10),
+                      "hiding the sidebar should remove the session rows")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"sidebar","args":{"mode":"show"}}"#)["ok"] as? Bool, true,
+                       "sidebar show should succeed")
+        XCTAssertTrue(app.staticTexts["session-row"].waitForExistence(timeout: 10),
+                      "showing the sidebar should restore the session rows")
+
+        let bad = try sendCommand(#"{"cmd":"sidebar","args":{"mode":"sideways"}}"#)
+        XCTAssertEqual(bad["ok"] as? Bool, false, "an invalid sidebar mode should error")
+    }
+
     // session.split toggle shows split:true in the tree; off hides it (keep-alive, mirrors ⌘D — the
     // pane's surface is NOT destroyed, only closeSplit on shell-exit does that), clearing split:false.
     func testSessionSplitToggle() throws {

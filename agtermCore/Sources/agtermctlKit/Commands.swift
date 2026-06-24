@@ -76,7 +76,7 @@ public struct Agtermctl: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "agtermctl",
         abstract: "Drive agterm over its control socket.",
-        subcommands: [Tree.self, Workspace.self, Session.self, Window.self, Quick.self, Notify.self, Font.self, Keymap.self]
+        subcommands: [Tree.self, Workspace.self, Session.self, Window.self, Quick.self, Sidebar.self, Notify.self, Font.self, Keymap.self]
     )
 
     public init() {}
@@ -578,6 +578,19 @@ struct Quick: RequestCommand {
 
     func makeRequest() throws -> ControlRequest {
         ControlRequest(cmd: .quick, args: ControlArgs(mode: mode))
+    }
+}
+
+// MARK: - sidebar
+
+struct Sidebar: RequestCommand {
+    static let configuration = CommandConfiguration(abstract: "Sidebar visibility (show|hide|toggle).")
+    @Argument(help: "Mode: show, hide, or toggle (default).") var mode: String = "toggle"
+    // the sidebar is always the frontmost window's, so this carries no `--window` selector.
+    @OptionGroup var options: BasicOptions
+
+    func makeRequest() throws -> ControlRequest {
+        ControlRequest(cmd: .sidebar, args: ControlArgs(mode: mode))
     }
 }
 

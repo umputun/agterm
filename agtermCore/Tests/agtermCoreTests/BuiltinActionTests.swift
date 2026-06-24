@@ -16,7 +16,8 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.toggleSearch.rawValue == "toggle_search")
         #expect(BuiltinAction.commandPalette.rawValue == "command_palette")
         #expect(BuiltinAction.nextAttentionSession.rawValue == "next_attention_session")
-        #expect(BuiltinAction.allCases.count == 28)
+        #expect(BuiltinAction.toggleSidebar.rawValue == "toggle_sidebar")
+        #expect(BuiltinAction.allCases.count == 29)
     }
 
     @Test func rejectsUnknownName() {
@@ -44,6 +45,7 @@ struct BuiltinActionTests {
             .toggleSplit: Chord(mods: [.command], key: "d"),
             .toggleScratch: Chord(mods: [.command], key: "j"),
             .toggleSearch: Chord(mods: [.command], key: "f"),
+            .toggleSidebar: Chord(mods: [.command, .control], key: "s"),
             .focusLeftPane: nil,    // ⌘⌥← — arrow, not expressible as a parsed Chord
             .focusRightPane: nil,   // ⌘⌥→ — arrow
             .previousSession: nil,  // ⌥⌘↑ — arrow
@@ -69,6 +71,13 @@ struct BuiltinActionTests {
         // the chord must round-trip through the keymap grammar so the starter renders it as `cmd+f`,
         // not `(not expressible)` (the same check chordSyntax runs app-side).
         #expect(chord.displayString == "cmd+f")
+        #expect(parseKeybind(chord.displayString) == [chord])
+    }
+
+    @Test func toggleSidebarDefaultIsCmdCtrlSAndRoundTrips() {
+        let chord = Chord(mods: [.command, .control], key: "s")
+        #expect(BuiltinAction.toggleSidebar.defaultChord == chord)
+        // must round-trip through the keymap grammar (so the starter renders it, not "(not expressible)").
         #expect(parseKeybind(chord.displayString) == [chord])
     }
 

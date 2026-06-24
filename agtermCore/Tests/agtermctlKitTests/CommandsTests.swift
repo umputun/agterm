@@ -317,6 +317,14 @@ struct CommandsTests {
         #expect(try request(["quick", "show"]) == ControlRequest(cmd: .quick, args: ControlArgs(mode: "show")))
     }
 
+    @Test func sidebarDefaultsToggle() throws {
+        #expect(try request(["sidebar"]) == ControlRequest(cmd: .sidebar, args: ControlArgs(mode: "toggle")))
+    }
+
+    @Test func sidebarHide() throws {
+        #expect(try request(["sidebar", "hide"]) == ControlRequest(cmd: .sidebar, args: ControlArgs(mode: "hide")))
+    }
+
     @Test func fontInc() throws {
         #expect(try request(["font", "inc", "--target", "s1"]) == ControlRequest(cmd: .fontInc, target: "s1"))
     }

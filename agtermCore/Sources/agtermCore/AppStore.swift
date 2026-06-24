@@ -35,6 +35,11 @@ public final class AppStore {
     public var workspaces: [Workspace]
     public var selectedSessionID: UUID?
 
+    /// Whether this window's sidebar is shown. Ephemeral per-window UI state (NOT in `Snapshot`, so it
+    /// resets to visible on relaunch); the custom split owns visibility, so the toolbar button, the View
+    /// menu item, the action palette, and the `sidebar` control command all flip this one flag.
+    public var sidebarVisible = true
+
     /// Most-recently-selected session ids, front = current. Drives the Ctrl-Tab switcher
     /// (`items[1]` is the previous session). `@ObservationIgnored`: read imperatively by the
     /// switcher, not by any SwiftUI view, and not persisted.
