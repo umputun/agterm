@@ -287,6 +287,7 @@ final class AppActions {
             PaletteItem(title: "Last Session", shortcut: paletteHint(for: .lastSession)) { [weak self] in self?.selectLastSession() },
             PaletteItem(title: "Toggle Split", shortcut: paletteHint(for: .toggleSplit)) { [weak self] in self?.toggleSplit() },
             PaletteItem(title: "Toggle Scratch", shortcut: paletteHint(for: .toggleScratch)) { [weak self] in self?.toggleScratch() },
+            PaletteItem(title: "Find…", shortcut: paletteHint(for: .toggleSearch)) { [weak self] in self?.toggleSearch() },
             PaletteItem(title: "Quick Terminal", shortcut: paletteHint(for: .quickTerminal)) { [weak self] in self?.toggleQuickTerminal() },
             PaletteItem(title: "Increase Font Size", shortcut: paletteHint(for: .increaseFontSize)) { [weak self] in self?.increaseFontSize() },
             PaletteItem(title: "Decrease Font Size", shortcut: paletteHint(for: .decreaseFontSize)) { [weak self] in self?.decreaseFontSize() },
@@ -396,6 +397,69 @@ final class AppActions {
     func increaseFontSize() { focusedSurface()?.performBindingAction("increase_font_size:1") }
     func decreaseFontSize() { focusedSurface()?.performBindingAction("decrease_font_size:1") }
     func resetFontSize() { focusedSurface()?.performBindingAction("reset_font_size") }
+
+    // MARK: - Search (on the surface that opened it)
+
+    /// The search-capable target: the focused surface IFF it is searchable (the main/split pane), else the
+    /// active session's focused pane (always searchable). A quick-terminal/scratch/overlay surface is NOT
+    /// searchable (no bar, no close lifecycle), so it falls back to the session pane behind it.
+    private func searchTarget() -> GhosttySurfaceView? {
+        if let view = focusedSurface(), view.isSearchable { return view }
+        return store?.activeSession?.activeSurface as? GhosttySurfaceView
+    }
+
+    /// Whether a covering surface hides the active session's panes — the frontmost window's quick terminal
+    /// is up, or the active session shows a scratch/overlay. While one is up, ⌘F must NOT open the bar over
+    /// the hidden pane (a covered, focus-stealing bar). The ⌘F-again CLOSE still runs (no cover blocks it).
+    private var coverHidesActiveSession: Bool {
+        if frontmostQuickTerminal?.isVisible == true { return true }
+        guard let session = store?.activeSession else { return false }
+        // a FLOATING overlay (overlaySizePercent != nil) leaves the session visible, so only a FULL
+        // overlay hides it; the scratch is always full-coverage.
+        return session.scratchActive || (session.overlayActive && session.overlaySizePercent == nil)
+    }
+
+    /// Toggle the search bar for the active session. CLOSE branch (search already active): send
+    /// `end_search` DIRECTLY to the session's pinned `searchSurface` (the surface that opened search), so
+    /// the END callback clears the fields and refocuses — it does NOT re-resolve a target or round-trip
+    /// `start_search`, which on a split with focus moved to the OTHER pane would put that pane into search
+    /// mode while `onSearchStart` closes only the pinned owner, stranding it. OPEN branch (search inactive):
+    /// no-op when no searchable surface exists (never enters bar-less search on a quick/scratch/overlay
+    /// surface) or while a covering surface hides the session, else send `start_search` to the search
+    /// target — `onSearchStart` opens the bar and pins the surface. Shared by the Find menu item, the
+    /// palette, and ⌘F.
+    func toggleSearch() {
+        if store?.activeSession?.searchActive == true {
+            (store?.activeSession?.searchSurface as? GhosttySurfaceView)?.endSearch()
+            return
+        }
+        guard let target = searchTarget(), !coverHidesActiveSession else { return }
+        target.startSearch()
+    }
+
+    /// Set the current query: mirror it into the active session's `searchNeedle` (so the bar's field stays
+    /// in sync) then send `search:<needle>` to the session's pinned `searchSurface`, which replies with the
+    /// new match count. Driving the pinned owner (not a re-resolved focused surface) keeps the bar bound to
+    /// the pane that opened search even after split focus moves.
+    func updateSearchNeedle(_ needle: String) {
+        guard let session = store?.activeSession else { return }
+        session.searchNeedle = needle
+        (session.searchSurface as? GhosttySurfaceView)?.sendSearchQuery(needle)
+    }
+
+    /// Step to the next/previous match (the up/down buttons, Enter/Shift-Enter in the bar), on the active
+    /// session's pinned `searchSurface`.
+    func navigateSearch(_ direction: GhosttySurfaceView.SearchDirection) {
+        (store?.activeSession?.searchSurface as? GhosttySurfaceView)?.navigateSearch(direction)
+    }
+
+    /// Close search: send `end_search` to the session's pinned `searchSurface` so it exits search mode
+    /// (never just flips the flag). The resulting END_SEARCH callback clears the session's fields, the
+    /// pinned owner, and returns first responder to the terminal — the single clear point, so this only
+    /// sends the binding action.
+    func endSearch() {
+        (store?.activeSession?.searchSurface as? GhosttySurfaceView)?.endSearch()
+    }
 
     // MARK: - Focus
 

@@ -100,8 +100,8 @@ struct agtermApp: App {
         WindowGroup(id: Self.windowGroupID) {
             ContentView(
                 library: library,
-                makeSurface: { Self.makeSurface(for: $0, store: $1, env: surfaceEnv(for: $0)) },
-                makeSplitSurface: { Self.makeSplitSurface(for: $0, store: $1, env: surfaceEnv(for: $0)) },
+                makeSurface: { Self.makeSurface(for: $0, store: $1, env: surfaceEnv(for: $0), library: library) },
+                makeSplitSurface: { Self.makeSplitSurface(for: $0, store: $1, env: surfaceEnv(for: $0), library: library) },
                 makeOverlaySurface: { Self.makeOverlaySurface(for: $0, store: $1, env: surfaceEnv(for: $0)) },
                 makeScratchSurface: { session, store in
                     // suppress the scratch's creation autoFocus when a full overlay OR this window's quick
@@ -265,6 +265,11 @@ struct agtermApp: App {
                 }
                 .keyboardShortcut(shortcut(for: .toggleScratch))
                 .disabled(library.activeStore?.activeSession == nil)
+                // search the focused terminal's scrollback. data-driven shortcut (⌘F default) like the
+                // toggles above — no hardcoded literal; the bar's open/close toggle lives in onSearchStart.
+                Button { actions.toggleSearch() } label: { Label("Find…", systemImage: "magnifyingglass") }
+                    .keyboardShortcut(shortcut(for: .toggleSearch))
+                    .disabled(library.activeStore?.activeSession == nil)
                 // arrow-bound actions: their default ⌘⌥←/→ can't round-trip through the keymap grammar
                 // (parseKeybind has no arrow keys), so defaultChord is nil and the hardcoded arrow is the
                 // FALLBACK — a user override (a parseable chord) wins. arrowShortcut(for:) owns the four
@@ -349,7 +354,8 @@ struct agtermApp: App {
     /// a login shell in the session's initial working directory. On shell exit the
     /// view calls back to close the owning session in the store.
     @MainActor
-    private static func makeSurface(for session: Session, store: AppStore, env: [String: String]) -> GhosttySurfaceView {
+    private static func makeSurface(for session: Session, store: AppStore, env: [String: String],
+                                    library: WindowLibrary) -> GhosttySurfaceView {
         // `initialCommand` (from `session.new --command`) runs as the surface's process instead of the
         // login shell; on its exit the surface's onExit (below) closes the single session, like kitty.
         let view = GhosttySurfaceView(workingDirectory: session.initialCwd, fontSize: session.fontSize.map(Float.init),
@@ -372,7 +378,59 @@ struct agtermApp: App {
         }
         view.onUserInputClearsStatus = { store.setAgentIndicator(AgentIndicator(), forSession: sessionID) }
         view.onFontSizeChange = { store.setFontSize(sessionID, $0) }
+        Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
         return view
+    }
+
+    /// Wire the four `onSearch*` surface callbacks to the owning session's search fields, resolving the
+    /// session live via `sessionID`. START toggles: if the session's bar is already open it sends
+    /// `end_search` (the ⌘F-again close) and lets the resulting END do the clear; else it opens the bar
+    /// (`searchActive = true`, seeding any returned needle) and pins THIS surface as `searchSurface` (the
+    /// owner the bar's needle/navigate/close drive). END is the single clear point — it resets the fields,
+    /// clears the owner, hides the bar, and returns first responder to the session's visible terminal.
+    /// TOTAL/SELECTED carry the match count/index. Shared by both surface factories — so the GUI and the
+    /// control channel pin the owner the same way and can't drift.
+    @MainActor
+    private static func wireSearchCallbacks(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID,
+                                            library: WindowLibrary) {
+        view.isSearchable = true
+        view.onSearchStart = { [weak view] needle in
+            guard let session = store.session(withID: sessionID) else { return }
+            if session.searchActive {
+                // bar already open: ⌘F-again close — end search on the PINNED owner (the surface START
+                // first fired on), not the just-fired `view`, so a second ⌘F on the OTHER split pane closes
+                // the original owner rather than stranding it in libghostty search mode. the resulting END
+                // callback clears the fields and refocuses.
+                (session.searchSurface as? GhosttySurfaceView)?.endSearch()
+                return
+            }
+            session.searchActive = true
+            session.searchSurface = view
+            if let needle, !needle.isEmpty { session.searchNeedle = needle }
+        }
+        view.onSearchEnd = {
+            guard let session = store.session(withID: sessionID) else { return }
+            session.searchActive = false
+            session.searchNeedle = ""
+            session.searchTotal = nil
+            session.searchSelected = nil
+            session.searchSurface = nil
+            // return first responder to the terminal ONLY when this is still the selected session AND no
+            // covering surface is up: a `session.search --close --target <background>` closes a hidden,
+            // opacity-0 surface whose first responder would steal input from the visible session (hidden
+            // views CAN become first responder), and a cover owns focus itself. besides the in-deck
+            // overlay/scratch (caught by `topmostSurface`), the window-level quick terminal also covers the
+            // session — refocusing the hidden pane behind it would steal focus, so bail while it's up
+            // (it restores the session on its own hide). target the visible `topmostSurface` (overlay >
+            // scratch > active pane) and re-assert past the SwiftUI teardown via the bounded retry.
+            guard store.selectedSessionID == sessionID else { return }
+            let quickTerminalVisible = library.windowID(forSession: sessionID)
+                .flatMap { QuickTerminalRegistry.shared.controller(for: $0) }?.isVisible ?? false
+            guard !quickTerminalVisible else { return }
+            (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
+        }
+        view.onSearchTotal = { total in store.session(withID: sessionID)?.searchTotal = total }
+        view.onSearchSelected = { selected in store.session(withID: sessionID)?.searchSelected = selected }
     }
 
     /// Split-pane surface factory: a second independent login shell in the session's current
@@ -380,7 +438,8 @@ struct agtermApp: App {
     /// `session.splitCwd`/`splitTitle` (never clobbering the primary's), and on shell exit it closes
     /// just the split (hide + teardown), not the whole session.
     @MainActor
-    private static func makeSplitSurface(for session: Session, store: AppStore, env: [String: String]) -> GhosttySurfaceView {
+    private static func makeSplitSurface(for session: Session, store: AppStore, env: [String: String],
+                                         library: WindowLibrary) -> GhosttySurfaceView {
         // seed the split's cwd from its persisted `initialSplitCwd` (so a restored split keeps its
         // own directory, not the primary's), falling back to the session's effectiveCwd for a fresh
         // split. Font size matches the primary; its own cmd +/- changes aren't persisted. It inherits
@@ -404,6 +463,7 @@ struct agtermApp: App {
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
         view.onUserInputClearsStatus = { store.setAgentIndicator(AgentIndicator(), forSession: sessionID) }
+        Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
         return view
     }
 

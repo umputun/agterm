@@ -304,6 +304,10 @@ private struct WindowContentView: View {
                 // reports that area exactly — correct centering, no manual sidebar/titlebar insets. It sits
                 // OUTSIDE each session's HSplitView-hosting ZStack, so opening it never perturbs the split.
                 .overlay { floatingOverlayLayer }
+                // the search bar, anchored at the SAME `detailPane` level as the floating overlay (never
+                // inside `sessionDetail`'s HSplitView ZStack) so toggling it can't overrun the NSSplitView
+                // up into the titlebar. Sits at the top-right of the detail area, like a standard find bar.
+                .overlay(alignment: .topTrailing) { searchBarLayer }
         }
     }
 
@@ -465,6 +469,30 @@ private struct WindowContentView: View {
                 // center the panel (and span the catcher) within the detail area (the GeometryReader is it).
                 .frame(width: geo.size.width, height: geo.size.height)
             }
+        }
+    }
+
+    /// The terminal search bar, attached as a top-aligned `.overlay` on `detailPane` (the SAME level as
+    /// `floatingOverlayLayer`, NOT inside any session's `sessionDetail`/HSplitView ZStack — so opening it
+    /// never perturbs the split and overruns the NSSplitView into the titlebar). Shown only while the active
+    /// session's `searchActive` is set; the needle binding drives the query through `actions.updateSearchNeedle`.
+    @ViewBuilder private var searchBarLayer: some View {
+        if let session = store.activeSession, session.searchActive {
+            TerminalSearchBar(
+                needle: Binding(
+                    get: { session.searchNeedle },
+                    // updateSearchNeedle is the single writer of the active session's searchNeedle.
+                    set: { actions.updateSearchNeedle($0) }
+                ),
+                displayText: session.searchDisplayText,
+                onNext: { actions.navigateSearch(.next) },
+                onPrevious: { actions.navigateSearch(.previous) },
+                onClose: { actions.endSearch() },
+                chromeText: chromeText,
+                terminalColor: terminalColor
+            )
+            .padding(.top, 8)
+            .padding(.trailing, 8)
         }
     }
 
