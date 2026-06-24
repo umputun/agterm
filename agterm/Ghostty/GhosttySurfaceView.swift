@@ -52,6 +52,12 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// to primary on collapse.
     var isSplitPane = false
 
+    /// Whether this surface has the search lifecycle callbacks wired (the main/split factory sets it).
+    /// Only these surfaces drive a visible bar and the END close path, so `AppActions.toggleSearch`
+    /// refuses to start search on a quick-terminal/scratch/overlay surface that lacks them (which would
+    /// otherwise enter libghostty search mode with no bar and no way to close).
+    var isSearchable = false
+
     /// Called on the main actor when the shell process exits, so the app can
     /// close the owning session (free the surface and drop the sidebar row). Set
     /// by the app's surface factory.
@@ -89,6 +95,27 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// surface only. libghostty has no font-size getter or change event, so this is driven
     /// off the CELL_SIZE action and reads the size via `ghostty_surface_inherited_config`.
     var onFontSizeChange: ((Double) -> Void)?
+
+    /// Called on the main actor when libghostty enters search mode (START_SEARCH), carrying the current
+    /// needle (nil when none). The factory wires this to toggle the session's search bar — if the bar is
+    /// already visible it sends `end_search` (the ⌘F-again close), else it opens the bar and seeds the
+    /// needle. Set by the main/split surface factory.
+    var onSearchStart: ((String?) -> Void)?
+
+    /// Called on the main actor when libghostty exits search mode (END_SEARCH). The factory wires this to
+    /// clear the session's search fields, hide the bar, and return first responder to the terminal. Set by
+    /// the main/split surface factory.
+    var onSearchEnd: (() -> Void)?
+
+    /// Called on the main actor with the total match count (SEARCH_TOTAL), or nil when libghostty reports a
+    /// negative count (no query). The factory wires this to the session's `searchTotal`. Set by the
+    /// main/split surface factory.
+    var onSearchTotal: ((Int?) -> Void)?
+
+    /// Called on the main actor with the 1-based index of the selected match (SEARCH_SELECTED), or nil when
+    /// libghostty reports a negative index. The factory wires this to the session's `searchSelected`. Set by
+    /// the main/split surface factory.
+    var onSearchSelected: ((Int?) -> Void)?
 
     /// Heap buffers backing the `const char*` fields of the surface config —
     /// notably `initial_input`, which libghostty writes to the pty
@@ -188,7 +215,9 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// Whether a child-exit should close this surface immediately (suppressing ghostty's "press any key"
     /// prompt). True only for a command surface (the overlay) that did NOT opt into the wait prompt; a
     /// `waitAfterCommand` overlay keeps the prompt and closes via `close_surface_cb` after the keypress.
-    var shouldCloseOnChildExitAction: Bool { command != nil && !waitAfterCommand }
+    /// `nonisolated` so the C action callback can read it without a main-actor hop; both backing fields
+    /// are immutable `let`s set in `init`, so the read is data-race-free.
+    nonisolated var shouldCloseOnChildExitAction: Bool { command != nil && !waitAfterCommand }
 
     /// Types `text` into this surface's pty (the control channel's `session.type`) as literal keystrokes,
     /// the same path the keyboard uses (`ghostty_surface_key` with `.text` set — see `insertText`). It does
@@ -255,6 +284,24 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         guard let surface else { return }
         _ = ghostty_surface_binding_action(surface, action, UInt(action.utf8.count))
     }
+
+    /// The direction `navigateSearch` steps through matches; the raw value feeds `navigate_search:<dir>`.
+    enum SearchDirection: String { case next, previous }
+
+    /// Enters search mode on this surface (the `start_search` binding action). libghostty replies with a
+    /// START_SEARCH action carrying the current needle; sending it again while search is active closes it.
+    func startSearch() { performBindingAction("start_search") }
+
+    /// Sets the search query (the `search:<needle>` binding action). libghostty replies with SEARCH_TOTAL
+    /// and SEARCH_SELECTED actions for the new match set.
+    func sendSearchQuery(_ needle: String) { performBindingAction("search:\(needle)") }
+
+    /// Steps to the next/previous match (the `navigate_search:<dir>` binding action).
+    func navigateSearch(_ direction: SearchDirection) { performBindingAction("navigate_search:\(direction.rawValue)") }
+
+    /// Exits search mode on this surface (the `end_search` binding action). libghostty replies with an
+    /// END_SEARCH action.
+    func endSearch() { performBindingAction("end_search") }
 
     /// Applies a rebuilt ghostty config to this live surface (font/theme change from Settings).
     /// `update_config` re-applies the whole config including font-size, so any runtime cmd-+/-

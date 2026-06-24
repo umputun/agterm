@@ -77,6 +77,33 @@ final class GhosttyCallbacks: @unchecked Sendable {
             guard let view = surfaceView(from: target), view.shouldCloseOnChildExitAction else { return false }
             DispatchQueue.main.async { view.handleProcessExit() }
             return true
+        case GHOSTTY_ACTION_START_SEARCH:
+            // libghostty entered search mode. recover the firing surface and copy the optional needle out
+            // of the C string synchronously (only valid for this call), then hop to the view's toggle.
+            guard let view = surfaceView(from: target) else { return true }
+            let needle = action.action.start_search.needle.flatMap { String(cString: $0) }
+            DispatchQueue.main.async { view.onSearchStart?(needle) }
+            return true
+        case GHOSTTY_ACTION_END_SEARCH:
+            // libghostty exited search mode. recover the surface and hop to the view's clear/refocus.
+            guard let view = surfaceView(from: target) else { return true }
+            DispatchQueue.main.async { view.onSearchEnd?() }
+            return true
+        case GHOSTTY_ACTION_SEARCH_TOTAL:
+            // libghostty reported the total match count (ssize_t; negative means no query). map a negative
+            // to nil, else carry the count.
+            guard let view = surfaceView(from: target) else { return true }
+            let raw = action.action.search_total.total
+            let value = raw < 0 ? nil : Int(raw)
+            DispatchQueue.main.async { view.onSearchTotal?(value) }
+            return true
+        case GHOSTTY_ACTION_SEARCH_SELECTED:
+            // libghostty reported the 1-based index of the selected match (ssize_t; negative means none).
+            guard let view = surfaceView(from: target) else { return true }
+            let raw = action.action.search_selected.selected
+            let value = raw < 0 ? nil : Int(raw)
+            DispatchQueue.main.async { view.onSearchSelected?(value) }
+            return true
         default:
             return false
         }
