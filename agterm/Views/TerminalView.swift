@@ -29,15 +29,18 @@ struct TerminalView: NSViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
 
     func makeNSView(context _: Context) -> GhosttySurfaceView {
-        if let existing = session[keyPath: surfaceKeyPath] as? GhosttySurfaceView {
-            return existing
-        }
-        let view = makeSurface(session)
+        let view = (session[keyPath: surfaceKeyPath] as? GhosttySurfaceView) ?? makeSurface(session)
         session[keyPath: surfaceKeyPath] = view
+        // before the view attaches: gate the overlay/scratch auto-focus to the active slot so a background
+        // session's overlay can't grab first responder during its initial createSurface.
+        view.deckActive = isActive
         return view
     }
 
     func updateNSView(_ nsView: GhosttySurfaceView, context: Context) {
+        // keep the auto-focus gate in sync with selection, set BEFORE createSurface (which fires the overlay
+        // auto-focus) so a background slot never starts the focus-grab retry.
+        nsView.deckActive = isActive
         // makeNSView may have run before the view had a sized window; createSurface is idempotent
         // (guards surface == nil and a non-zero backing size), so calling it here is safe. Synchronous
         // on purpose: a deferred next-tick create races the layout and gives the surface a stale size.

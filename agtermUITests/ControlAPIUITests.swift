@@ -551,6 +551,57 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertEqual(afterValue, sessionTtyValue, "focus should return to the SAME session terminal, not be lost")
     }
 
+    // a FULL overlay opened in a BACKGROUND (non-selected) session must NOT steal keyboard first responder.
+    // the overlay's auto-focus is gated on its deck slot being active (deckActive), so typing reaches the
+    // still-visible active session, not the hidden overlay. guards the focus-steal bug where a revdiff overlay
+    // in a non-active session silently swallowed input typed into the active session.
+    func testBackgroundSessionOverlayDoesNotStealKeyboardFocus() throws {
+        // seeded session A is the visible/active one.
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let root = try XCTUnwrap(treeResult["tree"] as? [String: Any], "result should carry a tree")
+        let workspaces = try XCTUnwrap(root["workspaces"] as? [[String: Any]], "tree should list workspaces")
+        let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
+        let sessionA = try XCTUnwrap(sessions.first?["id"] as? String, "should have a seeded session id")
+
+        // create a second session B; session.new focuses the new session, so re-select A to make B a
+        // background (mounted-but-hidden) deck slot — the exact setup where the overlay opens out of view.
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let sessionB = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String,
+                                     "session.new should return the new id")
+        XCTAssertTrue(pollSessionCount(2, timeout: 10), "the second session should land")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.select","target":"\#(sessionA)"}"#)["ok"] as? Bool, true,
+                       "re-selecting A should succeed so B is the background session")
+
+        // capture A's tty by injecting directly into its surface (focus-independent): the oracle for
+        // "the keyboard reached the active session A".
+        let ttyA = markerDir.appendingPathComponent("session-a-tty")
+        let ttyAValue = try XCTUnwrap(typeUntilMarker("tty > '\(ttyA.path)'\n", target: sessionA, file: ttyA, select: false),
+                                      "the active session A should report its tty")
+
+        // open a FULL overlay (no sizePercent) in the BACKGROUND session B; its shell captures one keyboard
+        // line into a marker then stays alive (cat). a captured marker would mean the hidden overlay stole
+        // first responder.
+        let ovlMarker = markerDir.appendingPathComponent("bg-overlay-keys")
+        let ovlCmd = "sh -c 'IFS= read -r x; printf %s \"$x\" > \(ovlMarker.path); cat'"
+        let ovlJSON = try! JSONSerialization.data(withJSONObject:
+            ["cmd": "session.overlay.open", "target": sessionB, "args": ["command": ovlCmd]])
+        XCTAssertEqual(try sendCommand(String(data: ovlJSON, encoding: .utf8)!)["ok"] as? Bool, true,
+                       "opening a full overlay in the background session should succeed")
+        XCTAssertTrue(pollSessionOverlay(id: sessionB, expected: true, timeout: 10), "B's overlay should be up")
+        // give a buggy build ample time to grab focus and reach the overlay shell's `read`.
+        usleep(800_000)
+
+        // type via the real keyboard: with the fix it reaches the visible active session A (writing A's tty);
+        // with the bug it goes to B's hidden overlay (writing ovlMarker, then swallowed by cat).
+        let afterTTY = markerDir.appendingPathComponent("after-type-tty")
+        let afterValue = keyboardTypeUntilMarker("tty > '\(afterTTY.path)'", file: afterTTY)
+        XCTAssertEqual(afterValue, ttyAValue,
+                       "keyboard input must reach the visible active session, not the background overlay")
+        XCTAssertNil(pollMarker(ovlMarker, timeout: 2),
+                     "the background session's overlay must NOT capture keyboard input")
+    }
+
     // session.split toggle shows split:true in the tree; off hides it (keep-alive, mirrors ⌘D — the
     // pane's surface is NOT destroyed, only closeSplit on shell-exit does that), clearing split:false.
     func testSessionSplitToggle() throws {

@@ -147,6 +147,14 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     private static let autoFocusMaxAttempts = 40
     private static let autoFocusRetryInterval: TimeInterval = 0.05
 
+    /// Whether this surface's deck slot is the active (selected) session. The overlay/scratch auto-focus
+    /// path grabs first responder when the surface attaches, so without this gate a full overlay (or scratch)
+    /// opened in a BACKGROUND, non-selected session would steal keyboard input from the visible session.
+    /// `TerminalView` sets it before `createSurface` so `requestAutoFocus` fires only for the active slot, and
+    /// a slot going inactive mid-retry makes the loop bail. Main/split panes never auto-focus, so it's inert
+    /// for them; they take focus through `TerminalView.focusIfNeeded`, which is already active-gated.
+    var deckActive = true
+
     private var _markedRange = NSRange(location: NSNotFound, length: 0)
     private var _selectedRange = NSRange(location: NSNotFound, length: 0)
     private var keyTextAccumulator: [String] = []
@@ -425,7 +433,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
     /// Starts the bounded auto-focus retry (overlay only), if not already done/in-flight.
     private func requestAutoFocus(in window: NSWindow?) {
-        guard autoFocus, !didAutoFocus, !autoFocusInFlight, let window else { return }
+        guard autoFocus, deckActive, !didAutoFocus, !autoFocusInFlight, let window else { return }
         autoFocusInFlight = true
         restoreAutoFocus(in: window, attempt: 0)
     }
@@ -434,7 +442,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// actually holds first responder, then marks it focused. Bounded so it never spins forever; gives
     /// up if the view is torn down or moved windows. macterm's FocusRestoration pattern.
     private func restoreAutoFocus(in window: NSWindow, attempt: Int) {
-        guard autoFocus, !didAutoFocus, !isDestroyed else { autoFocusInFlight = false; return }
+        guard autoFocus, deckActive, !didAutoFocus, !isDestroyed else { autoFocusInFlight = false; return }
         if self.window === window, surface != nil {
             if window.firstResponder !== self { window.makeFirstResponder(self) }
             if window.firstResponder === self {
