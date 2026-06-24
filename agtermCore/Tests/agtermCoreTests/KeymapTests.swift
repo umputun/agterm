@@ -39,6 +39,19 @@ struct KeymapTests {
         #expect(keymap.commands.isEmpty)
     }
 
+    @Test func rebindToggleSearchResolvesThroughGenericPath() {
+        // toggle_search rebinds like any other built-in: the generic parse/resolve path (no per-action
+        // special-casing) parses the chord, maps the raw name to .toggleSearch, and equivalent(for:)
+        // returns the override instead of the cmd+f default.
+        let (keymap, diagnostics) = parseKeymap("map cmd+shift+l toggle_search")
+        #expect(diagnostics.isEmpty)
+        let override = Chord(mods: [.command, .shift], key: "l")
+        #expect(keymap.builtinOverrides == [.toggleSearch: override])
+        #expect(keymap.equivalent(for: .toggleSearch) == override)
+        // sanity: the default is the shipped cmd+f, so the override is a real rebind.
+        #expect(BuiltinAction.toggleSearch.defaultChord == Chord(mods: [.command], key: "f"))
+    }
+
     @Test func parseCommandHappyPath() {
         let (keymap, diagnostics) = parseKeymap("command \"Lazygit\" ctrl+a>g lazygit")
         #expect(diagnostics.isEmpty)

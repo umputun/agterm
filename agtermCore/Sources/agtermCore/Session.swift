@@ -135,6 +135,30 @@ public final class Session: Identifiable {
     /// teardown) — after which the next show spawns a fresh shell. `@ObservationIgnored` like `surface`.
     @ObservationIgnored public var scratchSurface: (any TerminalSurface)?
 
+    /// Whether the in-terminal search bar is shown over this session's focused pane (⌘F). Observed,
+    /// so the detail pane shows/hides the bar. Written directly (from the surface factory's search
+    /// callbacks + `AppActions`). NOT persisted (absent from `snapshot()`), so it never survives a relaunch.
+    public var searchActive: Bool = false
+
+    /// The current search query, mirrored from the bar's text field and the control channel. Observed
+    /// + written directly like `searchActive`. Ephemeral, never persisted.
+    public var searchNeedle: String = ""
+
+    /// The number of matches for `searchNeedle`, from libghostty's `SEARCH_TOTAL` action; nil before a
+    /// query runs. Observed + written directly. Ephemeral, never persisted.
+    public var searchTotal: Int?
+
+    /// The 1-based index of the currently selected match, from libghostty's `SEARCH_SELECTED` action;
+    /// nil when none is selected. Observed + written directly. Ephemeral, never persisted.
+    public var searchSelected: Int?
+
+    /// The surface that owns the open search bar — the focused searchable pane at the time search opened.
+    /// Pinned here so the bar's needle/navigate/close drive the SAME surface that opened search even if
+    /// split focus moves afterwards (otherwise re-resolving `activeSurface` would strand the original pane
+    /// in libghostty search mode). Set on open by the surface factory's START callback, cleared on close.
+    /// `@ObservationIgnored` + weak (the session strongly owns its panes); ephemeral, never persisted.
+    @ObservationIgnored public weak var searchSurface: (any TerminalSurface)?
+
     public init(id: UUID = UUID(), initialCwd: String, customName: String? = nil) {
         self.id = id
         self.initialCwd = initialCwd
@@ -197,6 +221,29 @@ public final class Session: Identifiable {
         if overlayActive { return overlaySurface }
         if scratchActive { return scratchSurface }
         return activeSurface
+    }
+
+    /// The match counter shown in the search bar and returned by `session.search`: empty before a
+    /// query runs (`searchTotal` nil), `"no matches"` at zero, `"N matches"` while none is selected,
+    /// and `"S of N"` once a match is selected. `selected` is clamped to `total` so a stale selected
+    /// index (the count shrank under it before the next SEARCH_SELECTED lands) never reads "3 of 2".
+    public var searchDisplayText: String {
+        guard let total = searchTotal else { return "" }
+        guard total > 0 else { return "no matches" }
+        guard let selected = searchSelected else { return "\(total) matches" }
+        return "\(min(selected, total)) of \(total)"
+    }
+
+    /// Resets all search state to its defaults: hides the bar, clears the needle/count/index, and nils
+    /// the pinned owner. Called from the pane-teardown/promote paths (`closeSplit`, `closePrimaryPane`,
+    /// `closeSplitPane`) so a session whose searched pane was destroyed or promoted doesn't keep a stuck,
+    /// no-op bar (the weak `searchSurface` zeroes but `searchActive` would otherwise stay true).
+    public func clearSearch() {
+        searchActive = false
+        searchNeedle = ""
+        searchTotal = nil
+        searchSelected = nil
+        searchSurface = nil
     }
 }
 

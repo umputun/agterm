@@ -189,6 +189,92 @@ struct SessionTests {
         #expect(session.activeSurface === primary)
     }
 
+    @Test func searchDisplayTextIsEmptyBeforeAnyQuery() {
+        // searchTotal nil (no query run yet): empty string, so the bar shows no counter.
+        let session = Session(initialCwd: "/repo")
+        #expect(session.searchDisplayText == "")
+    }
+
+    @Test func searchDisplayTextReportsNoMatches() {
+        let session = Session(initialCwd: "/repo")
+        session.searchTotal = 0
+        #expect(session.searchDisplayText == "no matches")
+        // a selected index is meaningless at zero matches; still "no matches".
+        session.searchSelected = 1
+        #expect(session.searchDisplayText == "no matches")
+    }
+
+    @Test func searchDisplayTextReportsTotalWhenNoneSelected() {
+        let session = Session(initialCwd: "/repo")
+        session.searchTotal = 5
+        #expect(session.searchDisplayText == "5 matches")
+    }
+
+    @Test func searchDisplayTextReportsSelectedOfTotal() {
+        let session = Session(initialCwd: "/repo")
+        session.searchTotal = 5
+        session.searchSelected = 2
+        #expect(session.searchDisplayText == "2 of 5")
+    }
+
+    @Test func searchDisplayTextClampsStaleSelectedToTotal() {
+        // the count can shrink under a stale selected index before the next SEARCH_SELECTED lands;
+        // selected is clamped to total so it never reads "3 of 2".
+        let session = Session(initialCwd: "/repo")
+        session.searchTotal = 2
+        session.searchSelected = 3
+        #expect(session.searchDisplayText == "2 of 2")
+    }
+
+    @Test func searchFieldsAreNotPersistedAcrossSnapshot() {
+        // the search state is ephemeral like overlay/scratch: a snapshot round-trip leaves it at
+        // defaults on the restored session.
+        let store = AppStore(persistence: PersistenceStore(
+            directory: FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")))
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.searchActive = true
+        session.searchNeedle = "todo"
+        session.searchTotal = 3
+        session.searchSelected = 1
+        let restored = AppStore(persistence: PersistenceStore(
+            directory: FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")))
+        restored.restore(from: store.snapshot())
+        let r = restored.workspaces[0].sessions[0]
+        #expect(r.searchActive == false)
+        #expect(r.searchNeedle == "")
+        #expect(r.searchTotal == nil)
+        #expect(r.searchSelected == nil)
+    }
+
+    @Test func searchSurfacePinsTheOwnerAndIsWeak() {
+        // the pinned search owner is what the bar's needle/navigate/close drive, surviving a split focus
+        // move (it is NOT re-resolved from `activeSurface`). it is weak: the session strongly owns its
+        // panes, so it must not retain a surface.
+        let session = Session(initialCwd: "/repo")
+        var owner: FakeSurface? = FakeSurface()
+        session.searchSurface = owner
+        #expect(session.searchSurface === owner)
+        owner = nil
+        #expect(session.searchSurface == nil)
+    }
+
+    @Test func clearSearchResetsAllSearchState() {
+        let session = Session(initialCwd: "/repo")
+        let owner = FakeSurface()
+        session.searchActive = true
+        session.searchNeedle = "needle"
+        session.searchTotal = 4
+        session.searchSelected = 2
+        session.searchSurface = owner
+        session.clearSearch()
+        #expect(session.searchActive == false)
+        #expect(session.searchNeedle == "")
+        #expect(session.searchTotal == nil)
+        #expect(session.searchSelected == nil)
+        #expect(session.searchSurface == nil)
+    }
+
     @Test func topmostSurfacePrefersOverlayThenScratchThenPane() {
         let session = Session(initialCwd: "/repo")
         let primary = FakeSurface(), scratch = FakeSurface(), overlay = FakeSurface()

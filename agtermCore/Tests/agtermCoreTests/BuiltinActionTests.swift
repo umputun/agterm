@@ -13,9 +13,10 @@ struct BuiltinActionTests {
         // spot-check the documented raw names so a rename can't drift silently.
         #expect(BuiltinAction.newWindow.rawValue == "new_window")
         #expect(BuiltinAction.toggleSplit.rawValue == "toggle_split")
+        #expect(BuiltinAction.toggleSearch.rawValue == "toggle_search")
         #expect(BuiltinAction.commandPalette.rawValue == "command_palette")
         #expect(BuiltinAction.nextAttentionSession.rawValue == "next_attention_session")
-        #expect(BuiltinAction.allCases.count == 27)
+        #expect(BuiltinAction.allCases.count == 28)
     }
 
     @Test func rejectsUnknownName() {
@@ -42,6 +43,7 @@ struct BuiltinActionTests {
             .resetFontSize: Chord(mods: [.command], key: "0"),
             .toggleSplit: Chord(mods: [.command], key: "d"),
             .toggleScratch: Chord(mods: [.command], key: "j"),
+            .toggleSearch: Chord(mods: [.command], key: "f"),
             .focusLeftPane: nil,    // ⌘⌥← — arrow, not expressible as a parsed Chord
             .focusRightPane: nil,   // ⌘⌥→ — arrow
             .previousSession: nil,  // ⌥⌘↑ — arrow
@@ -59,6 +61,15 @@ struct BuiltinActionTests {
         for action in BuiltinAction.allCases {
             #expect(expected[action] == action.defaultChord, "default chord mismatch for \(action.rawValue)")
         }
+    }
+
+    @Test func toggleSearchDefaultIsCmdFAndRoundTrips() {
+        let chord = Chord(mods: [.command], key: "f")
+        #expect(BuiltinAction.toggleSearch.defaultChord == chord)
+        // the chord must round-trip through the keymap grammar so the starter renders it as `cmd+f`,
+        // not `(not expressible)` (the same check chordSyntax runs app-side).
+        #expect(chord.displayString == "cmd+f")
+        #expect(parseKeybind(chord.displayString) == [chord])
     }
 
     @Test func keylessActionsHaveNilDefault() {

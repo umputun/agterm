@@ -22,6 +22,7 @@ public enum Command: String, Codable, Sendable {
     case sessionScratch = "session.scratch"
     case sessionFocus = "session.focus"
     case sessionCopy = "session.copy"
+    case sessionSearch = "session.search"
     case sessionOverlayOpen = "session.overlay.open"
     case sessionOverlayClose = "session.overlay.close"
     case sessionOverlayResult = "session.overlay.result"
@@ -50,7 +51,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var cwd: String?
     /// Target workspace for `session.new` (the workspace to add to) and `session.move` (the destination).
     public var workspace: String?
-    /// Text to inject for `session.type`.
+    /// Text to inject for `session.type`; the search needle for `session.search`.
     public var text: String?
     /// Whether `session.type` may select a never-shown session to realize its surface.
     public var select: Bool?
@@ -58,8 +59,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var mode: String?
     /// Which split pane to focus for `session.focus` (`left`|`right`|`other`; `other` toggles).
     public var pane: String?
-    /// Direction for `session.go` (`next`|`prev`|`previous`|`first`|`last`) and for the reorder form of
-    /// `session.move` / `workspace.move` (`up`|`down`|`top`|`bottom`).
+    /// Direction for `session.go` (`next`|`prev`|`previous`|`first`|`last`), for the reorder form of
+    /// `session.move` / `workspace.move` (`up`|`down`|`top`|`bottom`), and for `session.search`
+    /// (`next`|`prev`|`close`).
     public var to: String?
     /// The desktop-notification title for `notify` (optional; defaults to the target session's name).
     public var title: String?
@@ -209,7 +211,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
     /// The overlay program's exit status for `session.overlay.result` (nil until the program exits).
     public var exitCode: Int?
     /// A count payload for commands whose result is a number, e.g. the keymap-diagnostic count for
-    /// `keymap.reload`.
+    /// `keymap.reload` and the total match count for `session.search` (whose "N of M" display string
+    /// rides in `text`).
     public var count: Int?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,

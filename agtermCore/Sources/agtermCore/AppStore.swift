@@ -232,6 +232,9 @@ public final class AppStore {
         session.splitCwd = nil
         session.splitTitle = nil
         session.initialSplitCwd = nil
+        // a search bar pinned to the torn-down split surface would otherwise stay stuck (the weak
+        // `searchSurface` zeroes but `searchActive` stays true), so reset search on the surviving session.
+        session.clearSearch()
         save()
     }
 
@@ -252,6 +255,9 @@ public final class AppStore {
         session.hasSplit = false
         session.splitFocused = true
         if let cwd = session.splitCwd { session.currentCwd = cwd }
+        // the primary surface (possibly the search owner) is torn down while the session survives as the
+        // promoted split, so reset search rather than leave a stuck bar pinned to the gone primary.
+        session.clearSearch()
         save()
     }
 

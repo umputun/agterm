@@ -417,6 +417,69 @@ struct AppStoreTests {
         #expect(split.teardownCount == 1)
     }
 
+    @Test func closeSplitClearsStuckSearchOnSurvivingSession() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let split = SpySurface()
+        session.splitSurface = split
+        session.isSplit = true
+        session.hasSplit = true
+        // search opened on the split pane, pinned as the owner
+        session.searchActive = true
+        session.searchNeedle = "needle"
+        session.searchTotal = 3
+        session.searchSelected = 1
+        session.searchSurface = split
+        store.closeSplit(session.id)
+        #expect(session.searchActive == false)
+        #expect(session.searchNeedle == "")
+        #expect(session.searchTotal == nil)
+        #expect(session.searchSelected == nil)
+        #expect(session.searchSurface == nil)
+    }
+
+    @Test func closePrimaryPaneClearsStuckSearchOnPromotedSession() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let primary = SpySurface(); session.surface = primary
+        let split = SpySurface(); session.splitSurface = split
+        session.isSplit = true
+        session.hasSplit = true
+        // search opened on the primary, which is torn down + promoted while the session survives
+        session.searchActive = true
+        session.searchNeedle = "needle"
+        session.searchTotal = 2
+        session.searchSelected = 1
+        session.searchSurface = primary
+        store.closePrimaryPane(session.id)
+        #expect(store.session(withID: session.id) != nil) // session survives
+        #expect(session.searchActive == false)
+        #expect(session.searchNeedle == "")
+        #expect(session.searchTotal == nil)
+        #expect(session.searchSelected == nil)
+        #expect(session.searchSurface == nil)
+    }
+
+    @Test func closeSplitPaneClearsStuckSearchWhenCollapsingToPrimary() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let primary = SpySurface(); session.surface = primary
+        let split = SpySurface(); session.splitSurface = split
+        session.isSplit = true
+        session.hasSplit = true
+        session.searchActive = true
+        session.searchTotal = 5
+        session.searchSurface = split
+        store.closeSplitPane(session.id) // primary alive → collapses via closeSplit, which clears search
+        #expect(store.session(withID: session.id) != nil)
+        #expect(session.searchActive == false)
+        #expect(session.searchTotal == nil)
+        #expect(session.searchSurface == nil)
+    }
+
     @Test func splitCwdRoundTripsThroughSnapshot() {
         let store = Self.makeStore()
         let ws = store.addWorkspace(name: "work")

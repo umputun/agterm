@@ -158,6 +158,37 @@ struct ControlProtocolTests {
         #expect(decoded.args?.to == "bottom")
     }
 
+    @Test func sessionSearchRoundTripsWithNeedleAndDirection() throws {
+        let request = ControlRequest(cmd: .sessionSearch, target: "active", args: ControlArgs(text: "foo", to: "next"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.cmd == .sessionSearch)
+        #expect(decoded.args?.text == "foo")
+        #expect(decoded.args?.to == "next")
+    }
+
+    @Test(arguments: ["next", "prev", "close"]) func sessionSearchRoundTripsEachDirection(_ to: String) throws {
+        let request = ControlRequest(cmd: .sessionSearch, target: "active", args: ControlArgs(to: to))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.cmd == .sessionSearch)
+        #expect(decoded.args?.to == to)
+    }
+
+    @Test func sessionSearchResultRoundTripsWithCountAndText() throws {
+        let response = ControlResponse(ok: true, result: ControlResult(text: "3 of 12", count: 12))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.count == 12)
+        #expect(decoded.result?.text == "3 of 12")
+    }
+
+    @Test func sessionSearchRawStringMapsToCommand() throws {
+        let json = #"{"cmd":"session.search"}"#
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8))
+        #expect(decoded.cmd == .sessionSearch)
+    }
+
     @Test func notifyRoundTripsWithTitleAndBody() throws {
         let request = ControlRequest(cmd: .notify, target: "active", args: ControlArgs(title: "Build", body: "done"))
         let decoded = try roundTrip(request)
