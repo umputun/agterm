@@ -163,6 +163,16 @@ public final class WindowLibrary {
         windows.map(\.id).filter { stores[$0] != nil }
     }
 
+    /// The number of currently-open windows and the total number of sessions across them — the
+    /// counts the quit confirmation reports. A window is open iff its store is loaded.
+    public func openCounts() -> (windows: Int, sessions: Int) {
+        let openStores = windows.map(\.id).compactMap { stores[$0] }
+        let sessions = openStores.reduce(0) { total, store in
+            total + store.workspaces.reduce(0) { $0 + $1.sessions.count }
+        }
+        return (openStores.count, sessions)
+    }
+
     /// The id SwiftUI's auto-opened launch window claims: the frontmost open window, else the first.
     /// `nil` only in the degenerate all-windows-closed state. Guards the frontmost on openness (like
     /// `activeWindowID`) — a frontmost pointing at a closed window must fall through to the first open

@@ -706,6 +706,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    /// Confirm a quit (menu Quit / ⌘Q) before the app tears down its windows — closing them ends every
+    /// session's running shell with no undo, the same loss the workspace/window delete actions confirm.
+    /// Reports the open-window and session counts in the prompt; proceeds without asking when nothing is
+    /// open (the auto-quit after the last window closed) or under an XCUITest launch (a modal would hang
+    /// the test's terminate).
+    func applicationShouldTerminate(_: NSApplication) -> NSApplication.TerminateReply {
+        guard !ContentView.isUITestLaunch, let library else { return .terminateNow }
+        let counts = library.openCounts()
+        guard counts.windows > 0 else { return .terminateNow }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Quit agterm?"
+        alert.informativeText = QuitPrompt.message(windows: counts.windows, sessions: counts.sessions)
+        alert.addButton(withTitle: "Quit")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn ? .terminateNow : .terminateCancel
+    }
+
     func applicationWillTerminate(_: Notification) {
         controlServer?.stop()
         customCommandRunner?.stop()

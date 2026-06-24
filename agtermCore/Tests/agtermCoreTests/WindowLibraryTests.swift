@@ -638,6 +638,31 @@ final class WindowLibraryTests {
         #expect(!library.isOpen(closedID))
     }
 
+    // MARK: - openCounts
+
+    @Test func openCountsSumsOpenWindowsAndSessions() throws {
+        let library = WindowLibrary(directory: directory)
+        // the seeded window already has one workspace + one session; add a second session to it.
+        let firstStore = try #require(library.store(for: library.windows[0].id))
+        let firstWs = try #require(firstStore.workspaces.first)
+        _ = try #require(firstStore.addSession(toWorkspace: firstWs.id, cwd: "/tmp"))
+        // a second open window seeds one more session.
+        _ = library.newWindow(name: "work")
+        let counts = library.openCounts()
+        #expect(counts.windows == 2)
+        #expect(counts.sessions == 3)
+    }
+
+    @Test func openCountsExcludesClosedWindows() throws {
+        let library = WindowLibrary(directory: directory)
+        let extra = library.newWindow(name: "extra")
+        #expect(library.openCounts().windows == 2)
+        library.closeWindow(extra.id)
+        let counts = library.openCounts()
+        #expect(counts.windows == 1)
+        #expect(counts.sessions == 1)
+    }
+
     // MARK: - saveAllOpen
 
     @Test func saveAllOpenFlushesEveryOpenStore() throws {
