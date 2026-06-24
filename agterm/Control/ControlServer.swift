@@ -1138,10 +1138,10 @@ final class ControlServer {
     // MARK: - Theme
 
     /// Set + persist a theme by name — the control half of the Settings picker / the `.themes` palette
-    /// commit (no live preview over the socket). A nil/empty name selects the default theme; any other
-    /// name must be a bundled theme, else an error (a typo silently doing nothing is worse than a fail).
-    /// Returns the applied theme in `result.theme` (nil = default). App-global: one `SettingsModel`, so
-    /// no `--window` selector.
+    /// commit (no live preview over the socket). A nil/empty name selects ghostty's built-in colors
+    /// ("default ghostty"), NOT the seeded `agterm` app default; any other name must be a bundled theme,
+    /// else an error (a typo silently doing nothing is worse than a fail). Returns the applied theme in
+    /// `result.theme` (nil = ghostty built-in). App-global: one `SettingsModel`, so no `--window` selector.
     private func setTheme(name: String?) -> ControlResponse {
         let trimmed = name?.trimmingCharacters(in: .whitespaces)
         let resolved = (trimmed?.isEmpty ?? true) ? nil : trimmed

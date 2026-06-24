@@ -49,7 +49,8 @@ public enum Command: String, Codable, Sendable {
 /// nil and are omitted from the JSON, keeping the wire form compact.
 public struct ControlArgs: Codable, Sendable, Equatable {
     /// New name for `workspace.new`, `workspace.rename`, `session.rename`; the theme name for
-    /// `theme.set` (omitted/empty selects the default theme).
+    /// `theme.set` (omitted/empty selects ghostty's built-in colors / "default ghostty", NOT the
+    /// seeded `agterm` app default).
     public var name: String?
     /// Working directory for `session.new`.
     public var cwd: String?
@@ -218,8 +219,8 @@ public struct ControlResult: Codable, Sendable, Equatable {
     /// `keymap.reload` and the total match count for `session.search` (whose "N of M" display string
     /// rides in `text`).
     public var count: Int?
-    /// The current/affected theme name for `theme.set` (echo) and `theme.list` (current); nil = the
-    /// default theme.
+    /// The current/affected theme name for `theme.set` (echo) and `theme.list` (current); nil =
+    /// ghostty's built-in colors ("default ghostty"), distinct from the seeded `agterm` app default.
     public var theme: String?
     /// The available bundled theme names for `theme.list`.
     public var themes: [String]?
