@@ -49,6 +49,10 @@ targets:
           - "Resources/terminfo"
           - "Resources/agent-status"
           - "Resources/agent-skill"
+          # committed SOURCE for agterm's own bundled theme(s); setup.sh stages it
+          # into Resources/ghostty/themes (above), so the source dir itself must not
+          # be pulled into the project tree or the app bundle.
+          - "Resources/custom-themes"
       # Ghostty resources (themes + shell-integration), downloaded by setup.sh.
       # Folder reference (not the default "group") because the contents are
       # extensionless files Xcode would otherwise skip. Lands at

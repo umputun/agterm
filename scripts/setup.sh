@@ -22,6 +22,15 @@ XCFRAMEWORK_DIR="GhosttyKit.xcframework"
 # TERMINFO=dirname(GHOSTTY_RESOURCES_DIR)/terminfo derivation resolves xterm-ghostty.
 RESOURCES_MARKER="agterm/Resources/terminfo"
 
+# stage agterm's own bundled theme(s) from the committed source into the (gitignored,
+# setup-regenerated) ghostty themes dir. idempotent and called on both the cached and the
+# fresh-build path so the theme survives a themes-dir wipe and shows in the Appearance picker.
+stage_custom_themes() {
+  local dst="agterm/Resources/ghostty/themes"
+  [[ -d "$dst" ]] || return 0
+  cp agterm/Resources/custom-themes/* "$dst/"
+}
+
 need_xc=true
 need_res=true
 [[ -d "$XCFRAMEWORK_DIR" ]] && need_xc=false
@@ -29,6 +38,7 @@ need_res=true
 
 if ! $need_xc && ! $need_res; then
   echo "GhosttyKit and resources already present"
+  stage_custom_themes
   exit 0
 fi
 
@@ -73,4 +83,5 @@ if $need_res; then
   cp -R "$BUILD_DIR/zig-out/share/terminfo" agterm/Resources/terminfo
 fi
 
+stage_custom_themes
 echo "setup complete"
