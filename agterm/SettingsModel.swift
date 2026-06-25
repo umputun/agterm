@@ -276,7 +276,7 @@ final class SettingsModel {
         #       line becomes palette-only). Omit the chord for a palette-only command. The rest of the
         #       line is run via `/bin/sh -c`. Examples:
         #
-        #           command "Open in Zed"  cmd+shift+e  open -a Zed {AGT_SESSION_PWD}
+        #           command "Open in Zed"  cmd+shift+e  open -a Zed "$AGT_SESSION_PWD"
         #           command "Lazygit"      ctrl+a>g     lazygit
         #           command "Deploy"                    ./deploy.sh
         #
