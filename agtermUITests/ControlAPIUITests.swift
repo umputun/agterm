@@ -692,7 +692,7 @@ final class ControlAPIUITests: XCTestCase {
     func testSessionFocusPane() throws {
         let notSplit = try sendCommand(#"{"cmd":"session.focus","target":"active","args":{"pane":"right"}}"#)
         XCTAssertEqual(notSplit["ok"] as? Bool, false, "focus on a non-split session should fail: \(notSplit)")
-        XCTAssertTrue((notSplit["error"] as? String ?? "").contains("not split"), "should report not split: \(notSplit)")
+        XCTAssertTrue((notSplit["error"] as? String ?? "").contains("no split"), "should report no split: \(notSplit)")
 
         let split = try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"on"}}"#)
         XCTAssertEqual(split["ok"] as? Bool, true, "split on should succeed: \(split)")
