@@ -331,6 +331,12 @@ struct agtermApp: App {
                     .keyboardShortcut(shortcut(for: .commandPalette))
             }
             CommandGroup(replacing: .help) {
+                Button("Developer Documentation…") {
+                    if let url = URL(string: "https://github.com/umputun/agterm#scripting-agterm") {
+                        NSWorkspace.shared.open(url)
+                    }
+                }
+                Divider()
                 Button("Install Command Line Tool…") { CLIInstaller.run() }
                 Button("Install Agent Status Hooks…") { AgentHooksInstaller.run() }
                 Button("Install Agent Skill…") { SkillInstaller.run() }
