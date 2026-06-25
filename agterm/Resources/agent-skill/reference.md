@@ -122,9 +122,12 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
 - `window close <id>` — close the on-screen window (the bundle is kept; reopen with select).
 - `window rename <id> <name>`.
 - `window delete <id>` — keep-at-least-one; deleting the last errors.
-- `window resize <id> --width W --height H` — frame size in points. The window must be open.
+- `window resize <id> --width W --height H` — frame size in points. The window must be open. The size is
+  clamped into `[window min size, the display's visible frame]`, so an oversized or under-min request is
+  bounded to fit rather than applied verbatim.
 - `window move <id> --x X --y Y [--display N]` — top-left position in points, relative to display `N`
-  (default the window's current display; y measured from the display top). The window must be open.
+  (default the window's current display; y measured from the display top). The window must be open. The
+  origin is clamped so an off-screen request keeps a grabbable strip of the window on the target display.
 
 `window resize`/`move` are control-native (no GUI equivalent — the title bar already drags-to-resize).
 

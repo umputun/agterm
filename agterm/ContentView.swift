@@ -1149,13 +1149,16 @@ final class WindowRegistry {
     }
 
     /// Resizes the on-screen window for `id` to `width` x `height` points (frame size), keeping its top
-    /// edge fixed and clamping to the window's `minSize`. Returns false if no window is registered for
-    /// `id` (not open). The control-channel `window.resize` path.
+    /// edge fixed and clamping into `[window.minSize, screen.visibleFrame]` via `WindowGeometry.clampSize`
+    /// (the single clamp path). Returns false if no window is registered for `id` (not open). The
+    /// control-channel `window.resize` path.
     @discardableResult
     func resize(_ id: WindowInfo.ID, width: Int, height: Int) -> Bool {
         guard let window = windows[id] else { return false }
-        let size = NSSize(width: max(CGFloat(width), window.minSize.width),
-                          height: max(CGFloat(height), window.minSize.height))
+        let maxSize = (window.screen ?? NSScreen.main)?.visibleFrame.size
+            ?? CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
+        let size = WindowGeometry.clampSize(CGSize(width: CGFloat(width), height: CGFloat(height)),
+                                            min: window.minSize, max: maxSize)
         var frame = window.frame
         frame.origin.y += frame.size.height - size.height // keep the top edge fixed
         frame.size = size
@@ -1165,8 +1168,9 @@ final class WindowRegistry {
 
     /// Moves the on-screen window for `id` so its top-left corner is at (`x`, `y`) points relative to the
     /// top-left of `display` (an index into the screen list; nil = the window's current display), y down.
-    /// Returns false if no window is registered for `id` (not open) or `display` is out of range. The
-    /// control-channel `window.move` path.
+    /// The origin is clamped via `WindowGeometry.clampOrigin` so an off-screen request keeps a grabbable
+    /// strip on the target display. Returns false if no window is registered for `id` (not open) or
+    /// `display` is out of range. The control-channel `window.move` path.
     @discardableResult
     func move(_ id: WindowInfo.ID, x: Int, y: Int, display: Int?) -> Bool {
         guard let window = windows[id] else { return false }
@@ -1180,7 +1184,12 @@ final class WindowRegistry {
         }
         guard let screen else { return false }
         // (x, y) is the top-left relative to the screen's top-left (y down) → AppKit screen point (y up).
-        window.setFrameTopLeftPoint(NSPoint(x: screen.frame.minX + CGFloat(x), y: screen.frame.maxY - CGFloat(y)))
+        let size = window.frame.size
+        let topLeft = NSPoint(x: screen.frame.minX + CGFloat(x), y: screen.frame.maxY - CGFloat(y))
+        // convert top-left to the frame's bottom-left origin, then clamp so a strip stays on the display.
+        let requestedOrigin = CGPoint(x: topLeft.x, y: topLeft.y - size.height)
+        let origin = WindowGeometry.clampOrigin(requestedOrigin, windowSize: size, displayFrame: screen.frame)
+        window.setFrameOrigin(origin)
         return true
     }
 }
