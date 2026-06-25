@@ -575,8 +575,8 @@ final class ControlServer {
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
             }
-            guard session.isSplit else {
-                return ControlResponse(ok: false, error: "session not split")
+            guard session.hasSplit else {
+                return ControlResponse(ok: false, error: "session has no split")
             }
             let toSplit: Bool
             switch pane {

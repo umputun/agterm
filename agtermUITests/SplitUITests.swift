@@ -152,6 +152,46 @@ final class SplitUITests: XCTestCase {
         XCTAssertEqual(rightTTYAfter, rightTTY, "hiding then showing the split keeps the same right shell alive")
     }
 
+    // pane navigation must keep working when the split is HIDDEN (maximized): with one pane shown,
+    // ⌃1/⌃2 (and ⌘⌥←/→) swap WHICH pane is shown maximized — gated on hasSplit, not isSplit. Before
+    // the fix these no-op'd while hidden. Verified with the tty oracle: after hiding, the focus
+    // shortcut swaps which shell receives the keystrokes.
+    func testHiddenSplitPaneNavigationSwapsShownPane() throws {
+        let row = app.staticTexts["session-row"]
+        XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
+        row.click()
+        usleep(800_000)
+
+        let primaryTTY = ttyAfterCommand(named: "primary")
+        XCTAssertNotNil(primaryTTY, "primary shell should write its tty")
+
+        // open the split — focus moves to the new (right) pane.
+        let splitButton = app.buttons["split-toggle"]
+        XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
+        splitButton.click()
+        usleep(800_000)
+        let rightTTY = ttyAfterCommand(named: "right")
+        XCTAssertNotNil(rightTTY, "right shell should write its tty")
+        XCTAssertNotEqual(rightTTY, primaryTTY, "opening the split moves focus to the new (right) pane")
+
+        // hide the split — the focused (right) pane stays shown maximized, both shells alive.
+        splitButton.click()
+        usleep(800_000)
+        XCTAssertEqual(ttyAfterCommand(named: "hidden-right"), rightTTY, "the hidden split shows the focused (right) pane")
+
+        // Ctrl-1 while hidden swaps the shown pane to the primary (the bug: it used to no-op when hidden).
+        app.typeKey("1", modifierFlags: .control)
+        usleep(800_000)
+        XCTAssertEqual(ttyAfterCommand(named: "hidden-ctrl1"), primaryTTY,
+                       "Ctrl-1 swaps the hidden split to the primary pane")
+
+        // Ctrl-2 while hidden swaps the shown pane back to the right pane.
+        app.typeKey("2", modifierFlags: .control)
+        usleep(800_000)
+        XCTAssertEqual(ttyAfterCommand(named: "hidden-ctrl2"), rightTTY,
+                       "Ctrl-2 swaps the hidden split back to the right pane")
+    }
+
     // exiting one pane of a split must keep the session alive (collapsed to the survivor) AND focus
     // the surviving pane, so typing reaches it without a click. Verified by exiting the primary, then
     // typing WITHOUT focusing and checking the command landed in the surviving right shell.

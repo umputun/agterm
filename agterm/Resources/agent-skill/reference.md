@@ -87,7 +87,8 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
   full-coverage and owns focus). Not persisted. Unknown mode errors. The tree's `scratch` flag tracks
   visibility.
 - `session focus [left|right|other] [--target] [--window W]` — move keyboard focus between the two
-  split panes (`other` toggles, the default). Errors when the session is not split.
+  split panes (`other` toggles, the default). Errors when the session has no split. Works whether the
+  split is shown side-by-side or hidden (maximized) — when hidden, focusing a pane swaps which one shows.
 - `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--target] [--window W]` —
   set the sidebar agent-status glyph. `--blink` pulses it (for attention). `--auto-reset` clears it
   back to idle once the session is visited (use for a one-shot completion flash). An unknown state
@@ -207,6 +208,6 @@ the commit, with no preview.
 ## Errors you may see
 
 `notFound` / `ambiguous` (target resolution), `no such session`, `invalid split mode` /
-`invalid scratch mode`, `not split` (focus), `no selection` (copy), `overlay already open` /
+`invalid scratch mode`, `session has no split` (focus), `no selection` (copy), `overlay already open` /
 `no overlay` / `still running` / `no result` (overlay), `invalid sidebar mode` (sidebar), `no open window` (quick/sidebar), `window not open`
 (resize/move/`--window`), `unknown theme: <name>` (theme set). Unknown commands fail to decode and return a structured error, never a crash.

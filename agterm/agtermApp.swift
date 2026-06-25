@@ -290,12 +290,12 @@ struct agtermApp: App {
                     Label("Focus Left Pane", systemImage: "rectangle.lefthalf.filled")
                 }
                 .keyboardShortcut(arrowShortcut(for: .focusLeftPane))
-                .disabled(library.activeStore?.activeSession?.isSplit != true)
+                .disabled(library.activeStore?.activeSession?.hasSplit != true)
                 Button { actions.focusPane(.split) } label: {
                     Label("Focus Right Pane", systemImage: "rectangle.righthalf.filled")
                 }
                 .keyboardShortcut(arrowShortcut(for: .focusRightPane))
-                .disabled(library.activeStore?.activeSession?.isSplit != true)
+                .disabled(library.activeStore?.activeSession?.hasSplit != true)
                 Divider()
                 // step between sessions in the sidebar's flattened order. Prev/Next ride ⌥⌘↑/↓ (NOT bare
                 // ⌘+arrows, which shadow text-field caret nav in the rename/palette/settings fields); ⌥⌘↑/↓

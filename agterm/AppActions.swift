@@ -310,7 +310,7 @@ final class AppActions {
         if store?.canRemoveWorkspace == true {
             items.append(PaletteItem(title: "Delete Workspace", shortcut: paletteHint(for: .deleteWorkspace)) { [weak self] in self?.deleteActiveWorkspace() })
         }
-        if store?.activeSession?.isSplit == true {
+        if store?.activeSession?.hasSplit == true {
             items.append(PaletteItem(title: "Focus Left Pane", shortcut: paletteHint(for: .focusLeftPane)) { [weak self] in self?.focusPane(.main) })
             items.append(PaletteItem(title: "Focus Right Pane", shortcut: paletteHint(for: .focusRightPane)) { [weak self] in self?.focusPane(.split) })
         }
@@ -468,8 +468,9 @@ final class AppActions {
     }
 
     /// Move keyboard focus to a pane of the active session's split: `.split` -> the right pane,
-    /// anything else -> the left/primary. No-op when the active session isn't split. Drives the
-    /// keyboard shortcuts, the View menu items, and the action palette.
+    /// anything else -> the left/primary. No-op when the active session has no split. Works whether the
+    /// split is shown side-by-side or hidden (maximized). Drives the keyboard shortcuts, the View menu
+    /// items, and the action palette.
     func focusPane(_ pane: PaneRole) {
         guard let session = store?.activeSession else { return }
         setSplitFocus(pane == .split, of: session)
@@ -477,9 +478,11 @@ final class AppActions {
 
     /// Set which pane of a session's split holds focus and move first responder there. Shared by the
     /// GUI `focusPane` and the control channel (which may target a session that isn't the active one).
-    /// Updates `splitFocused` so the pane dim, sidebar, and title bar follow. No-op when not split.
+    /// Updates `splitFocused` so the pane dim, sidebar, and title bar follow. Works whether the split is
+    /// shown side-by-side or hidden: when hidden, flipping `splitFocused` swaps which pane is shown
+    /// maximized. No-op only when the session has no split.
     func setSplitFocus(_ toSplit: Bool, of session: Session) {
-        guard session.isSplit else { return }
+        guard session.hasSplit else { return }
         session.splitFocused = toSplit
         focusSplitPane(session, wantSplit: toSplit)
     }
@@ -656,7 +659,7 @@ final class AppActions {
     private func revealSession(_ sessionID: UUID, pane: PaneRole, in store: AppStore) {
         guard let session = store.session(withID: sessionID) else { return }
         store.selectSession(session.id)
-        let wantSplit = pane == .split && session.isSplit
+        let wantSplit = pane == .split && session.hasSplit
         session.splitFocused = wantSplit
         focusSplitPane(session, wantSplit: wantSplit)
     }
