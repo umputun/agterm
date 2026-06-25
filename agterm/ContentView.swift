@@ -257,6 +257,10 @@ private struct WindowContentView: View {
                 sidebarColumn
                     .frame(width: CGFloat(store.sidebarWidth))
                 sidebarDivider
+                    // draw/hit above the terminal: the divider is the middle HStack child, so without this
+                    // the detail column (drawn last) shadows the right half of the grab handle, leaving only
+                    // a few points grabbable. zIndex lifts the whole handle on top so the full strip works.
+                    .zIndex(1)
             }
             detailColumn
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -295,7 +299,9 @@ private struct WindowContentView: View {
         }
     }
 
-    /// A 1px themed vertical separator with a wider invisible drag handle to resize the sidebar.
+    /// A 1px themed vertical separator with a wider invisible drag handle to resize the sidebar. The
+    /// handle is wider than the line and the divider carries `.zIndex(1)` at the call site so the full
+    /// grab strip is reachable from both sides (the terminal column would otherwise shadow its right half).
     private var sidebarDivider: some View {
         Rectangle()
             .fill(Color.white.opacity(0.1))
@@ -303,7 +309,7 @@ private struct WindowContentView: View {
             .frame(maxHeight: .infinity)
             .overlay {
                 Color.clear
-                    .frame(width: 10)
+                    .frame(width: 12)
                     .contentShape(Rectangle())
                     .onHover { inside in
                         if inside { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() }
