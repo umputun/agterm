@@ -89,6 +89,10 @@ final class ControlServer {
     /// unbounded.
     nonisolated private static let maxLineBytes = 1 << 20
 
+    /// Seconds a blocking client read may stall before it times out (EAGAIN → connection closed), so a
+    /// stalled client can't park the serial accept loop forever.
+    nonisolated private static let readTimeoutSeconds = 5
+
     init(library: WindowLibrary, actions: AppActions, settingsModel: SettingsModel, socketPath: String? = nil) {
         self.library = library
         self.actions = actions
@@ -205,6 +209,11 @@ final class ControlServer {
         // take the whole app down mid-request; SO_NOSIGPIPE turns it into a normal EPIPE write error.
         var noSigPipe: Int32 = 1
         setsockopt(conn, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
+
+        // bound the blocking read so a stalled client can't park the serial accept loop forever — a
+        // timed-out read returns EAGAIN, which readLine treats as a read error and closes the connection.
+        var readTimeout = timeval(tv_sec: readTimeoutSeconds, tv_usec: 0)
+        setsockopt(conn, SOL_SOCKET, SO_RCVTIMEO, &readTimeout, socklen_t(MemoryLayout<timeval>.size))
 
         guard let line = readLine(conn) else {
             writeResponse(conn, ControlResponse(ok: false, error: "request too large or read failed"))
