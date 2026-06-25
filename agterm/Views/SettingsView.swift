@@ -16,7 +16,7 @@ struct SettingsView: View {
             KeyMappingSettingsView(model: model)
                 .tabItem { Label("Key Mapping", systemImage: "keyboard") }
         }
-        .frame(width: 480, height: 420)
+        .frame(width: 480, height: 560)
         // keep macOS from saving/restoring the Settings window across launches. Otherwise a
         // process-launch reopen (see agtermApp's FB11763863 workaround) resurrects a stale Settings
         // window on whatever tab it was last on, which steals key focus from the real launch window.
@@ -124,8 +124,8 @@ private struct GeneralSettingsView: View {
 }
 
 /// Appearance tab: a Terminal section (font family, default font size, theme), a Window section
-/// (compact toolbar, background opacity + blur), and an Agent Status section (the three sidebar glyph
-/// colors). Each control persists and live-applies through `SettingsModel`.
+/// (compact toolbar, background opacity + blur, sidebar tint), and an Agent Status section (the three
+/// sidebar glyph colors). Each control persists and live-applies through `SettingsModel`.
 private struct AppearanceSettingsView: View {
     let model: SettingsModel
     private let themes = SettingsCatalog.themeNames()
@@ -181,6 +181,19 @@ private struct AppearanceSettingsView: View {
                 Text("Blur only takes effect when opacity is below 100%.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+
+                HStack {
+                    Text("Sidebar Tint")
+                    Slider(value: sidebarBackgroundShift, in: 0 ... 10, step: 1)
+                        .accessibilityIdentifier("settings-sidebar-shift")
+                    Text(sidebarShiftLabel)
+                        .monospacedDigit()
+                        .frame(width: 64, alignment: .trailing)
+                }
+
+                Text("Tints the sidebar background lighter or darker than the terminal. Center is no change.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
             }
 
             Section("Agent Status") {
@@ -223,6 +236,24 @@ private struct AppearanceSettingsView: View {
     private var backgroundBlur: Binding<Double> {
         Binding(get: { Double(model.settings.backgroundBlur ?? 0) },
                 set: { model.setBackgroundBlur($0 <= 0 ? nil : Int($0.rounded())) })
+    }
+
+    /// neutral (5) maps to nil so settings.json stays minimal, matching the other appearance controls'
+    /// "unset = default" convention.
+    private var sidebarBackgroundShift: Binding<Double> {
+        Binding(get: { Double(model.settings.sidebarBackgroundShift ?? AppSettings.defaultSidebarBackgroundShift) },
+                set: { value in
+                    let strength = Int(value.rounded())
+                    model.setSidebarBackgroundShift(strength == AppSettings.defaultSidebarBackgroundShift ? nil : strength)
+                })
+    }
+
+    /// "None" at the neutral center, else the direction and magnitude away from it (e.g. "Lighter 2").
+    private var sidebarShiftLabel: String {
+        let offset = (model.settings.sidebarBackgroundShift ?? AppSettings.defaultSidebarBackgroundShift)
+            - AppSettings.defaultSidebarBackgroundShift
+        if offset == 0 { return "None" }
+        return offset < 0 ? "Lighter \(-offset)" : "Darker \(offset)"
     }
 
     /// off (the default) maps to nil so settings.json stays minimal, matching the other appearance

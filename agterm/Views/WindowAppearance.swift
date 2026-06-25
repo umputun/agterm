@@ -46,18 +46,15 @@ enum WindowAppearance {
             setWindowBackgroundBlur(window, radius: 0) // clear any blur applied while translucent
         }
 
-        // on macOS 26 the NavigationSplitView sidebar is a Liquid Glass container wrapping the
-        // sidebar content. `NSGlassEffectView.tintColor` is an INPUT to the glass material, not an
+        // paint the sidebar background, applying the user's lighter/darker shift relative to the
+        // terminal. on macOS 26 the NavigationSplitView sidebar is a Liquid Glass container wrapping
+        // the sidebar content: `NSGlassEffectView.tintColor` is an INPUT to the glass material, not an
         // opaque fill — so AppKit re-cooks it markedly lighter/frostier when the window resigns key,
         // and there is no `NSVisualEffectView.state = .active` equivalent on `NSGlassEffectView` to
-        // pin it. To keep the sidebar a constant terminal color across key/non-key (only visible
-        // once there are multiple windows), stop letting the glass be the background: clear it and
-        // paint our own opaque terminal color on the glass content layer + the scroll view + the
-        // outline. Below full opacity everything stays clear so the translucent window background
-        // shows through.
-        if #available(macOS 26.0, *) {
-            syncSidebarBackground(in: window, background: background, transparent: transparent)
-        }
+        // pin it. To keep the sidebar a constant color across key/non-key (only visible once there are
+        // multiple windows), stop letting the glass be the background: clear it so the window background
+        // shows through (the sidebar tint is layered in SwiftUI — see `syncSidebarBackground`).
+        syncSidebarBackground(in: window)
 
         // the title/terminal separator is drawn in the detail pane (ContentView), so it
         // ends at the sidebar edge rather than spanning the full titlebar width.
@@ -72,34 +69,29 @@ enum WindowAppearance {
         container.firstDescendant(withClassName: "NSTitlebarBackgroundView")?.isHidden = true
     }
 
-    /// Paints the macOS 26 Liquid Glass sidebar a constant terminal color instead of letting the
-    /// glass material be the background (which the system re-renders lighter when the window is not
-    /// key). Clears the glass and fills our own content layer + scroll view + outline with
-    /// `background` at full opacity; keeps everything clear when translucent so the window
-    /// background shows through.
-    @available(macOS 26.0, *)
-    private static func syncSidebarBackground(in window: NSWindow, background: NSColor, transparent: Bool) {
+    /// Keeps the sidebar see-through so the window background shows through it — the opaque terminal
+    /// color at full opacity, or the translucent tinted background + blur below it. The user's
+    /// lighter/darker sidebar shift is layered in SwiftUI (a wash behind the transparent outline, see
+    /// `WindowContentView.sidebarTintWash`) so it composes with the translucency instead of fighting it
+    /// and covers the whole column (tree + bottom bar) uniformly. On macOS 26 the Liquid Glass container
+    /// that could wrap the sidebar is cleared too (defensive — the custom split no longer creates one).
+    private static func syncSidebarBackground(in window: NSWindow) {
         guard let scroll = sidebarScroll(in: window) else { return }
-        if let glass = sidebarGlass(containing: scroll) {
+        if #available(macOS 26.0, *), let glass = sidebarGlass(containing: scroll) {
             glass.style = .clear
             glass.tintColor = nil
             glass.contentView?.wantsLayer = true
-            glass.contentView?.layer?.backgroundColor = transparent ? nil : layerColor(background)
+            glass.contentView?.layer?.backgroundColor = nil
             forceVisualEffectsActive(in: glass)
         }
-        scroll.drawsBackground = !transparent
-        scroll.backgroundColor = transparent ? .clear : background
+        scroll.drawsBackground = false
+        scroll.backgroundColor = .clear
         if let outline = scroll.documentView as? NSOutlineView {
-            outline.backgroundColor = transparent ? .clear : background
+            outline.backgroundColor = .clear
         }
-    }
-
-    private static func layerColor(_ color: NSColor) -> CGColor {
-        (color.usingColorSpace(.deviceRGB) ?? color).cgColor
     }
 
     /// The sidebar's tagged scroll view (`agterm-sidebar-scroll`), searched from the window's root view.
-    @available(macOS 26.0, *)
     private static func sidebarScroll(in window: NSWindow) -> NSScrollView? {
         guard let contentView = window.contentView else { return nil }
         var root: NSView = contentView

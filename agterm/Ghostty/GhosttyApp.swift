@@ -46,6 +46,11 @@ final class GhosttyApp {
     /// pane's `paneDim` overlay reads it (via `AppSettings.muteOpacity`), `SettingsModel` writes it. The
     /// re-render rides the `.agtermAppearanceChanged` notification, like `compactToolbar`.
     private(set) var inactivePaneMuteStrength: Int = AppSettings.defaultInactivePaneMuteStrength
+    /// How much darker/lighter the sidebar background is than the terminal (0...10, 5 = neutral). NOT
+    /// ghostty-resolved: `ContentView` mirrors it into view state and renders the sidebar wash (via
+    /// `AppSettings.sidebarShiftAmount`), `SettingsModel` writes it. The re-render rides the
+    /// `.agtermAppearanceChanged` notification, like `compactToolbar`.
+    private(set) var sidebarBackgroundShift: Int = AppSettings.defaultSidebarBackgroundShift
     /// The agent-status glyph colors (active/blocked/completed). NOT ghostty-resolved: `StatusIconView`
     /// reads them when building the glyph, `SettingsModel` writes them (resolved from the user's hex or
     /// the system default). The sidebar re-render rides the `.agtermAppearanceChanged` notification.
@@ -121,6 +126,12 @@ final class GhosttyApp {
     /// every change; the detail-pane re-render rides the `.agtermAppearanceChanged` notification.
     func setInactivePaneMuteStrength(_ strength: Int) {
         inactivePaneMuteStrength = strength
+    }
+
+    /// Set the sidebar background shift (0...10, 5 = neutral). Called by `SettingsModel` at launch and on
+    /// every change; the window re-sync rides the `.agtermAppearanceChanged` notification.
+    func setSidebarBackgroundShift(_ strength: Int) {
+        sidebarBackgroundShift = strength
     }
 
     /// Set the agent-status glyph colors from the user's hex settings (nil/malformed → the system

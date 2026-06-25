@@ -43,6 +43,7 @@ final class SettingsModel {
         applyCompactToolbar()
         applyNotificationBadgeEnabled()
         applyInactivePaneMute()
+        applySidebarBackgroundShift()
         applyAgentStatusColors()
         // create the commented starter keymap on first launch, then load + parse it.
         ensureStarterKeymap()
@@ -59,6 +60,7 @@ final class SettingsModel {
     func setNotificationBadgeEnabled(_ value: Bool?) { settings.notificationBadgeEnabled = value; persistAndApply() }
     func setMouseScrollMultiplier(_ value: Double?) { settings.mouseScrollMultiplier = value; persistAndApply() }
     func setInactivePaneMuteStrength(_ value: Int?) { settings.inactivePaneMuteStrength = value; persistAndApply() }
+    func setSidebarBackgroundShift(_ value: Int?) { settings.sidebarBackgroundShift = value; persistAndApply() }
     func setActiveStatusColorHex(_ hex: String?) { settings.activeStatusColorHex = hex; persistAndApply() }
     func setBlockedStatusColorHex(_ hex: String?) { settings.blockedStatusColorHex = hex; persistAndApply() }
     func setCompletedStatusColorHex(_ hex: String?) { settings.completedStatusColorHex = hex; persistAndApply() }
@@ -258,6 +260,7 @@ final class SettingsModel {
         applyCompactToolbar()
         applyNotificationBadgeEnabled()
         applyInactivePaneMute()
+        applySidebarBackgroundShift()
         applyAgentStatusColors()
         // refresh the app chrome (title bar + sidebar + quick terminal) with the new terminal color,
         // window translucency, and toolbar style immediately, rather than only when the window next
@@ -285,6 +288,11 @@ final class SettingsModel {
     private func applyInactivePaneMute() {
         GhosttyApp.shared.setInactivePaneMuteStrength(
             settings.inactivePaneMuteStrength ?? AppSettings.defaultInactivePaneMuteStrength)
+    }
+
+    private func applySidebarBackgroundShift() {
+        GhosttyApp.shared.setSidebarBackgroundShift(
+            settings.sidebarBackgroundShift ?? AppSettings.defaultSidebarBackgroundShift)
     }
 
     private func applyAgentStatusColors() {

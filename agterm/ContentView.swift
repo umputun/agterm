@@ -171,6 +171,10 @@ private struct WindowContentView: View {
     /// Mirror of `GhosttyApp.inactivePaneMuteStrength` (0...10): how strongly `paneDim` mutes the
     /// inactive split pane's text. Refreshed on `.agtermAppearanceChanged`, like `compactToolbar`.
     @State private var inactivePaneMute: Int = WindowContentView.resolvedInactivePaneMute()
+    /// Mirror of `GhosttyApp.sidebarBackgroundShift` (0...10, 5 = neutral): how much lighter/darker the
+    /// sidebar background is than the terminal. Drives `sidebarTintWash`; refreshed on
+    /// `.agtermAppearanceChanged`, like `inactivePaneMute`.
+    @State private var sidebarShift: Int = WindowContentView.resolvedSidebarShift()
     /// The terminal theme's foreground color, mirrored from `GhosttyApp` and used for the chrome text
     /// (title bar text + buttons, sidebar bottom bar) so non-terminal text tracks the theme. Refreshed
     /// on `.agtermAppearanceChanged`, like `terminalColor`.
@@ -225,6 +229,7 @@ private struct WindowContentView: View {
             compactToolbar = WindowContentView.resolvedCompactToolbar()
             chromeText = WindowContentView.resolvedChromeText()
             inactivePaneMute = WindowContentView.resolvedInactivePaneMute()
+            sidebarShift = WindowContentView.resolvedSidebarShift()
         }
         // blend the title bar with the terminal; report frontmost/close to the library; surface the
         // window un-minimized on launch. the title token makes updateNSView re-run the blend on a
@@ -272,6 +277,22 @@ private struct WindowContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
         .safeAreaInset(edge: .bottom) { bottomBar }
+        // the lighter/darker sidebar tint: a wash behind the transparent outline + bottom bar, so the
+        // whole column reads as one surface a touch darker/lighter than the terminal. Behind the column
+        // content (so it never tints row text) and over the window background (so it composes with
+        // translucency/blur). Neutral paints nothing.
+        .background(sidebarTintWash)
+    }
+
+    /// The sidebar lighter/darker wash for the current `sidebarShift`: black (darker) or white (lighter)
+    /// at the shift's magnitude, composited over the window background. Compositing this over the window
+    /// background equals blending the terminal color toward black/white, and works the same over an
+    /// opaque or a translucent+blurred backdrop. Neutral (`amount == 0`) renders nothing.
+    @ViewBuilder private var sidebarTintWash: some View {
+        let amount = AppSettings.sidebarShiftAmount(strength: sidebarShift)
+        if amount != 0 {
+            Color(white: amount > 0 ? 0 : 1).opacity(abs(amount))
+        }
     }
 
     /// A 1px themed vertical separator with a wider invisible drag handle to resize the sidebar.
@@ -540,6 +561,12 @@ private struct WindowContentView: View {
     /// so a settings change (posting `.agtermAppearanceChanged`) re-renders the inactive pane live.
     private static func resolvedInactivePaneMute() -> Int {
         GhosttyApp.shared.inactivePaneMuteStrength
+    }
+
+    /// The sidebar background shift from the (non-observable) `GhosttyApp`, mirrored into view state so a
+    /// settings change (posting `.agtermAppearanceChanged`) re-tints the sidebar wash live.
+    private static func resolvedSidebarShift() -> Int {
+        GhosttyApp.shared.sidebarBackgroundShift
     }
 
     /// The terminal theme's foreground color (a light fallback if libghostty hasn't reported one),

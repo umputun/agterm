@@ -157,6 +157,30 @@ struct AppSettingsTests {
         #expect(AppSettings.defaultInactivePaneMuteStrength == 5)
     }
 
+    @Test func sidebarBackgroundShiftRoundTripsAndIsNotAConfigLine() throws {
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(sidebarBackgroundShift: 8)))
+        #expect(decoded.sidebarBackgroundShift == 8)
+        // AppKit-level sidebar tint applied in the app target, never a ghostty config key.
+        #expect(AppSettings(sidebarBackgroundShift: 8).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
+    }
+
+    @Test func sidebarBackgroundShiftDecodesNilWhenAbsent() throws {
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(decoded.sidebarBackgroundShift == nil)
+    }
+
+    @Test func sidebarShiftAmountIsSignedAndClamps() {
+        #expect(AppSettings.sidebarShiftAmount(strength: 5) == 0)
+        #expect(abs(AppSettings.sidebarShiftAmount(strength: 0) - (-0.30)) < 1e-9) // full lighten
+        #expect(abs(AppSettings.sidebarShiftAmount(strength: 10) - 0.30) < 1e-9)   // full darken
+        #expect(AppSettings.sidebarShiftAmount(strength: 7) > 0)                   // above center darkens
+        #expect(AppSettings.sidebarShiftAmount(strength: 3) < 0)                   // below center lightens
+        // out-of-range strengths clamp to the 0...10 ends.
+        #expect(AppSettings.sidebarShiftAmount(strength: -4) == AppSettings.sidebarShiftAmount(strength: 0))
+        #expect(AppSettings.sidebarShiftAmount(strength: 99) == AppSettings.sidebarShiftAmount(strength: 10))
+        #expect(AppSettings.defaultSidebarBackgroundShift == 5)
+    }
+
     @Test func defaultThemeIsAgtermButNotBakedIntoAppSettings() {
         #expect(AppSettings.defaultTheme == "agterm")
         // the seed lives in SettingsStore.load, NOT the memberwise default — AppSettings() stays

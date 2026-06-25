@@ -16,6 +16,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// extreme), used when `inactivePaneMuteStrength` is nil. 5 maps to the historical 0.4 opacity.
     public static let defaultInactivePaneMuteStrength = 5
 
+    /// The out-of-the-box sidebar background shift on the 0...10 scale, used when
+    /// `sidebarBackgroundShift` is nil. 5 is the neutral center (sidebar matches the terminal
+    /// background); below 5 lightens it, above 5 darkens it.
+    public static let defaultSidebarBackgroundShift = 5
+
     /// Terminal font family name (e.g. `SF Mono`), or nil for the ghostty default.
     public var fontFamily: String?
     /// Default terminal font size in points, or nil for the ghostty default.
@@ -66,13 +71,20 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// overlay opacity in the app target (see `muteOpacity(strength:)`), NOT a ghostty key — it never
     /// appears in `ghosttyConfigLines()`.
     public var inactivePaneMuteStrength: Int?
+    /// How much darker or lighter the sidebar background is than the terminal background, on a 0...10
+    /// scale where 5 is neutral (identical to the terminal); below 5 lightens, above 5 darkens. nil
+    /// means the default (`defaultSidebarBackgroundShift`, neutral). Applied in the app target as a
+    /// SwiftUI wash behind the sidebar (see `sidebarShiftAmount`), NOT a ghostty key — it never appears
+    /// in `ghosttyConfigLines()`.
+    public var sidebarBackgroundShift: Int?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 backgroundOpacity: Double? = nil, backgroundBlur: Int? = nil, notificationsEnabled: Bool? = nil,
                 compactToolbar: Bool? = nil, notificationBadgeEnabled: Bool? = nil,
                 activeStatusColorHex: String? = nil, blockedStatusColorHex: String? = nil,
                 completedStatusColorHex: String? = nil, configDirectory: String? = nil,
-                mouseScrollMultiplier: Double? = nil, inactivePaneMuteStrength: Int? = nil) {
+                mouseScrollMultiplier: Double? = nil, inactivePaneMuteStrength: Int? = nil,
+                sidebarBackgroundShift: Int? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -87,6 +99,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.configDirectory = configDirectory
         self.mouseScrollMultiplier = mouseScrollMultiplier
         self.inactivePaneMuteStrength = inactivePaneMuteStrength
+        self.sidebarBackgroundShift = sidebarBackgroundShift
     }
 
     /// The SwiftUI overlay opacity for a given inactive-pane mute strength: the strength is clamped to
@@ -95,6 +108,15 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// text further toward the background (less bright) while leaving background pixels unchanged.
     public static func muteOpacity(strength: Int) -> Double {
         Double(min(10, max(0, strength))) * 0.08
+    }
+
+    /// The signed sidebar background shift for a given strength: the strength is clamped to 0...10 and
+    /// measured from the neutral center (5), so 5 → 0 (no shift), 0 → -0.30 (full lighten), 10 → +0.30
+    /// (full darken). A positive amount darkens (a black wash over the sidebar), a negative one lightens
+    /// (a white wash); the magnitude is the wash opacity. Compositing that wash over the window
+    /// background is what the app target's sidebar tint does (`WindowContentView.sidebarTintWash`).
+    public static func sidebarShiftAmount(strength: Int) -> Double {
+        Double(min(10, max(0, strength)) - 5) * 0.06
     }
 
     /// The ghostty config lines for the set fields, one `key = value` per line, suitable for a
