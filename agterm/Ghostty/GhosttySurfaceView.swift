@@ -510,6 +510,18 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
             try? FileManager.default.removeItem(atPath: f)
             overlayCodeFile = nil
         }
+        // nil the store-capturing callbacks last to break the store -> session -> surface -> closure -> store
+        // retain cycle on every close path. MUST stay after the onExitCodeCaptured?(code) call above; niling
+        // it earlier would silently drop the overlay exit status. no libghostty callback fires once freed.
+        onExit = nil
+        onExitCodeCaptured = nil
+        onFocusChange = nil
+        onUserInputClearsStatus = nil
+        onFontSizeChange = nil
+        onSearchStart = nil
+        onSearchEnd = nil
+        onSearchTotal = nil
+        onSearchSelected = nil
     }
 
     /// `TerminalSurface` conformance: the model calls this when the owning
