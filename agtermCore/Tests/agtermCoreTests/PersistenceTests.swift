@@ -159,6 +159,7 @@ final class PersistenceTests {
         let work = app.addWorkspace(name: "work")
         let session = try! #require(app.addSession(toWorkspace: work.id, cwd: "/a"))
         app.setFontSize(session.id, 17.5)
+        app.save() // font saves are debounced; flush so the write lands before reading back
         #expect(store.load().workspaces[0].sessions[0].fontSize == 17.5)
 
         let restored = AppStore(persistence: store)
@@ -171,9 +172,12 @@ final class PersistenceTests {
         let work = app.addWorkspace(name: "work")
         let a = try! #require(app.addSession(toWorkspace: work.id, cwd: "/a"))
         let b = try! #require(app.addSession(toWorkspace: work.id, cwd: "/b"))
+        // selection saves are debounced; flush via save() so the write lands before reading back.
         app.selectSession(a.id)
+        app.save()
         #expect(store.load().selectedSessionID == a.id)
         app.selectSession(b.id)
+        app.save()
         #expect(store.load().selectedSessionID == b.id)
     }
 
@@ -181,9 +185,12 @@ final class PersistenceTests {
         let app = AppStore(persistence: store)
         let work = app.addWorkspace(name: "work")
         let a = try! #require(app.addSession(toWorkspace: work.id, cwd: "/a"))
+        // selection saves are debounced; flush via save() so the write lands before reading back.
         app.selectSession(a.id)
+        app.save()
         #expect(store.load().selectedSessionID == a.id)
         app.selectSession(nil)
+        app.save()
         #expect(app.selectedSessionID == nil)
         #expect(store.load().selectedSessionID == nil)
     }

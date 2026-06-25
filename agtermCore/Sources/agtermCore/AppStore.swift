@@ -62,6 +62,14 @@ public final class AppStore {
 
     @ObservationIgnored private let persistence: PersistenceStore
 
+    /// Coalesces the high-frequency selection/font saves: a click-storm or a font ramp schedules one
+    /// write ~0.3 s after the burst settles instead of hitting disk per event. `save()` cancels any
+    /// pending scheduled save, so the quit-flush (`saveAllOpen()` → `save()`) still captures the latest.
+    @ObservationIgnored private let saveDebouncer = Debouncer()
+
+    /// The quiet window before a scheduled (selection/font) save writes to disk.
+    private static let saveDebounceInterval: TimeInterval = 0.3
+
     public init(workspaces: [Workspace] = [], selectedSessionID: UUID? = nil,
                 persistence: PersistenceStore = PersistenceStore()) {
         self.workspaces = workspaces
@@ -115,8 +123,8 @@ public final class AppStore {
     /// Selects a session (or clears the selection when passed nil) and persists.
     /// A non-nil id that matches no session is ignored, leaving the current
     /// selection untouched; nil always deselects. Backs the sidebar's
-    /// `List(selection:)` so a click persists immediately rather than waiting for
-    /// the next structural mutation. Visiting a session clears its unseen badge. An
+    /// `List(selection:)` so a click persists (debounced ~0.3 s) rather than waiting
+    /// for the next structural mutation. Visiting a session clears its unseen badge. An
     /// `autoReset` agent indicator (the one-time `completed` flash) is reset to idle on
     /// BOTH the session moved to (you've seen it) and the one moved from (it must not
     /// persist once you leave it); a non-`autoReset` indicator (active/blocked) is left
@@ -129,7 +137,7 @@ public final class AppStore {
         clearAutoResetIndicator(sessionID) // visit: you've seen it
         clearAutoResetIndicator(previous)  // leave: a one-time status must not linger on the row you left
         recordRecency()
-        save()
+        scheduleSave() // selection fires on every click/keystroke — coalesce the writes
     }
 
     /// Reset a session's agent indicator to idle when it is marked `autoReset` (the one-time `completed`
@@ -469,11 +477,12 @@ public final class AppStore {
 
     /// Records a session's terminal font size (points) and persists it. No-ops when
     /// unchanged so the cell-size event firing on a DPI change (not a font change)
-    /// doesn't write. Persisted like a structural mutation, not on every keystroke.
+    /// doesn't write. The save is debounced (~0.3 s) so a font ramp (held ⌘+/⌘−)
+    /// coalesces into one write instead of hitting disk per step.
     public func setFontSize(_ sessionID: UUID, _ size: Double) {
         guard let session = session(withID: sessionID), session.fontSize != size else { return }
         session.fontSize = size
-        save()
+        scheduleSave()
     }
 
     /// Clears every session's per-session font-size override (back to the app default). Called
@@ -544,15 +553,36 @@ public final class AppStore {
         recordRecency()
     }
 
-    /// Persists the current state eagerly. Called after every mutation and on
-    /// terminate. A write failure is logged and swallowed — a transient disk error
+    /// Persists the current state eagerly. Called after every structural mutation and on
+    /// terminate. Cancels any pending debounced save first, so a `save()` (incl. the
+    /// quit-flush) always writes the latest snapshot and a stale scheduled write can't
+    /// fire afterward. A write failure is logged and swallowed — a transient disk error
     /// must not bring down the model.
     public func save() {
+        saveDebouncer.cancel()
         do {
             try persistence.save(snapshot())
         } catch {
             log("save failed: \(error)")
         }
+    }
+
+    /// Debounces a `save()` ~0.3 s out, coalescing the rapid selection/font writes. Used only by
+    /// `selectSession`/`setFontSize`; structural mutations call `save()` immediately. A `save()`
+    /// (or the quit-flush) cancels the pending schedule, so the latest state is always captured.
+    private func scheduleSave() {
+        saveDebouncer.schedule(after: AppStore.saveDebounceInterval) { [weak self] in
+            self?.save()
+        }
+    }
+
+    /// Drops any pending debounced save WITHOUT writing — unlike `save()`, which cancels then writes.
+    /// Used when the owning window is being deleted (`WindowLibrary.removeWindow`): the per-window file
+    /// is about to be removed, so a save scheduled by a just-before-delete selectSession/setFontSize
+    /// must be dropped rather than flushed, else it would fire after the file is deleted and re-create
+    /// it as an orphan.
+    public func cancelPendingSave() {
+        saveDebouncer.cancel()
     }
 
     private func log(_ message: @autoclosure () -> String) {

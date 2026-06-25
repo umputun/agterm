@@ -838,6 +838,68 @@ struct AppStoreTests {
         #expect(session.fontSize == nil)
     }
 
+    @Test func selectSessionThenSavePersistsSelectionToDisk() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let persistence = PersistenceStore(directory: dir)
+        let store = AppStore(persistence: persistence)
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        _ = store.addSession(toWorkspace: ws.id, cwd: "/b")!
+        store.selectSession(a.id)
+        store.save() // selection saves are debounced; save() flushes the write
+        #expect(persistence.load().selectedSessionID == a.id) // persisted to disk, not just in-memory
+    }
+
+    @Test func rapidSelectionAndFontThenSavePersistsLatestSnapshot() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let persistence = PersistenceStore(directory: dir)
+        let store = AppStore(persistence: persistence)
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        _ = store.addSession(toWorkspace: ws.id, cwd: "/b")!
+        let c = store.addSession(toWorkspace: ws.id, cwd: "/c")!
+        // a burst of debounced selection/font changes; save() writes the latest state once
+        store.selectSession(a.id)
+        store.selectSession(c.id)
+        store.setFontSize(c.id, 18)
+        store.save()
+        let loaded = persistence.load()
+        #expect(loaded.selectedSessionID == c.id)               // the latest selection won
+        #expect(loaded.workspaces[0].sessions[2].fontSize == 18) // and the latest font change landed
+    }
+
+    @Test func selectSessionDefersWriteUntilSaveFlushes() {
+        // guards the DEBOUNCE itself: selectSession must NOT write synchronously. addSession saves
+        // immediately (structural), so disk shows the last-added session selected; a debounced
+        // selectSession leaves the disk unchanged until save() flushes. A revert to a synchronous
+        // save() in selectSession fails the middle assertion.
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let persistence = PersistenceStore(directory: dir)
+        let store = AppStore(persistence: persistence)
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: ws.id, cwd: "/b")! // structural save: disk now selects b
+        #expect(persistence.load().selectedSessionID == b.id)
+        store.selectSession(a.id)                                // debounced — must not hit disk yet
+        #expect(persistence.load().selectedSessionID == b.id)    // still b: the write was deferred
+        store.save()                                             // flush
+        #expect(persistence.load().selectedSessionID == a.id)    // now a is persisted
+    }
+
+    @Test func setFontSizeDefersWriteUntilSaveFlushes() {
+        // same guard for setFontSize: the per-keystroke font change is debounced, not synchronous.
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let persistence = PersistenceStore(directory: dir)
+        let store = AppStore(persistence: persistence)
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")! // structural save: fontSize nil on disk
+        #expect(persistence.load().workspaces[0].sessions[0].fontSize == nil)
+        store.setFontSize(a.id, 18)                              // debounced — must not hit disk yet
+        #expect(persistence.load().workspaces[0].sessions[0].fontSize == nil) // still nil: deferred
+        store.save()                                             // flush
+        #expect(persistence.load().workspaces[0].sessions[0].fontSize == 18)
+    }
+
     @Test func closeUnknownSessionIsIgnored() {
         let store = Self.makeStore()
         let ws = store.addWorkspace(name: "work")
