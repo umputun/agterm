@@ -110,10 +110,11 @@ enum AgentHooksInstaller {
     // write text to a path, PRESERVING an existing symlink: when the path is a symlink (e.g. a
     // dotfiles-managed `~/.claude/settings.json` or `~/.zshrc`), write atomically to its resolved
     // target so the symlink and the user's dotfiles stay intact, instead of an atomic rename
-    // replacing the symlink with a standalone regular file.
-    private static func writePreservingSymlink(_ text: String, to url: URL) throws {
+    // replacing the symlink with a standalone regular file. when `posixMode` is non-nil the resolved
+    // target inherits that mode so a restrictive (chmod-600) file isn't widened by the atomic rewrite.
+    private static func writePreservingSymlink(_ text: String, to url: URL, posixMode: NSNumber? = nil) throws {
         let target = symlinkTarget(of: url) ?? url
-        try text.write(to: target, atomically: true, encoding: .utf8)
+        try AgentHooksInstall.writeFile(text, toPath: target.path, posixMode: posixMode)
     }
 
     // the resolved target if `url` itself is a symlink (following a chain), else nil. Uses
@@ -139,11 +140,19 @@ enum AgentHooksInstaller {
         }
         guard merged.changed else { return false }
         try FileManager.default.createDirectory(at: claudeDir, withIntermediateDirectories: true)
-        if let existing { // back up the prior file before overwriting it
+        // resolve the symlink target FIRST (so a dotfiles-managed settings.json link survives) and read
+        // its mode once, so the rewrite AND the .bak inherit the original (possibly chmod-600) mode
+        // instead of an atomic rename widening a secret file to 0644.
+        let target = symlinkTarget(of: settings) ?? settings
+        let mode = AgentHooksInstall.posixMode(ofFile: target.path)
+        if let existing { // back up the prior file before overwriting it, with the source's mode
+            // keep the .bak next to ~/.claude/settings.json (the symlink), NOT next to the resolved
+            // target — a dotfiles-managed link resolves into a git-tracked dir we must not litter; only
+            // the MODE comes from the resolved target.
             let backup = AgentHooksInstall.backupPath(for: settings.path)
-            try existing.write(toFile: backup, atomically: true, encoding: .utf8)
+            try AgentHooksInstall.writeFile(existing, toPath: backup, posixMode: mode)
         }
-        try writePreservingSymlink(merged.json, to: settings)
+        try writePreservingSymlink(merged.json, to: settings, posixMode: mode)
         return false
     }
 

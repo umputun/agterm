@@ -1,9 +1,11 @@
 import Foundation
 
-/// Pure, host-free helpers for installing the agent-status hooks package. The app side does the
-/// actual filesystem work (copying the bundled scripts, writing the files, the `.bak` backup); this
-/// type owns only the testable string/JSON transforms — given the current file contents and the
-/// installed script directory it returns the new contents plus a `changed` flag, all idempotent.
+/// Host-free helpers for installing the agent-status hooks package. Most are testable string/JSON
+/// transforms — given the current file contents and the installed script directory they return the new
+/// contents plus a `changed` flag, all idempotent. It also provides a small mode-preserving file write
+/// (`writeFile`/`posixMode`) so rewriting a restrictive-mode file (e.g. a chmod-600 `settings.json`)
+/// keeps its permissions instead of an atomic rename widening it to 0644. The app side still owns
+/// copying the bundled scripts and resolving symlinks.
 public enum AgentHooksInstall {
     /// The wrapper script the hooks invoke, installed into the script directory.
     public static let wrapperName = "agterm-agent-status.sh"
@@ -99,6 +101,24 @@ public enum AgentHooksInstall {
     /// hook entry. e.g. `<scriptDir>/agterm-agent-status.sh`.
     public static func wrapperPath(scriptDir: String) -> String {
         scriptDir + "/" + wrapperName
+    }
+
+    /// the POSIX permission bits of the file at `path`, or nil when the file is absent or its
+    /// attributes can't be read. Used to capture a file's mode before a mode-preserving rewrite.
+    public static func posixMode(ofFile path: String) -> NSNumber? {
+        guard let attrs = try? FileManager.default.attributesOfItem(atPath: path) else { return nil }
+        return attrs[.posixPermissions] as? NSNumber
+    }
+
+    /// write `text` to `path` atomically, then re-apply `posixMode` when non-nil so the rewrite keeps
+    /// the original file's permissions. An atomic write renames a fresh 0644 temp over the target, which
+    /// would otherwise widen a restrictive mode (e.g. a chmod-600 secret) to 0644; re-applying the
+    /// captured mode restores it. A nil `posixMode` leaves the new file's default permissions untouched.
+    public static func writeFile(_ text: String, toPath path: String, posixMode: NSNumber?) throws {
+        try text.write(toFile: path, atomically: true, encoding: .utf8)
+        if let posixMode {
+            try FileManager.default.setAttributes([.posixPermissions: posixMode], ofItemAtPath: path)
+        }
     }
 
     // build the command string a Claude hook runs: the quoted wrapper path plus the state argument.

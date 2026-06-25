@@ -153,4 +153,42 @@ struct AgentHooksInstallTests {
     @Test func backupPathHandlesPathWithoutExtension() {
         #expect(AgentHooksInstall.backupPath(for: "/home/me/.zshrc") == "/home/me/.zshrc.bak")
     }
+
+    private func makeTempDir() throws -> URL {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-hooks-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        return dir
+    }
+
+    @Test func writeFilePreservesPosixMode() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let path = dir.appendingPathComponent("settings.json").path
+        try "old contents".write(toFile: path, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o600)], ofItemAtPath: path)
+        let mode = AgentHooksInstall.posixMode(ofFile: path)
+        try AgentHooksInstall.writeFile("new contents", toPath: path, posixMode: mode)
+        #expect(AgentHooksInstall.posixMode(ofFile: path)?.intValue == 0o600) // mode survives the rewrite
+        #expect((try? String(contentsOfFile: path, encoding: .utf8)) == "new contents")
+    }
+
+    @Test func writeFileWithNilModeCreatesFile() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let path = dir.appendingPathComponent("fresh.json").path
+        try AgentHooksInstall.writeFile("hello", toPath: path, posixMode: nil)
+        #expect(FileManager.default.fileExists(atPath: path))
+        #expect((try? String(contentsOfFile: path, encoding: .utf8)) == "hello")
+        #expect(AgentHooksInstall.posixMode(ofFile: path) != nil) // some default mode was assigned
+    }
+
+    @Test func posixModeReturnsModeAndNilForAbsent() throws {
+        let dir = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let path = dir.appendingPathComponent("secret").path
+        try "x".write(toFile: path, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o600)], ofItemAtPath: path)
+        #expect(AgentHooksInstall.posixMode(ofFile: path)?.intValue == 0o600)
+        #expect(AgentHooksInstall.posixMode(ofFile: dir.appendingPathComponent("nope").path) == nil)
+    }
 }
