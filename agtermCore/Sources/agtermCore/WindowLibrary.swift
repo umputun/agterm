@@ -323,6 +323,12 @@ public final class WindowLibrary {
     /// `frontmostWindowID` if it pointed at the removed window.
     public func removeWindow(_ id: UUID) {
         guard canRemoveWindow, let index = windows.firstIndex(where: { $0.id == id }) else { return }
+        // cancel the store's pending debounced save BEFORE deleting the file — a save scheduled by a
+        // just-before-delete selectSession/setFontSize captures the store weakly and fires ~0.3 s out;
+        // since the delete-path willClose teardown skips its own save() (the window is no longer open),
+        // an un-cancelled pending save would fire after removeItem and re-create windows/<id>.json as an
+        // orphan that a future index loss would resurrect via recoverOrphanedWindows().
+        stores[id]?.cancelPendingSave()
         stores[id] = nil
         windows.remove(at: index)
         if frontmostWindowID == id { frontmostWindowID = nil }
@@ -388,9 +394,11 @@ public final class WindowLibrary {
 
     // MARK: - Bootstrap (migration + recovery)
 
-    /// Resolves the window set on init: load `windows.json` if valid, else migrate from legacy
-    /// `workspaces.json`, else seed one empty window. Reopens the persisted open-set (never
-    /// windowless — falls back to the frontmost/first window).
+    /// Resolves the window set on init: load `windows.json` if valid; else recover orphaned per-window
+    /// `windows/<id>.json` files into a fresh index when any are present (so a future schema bump that
+    /// invalidates the index doesn't lose the trees); else migrate from legacy `workspaces.json`; else
+    /// seed one empty window. Reopens the persisted open-set (never windowless — falls back to the
+    /// frontmost/first window).
     private func bootstrap() {
         if let index = loadIndex() {
             windows = index.windows.map { WindowInfo(id: $0.id, name: $0.name) }
@@ -398,8 +406,11 @@ public final class WindowLibrary {
             reopen(index)
             return
         }
+        // index unreadable but per-window files survive: recover them rather than discard the user's
+        // sessions (a future schema bump that invalidates the index must not lose the trees).
+        if recoverOrphanedWindows() { return }
         if migrateLegacy() { return }
-        // no index and no legacy file: seed one empty default-named window ("window 1" at count 0).
+        // no index, no orphans, and no legacy file: seed one empty default-named window ("window 1").
         newWindow()
     }
 
@@ -423,6 +434,34 @@ public final class WindowLibrary {
         let frontmostExists = index.frontmost.map { id in windows.contains { $0.id == id } } ?? false
         let fallback = (frontmostExists ? index.frontmost : nil) ?? windows.first?.id
         if let fallback { loadStore(for: fallback) }
+    }
+
+    /// When `windows.json` is unreadable/version-mismatched but per-window `windows/<id>.json` files
+    /// survive, recovers them into a fresh index instead of falling through to legacy/seeding (which
+    /// would discard the user's sessions). Each file whose name stem is a valid UUID becomes an OPEN
+    /// window named "window N", numbered in filename order so the numbering and the frontmost pick are
+    /// deterministic; the first recovered window becomes frontmost. Files with a non-UUID stem are
+    /// skipped. Returns false when no recoverable per-window files exist (the caller then tries
+    /// legacy migration, else seeds). Recovering every orphan as open means the launch reopen-all
+    /// opens them all on screen at once — acceptable for this rare recovery path.
+    @discardableResult
+    private func recoverOrphanedWindows() -> Bool {
+        let contents = (try? FileManager.default.contentsOfDirectory(at: windowsDirectory,
+                                                                     includingPropertiesForKeys: nil)) ?? []
+        // stable filename order so "window N" numbering and the frontmost pick are deterministic.
+        let ids = contents
+            .filter { $0.pathExtension == "json" }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+            .compactMap { UUID(uuidString: $0.deletingPathExtension().lastPathComponent) }
+        guard !ids.isEmpty else { return false }
+        let infos = ids.enumerated().map { WindowInfo(id: $0.element, name: "window \($0.offset + 1)") }
+        // append ALL infos FIRST — loadStore(for:) guards on `windows.contains(id)`, so loading a
+        // store before the append would silently no-op.
+        windows.append(contentsOf: infos)
+        for info in infos { loadStore(for: info.id) }
+        frontmostWindowID = infos.first?.id
+        saveIndex()
+        return true
     }
 
     /// If `windows.json` is absent but legacy `workspaces.json` exists, wraps it into one window

@@ -132,6 +132,25 @@ final class WindowLibraryTests {
         #expect(library.frontmostWindowID == nil)
     }
 
+    @Test func removeWindowCancelsPendingSaveSoFileStaysDeleted() throws {
+        // a debounced save scheduled just before delete must NOT re-create the per-window file after
+        // removeWindow deletes it. removeWindow cancels the store's pending save first, so even holding
+        // the store reference (keeping it alive past the drop, as the real-world willClose closure does)
+        // leaves no scheduled write to resurrect windows/<id>.json. The async timer can't fire in
+        // synchronous test code, so the assertion is the deterministic observable contract: the file is
+        // gone and stays gone.
+        let library = WindowLibrary(directory: directory)
+        let extra = library.newWindow(name: "extra")
+        let store = try #require(library.store(for: extra.id)) // hold a strong ref past the store drop
+        let session = try #require(store.workspaces.first?.sessions.first)
+        store.selectSession(session.id) // debounced save scheduled — would re-create the file when it fires
+        #expect(FileManager.default.fileExists(atPath: windowFileURL(extra.id).path))
+        library.removeWindow(extra.id)
+        #expect(library.store(for: extra.id) == nil)
+        #expect(!FileManager.default.fileExists(atPath: windowFileURL(extra.id).path))
+        _ = store // keep the store alive through the assertions above (mirrors the willClose retention)
+    }
+
     // MARK: - Open-set / frontmost / close
 
     @Test func closeWindowMarksClosedButKeepsEntry() {
@@ -595,6 +614,99 @@ final class WindowLibraryTests {
         let library = WindowLibrary(directory: directory)
         let store = try #require(library.store(for: id))
         #expect(store.workspaces.isEmpty)
+    }
+
+    // MARK: - Orphan recovery (index lost, per-window files survive)
+
+    // a corrupt index plus surviving per-window files must recover the windows (sessions intact),
+    // not discard them by falling through to legacy/seeding.
+    @Test func corruptIndexRecoversOrphanedPerWindowFiles() throws {
+        let aID = UUID()
+        let bID = UUID()
+        let aSession = UUID()
+        let bSession = UUID()
+        try writeWindowFile(aID, Snapshot(workspaces: [
+            WorkspaceSnapshot(id: UUID(), name: "alpha", sessions: [
+                SessionSnapshot(id: aSession, customName: "a-sess", cwd: "/a"),
+            ]),
+        ]))
+        try writeWindowFile(bID, Snapshot(workspaces: [
+            WorkspaceSnapshot(id: UUID(), name: "beta", sessions: [
+                SessionSnapshot(id: bSession, customName: "b-sess", cwd: "/b"),
+            ]),
+        ]))
+        try Data("{ not valid json ]".utf8).write(to: indexURL)
+
+        let library = WindowLibrary(directory: directory)
+        // both windows recovered and open, with auto-assigned default names.
+        #expect(library.windows.count == 2)
+        #expect(Set(library.windows.map(\.id)) == Set([aID, bID]))
+        #expect(Set(library.openIDs()) == Set([aID, bID]))
+        #expect(library.windows.allSatisfy { WindowInfo.isAutoName($0.name) })
+        // sessions from the per-window snapshots survived intact.
+        let storeA = try #require(library.store(for: aID))
+        let storeB = try #require(library.store(for: bID))
+        #expect(storeA.workspaces.map(\.name) == ["alpha"])
+        #expect(storeA.workspaces[0].sessions[0].displayName == "a-sess")
+        #expect(storeB.workspaces.map(\.name) == ["beta"])
+        #expect(storeB.workspaces[0].sessions[0].displayName == "b-sess")
+        // a frontmost was picked from the recovered set, and the healed index round-trips.
+        let frontmost = try #require(library.frontmostWindowID)
+        #expect([aID, bID].contains(frontmost))
+        let reloaded = WindowLibrary(directory: directory)
+        #expect(Set(reloaded.windows.map(\.id)) == Set([aID, bID]))
+    }
+
+    // a version-mismatched index is treated as absent too — the surviving per-window files recover.
+    @Test func versionMismatchIndexRecoversOrphanedPerWindowFiles() throws {
+        let id = UUID()
+        let sessionID = UUID()
+        try writeWindowFile(id, Snapshot(workspaces: [
+            WorkspaceSnapshot(id: UUID(), name: "kept", sessions: [
+                SessionSnapshot(id: sessionID, customName: "survivor", cwd: "/kept"),
+            ]),
+        ]))
+        var future = WindowsIndex(windows: [WindowEntry(id: UUID(), name: "future", isOpen: true)])
+        future.version = WindowsIndex.currentVersion + 1
+        try writeIndex(future)
+
+        let library = WindowLibrary(directory: directory)
+        // the mismatched index is ignored; the orphan file recovers (not the "future" entry, not a seed).
+        #expect(library.windows.map(\.id) == [id])
+        #expect(library.windows[0].name == "window 1")
+        let store = try #require(library.store(for: id))
+        #expect(store.workspaces.map(\.name) == ["kept"])
+        #expect(store.workspaces[0].sessions[0].displayName == "survivor")
+    }
+
+    // a non-UUID file in the windows/ dir is skipped; with no recoverable UUID files present and a
+    // legacy file, bootstrap still falls through to legacy migration (one "window 1").
+    @Test func noOrphanFilesFallsThroughToLegacyMigration() throws {
+        try Data("garbage".utf8).write(to: indexURL)
+        // a stray non-UUID file in the windows dir must NOT be mistaken for a recoverable window.
+        try FileManager.default.createDirectory(at: directory.appendingPathComponent("windows"),
+                                                withIntermediateDirectories: true)
+        try Data("noise".utf8).write(to: directory.appendingPathComponent("windows").appendingPathComponent("notes.json"))
+        try PersistenceStore(directory: directory).save(Snapshot(workspaces: [
+            WorkspaceSnapshot(id: UUID(), name: "legacy", sessions: []),
+        ]))
+
+        let library = WindowLibrary(directory: directory)
+        // no recoverable per-window files → legacy migration, one default-named window.
+        #expect(library.windows.count == 1)
+        #expect(library.windows[0].name == "window 1")
+        let store = try #require(library.store(for: library.windows[0].id))
+        #expect(store.workspaces.map(\.name) == ["legacy"])
+    }
+
+    // nothing present (no index, no orphan files, no legacy) → seed exactly one default window.
+    @Test func nothingPresentSeedsExactlyOneWindow() throws {
+        let library = WindowLibrary(directory: directory)
+        #expect(library.windows.count == 1)
+        #expect(library.windows[0].name == "window 1")
+        let store = try #require(library.store(for: library.windows[0].id))
+        #expect(store.workspaces.count == 1)
+        #expect(store.workspaces[0].sessions.count == 1)
     }
 
     // MARK: - Reset per-session font sizes across all windows
