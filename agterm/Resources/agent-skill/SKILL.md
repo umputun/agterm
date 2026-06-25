@@ -4,7 +4,8 @@ description: >
   Drive agterm, a native macOS terminal app, programmatically via its agtermctl CLI and a local
   control socket. Use when running inside an agterm session and asked to control the terminal:
   create, rename, close, select, or reorder sessions and workspaces; split panes; toggle the
-  per-session scratch terminal; open or close overlay terminals and read their exit status; type
+  per-session scratch terminal; open or close overlay terminals and read their exit status; display
+  an image inline via a bundled helper script; type
   into a session, copy its selection, or search its scrollback; post desktop notifications; manage windows (new, list,
   select, close, resize, move); change font size; or reload and edit the keymap. Also covers the
   window/workspace/session addressing model and the AGTERM_* environment a spawned shell sees.
@@ -13,8 +14,8 @@ when_to_use: >
   session.split, session.scratch, session.focus, session.go, session.copy, session.search, session.status,
   session.overlay, workspace.new, workspace.select, workspace.move, window.new, window.list,
   window.select, window.resize, window.move, quick terminal, sidebar, notify, font.inc, keymap.reload,
-  theme.set, theme.list, select theme, edit keymap, AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive
-  or script agterm.
+  theme.set, theme.list, select theme, edit keymap, show an image, display an image inline, show-image,
+  AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm.
 user-invocable: false
 allowed-tools: Bash(agtermctl *)
 ---
@@ -104,7 +105,9 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 - `focus [left|right|other]` — move focus between split panes.
 - `status <idle|active|completed|blocked> [--blink] [--auto-reset]` — set the sidebar agent glyph.
 - `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N]` · `overlay close` ·
-  `overlay result` — run a program on top of a session; `--block` waits and exits with its status.
+  `overlay result` — run a program on top of a session; `--block` waits and exits with its status. An
+  overlay is a real terminal (pty), which is also how you **display an image inline** — via the bundled
+  `scripts/show-image.sh` (see below).
 
 **window** — `new [name]` · `list` · `select <id>` · `close <id>` · `rename <id> <name>` ·
 `delete <id>` · `resize <id> --width W --height H` · `move <id> --x X --y Y [--display N]`.
@@ -123,6 +126,22 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 terminal theme app-wide. The app default is the bundled **agterm** theme; omit the name for ghostty's
 built-in default ("default ghostty"); an unknown name errors.
 
+## Displaying an image inline
+
+This skill bundles `scripts/show-image.sh`. It opens an overlay (a real terminal) and renders the
+image there via the kitty graphics protocol, which ghostty draws natively — no kitty binary and no
+external image tool, just `base64` + `printf`. Run it with the image path (optional size percent,
+default 60):
+
+```bash
+bash ~/.claude/skills/agterm/scripts/show-image.sh <image> [size-percent]   # Claude Code
+bash ~/.codex/skills/agterm/scripts/show-image.sh <image> [size-percent]    # Codex
+```
+
+Do NOT print graphics escapes to your own tool stdout (the agent harness escapes the control bytes)
+and do NOT run an image viewer in your tool shell (no controlling terminal). The overlay is what makes
+it render. Outside agterm (`AGTERM_ENABLED` unset) there is no overlay — fall back to `open <image>`.
+
 ## Reference files
 
 - **reference.md** — full per-command detail: every flag, the JSON return shapes
@@ -130,5 +149,6 @@ built-in default ("default ghostty"); an unknown name errors.
   lifecycle, and the keymap.conf format (`map` / `command`, chords, leaders, `{AGT_X}` tokens).
 - **examples.md** — copy-paste agtermctl recipes for common tasks (build a layout, run a program in a
   blocking overlay and read its status, type into a fresh session, notify, inspect the tree).
+- **scripts/show-image.sh** — bundled helper that displays an image inline in an overlay (see above).
 
 Read those files when you need exact flags, return shapes, or worked examples.

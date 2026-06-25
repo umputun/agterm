@@ -65,6 +65,32 @@ agtermctl session overlay open "make test"
 agtermctl session overlay result --json   # errors "still running" until it exits, then result.exitCode
 ```
 
+## Show an image inline
+
+To show the user an image (a generated favicon, a chart, a preview), run the bundled
+`scripts/show-image.sh` with the image path. It opens an overlay (a real terminal) and renders the
+image there via the kitty graphics protocol, which ghostty draws natively — no kitty binary and no
+external image tool, just `base64` + `printf`. An optional second argument sets the panel size percent
+(default 60):
+
+```bash
+bash ~/.claude/skills/agterm/scripts/show-image.sh /abs/path/to/img.png 60   # Claude Code
+bash ~/.codex/skills/agterm/scripts/show-image.sh /abs/path/to/img.png 60    # Codex
+```
+
+The image shows in a floating overlay over the active session; dismiss it with Enter in the panel or
+`agtermctl session overlay close`. Do NOT emit graphics escapes to your own tool stdout (the harness
+escapes the control bytes) and do NOT run an image viewer in your tool shell (no controlling
+terminal) — the overlay's real terminal is what renders.
+
+Tiny images (a favicon) enlarge with nearest-neighbor first, so the pixels stay crisp:
+
+```bash
+magick favicon.png -filter point -resize 256x256 /tmp/big.png
+```
+
+Outside agterm (`AGTERM_ENABLED` unset) there is no overlay — fall back to `open img.png` (Preview).
+
 ## Toggle the scratch terminal
 
 A third per-session full-coverage shell. Hide keeps it alive; `exit` in it recreates on next show.

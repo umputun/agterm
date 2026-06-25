@@ -103,6 +103,16 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 - `session overlay result [--target] [--window W]` — returns `result.exitCode` once the overlay has
   closed. Errors `still running` while up, `no result` if none ran.
 
+**Displaying an image inline.** This skill bundles `scripts/show-image.sh`. It opens an overlay (a
+real terminal surface) and renders the image there via the kitty graphics protocol, which ghostty —
+agterm's engine — draws natively. No kitty binary and no external image viewer are used; the encoder
+is plain `base64` + `printf`. Run it as `bash <skill-dir>/scripts/show-image.sh <image> [size-percent]`
+(the skill installs to `~/.claude/skills/agterm/` and `~/.codex/skills/agterm/`, so the path is
+`~/.claude/skills/agterm/scripts/show-image.sh` or `~/.codex/skills/agterm/scripts/show-image.sh`).
+Two simpler routes fail and are why the overlay is needed: emitting graphics escapes to the agent's own
+tool stdout (the harness escapes the control bytes) and running an image viewer in the agent's tool
+shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage.
+
 ## window
 
 - `window new [name]` — create and open a window; returns its id.
