@@ -409,12 +409,14 @@ struct AppStoreTests {
         let split = SpySurface(); session.splitSurface = split
         session.isSplit = true
         session.hasSplit = true
+        session.splitRatio = 0.4
         store.closeSplitPane(session.id)
         #expect(store.session(withID: session.id) != nil) // session survives
         #expect(split.teardownCount == 1)                 // the split is torn down
         #expect(primary.teardownCount == 0)               // the primary is kept
         #expect(session.splitSurface == nil)
         #expect(session.isSplit == false)
+        #expect(session.splitRatio == nil)                // delegates to closeSplit, which clears the ratio
     }
 
     @Test func closeSplitPaneWithoutPrimaryClosesSession() {
@@ -533,6 +535,15 @@ struct AppStoreTests {
         store.restore(from: Snapshot(workspaces: []))
         #expect(store.sidebarWidth == 220)
         #expect(store.sidebarVisible == true)
+    }
+
+    @Test func restoreClampsOutOfRangeSidebarWidth() {
+        // a corrupt or hand-edited snapshot must not drive an out-of-range frame width; restore clamps it.
+        let store = Self.makeStore()
+        store.restore(from: Snapshot(workspaces: [], sidebarWidth: 2000))
+        #expect(store.sidebarWidth == AppStore.sidebarWidthMax)
+        store.restore(from: Snapshot(workspaces: [], sidebarWidth: 10))
+        #expect(store.sidebarWidth == AppStore.sidebarWidthMin)
     }
 
     @Test func splitRatioRoundTripsThroughSnapshot() {
