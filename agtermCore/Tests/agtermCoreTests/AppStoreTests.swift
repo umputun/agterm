@@ -507,6 +507,42 @@ struct AppStoreTests {
         #expect(r.isSplit == true)
     }
 
+    @Test func sidebarWidthAndVisibilityRoundTripThroughSnapshot() {
+        let store = Self.makeStore()
+        _ = store.addWorkspace(name: "work")
+        store.sidebarWidth = 312
+        store.sidebarVisible = false
+        let snap = store.snapshot()
+        #expect(snap.sidebarWidth == 312)
+        #expect(snap.sidebarVisible == false)
+        let restored = Self.makeStore()
+        restored.restore(from: snap)
+        #expect(restored.sidebarWidth == 312)
+        #expect(restored.sidebarVisible == false)
+    }
+
+    @Test func sidebarDefaultsWhenSnapshotOmitsThem() {
+        // a snapshot written before these fields existed decodes them as nil; restore falls back to defaults.
+        let store = Self.makeStore()
+        store.sidebarWidth = 400
+        store.sidebarVisible = false
+        store.restore(from: Snapshot(workspaces: []))
+        #expect(store.sidebarWidth == 220)
+        #expect(store.sidebarVisible == true)
+    }
+
+    @Test func splitRatioRoundTripsThroughSnapshot() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.isSplit = true
+        session.splitRatio = 0.63
+        #expect(store.snapshot().workspaces[0].sessions[0].splitRatio == 0.63)
+        let restored = Self.makeStore()
+        restored.restore(from: store.snapshot())
+        #expect(restored.workspaces[0].sessions[0].splitRatio == 0.63)
+    }
+
     @Test func openOverlaySetsCommandAndFlag() {
         let store = Self.makeStore()
         let ws = store.addWorkspace(name: "work")

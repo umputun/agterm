@@ -101,7 +101,7 @@ xcodebuild test -project agterm.xcodeproj -scheme agterm -destination 'platform=
 
 ### Persistence
 
-- Auto-persist on every change and on quit; restore the tree, names, selection, each session's working directory and font size, the split state, and the status-bar visibility on the next launch.
+- Auto-persist on every change and on quit; restore the tree, names, selection, each session's working directory and font size, the split state and each split's divider ratio, and each window's sidebar width and visibility on the next launch.
 
 ## Scripting agterm
 

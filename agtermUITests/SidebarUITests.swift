@@ -224,4 +224,38 @@ final class SidebarUITests: XCTestCase {
         }
         return false
     }
+
+    /// Sidebar visibility persists per-window: hiding it records `sidebarVisible=false` in the snapshot,
+    /// it survives a relaunch (the sidebar restores hidden, so no `session-row`s show), and showing it
+    /// again records `true` and reveals the restored session. Width and split ratio are geometric (no AX
+    /// value, the divider has no queryable element), so those stay on the host-free `AppStore` round-trip
+    /// tests; visibility is observable here in both the snapshot file and the rows' presence.
+    func testSidebarVisibilityPersistsAcrossRelaunch() throws {
+        XCTAssertTrue(sessionRow().firstMatch.waitForExistence(timeout: 20), "seeded session should exist")
+
+        // hide via the title-bar toggle; the toggle's save() must record sidebarVisible=false.
+        let toggle = app.buttons["sidebar-toggle-button"]
+        XCTAssertTrue(toggle.waitForHittable(timeout: 8), "sidebar toggle should be hittable")
+        toggle.click()
+        XCTAssertTrue(stateDir.pollSnapshot(equals: false, timeout: 8) { $0["sidebarVisible"] as? Bool },
+                      "hiding should persist sidebarVisible=false")
+
+        // relaunch with the same state dir; the sidebar must restore HIDDEN. The toggle is present either
+        // way (proves the window rendered); the rows stay absent because the sidebar is hidden.
+        app.terminate()
+        app = XCUIApplication()
+        app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
+        app.launchForUITest()
+        let toggleAfter = app.buttons["sidebar-toggle-button"]
+        XCTAssertTrue(toggleAfter.waitForHittable(timeout: 20), "window should render with the sidebar toggle")
+        XCTAssertFalse(sessionRow().firstMatch.waitForExistence(timeout: 3),
+                       "the sidebar should restore hidden (no session rows)")
+
+        // showing it again reveals the restored session and persists sidebarVisible=true.
+        toggleAfter.click()
+        XCTAssertTrue(sessionRow().firstMatch.waitForExistence(timeout: 8),
+                      "the restored session appears when the sidebar is shown again")
+        XCTAssertTrue(stateDir.pollSnapshot(equals: true, timeout: 8) { $0["sidebarVisible"] as? Bool },
+                      "showing should persist sidebarVisible=true")
+    }
 }

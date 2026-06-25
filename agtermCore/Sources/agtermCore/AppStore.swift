@@ -35,10 +35,14 @@ public final class AppStore {
     public var workspaces: [Workspace]
     public var selectedSessionID: UUID?
 
-    /// Whether this window's sidebar is shown. Ephemeral per-window UI state (NOT in `Snapshot`, so it
-    /// resets to visible on relaunch); the custom split owns visibility, so the toolbar button, the View
-    /// menu item, the action palette, and the `sidebar` control command all flip this one flag.
+    /// Whether this window's sidebar is shown. Per-window UI state, persisted in `Snapshot` (restored on
+    /// relaunch); the custom split owns visibility, so the toolbar button, the View menu item, the action
+    /// palette, and the `sidebar` control command all flip this one flag.
     public var sidebarVisible = true
+
+    /// This window's sidebar width in points. Per-window UI state, persisted in `Snapshot`. Driven by the
+    /// sidebar divider drag (clamped in the view); restored on relaunch.
+    public var sidebarWidth: Double = 220
 
     /// Most-recently-selected session ids, front = current. Drives the Ctrl-Tab switcher
     /// (`items[1]` is the previous session). `@ObservationIgnored`: read imperatively by the
@@ -484,10 +488,11 @@ public final class AppStore {
             WorkspaceSnapshot(id: workspace.id, name: workspace.name, sessions: workspace.sessions.map { session in
                 SessionSnapshot(id: session.id, customName: session.customName, cwd: session.currentCwd ?? session.initialCwd,
                                 isSplit: session.isSplit, fontSize: session.fontSize,
-                                splitCwd: session.splitCwd ?? session.initialSplitCwd)
+                                splitCwd: session.splitCwd ?? session.initialSplitCwd, splitRatio: session.splitRatio)
             })
         }
-        return Snapshot(selectedSessionID: selectedSessionID, workspaces: workspaceSnapshots)
+        return Snapshot(selectedSessionID: selectedSessionID, workspaces: workspaceSnapshots,
+                        sidebarWidth: sidebarWidth, sidebarVisible: sidebarVisible)
     }
 
     /// Rebuilds the tree from a snapshot: fresh `Session`s (surfaces and shells
@@ -506,10 +511,13 @@ public final class AppStore {
                 session.hasSplit = session.isSplit
                 session.fontSize = sessionSnapshot.fontSize
                 session.initialSplitCwd = sessionSnapshot.splitCwd
+                session.splitRatio = sessionSnapshot.splitRatio
                 return session
             }
             return Workspace(id: workspaceSnapshot.id, name: workspaceSnapshot.name, sessions: sessions)
         }
+        sidebarWidth = snapshot.sidebarWidth ?? 220
+        sidebarVisible = snapshot.sidebarVisible ?? true
         if let id = snapshot.selectedSessionID, session(withID: id) == nil {
             selectedSessionID = nil
         } else {

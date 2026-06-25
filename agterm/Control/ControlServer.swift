@@ -707,7 +707,10 @@ final class ControlServer {
         case "toggle": want = !store.sidebarVisible
         default: return ControlResponse(ok: false, error: "invalid sidebar mode: \(mode)")
         }
-        if want != store.sidebarVisible { store.sidebarVisible = want }
+        if want != store.sidebarVisible {
+            store.sidebarVisible = want
+            store.save() // sidebarVisible is persisted per-window
+        }
         return ControlResponse(ok: true)
     }
 

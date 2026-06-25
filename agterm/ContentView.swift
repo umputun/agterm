@@ -172,10 +172,9 @@ private struct WindowContentView: View {
     /// (title bar text + buttons, sidebar bottom bar) so non-terminal text tracks the theme. Refreshed
     /// on `.agtermAppearanceChanged`, like `terminalColor`.
     @State private var chromeText: Color = WindowContentView.resolvedChromeText()
-    /// Custom sidebar width (we own the split now, not NavigationSplitView): drag-resizable, not persisted.
-    /// Show/hide lives on `store.sidebarVisible` (ephemeral per-window) so the toolbar button, the View
-    /// menu, the palette, and the `sidebar` control command share one flag.
-    @State private var sidebarWidth: CGFloat = 220
+    /// Custom sidebar width and show/hide both live on the per-window `AppStore` (`sidebarWidth` /
+    /// `sidebarVisible`), persisted in `Snapshot` so they restore on relaunch. The toolbar button, the View
+    /// menu, the palette, and the `sidebar` control command share `sidebarVisible`.
     /// Height of the custom titlebar row: one short line in compact mode, two lines (title + cwd)
     /// otherwise. The split content is inset by this so it sits below the row.
     private var titlebarHeight: CGFloat { compactToolbar ? 30 : 48 }
@@ -247,7 +246,7 @@ private struct WindowContentView: View {
         HStack(spacing: 0) {
             if store.sidebarVisible {
                 sidebarColumn
-                    .frame(width: sidebarWidth)
+                    .frame(width: CGFloat(store.sidebarWidth))
                 sidebarDivider
             }
             detailColumn
@@ -290,8 +289,10 @@ private struct WindowContentView: View {
                         // feeds back on itself and the line flickers. Absolute position is stable.
                         DragGesture(minimumDistance: 1, coordinateSpace: .global)
                             .onChanged { value in
-                                sidebarWidth = min(560, max(160, value.location.x))
+                                store.sidebarWidth = Double(min(560, max(160, value.location.x)))
                             }
+                            // persist the new width once, on release, not on every drag tick.
+                            .onEnded { _ in store.save() }
                     )
             }
     }
@@ -361,6 +362,9 @@ private struct WindowContentView: View {
                         TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
                                      isActive: isActive && !session.splitFocused && !overlaid)
                             .overlay { paneDim(session.splitFocused) }
+                            // introspects the AppKit NSSplitView to persist/restore the divider ratio; a
+                            // background (not a third pane), unconditional so it never perturbs the split shape.
+                            .background { SplitRatioAccessor(session: session, onPersist: { store.save() }) }
                             .id(session.id)
                         TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
                                      isActive: isActive && session.splitFocused && !overlaid)
@@ -573,7 +577,7 @@ private struct WindowContentView: View {
                     Spacer(minLength: 0)
                     sidebarToggleButton.labelStyle(.iconOnly)
                 }
-                .frame(width: max(40, sidebarWidth - 78))
+                .frame(width: max(40, CGFloat(store.sidebarWidth) - 78))
                 Color.clear.frame(width: 11) // 1px divider + gap to the title
             } else {
                 sidebarToggleButton.labelStyle(.iconOnly)
@@ -1196,5 +1200,94 @@ private final class WindowCloseDelegateProxy: NSObject, NSWindowDelegate {
 
     nonisolated override func forwardingTarget(for selector: Selector!) -> Any? {
         forwardingDelegate?.responds(to: selector) == true ? forwardingDelegate : super.forwardingTarget(for: selector)
+    }
+}
+
+/// Bridges to the AppKit `NSSplitView` under SwiftUI's `HSplitView` to persist and restore the split
+/// divider ratio — no public SwiftUI API exposes the divider position. Attached as a `.background` on the
+/// primary pane so its `NSView` lives inside the split's view tree without becoming a third arranged pane.
+/// Once the split has a real width it restores `session.splitRatio` via `setPosition`; on each divider
+/// resize it writes the current left-pane fraction back to the session, which the next `save()` (or the
+/// quit-flush) persists, like a live cwd change.
+private struct SplitRatioAccessor: NSViewRepresentable {
+    let session: Session
+    let onPersist: () -> Void
+
+    func makeNSView(context _: Context) -> SplitProbeView {
+        let view = SplitProbeView(session: session)
+        view.onPersist = onPersist
+        return view
+    }
+    func updateNSView(_ nsView: SplitProbeView, context _: Context) { nsView.onPersist = onPersist }
+
+    final class SplitProbeView: NSView {
+        private let session: Session
+        var onPersist: (() -> Void)?
+        nonisolated(unsafe) private var resizeObserver: NSObjectProtocol?
+        nonisolated(unsafe) private var saveWorkItem: DispatchWorkItem?
+        private weak var splitView: NSSplitView?
+        private var restored = false
+
+        init(session: Session) {
+            self.session = session
+            super.init(frame: .zero)
+        }
+
+        @available(*, unavailable)
+        required init?(coder _: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+        override func layout() {
+            super.layout()
+            attachIfNeeded()
+            guard !restored, let split = splitView else { return }
+            if let ratio = session.splitRatio {
+                let total = split.bounds.width
+                guard total > 1 else { return } // wait for a real width; retried on each layout pass
+                split.setPosition(total * CGFloat(ratio), ofDividerAt: 0)
+            }
+            restored = true
+        }
+
+        /// Find the enclosing `NSSplitView` once it's in the tree, then observe divider moves.
+        private func attachIfNeeded() {
+            guard splitView == nil, let split = enclosingSplitView() else { return }
+            splitView = split
+            resizeObserver = NotificationCenter.default.addObserver(
+                forName: NSSplitView.didResizeSubviewsNotification, object: split, queue: .main) { [weak self] _ in
+                self?.capture()
+            }
+        }
+
+        /// Record the current left-pane fraction onto the session, skipping no-op and degenerate values so a
+        /// window resize that keeps the ratio doesn't churn it.
+        private func capture() {
+            guard restored, let split = splitView, let first = split.arrangedSubviews.first else { return }
+            let total = split.bounds.width
+            guard total > 1 else { return }
+            let ratio = Double(first.frame.width / total)
+            guard ratio > 0.05, ratio < 0.95 else { return }
+            if let current = session.splitRatio, abs(current - ratio) < 0.004 { return }
+            session.splitRatio = ratio
+            // persist shortly after the drag settles (debounced) so a force-quit keeps it too, symmetric
+            // with the sidebar width; coalesces the many resize ticks of one drag into a single save().
+            saveWorkItem?.cancel()
+            let work = DispatchWorkItem { [weak self] in self?.onPersist?() }
+            saveWorkItem = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
+        }
+
+        private func enclosingSplitView() -> NSSplitView? {
+            var view: NSView? = superview
+            while let current = view {
+                if let split = current as? NSSplitView { return split }
+                view = current.superview
+            }
+            return nil
+        }
+
+        deinit {
+            saveWorkItem?.cancel()
+            if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
+        }
     }
 }

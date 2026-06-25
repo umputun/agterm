@@ -13,12 +13,19 @@ public struct Snapshot: Codable, Equatable, Sendable {
     public var version: Int
     public var selectedSessionID: UUID?
     public var workspaces: [WorkspaceSnapshot]
+    /// The window's sidebar width in points, or nil for the default. Optional so a snapshot already on
+    /// disk before this field was added still decodes, like the SessionSnapshot fields below.
+    public var sidebarWidth: Double?
+    /// Whether the window's sidebar is shown, or nil for the default (shown). Optional for forward-compat.
+    public var sidebarVisible: Bool?
 
     public init(version: Int = Snapshot.currentVersion, selectedSessionID: UUID? = nil,
-                workspaces: [WorkspaceSnapshot] = []) {
+                workspaces: [WorkspaceSnapshot] = [], sidebarWidth: Double? = nil, sidebarVisible: Bool? = nil) {
         self.version = version
         self.selectedSessionID = selectedSessionID
         self.workspaces = workspaces
+        self.sidebarWidth = sidebarWidth
+        self.sidebarVisible = sidebarVisible
     }
 }
 
@@ -56,14 +63,18 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     /// hasn't reported a PWD yet; nil when there is no split. Optional for forward-compat like the
     /// fields above.
     public var splitCwd: String?
+    /// The split divider's left-pane fraction (0...1), so the side-by-side ratio restores. Optional for
+    /// forward-compat; nil restores the even default.
+    public var splitRatio: Double?
 
     public init(id: UUID, customName: String?, cwd: String, isSplit: Bool? = nil, fontSize: Double? = nil,
-                splitCwd: String? = nil) {
+                splitCwd: String? = nil, splitRatio: Double? = nil) {
         self.id = id
         self.customName = customName
         self.cwd = cwd
         self.isSplit = isSplit
         self.fontSize = fontSize
         self.splitCwd = splitCwd
+        self.splitRatio = splitRatio
     }
 }
