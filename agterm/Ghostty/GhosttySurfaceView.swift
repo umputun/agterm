@@ -201,14 +201,28 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         // so persisting here would thrash the disk. Live cwd is persisted on quit
         // and on structural mutations (add/close/move/rename/select), not on every
         // cd, so a crash/force-quit loses only cwd changes since the last save.
-        if isSplitPane { session?.splitCwd = pwd } else { session?.currentCwd = pwd }
+        //
+        // Guard on a real value change: OSC 7 re-emits the same pwd on every prompt
+        // redraw, so an equal write would still notify @Observable observers and churn
+        // the sidebar reconcile for nothing.
+        if isSplitPane {
+            if session?.splitCwd != pwd { session?.splitCwd = pwd }
+        } else {
+            if session?.currentCwd != pwd { session?.currentCwd = pwd }
+        }
     }
 
     func applyTitle(_ title: String) {
         // Already on the main actor (the callback hops via DispatchQueue.main.async).
         // `oscTitle`/`splitTitle` are observed, so the sidebar row and window title refresh live. Like
         // applyPwd, this deliberately does NOT save(): OSC set-title re-fires on every prompt redraw.
-        if isSplitPane { session?.splitTitle = title } else { session?.oscTitle = title }
+        //
+        // Guard on a real value change so an equal re-emit doesn't notify observers and churn the sidebar.
+        if isSplitPane {
+            if session?.splitTitle != title { session?.splitTitle = title }
+        } else {
+            if session?.oscTitle != title { session?.oscTitle = title }
+        }
     }
 
     func handleProcessExit() {
