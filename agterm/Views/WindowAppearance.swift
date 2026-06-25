@@ -46,9 +46,10 @@ enum WindowAppearance {
             setWindowBackgroundBlur(window, radius: 0) // clear any blur applied while translucent
         }
 
-        // paint the sidebar background, applying the user's lighter/darker shift relative to the
-        // terminal. on macOS 26 the NavigationSplitView sidebar is a Liquid Glass container wrapping
-        // the sidebar content: `NSGlassEffectView.tintColor` is an INPUT to the glass material, not an
+        // keep the sidebar see-through so the window background shows through it (the lighter/darker
+        // tint is layered in SwiftUI, not here). on macOS 26 the NavigationSplitView sidebar is a Liquid
+        // Glass container wrapping the sidebar content: `NSGlassEffectView.tintColor` is an INPUT to the
+        // glass material, not an
         // opaque fill — so AppKit re-cooks it markedly lighter/frostier when the window resigns key,
         // and there is no `NSVisualEffectView.state = .active` equivalent on `NSGlassEffectView` to
         // pin it. To keep the sidebar a constant color across key/non-key (only visible once there are
