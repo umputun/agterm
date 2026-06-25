@@ -61,10 +61,11 @@ public final class Session: Identifiable {
     /// Observed, so the detail pane can dim the inactive pane. Meaningless when not split.
     public var splitFocused: Bool = false
 
-    /// The split divider's left-pane fraction (0...1), captured from the live `NSSplitView` so the
-    /// side-by-side ratio survives a hide/show and a relaunch (persisted in `SessionSnapshot`). Seeded on
-    /// restore, kept current by the split's introspection accessor; `@ObservationIgnored` because it is
-    /// read/written imperatively, not by any SwiftUI view. nil = the even default.
+    /// The split divider's left-pane fraction, captured from the live `NSSplitView` so the side-by-side
+    /// ratio survives a hide/show and a relaunch (persisted in `SessionSnapshot`). Within
+    /// `AppStore.splitRatioMin...splitRatioMax` (~0.05...0.95) - the capture skips degenerate extremes and
+    /// restore clamps. Seeded on restore, kept current by the split's introspection accessor;
+    /// `@ObservationIgnored` because it is read/written imperatively, not by any SwiftUI view. nil = even.
     @ObservationIgnored public var splitRatio: Double?
 
     /// The second pane's surface, lazily created on first split. `@ObservationIgnored`

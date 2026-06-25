@@ -546,6 +546,18 @@ struct AppStoreTests {
         #expect(store.sidebarWidth == AppStore.sidebarWidthMin)
     }
 
+    @Test func restoreClampsOutOfRangeSplitRatio() {
+        // a corrupt snapshot ratio must not feed an out-of-range fraction into NSSplitView.setPosition.
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.isSplit = true
+        session.splitRatio = 5.0
+        let restored = Self.makeStore()
+        restored.restore(from: store.snapshot())
+        #expect(restored.workspaces[0].sessions[0].splitRatio == AppStore.splitRatioMax)
+    }
+
     @Test func splitRatioRoundTripsThroughSnapshot() {
         let store = Self.makeStore()
         let ws = store.addWorkspace(name: "work")

@@ -1267,7 +1267,7 @@ private struct SplitRatioAccessor: NSViewRepresentable {
             let total = split.bounds.width
             guard total > 1 else { return }
             let ratio = Double(first.frame.width / total)
-            guard ratio > 0.05, ratio < 0.95 else { return }
+            guard ratio > AppStore.splitRatioMin, ratio < AppStore.splitRatioMax else { return }
             if let current = session.splitRatio, abs(current - ratio) < 0.004 { return }
             session.splitRatio = ratio
             // persist shortly after the drag settles (debounced) so a force-quit keeps it too, symmetric

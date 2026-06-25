@@ -50,6 +50,11 @@ public final class AppStore {
     public static let sidebarWidthMin: Double = 160
     public static let sidebarWidthMax: Double = 560
 
+    /// The persisted split-divider left-pane fraction bounds. The live capture skips degenerate extremes
+    /// outside this range and `restore()` clamps to it, so the on-disk ratio is always within bounds.
+    public static let splitRatioMin: Double = 0.05
+    public static let splitRatioMax: Double = 0.95
+
     /// Most-recently-selected session ids, front = current. Drives the Ctrl-Tab switcher
     /// (`items[1]` is the previous session). `@ObservationIgnored`: read imperatively by the
     /// switcher, not by any SwiftUI view, and not persisted.
@@ -519,7 +524,9 @@ public final class AppStore {
                 session.hasSplit = session.isSplit
                 session.fontSize = sessionSnapshot.fontSize
                 session.initialSplitCwd = sessionSnapshot.splitCwd
-                session.splitRatio = sessionSnapshot.splitRatio
+                // clamp on restore (like sidebarWidth) so a corrupt snapshot can't feed an out-of-range
+                // fraction into NSSplitView.setPosition; nil stays nil (the even default).
+                session.splitRatio = sessionSnapshot.splitRatio.map { min(AppStore.splitRatioMax, max(AppStore.splitRatioMin, $0)) }
                 return session
             }
             return Workspace(id: workspaceSnapshot.id, name: workspaceSnapshot.name, sessions: sessions)

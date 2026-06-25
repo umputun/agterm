@@ -63,8 +63,9 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     /// hasn't reported a PWD yet; nil when there is no split. Optional for forward-compat like the
     /// fields above.
     public var splitCwd: String?
-    /// The split divider's left-pane fraction (0...1), so the side-by-side ratio restores. Optional for
-    /// forward-compat; nil restores the even default.
+    /// The split divider's left-pane fraction, so the side-by-side ratio restores. Within
+    /// `AppStore.splitRatioMin...splitRatioMax` (~0.05...0.95): the live capture skips degenerate extremes
+    /// and restore clamps to the same bounds. Optional for forward-compat; nil restores the even default.
     public var splitRatio: Double?
 
     public init(id: UUID, customName: String?, cwd: String, isSplit: Bool? = nil, fontSize: Double? = nil,
