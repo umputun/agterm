@@ -93,6 +93,12 @@ final class ControlServer {
     /// stalled client can't park the serial accept loop forever.
     nonisolated private static let readTimeoutSeconds = 5
 
+    /// Overall seconds a single connection's request read may take before it's abandoned. `readTimeoutSeconds`
+    /// only bounds each `read()`, so a slow-loris client trickling one byte per interval (each under the
+    /// per-read timeout) never sends a newline yet keeps the serial accept loop busy indefinitely. This caps
+    /// the total read time; a legit one-line request arrives in milliseconds, far under the cap.
+    nonisolated private static let readDeadlineSeconds = 10
+
     init(library: WindowLibrary, actions: AppActions, settingsModel: SettingsModel, socketPath: String? = nil) {
         self.library = library
         self.actions = actions
@@ -244,11 +250,15 @@ final class ControlServer {
     }
 
     /// Read bytes from `conn` up to (and excluding) the first newline, capping at `maxLineBytes`. Returns
-    /// nil on EOF-before-newline, read error, or cap exceeded.
+    /// nil on EOF-before-newline, read error, the `maxLineBytes` cap, or the `readDeadlineSeconds` overall cap.
     nonisolated private static func readLine(_ conn: Int32) -> Data? {
         var buffer = Data()
         var byte: UInt8 = 0
+        // overall deadline: SO_RCVTIMEO bounds each read, but a slow trickle (a byte per sub-timeout
+        // interval) would otherwise loop forever without a newline. cap the total read time too.
+        let deadline = DispatchTime.now() + .seconds(readDeadlineSeconds)
         while true {
+            if DispatchTime.now() > deadline { return nil }
             let n = read(conn, &byte, 1)
             if n == 0 { return buffer.isEmpty ? nil : buffer } // EOF: accept a trailing line without newline.
             if n < 0 {
