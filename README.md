@@ -1,12 +1,14 @@
 # agterm
 
-`agterm` is a native macOS terminal for working with AI coding agents across many sessions at once. It is intentionally opinionated: rather than scattering shells across tabs, it organizes them into named workspaces, each holding the sessions for one project or context, so several agent-driven sessions can run side by side and you can move between them without losing track of which is which.
+`agterm` is a native macOS terminal for working with AI coding agents across many sessions at once. It is intentionally opinionated: rather than scattering shells across tabs, it organizes them into named workspaces, each holding the sessions for one project or context, so several agent-driven sessions can run side by side and you can move between them without losing track of which is which. The motivation is specific: running several coding agents at once means many long-lived sessions, each progressing on its own, and a tabbed terminal loses track of them quickly. agterm keeps them organized and makes it obvious which session needs you. None of this is limited to agents. It also works as a capable general-purpose terminal for everyday multi-project work.
 
 What sets it apart:
 
-- **Workspace organization.** A vertical, two-level sidebar groups sessions under named workspaces such as "work" and "personal". Sessions split into two shells, drag between workspaces, and are reached by name, recency, or keyboard, so a screen full of concurrent sessions stays legible.
-- **Programmatic control.** A companion CLI, `agtermctl`, drives almost everything over a local socket: create sessions, type into them, run a program in an overlay and read its exit status, move and resize windows, or post a desktop notification tied to a specific session. An external script or an AI agent can build and steer its own terminal layout, and notify you in the exact session it was working in, rather than being stuck inside a single shell.
+- **Workspace organization.** A vertical, two-level sidebar groups sessions under named workspaces such as "work" and "personal". Sessions split into two shells, open a scratch terminal on demand, drag between workspaces, and are reached by name, recency, or keyboard, so a screen full of concurrent sessions stays legible.
+- **Programmatic control.** A bundled command-line tool, `agtermctl`, drives almost everything over a local socket: create sessions, type into them, run a program in an overlay and read its exit status, move and resize windows, or post a desktop notification tied to a specific session. An external script or an AI agent can build and steer its own terminal layout, and notify you in the exact session it was working in, rather than being stuck inside a single shell.
 - **A working surface built for flow.** Split a session into two shells, drop a quick scratch terminal over the active one, or run a program in a full or floating overlay without disturbing the session beneath it. Navigation stays on the keyboard: jump to a session by name with a fuzzy palette, flip through a most-recently-used list with Ctrl-Tab for a quick jump back, and step between sessions, panes, and windows with shortcuts. Windows that are open at quit reopen on the next launch.
+- **Built to be driven by agents.** agterm ships with an agent skill (Help ▸ Install Agent Skill…) that teaches Claude Code or Codex the control model and the full `agtermctl` command set. An agent running inside agterm can then build its own layout, run overlays, manage windows, and display images inline, without you explaining the API first.
+- **Agent status at a glance.** A coding agent reports its state onto its session's sidebar row as a tinted glyph (active, blocked, or completed), so a screen of concurrent agents shows which one needs you. Wiring it up is automatic: the app installs status hooks for Claude Code and notify and shell scripts for Codex and other agents (Help ▸ Install Agent Status Hooks…).
 
 For the real terminal work, rendering, VT parsing, and shell I/O, `agterm` embeds [Ghostty](https://ghostty.org)'s engine (libghostty); everything above is `agterm`'s own.
 
@@ -29,6 +31,9 @@ Direct download:
 Download the latest `.dmg` from the [releases page](https://github.com/umputun/agterm/releases), open it, and drag `agterm.app` into `/Applications`. To put the `agtermctl` CLI on your `PATH`, use **Help ▸ Install Command Line Tool…** from the app.
 
 ## Build from source
+
+<details>
+<summary>Build steps</summary>
 
 Requirements:
 
@@ -55,23 +60,47 @@ cd agtermCore && swift test
 xcodebuild test -project agterm.xcodeproj -scheme agterm -destination 'platform=macOS'
 ```
 
+</details>
+
 ## Features
+
+### Workspaces and sessions
 
 - Two-level sidebar tree: workspaces, each containing sessions. Each row carries a leading kind icon: a filled folder for a workspace, an outlined terminal for a session.
 - Default session name is the basename of the session's working directory. Renaming a session pins a custom name; clearing it reverts to the basename.
 - Add workspaces and sessions from a two-icon bar at the bottom of the sidebar: a workspace button, and a session menu offering **New Session** (a shell in the home directory) and **Open Directory…** (a folder picker that roots the session there). The two session actions are also on each workspace row's right-click menu, so a specific or empty workspace can be targeted.
 - Rename inline (double-click a row or use its `Rename` context-menu item). Close a session from its context menu, or it closes itself when the shell exits. Delete a whole workspace from its right-click menu (also in the menu bar and the action palette); a non-empty workspace asks to confirm first, and the last remaining workspace can't be deleted.
 - Move a session between workspaces by dragging it onto another workspace, or via the row's `Move to` menu. The session keeps running across the move, with its shell and scrollback intact. Reorder a session within its workspace by dragging it up or down, and reorder workspaces by dragging them. Dropping between two rows places the dragged row at that exact position rather than just appending it.
+
+### Terminals: split, scratch, quick, and search
+
 - A quick terminal: a single scratch terminal overlaid at 90% of the window (toolbar button next to the split toggle), opening in the active session's directory. Click the button again or the surrounding margin to dismiss; hiding keeps its shell alive. It is not persisted across launches.
 - A per-session scratch terminal (⌘J, the toolbar button next to the split toggle, View ▸ Show/Hide Scratch, or the action palette): a third shell for the session that covers it full-screen like an overlay but, like the split, is always available and just hidden — toggling it back keeps the same shell alive. It opens in the session's directory; typing `exit` closes it, and the next toggle starts a fresh shell. In-terminal search (⌘F) works inside it. Each session has its own; it is not persisted across launches.
 - In-terminal text search (⌘F, View ▸ Find…, or the action palette): a small search bar opens at the top of the focused terminal — a main pane, a split pane, or the scratch terminal when it is shown. Typing a query highlights matches in the live scrollback and shows an "N of M" counter; Enter steps to the next match, Shift-Enter to the previous (or click the up/down buttons), and Esc (or ⌘F again) closes and returns focus to the terminal.
+
+### Navigation
+
 - A standard macOS menu bar mirrors the in-app actions with keyboard shortcuts: **File** — New Session (⌘N), New Workspace (⇧⌘N), Open Directory… (⌘O), Rename Session/Workspace, Delete Workspace, Close Session (⌘W, terminal-style: closes the active session); **View** — Show/Hide Sidebar (⌃⌘S), Split (⌘D), Scratch (⌘J), Find… (⌘F), Quick Terminal (⌃`), the command palettes, Previous/Next Session (⌥⌘↑/⌥⌘↓), Previous/Next Attention Session (⌃⌥↑/⌃⌥↓, jump between sessions with a blocked/completed status glyph), First/Last Session (menu and palette only, no hotkey), Increase/Decrease/Actual font size (⌘+/⌘−/⌘0), Select Theme… (the live-preview theme picker).
 - Two fuzzy-search command palettes (type to filter, ↑/↓ to move, Enter to run, Esc to dismiss): the **session switcher** (⌃P) jumps between open sessions by name or working directory, and the **action palette** (⌃⇧P) runs any command (new/rename/close, delete workspace, split, scratch, toggle sidebar, quick terminal, font size, move session to a workspace, …). Results sort by match quality then alphabetically. Both are also in the View menu.
-- A live-preview theme picker (View ▸ Select Theme…, the action palette's "Select Theme…", or the `select_theme` keymap action): a fuzzy-search palette of the bundled themes that applies each one to the open terminals **as you navigate or filter** — Enter commits it (and syncs Settings), Esc reverts to the theme you started on. The full theme catalog stays out of the action palette; only the single "Select Theme…" launcher appears there. The app's default theme (a fresh install) is the bundled **agterm** theme; a "default ghostty" entry selects ghostty's own built-in colors.
 - A Ctrl-Tab session switcher (macOS app-switcher style): hold Ctrl and tap Tab to walk a most-recently-used list of sessions across all workspaces (the previous session pre-selected on top, Ctrl+Shift+Tab reverses), then release Ctrl to switch. A quick tap of Ctrl+Tab flips straight to the previously visited session.
-- A Settings window (Cmd+,) with **General**, **Appearance**, and **Key Mapping** tabs. **General** toggles macOS notification banners and the sidebar notification count badges, and sets the mouse-wheel/trackpad scroll speed (a multiplier, default 3). **Appearance → Terminal** sets the terminal font family, default font size, and ghostty theme (any of the 512 bundled themes); **Appearance → Window** sets background opacity and blur (a translucent, optionally blurred window — the sidebar's Liquid Glass tints to match on macOS 26). **Key Mapping** points at the config directory holding `keymap.conf` (see Customizing keys), lists any parse diagnostics, and has a Reload button. Changes persist and apply live to open terminals. Applying a font/theme change resets per-session cmd-+/- zoom to the default.
-- Terminal desktop notifications: a program's OSC 9 / 777 notification from any session or pane surfaces as a macOS banner and an unseen-count badge on the sidebar row (rolled up onto a collapsed workspace row). Clicking the banner brings agterm forward and focuses the exact pane; focusing a session clears its badge and dismisses its delivered banners. A notification from the pane you're already focused on is suppressed. Banners can be turned off with the **Show notification banners** toggle in General settings; the red count badges can be hidden separately with **Show notification badges** — the count keeps tracking either way (it reappears with the current count when re-enabled), and the agent-status indicator is unaffected.
+
+### Windows
+
 - Named windows: a window is a top-level bundle of workspaces and sessions, each in its own on-screen macOS window. Keep a library of windows (for example "work" and "personal"), open one per on-screen window, and create, rename, or delete them from the **File** menu (New Window ⌥⌘N, Open Window ▸, Rename Window…, Delete Window) or the action palette. Each bundle shows in exactly one window. The set of windows open at quit reopens on the next launch, with their frames restored. Quitting (menu or ⌘Q) asks to confirm first, reporting how many windows and sessions it will close.
+
+### Notifications
+
+- Terminal desktop notifications: a program's OSC 9 / 777 notification from any session or pane surfaces as a macOS banner and an unseen-count badge on the sidebar row (rolled up onto a collapsed workspace row). Clicking the banner brings agterm forward and focuses the exact pane; focusing a session clears its badge and dismisses its delivered banners. A notification from the pane you're already focused on is suppressed. Banners can be turned off with the **Show notification banners** toggle in General settings; the red count badges can be hidden separately with **Show notification badges** — the count keeps tracking either way (it reappears with the current count when re-enabled), and the agent-status indicator is unaffected.
+
+### Customization and settings
+
+- A live-preview theme picker (View ▸ Select Theme…, the action palette's "Select Theme…", or the `select_theme` keymap action): a fuzzy-search palette of the bundled themes that applies each one to the open terminals **as you navigate or filter** — Enter commits it (and syncs Settings), Esc reverts to the theme you started on. The full theme catalog stays out of the action palette; only the single "Select Theme…" launcher appears there. The app's default theme (a fresh install) is the bundled **agterm** theme; a "default ghostty" entry selects ghostty's own built-in colors.
+- A Settings window (Cmd+,) with **General**, **Appearance**, and **Key Mapping** tabs. **General** toggles macOS notification banners and the sidebar notification count badges, and sets the mouse-wheel/trackpad scroll speed (a multiplier, default 3). **Appearance → Terminal** sets the terminal font family, default font size, and ghostty theme (any of the 512 bundled themes); **Appearance → Window** sets background opacity and blur (a translucent, optionally blurred window — the sidebar's Liquid Glass tints to match on macOS 26). **Key Mapping** points at the config directory holding `keymap.conf` (see Customizing keys), lists any parse diagnostics, and has a Reload button. Changes persist and apply live to open terminals. Applying a font/theme change resets per-session cmd-+/- zoom to the default.
+- Keyboard-driven and customizable: every action is reachable by a keyboard shortcut, not only from the menus, toolbar icons, and palettes, and every built-in shortcut can be rebound in a `keymap.conf` file (see Customizing keys).
+- Custom commands: bind any shell command to a key or list it in the action palette through `keymap.conf`. The focused session's directory and selection pass to the command as tokens, so you can drive your own user-defined workflows (open an editor, deploy, launch a TUI) without changing the app.
+
+### Persistence
+
 - Auto-persist on every change and on quit; restore the tree, names, selection, each session's working directory and font size, the split state, and the status-bar visibility on the next launch.
 
 ## Scripting agterm
