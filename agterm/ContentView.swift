@@ -289,7 +289,7 @@ private struct WindowContentView: View {
                         // feeds back on itself and the line flickers. Absolute position is stable.
                         DragGesture(minimumDistance: 1, coordinateSpace: .global)
                             .onChanged { value in
-                                store.sidebarWidth = Double(min(560, max(160, value.location.x)))
+                                store.sidebarWidth = min(AppStore.sidebarWidthMax, max(AppStore.sidebarWidthMin, Double(value.location.x)))
                             }
                             // persist the new width once, on release, not on every drag tick.
                             .onEnded { _ in store.save() }
@@ -1254,7 +1254,9 @@ private struct SplitRatioAccessor: NSViewRepresentable {
             splitView = split
             resizeObserver = NotificationCenter.default.addObserver(
                 forName: NSSplitView.didResizeSubviewsNotification, object: split, queue: .main) { [weak self] _ in
-                self?.capture()
+                // the observer fires on the main queue; assume the main actor to call the @MainActor
+                // `capture()`, matching the codebase's notification-closure pattern (e.g. ControlServer).
+                MainActor.assumeIsolated { self?.capture() }
             }
         }
 

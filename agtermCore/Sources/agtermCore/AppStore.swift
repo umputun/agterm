@@ -41,8 +41,14 @@ public final class AppStore {
     public var sidebarVisible = true
 
     /// This window's sidebar width in points. Per-window UI state, persisted in `Snapshot`. Driven by the
-    /// sidebar divider drag (clamped in the view); restored on relaunch.
-    public var sidebarWidth: Double = 220
+    /// sidebar divider drag (clamped to `sidebarWidthMin...sidebarWidthMax`); restored on relaunch.
+    public var sidebarWidth: Double = AppStore.sidebarWidthDefault
+
+    /// The sidebar width default and drag/restore bounds, shared by the view's divider drag and the
+    /// `restore()` clamp so the two can't drift (and a hand-edited snapshot can't drive an out-of-range frame).
+    public static let sidebarWidthDefault: Double = 220
+    public static let sidebarWidthMin: Double = 160
+    public static let sidebarWidthMax: Double = 560
 
     /// Most-recently-selected session ids, front = current. Drives the Ctrl-Tab switcher
     /// (`items[1]` is the previous session). `@ObservationIgnored`: read imperatively by the
@@ -241,6 +247,7 @@ public final class AppStore {
         session.splitCwd = nil
         session.splitTitle = nil
         session.initialSplitCwd = nil
+        session.splitRatio = nil // tearing down the split clears its geometry too, so a fresh split opens even
         // a search bar pinned to the torn-down split surface would otherwise stay stuck (the weak
         // `searchSurface` zeroes but `searchActive` stays true), so reset search on the surviving session.
         session.clearSearch()
@@ -263,6 +270,7 @@ public final class AppStore {
         session.isSplit = false
         session.hasSplit = false
         session.splitFocused = true
+        session.splitRatio = nil // promoted to a single pane; a later split should open even, not stale
         if let cwd = session.splitCwd { session.currentCwd = cwd }
         // the primary surface (possibly the search owner) is torn down while the session survives as the
         // promoted split, so reset search rather than leave a stuck bar pinned to the gone primary.
@@ -516,7 +524,9 @@ public final class AppStore {
             }
             return Workspace(id: workspaceSnapshot.id, name: workspaceSnapshot.name, sessions: sessions)
         }
-        sidebarWidth = snapshot.sidebarWidth ?? 220
+        // clamp on restore (not just nil-default) so a corrupt or hand-edited snapshot can't drive an
+        // out-of-range frame width; the drag path clamps to the same bounds.
+        sidebarWidth = min(AppStore.sidebarWidthMax, max(AppStore.sidebarWidthMin, snapshot.sidebarWidth ?? AppStore.sidebarWidthDefault))
         sidebarVisible = snapshot.sidebarVisible ?? true
         if let id = snapshot.selectedSessionID, session(withID: id) == nil {
             selectedSessionID = nil

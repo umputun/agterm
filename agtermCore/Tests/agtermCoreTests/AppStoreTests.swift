@@ -356,6 +356,7 @@ struct AppStoreTests {
         let split = SpySurface()
         session.splitSurface = split
         session.splitCwd = "/var/log"
+        session.splitRatio = 0.7
         store.closeSplit(session.id)
         #expect(session.isSplit == false)
         #expect(session.hasSplit == false)
@@ -363,6 +364,7 @@ struct AppStoreTests {
         #expect(session.splitSurface == nil)
         #expect(session.splitCwd == nil)
         #expect(session.initialSplitCwd == nil)
+        #expect(session.splitRatio == nil) // teardown clears geometry too, so a fresh re-split opens even
         #expect(split.teardownCount == 1)
     }
 
@@ -375,6 +377,7 @@ struct AppStoreTests {
         session.isSplit = true
         session.hasSplit = true
         session.splitCwd = "/var/log"
+        session.splitRatio = 0.3
         store.closePrimaryPane(session.id)
         #expect(store.session(withID: session.id) != nil) // session survives
         #expect(primary.teardownCount == 1)               // the dead primary is torn down
@@ -384,6 +387,7 @@ struct AppStoreTests {
         #expect(session.isSplit == false)
         #expect(session.hasSplit == false)
         #expect(session.splitFocused == true)             // the maximized survivor is shown
+        #expect(session.splitRatio == nil)                // promoted to single, so a later split opens even
         #expect(session.currentCwd == "/var/log")         // the survivor's cwd is promoted
     }
 
@@ -541,6 +545,16 @@ struct AppStoreTests {
         let restored = Self.makeStore()
         restored.restore(from: store.snapshot())
         #expect(restored.workspaces[0].sessions[0].splitRatio == 0.63)
+    }
+
+    @Test func sessionSnapshotDecodesWithoutSplitRatio() throws {
+        // a SessionSnapshot persisted before splitRatio existed (the key absent) must decode to nil, not
+        // fail the load — the forward-compat contract the optional field documents.
+        let json = "{\"id\":\"\(UUID().uuidString)\",\"cwd\":\"/a\"}"
+        let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        #expect(snap.splitRatio == nil)
+        #expect(snap.isSplit == nil)
+        #expect(snap.fontSize == nil)
     }
 
     @Test func openOverlaySetsCommandAndFlag() {
