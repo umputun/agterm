@@ -47,11 +47,14 @@ public enum SkillInstall {
         return targets
     }
 
-    /// Whether the installer may overwrite a destination. `nil` (no existing `SKILL.md`) is safe to
-    /// write; an existing file is overwritable only when it carries `marker` (i.e. agterm put it there),
-    /// so a user's own skill named `agterm` is preserved rather than clobbered.
-    public static func mayOverwrite(existingSKILL contents: String?) -> Bool {
-        guard let contents else { return true }
+    /// Whether the installer may overwrite a destination. An absent directory is always safe to write
+    /// (nothing to clobber). When the directory already exists, it is overwritable only when its
+    /// `SKILL.md` carries `marker` (i.e. agterm put it there) — a present directory with an absent,
+    /// unreadable, or unmarked `SKILL.md` is treated as user-authored content and refused, so a user's
+    /// own skill named `agterm` is preserved rather than recursively wiped.
+    public static func mayOverwrite(directoryExists: Bool, existingSKILL contents: String?) -> Bool {
+        guard directoryExists else { return true }
+        guard let contents else { return false }
         return contents.contains(marker)
     }
 }

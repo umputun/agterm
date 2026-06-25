@@ -26,15 +26,21 @@ struct SkillInstallTests {
         #expect(t == [.init(agent: "Claude Code", skillDirectory: "/h/.claude/skills/agterm")])
     }
 
-    @Test func mayOverwriteWhenNoExistingFile() {
-        #expect(SkillInstall.mayOverwrite(existingSKILL: nil) == true)
+    @Test func mayOverwriteWhenDirectoryAbsent() {
+        #expect(SkillInstall.mayOverwrite(directoryExists: false, existingSKILL: nil) == true)
+    }
+
+    @Test func refusesOverwriteOfDirectoryWithoutSkillFile() {
+        #expect(SkillInstall.mayOverwrite(directoryExists: true, existingSKILL: nil) == false)
     }
 
     @Test func mayOverwriteWhenMarkerPresent() {
-        #expect(SkillInstall.mayOverwrite(existingSKILL: "---\nx\n---\n\(SkillInstall.marker)\nbody") == true)
+        let contents = "---\nx\n---\n\(SkillInstall.marker)\nbody"
+        #expect(SkillInstall.mayOverwrite(directoryExists: true, existingSKILL: contents) == true)
     }
 
     @Test func refusesOverwriteOfForeignSkill() {
-        #expect(SkillInstall.mayOverwrite(existingSKILL: "---\ndescription: someone else's agterm\n---\nbody") == false)
+        let contents = "---\ndescription: someone else's agterm\n---\nbody"
+        #expect(SkillInstall.mayOverwrite(directoryExists: true, existingSKILL: contents) == false)
     }
 }

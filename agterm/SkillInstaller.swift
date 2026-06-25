@@ -50,9 +50,14 @@ enum SkillInstaller {
         var report = Report()
         for target in targets {
             let destination = URL(fileURLWithPath: target.skillDirectory)
-            // refuse to clobber a same-named skill the user authored themselves (no agterm marker).
+            // refuse to clobber a same-named skill the user authored themselves (a present dir whose
+            // SKILL.md is absent, unreadable, or lacks the agterm marker). `attributesOfItem` uses lstat
+            // semantics (does NOT follow the final symlink), so a dangling/any symlink at the destination
+            // counts as present too — unlike `fileExists(atPath:)`, which follows the link and would read a
+            // dangling symlink as absent, letting the wipe path delete the user's own symlink.
+            let directoryExists = (try? fm.attributesOfItem(atPath: destination.path)) != nil
             let existingSKILL = try? String(contentsOf: destination.appendingPathComponent("SKILL.md"), encoding: .utf8)
-            guard SkillInstall.mayOverwrite(existingSKILL: existingSKILL) else {
+            guard SkillInstall.mayOverwrite(directoryExists: directoryExists, existingSKILL: existingSKILL) else {
                 report.skipped.append((target.agent, "a different '\(SkillInstall.skillName)' skill is already there — left untouched"))
                 continue
             }
