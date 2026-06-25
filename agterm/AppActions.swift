@@ -420,10 +420,13 @@ final class AppActions {
     }
 
     /// Re-apply the captured original theme and end the preview (Esc / scrim / mode switch / unmount
-    /// without a commit). No-op when no preview is active (e.g. right after a commit).
+    /// without a commit). No-op when no preview is active (e.g. right after a commit). Routes through
+    /// the IMMEDIATE (non-debounced) revert so Esc restores the original theme instantly — the
+    /// navigation preview is debounced, so calling `previewTheme` here would lag or leave the last
+    /// previewed theme stuck applied.
     func cancelThemePreview() {
         guard themePreviewActive else { return }
-        settingsModel?.previewTheme(themePreviewOriginal)
+        settingsModel?.previewThemeImmediate(themePreviewOriginal)
         themePreviewActive = false
         themePreviewOriginal = nil
     }

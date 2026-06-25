@@ -161,7 +161,8 @@ private struct AppearanceSettingsView: View {
 
                 HStack {
                     Text("Background Opacity")
-                    Slider(value: backgroundOpacity, in: 0 ... 1)
+                    Slider(value: backgroundOpacity, in: 0 ... 1,
+                           onEditingChanged: { editing in if !editing { model.commitBackgroundSettings() } })
                         .accessibilityIdentifier("settings-bg-opacity")
                     Text("\(Int(((model.settings.backgroundOpacity ?? 1) * 100).rounded()))%")
                         .monospacedDigit()
@@ -170,7 +171,8 @@ private struct AppearanceSettingsView: View {
 
                 HStack {
                     Text("Background Blur")
-                    Slider(value: backgroundBlur, in: 0 ... 100)
+                    Slider(value: backgroundBlur, in: 0 ... 100,
+                           onEditingChanged: { editing in if !editing { model.commitBackgroundSettings() } })
                         .accessibilityIdentifier("settings-bg-blur")
                     Text("\(model.settings.backgroundBlur ?? 0)")
                         .monospacedDigit()
@@ -227,15 +229,18 @@ private struct AppearanceSettingsView: View {
     }
 
     /// 1.0 maps to nil (the opaque default) so settings.json stays minimal and the "unset = default"
-    /// convention matches the font/theme controls.
+    /// convention matches the font/theme controls. The setter PREVIEWS live (apply without save) on
+    /// every drag tick and debounces the write; the slider's `onEditingChanged` flushes it on release.
     private var backgroundOpacity: Binding<Double> {
         Binding(get: { model.settings.backgroundOpacity ?? 1 },
-                set: { model.setBackgroundOpacity($0 >= 1 ? nil : $0) })
+                set: { model.previewBackgroundOpacity($0 >= 1 ? nil : $0) })
     }
 
+    /// PREVIEWS live (apply without save) on every drag tick and debounces the write; the slider's
+    /// `onEditingChanged` flushes it on release.
     private var backgroundBlur: Binding<Double> {
         Binding(get: { Double(model.settings.backgroundBlur ?? 0) },
-                set: { model.setBackgroundBlur($0 <= 0 ? nil : Int($0.rounded())) })
+                set: { model.previewBackgroundBlur($0 <= 0 ? nil : Int($0.rounded())) })
     }
 
     /// neutral (5) maps to nil so settings.json stays minimal, matching the other appearance controls'

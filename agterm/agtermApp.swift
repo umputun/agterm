@@ -145,6 +145,7 @@ struct agtermApp: App {
                     // the keymap on `.agtermKeymapChanged`. Hand the delegate a reference so it can
                     // remove the monitor on terminate.
                     appDelegate.customCommandRunner = customCommandRunner
+                    appDelegate.settingsModel = settingsModel
                     customCommandRunner.start()
                     // wire the keymap + runner into the action hub so the command palette can list the
                     // custom commands and run them (both are built after `actions`, so they're set here
@@ -584,6 +585,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// remove its `NSEvent` monitor and observer on terminate.
     var customCommandRunner: CustomCommandRunner?
 
+    /// The settings model, handed over once the scene appears so the delegate can flush its pending
+    /// debounced `settings.json` writes (opacity/blur, theme preview) on terminate.
+    var settingsModel: SettingsModel?
+
     private var restoreObserver: NSObjectProtocol?
     private var scheduledReconciliationReasons: Set<String> = []
 
@@ -743,6 +748,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // aren't auto-persisted) and the index. replaces the single-store save.
         library?.saveAllOpen()
         library?.saveIndex()
+        // flush the settings model's pending debounced writes (a keyboard-driven opacity/blur change
+        // holds a ~0.3s deferred save that no drag-end commit fires) so they survive ⌘Q.
+        settingsModel?.flushPendingSaves()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {

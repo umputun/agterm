@@ -25,10 +25,32 @@ final class SettingsModel {
     /// Problems found while parsing the keymap file, surfaced read-only in the Key Mapping settings tab.
     private(set) var keymapDiagnostics: [KeymapDiagnostic] = []
 
+    /// Coalesces rapid theme-picker navigation/typing previews so a burst of `previewTheme` calls
+    /// triggers a single `apply()` once the quiet window elapses, instead of rebuilding + reloading
+    /// every surface on each arrow keypress. Commit flushes it; cancel drops it (see `commitTheme`
+    /// and `previewThemeImmediate`).
+    private let previewThemeDebouncer = Debouncer()
+    private static let previewThemeDebounceInterval: TimeInterval = 0.07
+
+    /// Coalesces the opacity/blur slider's live drag into a single deferred `settings.json` write: the
+    /// preview methods apply each tick WITHOUT saving and reschedule this, so the disk write fires once
+    /// the slider settles. This persists KEYBOARD adjustments too (arrow keys don't fire the slider's
+    /// `onEditingChanged`), while a mouse release flushes it immediately via `commitBackgroundSettings`.
+    private let backgroundSaveDebouncer = Debouncer()
+    private static let backgroundSaveInterval: TimeInterval = 0.3
+
+    /// The theme as of the last real persist (`persistAndApply`/`commitTheme`), NOT updated by the
+    /// live theme preview. The opacity/blur background-save debounce persists a snapshot pinned to
+    /// this value instead of the in-flight `settings.theme`, so a slider write firing mid-preview
+    /// can't leak an uncommitted previewed theme to `settings.json` (the preview persists only on
+    /// commit; Esc reverts it in memory, and disk must never have seen it).
+    private var committedTheme: String?
+
     init(library: WindowLibrary, settingsStore: SettingsStore) {
         self.library = library
         self.settingsStore = settingsStore
         self.settings = settingsStore.load()
+        self.committedTheme = settings.theme
         // write the ghostty config from the loaded settings NOW — before GhosttyApp boots and reads it
         // (its loadConfig runs in applicationDidFinishLaunching, AFTER this App.init). The SEEDED default
         // theme (agterm) lives only in memory (load() seeds it; it isn't in settings.json), so without
@@ -53,8 +75,6 @@ final class SettingsModel {
     func setFontFamily(_ value: String?) { settings.fontFamily = value; persistAndApply() }
     func setFontSize(_ value: Double?) { settings.fontSize = value; persistAndApply() }
     func setTheme(_ value: String?) { settings.theme = value; persistAndApply() }
-    func setBackgroundOpacity(_ value: Double?) { settings.backgroundOpacity = value; persistAndApply() }
-    func setBackgroundBlur(_ value: Int?) { settings.backgroundBlur = value; persistAndApply() }
     func setNotificationsEnabled(_ value: Bool?) { settings.notificationsEnabled = value; persistAndApply() }
     func setCompactToolbar(_ value: Bool?) { settings.compactToolbar = value; persistAndApply() }
     func setNotificationBadgeEnabled(_ value: Bool?) { settings.notificationBadgeEnabled = value; persistAndApply() }
@@ -65,16 +85,80 @@ final class SettingsModel {
     func setBlockedStatusColorHex(_ hex: String?) { settings.blockedStatusColorHex = hex; persistAndApply() }
     func setCompletedStatusColorHex(_ hex: String?) { settings.completedStatusColorHex = hex; persistAndApply() }
 
+    /// Apply a new background opacity live WITHOUT an immediate save — the live-drag half of the opacity
+    /// slider. Updates translucency on every drag tick (apply-without-save) and schedules a debounced
+    /// write, so the window updates continuously while the disk write coalesces to one once the slider
+    /// settles (covering keyboard arrow adjustments, which never fire `onEditingChanged`). A mouse
+    /// release flushes it immediately via `commitBackgroundSettings`. Mirrors the theme apply/save split.
+    func previewBackgroundOpacity(_ value: Double?) {
+        settings.backgroundOpacity = value
+        apply()
+        scheduleBackgroundSave()
+    }
+
+    /// Apply a new background blur live, the counterpart of `previewBackgroundOpacity`: apply-without-save
+    /// plus a debounced write flushed on drag-end.
+    func previewBackgroundBlur(_ value: Int?) {
+        settings.backgroundBlur = value
+        apply()
+        scheduleBackgroundSave()
+    }
+
+    /// Persist the current opacity/blur NOW — the slider's `onEditingChanged` drag-end commit. Flushes
+    /// the pending debounced write so a mouse release saves immediately (save-only; the value is already
+    /// live from the preview applies, so no redundant re-apply).
+    func commitBackgroundSettings() { backgroundSaveDebouncer.flush() }
+
+    private func scheduleBackgroundSave() {
+        backgroundSaveDebouncer.schedule(after: Self.backgroundSaveInterval) { [weak self] in
+            guard let self else { return }
+            // pin the theme to the last committed value: a theme preview mutates settings.theme in
+            // place WITHOUT persisting, so saving the live settings here would leak an uncommitted
+            // preview to disk. Opacity/blur (what this save is for) keep their live values.
+            var snapshot = settings
+            snapshot.theme = committedTheme
+            try? settingsStore.save(snapshot)
+        }
+    }
+
     /// Apply a theme live WITHOUT persisting it — the live-preview half of the action-palette theme
-    /// picker. Runs the same apply path as a real change (config rewrite + surface reload + chrome
-    /// refresh) but skips `settingsStore.save`, so navigating themes in the picker doesn't touch
-    /// `settings.json`; the picker commits with `commitTheme()` on Enter or reverts (re-previewing the
-    /// original) on Esc.
-    func previewTheme(_ value: String?) { settings.theme = value; apply() }
+    /// picker (navigation/typing). Sets `settings.theme` immediately (so a commit captures the latest
+    /// even if the apply hasn't fired yet) but DEBOUNCES the expensive `apply()` (config rewrite +
+    /// surface reload + chrome refresh), so a burst of arrow/typing previews coalesces to one reload
+    /// once the quiet window elapses. Skips `settingsStore.save`, so navigating themes doesn't touch
+    /// `settings.json`; the picker commits with `commitTheme()` on Enter (which flushes the pending
+    /// apply) or reverts with `previewThemeImmediate(original)` on Esc.
+    func previewTheme(_ value: String?) {
+        settings.theme = value
+        previewThemeDebouncer.schedule(after: Self.previewThemeDebounceInterval) { [weak self] in self?.apply() }
+    }
+
+    /// Apply a theme live IMMEDIATELY (no debounce), cancelling any pending debounced preview — the
+    /// revert half of the picker (Esc / scrim / mode switch / unmount). Synchronous so the original
+    /// theme is restored with no debounce lag and no queued preview fires afterwards.
+    func previewThemeImmediate(_ value: String?) {
+        previewThemeDebouncer.cancel()
+        settings.theme = value
+        apply()
+    }
 
     /// Persist the current settings — the commit half of the theme picker, called on Enter after one
-    /// or more `previewTheme` applies. The theme is already live; this only writes `settings.json`.
-    func commitTheme() { try? settingsStore.save(settings) }
+    /// or more `previewTheme` applies. Flushes any pending debounced preview first, so the latest
+    /// previewed theme is live NOW, then writes `settings.json`.
+    func commitTheme() {
+        previewThemeDebouncer.flush()
+        try? settingsStore.save(settings)
+        committedTheme = settings.theme
+    }
+
+    /// Flush any pending debounced settings writes synchronously — the quit path. The opacity/blur
+    /// slider's debounced `settings.json` write (and the theme preview, for symmetry) holds a pending
+    /// save for ~0.3 s after a KEYBOARD adjustment, which never fires the slider's drag-end commit;
+    /// quitting within that window would otherwise lose it. Called from `applicationWillTerminate`.
+    func flushPendingSaves() {
+        backgroundSaveDebouncer.flush()
+        previewThemeDebouncer.flush()
+    }
 
     /// Clear all three agent-status colors back to the system defaults (the "Reset to defaults" button).
     func resetStatusColors() {
@@ -236,6 +320,7 @@ final class SettingsModel {
 
     private func persistAndApply() {
         try? settingsStore.save(settings)
+        committedTheme = settings.theme
         apply()
     }
 
