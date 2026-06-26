@@ -268,6 +268,9 @@ private struct WindowContentView: View {
         // animate the collapse/expand uniformly, whatever flips the flag (toolbar button, menu, palette,
         // control), now that the toggle no longer wraps its own `withAnimation`.
         .animation(.easeInOut(duration: 0.15), value: store.sidebarVisible)
+        // animate the tree↔flagged sidebar mode switch the same way, for every caller (bottom-bar
+        // toggle, menu, palette, control).
+        .animation(.easeInOut(duration: 0.15), value: store.sidebarMode)
     }
 
     private var sidebarColumn: some View {
@@ -816,6 +819,44 @@ private struct WindowContentView: View {
             .accessibilityIdentifier("add-session")
 
             Spacer()
+
+            // an escape hatch shown only while a workspace is focused: names the focused workspace and
+            // unfocuses on its ✕ (the primary affordance; the menu/palette "Clear Focus" mirror it).
+            if let focused = store.focusedWorkspace {
+                Button {
+                    actions.clearFocus()
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("Focused: \(focused.name)")
+                            .lineLimit(1)
+                        Image(systemName: "xmark")
+                    }
+                    .font(.caption)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(chromeText.opacity(0.15)))
+                    .contentShape(Capsule())
+                }
+                .buttonStyle(.borderless)
+                .help("Clear focus")
+                .accessibilityLabel("Clear focus")
+                .accessibilityIdentifier("focus-pill")
+            }
+
+            // flip the sidebar between the workspace tree and the flat flagged working-set list. 2-state
+            // glyph (filled in flagged mode); the switch animates via splitRoot's `.animation(value:)`.
+            Button {
+                actions.toggleFlaggedView()
+            } label: {
+                let flagged = store.sidebarMode == .flagged
+                Image(systemName: flagged ? "flag.fill" : "flag")
+                    .frame(width: 24, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.borderless)
+            .help(store.sidebarMode == .flagged ? "Show all sessions" : "Show flagged sessions")
+            .accessibilityLabel("Toggle Flagged View")
+            .accessibilityIdentifier("flagged-view-toggle")
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)

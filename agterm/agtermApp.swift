@@ -266,6 +266,35 @@ struct agtermApp: App {
                     Label(sidebarShown ? "Hide Sidebar" : "Show Sidebar", systemImage: "sidebar.left")
                 }
                 .keyboardShortcut(shortcut(for: .toggleSidebar))
+                // flip the sidebar between the workspace tree and the flat flagged working-set list.
+                // single 2-state item like the sidebar/scratch toggles; keyless by default (rebindable
+                // via toggle_flagged_view). The control half is sidebar.mode.
+                let flaggedMode = library.activeStore?.sidebarMode == .flagged
+                Button { actions.toggleFlaggedView() } label: {
+                    Label(flaggedMode ? "Show All Sessions" : "Show Flagged Sessions", systemImage: "flag")
+                }
+                .keyboardShortcut(shortcut(for: .toggleFlaggedView))
+                let sessionFlagged = library.activeStore?.activeSession?.flagged == true
+                Button { actions.toggleFlagActiveSession() } label: {
+                    Label(sessionFlagged ? "Unflag Session" : "Flag Session", systemImage: "flag.badge.ellipsis")
+                }
+                .keyboardShortcut(shortcut(for: .toggleFlag))
+                .disabled(library.activeStore?.activeSession == nil)
+                Button { actions.clearFlags() } label: { Label("Clear Flagged", systemImage: "flag.slash") }
+                    .disabled(library.activeStore?.flaggedSessions.isEmpty ?? true)
+                // collapse the tree to the current workspace's subtree (or unfocus when already focused).
+                // keyless by default (rebindable via focus_workspace). The control half is workspace.focus.
+                // the label tracks the toggle (Focus/Unfocus) like the workspace row's context-menu item.
+                let focusStore = library.activeStore
+                let currentFocused = focusStore?.focusedWorkspace?.id == focusStore?.currentWorkspaceID
+                Button { actions.focusActiveWorkspace() } label: {
+                    Label(currentFocused ? "Unfocus Workspace" : "Focus Workspace", systemImage: "scope")
+                }
+                .keyboardShortcut(shortcut(for: .focusWorkspace))
+                .disabled(library.activeStore?.currentWorkspaceID == nil)
+                // plain (non-BuiltinAction) clear, like Clear Flagged; the bottom-bar pill ✕ is primary.
+                Button { actions.clearFocus() } label: { Label("Clear Focus", systemImage: "scope") }
+                    .disabled(library.activeStore?.focusedWorkspaceID == nil)
                 Button { actions.toggleSplit() } label: {
                     Label(library.activeStore?.activeSession?.isSplit == true ? "Hide Split" : "Split Right", systemImage: "rectangle.split.2x1")
                 }
