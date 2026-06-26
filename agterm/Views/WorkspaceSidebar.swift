@@ -859,12 +859,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 // gate the agent-status glyph: hidden for the frontmost window's selected session.
                 cell.statusIcon.apply(effectiveIndicator(forSession: node.id))
                 // a session with a split shows the split-rectangle icon (matching the toolbar split
-                // button) so it's distinguishable at a glance; `hasSplit` keeps it while merely hidden. the
-                // flat flagged view uses a plain terminal icon regardless of split/flag state, so the
-                // split and flagged variants are tree-mode only.
-                let tree = store.sidebarMode == .tree
-                let showSplitIcon = tree && session?.hasSplit == true
-                let flagged = tree && session?.flagged == true
+                // button) in BOTH modes so it stays distinguishable at a glance; `hasSplit` keeps it while
+                // merely hidden. only the filled `flagged` variant is tree-mode only — in the flat flagged
+                // view every row is flagged, so the fill marker would be noise.
+                let showSplitIcon = session?.hasSplit == true
+                let flagged = store.sidebarMode == .tree && session?.flagged == true
                 cell.imageView?.image = iconForSession(split: showSplitIcon, flagged: flagged)
                 cell.imageView?.setAccessibilityIdentifier("session-icon")
             }
@@ -981,11 +980,13 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// The row's label: the session `displayName` in tree mode, or `session : workspace` (the session
         /// name then its owning workspace name) in the flat flagged view, so a flagged row from a different
         /// workspace stays distinguishable. The cell path (`cellForRow`) only has the node id, so it resolves
-        /// the session + workspace by id; the reconcile path passes the already-loaded session + name (see
+        /// the session by id (and the workspace only in flagged mode, where the name is shown — tree mode
+        /// skips that O(n) scan); the reconcile path passes the already-loaded session + name (see
         /// `rowLabel(for:workspaceName:)`) to stay off the O(n) lookups.
         private func rowLabel(forSession id: UUID) -> String {
             guard let session = store.session(withID: id) else { return "" }
-            return rowLabel(for: session, workspaceName: store.workspace(forSession: id)?.name ?? "")
+            let workspaceName = store.sidebarMode == .flagged ? store.workspace(forSession: id)?.name ?? "" : ""
+            return rowLabel(for: session, workspaceName: workspaceName)
         }
 
         /// The row label from an already-resolved session + its owning workspace name, with no store lookup —
