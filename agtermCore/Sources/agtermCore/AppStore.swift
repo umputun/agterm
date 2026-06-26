@@ -40,6 +40,20 @@ public final class AppStore {
     /// palette, and the `sidebar` control command all flip this one flag.
     public var sidebarVisible = true
 
+    /// Which view this window's sidebar renders: the normal workspace tree or a flat list of the
+    /// flagged working-set. Per-window UI state, persisted in `Snapshot` (restored on relaunch);
+    /// flipped by the bottom-bar toggle, the View menu, the action palette, and the `sidebar.mode`
+    /// control command via `setSidebarMode(_:)`.
+    public var sidebarMode: SidebarMode = .tree
+
+    /// The workspace the sidebar tree is focused (zoomed) on, or nil for the full tree. Per-window UI
+    /// state, persisted in `Snapshot` (restored on relaunch). When set, the tree renders only that
+    /// workspace (see `visibleWorkspaces`); orthogonal to `sidebarMode` (flagged mode ignores focus).
+    /// Flipped by the workspace row menu, the bottom-bar pill, the View menu, the palette, and the
+    /// `workspace.focus` control command via `setFocusedWorkspace(_:)`. Auto-cleared when the focused
+    /// workspace is removed or when a session outside it becomes selected.
+    public var focusedWorkspaceID: UUID?
+
     /// This window's sidebar width in points. Per-window UI state, persisted in `Snapshot`. Driven by the
     /// sidebar divider drag (clamped to `sidebarWidthMin...sidebarWidthMax`); restored on relaunch.
     public var sidebarWidth: Double = AppStore.sidebarWidthDefault
@@ -98,10 +112,15 @@ public final class AppStore {
         "workspace \(workspaces.count + 1)"
     }
 
+    /// Creates a workspace and appends it. Clears any active focus so the new (empty)
+    /// workspace is immediately visible — without this `visibleWorkspaces` would still
+    /// return only the focused one and the new workspace would be silently hidden until
+    /// the user manually unfocuses (the same auto-reveal contract as `addSession`).
     @discardableResult
     public func addWorkspace(name: String) -> Workspace {
         let workspace = Workspace(name: name)
         workspaces.append(workspace)
+        focusedWorkspaceID = nil
         save()
         return workspace
     }
@@ -115,6 +134,7 @@ public final class AppStore {
         session.initialCommand = command
         workspaces[index].sessions.append(session)
         selectedSessionID = session.id
+        autoUnfocusIfOutsideFocus(session.id) // a control-driven add into another workspace must reveal it
         recordRecency()
         save()
         return session
@@ -133,11 +153,22 @@ public final class AppStore {
         if let sessionID, session(withID: sessionID) == nil { return }
         let previous = selectedSessionID
         selectedSessionID = sessionID
+        autoUnfocusIfOutsideFocus(sessionID)
         if let sessionID { clearUnseen(sessionID) }
         clearAutoResetIndicator(sessionID) // visit: you've seen it
         clearAutoResetIndicator(previous)  // leave: a one-time status must not linger on the row you left
         recordRecency()
         scheduleSave() // selection fires on every click/keystroke — coalesce the writes
+    }
+
+    /// Clears focus when the newly selected session lives outside the focused workspace, so global
+    /// navigation (`navigateSession`/`session.go`, Ctrl-Tab, attention-nav) always reveals its target —
+    /// the active session is then always inside the visible set. No-op when unfocused, when nothing is
+    /// selected, or when the selection is inside the focused workspace. Persistence rides the caller's
+    /// `selectSession` save.
+    private func autoUnfocusIfOutsideFocus(_ sessionID: UUID?) {
+        guard let focusedWorkspaceID, let sessionID else { return }
+        if workspace(forSession: sessionID)?.id != focusedWorkspaceID { self.focusedWorkspaceID = nil }
     }
 
     /// Reset a session's agent indicator to idle when it is marked `autoReset` (the one-time `completed`
@@ -196,6 +227,7 @@ public final class AppStore {
         sessionRecency.remove(sessionID)
         if wasActive {
             selectedSessionID = reselectionTarget(after: location)
+            autoUnfocusIfOutsideFocus(selectedSessionID) // the neighbor may live outside the focused workspace
             recordRecency()
         }
         save()
@@ -221,11 +253,13 @@ public final class AppStore {
             session.scratchSurface?.teardown()
             sessionRecency.remove(session.id)
         }
+        if focusedWorkspaceID == workspaceID { focusedWorkspaceID = nil } // the focused root is gone
         workspaces.remove(at: index)
         if removingActive {
             let fallbackIndex = min(index, workspaces.count - 1)
             selectedSessionID = workspaces[fallbackIndex].sessions.first?.id
                 ?? workspaces.first(where: { !$0.sessions.isEmpty })?.sessions.first?.id
+            autoUnfocusIfOutsideFocus(selectedSessionID) // the reselected session may live outside the focused workspace
             recordRecency()
         }
         save()
@@ -377,6 +411,9 @@ public final class AppStore {
     /// `selectedSessionID` is unaffected — the id is stable, so a moved active
     /// session stays selected. No-ops if the session or target workspace is
     /// unknown; a same-workspace move to the current slot leaves order unchanged.
+    /// Moving the **active** session out of the focused workspace auto-unfocuses
+    /// (the auto-reveal contract — the active session must stay inside the visible
+    /// set); moving a non-active session leaves focus intact.
     public func moveSession(_ sessionID: UUID, toWorkspace targetID: UUID, at index: Int? = nil) {
         guard let source = location(ofSession: sessionID) else { return }
         guard let targetIndex = workspaces.firstIndex(where: { $0.id == targetID }) else { return }
@@ -384,6 +421,7 @@ public final class AppStore {
         let session = workspaces[source.workspaceIndex].sessions.remove(at: source.sessionIndex)
         let destination = max(0, min(index ?? workspaces[targetIndex].sessions.count, workspaces[targetIndex].sessions.count))
         workspaces[targetIndex].sessions.insert(session, at: destination)
+        if sessionID == selectedSessionID { autoUnfocusIfOutsideFocus(sessionID) }
         save()
     }
 
@@ -500,6 +538,66 @@ public final class AppStore {
         if changed { save() }
     }
 
+    /// Sets the sidebar mode and persists it. Clean no-op (no write) when the mode is unchanged, so the
+    /// delta-computed control/menu callers stay idempotent.
+    public func setSidebarMode(_ mode: SidebarMode) {
+        guard sidebarMode != mode else { return }
+        sidebarMode = mode
+        save()
+    }
+
+    /// Sets (or clears) the focused workspace and persists it. Clean no-op (no write) when unchanged, so
+    /// the delta-computed control/menu callers stay idempotent. Passing nil unfocuses.
+    public func setFocusedWorkspace(_ id: UUID?) {
+        guard focusedWorkspaceID != id else { return }
+        focusedWorkspaceID = id
+        save()
+    }
+
+    /// The focused workspace, resolved from `focusedWorkspaceID` — nil when unfocused OR when the id is
+    /// stale (its workspace no longer exists). The single id→workspace lookup the tree filter and the
+    /// bottom-bar focus pill both read, so they can't drift.
+    public var focusedWorkspace: Workspace? {
+        guard let focusedWorkspaceID else { return nil }
+        return workspaces.first(where: { $0.id == focusedWorkspaceID })
+    }
+
+    /// The workspaces the sidebar tree should render: just the focused workspace when `focusedWorkspaceID`
+    /// is set AND that workspace still exists, else all workspaces. The source of truth the tree filters
+    /// on; a stale focus id (its workspace gone) falls back to the full tree.
+    public var visibleWorkspaces: [Workspace] {
+        guard let focused = focusedWorkspace else { return workspaces }
+        return [focused]
+    }
+
+    /// Sets (or clears) a session's flag — the durable flagged working-set membership the flat sidebar
+    /// view projects. Persists the change. Clean no-op (no write) for an unknown id or when the flag is
+    /// already in the requested state, so the delta-computed control/menu callers stay idempotent.
+    public func setFlag(_ on: Bool, forSession id: UUID) {
+        guard let session = session(withID: id), session.flagged != on else { return }
+        session.flagged = on
+        save()
+    }
+
+    /// Unflags every session across all workspaces in one `save()`. No-ops (no write) when nothing is
+    /// flagged. Backs the Clear Flagged action and the `session.flag clear` control mode.
+    public func clearFlags() {
+        var changed = false
+        for workspace in workspaces {
+            for session in workspace.sessions where session.flagged {
+                session.flagged = false
+                changed = true
+            }
+        }
+        if changed { save() }
+    }
+
+    /// The flagged sessions across all workspaces in tree order (`workspaces.flatMap(\.sessions)` filtered
+    /// by `flagged`). A pure derived projection — the flat sidebar view renders this directly.
+    public var flaggedSessions: [Session] {
+        workspaces.flatMap(\.sessions).filter(\.flagged)
+    }
+
     // MARK: - Persistence
 
     /// Builds a `Snapshot` value of the current tree. Each session captures its
@@ -510,11 +608,13 @@ public final class AppStore {
             WorkspaceSnapshot(id: workspace.id, name: workspace.name, sessions: workspace.sessions.map { session in
                 SessionSnapshot(id: session.id, customName: session.customName, cwd: session.currentCwd ?? session.initialCwd,
                                 isSplit: session.isSplit, fontSize: session.fontSize,
-                                splitCwd: session.splitCwd ?? session.initialSplitCwd, splitRatio: session.splitRatio)
+                                splitCwd: session.splitCwd ?? session.initialSplitCwd, splitRatio: session.splitRatio,
+                                flagged: session.flagged)
             })
         }
         return Snapshot(selectedSessionID: selectedSessionID, workspaces: workspaceSnapshots,
-                        sidebarWidth: sidebarWidth, sidebarVisible: sidebarVisible)
+                        sidebarWidth: sidebarWidth, sidebarVisible: sidebarVisible, sidebarMode: sidebarMode,
+                        focusedWorkspaceID: focusedWorkspaceID)
     }
 
     /// Rebuilds the tree from a snapshot: fresh `Session`s (surfaces and shells
@@ -536,6 +636,7 @@ public final class AppStore {
                 // clamp on restore (like sidebarWidth) so a corrupt snapshot can't feed an out-of-range
                 // fraction into NSSplitView.setPosition; nil stays nil (the even default).
                 session.splitRatio = sessionSnapshot.splitRatio.map { min(AppStore.splitRatioMax, max(AppStore.splitRatioMin, $0)) }
+                session.flagged = sessionSnapshot.flagged ?? false
                 return session
             }
             return Workspace(id: workspaceSnapshot.id, name: workspaceSnapshot.name, sessions: sessions)
@@ -544,6 +645,10 @@ public final class AppStore {
         // out-of-range frame width; the drag path clamps to the same bounds.
         sidebarWidth = min(AppStore.sidebarWidthMax, max(AppStore.sidebarWidthMin, snapshot.sidebarWidth ?? AppStore.sidebarWidthDefault))
         sidebarVisible = snapshot.sidebarVisible ?? true
+        sidebarMode = snapshot.sidebarMode ?? .tree
+        // a stale focus id (its workspace not in the restored tree) is harmless — `visibleWorkspaces`
+        // falls back to the full tree — so restore it verbatim; nil stays unfocused.
+        focusedWorkspaceID = snapshot.focusedWorkspaceID
         if let id = snapshot.selectedSessionID, session(withID: id) == nil {
             selectedSessionID = nil
         } else {

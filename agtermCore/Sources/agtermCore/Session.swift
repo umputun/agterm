@@ -43,6 +43,12 @@ public final class Session: Identifiable {
     /// capture it, so it never survives a relaunch.
     public var agentIndicator = AgentIndicator()
 
+    /// Whether this session is in the flagged working-set — a durable, user-set flag that surfaces the
+    /// session in the sidebar's flat flagged view (across workspaces) and draws a checkmark badge on its
+    /// tree row. Observed, so the sidebar reacts to a toggle. Persisted via `SessionSnapshot.flagged`,
+    /// so it survives a relaunch (and a workspace move — the flag travels with the session).
+    public var flagged: Bool = false
+
     /// The app-side surface (a `GhosttySurfaceView`). Lazily created on first
     /// display and owned here so it survives sidebar/detail view churn.
     @ObservationIgnored public var surface: (any TerminalSurface)?

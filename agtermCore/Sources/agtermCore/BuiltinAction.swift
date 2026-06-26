@@ -14,6 +14,7 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
     case increaseFontSize = "increase_font_size", decreaseFontSize = "decrease_font_size", resetFontSize = "reset_font_size"
     case toggleSplit = "toggle_split", toggleScratch = "toggle_scratch", toggleSearch = "toggle_search"
     case toggleSidebar = "toggle_sidebar", selectTheme = "select_theme"
+    case toggleFlaggedView = "toggle_flagged_view", toggleFlag = "toggle_flag", focusWorkspace = "focus_workspace"
     case focusLeftPane = "focus_left_pane", focusRightPane = "focus_right_pane"
     case previousSession = "previous_session", nextSession = "next_session"
     case previousAttentionSession = "previous_attention_session", nextAttentionSession = "next_attention_session"
@@ -23,7 +24,8 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
     /// The shipped default chord for this action, or `nil` when it has no default key today.
     ///
     /// `nil` covers two groups: the keyless actions (`rename_*`/`delete_*`/`clear_status`/
-    /// `first_session`/`last_session`), which gain a key only when the user `map`s one; AND the
+    /// `first_session`/`last_session`/`select_theme`/`toggle_flagged_view`/`toggle_flag`/
+    /// `focus_workspace`), which gain a key only when the user `map`s one; AND the
     /// arrow-bound actions (`focus_left_pane` ⌘⌥←, `focus_right_pane` ⌘⌥→, `previous_session` ⌥⌘↑,
     /// `next_session` ⌥⌘↓). Arrows are NOT expressible as a parsed `Chord` (`parseKeybind` only accepts
     /// single-char keys or `tab`/`space`/`return`/`delete`), so they cannot round-trip through the
@@ -47,7 +49,7 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
         case .sessionPalette: return Chord(mods: [.control], key: "p")
         case .commandPalette: return Chord(mods: [.control, .shift], key: "p")
         case .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .clearStatus,
-             .firstSession, .lastSession, .selectTheme:
+             .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .toggleFlag, .focusWorkspace:
             return nil
         case .focusLeftPane, .focusRightPane, .previousSession, .nextSession,
              .previousAttentionSession, .nextAttentionSession:

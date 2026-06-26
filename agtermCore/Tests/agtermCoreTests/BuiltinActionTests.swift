@@ -18,7 +18,10 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.nextAttentionSession.rawValue == "next_attention_session")
         #expect(BuiltinAction.toggleSidebar.rawValue == "toggle_sidebar")
         #expect(BuiltinAction.selectTheme.rawValue == "select_theme")
-        #expect(BuiltinAction.allCases.count == 30)
+        #expect(BuiltinAction.toggleFlaggedView.rawValue == "toggle_flagged_view")
+        #expect(BuiltinAction.toggleFlag.rawValue == "toggle_flag")
+        #expect(BuiltinAction.focusWorkspace.rawValue == "focus_workspace")
+        #expect(BuiltinAction.allCases.count == 33)
     }
 
     @Test func rejectsUnknownName() {
@@ -48,6 +51,9 @@ struct BuiltinActionTests {
             .toggleSearch: Chord(mods: [.command], key: "f"),
             .toggleSidebar: Chord(mods: [.command, .control], key: "s"),
             .selectTheme: nil,      // keyless — gains a key only when the user maps one
+            .toggleFlaggedView: nil, // keyless — gains a key only when the user maps one
+            .toggleFlag: nil,       // keyless — gains a key only when the user maps one
+            .focusWorkspace: nil,   // keyless — gains a key only when the user maps one
             .focusLeftPane: nil,    // ⌘⌥← — arrow, not expressible as a parsed Chord
             .focusRightPane: nil,   // ⌘⌥→ — arrow
             .previousSession: nil,  // ⌥⌘↑ — arrow
@@ -86,7 +92,7 @@ struct BuiltinActionTests {
     @Test func keylessActionsHaveNilDefault() {
         let keyless: Set<BuiltinAction> = [
             .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .clearStatus,
-            .firstSession, .lastSession, .selectTheme,
+            .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .toggleFlag, .focusWorkspace,
             // arrow-bound actions are also nil here (arrows can't round-trip through parseKeybind).
             .focusLeftPane, .focusRightPane, .previousSession, .nextSession,
             .previousAttentionSession, .nextAttentionSession,

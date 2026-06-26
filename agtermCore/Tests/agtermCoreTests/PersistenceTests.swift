@@ -154,6 +154,103 @@ final class PersistenceTests {
         #expect(restored.workspaces[0].sessions[0].isSplit == true)
     }
 
+    @Test func sessionFlaggedStatePersistsAndRestores() {
+        let app = AppStore(persistence: store)
+        let work = app.addWorkspace(name: "work")
+        let flag = try! #require(app.addSession(toWorkspace: work.id, cwd: "/a"))
+        let plain = try! #require(app.addSession(toWorkspace: work.id, cwd: "/b"))
+        flag.flagged = true
+        app.save()
+        #expect(store.load().workspaces[0].sessions[0].flagged == true)
+        #expect(store.load().workspaces[0].sessions[1].flagged == false)
+
+        let restored = AppStore(persistence: store)
+        restored.restore(from: store.load())
+        #expect(restored.workspaces[0].sessions[0].flagged == true)
+        #expect(restored.workspaces[0].sessions[1].flagged == false)
+        _ = plain
+    }
+
+    @Test func legacySnapshotWithoutFlaggedDecodesUnflagged() throws {
+        // a workspaces.json written before `flagged` existed has no key; it must decode (not throw and
+        // wipe the tree) with the session unflagged.
+        let ws = UUID()
+        let sid = UUID()
+        let json = #"{ "version": 1, "workspaces": [ { "id": "\#(ws.uuidString)", "name": "work", "sessions": [ { "id": "\#(sid.uuidString)", "customName": null, "cwd": "/a" } ] } ] }"#
+        try Data(json.utf8).write(to: fileURL)
+        let loaded = store.load()
+        #expect(loaded.workspaces.map(\.id) == [ws])
+        #expect(loaded.workspaces[0].sessions[0].flagged == nil)
+
+        let app = AppStore(persistence: store)
+        app.restore(from: loaded)
+        #expect(app.workspaces[0].sessions[0].flagged == false)
+    }
+
+    @Test func sidebarModePersistsAndRestores() {
+        let app = AppStore(persistence: store)
+        _ = app.addWorkspace(name: "work")
+        #expect(store.load().sidebarMode == .tree)
+        app.setSidebarMode(.flagged)
+        #expect(store.load().sidebarMode == .flagged)
+
+        let restored = AppStore(persistence: store)
+        restored.restore(from: store.load())
+        #expect(restored.sidebarMode == .flagged)
+
+        app.setSidebarMode(.tree)
+        let restoredTree = AppStore(persistence: store)
+        restoredTree.restore(from: store.load())
+        #expect(restoredTree.sidebarMode == .tree)
+    }
+
+    @Test func legacySnapshotWithoutSidebarModeDecodesTree() throws {
+        // a workspaces.json written before `sidebarMode` existed has no key; it must decode (not throw
+        // and wipe the tree) and restore to `.tree`.
+        let ws = UUID()
+        let json = #"{ "version": 1, "workspaces": [ { "id": "\#(ws.uuidString)", "name": "work", "sessions": [] } ] }"#
+        try Data(json.utf8).write(to: fileURL)
+        let loaded = store.load()
+        #expect(loaded.workspaces.map(\.id) == [ws])
+        #expect(loaded.sidebarMode == nil)
+
+        let app = AppStore(persistence: store)
+        app.restore(from: loaded)
+        #expect(app.sidebarMode == .tree)
+    }
+
+    @Test func focusedWorkspacePersistsAndRestores() {
+        let app = AppStore(persistence: store)
+        let work = app.addWorkspace(name: "work")
+        #expect(store.load().focusedWorkspaceID == nil) // default unfocused
+        app.setFocusedWorkspace(work.id)
+        #expect(store.load().focusedWorkspaceID == work.id)
+
+        let restored = AppStore(persistence: store)
+        restored.restore(from: store.load())
+        #expect(restored.focusedWorkspaceID == work.id)
+
+        app.setFocusedWorkspace(nil)
+        let restoredCleared = AppStore(persistence: store)
+        restoredCleared.restore(from: store.load())
+        #expect(restoredCleared.focusedWorkspaceID == nil)
+    }
+
+    @Test func legacySnapshotWithoutFocusedWorkspaceDecodesUnfocused() throws {
+        // a workspaces.json written before `focusedWorkspaceID` existed has no key; it must decode (not
+        // throw and wipe the tree) and restore to unfocused.
+        let ws = UUID()
+        let json = #"{ "version": 1, "workspaces": [ { "id": "\#(ws.uuidString)", "name": "work", "sessions": [] } ] }"#
+        try Data(json.utf8).write(to: fileURL)
+        let loaded = store.load()
+        #expect(loaded.workspaces.map(\.id) == [ws])
+        #expect(loaded.focusedWorkspaceID == nil)
+
+        let app = AppStore(persistence: store)
+        app.restore(from: loaded)
+        #expect(app.focusedWorkspaceID == nil)
+    }
+
     @Test func sessionFontSizePersistsAndRestores() {
         let app = AppStore(persistence: store)
         let work = app.addWorkspace(name: "work")

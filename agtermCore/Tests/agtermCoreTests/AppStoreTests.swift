@@ -1035,6 +1035,294 @@ struct AppStoreTests {
         #expect(movedRef.customName == "build")
     }
 
+    @Test func setFlagTogglesAndPersists() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let persistence = PersistenceStore(directory: dir)
+        let store = AppStore(persistence: persistence)
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        #expect(!a.flagged)
+        store.setFlag(true, forSession: a.id)
+        #expect(a.flagged)
+        #expect(persistence.load().workspaces[0].sessions[0].flagged == true) // structural save hit disk
+        store.setFlag(false, forSession: a.id)
+        #expect(!a.flagged)
+        #expect(persistence.load().workspaces[0].sessions[0].flagged == false)
+    }
+
+    @Test func setFlagUnknownIdIsNoOp() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.setFlag(true, forSession: UUID()) // unknown id
+        #expect(!a.flagged)
+    }
+
+    @Test func clearFlagsEmptiesTheSet() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: personal.id, cwd: "/b")!
+        store.setFlag(true, forSession: a.id)
+        store.setFlag(true, forSession: b.id)
+        #expect(store.flaggedSessions.count == 2)
+        store.clearFlags()
+        #expect(store.flaggedSessions.isEmpty)
+        #expect(!a.flagged)
+        #expect(!b.flagged)
+    }
+
+    @Test func flaggedSessionsReturnsMatchesInTreeOrder() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        _ = store.addSession(toWorkspace: work.id, cwd: "/b")! // unflagged, skipped
+        let c = store.addSession(toWorkspace: personal.id, cwd: "/c")!
+        store.setFlag(true, forSession: c.id)
+        store.setFlag(true, forSession: a.id)
+        // workspace-then-session order, regardless of flag-setting order
+        #expect(store.flaggedSessions.map(\.id) == [a.id, c.id])
+    }
+
+    @Test func flaggedSessionMovedToOtherWorkspaceResorts() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: personal.id, cwd: "/b")!
+        store.setFlag(true, forSession: a.id)
+        store.setFlag(true, forSession: b.id)
+        #expect(store.flaggedSessions.map(\.id) == [a.id, b.id])
+        // moving a into personal (after b) keeps its flag and re-sorts the derived list
+        store.moveSession(a.id, toWorkspace: personal.id)
+        #expect(a.flagged)
+        #expect(store.flaggedSessions.map(\.id) == [b.id, a.id])
+    }
+
+    @Test func setFocusedWorkspaceSetsAndClears() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        #expect(store.focusedWorkspaceID == nil)
+        store.setFocusedWorkspace(work.id)
+        #expect(store.focusedWorkspaceID == work.id)
+        store.setFocusedWorkspace(nil)
+        #expect(store.focusedWorkspaceID == nil)
+    }
+
+    @Test func removeFocusedWorkspaceClearsFocus() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let doomed = store.addWorkspace(name: "doomed")
+        store.setFocusedWorkspace(doomed.id)
+        store.removeWorkspace(doomed.id)
+        #expect(store.focusedWorkspaceID == nil)
+        _ = work
+    }
+
+    @Test func removeNonFocusedWorkspaceKeepsFocus() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let doomed = store.addWorkspace(name: "doomed")
+        store.setFocusedWorkspace(work.id)
+        store.removeWorkspace(doomed.id)
+        #expect(store.focusedWorkspaceID == work.id)
+    }
+
+    @Test func visibleWorkspacesReturnsAllWhenUnfocused() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        #expect(store.visibleWorkspaces.map(\.id) == [work.id, personal.id])
+    }
+
+    @Test func visibleWorkspacesReturnsOneWhenFocused() {
+        let store = Self.makeStore()
+        _ = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        store.setFocusedWorkspace(personal.id)
+        #expect(store.visibleWorkspaces.map(\.id) == [personal.id])
+    }
+
+    @Test func visibleWorkspacesFallsBackToAllForStaleFocusID() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        store.focusedWorkspaceID = UUID() // stale id, no matching workspace
+        #expect(store.visibleWorkspaces.map(\.id) == [work.id, personal.id])
+    }
+
+    @Test func selectSessionOutsideFocusClearsFocus() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        _ = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let outside = store.addSession(toWorkspace: personal.id, cwd: "/b")!
+        store.setFocusedWorkspace(work.id)
+        store.selectSession(outside.id)
+        #expect(store.focusedWorkspaceID == nil) // auto-unfocus reveals the off-focus target
+    }
+
+    @Test func selectSessionInsideFocusKeepsFocus() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let inside = store.addSession(toWorkspace: work.id, cwd: "/b")!
+        store.setFocusedWorkspace(work.id)
+        store.selectSession(inside.id)
+        #expect(store.focusedWorkspaceID == work.id)
+        _ = a
+    }
+
+    @Test func selectSessionWhileUnfocusedIsNoOpOnFocus() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        store.selectSession(a.id)
+        #expect(store.focusedWorkspaceID == nil)
+    }
+
+    @Test func closeFocusedSessionRevealingOtherWorkspaceClearsFocus() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        let only = store.addSession(toWorkspace: work.id, cwd: "/only")!
+        _ = store.addSession(toWorkspace: personal.id, cwd: "/other")!
+        store.selectSession(only.id)
+        store.setFocusedWorkspace(work.id)
+        store.closeSession(only.id) // reselects the personal session — outside the now-empty focused work
+        #expect(store.activeSession != nil)
+        #expect(store.workspace(forSession: store.selectedSessionID!)?.id == personal.id)
+        #expect(store.focusedWorkspaceID == nil) // auto-unfocus reveals the new active session
+    }
+
+    @Test func removeWorkspaceReselectingNonFocusedClearsFocus() {
+        let store = Self.makeStore()
+        let a = store.addWorkspace(name: "a")
+        let b = store.addWorkspace(name: "b")
+        let c = store.addWorkspace(name: "c")
+        _ = store.addSession(toWorkspace: a.id, cwd: "/a")!
+        _ = store.addSession(toWorkspace: b.id, cwd: "/b")!
+        let activeInC = store.addSession(toWorkspace: c.id, cwd: "/c")!
+        store.selectSession(activeInC.id)
+        store.setFocusedWorkspace(a.id)
+        store.removeWorkspace(c.id) // reselects into b (the fallback slot), outside the focused a
+        #expect(store.workspace(forSession: store.selectedSessionID!)?.id == b.id)
+        #expect(store.focusedWorkspaceID == nil) // auto-unfocus reveals the reselected session
+    }
+
+    @Test func addSessionToOtherWorkspaceWhileFocusedClearsFocus() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let other = store.addWorkspace(name: "other")
+        _ = store.addSession(toWorkspace: work.id, cwd: "/w")!
+        store.setFocusedWorkspace(work.id)
+        let created = store.addSession(toWorkspace: other.id, cwd: "/o")! // a control add into another workspace
+        #expect(store.selectedSessionID == created.id)
+        #expect(store.focusedWorkspaceID == nil) // auto-unfocus reveals the just-created off-focus session
+    }
+
+    @Test func addSessionInsideFocusedWorkspaceKeepsFocus() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        _ = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        store.setFocusedWorkspace(work.id)
+        let created = store.addSession(toWorkspace: work.id, cwd: "/b")! // the GUI new-session path lands here
+        #expect(store.selectedSessionID == created.id)
+        #expect(store.focusedWorkspaceID == work.id)
+    }
+
+    @Test func navigateSessionRevealingOffFocusTargetClearsFocus() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: personal.id, cwd: "/b")!
+        store.selectSession(a.id)
+        store.setFocusedWorkspace(work.id)
+        store.navigateSession(.next) // a -> b, which lives in the personal (off-focus) workspace
+        #expect(store.selectedSessionID == b.id)
+        #expect(store.focusedWorkspaceID == nil)
+    }
+
+    @Test func selectNilWhileFocusedKeepsFocus() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        store.selectSession(a.id)
+        store.setFocusedWorkspace(work.id)
+        store.selectSession(nil) // deselect reveals nothing, so focus is retained
+        #expect(store.focusedWorkspaceID == work.id)
+    }
+
+    @Test func moveActiveSessionOutOfFocusedWorkspaceClearsFocus() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let other = store.addWorkspace(name: "other")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        store.selectSession(a.id)
+        store.setFocusedWorkspace(work.id)
+        store.moveSession(a.id, toWorkspace: other.id) // the active session leaves the focused workspace
+        #expect(store.selectedSessionID == a.id)
+        #expect(store.focusedWorkspaceID == nil) // auto-unfocus reveals the moved active session
+    }
+
+    @Test func moveNonActiveSessionOutOfFocusedWorkspaceKeepsFocus() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let other = store.addWorkspace(name: "other")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: work.id, cwd: "/b")!
+        store.selectSession(a.id)
+        store.setFocusedWorkspace(work.id)
+        store.moveSession(b.id, toWorkspace: other.id) // a non-active session leaves; focus must stand
+        #expect(store.selectedSessionID == a.id)
+        #expect(store.focusedWorkspaceID == work.id)
+    }
+
+    @Test func addWorkspaceWhileFocusedClearsFocusAndRevealsNew() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        _ = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        store.setFocusedWorkspace(work.id)
+        let fresh = store.addWorkspace(name: "fresh") // a new (empty) workspace must become visible
+        #expect(store.focusedWorkspaceID == nil)
+        #expect(store.visibleWorkspaces.map(\.id) == [work.id, fresh.id])
+    }
+
+    @Test func flaggedSessionsIgnoreFocus() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: personal.id, cwd: "/b")!
+        store.setFlag(true, forSession: a.id)
+        store.setFlag(true, forSession: b.id)
+        store.setFocusedWorkspace(work.id) // focus is orthogonal — it must NOT shrink the flagged set
+        #expect(store.flaggedSessions.map(\.id) == [a.id, b.id]) // spans both workspaces, not just the focused one
+    }
+
+    @Test func setSameValuesAreNoOpWritesAndStable() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let persistence = PersistenceStore(directory: dir)
+        let store = AppStore(persistence: persistence)
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.setFlag(true, forSession: a.id)
+        store.setSidebarMode(.flagged)
+        store.setFocusedWorkspace(ws.id)
+        let file = dir.appendingPathComponent("workspaces.json")
+        try? FileManager.default.removeItem(at: file) // a no-op setter must NOT recreate the file
+        store.setFlag(true, forSession: a.id)       // unchanged
+        store.setSidebarMode(.flagged)              // unchanged
+        store.setFocusedWorkspace(ws.id)            // unchanged
+        #expect(!FileManager.default.fileExists(atPath: file.path)) // no write happened
+        #expect(a.flagged)
+        #expect(store.sidebarMode == .flagged)
+        #expect(store.focusedWorkspaceID == ws.id) // state stable across the no-op setters
+    }
+
     @Test func moveActiveSessionKeepsItSelected() {
         let store = Self.makeStore()
         let work = store.addWorkspace(name: "work")
