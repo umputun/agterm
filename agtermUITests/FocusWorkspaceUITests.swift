@@ -8,7 +8,7 @@ import XCTest
 /// Accessibility-tree facts these queries rely on (shared with SidebarUITests/FlaggedViewUITests):
 /// - a session row exposes its name as a StaticText `value` under the `session-row` identifier;
 /// - a workspace header exposes its name as a StaticText `label`;
-/// - the bottom-bar "Focused: <name> ✕" escape hatch is a button with identifier `focus-pill`.
+/// - the bottom-bar "<name> ✕" focus escape hatch is a button with identifier `focus-pill`.
 @MainActor
 final class FocusWorkspaceUITests: XCTestCase {
     private var app: XCUIApplication!
@@ -32,7 +32,7 @@ final class FocusWorkspaceUITests: XCTestCase {
 
     /// End-to-end focus: seed two workspaces (workspace 1 holding the visible session, workspace 2 empty),
     /// focus workspace 2 via its header's context menu — the OTHER workspace's header AND its session row
-    /// leave the AX tree, and the "Focused: workspace 2 ✕" pill appears — then click the pill ✕ and confirm
+    /// leave the AX tree, and the "workspace 2 ✕" focus pill appears — then click the pill ✕ and confirm
     /// the hidden workspace and its session row return.
     ///
     /// Focusing the (empty) other workspace is what makes a *visible* session row (workspace 1's, which is
@@ -62,7 +62,7 @@ final class FocusWorkspaceUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["workspace 2"].waitForExistence(timeout: 5),
                       "the focused workspace's header should remain")
 
-        // the "Focused: workspace 2 ✕" escape-hatch pill appears.
+        // the "workspace 2 ✕" focus escape-hatch pill appears.
         let pill = app.buttons["focus-pill"]
         XCTAssertTrue(pill.waitForExistence(timeout: 8), "the focus pill should appear while a workspace is focused")
 

@@ -827,7 +827,7 @@ private struct WindowContentView: View {
                     actions.clearFocus()
                 } label: {
                     HStack(spacing: 4) {
-                        Text("Focused: \(focused.name)")
+                        Text(focused.name)
                             .lineLimit(1)
                         Image(systemName: "xmark")
                     }

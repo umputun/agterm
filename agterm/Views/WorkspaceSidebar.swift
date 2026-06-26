@@ -453,7 +453,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
             let hasSplit: Bool
             let unseen: Int
             let indicator: AgentIndicator
-            /// Whether the session is flagged (tree-mode checkmark corner-badge). A change re-badges
+            /// Whether the session is flagged (tree-mode filled-icon variant). A change re-badges
             /// just this row via `reloadItem`. Always false for workspace rows.
             let flagged: Bool
         }
@@ -839,17 +839,19 @@ struct WorkspaceSidebar: NSViewRepresentable {
 
         /// Leading row icons: a filled folder for a workspace, an outlined terminal for a single
         /// session, and a split-rectangle for a split session, rendered as monochrome template symbols.
-        /// The two `flagged*` variants composite a checkmark corner-badge over the base icon (still a
-        /// single template, so `setColors` tints both). Cached because only a few distinct symbols exist
-        /// and every row reuses them.
+        /// The two `flagged*` variants swap to the `.fill` SF Symbol (a solid interior — the same
+        /// "small filled area" idiom the scratch-active toolbar glyph uses): `terminal.fill` for a
+        /// single session, `rectangle.split.2x1.fill` for a split. A pure symbol swap, not a composited
+        /// corner badge, so it stays a single template `setColors` tints and reserves no extra space.
+        /// Cached because only a few distinct symbols exist and every row reuses them.
         private lazy var workspaceIcon = Self.rowIcon("folder.fill")
         private lazy var splitSessionIcon = Self.rowIcon("rectangle.split.2x1")
         private lazy var sessionIcon = Self.rowIcon("terminal")
-        private lazy var flaggedSessionIcon = Self.flaggedIcon(base: sessionIcon)
-        private lazy var flaggedSplitSessionIcon = Self.flaggedIcon(base: splitSessionIcon)
+        private lazy var flaggedSessionIcon = Self.rowIcon("terminal.fill")
+        private lazy var flaggedSplitSessionIcon = Self.rowIcon("rectangle.split.2x1.fill")
 
         /// The leading icon for a session row: the split-rectangle when split, the plain terminal
-        /// otherwise, each with a flagged checkmark corner-badge when `flagged`. The badge variant is
+        /// otherwise, each swapped to its filled variant when `flagged`. The filled variant is
         /// tree-mode only (the caller passes `flagged: false` in the flat flagged view).
         private func iconForSession(split: Bool, flagged: Bool) -> NSImage? {
             switch (split, flagged) {
@@ -866,29 +868,6 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 .withSymbolConfiguration(config)
             image?.isTemplate = true
             return image
-        }
-
-        /// Composites a small checkmark badge into the bottom-right corner of `base` (the clear corner of
-        /// both the terminal and split glyphs) as a single TEMPLATE image, so `setColors` tints the icon
-        /// and the badge together with the chrome/selection color. The badge lives entirely within the
-        /// 16pt icon bounds, so a flagged row reserves NO extra (or trailing) space — it's a pure corner
-        /// overlay, not a layout-affecting sibling. The drawing handler renders at the device scale, so
-        /// the composite stays crisp on Retina. There is no native "terminal+checkmark" SF Symbol.
-        private static func flaggedIcon(base: NSImage?) -> NSImage? {
-            guard let base else { return nil }
-            let size = NSSize(width: 16, height: 16)
-            let badge = NSImage(systemSymbolName: "checkmark", accessibilityDescription: nil)?
-                .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 10, weight: .bold))
-            let composite = NSImage(size: size, flipped: false) { _ in
-                base.draw(in: NSRect(origin: .zero, size: size))
-                if let badge {
-                    let b = badge.size
-                    badge.draw(in: NSRect(x: size.width - b.width, y: 0, width: b.width, height: b.height))
-                }
-                return true
-            }
-            composite.isTemplate = true
-            return composite
         }
 
         /// Builds a view-based outline cell: an `SidebarCellView` with a leading icon

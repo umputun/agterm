@@ -44,8 +44,8 @@ public final class Session: Identifiable {
     public var agentIndicator = AgentIndicator()
 
     /// Whether this session is in the flagged working-set — a durable, user-set flag that surfaces the
-    /// session in the sidebar's flat flagged view (across workspaces) and draws a checkmark badge on its
-    /// tree row. Observed, so the sidebar reacts to a toggle. Persisted via `SessionSnapshot.flagged`,
+    /// session in the sidebar's flat flagged view (across workspaces) and swaps its tree row to the
+    /// filled icon variant. Observed, so the sidebar reacts to a toggle. Persisted via `SessionSnapshot.flagged`,
     /// so it survives a relaunch (and a workspace move — the flag travels with the session).
     public var flagged: Bool = false
 

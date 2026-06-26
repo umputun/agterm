@@ -50,8 +50,9 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
   workspace's subtree (hiding the others), or restore the full tree; returns the workspace id. `on`
   focuses the target, `off` unfocuses it only when it is the currently focused one, `toggle` (default)
   flips. Per-window and persisted; orthogonal to `sidebar mode` (the flagged flat list ignores focus).
-  Selecting a session outside the focused workspace auto-unfocuses, so global navigation always reveals
-  its target. An unknown mode errors.
+  While a workspace is focused, `session go` navigation is scoped to that workspace's sessions (and to
+  the flagged set in flagged mode); an explicit `session select` of a session outside the focused
+  workspace still auto-unfocuses to reveal it. An unknown mode errors.
 
 ## session
 
@@ -64,9 +65,11 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 - `session select [--target] [--window W]`.
 - `session rename <name> [--target] [--window W]`.
 - `session go --to next|prev|first|last|next-attention|prev-attention [--window W]` — move the
-  selection relative to the CURRENT one (no `--target`). next/prev stop at the ends (no wrap); first/
-  last jump to the ends; next-attention/prev-attention step only through sessions needing attention
-  (status blocked/completed), wrapping. Returns the newly selected id.
+  selection relative to the CURRENT one (no `--target`). Operates over the VISIBLE/FILTERED set: the
+  flagged sessions in flagged mode, the focused workspace's sessions when a workspace is focused, else
+  all sessions (clearing the flag/focus restores the full set). next/prev stop at the ends (no wrap);
+  first/last jump to the ends of that set; next-attention/prev-attention step only through the filtered
+  sessions needing attention (status blocked/completed), wrapping. Returns the newly selected id.
 - `session move <workspace> [--target] [--window W]` — relocate the session to another workspace
   (appends). OR `session move --to up|down|top|bottom [--target]` — reorder within its workspace.
   Exactly one of the positional workspace or `--to` is required.
@@ -160,8 +163,10 @@ the ⌃⇧P palette "Toggle Sidebar", and the ⌃⌘S keymap action (`toggle_sid
 workspace tree and the flat flagged working-set list (the durable per-session `flag`; each flagged row
 is labeled `session : workspace`, even across workspaces). `toggle` is the default; idempotent
 (delta-computed); an unknown mode is an error, and `no open window` when none is open. Persisted
-per-window. The GUI half is the bottom-bar flag button, View ▸ Show Flagged / Show All, and the ⌃⇧P
-palette. Use with `session flag` to build and view a cross-workspace working set.
+per-window. While in `flagged` mode, `session go` navigation (and the Ctrl-Tab MRU switcher) is scoped
+to the flagged sessions only; back in `tree` it spans the focused workspace's sessions (when focused)
+or all sessions. The GUI half is the bottom-bar flag button, View ▸ Show Flagged / Show All, and the
+⌃⇧P palette. Use with `session flag` to build and view a cross-workspace working set.
 
 ## notify
 

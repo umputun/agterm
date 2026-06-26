@@ -161,11 +161,14 @@ public final class AppStore {
         scheduleSave() // selection fires on every click/keystroke — coalesce the writes
     }
 
-    /// Clears focus when the newly selected session lives outside the focused workspace, so global
-    /// navigation (`navigateSession`/`session.go`, Ctrl-Tab, attention-nav) always reveals its target —
-    /// the active session is then always inside the visible set. No-op when unfocused, when nothing is
-    /// selected, or when the selection is inside the focused workspace. Persistence rides the caller's
-    /// `selectSession` save.
+    /// Clears focus when the newly selected session lives outside the focused workspace, so an explicit
+    /// cross-set select (`session.select <id>` of a hidden session, a notification reveal, a move/close
+    /// that reselects elsewhere) reveals its target — the active session is then always inside the
+    /// visible set. Session navigation (`navigateSession`/`session.go`, Ctrl-Tab, attention-nav) is now
+    /// scoped to the filtered set (`navigableSessions`), so its targets are always in-set and never
+    /// trip this — it stays the safety net only for the explicit cross-set cases. No-op when unfocused,
+    /// when nothing is selected, or when the selection is inside the focused workspace. Persistence
+    /// rides the caller's `selectSession` save.
     private func autoUnfocusIfOutsideFocus(_ sessionID: UUID?) {
         guard let focusedWorkspaceID, let sessionID else { return }
         if workspace(forSession: sessionID)?.id != focusedWorkspaceID { self.focusedWorkspaceID = nil }
@@ -464,14 +467,16 @@ public final class AppStore {
         return (workspace.id, loc.sessionIndex, workspace.sessions.count)
     }
 
-    /// Steps the selection through the flattened session list (`workspaces.flatMap(\.sessions)`,
-    /// the sidebar's visual order). `next`/`previous` move one and stop at the ends (no wrap — `next`
-    /// on the last session and `previous` on the first are no-ops); `first`/`last` jump to the tree
-    /// ends. With no/invalid current selection, `next`/`previous` land on the first session. No-op
-    /// when there are no sessions. Routes through `selectSession`, inheriting recency, badge clearing,
-    /// persistence, and workspace derivation.
+    /// Steps the selection through the flattened VISIBLE/FILTERED session list (`navigableSessions`:
+    /// the flagged set in `.flagged` mode, the focused workspace's sessions when focused, else all),
+    /// in the sidebar's visual order. `next`/`previous` move one and stop at the ends (no wrap — `next`
+    /// on the last session and `previous` on the first are no-ops); `first`/`last` jump to the ends of
+    /// the filtered list. With no/invalid current selection, `next`/`previous` land on its first session.
+    /// No-op when the filtered list is empty. Routes through `selectSession`, inheriting recency, badge
+    /// clearing, persistence, and workspace derivation. Because the targets are always in-set, nav never
+    /// triggers `autoUnfocusIfOutsideFocus` — that stays the safety net for an explicit cross-set select.
     public func navigateSession(_ direction: SessionNavigation) {
-        let sessions = workspaces.flatMap(\.sessions)
+        let sessions = navigableSessions
         let ids = sessions.map(\.id)
         guard let first = ids.first, let last = ids.last else { return }
         let target: UUID
@@ -596,6 +601,16 @@ public final class AppStore {
     /// by `flagged`). A pure derived projection — the flat sidebar view renders this directly.
     public var flaggedSessions: [Session] {
         workspaces.flatMap(\.sessions).filter(\.flagged)
+    }
+
+    /// The session set navigation operates over — the VISIBLE/FILTERED set, not the whole tree: the
+    /// flagged sessions in `.flagged` sidebar mode, the focused workspace's sessions when a workspace
+    /// is focused, else all sessions. Computed live (`visibleWorkspaces` already collapses to the
+    /// focused workspace, or the full tree when unfocused / the focus id is stale), so clearing the
+    /// flag/focus naturally restores the full set. Backs `navigateSession` (and via it `session.go`,
+    /// attention-nav) plus the Ctrl-Tab MRU candidate set, so all three follow the same filter.
+    public var navigableSessions: [Session] {
+        sidebarMode == .flagged ? flaggedSessions : visibleWorkspaces.flatMap(\.sessions)
     }
 
     // MARK: - Persistence

@@ -110,6 +110,7 @@ Flag a few sessions across workspaces, then flip the sidebar to the flat flagged
 agtermctl session flag on --target "$AGTERM_SESSION_ID"   # flag this session
 agtermctl session flag on --target a1b2                   # flag another (any workspace)
 agtermctl sidebar mode flagged                            # show only the flagged sessions
+agtermctl session go --to next                            # in flagged mode, nav steps the flagged set only
 agtermctl sidebar mode tree                               # back to the full tree
 agtermctl session flag clear                              # unflag everything in the window
 ```
@@ -117,7 +118,8 @@ agtermctl session flag clear                              # unflag everything in
 ## Focus a single workspace
 
 Collapse the sidebar tree to one workspace's sessions (hiding the others), with the full tree one
-command away. Per-window and persisted; orthogonal to `sidebar mode`.
+command away. Per-window and persisted; orthogonal to `sidebar mode`. While focused, `session go`
+navigation is scoped to that workspace's sessions; unfocusing restores stepping over all sessions.
 
 ```bash
 agtermctl workspace focus on --target "$AGTERM_WORKSPACE_ID"  # zoom to this workspace

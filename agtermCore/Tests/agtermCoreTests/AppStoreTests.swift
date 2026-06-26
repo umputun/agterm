@@ -1233,17 +1233,17 @@ struct AppStoreTests {
         #expect(store.focusedWorkspaceID == work.id)
     }
 
-    @Test func navigateSessionRevealingOffFocusTargetClearsFocus() {
+    @Test func navigateSessionStaysWithinFocusedWorkspace() {
         let store = Self.makeStore()
         let work = store.addWorkspace(name: "work")
         let personal = store.addWorkspace(name: "personal")
         let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
-        let b = store.addSession(toWorkspace: personal.id, cwd: "/b")!
+        _ = store.addSession(toWorkspace: personal.id, cwd: "/b")!
         store.selectSession(a.id)
         store.setFocusedWorkspace(work.id)
-        store.navigateSession(.next) // a -> b, which lives in the personal (off-focus) workspace
-        #expect(store.selectedSessionID == b.id)
-        #expect(store.focusedWorkspaceID == nil)
+        store.navigateSession(.next) // nav is scoped to the focused workspace (only a), so no in-set next
+        #expect(store.selectedSessionID == a.id) // stays put — the off-focus session is never revealed
+        #expect(store.focusedWorkspaceID == work.id) // nav never crosses the focus boundary, so focus stands
     }
 
     @Test func selectNilWhileFocusedKeepsFocus() {
@@ -1760,6 +1760,78 @@ struct AppStoreTests {
         store.selectSession(nil)
         store.navigateSession(.previousAttention)
         #expect(store.selectedSessionID == ids[3]) // backward from after-last -> last attention
+    }
+
+    // MARK: - navigation scoping (filtered set)
+
+    @Test func navigableSessionsReflectsFlaggedFocusAndUnfocused() {
+        let (store, ids) = Self.makeNavTree() // work={a,b}, personal={c,d}
+        #expect(store.navigableSessions.map(\.id) == ids) // unfocused tree mode -> all sessions
+        let work = store.workspace(forSession: ids[0])!
+        store.setFocusedWorkspace(work.id)
+        #expect(store.navigableSessions.map(\.id) == [ids[0], ids[1]]) // focused -> only that workspace
+        store.setFocusedWorkspace(UUID()) // a stale focus id falls back to all
+        #expect(store.navigableSessions.map(\.id) == ids)
+        store.setFocusedWorkspace(nil)
+        store.setFlag(true, forSession: ids[1])
+        store.setFlag(true, forSession: ids[2])
+        store.setSidebarMode(.flagged)
+        #expect(store.navigableSessions.map(\.id) == [ids[1], ids[2]]) // flagged mode -> the flagged set
+    }
+
+    @Test func navigateScopesToFocusedWorkspace() {
+        let (store, ids) = Self.makeNavTree() // work={a,b}, personal={c,d}
+        let work = store.workspace(forSession: ids[0])!
+        store.setFocusedWorkspace(work.id)
+        store.selectSession(ids[0])
+        store.navigateSession(.next)
+        #expect(store.selectedSessionID == ids[1]) // a -> b within the focused workspace
+        store.navigateSession(.next)
+        #expect(store.selectedSessionID == ids[1]) // b is the in-set last: stays put, never crosses to c
+        store.navigateSession(.last)
+        #expect(store.selectedSessionID == ids[1]) // .last is the focused workspace's last, not the tree's
+        store.navigateSession(.first)
+        #expect(store.selectedSessionID == ids[0]) // .first is the focused workspace's first
+        #expect(store.focusedWorkspaceID == work.id) // never auto-unfocuses — every target was in-set
+    }
+
+    @Test func navigateScopesToFlaggedSet() {
+        let (store, ids) = Self.makeNavTree() // a, b, c, d
+        store.setFlag(true, forSession: ids[0]) // a
+        store.setFlag(true, forSession: ids[2]) // c
+        store.setSidebarMode(.flagged)
+        store.selectSession(ids[0])
+        store.navigateSession(.next)
+        #expect(store.selectedSessionID == ids[2]) // a -> c, skipping the unflagged b
+        store.navigateSession(.next)
+        #expect(store.selectedSessionID == ids[2]) // c is the flagged-set last: stays put
+        store.navigateSession(.first)
+        #expect(store.selectedSessionID == ids[0]) // .first is the flagged set's first
+    }
+
+    @Test func navigateAttentionScopesToFocusedWorkspace() {
+        let (store, ids) = Self.makeNavTree() // work={a,b}, personal={c,d}
+        store.session(withID: ids[1])?.agentIndicator = AgentIndicator(status: .blocked)   // b (in focus)
+        store.session(withID: ids[3])?.agentIndicator = AgentIndicator(status: .completed) // d (off focus)
+        let work = store.workspace(forSession: ids[0])!
+        store.setFocusedWorkspace(work.id)
+        store.selectSession(ids[0])
+        store.navigateSession(.nextAttention)
+        #expect(store.selectedSessionID == ids[1]) // only b is in the focused set; d is never reached
+        store.navigateSession(.nextAttention)
+        #expect(store.selectedSessionID == ids[1]) // b is the single in-set attention session: stays
+    }
+
+    @Test func navigateRestoresFullSetWhenFocusCleared() {
+        let (store, ids) = Self.makeNavTree()
+        let work = store.workspace(forSession: ids[0])!
+        store.setFocusedWorkspace(work.id)
+        store.selectSession(ids[1])
+        store.navigateSession(.next)
+        #expect(store.selectedSessionID == ids[1]) // scoped: no in-set next past b
+        store.setFocusedWorkspace(nil) // clearing focus restores the full navigable set
+        store.navigateSession(.next)
+        #expect(store.selectedSessionID == ids[2]) // now crosses into the personal workspace
     }
 }
 
