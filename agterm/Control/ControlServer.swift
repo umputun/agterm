@@ -414,6 +414,8 @@ final class ControlServer {
                                to: request.args?.to, workspace: request.args?.workspace)
         case .workspaceMove:
             return moveWorkspace(request.target, window: request.args?.window, to: request.args?.to)
+        case .workspaceFocus:
+            return focusWorkspace(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionType:
             guard let text = request.args?.text else {
                 return ControlResponse(ok: false, error: "session.type requires text")
@@ -437,6 +439,8 @@ final class ControlServer {
             return setSessionStatus(request.target, window: request.args?.window,
                                     status: request.args?.status, blink: request.args?.blink,
                                     autoReset: request.args?.autoReset)
+        case .sessionFlag:
+            return flagSession(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionCopy:
             return copySelection(request.target, window: request.args?.window)
         case .sessionSearch:
@@ -492,6 +496,12 @@ final class ControlServer {
             return setQuickTerminal(mode: request.args?.mode)
         case .sidebar:
             return setSidebar(mode: request.args?.mode)
+        case .sidebarMode:
+            return setSidebarViewMode(mode: request.args?.mode)
+        case .sidebarExpand:
+            return expandWorkspaces(window: request.args?.window)
+        case .sidebarCollapse:
+            return collapseWorkspaces(window: request.args?.window)
         case .notify:
             return sendNotification(request.target, window: request.args?.window,
                                     title: request.args?.title, body: request.args?.body)
@@ -626,6 +636,35 @@ final class ControlServer {
         }
     }
 
+    /// Flag/unflag the target session for the flagged working-set view (the durable `Session.flagged`
+    /// membership the flat sidebar mode projects). `mode` is `on|off|toggle|clear`, computed against the
+    /// session's current `flagged` so `on`/`off` are idempotent. `clear` ignores the target and unflags
+    /// every session in the resolved store (frontmost or `--window`), via `AppStore.clearFlags()` — it
+    /// reports ok with no id. An unknown mode is an error.
+    private func flagSession(_ target: String?, window: String?, mode: String?) -> ControlResponse {
+        let mode = mode ?? "toggle"
+        if mode == "clear" {
+            return resolvePlacementStore(window) { store in
+                store.clearFlags()
+                return ControlResponse(ok: true)
+            }
+        }
+        return resolveSession(target, window: window) { store, id in
+            guard let session = store.session(withID: id) else {
+                return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
+            }
+            let want: Bool
+            switch mode {
+            case "on": want = true
+            case "off": want = false
+            case "toggle": want = !session.flagged
+            default: return ControlResponse(ok: false, error: "invalid flag mode: \(mode)")
+            }
+            store.setFlag(want, forSession: id) // no-op + no save when unchanged (idempotent)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
     /// Mode-bearing `session.move`: `to` reorders the session within its own workspace
     /// (`up`|`down`|`top`|`bottom`), `workspace` relocates it to another workspace (appending). Exactly
     /// one of the two is required; both set or neither set is an error. An invalid `to` direction errors.
@@ -668,6 +707,26 @@ final class ControlServer {
         }
         return resolveWorkspace(target, window: window) { store, id in
             store.reorderWorkspace(id, dir)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    /// Focus (or unfocus) a workspace — collapse the sidebar tree to that workspace's subtree, or restore
+    /// the full tree. `mode` is `on|off|toggle`: `on` focuses the target, `off` unfocuses it only when it
+    /// is the currently focused one (a no-op otherwise), `toggle` flips. Delta-computed via
+    /// `AppStore.setFocusedWorkspace` so a no-op mode skips the write (idempotent). An unknown mode is an
+    /// error. The control half of the workspace row's Focus/Unfocus menu + the pill ✕.
+    private func focusWorkspace(_ target: String?, window: String?, mode: String?) -> ControlResponse {
+        let mode = mode ?? "toggle"
+        return resolveWorkspace(target, window: window) { store, id in
+            let want: UUID?
+            switch mode {
+            case "on": want = id
+            case "off": want = store.focusedWorkspaceID == id ? nil : store.focusedWorkspaceID
+            case "toggle": want = store.focusedWorkspaceID == id ? nil : id
+            default: return ControlResponse(ok: false, error: "invalid focus mode: \(mode)")
+            }
+            store.setFocusedWorkspace(want) // no-op + no save when unchanged (idempotent)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
@@ -731,6 +790,55 @@ final class ControlServer {
             store.save() // sidebarVisible is persisted per-window
         }
         return ControlResponse(ok: true)
+    }
+
+    /// Set the frontmost window's sidebar VIEW mode (the tree vs the flat flagged list) — distinct from
+    /// `setSidebar` (visibility). `mode` is `tree|flagged|toggle`, delta-computed so a no-op mode skips
+    /// the write (idempotent), via `AppStore.setSidebarMode`. An unknown mode + no-open-window are errors.
+    private func setSidebarViewMode(mode: String?) -> ControlResponse {
+        let mode = mode ?? "toggle"
+        guard let store = library.activeStore else {
+            return ControlResponse(ok: false, error: "no open window")
+        }
+        let want: SidebarMode
+        switch mode {
+        case "tree": want = .tree
+        case "flagged": want = .flagged
+        case "toggle": want = store.sidebarMode == .tree ? .flagged : .tree
+        default: return ControlResponse(ok: false, error: "invalid sidebar mode: \(mode)")
+        }
+        store.setSidebarMode(want) // no-op + no save when unchanged (idempotent)
+        return ControlResponse(ok: true)
+    }
+
+    /// Expand every workspace in a window's sidebar tree — the `--window` selector picks the (OPEN) target,
+    /// defaulting to the frontmost window (a graceful no-op in flagged mode, which has no workspace rows).
+    /// Drives `AppActions.expandAllWorkspaces(in:)` (the same path the View menu / palette drive on the
+    /// frontmost). Idempotent (expanding when all are already expanded is a clean no-op); a named-but-closed
+    /// window errors, and no open window at all errors rather than silently no-opping.
+    private func expandWorkspaces(window: String?) -> ControlResponse {
+        if trimmed(window) == nil, library.activeStore == nil {
+            return ControlResponse(ok: false, error: "no open window")
+        }
+        return resolvePlacementStore(window) { store in
+            actions.expandAllWorkspaces(in: store)
+            return ControlResponse(ok: true)
+        }
+    }
+
+    /// Collapse every workspace except the active one (the active session's workspace) in a window's
+    /// sidebar, keeping that workspace expanded and scrolled into view. The `--window` selector picks the
+    /// (OPEN) target, defaulting to the frontmost. Drives `AppActions.collapseOtherWorkspaces(in:)`.
+    /// Graceful no-op in flagged mode; idempotent; a named-but-closed window errors, and no open window
+    /// at all errors.
+    private func collapseWorkspaces(window: String?) -> ControlResponse {
+        if trimmed(window) == nil, library.activeStore == nil {
+            return ControlResponse(ok: false, error: "no open window")
+        }
+        return resolvePlacementStore(window) { store in
+            actions.collapseOtherWorkspaces(in: store)
+            return ControlResponse(ok: true)
+        }
     }
 
     /// Resolve the target session and run a font binding action on its surface (targets a specific
@@ -904,7 +1012,7 @@ final class ControlServer {
                 ControlSessionNode(id: session.id.uuidString, name: session.displayName,
                                    cwd: session.effectiveCwd, active: session.id == activeID,
                                    split: session.isSplit, overlay: session.overlayActive,
-                                   scratch: session.scratchActive)
+                                   scratch: session.scratchActive, flagged: session.flagged)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID, sessions: sessions)

@@ -126,7 +126,7 @@ struct Tree: RequestCommand {
 struct Workspace: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Workspace commands.",
-        subcommands: [New.self, Rename.self, Delete.self, Select.self, Move.self]
+        subcommands: [New.self, Rename.self, Delete.self, Select.self, Move.self, Focus.self]
     )
 
     struct New: RequestCommand {
@@ -181,6 +181,23 @@ struct Workspace: ParsableCommand {
             ControlRequest(cmd: .workspaceMove, target: target.target, args: options.withWindow(ControlArgs(to: to)))
         }
     }
+
+    struct Focus: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Focus the sidebar on a single workspace (on|off|toggle).")
+        @Argument(help: "Mode: on (focus), off (unfocus), or toggle (default).") var mode: String = "toggle"
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        func validate() throws {
+            guard ["on", "off", "toggle"].contains(mode) else {
+                throw ValidationError("mode must be on, off, or toggle")
+            }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .workspaceFocus, target: target.target, args: options.withWindow(ControlArgs(mode: mode)))
+        }
+    }
 }
 
 // MARK: - session
@@ -188,7 +205,7 @@ struct Workspace: ParsableCommand {
 struct Session: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Session commands.",
-        subcommands: [New.self, Close.self, Select.self, Go.self, Rename.self, Move.self, TypeText.self, Split.self, Scratch.self, Focus.self, Copy.self, Status.self, Search.self, Overlay.self]
+        subcommands: [New.self, Close.self, Select.self, Go.self, Rename.self, Move.self, TypeText.self, Split.self, Scratch.self, Focus.self, Copy.self, Status.self, FlagCommand.self, Search.self, Overlay.self]
     )
 
     struct New: RequestCommand {
@@ -348,6 +365,25 @@ struct Session: ParsableCommand {
             ControlRequest(cmd: .sessionStatus, target: target.target,
                            args: options.withWindow(ControlArgs(status: state, blink: blink ? true : nil,
                                                                  autoReset: autoReset ? true : nil)))
+        }
+    }
+
+    // named `FlagCommand` (not `Flag`) so it doesn't shadow ArgumentParser's `@Flag` wrapper within
+    // the `Session` namespace; `commandName` keeps the user-facing verb `flag`.
+    struct FlagCommand: RequestCommand {
+        static let configuration = CommandConfiguration(commandName: "flag", abstract: "Flag a session for the flagged working-set view (on|off|toggle|clear).")
+        @Argument(help: "Mode: on, off, toggle (default), or clear (unflag all; ignores --target).") var mode: String = "toggle"
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        func validate() throws {
+            guard ["on", "off", "toggle", "clear"].contains(mode) else {
+                throw ValidationError("mode must be on, off, toggle, or clear")
+            }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sessionFlag, target: target.target, args: options.withWindow(ControlArgs(mode: mode)))
         }
     }
 
@@ -610,14 +646,61 @@ struct Quick: RequestCommand {
 
 // MARK: - sidebar
 
-struct Sidebar: RequestCommand {
-    static let configuration = CommandConfiguration(abstract: "Sidebar visibility (show|hide|toggle).")
-    @Argument(help: "Mode: show, hide, or toggle (default).") var mode: String = "toggle"
-    // the sidebar is always the frontmost window's, so this carries no `--window` selector.
-    @OptionGroup var options: BasicOptions
+struct Sidebar: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Sidebar visibility and view mode.",
+        subcommands: [Visibility.self, Mode.self, Expand.self, Collapse.self],
+        defaultSubcommand: Visibility.self
+    )
 
-    func makeRequest() throws -> ControlRequest {
-        ControlRequest(cmd: .sidebar, args: ControlArgs(mode: mode))
+    /// `agtermctl sidebar [show|hide|toggle]` — the default, so the bare verb keeps working. Toggles the
+    /// frontmost window's sidebar visibility.
+    struct Visibility: RequestCommand {
+        static let configuration = CommandConfiguration(commandName: "visibility", abstract: "Sidebar visibility (show|hide|toggle).")
+        @Argument(help: "Mode: show, hide, or toggle (default).") var mode: String = "toggle"
+        // the sidebar is always the frontmost window's, so this carries no `--window` selector.
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sidebar, args: ControlArgs(mode: mode))
+        }
+    }
+
+    /// `agtermctl sidebar mode [tree|flagged|toggle]` — flips the frontmost window's sidebar view between
+    /// the workspace tree and the flat flagged working-set list.
+    struct Mode: RequestCommand {
+        static let configuration = CommandConfiguration(commandName: "mode", abstract: "Sidebar view mode (tree|flagged|toggle).")
+        @Argument(help: "Mode: tree, flagged, or toggle (default).") var mode: String = "toggle"
+        @OptionGroup var options: BasicOptions
+
+        func validate() throws {
+            guard ["tree", "flagged", "toggle"].contains(mode) else {
+                throw ValidationError("mode must be tree, flagged, or toggle")
+            }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sidebarMode, args: ControlArgs(mode: mode))
+        }
+    }
+
+    /// `agtermctl sidebar expand [--window W]` — expand every workspace in a window's sidebar tree
+    /// (defaults to the frontmost). Unlike `visibility`/`mode`, this carries the `--window` selector so a
+    /// script can expand a background window's tree.
+    struct Expand: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Expand every workspace in the sidebar.")
+        @OptionGroup var options: ClientOptions
+
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .sidebarExpand, args: options.withWindow()) }
+    }
+
+    /// `agtermctl sidebar collapse [--window W]` — collapse every workspace except the active one (it
+    /// stays expanded) in a window's sidebar (defaults to the frontmost).
+    struct Collapse: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Collapse all workspaces except the active one.")
+        @OptionGroup var options: ClientOptions
+
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .sidebarCollapse, args: options.withWindow()) }
     }
 }
 

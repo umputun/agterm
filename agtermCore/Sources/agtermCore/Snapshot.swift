@@ -18,14 +18,25 @@ public struct Snapshot: Codable, Equatable, Sendable {
     public var sidebarWidth: Double?
     /// Whether the window's sidebar is shown, or nil for the default (shown). Optional for forward-compat.
     public var sidebarVisible: Bool?
+    /// Which view the sidebar renders (tree or flagged flat list), or nil for the default (`.tree`).
+    /// Optional so a snapshot already on disk before this field was added still decodes instead of
+    /// failing the load and wiping the saved tree, like the fields above.
+    public var sidebarMode: SidebarMode?
+    /// The workspace the sidebar tree is focused on, or nil for the full tree. Naturally Optional, so a
+    /// snapshot already on disk before this field was added decodes (as nil → unfocused) instead of
+    /// failing the load and wiping the saved tree.
+    public var focusedWorkspaceID: UUID?
 
     public init(version: Int = Snapshot.currentVersion, selectedSessionID: UUID? = nil,
-                workspaces: [WorkspaceSnapshot] = [], sidebarWidth: Double? = nil, sidebarVisible: Bool? = nil) {
+                workspaces: [WorkspaceSnapshot] = [], sidebarWidth: Double? = nil, sidebarVisible: Bool? = nil,
+                sidebarMode: SidebarMode? = nil, focusedWorkspaceID: UUID? = nil) {
         self.version = version
         self.selectedSessionID = selectedSessionID
         self.workspaces = workspaces
         self.sidebarWidth = sidebarWidth
         self.sidebarVisible = sidebarVisible
+        self.sidebarMode = sidebarMode
+        self.focusedWorkspaceID = focusedWorkspaceID
     }
 }
 
@@ -67,9 +78,13 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     /// `AppStore.splitRatioMin...splitRatioMax` (~0.05...0.95): the live capture skips degenerate extremes
     /// and restore clamps to the same bounds. Optional for forward-compat; nil restores the even default.
     public var splitRatio: Double?
+    /// Whether the session is in the flagged working-set. Optional so a snapshot already on disk before
+    /// this field was added still decodes (as nil → not flagged) instead of failing the load and wiping
+    /// the saved tree, like the fields above.
+    public var flagged: Bool?
 
     public init(id: UUID, customName: String?, cwd: String, isSplit: Bool? = nil, fontSize: Double? = nil,
-                splitCwd: String? = nil, splitRatio: Double? = nil) {
+                splitCwd: String? = nil, splitRatio: Double? = nil, flagged: Bool? = nil) {
         self.id = id
         self.customName = customName
         self.cwd = cwd
@@ -77,5 +92,6 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         self.fontSize = fontSize
         self.splitCwd = splitCwd
         self.splitRatio = splitRatio
+        self.flagged = flagged
     }
 }

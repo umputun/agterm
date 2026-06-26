@@ -32,7 +32,8 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 
 `agtermctl tree [--json] [--window W]` — the workspace/session tree. Each session node:
 `id`, `name`, `cwd`, `active` (selected), `split` (split shown), `overlay` (overlay shown),
-`scratch` (scratch shown). Workspace nodes carry `id`, `name`, `active`, `sessions`.
+`scratch` (scratch shown), `flagged` (in the flagged working-set). Workspace nodes carry
+`id`, `name`, `active`, `sessions`.
 
 ## workspace
 
@@ -45,6 +46,13 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
   or invalid `--to` errors. Note: `--target active` resolves to the current workspace, which with no
   selected session falls back to the last workspace; address a specific workspace by id to step the
   same one.
+- `workspace focus [on|off|toggle] [--target] [--window W]` — collapse the sidebar tree to a single
+  workspace's subtree (hiding the others), or restore the full tree; returns the workspace id. `on`
+  focuses the target, `off` unfocuses it only when it is the currently focused one, `toggle` (default)
+  flips. Per-window and persisted; orthogonal to `sidebar mode` (the flagged flat list ignores focus).
+  While a workspace is focused, `session go` navigation is scoped to that workspace's sessions (and to
+  the flagged set in flagged mode); an explicit `session select` of a session outside the focused
+  workspace still auto-unfocuses to reveal it. An unknown mode errors.
 
 ## session
 
@@ -57,9 +65,11 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 - `session select [--target] [--window W]`.
 - `session rename <name> [--target] [--window W]`.
 - `session go --to next|prev|first|last|next-attention|prev-attention [--window W]` — move the
-  selection relative to the CURRENT one (no `--target`). next/prev stop at the ends (no wrap); first/
-  last jump to the ends; next-attention/prev-attention step only through sessions needing attention
-  (status blocked/completed), wrapping. Returns the newly selected id.
+  selection relative to the CURRENT one (no `--target`). Operates over the VISIBLE/FILTERED set: the
+  flagged sessions in flagged mode, the focused workspace's sessions when a workspace is focused, else
+  all sessions (clearing the flag/focus restores the full set). next/prev stop at the ends (no wrap);
+  first/last jump to the ends of that set; next-attention/prev-attention step only through the filtered
+  sessions needing attention (status blocked/completed), wrapping. Returns the newly selected id.
 - `session move <workspace> [--target] [--window W]` — relocate the session to another workspace
   (appends). OR `session move --to up|down|top|bottom [--target]` — reorder within its workspace.
   Exactly one of the positional workspace or `--to` is required.
@@ -93,6 +103,11 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
   set the sidebar agent-status glyph. `--blink` pulses it (for attention). `--auto-reset` clears it
   back to idle once the session is visited (use for a one-shot completion flash). An unknown state
   errors. Setting non-idle is for agents/hooks; `idle` clears it (also available in the GUI).
+- `session flag [on|off|toggle|clear] [--target] [--window W]` — flag/unflag a session for the flagged
+  working-set view (a durable, persisted membership). `on`/`off`/`toggle` act on `--target` (default
+  `active`) and are idempotent; `clear` ignores the target and unflags every session in the window.
+  Pair with `sidebar mode flagged` to see just the flagged sessions as a flat `session : workspace`
+  list. Unknown mode errors. The tree's `flagged` flag tracks membership.
 - `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--target] [--window W]`
   — run `command` in an ephemeral terminal on top of the session; it closes when the command exits.
   Full-size by default (hides the session); `--size-percent N` (1–100) makes it a floating framed panel
@@ -143,6 +158,28 @@ terminal at 90% of the window, not in the tree; its shell stays alive across hid
 (the custom split has no system toggle). `toggle` is the default; an unknown mode is an error, and
 `no open window` when none is open. The GUI half is the title-bar button, View ▸ Show/Hide Sidebar,
 the ⌃⇧P palette "Toggle Sidebar", and the ⌃⌘S keymap action (`toggle_sidebar`).
+
+`agtermctl sidebar mode [tree|flagged|toggle]` — flip the frontmost window's sidebar VIEW between the
+workspace tree and the flat flagged working-set list (the durable per-session `flag`; each flagged row
+is labeled `session : workspace`, even across workspaces). `toggle` is the default; idempotent
+(delta-computed); an unknown mode is an error, and `no open window` when none is open. Persisted
+per-window. While in `flagged` mode, `session go` navigation (and the Ctrl-Tab MRU switcher) is scoped
+to the flagged sessions only; back in `tree` it spans the focused workspace's sessions (when focused)
+or all sessions. The GUI half is the bottom-bar flag button, View ▸ Show Flagged / Show All, and the
+⌃⇧P palette. Use with `session flag` to build and view a cross-workspace working set.
+
+`agtermctl sidebar expand [--window W]` — expand every workspace row in a window's sidebar tree.
+Defaults to the frontmost window; `--window` (id / prefix / `active`) targets any OPEN window, so a
+script can expand a background window's tree. Idempotent (a clean no-op when all are already expanded);
+a graceful no-op in `flagged` mode (no workspace rows); a named-but-closed window errors, and `no open
+window` when none is open. The GUI half (frontmost only) is View ▸ Expand Workspaces and the ⌃⇧P palette
+"Expand Workspaces".
+
+`agtermctl sidebar collapse [--window W]` — collapse every workspace EXCEPT the active one (the
+workspace of the active session), which stays expanded and is scrolled into view. Same `--window`
+selector and defaults as `expand`. Idempotent; a graceful no-op in `flagged` mode; a named-but-closed
+window errors, and `no open window` when none is open. The GUI half (frontmost only) is View ▸ Collapse
+Workspaces and the ⌃⇧P palette "Collapse Workspaces".
 
 ## notify
 
@@ -212,5 +249,7 @@ the commit, with no preview.
 
 `notFound` / `ambiguous` (target resolution), `no such session`, `invalid split mode` /
 `invalid scratch mode`, `session has no split` (focus), `no selection` (copy), `overlay already open` /
-`no overlay` / `still running` / `no result` (overlay), `invalid sidebar mode` (sidebar), `no open window` (quick/sidebar), `window not open`
+`no overlay` / `still running` / `no result` (overlay), `invalid flag mode` (session flag),
+`invalid sidebar mode` (sidebar), `invalid focus mode` (workspace focus),
+`no open window` (quick/sidebar), `window not open`
 (resize/move/`--window`), `unknown theme: <name>` (theme set). Unknown commands fail to decode and return a structured error, never a crash.

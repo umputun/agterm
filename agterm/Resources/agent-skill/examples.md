@@ -101,6 +101,44 @@ agtermctl session scratch off       # hide, shell stays alive
 agtermctl session scratch toggle
 ```
 
+## Flag a working set and view just the flagged sessions
+
+Flag a few sessions across workspaces, then flip the sidebar to the flat flagged list (each row labeled
+`session : workspace`). The flag is durable (persisted per session); `sidebar mode` is per-window.
+
+```bash
+agtermctl session flag on --target "$AGTERM_SESSION_ID"   # flag this session
+agtermctl session flag on --target a1b2                   # flag another (any workspace)
+agtermctl sidebar mode flagged                            # show only the flagged sessions
+agtermctl session go --to next                            # in flagged mode, nav steps the flagged set only
+agtermctl sidebar mode tree                               # back to the full tree
+agtermctl session flag clear                              # unflag everything in the window
+```
+
+## Focus a single workspace
+
+Collapse the sidebar tree to one workspace's sessions (hiding the others), with the full tree one
+command away. Per-window and persisted; orthogonal to `sidebar mode`. While focused, `session go`
+navigation is scoped to that workspace's sessions; unfocusing restores stepping over all sessions.
+
+```bash
+agtermctl workspace focus on --target "$AGTERM_WORKSPACE_ID"  # zoom to this workspace
+agtermctl workspace focus toggle --target a1b2                # flip focus on another workspace
+agtermctl workspace focus off                                 # restore the full tree
+```
+
+## Expand or collapse the sidebar tree
+
+Open every workspace at once, or collapse all but the active one (the workspace of the active session,
+which stays expanded and scrolled into view) to cut clutter. Defaults to the frontmost window; pass
+`--window` to target any open window. A no-op in flagged mode.
+
+```bash
+agtermctl sidebar expand                                 # expand every workspace (frontmost window)
+agtermctl sidebar collapse                               # collapse all but the active workspace
+agtermctl sidebar collapse --window "$AGTERM_WINDOW_ID"  # collapse a specific window's sidebar
+```
+
 ## Copy a selection and reuse it
 
 `session copy` returns the selection as text (it does not use the system clipboard). Pipe it onward.

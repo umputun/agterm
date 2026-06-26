@@ -151,9 +151,9 @@ final class PaletteUITests: XCTestCase {
     }
 
     private func openPalette(_ menuTitle: String) {
-        app.menuBars.menuBarItems["View"].click()
+        app.menuBars.menuBarItems["Navigate"].click()
         let item = app.menuItems[menuTitle]
-        XCTAssertTrue(item.waitForExistence(timeout: 5), "View menu should offer \(menuTitle)")
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "Navigate menu should offer \(menuTitle)")
         item.click()
     }
 

@@ -59,6 +59,19 @@ struct CommandsTests {
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["workspace", "move"]) }
     }
 
+    @Test func workspaceFocusDefaultsToggle() throws {
+        #expect(try request(["workspace", "focus"]) == ControlRequest(cmd: .workspaceFocus, target: "active", args: ControlArgs(mode: "toggle")))
+    }
+
+    @Test func workspaceFocusOnWithTarget() throws {
+        let expected = ControlRequest(cmd: .workspaceFocus, target: "9f3c", args: ControlArgs(mode: "on"))
+        #expect(try request(["workspace", "focus", "on", "--target", "9f3c"]) == expected)
+    }
+
+    @Test func workspaceFocusRejectsBadMode() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["workspace", "focus", "sideways"]) }
+    }
+
     @Test func sessionNewWithCwdAndWorkspace() throws {
         let expected = ControlRequest(cmd: .sessionNew, args: ControlArgs(cwd: "/tmp", workspace: "ws1"))
         #expect(try request(["session", "new", "--cwd", "/tmp", "--workspace", "ws1"]) == expected)
@@ -323,6 +336,53 @@ struct CommandsTests {
 
     @Test func sidebarHide() throws {
         #expect(try request(["sidebar", "hide"]) == ControlRequest(cmd: .sidebar, args: ControlArgs(mode: "hide")))
+    }
+
+    @Test func sidebarModeDefaultsToggle() throws {
+        #expect(try request(["sidebar", "mode"]) == ControlRequest(cmd: .sidebarMode, args: ControlArgs(mode: "toggle")))
+    }
+
+    @Test func sidebarModeFlagged() throws {
+        #expect(try request(["sidebar", "mode", "flagged"]) == ControlRequest(cmd: .sidebarMode, args: ControlArgs(mode: "flagged")))
+    }
+
+    @Test func sidebarModeRejectsBadMode() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["sidebar", "mode", "sideways"]) }
+    }
+
+    @Test func sidebarExpand() throws {
+        #expect(try request(["sidebar", "expand"]) == ControlRequest(cmd: .sidebarExpand))
+    }
+
+    @Test func sidebarCollapse() throws {
+        #expect(try request(["sidebar", "collapse"]) == ControlRequest(cmd: .sidebarCollapse))
+    }
+
+    @Test func sidebarExpandWithWindow() throws {
+        #expect(try request(["sidebar", "expand", "--window", "abc"]) ==
+            ControlRequest(cmd: .sidebarExpand, args: ControlArgs(window: "abc")))
+    }
+
+    @Test func sidebarCollapseWithWindow() throws {
+        #expect(try request(["sidebar", "collapse", "--window", "abc"]) ==
+            ControlRequest(cmd: .sidebarCollapse, args: ControlArgs(window: "abc")))
+    }
+
+    @Test func sessionFlagDefaultsToggle() throws {
+        #expect(try request(["session", "flag"]) == ControlRequest(cmd: .sessionFlag, target: "active", args: ControlArgs(mode: "toggle")))
+    }
+
+    @Test func sessionFlagOnWithTarget() throws {
+        let expected = ControlRequest(cmd: .sessionFlag, target: "9f3c", args: ControlArgs(mode: "on"))
+        #expect(try request(["session", "flag", "on", "--target", "9f3c"]) == expected)
+    }
+
+    @Test func sessionFlagClear() throws {
+        #expect(try request(["session", "flag", "clear"]) == ControlRequest(cmd: .sessionFlag, target: "active", args: ControlArgs(mode: "clear")))
+    }
+
+    @Test func sessionFlagRejectsBadMode() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "flag", "bogus"]) }
     }
 
     @Test func fontInc() throws {

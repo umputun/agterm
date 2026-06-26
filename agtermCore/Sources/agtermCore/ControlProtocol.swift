@@ -16,8 +16,10 @@ public enum Command: String, Codable, Sendable {
     case sessionRename = "session.rename"
     case sessionMove = "session.move"
     case workspaceMove = "workspace.move"
+    case workspaceFocus = "workspace.focus"
     case sessionType = "session.type"
     case sessionStatus = "session.status"
+    case sessionFlag = "session.flag"
     case sessionSplit = "session.split"
     case sessionScratch = "session.scratch"
     case sessionFocus = "session.focus"
@@ -28,6 +30,9 @@ public enum Command: String, Codable, Sendable {
     case sessionOverlayResult = "session.overlay.result"
     case quick
     case sidebar
+    case sidebarMode = "sidebar.mode"
+    case sidebarExpand = "sidebar.expand"
+    case sidebarCollapse = "sidebar.collapse"
     case notify
     case fontInc = "font.inc"
     case fontDec = "font.dec"
@@ -60,7 +65,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var text: String?
     /// Whether `session.type` may select a never-shown session to realize its surface.
     public var select: Bool?
-    /// Mode for `session.split` / `quick` (`on|off|toggle`, `show|hide|toggle` for quick).
+    /// Mode for `session.split` / `quick` (`on|off|toggle`, `show|hide|toggle` for quick),
+    /// `session.flag` (`on|off|toggle|clear`), `sidebar.mode` (`tree|flagged|toggle`), and
+    /// `workspace.focus` (`on|off|toggle`).
     public var mode: String?
     /// Which split pane to focus for `session.focus` (`left`|`right`|`other`; `other` toggles).
     public var pane: String?
@@ -153,9 +160,10 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let split: Bool
     public let overlay: Bool
     public let scratch: Bool
+    public let flagged: Bool
 
     public init(id: String, name: String, cwd: String, active: Bool, split: Bool, overlay: Bool = false,
-                scratch: Bool = false) {
+                scratch: Bool = false, flagged: Bool = false) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -163,6 +171,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.split = split
         self.overlay = overlay
         self.scratch = scratch
+        self.flagged = flagged
     }
 }
 

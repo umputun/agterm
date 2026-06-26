@@ -122,7 +122,7 @@ final class KeymapUITests: XCTestCase {
     }
 
     // "Reload Keymap" re-reads keymap.conf: launch with ⌘⇧J bound to touch fileC1, then rewrite the
-    // file so ⌘⇧J touches fileC2 instead, invoke Reload Keymap (View menu), and assert the POST-reload
+    // file so ⌘⇧J touches fileC2 instead, invoke Reload Keymap (File menu), and assert the POST-reload
     // chord touches fileC2 — proving the reload picked up the rewritten file.
     func testReloadKeymapPicksUpRewrittenFile() throws {
         let before = markerDir.appendingPathComponent("reload-before")
@@ -138,10 +138,10 @@ final class KeymapUITests: XCTestCase {
         // rewrite keymap.conf so the same chord now touches a DIFFERENT file.
         seedKeymap("command \"Touch C\" cmd+shift+j touch '\(after.path)'\n")
 
-        // invoke Reload Keymap from the View menu.
-        app.menuBars.menuBarItems["View"].click()
+        // invoke Reload Keymap from the File menu.
+        app.menuBars.menuBarItems["File"].click()
         let reload = app.menuItems["Reload Keymap"]
-        XCTAssertTrue(reload.waitForExistence(timeout: 5), "View menu should offer Reload Keymap")
+        XCTAssertTrue(reload.waitForExistence(timeout: 5), "File menu should offer Reload Keymap")
         reload.click()
 
         // after the reload the chord must touch the NEW file (the rewritten binding is in effect).
@@ -256,9 +256,9 @@ final class KeymapUITests: XCTestCase {
     }
 
     private func openPalette(_ menuTitle: String) {
-        app.menuBars.menuBarItems["View"].click()
+        app.menuBars.menuBarItems["Navigate"].click()
         let item = app.menuItems[menuTitle]
-        XCTAssertTrue(item.waitForExistence(timeout: 5), "View menu should offer \(menuTitle)")
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "Navigate menu should offer \(menuTitle)")
         item.click()
     }
 

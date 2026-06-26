@@ -12,8 +12,8 @@ description: >
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.scratch, session.focus, session.go, session.copy, session.search, session.status,
-  session.overlay, workspace.new, workspace.select, workspace.move, window.new, window.list,
-  window.select, window.resize, window.move, quick terminal, sidebar, notify, font.inc, keymap.reload,
+  session.flag, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
+  window.select, window.resize, window.move, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload,
   theme.set, theme.list, select theme, edit keymap, show an image, display an image inline, show-image,
   AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm.
 user-invocable: false
@@ -82,14 +82,15 @@ a global `--window <id|prefix|active>` to operate on a specific window's tree (d
 
 Scripts rarely type ids: create with `*.new` (capture the returned id), or act on `active`.
 
-## Command summary (39 commands)
+## Command summary (44 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
 
 **tree** — print the workspace/session tree (`--json` for structured).
 
-**workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom`.
+**workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom` ·
+`focus [on|off|toggle]` (collapse the sidebar tree to a single workspace).
 
 **session**
 - `new [--cwd DIR] [--workspace W] [--command CMD]` — create (and focus) a session; `--command` runs
@@ -104,6 +105,7 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 - `scratch [on|off|toggle]` — full-coverage third shell (hide keeps it alive; `exit` recreates).
 - `focus [left|right|other]` — move focus between split panes.
 - `status <idle|active|completed|blocked> [--blink] [--auto-reset]` — set the sidebar agent glyph.
+- `flag [on|off|toggle|clear]` — flag a session for the flagged working-set view (`clear` unflags all).
 - `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N]` · `overlay close` ·
   `overlay result` — run a program on top of a session; `--block` waits and exits with its status. An
   overlay is a real terminal (pty), which is also how you **display an image inline** — via the bundled
@@ -114,7 +116,11 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 
 **quick** — `[show|hide|toggle]` — the window's quick terminal.
 
-**sidebar** — `[show|hide|toggle]` — the frontmost window's sidebar.
+**sidebar** — `[show|hide|toggle]` (visibility) · `mode [tree|flagged|toggle]` (flip between the
+workspace tree and the flat flagged working-set list) · `expand [--window W]` (expand every workspace) ·
+`collapse [--window W]` (collapse all workspaces except the active one, which stays expanded).
+Visibility/mode act on the frontmost window; `expand`/`collapse` default to the frontmost but take a
+`--window` selector to target any open window.
 
 **notify** — `notify <body> [--title T]` — post a desktop notification attributed to a session.
 
