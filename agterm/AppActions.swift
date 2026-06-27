@@ -122,9 +122,54 @@ final class AppActions {
     /// model is wired, or when an overlay is already open.
     func editKeymap() {
         guard let store, let id = store.selectedSessionID, let path = settingsModel?.keymapPath else { return }
-        if store.openOverlay(id, command: ConfigPaths.editorCommand(forKeymapPath: path), sizePercent: 95) {
+        if store.openOverlay(id, command: ConfigPaths.editorCommand(forPath: path), sizePercent: 95) {
             keymapEditOverlaySession = id
         }
+    }
+
+    /// Re-read the ghostty config and rebroadcast it to every live surface (the warning banner on
+    /// diagnostics is posted by `SettingsModel.reloadGhosttyConfig`, mirroring `reloadKeymap`). Returns the
+    /// config-diagnostic count (0 = clean, or 0 before the scene wires the settings model) so the control
+    /// channel can report the value the reload actually produced. Shared by the File ▸ Reload Config menu
+    /// item, the action palette, the Edit-ghostty overlay close, and the `config.reload` control channel.
+    @discardableResult
+    func reloadGhosttyConfig() -> Int {
+        settingsModel?.reloadGhosttyConfig() ?? 0
+    }
+
+    /// The session whose currently-open overlay is the ghostty.conf editor, so `WindowContentView`'s overlay
+    /// onChange can reload the config when that overlay closes. Nil when no ghostty-edit overlay is up.
+    var ghosttyEditOverlaySession: UUID?
+
+    /// The `ghostty.conf` contents captured when the Edit-ghostty overlay opened, so the overlay-close path
+    /// can skip the reload (and its per-session font-zoom reset) on a no-op editor session. Nil when no
+    /// ghostty-edit overlay is up.
+    private var ghosttyEditOverlaySnapshot: String?
+
+    /// Open `ghostty.conf` in the user's editor (`$VISUAL`/`$EDITOR`, else `vi`) in a 95% floating overlay
+    /// over the active session, mirroring `editKeymap`. The overlay runs through the login shell, so an
+    /// `$EDITOR` exported from the user's login-shell startup is honored. Captures the file contents so the
+    /// overlay-close path can reload only when the file actually changed. On the editor exiting, the config
+    /// is reloaded (the overlay-close onChange in `WindowContentView`). No-op with no active session, before
+    /// the settings model is wired, or when an overlay is already open.
+    func editGhosttyConfig() {
+        guard let store, let id = store.selectedSessionID, let path = settingsModel?.ghosttyConfigPath else { return }
+        if store.openOverlay(id, command: ConfigPaths.editorCommand(forPath: path), sizePercent: 95) {
+            ghosttyEditOverlaySession = id
+            ghosttyEditOverlaySnapshot = try? String(contentsOfFile: path, encoding: .utf8)
+        }
+    }
+
+    /// Called when the Edit-ghostty overlay closes: reload the config only if the file actually changed
+    /// since the editor opened, so a no-op open/close does not clear per-session ⌘+/⌘− zoom (the reload's
+    /// font reset). The explicit File ▸ Reload Config / `config.reload` paths stay unconditional by design
+    /// (the user asked to reload); this guard covers only the editor round-trip.
+    func reloadGhosttyConfigIfEdited() {
+        let before = ghosttyEditOverlaySnapshot
+        ghosttyEditOverlaySnapshot = nil
+        let after = settingsModel.flatMap { try? String(contentsOfFile: $0.ghosttyConfigPath, encoding: .utf8) }
+        guard before != after else { return }
+        reloadGhosttyConfig()
     }
 
     /// Step the selection to the previous/next session, or jump to the first/last, in the sidebar's
@@ -414,6 +459,8 @@ final class AppActions {
             PaletteItem(title: "Select Theme…", shortcut: paletteHint(for: .selectTheme)) { [weak self] in self?.openThemePalette() },
             PaletteItem(title: "Edit Keymap") { [weak self] in self?.editKeymap() },
             PaletteItem(title: "Reload Keymap") { [weak self] in self?.reloadKeymap() },
+            PaletteItem(title: "Edit ghostty.conf") { [weak self] in self?.editGhosttyConfig() },
+            PaletteItem(title: "Reload Config") { [weak self] in self?.reloadGhosttyConfig() },
         ]
         if store?.canRemoveWorkspace == true {
             items.append(PaletteItem(title: "Delete Workspace", shortcut: paletteHint(for: .deleteWorkspace)) { [weak self] in self?.deleteActiveWorkspace() })

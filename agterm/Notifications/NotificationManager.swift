@@ -130,6 +130,23 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         }
     }
 
+    /// Post a banner when the ghostty config reloaded with problems (parse errors or invalid keys), so
+    /// they're visible without digging through the log. The count spans ALL config sources (bundled
+    /// defaults, the global `~/.config/ghostty/config`, the agterm-scoped `ghostty.conf`, and the UI
+    /// settings conf) because libghostty diagnostics carry no source-file attribution, so the banner does
+    /// NOT blame `ghostty.conf` specifically. Session-less and app-level, like `notifyKeymapDiagnostics`:
+    /// no focus/window gating; a fixed identifier coalesces repeated reloads to a single banner.
+    func notifyConfigDiagnostics(count: Int) {
+        guard bannersEnabled else { return }
+        let content = UNMutableNotificationContent()
+        content.title = "Config"
+        content.body = "\(count) issue\(count == 1 ? "" : "s") in ghostty config — see Console, then Reload Config"
+        let request = UNNotificationRequest(identifier: "config-diagnostics", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error { logger.error("config-diagnostics banner add failed: \(error.localizedDescription, privacy: .public)") }
+        }
+    }
+
     /// Which of the session's surfaces fired, by identity against its three slots.
     private func paneRole(of view: GhosttySurfaceView, in session: Session) -> PaneRole {
         if view === (session.splitSurface as? GhosttySurfaceView) { return .split }

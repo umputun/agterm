@@ -465,6 +465,12 @@ private struct WindowContentView: View {
                 actions.keymapEditOverlaySession = nil
                 actions.reloadKeymap()
             }
+            // a ghostty.conf-edit overlay just closed → reload the edited ghostty config (skipped when the
+            // file is unchanged, so a no-op editor session keeps per-session font zoom).
+            if !isOpen, actions.ghosttyEditOverlaySession == session.id {
+                actions.ghosttyEditOverlaySession = nil
+                actions.reloadGhosttyConfigIfEdited()
+            }
         }
         // scratch show AND hide both need the bounded focus retry: the surface is kept alive across hides,
         // so a re-show remounts it and `autoFocus`'s one-shot latch won't re-fire (same remount race as the

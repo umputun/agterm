@@ -21,16 +21,23 @@ public enum ConfigPaths {
         configDirectory.appendingPathComponent("keymap.conf")
     }
 
-    /// The shell command that opens `keymapPath` in the user's editor (`$VISUAL` else `$EDITOR` else
+    /// The agterm-scoped ghostty config file path within a resolved config directory: `<dir>/ghostty.conf`.
+    /// Co-located with `keymap.conf` so a user-set custom config dir holds both.
+    public static func ghosttyConfigPath(configDirectory: URL) -> URL {
+        configDirectory.appendingPathComponent("ghostty.conf")
+    }
+
+    /// The shell command that opens `path` in the user's editor (`$VISUAL` else `$EDITOR` else
     /// `vi`). It runs the editor through the user's INTERACTIVE login shell (`$SHELL -ilc`) so the editor
     /// resolves exactly as in a normal terminal — including an `$EDITOR`/`$VISUAL` set only in `~/.zshrc`.
     /// The overlay's own process is a bare non-interactive `/bin/sh` that sources NONE of the user's shell
     /// config (so a direct `${EDITOR:-vi}` there always fell back to `vi`); re-invoking `$SHELL -ilc` is
     /// what sources `.zshrc`/`.zprofile`/`.zshenv`. The path rides as a positional arg (`$1`):
     /// single-quoted at the eval level and double-quoted inside the `-c` script, so spaces and embedded
-    /// quotes survive both layers without interpolating into the script.
-    public static func editorCommand(forKeymapPath keymapPath: String) -> String {
-        let quoted = "'\(keymapPath.replacingOccurrences(of: "'", with: "'\\''"))'"
-        return "${SHELL:-/bin/zsh} -ilc '${VISUAL:-${EDITOR:-vi}} \"$1\"' agterm-keymap-edit \(quoted)"
+    /// quotes survive both layers without interpolating into the script. Shared by the keymap and
+    /// ghostty-config editor overlays.
+    public static func editorCommand(forPath path: String) -> String {
+        let quoted = "'\(path.replacingOccurrences(of: "'", with: "'\\''"))'"
+        return "${SHELL:-/bin/zsh} -ilc '${VISUAL:-${EDITOR:-vi}} \"$1\"' agterm-config-edit \(quoted)"
     }
 }

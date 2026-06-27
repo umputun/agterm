@@ -15,6 +15,13 @@ final class GhosttyApp {
 
     private(set) var app: ghostty_app_t?
     private(set) var config: ghostty_config_t?
+    /// The number of config diagnostics (parse errors / invalid keys) from the most recent `loadConfig`,
+    /// counted across ALL loaded sources (bundled defaults, `~/.config/ghostty/config`, the agterm-scoped
+    /// `ghostty.conf`, and the UI settings conf). libghostty diagnostics carry no source-file attribution,
+    /// so this is NOT specific to `ghostty.conf`. Surfaced by `reloadConfig` so File ▸ Reload Config (and
+    /// `config.reload`) can warn the user when the resolved config has problems; the Console log shows the
+    /// offending line. Reset on each `loadConfig`.
+    private(set) var lastConfigDiagnosticsCount = 0
     /// The terminal background color parsed from the resolved config. Used to tint the
     /// window so the title bar blends with the terminal instead of drawing the default
     /// titlebar material. Nil if the color couldn't be read.
@@ -67,7 +74,8 @@ final class GhosttyApp {
             logger.error("ghostty_init failed")
             return
         }
-        guard let cfg = loadConfig() else {
+        let scopedConfigURL = Self.ghosttyConfigURL()
+        guard let cfg = loadConfig(ghosttyConfigURL: scopedConfigURL) else {
             logger.error("ghostty_config_new failed")
             return
         }
@@ -93,7 +101,7 @@ final class GhosttyApp {
         }
         app = createdApp
         config = cfg
-        resolveThemeColors(from: cfg)
+        resolveThemeColors(from: cfg, ghosttyConfigURL: scopedConfigURL)
         // demand-driven: no poll timer. ticks come from libghostty wakeups (coalesced in
         // GhosttyCallbacks.wakeup) and surfaces draw on GHOSTTY_ACTION_RENDER, matching Ghostty.app/conterm
         // — an idle terminal does no work, where a 120Hz poll ticked continuously.
@@ -154,27 +162,65 @@ final class GhosttyApp {
         return dir.appendingPathComponent("ghostty-settings.conf")
     }
 
+    /// Resolve the agterm-scoped ghostty config file (`<configDir>/ghostty.conf`), co-located with
+    /// `keymap.conf`. A FUNCTION, not a computed property, because it reads `settings.json` from disk
+    /// (`SettingsStore().load()`) — callers resolve it ONCE per config build and thread the result to
+    /// `loadConfig` and `resolveSelectionColors` so a single reload reads `settings.json` at most once for
+    /// this path. Resolved self-contained because `loadConfig` runs before any `SettingsModel` exists (its
+    /// first touch of `GhosttyApp.shared` is inside `SettingsModel.init`): it reads the persisted
+    /// `configDirectory` from a `SettingsStore` rooted the SAME way `agtermApp.init` builds it (via
+    /// `settingsStore()`) and applies the same precedence the keymap uses
+    /// (explicit setting → `AGTERM_STATE_DIR/config` → `~/.config/agterm`).
+    static func ghosttyConfigURL() -> URL {
+        let configDir = ConfigPaths.configDirectory(
+            setting: settingsStore().load().configDirectory,
+            stateDir: ProcessInfo.processInfo.environment["AGTERM_STATE_DIR"],
+            home: FileManager.default.homeDirectoryForCurrentUser)
+        return ConfigPaths.ghosttyConfigPath(configDirectory: configDir)
+    }
+
+    /// The persisted settings store, rooted the SAME way `agtermApp.init` builds it: `AGTERM_STATE_DIR`
+    /// when set (test isolation), else the default Application Support directory. `ghosttyConfigURL`
+    /// reads `configDirectory` through this so it resolves the SAME `settings.json` the active
+    /// `SettingsModel` does. A bare `SettingsStore()` would read the default app-support file even under
+    /// `AGTERM_STATE_DIR` isolation, so an explicit `configDirectory` in the state-dir settings would be
+    /// ignored (and a production one could leak into an isolated run), pointing GhosttyApp and
+    /// SettingsModel at different `ghostty.conf` files.
+    private static func settingsStore() -> SettingsStore {
+        ProcessInfo.processInfo.environment["AGTERM_STATE_DIR"]
+            .map { SettingsStore(directory: URL(fileURLWithPath: $0, isDirectory: true)) } ?? SettingsStore()
+    }
+
     /// Rebuilds the config (re-reading the agterm settings file) and broadcasts it to the app and the
     /// given live surfaces — a live appearance change. Keeps the new config as `self.config`; the
     /// previous config is intentionally NOT freed: settings changes are rare and `update_config`
     /// has no documented ownership contract, so this matches the existing never-free pattern over
-    /// risking a use-after-free.
-    func reloadConfig(surfaces: [GhosttySurfaceView]) {
-        guard let app, let newConfig = loadConfig() else { return }
+    /// risking a use-after-free. Returns the rebuilt config's diagnostic count (0 = clean) so a
+    /// Reload Config can warn the user about a malformed `ghostty.conf`.
+    @discardableResult
+    func reloadConfig(surfaces: [GhosttySurfaceView]) -> Int {
+        // no app (called before `ghostty_app_new` succeeded) or `ghostty_config_new` allocation failure:
+        // nothing was re-read, so report the last known count. The property name is "from the most recent
+        // loadConfig", and both paths are effectively unreachable in practice (the app is always booted
+        // before a reload is reachable, and config allocation only fails under OOM).
+        guard let app else { return lastConfigDiagnosticsCount }
+        let scopedURL = Self.ghosttyConfigURL()
+        guard let newConfig = loadConfig(ghosttyConfigURL: scopedURL) else { return lastConfigDiagnosticsCount }
         ghostty_app_update_config(app, newConfig)
         for surface in surfaces { surface.applyConfig(newConfig) }
         config = newConfig
-        resolveThemeColors(from: newConfig)
+        resolveThemeColors(from: newConfig, ghosttyConfigURL: scopedURL)
+        return lastConfigDiagnosticsCount
     }
 
     /// Re-read the chrome colors (background, foreground, selection background/foreground) from a
     /// resolved config. Called at init and on every settings reload. `background`/`foreground` come
     /// from the resolved config; the selection colors are resolved separately (see below) because
     /// `ghostty_config_get` does not expose the optional `selection-*` keys.
-    private func resolveThemeColors(from config: ghostty_config_t) {
+    private func resolveThemeColors(from config: ghostty_config_t, ghosttyConfigURL: URL) {
         terminalBackgroundColor = Self.color(from: config, key: "background")
         terminalForegroundColor = Self.color(from: config, key: "foreground")
-        let (selectionBackground, selectionForeground) = Self.resolveSelectionColors()
+        let (selectionBackground, selectionForeground) = Self.resolveSelectionColors(ghosttyConfigPath: ghosttyConfigURL.path)
         terminalSelectionBackgroundColor = selectionBackground
         terminalSelectionForegroundColor = selectionForeground
             ?? selectionBackground.map(Self.contrastingText(for:))
@@ -184,12 +230,19 @@ final class GhosttyApp {
     /// optional `selection-background`/`selection-foreground` keys), so resolve them by reading the
     /// same config sources `loadConfig` loads — in the same order — plus the active theme file. An
     /// explicit `selection-*` line wins over the theme's; either color may be nil when unset.
-    private static func resolveSelectionColors() -> (NSColor?, NSColor?) {
+    ///
+    /// Known limitation: this scans only the four top-level config files; it does NOT follow
+    /// `config-file` includes that `ghostty_config_load_recursive_files` expands, so a `selection-*`
+    /// delegated through an include is missed and the sidebar pill falls back. A known edge case
+    /// (it pre-dates the agterm-scoped `ghostty.conf` and affects `~/.config/ghostty/config` too);
+    /// see docs/known-issues.md.
+    private static func resolveSelectionColors(ghosttyConfigPath: String) -> (NSColor?, NSColor?) {
         var sources: [String] = []
         if let defaults = Bundle.main.url(forResource: "ghostty-defaults", withExtension: "conf") {
             sources.append(defaults.path)
         }
         sources.append((NSHomeDirectory() as NSString).appendingPathComponent(".config/ghostty/config"))
+        sources.append(ghosttyConfigPath)
         sources.append(settingsConfigURL.path)
 
         var themeName: String?
@@ -250,7 +303,7 @@ final class GhosttyApp {
         return luminance > 0.6 ? .black : .white
     }
 
-    private func loadConfig() -> ghostty_config_t? {
+    private func loadConfig(ghosttyConfigURL: URL) -> ghostty_config_t? {
         guard let cfg = ghostty_config_new() else { return nil }
 
         // app's built-in defaults (terminal padding, etc.), loaded first so a
@@ -269,6 +322,15 @@ final class GhosttyApp {
             logger.info("no user ghostty config at \(userPath, privacy: .public); using defaults")
         }
 
+        // agterm-scoped ghostty config (`<configDir>/ghostty.conf`, co-located with keymap.conf), loaded
+        // after the global config so it overrides the bundled defaults + the user's ~/.config/ghostty
+        // for any key, but BEFORE agterm's UI settings so the Settings picker still wins for what it
+        // manages. Skipped when absent (the starter is comment-only, so a fresh install is a no-op).
+        let scopedPath = ghosttyConfigURL.path
+        if FileManager.default.fileExists(atPath: scopedPath) {
+            scopedPath.withCString { ghostty_config_load_file(cfg, $0) }
+        }
+
         // agterm's own appearance settings (Settings window: font / size / theme), loaded last so
         // they win over the user's ghostty config for the keys the UI manages.
         let settingsConf = Self.settingsConfigURL.path
@@ -280,6 +342,7 @@ final class GhosttyApp {
         ghostty_config_finalize(cfg)
 
         let diagCount = ghostty_config_diagnostics_count(cfg)
+        lastConfigDiagnosticsCount = Int(diagCount)
         for i in 0 ..< diagCount {
             let diag = ghostty_config_get_diagnostic(cfg, i)
             if let msg = diag.message {

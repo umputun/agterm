@@ -167,6 +167,12 @@ struct agtermApp: App {
                     if !library.hasReopened, !settingsModel.keymapDiagnostics.isEmpty {
                         NotificationManager.shared.notifyKeymapDiagnostics(count: settingsModel.keymapDiagnostics.count)
                     }
+                    // same for ghostty config diagnostics: GhosttyApp.loadConfig records them at boot
+                    // (applicationDidFinishLaunching, before notification registration), so surface them
+                    // here on the launch window only, the same `hasReopened` gate as the keymap banner.
+                    if !library.hasReopened, GhosttyApp.shared.lastConfigDiagnosticsCount > 0 {
+                        NotificationManager.shared.notifyConfigDiagnostics(count: GhosttyApp.shared.lastConfigDiagnosticsCount)
+                    }
                     // reopen every window that was open at quit. SwiftUI auto-opened one window
                     // (this one) at launch, which claimed the launch id; open one more per remaining
                     // open id. runs once (the .task fires per window) via the library latch.
@@ -244,6 +250,12 @@ struct agtermApp: App {
                 // re-read keymap.conf and apply (menu shortcuts re-render, the runner + palette rebuild).
                 // Keyless — a future BuiltinAction could give it a default chord.
                 Button { actions.reloadKeymap() } label: { Label("Reload Keymap", systemImage: "keyboard") }
+                // open the agterm-scoped ghostty.conf in $EDITOR in a 95% overlay; it reloads the config on
+                // the editor exiting. Keyless, like Edit Keymap.
+                Button { actions.editGhosttyConfig() } label: { Label("Edit ghostty.conf…", systemImage: "slider.horizontal.3") }
+                // re-read ghostty.conf and rebroadcast to every surface; warns with a banner on a
+                // malformed file. Keyless, like Reload Keymap.
+                Button { actions.reloadGhosttyConfig() } label: { Label("Reload Config", systemImage: "arrow.clockwise") }
             }
             // View: font zoom (drives ghostty on the focused terminal), the status-bar toggle, and
             // split / quick terminal / palettes. The menu reserves an icon column because the system

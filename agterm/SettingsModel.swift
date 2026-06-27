@@ -70,6 +70,8 @@ final class SettingsModel {
         // create the commented starter keymap on first launch, then load + parse it.
         ensureStarterKeymap()
         loadKeymap()
+        // create the commented starter ghostty.conf on first launch (all comments, a no-op until edited).
+        ensureStarterGhosttyConfig()
     }
 
     func setFontFamily(_ value: String?) { settings.fontFamily = value; persistAndApply() }
@@ -168,12 +170,15 @@ final class SettingsModel {
         persistAndApply()
     }
 
-    /// Persist a new config directory (where `keymap.conf` lives) and reload the keymap from it. A nil
-    /// value falls back to the default location resolved by `ConfigPaths.configDirectory`.
+    /// Persist a new config directory (where `keymap.conf` and `ghostty.conf` live) and reload BOTH
+    /// co-located files from it, so neither lags behind a directory change (each reload posts its own
+    /// diagnostics banner). A nil value falls back to the default location resolved by
+    /// `ConfigPaths.configDirectory`.
     func setConfigDirectory(_ value: String?) {
         settings.configDirectory = value
         try? settingsStore.save(settings)
         reloadKeymap()
+        reloadGhosttyConfig()
     }
 
     /// Re-read and re-parse `keymap.conf`, then post `.agtermKeymapChanged` so the custom-command
@@ -189,18 +194,50 @@ final class SettingsModel {
         }
     }
 
-    /// The resolved keymap file path: `<config dir>/keymap.conf`, where the config dir honors the
-    /// explicit setting, else `AGTERM_STATE_DIR/config` (test isolation), else `~/.config/agterm`.
-    private func keymapURL() -> URL {
-        let configDir = ConfigPaths.configDirectory(
+    /// The resolved config directory: the explicit setting, else `AGTERM_STATE_DIR/config` (test
+    /// isolation), else `~/.config/agterm`. Both `keymap.conf` and `ghostty.conf` live here.
+    private func configDirectoryURL() -> URL {
+        ConfigPaths.configDirectory(
             setting: settings.configDirectory,
             stateDir: ProcessInfo.processInfo.environment["AGTERM_STATE_DIR"],
             home: FileManager.default.homeDirectoryForCurrentUser)
-        return ConfigPaths.keymapPath(configDirectory: configDir)
+    }
+
+    /// The resolved keymap file path: `<config dir>/keymap.conf`.
+    private func keymapURL() -> URL {
+        ConfigPaths.keymapPath(configDirectory: configDirectoryURL())
     }
 
     /// The resolved `keymap.conf` path, exposed for the Edit Keymap action (the overlay command).
     var keymapPath: String { keymapURL().path }
+
+    /// The resolved agterm-scoped `ghostty.conf` path: `<config dir>/ghostty.conf`, co-located with
+    /// `keymap.conf`.
+    private func ghosttyConfigURL() -> URL {
+        ConfigPaths.ghosttyConfigPath(configDirectory: configDirectoryURL())
+    }
+
+    /// The resolved `ghostty.conf` path, exposed for the Edit ghostty.conf action (the overlay command).
+    var ghosttyConfigPath: String { ghosttyConfigURL().path }
+
+    /// Rebuild the ghostty config from all sources (re-reading the agterm-scoped `ghostty.conf` the user
+    /// just edited) and broadcast it to every live surface, clearing per-session font overrides like a
+    /// settings change. Unconditional — unlike `apply()`, which skips the reload when the generated
+    /// settings text is unchanged; `ghostty.conf` is edited externally, so there is always something to
+    /// re-read. Posts `.agtermAppearanceChanged` so the chrome picks up any color change, and a warning
+    /// banner on diagnostics (mirroring `reloadKeymap`, so every caller surfaces them — this runtime path
+    /// runs after notification registration, so posting here is safe). Returns the rebuilt config's
+    /// diagnostic count (0 = clean), counted across ALL config sources (libghostty diagnostics carry no
+    /// source-file attribution, so it is not specific to `ghostty.conf`). Drives File ▸ Reload Config, the
+    /// Edit-ghostty overlay close, a Key Mapping directory change, and the `config.reload` control command.
+    @discardableResult
+    func reloadGhosttyConfig() -> Int {
+        let count = GhosttyApp.shared.reloadConfig(surfaces: liveSurfaces())
+        library.resetSessionFontSizesAllWindows()
+        NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
+        if count > 0 { NotificationManager.shared.notifyConfigDiagnostics(count: count) }
+        return count
+    }
 
     /// Read `keymap.conf` and parse it into `keymap` + `keymapDiagnostics`. A MISSING file is not an
     /// error: it yields an empty keymap with no diagnostics (the starter file is created at init). A
@@ -239,6 +276,43 @@ final class SettingsModel {
         }
     }
 
+    /// On first launch, if `ghostty.conf` does not exist, create the config directory and write a
+    /// commented starter file pointing at ghostty's config docs with an example override. Never
+    /// overwrites an existing file. (Seeded after GhosttyApp's first `loadConfig` runs, but harmless:
+    /// the starter is all comments — a no-op — exactly like the starter keymap.)
+    private func ensureStarterGhosttyConfig() {
+        let url = ghosttyConfigURL()
+        if FileManager.default.fileExists(atPath: url.path) { return }
+        do {
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                    withIntermediateDirectories: true)
+            try starterGhosttyConfigText().write(to: url, atomically: true, encoding: .utf8)
+        } catch {
+            logger.notice("could not write starter ghostty.conf at \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// The commented starter `ghostty.conf`: a header linking ghostty's config docs, a commented
+    /// example override, and a note that agterm's UI-managed keys win over this file. Every line is a
+    /// comment so a fresh file changes nothing.
+    private func starterGhosttyConfigText() -> String {
+        """
+        # agterm-scoped ghostty config — applies ONLY to agterm, not the standalone Ghostty.app.
+        # Put any ghostty config key here to override agterm's bundled defaults and your global
+        # ~/.config/ghostty/config. Full key reference: https://ghostty.org/docs/config
+        #
+        # Edit this file and run File ▸ Reload Config (or relaunch) to apply. Blank lines and lines
+        # starting with `#` are ignored.
+        #
+        # Example — make the macOS Option key send Alt (uncomment to enable):
+        # macos-option-as-alt = true
+        #
+        # NOTE: agterm's UI-managed keys (font, theme, background opacity/blur, scroll speed) are set
+        # in Settings and always win over this file — set those in Settings, everything else here.
+
+        """
+    }
+
     /// The commented starter `keymap.conf`: the two-verb syntax, every `BuiltinAction` raw name with
     /// its shipped default chord (or "no default"), and the `{AGT_X}` token list. Every line is a
     /// comment so a fresh file rebinds nothing.
@@ -257,7 +331,7 @@ final class SettingsModel {
 
         return """
         # agterm keymap — a kitty-flavored config for rebinding built-in shortcuts and defining
-        # custom shell commands. Edit this file and run View ▸ Reload Keymap (or `agtermctl keymap
+        # custom shell commands. Edit this file and run File ▸ Reload Keymap (or `agtermctl keymap
         # reload`) to apply. Blank lines and lines starting with `#` are ignored.
         #
         # Two verbs:
