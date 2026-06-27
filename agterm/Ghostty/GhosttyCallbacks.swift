@@ -104,6 +104,13 @@ final class GhosttyCallbacks: @unchecked Sendable {
             let value = raw < 0 ? nil : Int(raw)
             DispatchQueue.main.async { view.onSearchSelected?(value) }
             return true
+        case GHOSTTY_ACTION_MOUSE_VISIBILITY:
+            // libghostty asks the host to hide/show the pointer — the mechanism behind
+            // mouse-hide-while-typing (the core never touches the cursor itself). setHiddenUntilMouseMoves
+            // auto-reveals on the next mouse move, so the hidden case is all that needs acting on; show resets it.
+            let hidden = action.action.mouse_visibility == GHOSTTY_MOUSE_HIDDEN
+            DispatchQueue.main.async { NSCursor.setHiddenUntilMouseMoves(hidden) }
+            return true
         default:
             return false
         }
