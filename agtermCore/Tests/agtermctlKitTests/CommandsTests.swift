@@ -77,6 +77,28 @@ struct CommandsTests {
         #expect(try request(["session", "new", "--cwd", "/tmp", "--workspace", "ws1"]) == expected)
     }
 
+    @Test func sessionNewWithWorkspaceName() throws {
+        let expected = ControlRequest(cmd: .sessionNew, args: ControlArgs(workspaceName: "servers"))
+        #expect(try request(["session", "new", "--workspace-name", "servers"]) == expected)
+    }
+
+    @Test func sessionNewWithCreateWorkspace() throws {
+        // --create-workspace sets createWorkspace=true on the wire (omitted when the flag is absent).
+        let expected = ControlRequest(cmd: .sessionNew, args: ControlArgs(workspaceName: "servers", createWorkspace: true))
+        #expect(try request(["session", "new", "--workspace-name", "servers", "--create-workspace"]) == expected)
+    }
+
+    @Test func sessionNewRejectsWorkspaceAndWorkspaceName() {
+        // both addressing modes set — validate() rejects it before any request is built.
+        #expect(validationMessage(["session", "new", "--workspace", "active", "--workspace-name", "servers"])
+            == "use either --workspace or --workspace-name, not both")
+    }
+
+    @Test func sessionNewRequiresWorkspaceNameForCreateWorkspace() {
+        // --create-workspace with no --workspace-name has nothing to create by id — validate() rejects it.
+        #expect(validationMessage(["session", "new", "--create-workspace"]) == "--create-workspace requires --workspace-name")
+    }
+
     @Test func sessionClose() throws {
         #expect(try request(["session", "close", "--target", "x"]) == ControlRequest(cmd: .sessionClose, target: "x"))
     }

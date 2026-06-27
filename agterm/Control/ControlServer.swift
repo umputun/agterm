@@ -389,14 +389,16 @@ final class ControlServer {
             return resolvePlacementStore(args?.window) { store in
                 // name addressing: reuse-or-create with `createWorkspace`, else require an existing match.
                 if let name = args?.workspaceName {
+                    // a blank name can neither be found NOR created — report that directly rather than
+                    // suggesting --create-workspace (which would also reject a blank name).
+                    guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                        return ControlResponse(ok: false, error: "workspace name must not be blank")
+                    }
                     let workspace = args?.createWorkspace == true
                         ? store.ensureWorkspace(named: name)
                         : store.workspace(named: name)
                     guard let workspace else {
-                        let reason = args?.createWorkspace == true
-                            ? "workspace name must not be blank"
-                            : "no workspace named \"\(name)\" (pass --create-workspace to add it)"
-                        return ControlResponse(ok: false, error: reason)
+                        return ControlResponse(ok: false, error: "no workspace named \"\(name)\" (pass --create-workspace to add it)")
                     }
                     return makeSessionResponse(in: store, workspaceID: workspace.id, args: args)
                 }
