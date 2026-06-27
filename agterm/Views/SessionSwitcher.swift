@@ -130,7 +130,7 @@ struct SessionSwitcherOverlay: View {
             HStack {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(session.displayName)
-                    Text("\(store.workspace(forSession: id)?.name ?? "") · \(session.effectiveCwd)")
+                    Text("\(store.workspace(forSession: id)?.name ?? "") · \(session.subtitleDetail)")
                         .font(.caption).foregroundStyle(.secondary)
                         .lineLimit(1).truncationMode(.middle)
                 }

@@ -153,6 +153,25 @@ struct ControlProtocolTests {
         #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.flagged == true)
     }
 
+    @Test func treeSessionNodeRoundTripsWithTitle() throws {
+        let session = ControlSessionNode(id: "s1", name: "build", cwd: "/tmp", title: "user@web1: ~",
+                                         active: true, split: false)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.title == "user@web1: ~")
+    }
+
+    @Test func treeSessionNodeOmitsTitleWhenNil() throws {
+        // a session with no reported title must omit the key entirely (backward-compatible), not emit null.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("title"), "a nil title must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.title == nil)
+    }
+
     @Test func sessionFocusRoundTripsWithPane() throws {
         let request = ControlRequest(cmd: .sessionFocus, target: "active", args: ControlArgs(pane: "right"))
         let decoded = try roundTrip(request)

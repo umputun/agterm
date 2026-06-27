@@ -87,6 +87,64 @@ struct SessionTests {
         #expect(session.displayName == "web1")
     }
 
+    @Test func subtitleDetailPrefersTitleForNamedSession() {
+        // named remote (SSH) session: the OSC title carries host/path the stale local cwd can't, and the
+        // name occupies line 1, so the second line shows the title instead of the misleading local path.
+        let session = Session(initialCwd: "/Users/user", customName: "web1")
+        session.currentCwd = "/Users/user"
+        session.oscTitle = "user@web1: ~"
+        #expect(session.subtitleDetail == "user@web1: ~")
+    }
+
+    @Test func subtitleDetailUsesCwdForNamedSessionWithoutTitle() {
+        // named local session: local auto-title is suppressed so oscTitle is nil; the second line is the cwd.
+        let session = Session(initialCwd: "/Users/user/dev/foo", customName: "build")
+        #expect(session.subtitleDetail == "/Users/user/dev/foo")
+    }
+
+    @Test func subtitleDetailUsesCwdWhenTitleIsAlreadyDisplayName() {
+        // unnamed session: the OSC title is already line 1 (displayName), so the second line falls
+        // through to the cwd rather than repeating it.
+        let session = Session(initialCwd: "/Users/user")
+        session.currentCwd = "/Users/user"
+        session.oscTitle = "user@web1: ~"
+        #expect(session.displayName == "user@web1: ~")
+        #expect(session.subtitleDetail == "/Users/user")
+    }
+
+    @Test func subtitleDetailUsesCwdForPlainLocalSession() {
+        let session = Session(initialCwd: "/Users/user/dev/foo")
+        #expect(session.subtitleDetail == "/Users/user/dev/foo")
+    }
+
+    @Test func subtitleDetailBlankTitleFallsBackToCwd() {
+        // a whitespace-only title is trimmed away, so a named session with no real title shows the cwd.
+        let session = Session(initialCwd: "/Users/user/dev/foo", customName: "build")
+        session.oscTitle = "  \t"
+        #expect(session.subtitleDetail == "/Users/user/dev/foo")
+    }
+
+    @Test func subtitleDetailTitleEqualToCustomNameFallsBackToCwd() {
+        // edge: the remote titles the tab exactly what the user named the session, so the title would
+        // just repeat line 1 — the second line falls through to the cwd.
+        let session = Session(initialCwd: "/Users/user", customName: "web1")
+        session.currentCwd = "/Users/user"
+        session.oscTitle = "web1"
+        #expect(session.subtitleDetail == "/Users/user")
+    }
+
+    @Test func subtitleDetailFollowsFocusedPane() {
+        // focus-aware like displayName/focusedCwd: a named session's second line uses the focused pane's
+        // title (the split pane's while it has focus, else the primary's).
+        let session = Session(initialCwd: "/repo", customName: "build")
+        session.isSplit = true
+        session.oscTitle = "primary-title"
+        session.splitTitle = "split-title"
+        #expect(session.subtitleDetail == "primary-title")
+        session.splitFocused = true
+        #expect(session.subtitleDetail == "split-title")
+    }
+
     @Test func effectiveCwdFallsBackToInitialUntilPwdReport() {
         // a restored session has no currentCwd until OSC 7 arrives; effectiveCwd is
         // initialCwd so git status refreshes immediately on launch/select.

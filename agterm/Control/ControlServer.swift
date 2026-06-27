@@ -1025,7 +1025,8 @@ final class ControlServer {
         let workspaces = store.workspaces.map { workspace in
             let sessions = workspace.sessions.map { session in
                 ControlSessionNode(id: session.id.uuidString, name: session.displayName,
-                                   cwd: session.effectiveCwd, active: session.id == activeID,
+                                   cwd: session.effectiveCwd, title: session.oscTitle,
+                                   active: session.id == activeID,
                                    split: session.isSplit, overlay: session.overlayActive,
                                    scratch: session.scratchActive, flagged: session.flagged)
             }

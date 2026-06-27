@@ -213,6 +213,21 @@ public final class Session: Identifiable {
     /// The terminal title of the focused pane: the split pane's while it has focus, else the primary's.
     private var focusedOscTitle: String? { splitFocused ? splitTitle : oscTitle }
 
+    /// The detail shown after the workspace name on the second line of the session palette, the Ctrl-Tab
+    /// switcher, and the title bar: the focused pane's terminal title when it isn't already the
+    /// `displayName` (so it ADDS context rather than repeating line 1), otherwise the focused cwd.
+    ///
+    /// A remote (SSH) host sets the OSC title to its own `user@host:dir` while the local OSC 7 cwd report
+    /// stops once the shell hops out, so `currentCwd` freezes at the stale local path. Preferring the
+    /// title surfaces the remote location instead of that misleading local path. For an UNNAMED session
+    /// the title is already line 1 (`displayName` prefers it over the cwd), so this falls through to the
+    /// cwd — no duplication. For a plain local session the title is nil (local auto-title is suppressed),
+    /// so this is just the cwd, unchanged.
+    public var subtitleDetail: String {
+        if let title = focusedOscTitle?.trimmedOrNil, title != displayName { return title }
+        return focusedCwd
+    }
+
     /// The session's effective working directory: the live `currentCwd` once a PWD report has
     /// arrived, otherwise `initialCwd`. Always the PRIMARY pane's (NOT focus-aware) — it seeds a new
     /// split/overlay/quick-terminal and backs the `AGTERM_SESSION_PWD` token, which should be stable

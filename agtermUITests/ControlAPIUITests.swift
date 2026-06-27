@@ -58,6 +58,33 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertEqual(sessions[0]["active"] as? Bool, true, "the seeded session should be active")
     }
 
+    // the tree exposes a session's raw OSC title. Set one by typing a printf that emits OSC 2, held by
+    // `cat` so the local shell can't clear it at the next prompt (mirroring how a remote keeps its title).
+    func testTreeExposesOscTitle() throws {
+        let text = "printf '\\033]2;CTL-OSC-TITLE\\007'; cat\n"
+        let payload: [String: Any] = ["cmd": "session.type", "args": ["text": text]]
+        let line = String(data: try JSONSerialization.data(withJSONObject: payload), encoding: .utf8)!
+        let typed = try sendCommand(line)
+        XCTAssertEqual(typed["ok"] as? Bool, true, "session.type should succeed: \(typed)")
+
+        var title: String?
+        for _ in 0..<40 {
+            let resp = try sendCommand(#"{"cmd":"tree"}"#)
+            if let t = firstSessionTitle(resp), t == "CTL-OSC-TITLE" { title = t; break }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        XCTAssertEqual(title, "CTL-OSC-TITLE", "tree should expose the session's OSC title")
+    }
+
+    /// The first session's `title` from a `tree` response dict, or nil if absent.
+    private func firstSessionTitle(_ response: [String: Any]) -> String? {
+        guard let result = response["result"] as? [String: Any],
+              let tree = result["tree"] as? [String: Any],
+              let workspaces = tree["workspaces"] as? [[String: Any]],
+              let sessions = workspaces.first?["sessions"] as? [[String: Any]] else { return nil }
+        return sessions.first?["title"] as? String
+    }
+
     // a malformed JSON line returns ok:false with an error, and the server stays alive: a
     // subsequent valid `tree` still succeeds.
     func testMalformedRequestErrorsAndServerStaysAlive() throws {

@@ -167,17 +167,23 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let id: String
     public let name: String
     public let cwd: String
+    /// The raw terminal title from the latest OSC 0/1/2 (a remote host over SSH, a shell
+    /// `PROMPT_COMMAND`); nil when none has been reported (omitted from the JSON). This is the
+    /// unprocessed `Session.oscTitle`, distinct from `name` (the derived sidebar label, which uses the
+    /// title as one fallback) — useful to a script because a remote session's local `cwd` goes stale.
+    public let title: String?
     public let active: Bool
     public let split: Bool
     public let overlay: Bool
     public let scratch: Bool
     public let flagged: Bool
 
-    public init(id: String, name: String, cwd: String, active: Bool, split: Bool, overlay: Bool = false,
-                scratch: Bool = false, flagged: Bool = false) {
+    public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
+                overlay: Bool = false, scratch: Bool = false, flagged: Bool = false) {
         self.id = id
         self.name = name
         self.cwd = cwd
+        self.title = title
         self.active = active
         self.split = split
         self.overlay = overlay

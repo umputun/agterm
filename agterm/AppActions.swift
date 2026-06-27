@@ -539,13 +539,13 @@ final class AppActions {
     /// set in flagged mode, else all — so the ⌃P list matches the sidebar (and the Ctrl-Tab MRU switcher
     /// and `session.go` nav, which already filter the same way). The subtitle leads with the owning
     /// workspace (so you can tell sessions of the same name apart, and search by workspace) followed by
-    /// the working directory.
+    /// `subtitleDetail` (the focused pane's terminal title for a remote session, else its cwd).
     func paletteSessions() -> [PaletteItem] {
         guard let store else { return [] }
         return store.navigableSessions.map { session in
             let id = session.id
             let workspaceName = store.workspace(forSession: id)?.name ?? ""
-            let subtitle = "\(workspaceName) · \(session.effectiveCwd)"
+            let subtitle = "\(workspaceName) · \(session.subtitleDetail)"
             return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: subtitle) {
                 store.selectSession(id)
             }

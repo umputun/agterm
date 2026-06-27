@@ -31,9 +31,10 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 ## tree
 
 `agtermctl tree [--json] [--window W]` — the workspace/session tree. Each session node:
-`id`, `name`, `cwd`, `active` (selected), `split` (split shown), `overlay` (overlay shown),
-`scratch` (scratch shown), `flagged` (in the flagged working-set). Workspace nodes carry
-`id`, `name`, `active`, `sessions`.
+`id`, `name`, `cwd`, `title` (the raw OSC terminal title — e.g. a remote host over SSH — omitted
+when none reported; distinct from `name`, the derived sidebar label), `active` (selected),
+`split` (split shown), `overlay` (overlay shown), `scratch` (scratch shown), `flagged` (in the
+flagged working-set). Workspace nodes carry `id`, `name`, `active`, `sessions`.
 
 ## workspace
 

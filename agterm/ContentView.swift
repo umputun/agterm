@@ -602,11 +602,11 @@ private struct WindowContentView: View {
         return "\(session) — \(info.name)"
     }
 
-    /// The titlebar subtitle (second line): the focused pane's working directory (the split pane's
-    /// while it's focused, else the primary's). Dropped in compact mode so the title bar is a single
-    /// short row.
+    /// The titlebar subtitle (second line): the focused pane's `subtitleDetail` — its terminal title for
+    /// a remote (SSH) session whose local cwd is stale, else its working directory (the split pane's while
+    /// it's focused, else the primary's). Dropped in compact mode so the title bar is a single short row.
     private var windowSubtitle: String {
-        compactToolbar ? "" : (store.activeSession?.focusedCwd ?? "")
+        compactToolbar ? "" : (store.activeSession?.subtitleDetail ?? "")
     }
 
     /// The window title at the terminal's leading edge: the session name, plus the cwd subtitle on a

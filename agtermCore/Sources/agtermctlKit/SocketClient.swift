@@ -171,7 +171,8 @@ struct SocketClient {
                 let smark = session.active ? "*" : " "
                 let tags = (session.split ? " (split)" : "") + (session.overlay ? " (overlay)" : "")
                     + (session.scratch ? " (scratch)" : "")
-                lines.append("  \(smark) \(session.name)\(tags)  [\(session.id)]  \(session.cwd)")
+                let titleSuffix = session.title.map { "  title: \($0)" } ?? ""
+                lines.append("  \(smark) \(session.name)\(tags)  [\(session.id)]  \(session.cwd)\(titleSuffix)")
             }
         }
         return lines.joined(separator: "\n")

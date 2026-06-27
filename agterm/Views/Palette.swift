@@ -194,6 +194,8 @@ struct CommandPalette: View {
                 if let subtitle = item.subtitle {
                     Text(subtitle).font(.caption).foregroundStyle(.secondary)
                         .lineLimit(1).truncationMode(.middle)
+                        .accessibilityIdentifier("palette-subtitle")
+                        .accessibilityValue(subtitle)
                 }
             }
             Spacer(minLength: 8)

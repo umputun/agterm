@@ -71,7 +71,9 @@ Separately, each window has one **quick terminal** (a scratch overlay at 90% of 
 of the tree).
 
 Inspect the live tree any time with `agtermctl tree --json` (workspaces → sessions, each with
-`id`, `name`, `cwd`, `active`, `split`, `overlay`, `scratch`). List windows with
+`id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `scratch`). `title` is the raw OSC
+terminal title (e.g. a remote host over SSH), omitted when none was reported — read it when a
+session's local `cwd` is stale because it's connected to a remote. List windows with
 `agtermctl window list --json`.
 
 ## Addressing
