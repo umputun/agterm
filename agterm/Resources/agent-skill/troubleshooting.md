@@ -36,7 +36,9 @@ You are inside agterm (`AGTERM_ENABLED=1`). Use:
 Edit Keymap runs `$VISUAL`/`$EDITOR` (else `vi`) in an overlay via the login shell. The most common
 cause is a **GUI editor launched without a blocking flag** (`code`, `subl`, `zed`, `mate`, `cursor`):
 it returns immediately, so the overlay flashes shut. Fix: `export EDITOR='code -w'` (the editor's wait
-flag) in the shell rc. It also no-ops with no session selected or an overlay already open.
+flag) in the shell rc. `$EDITOR`/`$VISUAL` must be **exported** (`export EDITOR=…`, or fish `set -gx
+EDITOR …`) so it resolves regardless of your login shell — a non-exported value falls back to `vi`. It
+also no-ops with no session selected or an overlay already open.
 
 ### "Custom action does nothing"
 

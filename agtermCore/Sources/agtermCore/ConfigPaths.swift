@@ -27,17 +27,30 @@ public enum ConfigPaths {
         configDirectory.appendingPathComponent("ghostty.conf")
     }
 
-    /// The shell command that opens `path` in the user's editor (`$VISUAL` else `$EDITOR` else
-    /// `vi`). It runs the editor through the user's INTERACTIVE login shell (`$SHELL -ilc`) so the editor
-    /// resolves exactly as in a normal terminal — including an `$EDITOR`/`$VISUAL` set only in `~/.zshrc`.
-    /// The overlay's own process is a bare non-interactive `/bin/sh` that sources NONE of the user's shell
-    /// config (so a direct `${EDITOR:-vi}` there always fell back to `vi`); re-invoking `$SHELL -ilc` is
-    /// what sources `.zshrc`/`.zprofile`/`.zshenv`. The path rides as a positional arg (`$1`):
-    /// single-quoted at the eval level and double-quoted inside the `-c` script, so spaces and embedded
-    /// quotes survive both layers without interpolating into the script. Shared by the keymap and
+    /// The shell command that opens `path` in the user's editor (`$VISUAL` else `$EDITOR` else `vi`),
+    /// working under ANY login shell — POSIX (zsh/bash) or not (fish, nushell). Shared by the keymap and
     /// ghostty-config editor overlays.
+    ///
+    /// The user's INTERACTIVE login shell (`$SHELL -ilc`) is run first so it sources its rc and EXPORTS
+    /// `$EDITOR`/`$VISUAL` — the overlay's own process is a bare non-interactive `/bin/sh` that sources
+    /// none of the user's shell config, and a GUI-launched app inherits no shell env, so without this the
+    /// editor resolution always fell back to `vi`. The login shell then `exec`s a POSIX `/bin/sh` that does
+    /// the actual `${VISUAL:-${EDITOR:-vi}} "$1"` resolution + launch. Doing the resolution in the inner
+    /// `/bin/sh` (not in `$SHELL` directly) is what makes this work for non-POSIX shells: fish/nushell
+    /// can't parse POSIX `${VAR:-default}` parameter-expansion, so the previous `$SHELL -ilc
+    /// '${VISUAL:-${EDITOR:-vi}} …'` died with `${ is not a valid variable` (exit 127) and the overlay
+    /// just flashed. Here that POSIX text rides inside single quotes that BOTH shell families pass through
+    /// verbatim to the inner `/bin/sh`. The path is embedded single-quoted as the inner `/bin/sh`'s
+    /// positional `$1` (NOT passed positionally to `$SHELL`, since fish has no `$1`), so spaces and
+    /// embedded quotes survive. Caveat: this resolves `$EDITOR`/`$VISUAL` only when they are EXPORTED env
+    /// vars — their entire purpose and the universal convention (`export EDITOR=…` / `set -gx EDITOR …`).
     public static func editorCommand(forPath path: String) -> String {
-        let quoted = "'\(path.replacingOccurrences(of: "'", with: "'\\''"))'"
-        return "${SHELL:-/bin/zsh} -ilc '${VISUAL:-${EDITOR:-vi}} \"$1\"' agterm-config-edit \(quoted)"
+        // POSIX single-quote: wrap in '…' and escape any embedded ' as '\'' (works in fish + POSIX shells).
+        func singleQuoted(_ s: String) -> String { "'\(s.replacingOccurrences(of: "'", with: "'\\''"))'" }
+        // the POSIX resolution + launch, run by the inner /bin/sh regardless of the login shell.
+        let inner = "${VISUAL:-${EDITOR:-vi}} \"$1\""
+        // what the login shell runs: source its rc (above), then hand off to /bin/sh with the path as $1.
+        let viaPosix = "exec /bin/sh -c \(singleQuoted(inner)) agterm-config-edit \(singleQuoted(path))"
+        return "${SHELL:-/bin/zsh} -ilc \(singleQuoted(viaPosix))"
     }
 }
