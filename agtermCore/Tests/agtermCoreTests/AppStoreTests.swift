@@ -98,6 +98,36 @@ struct AppStoreTests {
         #expect(store.selectedSessionID == nil)
     }
 
+    @Test func workspaceNamedFindsExactTrimmedMatch() {
+        let store = Self.makeStore()
+        let servers = store.addWorkspace(name: "servers")
+        store.addWorkspace(name: "other")
+        #expect(store.workspace(named: "servers")?.id == servers.id)
+        #expect(store.workspace(named: "  servers  ")?.id == servers.id) // input is trimmed
+        #expect(store.workspace(named: "Servers") == nil)                // case-sensitive
+        #expect(store.workspace(named: "missing") == nil)
+        #expect(store.workspace(named: "   ") == nil)                    // blank
+    }
+
+    @Test func ensureWorkspaceReusesExistingElseCreates() {
+        let store = Self.makeStore()
+        let existing = store.addWorkspace(name: "servers")
+        let before = store.workspaces.count
+        // reuse: the same name returns the existing workspace, no new one appended.
+        #expect(store.ensureWorkspace(named: "servers")?.id == existing.id)
+        #expect(store.workspaces.count == before)
+        // create: a new name appends exactly one workspace, trimmed.
+        let created = try! #require(store.ensureWorkspace(named: "  fresh  "))
+        #expect(created.name == "fresh")
+        #expect(store.workspaces.count == before + 1)
+        // idempotent: ensuring the just-created name again reuses it.
+        #expect(store.ensureWorkspace(named: "fresh")?.id == created.id)
+        #expect(store.workspaces.count == before + 1)
+        // a blank name creates nothing.
+        #expect(store.ensureWorkspace(named: "   ") == nil)
+        #expect(store.workspaces.count == before + 1)
+    }
+
     @Test func selectSessionUpdatesActive() {
         let store = Self.makeStore()
         let ws = store.addWorkspace(name: "work")

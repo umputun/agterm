@@ -62,7 +62,14 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// Working directory for `session.new`.
     public var cwd: String?
     /// Target workspace for `session.new` (the workspace to add to) and `session.move` (the destination).
+    /// Resolved by id / unique prefix / `active`, never by name — use `workspaceName` for name targeting.
     public var workspace: String?
+    /// Target workspace BY NAME for `session.new` (mutually exclusive with `workspace`). Reuses the first
+    /// workspace with this exact name; an absent name is an error unless `createWorkspace` is set.
+    public var workspaceName: String?
+    /// For `session.new` with `workspaceName`: create the named workspace when none exists (idempotent
+    /// reuse-or-create). An error without `workspaceName` — there is nothing to create by id.
+    public var createWorkspace: Bool?
     /// Text to inject for `session.type`; the search needle for `session.search`.
     public var text: String?
     /// Whether `session.type` may select a never-shown session to realize its surface.
@@ -108,15 +115,17 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// Whether the `session.status` indicator resets to idle once the session is visited (selected).
     public var autoReset: Bool?
 
-    public init(name: String? = nil, cwd: String? = nil, workspace: String? = nil, text: String? = nil,
-                select: Bool? = nil, mode: String? = nil, command: String? = nil, wait: Bool? = nil,
-                sizePercent: Int? = nil, window: String? = nil, pane: String? = nil, to: String? = nil,
-                title: String? = nil, body: String? = nil, width: Int? = nil, height: Int? = nil,
-                x: Int? = nil, y: Int? = nil, display: Int? = nil, status: String? = nil, blink: Bool? = nil,
-                autoReset: Bool? = nil) {
+    public init(name: String? = nil, cwd: String? = nil, workspace: String? = nil, workspaceName: String? = nil,
+                createWorkspace: Bool? = nil, text: String? = nil, select: Bool? = nil, mode: String? = nil,
+                command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, window: String? = nil,
+                pane: String? = nil, to: String? = nil, title: String? = nil, body: String? = nil,
+                width: Int? = nil, height: Int? = nil, x: Int? = nil, y: Int? = nil, display: Int? = nil,
+                status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil) {
         self.name = name
         self.cwd = cwd
         self.workspace = workspace
+        self.workspaceName = workspaceName
+        self.createWorkspace = createWorkspace
         self.text = text
         self.select = select
         self.mode = mode

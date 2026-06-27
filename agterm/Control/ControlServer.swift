@@ -375,26 +375,36 @@ final class ControlServer {
                 return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
             }
         case .sessionNew:
-            // defaults: the placement store's current workspace and $HOME. An explicit `workspace`
-            // arg (resolved within the placement store) overrides the target workspace; `cwd`
-            // overrides the directory. `command` (optional) runs as the session's process instead of
-            // the login shell — like kitty's `launch <cmd>`, no echoed command line; the session closes
-            // when the command exits. `name` (optional) seeds the session's custom name.
-            let cwd = request.args?.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path
-            return resolvePlacementStore(request.args?.window) { store in
-                let target = request.args?.workspace ?? "active"
+            // the destination workspace is addressed one of two mutually-exclusive ways: `workspace`
+            // (id / unique prefix / `active`, the default) or `workspaceName` (the sidebar label),
+            // the latter optionally with `createWorkspace` to add it when absent. create needs a name —
+            // there is nothing to create by id. cwd/command/name are applied in makeSessionResponse.
+            let args = request.args
+            if args?.workspace != nil, args?.workspaceName != nil {
+                return ControlResponse(ok: false, error: "use either --workspace or --workspace-name, not both")
+            }
+            if args?.createWorkspace == true, args?.workspaceName == nil {
+                return ControlResponse(ok: false, error: "--create-workspace requires --workspace-name")
+            }
+            return resolvePlacementStore(args?.window) { store in
+                // name addressing: reuse-or-create with `createWorkspace`, else require an existing match.
+                if let name = args?.workspaceName {
+                    let workspace = args?.createWorkspace == true
+                        ? store.ensureWorkspace(named: name)
+                        : store.workspace(named: name)
+                    guard let workspace else {
+                        let reason = args?.createWorkspace == true
+                            ? "workspace name must not be blank"
+                            : "no workspace named \"\(name)\" (pass --create-workspace to add it)"
+                        return ControlResponse(ok: false, error: reason)
+                    }
+                    return makeSessionResponse(in: store, workspaceID: workspace.id, args: args)
+                }
+                // id addressing (default `active`): the canonical prefix/active resolver.
+                let target = args?.workspace ?? "active"
                 return resolve(target, candidates: store.workspaces.map(\.id),
                                active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
-                    guard let session = store.addSession(toWorkspace: workspaceID, cwd: cwd,
-                                                         command: request.args?.command,
-                                                         name: request.args?.name) else {
-                        return ControlResponse(ok: false, error: "could not create session")
-                    }
-                    // move first responder into the new session when it's created in the frontmost
-                    // window, so a keymap `session new --command "ssh …"` lands focused like the GUI New
-                    // Session. skip for a background `--window` target (stealing focus would be wrong).
-                    if store === library.activeStore { actions.focusActiveSession() }
-                    return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
+                    makeSessionResponse(in: store, workspaceID: workspaceID, args: args)
                 }
             }
         case .sessionClose:
@@ -1041,6 +1051,20 @@ final class ControlServer {
         case .failure(let response): return response
         case .success(let store): return body(store)
         }
+    }
+
+    /// Creates a session in `workspaceID` of `store` with the `session.new` args (cwd default $HOME,
+    /// optional command/name), focuses it when it lands in the frontmost window (so a keymap `session new`
+    /// opens focused like the GUI New Session; a background `--window` target keeps focus), and returns the
+    /// new id. Shared by the id- and name-addressed paths of the `.sessionNew` arm.
+    private func makeSessionResponse(in store: AppStore, workspaceID: UUID, args: ControlArgs?) -> ControlResponse {
+        let cwd = args?.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path
+        guard let session = store.addSession(toWorkspace: workspaceID, cwd: cwd,
+                                             command: args?.command, name: args?.name) else {
+            return ControlResponse(ok: false, error: "could not create session")
+        }
+        if store === library.activeStore { actions.focusActiveSession() }
+        return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
     }
 
     /// Resolve `window` to an OPEN window's store. nil → the frontmost store. A set value resolves the

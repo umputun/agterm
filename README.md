@@ -121,7 +121,7 @@ cd agtermCore && swift build -c release
 
 Each command targets a session or workspace by its UUID, a unique prefix of that UUID (git-style), or the keyword `active` (the selected session / current workspace). `--target` defaults to `active`, so the current one rarely needs to be named. Mutating commands print the affected id; `tree` prints the workspace and session tree. Add `--json` for the raw response, or `--socket PATH` to override the socket path. The exit code is zero on success, non-zero on error.
 
-`--workspace`/`--target` take an id, a unique id prefix, or `active` — never a name. To create a workspace and then open a session in it, capture the printed id:
+`--workspace`/`--target` take an id, a unique id prefix, or `active` — never a name. (`session new` also accepts `--workspace-name <name>` to target a workspace by its sidebar label, plus `--create-workspace` to make it when none matches — the two are mutually exclusive with `--workspace`.) To create a workspace and then open a session in it, capture the printed id:
 
 ```sh
 agtermctl tree                                   # print the workspace/session tree with ids
@@ -129,6 +129,7 @@ ws=$(agtermctl workspace new work)               # create a workspace, capture i
 agtermctl session new --workspace "$ws" --cwd ~/src/agterm  # open a session in it, print its id
 agtermctl session new --command "ssh user@host"  # run a command as the session's process (like kitty launch; no typed command, closes on exit)
 agtermctl session new --name "myhost" --command "ssh user@host"  # pre-name the session (sidebar label set at creation)
+agtermctl session new --workspace-name servers --create-workspace --name "myhost"  # open in the "servers" workspace, creating it if absent (idempotent)
 agtermctl session type --target 9f3c $'make test\n'      # inject text into a session by id prefix
 echo 'make test' | agtermctl session type --target active --stdin
 agtermctl session go --to next                   # step to the next session (next|prev|first|last; stops at ends)

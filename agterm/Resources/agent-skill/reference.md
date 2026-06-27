@@ -56,12 +56,16 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 
 ## session
 
-- `session new [--cwd DIR] [--workspace W] [--command CMD] [--name NAME] [--window W]` — create a
-  session and focus it; returns the new id. `--cwd` sets the start directory (default `$HOME`).
-  `--command` runs that command as the session's process instead of the login shell (no echoed command
-  line; the session closes when the command exits). The command is run-once and not persisted (a
-  restored session is a plain shell). `--name` seeds the session's custom name (the sidebar label;
-  blank/omitted leaves the auto basename), equivalent to a `session rename` right after create.
+- `session new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--name NAME] [--window W]`
+  — create a session and focus it; returns the new id. `--cwd` sets the start directory (default
+  `$HOME`). The destination workspace is addressed one of two mutually-exclusive ways: `--workspace`
+  (id / unique prefix / `active`, the default) or `--workspace-name` (the sidebar label) — the latter
+  errors if no workspace has that name unless `--create-workspace` is also passed, which reuses an
+  existing one or creates it when absent (idempotent). `--command` runs that command as the session's
+  process instead of the login shell (no echoed command line; the session closes when the command
+  exits). The command is run-once and not persisted (a restored session is a plain shell). `--name`
+  seeds the session's custom name (the sidebar label; blank/omitted leaves the auto basename),
+  equivalent to a `session rename` right after create.
 - `session close [--target] [--window W]`.
 - `session select [--target] [--window W]`.
 - `session rename <name> [--target] [--window W]`.

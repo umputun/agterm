@@ -34,6 +34,13 @@ Create a session pre-named (label set at creation, no follow-up rename):
 agtermctl session new --name "myhost" --command "ssh user@host"
 ```
 
+Open a session in a named workspace, creating the workspace once and reusing it after (idempotent — no
+duplicate "servers" workspace on repeated calls):
+
+```bash
+agtermctl session new --workspace-name servers --create-workspace --name "myhost" --command "ssh user@host"
+```
+
 ## Build a small layout
 
 ```bash

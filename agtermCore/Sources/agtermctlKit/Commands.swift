@@ -211,14 +211,27 @@ struct Session: ParsableCommand {
     struct New: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Create a session.")
         @Option(name: .long, help: "Working directory (defaults to $HOME).") var cwd: String?
-        @Option(name: .long, help: "Target workspace id/prefix (defaults to the current one).") var workspace: String?
+        @Option(name: .long, help: "Target workspace by id/prefix/active (defaults to the current one). Mutually exclusive with --workspace-name.") var workspace: String?
+        @Option(name: .long, help: "Target workspace by name; errors if not found unless --create-workspace. Mutually exclusive with --workspace.") var workspaceName: String?
+        @Flag(name: .long, help: "With --workspace-name, create the workspace when it does not exist (reuse it otherwise).") var createWorkspace = false
         @Option(name: .long, help: "Run this command as the session's process instead of the login shell (no echoed command line; the session closes when it exits).") var command: String?
         @Option(name: .long, help: "Initial session name (defaults to the auto basename).") var name: String?
         @OptionGroup var options: ClientOptions
         var echoesResultID: Bool { true }
 
+        func validate() throws {
+            if workspace != nil, workspaceName != nil {
+                throw ValidationError("use either --workspace or --workspace-name, not both")
+            }
+            if createWorkspace, workspaceName == nil {
+                throw ValidationError("--create-workspace requires --workspace-name")
+            }
+        }
+
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionNew, args: options.withWindow(ControlArgs(name: name, cwd: cwd, workspace: workspace, command: command)))
+            ControlRequest(cmd: .sessionNew, args: options.withWindow(
+                ControlArgs(name: name, cwd: cwd, workspace: workspace, workspaceName: workspaceName,
+                            createWorkspace: createWorkspace ? true : nil, command: command)))
         }
     }
 

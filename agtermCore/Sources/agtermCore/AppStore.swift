@@ -125,6 +125,22 @@ public final class AppStore {
         return workspace
     }
 
+    /// The first workspace whose name exactly equals `name` (case-sensitive, trimmed), or nil when none
+    /// matches or `name` is blank. Backs `session.new --workspace-name` (addressing a workspace by its
+    /// sidebar label instead of an id).
+    public func workspace(named name: String) -> Workspace? {
+        guard let needle = name.trimmedOrNil else { return nil }
+        return workspaces.first { $0.name == needle }
+    }
+
+    /// The workspace named `name`, created if none exists (idempotent reuse-or-create). Returns nil only
+    /// when `name` is blank. Backs `session.new --workspace-name … --create-workspace`.
+    @discardableResult
+    public func ensureWorkspace(named name: String) -> Workspace? {
+        guard let needle = name.trimmedOrNil else { return nil }
+        return workspace(named: needle) ?? addWorkspace(name: needle)
+    }
+
     /// Creates a session in the given workspace, appends it, and selects it.
     /// An optional `name` seeds the session's `customName` (trimmed; blank clears it
     /// to the auto basename, matching `renameSession`). Returns nil if no workspace matches.
