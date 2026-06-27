@@ -7,6 +7,7 @@ A guide to checking what agterm is doing, the most common problems, and how to r
 Paths assume the defaults. When `AGTERM_STATE_DIR` is set, the state files move under that directory instead of `~/Library/Application Support/agterm`.
 
 - **Keymap**: `~/.config/agterm/keymap.conf` (or `$AGTERM_STATE_DIR/config/keymap.conf`, or a custom directory set in Settings ▸ Key Mapping).
+- **Ghostty config**: `~/.config/agterm/ghostty.conf` (same directory as the keymap), an agterm-scoped ghostty config that overrides the bundled defaults and your global `~/.config/ghostty/config`.
 - **Settings**: `~/Library/Application Support/agterm/settings.json`.
 - **Window and session state**: `~/Library/Application Support/agterm/windows.json` plus one `windows/<id>.json` per window.
 - **Control socket**: `~/Library/Application Support/agterm/agterm.sock` (or `$AGTERM_CONTROL_SOCKET` when set). A spawned shell sees the bound path in `$AGTERM_SOCKET`.
@@ -68,6 +69,25 @@ Work down this list:
 8. **Token quoting.** `{AGT_SELECTION}` and the other `{AGT_*}` tokens expand raw into the shell line. For content that may contain shell metacharacters, use the `$AGT_SELECTION` environment form, which is already quoted. The token list is in the keymap section of the README.
 
 Reload after every edit (File ▸ Reload Keymap, or `agtermctl keymap reload`). Edits are not applied until you do.
+
+## Changing ghostty settings
+
+Most terminal behavior comes from ghostty. The common knobs (font, theme, background opacity and blur, scroll speed) are in agterm's Settings, but any other ghostty key (`macos-option-as-alt`, `keybind`, `window-padding-*`, and so on) is set in a config file.
+
+agterm reads four config sources, each overriding the one before it:
+
+```
+ghostty's bundled defaults  →  ~/.config/ghostty/config  →  <config dir>/ghostty.conf  →  agterm Settings
+       (lowest)                    (your global config)         (agterm-scoped)             (UI wins)
+```
+
+- `<config dir>/ghostty.conf` (default `~/.config/agterm/ghostty.conf`, next to `keymap.conf`) is scoped to agterm only; the standalone Ghostty.app never reads it. Use it for keys you want in agterm but not everywhere.
+- `~/.config/ghostty/config` is your global ghostty config, shared with Ghostty.app, and already in the chain.
+- The keys agterm sets from its Settings window load last, so the Settings picker wins for what it manages. Put everything else in `ghostty.conf`.
+
+Edit `ghostty.conf` with **File ▸ Edit ghostty.conf…** (or the ⌃⇧P palette), which opens it in `$EDITOR` and reloads on exit, the same as Edit Keymap. After editing it elsewhere, apply it with **File ▸ Reload Config**, the action palette, or `agtermctl config reload`. A malformed line is skipped while the good ones still apply. The diagnostic count (shown in a banner and printed by `config.reload`, where `0` means a clean reload) covers every ghostty config source, not just `ghostty.conf`, because the diagnostics do not record which file they came from. Check the Console log for the offending line.
+
+The full ghostty key reference is at <https://ghostty.org/docs/config>.
 
 ## Other common issues
 

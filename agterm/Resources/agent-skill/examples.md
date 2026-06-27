@@ -194,6 +194,17 @@ $EDITOR ~/.config/agterm/keymap.conf
 agtermctl keymap reload          # prints the parse-diagnostic count (0 = clean)
 ```
 
+## Change a ghostty setting agterm does not expose
+
+```bash
+$EDITOR ~/.config/agterm/ghostty.conf   # e.g. add: macos-option-as-alt = true
+agtermctl config reload                 # apply it; prints the diagnostic count (0 = clean)
+```
+
+`ghostty.conf` is scoped to agterm and overrides the bundled defaults and your global
+`~/.config/ghostty/config`; agterm's own Settings (font, theme, opacity, scroll) still win. Full key
+reference: https://ghostty.org/docs/config
+
 ## Set the terminal theme
 
 The app default is the bundled `agterm` theme; the "default ghostty" option (no theme) is ghostty's

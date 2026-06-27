@@ -7,7 +7,8 @@ description: >
   per-session scratch terminal; open or close overlay terminals and read their exit status; display
   an image inline via a bundled helper script; type
   into a session, copy its selection, or search its scrollback; post desktop notifications; manage windows (new, list,
-  select, close, resize, move); change font size; or reload and edit the keymap. Also covers the
+  select, close, resize, move); change font size; or reload and edit the keymap and the agterm-scoped
+  ghostty config. Also covers the
   window/workspace/session addressing model and the AGTERM_* environment a spawned shell sees, plus
   diagnosing problems (keymap editor, custom actions, logs) and filing a bug as a GitHub issue or a
   feature request / question as a GitHub Discussion.
@@ -15,7 +16,7 @@ when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.scratch, session.focus, session.go, session.copy, session.search, session.status,
   session.flag, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
-  window.select, window.resize, window.move, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload,
+  window.select, window.resize, window.move, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
   theme.set, theme.list, select theme, edit keymap, show an image, display an image inline, show-image,
   AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: troubleshoot agterm,
   keymap editor won't open, custom action / custom command not working, agterm logs, file an agterm
@@ -86,7 +87,7 @@ a global `--window <id|prefix|active>` to operate on a specific window's tree (d
 
 Scripts rarely type ids: create with `*.new` (capture the returned id), or act on `active`.
 
-## Command summary (44 commands)
+## Command summary (45 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -131,6 +132,8 @@ Visibility/mode act on the frontmost window; `expand`/`collapse` default to the 
 **font** — `font inc|dec|reset` — font size on the focused surface.
 
 **keymap** — `keymap reload` — re-read `keymap.conf` (prints the parse-diagnostic count).
+
+**config** - `config reload` - re-read the agterm-scoped `ghostty.conf` (prints the diagnostic count).
 
 **theme** — `theme list` (bundled themes, current marked `*`) · `theme set [name]` — set + persist the
 terminal theme app-wide. The app default is the bundled **agterm** theme; omit the name for ghostty's

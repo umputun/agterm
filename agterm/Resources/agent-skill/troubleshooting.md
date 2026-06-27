@@ -14,13 +14,20 @@ You are inside agterm (`AGTERM_ENABLED=1`). Use:
 - **Live state** — `agtermctl tree --json`, `agtermctl window list --json`.
 - **Keymap problems** — `agtermctl keymap reload` prints the parse-diagnostic count (`0` = clean). A
   non-zero count means `keymap.conf` has problems; the user sees the list in Settings ▸ Key Mapping.
+- **Ghostty settings** - `agtermctl config reload` re-reads the ghostty config and prints the diagnostic
+  count (`0` = clean). The count covers every config source, not just `ghostty.conf` (libghostty does not
+  record which file a diagnostic came from), so check the Console log for the offending line. `ghostty.conf`
+  (next to `keymap.conf`) overrides the bundled defaults and the global `~/.config/ghostty/config`; agterm's
+  Settings (font/theme/opacity/scroll) still win. Use it for keys the UI does not expose, e.g.
+  `macos-option-as-alt`. Full reference: https://ghostty.org/docs/config
 - **Logs** (unified logging, subsystem `com.umputun.agterm`):
   ```bash
   log show --predicate 'subsystem == "com.umputun.agterm"' --info --last 30m
   ```
   Categories: `CustomCommandRunner`, `SettingsModel`, `GhosttyApp`, `NotificationManager`, `ControlServer`.
-- **Files** — keymap `~/.config/agterm/keymap.conf`; settings
-  `~/Library/Application Support/agterm/settings.json`; socket path in `$AGTERM_SOCKET`.
+- **Files** — keymap `~/.config/agterm/keymap.conf`; agterm-scoped ghostty config
+  `~/.config/agterm/ghostty.conf`; settings `~/Library/Application Support/agterm/settings.json`;
+  socket path in `$AGTERM_SOCKET`.
 
 ### "Keymap editor won't open"
 

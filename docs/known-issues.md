@@ -40,3 +40,18 @@ still open, so no good *recent* build exists yet — `4dcb09ada` (Apr 30) predat
 
 **When to revisit:** watch the issues above (and newer resize/reflow fixes). Once a candidate build tests
 clean on the font-increase-with-scrollback case, bump `GHOSTTY_REV` in `scripts/setup.sh` forward.
+
+## Sidebar selection colors ignore `config-file` includes
+
+The selected sidebar row draws its pill in the terminal theme's `selection-background` /
+`selection-foreground`, but libghostty's `ghostty_config_get` cannot read those optional keys back, so
+agterm re-parses the config files itself (`GhosttyApp.resolveSelectionColors`). That re-parse scans
+only the four top-level sources (the bundled defaults, `~/.config/ghostty/config`, the agterm-scoped
+`ghostty.conf`, and the UI settings file) plus the active theme. It does not follow `config-file`
+includes that libghostty expands at load, so a `selection-*` set inside an included file is missed and
+the sidebar pill falls back to the theme color or a soft white wash.
+
+This predates the agterm-scoped `ghostty.conf` work and affects `~/.config/ghostty/config` includes
+too. The terminal itself still renders the included selection color; only the sidebar chrome can
+mismatch. Set `selection-background` / `selection-foreground` directly in one of the top-level files to
+keep the chrome in sync.

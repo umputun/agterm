@@ -229,6 +229,25 @@ Built-in action names for `map` include: `new_window`, `new_workspace`, `new_ses
 `focus_left_pane`, `focus_right_pane`, `select_theme`). Editing the keymap from a terminal: open
 `keymap.conf` in `$EDITOR`, then `agtermctl keymap reload`.
 
+## config
+
+`agtermctl config reload` - re-read and apply the ghostty config; returns `result.count` = the ghostty
+config-diagnostic count (0 = clean), counted across ALL config sources, not just the agterm-scoped
+`ghostty.conf` (libghostty diagnostics do not record which file they came from), so do not read a
+non-zero count as proof `ghostty.conf` is the culprit. App-global (no `--window`). It runs the same path
+as the GUI's File ▸ Reload Config menu/palette item, which posts a warning banner on diagnostics.
+
+### ghostty.conf
+
+`<config dir>/ghostty.conf` (default `~/.config/agterm`, next to `keymap.conf`) is an agterm-scoped
+ghostty config. The app loads four config sources in order, each overriding the one before: ghostty's
+bundled defaults, then your global `~/.config/ghostty/config`, then `<config dir>/ghostty.conf`, then
+agterm's own Settings (font, theme, background opacity/blur, scroll speed), which load last and win for
+the keys the UI manages. The file is scoped to agterm; the standalone Ghostty.app never reads it. Put
+any other ghostty key here (e.g. `macos-option-as-alt = true`); the full reference is at
+https://ghostty.org/docs/config. Editing it from a terminal: open `ghostty.conf` in `$EDITOR`, then
+`agtermctl config reload`.
+
 ## theme
 
 The app's out-of-the-box default theme is the bundled **agterm** theme (a fresh install opens on it).
