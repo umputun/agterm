@@ -87,6 +87,11 @@ ghostty's bundled defaults  →  ~/.config/ghostty/config  →  <config dir>/gho
 
 Edit `ghostty.conf` with **File ▸ Edit ghostty.conf…** (or the ⌃⇧P palette), which opens it in `$EDITOR` and reloads on exit, the same as Edit Keymap. After editing it elsewhere, apply it with **File ▸ Reload Config**, the action palette, or `agtermctl config reload`. A malformed line is skipped while the good ones still apply. The diagnostic count (shown in a banner and printed by `config.reload`, where `0` means a clean reload) covers every ghostty config source, not just `ghostty.conf`, because the diagnostics do not record which file they came from. Check the Console log for the offending line.
 
+A reload applies most keys to your open terminals right away — colors, theme, `cursor-style`, `macos-option-as-alt`, and the mouse and clipboard keys all take effect on the visible pane. Two kinds of key cannot change for a terminal that is already running, though:
+
+- **Layout keys** — `window-padding-x`, `window-padding-y`, and other size-affecting keys — do not re-apply to an open pane. libghostty re-derives a surface's padding only when it is first laid out, so a reload (and even resizing the window) leaves existing panes on their old padding. Open a new session or new window to pick up the change; the panes that were already open need a relaunch.
+- **Spawn-time keys** — `term` and `shell-integration-features` — are read once when the shell starts, so a reload cannot change them for a shell that is already running. Open a new session, whose shell is spawned fresh, to apply them.
+
 The full ghostty key reference is at <https://ghostty.org/docs/config>.
 
 ## Other common issues

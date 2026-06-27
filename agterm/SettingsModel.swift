@@ -302,7 +302,9 @@ final class SettingsModel {
         # ~/.config/ghostty/config. Full key reference: https://ghostty.org/docs/config
         #
         # Edit this file and run File ▸ Reload Config (or relaunch) to apply. Blank lines and lines
-        # starting with `#` are ignored.
+        # starting with `#` are ignored. Most keys apply to open terminals on reload, but layout keys
+        # (window-padding-*) and shell-spawn keys (term, shell-integration-features) only take effect in
+        # a new session/window or after a relaunch.
         #
         # Example — make the macOS Option key send Alt (uncomment to enable):
         # macos-option-as-alt = true

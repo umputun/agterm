@@ -19,7 +19,9 @@ You are inside agterm (`AGTERM_ENABLED=1`). Use:
   record which file a diagnostic came from), so check the Console log for the offending line. `ghostty.conf`
   (next to `keymap.conf`) overrides the bundled defaults and the global `~/.config/ghostty/config`; agterm's
   Settings (font/theme/opacity/scroll) still win. Use it for keys the UI does not expose, e.g.
-  `macos-option-as-alt`. Full reference: https://ghostty.org/docs/config
+  `macos-option-as-alt`. Most keys apply to open panes on reload, but layout keys (`window-padding-*`)
+  and spawn-time keys (`term`, `shell-integration-features`) only take effect in a new session/window
+  or after a relaunch. Full reference: https://ghostty.org/docs/config
 - **Logs** (unified logging, subsystem `com.umputun.agterm`):
   ```bash
   log show --predicate 'subsystem == "com.umputun.agterm"' --info --last 30m
