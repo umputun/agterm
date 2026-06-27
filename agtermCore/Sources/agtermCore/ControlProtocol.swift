@@ -46,6 +46,7 @@ public enum Command: String, Codable, Sendable {
     case windowResize = "window.resize"
     case windowMove = "window.move"
     case keymapReload = "keymap.reload"
+    case configReload = "config.reload"
     case themeSet = "theme.set"
     case themeList = "theme.list"
 }
@@ -225,8 +226,10 @@ public struct ControlResult: Codable, Sendable, Equatable {
     /// The overlay program's exit status for `session.overlay.result` (nil until the program exits).
     public var exitCode: Int?
     /// A count payload for commands whose result is a number, e.g. the keymap-diagnostic count for
-    /// `keymap.reload` and the total match count for `session.search` (whose "N of M" display string
-    /// rides in `text`).
+    /// `keymap.reload`, the ghostty config-diagnostic count for `config.reload` (counted across ALL config
+    /// sources, not just the agterm-scoped `ghostty.conf` — libghostty diagnostics carry no source-file
+    /// attribution), and the total match count for `session.search` (whose "N of M" display string rides
+    /// in `text`).
     public var count: Int?
     /// The current/affected theme name for `theme.set` (echo) and `theme.list` (current); nil =
     /// ghostty's built-in colors ("default ghostty"), distinct from the seeded `agterm` app default.

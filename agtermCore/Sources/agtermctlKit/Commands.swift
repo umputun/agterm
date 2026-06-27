@@ -76,7 +76,7 @@ public struct Agtermctl: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "agtermctl",
         abstract: "Drive agterm over its control socket.",
-        subcommands: [Tree.self, Workspace.self, Session.self, Window.self, Quick.self, Sidebar.self, Notify.self, Font.self, Keymap.self, Theme.self]
+        subcommands: [Tree.self, Workspace.self, Session.self, Window.self, Quick.self, Sidebar.self, Notify.self, Font.self, Keymap.self, Config.self, Theme.self]
     )
 
     public init() {}
@@ -601,6 +601,23 @@ struct Keymap: ParsableCommand {
         @OptionGroup var options: BasicOptions
 
         func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .keymapReload) }
+    }
+}
+
+// MARK: - config
+
+struct Config: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Config commands.",
+        subcommands: [Reload.self]
+    )
+
+    struct Reload: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Re-read and apply the agterm-scoped ghostty.conf (prints the diagnostic count).")
+        // config.reload is app-global (one settings model + GhosttyApp), so no `--window` selector.
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .configReload) }
     }
 }
 

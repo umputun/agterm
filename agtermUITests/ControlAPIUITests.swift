@@ -1602,6 +1602,32 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertGreaterThanOrEqual(count, 1, "a broken keymap line should yield at least one diagnostic: \(response)")
     }
 
+    // MARK: - Config
+
+    // config.reload re-reads the agterm-scoped ghostty.conf and returns the config-diagnostic count.
+    // assert ok rather than count==0: the count merges the host's real ~/.config/ghostty/config (not
+    // AGTERM_STATE_DIR-isolated), so a count==0 assert would be flaky on a host with its own config.
+    func testConfigReloadSucceeds() throws {
+        let response = try sendCommand(#"{"cmd":"config.reload"}"#)
+        XCTAssertEqual(response["ok"] as? Bool, true, "config.reload should succeed: \(response)")
+        let result = try XCTUnwrap(response["result"] as? [String: Any], "config.reload should carry a result")
+        XCTAssertNotNil(result["count"] as? Int, "config.reload should return a diagnostic count: \(response)")
+    }
+
+    // a ghostty.conf with a malformed line seeded under <stateDir>/config surfaces in the diagnostic
+    // count config.reload returns: relaunch with the malformed file in place (so the starter isn't
+    // created over it), then config.reload reports a non-zero count. Use an UNKNOWN key (not a bad value
+    // of a known key) so the line is an unambiguous, deterministic diagnostic that raises the count on its
+    // own — independent of any diagnostics the host's own ~/.config/ghostty/config might also contribute.
+    func testConfigReloadReportsDiagnosticsForMalformedFile() throws {
+        try relaunch(withGhosttyConfig: "nonexistent-ghostty-key-xyz = 1\n")
+        let response = try sendCommand(#"{"cmd":"config.reload"}"#)
+        XCTAssertEqual(response["ok"] as? Bool, true, "config.reload should succeed even with a malformed file: \(response)")
+        let result = try XCTUnwrap(response["result"] as? [String: Any], "config.reload should carry a result")
+        let count = try XCTUnwrap(result["count"] as? Int, "config.reload should return a diagnostic count: \(response)")
+        XCTAssertGreaterThanOrEqual(count, 1, "an unknown ghostty.conf key should yield at least one diagnostic: \(response)")
+    }
+
     func testThemeListAndSet() throws {
         // list: a non-empty set of bundled themes, including the repo's own "agterm" theme. a fresh
         // install seeds the agterm theme as the default, so it is the current theme.
@@ -1754,13 +1780,25 @@ final class ControlAPIUITests: XCTestCase {
     }
 
     /// Terminate the running app, write `keymap` to `<stateDir>/config/keymap.conf`, and relaunch with the
-    /// same isolated state dir + socket. Writing the file before relaunch means `ensureStarterKeymap()`
-    /// finds it present and never overwrites it, so the seeded content is what gets parsed.
+    /// same isolated state dir + socket.
     private func relaunch(withKeymap keymap: String) throws {
+        try relaunch(writing: keymap, toConfigFile: "keymap.conf")
+    }
+
+    /// Terminate the running app, write `config` to `<stateDir>/config/ghostty.conf`, and relaunch with the
+    /// same isolated state dir + socket.
+    private func relaunch(withGhosttyConfig config: String) throws {
+        try relaunch(writing: config, toConfigFile: "ghostty.conf")
+    }
+
+    /// Terminate the running app, write `contents` to `<stateDir>/config/<fileName>`, and relaunch with the
+    /// same isolated state dir + socket. Writing the file before relaunch means the starter-file seeder
+    /// finds it present and never overwrites it, so the seeded content is what gets parsed.
+    private func relaunch(writing contents: String, toConfigFile fileName: String) throws {
         app.terminate()
         let configDir = stateDir.appendingPathComponent("config", isDirectory: true)
         try FileManager.default.createDirectory(at: configDir, withIntermediateDirectories: true)
-        try Data(keymap.utf8).write(to: configDir.appendingPathComponent("keymap.conf"))
+        try Data(contents.utf8).write(to: configDir.appendingPathComponent(fileName))
         app = XCUIApplication()
         app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
         app.launchEnvironment["AGTERM_CONTROL_SOCKET"] = socketPath

@@ -275,6 +275,19 @@ struct ControlProtocolTests {
         #expect(decoded.cmd == .keymapReload)
     }
 
+    @Test func configReloadRequestRoundTrips() throws {
+        let request = ControlRequest(cmd: .configReload)
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.cmd == .configReload)
+    }
+
+    @Test func configReloadRawStringMapsToCommand() throws {
+        let json = #"{"cmd":"config.reload"}"#
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8))
+        #expect(decoded.cmd == .configReload)
+    }
+
     @Test func sidebarExpandCollapseRequestsRoundTrip() throws {
         let cases = [
             ControlRequest(cmd: .sidebarExpand),

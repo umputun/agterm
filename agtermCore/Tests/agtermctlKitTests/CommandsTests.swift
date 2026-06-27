@@ -406,6 +406,15 @@ struct CommandsTests {
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["keymap", "reload", "--window", "w1"]) }
     }
 
+    @Test func configReload() throws {
+        #expect(try request(["config", "reload"]) == ControlRequest(cmd: .configReload))
+    }
+
+    @Test func configReloadRejectsWindowSelector() {
+        // config.reload is app-global, so --window is meaningless and must not be accepted.
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["config", "reload", "--window", "w1"]) }
+    }
+
     // MARK: - theme subcommands
 
     @Test func themeSetWithName() throws {

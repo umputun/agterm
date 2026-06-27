@@ -529,6 +529,8 @@ final class ControlServer {
             return windowMove(request.target, x: request.args?.x, y: request.args?.y, display: request.args?.display)
         case .keymapReload:
             return reloadKeymap()
+        case .configReload:
+            return reloadGhosttyConfig()
         case .themeSet:
             return setTheme(name: request.args?.name)
         case .themeList:
@@ -1258,11 +1260,25 @@ final class ControlServer {
     // MARK: - Keymap
 
     /// Re-read and re-parse `keymap.conf`, returning the count of parse diagnostics. The SAME
-    /// `reloadKeymap()` path the GUI's View ▸ Reload Keymap menu/palette item drives, so the menu/palette
+    /// `reloadKeymap()` path the GUI's File ▸ Reload Keymap menu/palette item drives, so the menu/palette
     /// and `keymap.reload` never diverge — control-native here only in the count it reports back.
     private func reloadKeymap() -> ControlResponse {
         settingsModel.reloadKeymap()
         return ControlResponse(ok: true, result: ControlResult(count: settingsModel.keymapDiagnostics.count))
+    }
+
+    // MARK: - Config
+
+    /// Re-read and apply the ghostty config, returning the config-diagnostic count (0 = clean), counted
+    /// across ALL config sources (bundled defaults, the global `~/.config/ghostty/config`, the agterm-scoped
+    /// `ghostty.conf`, and the UI settings conf) — libghostty diagnostics carry no source-file attribution.
+    /// The SAME `AppActions.reloadGhosttyConfig()` path the GUI's File ▸ Reload Config menu/palette item
+    /// drives (which posts the warning banner on diagnostics), so the GUI and `config.reload` never diverge
+    /// — control-native here only in the count it reports back. The count is the value the reload actually
+    /// produced (threaded back from the reload), not a separate re-read. App-global (one settings model +
+    /// one GhosttyApp), so no `--window` selector, like `keymap.reload`.
+    private func reloadGhosttyConfig() -> ControlResponse {
+        ControlResponse(ok: true, result: ControlResult(count: actions.reloadGhosttyConfig()))
     }
 
     // MARK: - Theme
