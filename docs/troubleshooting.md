@@ -40,7 +40,7 @@ After editing `keymap.conf`, nothing changes until you reload it.
 
 ## The keymap editor will not open
 
-**Edit Keymap** (File ▸ Edit Keymap…, or the `⌃⇧P` palette) opens `keymap.conf` in `$VISUAL`, else `$EDITOR`, else `vi`, inside a floating overlay over the active session. The overlay runs the editor through your login shell, so the editor resolves the same way it does in a normal terminal.
+**Edit Keymap** (File ▸ Edit Keymap…, or the `⌃⇧P` palette) opens `keymap.conf` in `$VISUAL`, else `$EDITOR`, else `vi`, inside a floating overlay over the active session. The overlay runs the editor through your login shell, so the editor resolves the same way it does in a normal terminal — whether your login shell is zsh/bash or fish.
 
 Common causes when nothing usable appears:
 
@@ -53,7 +53,7 @@ Common causes when nothing usable appears:
 2. **`$EDITOR` unset.** You get `vi` inside the overlay. Press `i` to start typing, then `Esc` and `:wq` to save and quit; the keymap reloads when the editor exits.
 3. **No active session, or an overlay is already open.** Edit Keymap is a no-op with no session selected, or while another overlay or the quick terminal is up. Select a session and close any overlay first.
 
-Set `$EDITOR` or `$VISUAL` in your shell startup file (`~/.zshrc`, `~/.bashrc`), not just in the current shell. The overlay reads it from your login shell, so an export that only lives in one terminal session is not seen.
+Set and **export** `$EDITOR` or `$VISUAL` in your shell startup file (`export EDITOR=…` in `~/.zshrc`/`~/.bashrc`, or `set -gx EDITOR …` in `~/.config/fish/config.fish`), not just in the current shell. The overlay reads the *exported* value from your login shell, so a value that lives in one terminal session only — or one set without `export` — is not seen and falls back to `vi`.
 
 ## A custom action does nothing
 

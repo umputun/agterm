@@ -44,56 +44,120 @@ struct ConfigPathsTests {
                 == "${SHELL:-/bin/zsh} -ilc 'exec /bin/sh -c '\\''${VISUAL:-${EDITOR:-vi}} \"$1\"'\\'' agterm-config-edit '\\''/Users/test/.config/agterm/keymap.conf'\\'''")
     }
 
-    @Test func editorCommandWorksForGhosttyConfigPath() {
-        // the generalized command opens any path, including the ghostty.conf the new Edit action targets.
+    @Test func editorCommandEmbedsAnyPathForBothEditorOverlays() {
+        // both the keymap and ghostty-config Edit overlays call this one function; a different path is
+        // embedded single-quoted with the same shape. Arbitrary-path integrity is proven behaviorally
+        // below, so this only checks the call site, not the full golden string again.
         let dir = URL(fileURLWithPath: "/Users/test/.config/agterm")
-        let path = ConfigPaths.ghosttyConfigPath(configDirectory: dir).path
-        #expect(ConfigPaths.editorCommand(forPath: path)
-                == "${SHELL:-/bin/zsh} -ilc 'exec /bin/sh -c '\\''${VISUAL:-${EDITOR:-vi}} \"$1\"'\\'' agterm-config-edit '\\''/Users/test/.config/agterm/ghostty.conf'\\'''")
+        let cmd = ConfigPaths.editorCommand(forPath: ConfigPaths.ghosttyConfigPath(configDirectory: dir).path)
+        #expect(cmd.hasPrefix("${SHELL:-/bin/zsh} -ilc 'exec /bin/sh -c "))
+        #expect(cmd.contains("agterm-config-edit '\\''/Users/test/.config/agterm/ghostty.conf'\\'''"))
     }
 
-    @Test func editorCommandResolvesExportedEditorAndPreservesPathAcrossShells() throws {
-        // run the command exactly as libghostty does (/bin/sh -c "<cmd>") with a fake "editor" that records
-        // its argument, isolating each candidate login shell from the machine's rc. Proves the nested
-        // quoting survives, the exported $EDITOR resolves, and a path with a space AND an embedded single
-        // quote reaches the editor intact. zsh always runs; fish runs only when installed — fish parses the
-        // same because the POSIX logic runs under the inner /bin/sh (the old `$SHELL -ilc '${VISUAL:-…}'`
-        // died under fish with `${ is not a valid variable`, exit 127).
-        let fm = FileManager.default
-        let tmp = fm.temporaryDirectory.appendingPathComponent("agterm-editorcmd-\(UUID().uuidString)")
-        try fm.createDirectory(at: tmp, withIntermediateDirectories: true)
-        defer { try? fm.removeItem(at: tmp) }
+    // MARK: - Cross-shell behavioral tests
+    //
+    // These run the command exactly as libghostty does (`/bin/sh -c "<cmd>"`) with a fake "editor" that
+    // records its argument, isolating the login shell from the machine's rc via HOME/ZDOTDIR/XDG_CONFIG_HOME.
+    // The `vi` fallback is intentionally not exercised behaviorally: it is the standard POSIX
+    // `${VISUAL:-${EDITOR:-vi}}` default (pinned literally by the golden test above), and a behavioral check
+    // would risk launching the real, tty-blocking `vi` — a login shell's /etc/{profile,zprofile} path_helper
+    // reorders PATH so a system `/usr/bin/vi` would win over a fake one.
 
-        let got = tmp.appendingPathComponent("got")
-        let editor = tmp.appendingPathComponent("fake-editor.sh")
-        try "#!/bin/sh\nprintf '%s' \"$1\" > \"\(got.path)\"\n".write(to: editor, atomically: true, encoding: .utf8)
-        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: editor.path)
+    /// Writes an executable recorder at `<dir>/<name>` that records its first argument to `<dir>/<name>.got`,
+    /// returning the script path and the marker URL.
+    private func makeRecorder(in dir: URL, named name: String) throws -> (script: String, got: URL) {
+        let got = dir.appendingPathComponent("\(name).got")
+        let script = dir.appendingPathComponent(name)
+        try "#!/bin/sh\nprintf '%s' \"$1\" > \"\(got.path)\"\n".write(to: script, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: script.path)
+        return (script.path, got)
+    }
 
-        let path = tmp.appendingPathComponent("a b/o'd.conf").path // space + embedded single quote
-        let cmd = ConfigPaths.editorCommand(forPath: path)
+    private func makeTmp() throws -> URL {
+        let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-editorcmd-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: tmp, withIntermediateDirectories: true)
+        return tmp
+    }
 
-        var shells = ["/bin/zsh"]
-        if let fish = ["/opt/homebrew/bin/fish", "/usr/local/bin/fish", "/usr/bin/fish"]
-            .first(where: { fm.isExecutableFile(atPath: $0) }) { shells.append(fish) }
-
-        for shell in shells {
-            try? fm.removeItem(at: got)
-            let proc = Process()
-            proc.executableURL = URL(fileURLWithPath: "/bin/sh")
-            proc.arguments = ["-c", cmd]
-            var env = ProcessInfo.processInfo.environment
-            env["SHELL"] = shell
-            env["EDITOR"] = editor.path
-            env["HOME"] = tmp.path            // isolate from the machine's rc (zsh/bash)
-            env["ZDOTDIR"] = tmp.path         // zsh rc isolation
-            env["XDG_CONFIG_HOME"] = tmp.path // fish config isolation
-            env.removeValue(forKey: "VISUAL")
-            proc.environment = env
-            try proc.run()
-            proc.waitUntilExit()
-            #expect(proc.terminationStatus == 0, "command should exit 0 under \(shell)")
-            #expect((try? String(contentsOf: got, encoding: .utf8)) == path,
-                    "the path should reach the resolved editor intact under \(shell)")
+    /// Runs `editorCommand(forPath:)` under `/bin/sh -c` with `overrides` merged onto the process env;
+    /// EDITOR/VISUAL are cleared first (so only `overrides` set them) and the login-shell rc is isolated to
+    /// `tmp` via HOME/ZDOTDIR/XDG_CONFIG_HOME. Returns the exit status; a nil value in `overrides` removes a key.
+    @discardableResult
+    private func runEditorCommand(forPath path: String, tmp: URL, env overrides: [String: String?]) throws -> Int32 {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/bin/sh")
+        proc.arguments = ["-c", ConfigPaths.editorCommand(forPath: path)]
+        var env = ProcessInfo.processInfo.environment
+        env["HOME"] = tmp.path
+        env["ZDOTDIR"] = tmp.path
+        env["XDG_CONFIG_HOME"] = tmp.path
+        env.removeValue(forKey: "EDITOR")
+        env.removeValue(forKey: "VISUAL")
+        for (key, value) in overrides {
+            if let value { env[key] = value } else { env.removeValue(forKey: key) }
         }
+        proc.environment = env
+        try proc.run()
+        proc.waitUntilExit()
+        return proc.terminationStatus
+    }
+
+    @Test func editorCommandResolvesExportedEditorAndPreservesPath() throws {
+        // an exported $EDITOR resolves and a path with a space AND an embedded single quote survives the
+        // nested quoting, under zsh (a POSIX login shell, always present).
+        let tmp = try makeTmp(); defer { try? FileManager.default.removeItem(at: tmp) }
+        let (editor, got) = try makeRecorder(in: tmp, named: "editor")
+        let path = tmp.appendingPathComponent("a b/o'd.conf").path
+        let status = try runEditorCommand(forPath: path, tmp: tmp, env: ["SHELL": "/bin/zsh", "EDITOR": editor])
+        #expect(status == 0)
+        #expect((try? String(contentsOf: got, encoding: .utf8)) == path)
+    }
+
+    @Test func editorCommandPrefersVisualOverEditor() throws {
+        // $VISUAL wins over $EDITOR (the ${VISUAL:-${EDITOR:-vi}} precedence), under zsh.
+        let tmp = try makeTmp(); defer { try? FileManager.default.removeItem(at: tmp) }
+        let (visual, visualGot) = try makeRecorder(in: tmp, named: "visual")
+        let (editor, editorGot) = try makeRecorder(in: tmp, named: "editor")
+        let path = tmp.appendingPathComponent("k.conf").path
+        let status = try runEditorCommand(forPath: path, tmp: tmp,
+                                          env: ["SHELL": "/bin/zsh", "VISUAL": visual, "EDITOR": editor])
+        #expect(status == 0)
+        #expect((try? String(contentsOf: visualGot, encoding: .utf8)) == path)
+        #expect(!FileManager.default.fileExists(atPath: editorGot.path), "EDITOR must not run when VISUAL is set")
+    }
+
+    @Test func editorCommandSourcesLoginShellRcForExportedEditor() throws {
+        // the `-ilc` hop is load-bearing: an $EDITOR exported only in the shell rc (NOT in the process env)
+        // still resolves, because the login shell sources its rc before exec'ing /bin/sh. Without `-ilc` the
+        // rc isn't sourced and this would fall back to vi.
+        let tmp = try makeTmp(); defer { try? FileManager.default.removeItem(at: tmp) }
+        let (editor, got) = try makeRecorder(in: tmp, named: "rc-editor")
+        // zsh -i sources $ZDOTDIR/.zshrc; export EDITOR there and pass no EDITOR in the env.
+        try "export EDITOR='\(editor)'\n".write(to: tmp.appendingPathComponent(".zshrc"), atomically: true, encoding: .utf8)
+        let path = tmp.appendingPathComponent("k.conf").path
+        let status = try runEditorCommand(forPath: path, tmp: tmp, env: ["SHELL": "/bin/zsh"])
+        #expect(status == 0)
+        #expect((try? String(contentsOf: got, encoding: .utf8)) == path)
+    }
+
+    @Test(.enabled(if: ConfigPathsTests.fishPath() != nil,
+                   "no non-POSIX login shell (fish) installed — the cross-shell parse assertion is skipped here"))
+    func editorCommandWorksUnderNonPosixLoginShell() throws {
+        // the actual bug fix: a non-POSIX login shell (fish) must run the command without choking on `${`.
+        // SKIPPED (visibly) when no fish is installed, so a green run on a POSIX-only box is not mistaken for
+        // cross-shell verification.
+        let fish = try #require(ConfigPathsTests.fishPath())
+        let tmp = try makeTmp(); defer { try? FileManager.default.removeItem(at: tmp) }
+        let (editor, got) = try makeRecorder(in: tmp, named: "editor")
+        let path = tmp.appendingPathComponent("a b/o'd.conf").path
+        let status = try runEditorCommand(forPath: path, tmp: tmp, env: ["SHELL": fish, "EDITOR": editor])
+        #expect(status == 0)
+        #expect((try? String(contentsOf: got, encoding: .utf8)) == path)
+    }
+
+    /// The first installed `fish` binary, or nil — gates the non-POSIX behavioral test above.
+    private static func fishPath() -> String? {
+        ["/opt/homebrew/bin/fish", "/usr/local/bin/fish", "/usr/bin/fish"]
+            .first { FileManager.default.isExecutableFile(atPath: $0) }
     }
 }
