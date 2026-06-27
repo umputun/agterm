@@ -11,7 +11,7 @@ private let sessionPasteboardType = NSPasteboard.PasteboardType("com.umputun.agt
 private let workspacePasteboardType = NSPasteboard.PasteboardType("com.umputun.agterm.workspace")
 
 /// An `NSTableCellView` with a leading icon, the name field, and a trailing badge.
-/// The icon is the inherited `cell.imageView` (a filled folder for a workspace, an outlined
+/// The icon is the inherited `cell.imageView` (a 2x2 grid glyph for a workspace, an outlined
 /// terminal for a session), so AppKit re-tints it white on a selected row. The name field is `cell.textField`
 /// (rename and selection wiring operate on it).
 private final class SidebarCellView: NSTableCellView {
@@ -881,14 +881,14 @@ struct WorkspaceSidebar: NSViewRepresentable {
             cell.badge.count = count
         }
 
-        /// Leading row icons: a filled folder for a workspace, an outlined terminal for a single
+        /// Leading row icons: a 2x2 grid glyph for a workspace, an outlined terminal for a single
         /// session, and a split-rectangle for a split session, rendered as monochrome template symbols.
         /// The two `flagged*` variants swap to the `.fill` SF Symbol (a solid interior — the same
         /// "small filled area" idiom the scratch-active toolbar glyph uses): `terminal.fill` for a
         /// single session, `rectangle.split.2x1.fill` for a split. A pure symbol swap, not a composited
         /// corner badge, so it stays a single template `setColors` tints and reserves no extra space.
         /// Cached because only a few distinct symbols exist and every row reuses them.
-        private lazy var workspaceIcon = Self.rowIcon("folder.fill")
+        private lazy var workspaceIcon = Self.rowIcon("square.grid.2x2")
         private lazy var splitSessionIcon = Self.rowIcon("rectangle.split.2x1")
         private lazy var sessionIcon = Self.rowIcon("terminal")
         private lazy var flaggedSessionIcon = Self.rowIcon("terminal.fill")
