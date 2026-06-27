@@ -18,3 +18,8 @@ windows.json
 workspaces.json
 windows/
 *.sock
+
+# track the path-scoped Claude rules (the global ~/.gitignore_global ignores .claude/)
+!.claude/
+.claude/*
+!.claude/rules/
