@@ -9,6 +9,21 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
     /// the attention navigation (⌃⌥↑/↓, `session.go next-attention|prev-attention`) steps through,
     /// excluding `idle` (no glyph) and `active` (the agent is still working).
     public var needsAttention: Bool { self == .blocked || self == .completed }
+
+    /// Whether a keystroke in the session's terminal should clear this glyph back to idle. `blocked` and
+    /// `completed` clear on ANY key (you've engaged with the prompt / the finished result); `active`
+    /// clears ONLY on Escape — the interrupt key — so ordinary typing while the agent works does NOT wipe
+    /// the "working" glyph, but cancelling (Esc) a prompt the agent is showing does. This is what covers
+    /// the quick-Esc case: a pending question can still read `active` when you cancel it (Claude Code's
+    /// `blocked` notification lands seconds later), and the Esc-interrupt itself fires no hook, so this
+    /// keystroke clear is the only signal that drops the stale `active`. `idle` has no glyph to clear.
+    public func clearedByKeystroke(isEscape: Bool) -> Bool {
+        switch self {
+        case .blocked, .completed: return true
+        case .active: return isEscape
+        case .idle: return false
+        }
+    }
 }
 
 /// AgentIndicator is the per-session agent status value: the state plus an optional blink flag (pulse

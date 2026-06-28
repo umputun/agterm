@@ -26,6 +26,20 @@ struct AgentStatusTests {
         #expect(!AgentStatus.active.needsAttention)
     }
 
+    @Test func clearedByKeystrokeClearsAttentionAlwaysAndActiveOnlyOnEscape() {
+        // blocked/completed clear on ANY key — you've engaged with the prompt / finished result
+        #expect(AgentStatus.blocked.clearedByKeystroke(isEscape: false))
+        #expect(AgentStatus.blocked.clearedByKeystroke(isEscape: true))
+        #expect(AgentStatus.completed.clearedByKeystroke(isEscape: false))
+        #expect(AgentStatus.completed.clearedByKeystroke(isEscape: true))
+        // active clears ONLY on Escape (the interrupt key); ordinary typing leaves the working glyph
+        #expect(!AgentStatus.active.clearedByKeystroke(isEscape: false))
+        #expect(AgentStatus.active.clearedByKeystroke(isEscape: true))
+        // idle has no glyph to clear
+        #expect(!AgentStatus.idle.clearedByKeystroke(isEscape: false))
+        #expect(!AgentStatus.idle.clearedByKeystroke(isEscape: true))
+    }
+
     @Test func indicatorDefaults() {
         let indicator = AgentIndicator()
         #expect(indicator.status == .idle)

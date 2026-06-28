@@ -156,6 +156,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     private var didAutoFocus = false
     private static let autoFocusMaxAttempts = 40
     private static let autoFocusRetryInterval: TimeInterval = 0.05
+    private static let escapeKeyCode: UInt16 = 53
 
     /// Whether this surface's deck slot is the active (selected) session. The overlay/scratch auto-focus
     /// path grabs first responder when the surface attaches, so without this gate a full overlay (or scratch)
@@ -718,10 +719,14 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
             super.keyDown(with: event)
             return
         }
-        // typing in a session flagged for your attention — blocked (waiting on you) or completed (finished)
-        // — means you've engaged with it, so clear the glyph to idle. active is left alone (agent still
-        // working). fires once: the status drops to idle, so the gate skips on the next key.
-        if let status = session?.agentIndicator.status, status == .blocked || status == .completed {
+        // a keystroke in a session flagged for your attention clears the glyph to idle: blocked/completed
+        // on ANY key (you've engaged with the prompt / finished result), active ONLY on Escape — the
+        // interrupt key — so ordinary typing while the agent works doesn't wipe the "working" glyph, but
+        // cancelling a pending prompt (Esc) does. Esc-interrupt fires no Claude Code hook and a pending
+        // prompt can still read active when you cancel (the blocked notification lands seconds later), so
+        // this keystroke clear is the only signal that drops the stale glyph. fires once: it goes to idle.
+        if let status = session?.agentIndicator.status,
+           status.clearedByKeystroke(isEscape: event.keyCode == Self.escapeKeyCode) {
             onUserInputClearsStatus?()
         }
         let action: ghostty_input_action_e = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS
