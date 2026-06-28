@@ -93,7 +93,16 @@ final class AppActions {
     }
 
     func closeActiveSession() {
-        guard let store, let id = store.selectedSessionID else { return }
+        // ⌘W dismisses a focus-stealing cover (quick terminal / overlay / scratch) rather than closing the
+        // session hidden behind it — the cover is the "current terminal" on screen. precedence follows the
+        // z-order: the quick terminal is window-topmost, a full overlay sits above the scratch within a session.
+        if let quick = frontmostQuickTerminal, quick.isVisible { quick.hide(); return }
+        guard let store else { return }
+        if let session = store.activeSession {
+            if session.overlayActive { store.closeOverlay(session.id); return }
+            if session.scratchActive { store.toggleScratch(session.id); return }
+        }
+        guard let id = store.selectedSessionID else { return }
         store.closeSession(id)
         focusActiveSession()
     }

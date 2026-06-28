@@ -960,6 +960,39 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertTrue((bad["error"] as? String ?? "").contains("invalid scratch mode"), "should report invalid mode: \(bad)")
     }
 
+    // ⌘W with the scratch shown DISMISSES the scratch, not the session under it. The scratch renders
+    // full-pane over the active session, so the close shortcut must target the cover, not the hidden session.
+    func testCloseSessionShortcutHidesScratchInsteadOfClosingSession() throws {
+        let on = try sendCommand(#"{"cmd":"session.scratch","target":"active","args":{"mode":"on"}}"#)
+        XCTAssertEqual(on["ok"] as? Bool, true, "session.scratch on should succeed: \(on)")
+        XCTAssertTrue(pollActiveSessionScratch(true, timeout: 10), "the scratch should be shown")
+
+        app.typeKey("w", modifierFlags: .command)
+
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "⌘W must not close the session behind the scratch")
+        XCTAssertTrue(pollActiveSessionScratch(false, timeout: 10), "⌘W should hide the scratch")
+    }
+
+    // ⌘W with a full overlay up DISMISSES the overlay (closes it), not the session under it. `cat` blocks
+    // so the overlay stays up until ⌘W; the session row surviving proves the session wasn't closed instead.
+    func testCloseSessionShortcutClosesOverlayInsteadOfClosingSession() throws {
+        // the seeded session is active; capture its id to address the overlay + poll its flag.
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let result = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let t = try XCTUnwrap(result["tree"] as? [String: Any], "result should carry a tree")
+        let ws = try XCTUnwrap((t["workspaces"] as? [[String: Any]])?.first, "should have a workspace")
+        let seededID = try XCTUnwrap((ws["sessions"] as? [[String: Any]])?.first?["id"] as? String, "seeded session id")
+
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(seededID)","args":{"command":"cat"}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: seededID, expected: true, timeout: 10), "the overlay should be up")
+
+        app.typeKey("w", modifierFlags: .command)
+
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "⌘W must not close the session behind the overlay")
+        XCTAssertTrue(pollSessionOverlay(id: seededID, expected: false, timeout: 10), "⌘W should close the overlay")
+    }
+
     // session.scratch --command runs the command AS the scratch's process (not a shell): the command
     // writes a marker file, proving it ran. It exits immediately (run-once), so the scratch then closes —
     // the marker is the oracle. The command is argv-style (no shell), so the redirect is wrapped in sh -c.

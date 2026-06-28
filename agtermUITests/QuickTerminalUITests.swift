@@ -49,6 +49,38 @@ final class QuickTerminalUITests: XCTestCase {
         XCTAssertNotEqual(mainTTY, quickTTY, "the quick terminal is a separate shell from the main session")
     }
 
+    func testCloseSessionShortcutHidesQuickTerminalInsteadOfClosingSession() throws {
+        let row = app.staticTexts["session-row"]
+        XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
+        row.click()
+        usleep(800_000)
+
+        // focus the main session and record its tty.
+        let mainTTY = ttyAfterCommand(named: "main")
+        XCTAssertNotNil(mainTTY, "main shell should write its tty (terminal must be focused)")
+
+        // open the quick terminal — a separate shell on top of the session.
+        let button = app.buttons["quick-terminal-toggle"]
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "quick-terminal toolbar button should exist")
+        button.click()
+        usleep(900_000)
+        let quickTTY = ttyAfterCommand(named: "quick")
+        XCTAssertNotNil(quickTTY, "quick terminal should be focused")
+        XCTAssertNotEqual(mainTTY, quickTTY, "the quick terminal is a separate shell from the main session")
+
+        // ⌘W with the quick terminal up must DISMISS it, NOT close the session underneath.
+        app.typeKey("w", modifierFlags: .command)
+        usleep(900_000)
+
+        // the session survives (the bug closed the session behind the quick terminal instead).
+        XCTAssertTrue(app.staticTexts["session-row"].exists, "⌘W must not close the session behind the quick terminal")
+        XCTAssertEqual(app.staticTexts.matching(identifier: "session-row").count, 1, "no session should be closed")
+
+        // focus returned to the original session (the quick terminal hid), so its tty matches the main shell.
+        let afterTTY = ttyAfterCommand(named: "after")
+        XCTAssertEqual(afterTTY, mainTTY, "⌘W hid the quick terminal and refocused the session")
+    }
+
     /// Types `tty > <markerDir>/<name>` into the focused terminal and returns the tty the
     /// shell wrote (trimmed), or nil if nothing was written within the timeout.
     private func ttyAfterCommand(named name: String) -> String? {
