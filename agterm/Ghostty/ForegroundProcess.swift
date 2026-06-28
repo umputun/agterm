@@ -12,8 +12,10 @@ enum ForegroundProcess {
     /// `shellBasename` is the user's `$SHELL` basename so a non-standard login shell is recognized too.
     @MainActor
     static func command(for view: GhosttySurfaceView, shellBasename: String?) -> [String]? {
-        guard let pid = view.foregroundPid(), let argv = procArgs(pid: pid), let first = argv.first else { return nil }
-        if CommandRestore.isKnownShell(CommandRestore.basename(first), extra: shellBasename) { return nil }
+        guard let pid = view.foregroundPid(), let argv = procArgs(pid: pid), !argv.isEmpty else { return nil }
+        // skip a shell ONLY when it's idle at its prompt (no script/command argument); a shell running a
+        // script (a #!/bin/sh wrapper like cld) is a real foreground process to restore.
+        if CommandRestore.isIdleShell(argv: argv, extra: shellBasename) { return nil }
         return argv
     }
 

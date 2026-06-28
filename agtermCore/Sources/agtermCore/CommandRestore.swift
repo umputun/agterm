@@ -27,6 +27,17 @@ public enum CommandRestore {
         return false
     }
 
+    /// Whether `argv` is an interactive shell sitting at its prompt — the "idle pane, nothing to restore"
+    /// case: `argv[0]` is a known shell (or `$SHELL`, passed as `extra`) AND there is no payload argument
+    /// after it, only option flags. A shell RUNNING something is NOT idle and IS captured: a script path
+    /// (`/bin/sh /usr/local/bin/cld`, the foreground of any `#!/bin/sh` wrapper) or a `-c` command leaves a
+    /// non-flag argument after `argv[0]`. Without this, every shell-script wrapper was wrongly skipped as a
+    /// prompt while a plain binary (`htop`) restored.
+    public static func isIdleShell(argv: [String], extra: String? = nil) -> Bool {
+        guard let first = argv.first, isKnownShell(basename(first), extra: extra) else { return false }
+        return !argv.dropFirst().contains { !$0.hasPrefix("-") }
+    }
+
     /// Whether a captured argv should be re-run on restore: false for an empty argv or one whose
     /// `argv[0]` basename is in `denylist`, true otherwise. The denylist is the user-editable
     /// `restore-denylist.conf` (no built-in entries) — `parseDenylist` builds it.

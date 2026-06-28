@@ -48,6 +48,22 @@ struct CommandRestoreTests {
         #expect(!CommandRestore.isKnownShell("", extra: ""))
     }
 
+    @Test func isIdleShellSkipsBarePromptButNotScripts() {
+        // a bare interactive/login shell at its prompt is idle (skip).
+        #expect(CommandRestore.isIdleShell(argv: ["-zsh"]))
+        #expect(CommandRestore.isIdleShell(argv: ["/bin/zsh"]))
+        #expect(CommandRestore.isIdleShell(argv: ["-/bin/zsh"]))
+        #expect(CommandRestore.isIdleShell(argv: ["zsh", "-i", "-l"]))            // only option flags
+        #expect(CommandRestore.isIdleShell(argv: ["bash"], extra: "bash"))
+        // a shell RUNNING a script or -c command is NOT idle — capture it (the cld bug).
+        #expect(!CommandRestore.isIdleShell(argv: ["/bin/sh", "/usr/local/bin/cld"]))
+        #expect(!CommandRestore.isIdleShell(argv: ["/bin/sh", "/usr/local/bin/cld", "--flag"]))
+        #expect(!CommandRestore.isIdleShell(argv: ["bash", "-c", "echo hi"]))
+        // not a shell at all, or empty.
+        #expect(!CommandRestore.isIdleShell(argv: ["htop"]))
+        #expect(!CommandRestore.isIdleShell(argv: []))
+    }
+
     @Test func shouldRestoreSkipsDenylistByBasename() {
         let denylist: Set<String> = ["vim", "tmux", "hx"]
         #expect(CommandRestore.shouldRestore(argv: ["ssh", "gate"], denylist: denylist))

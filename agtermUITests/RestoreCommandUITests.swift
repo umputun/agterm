@@ -55,6 +55,27 @@ final class RestoreCommandUITests: XCTestCase {
                        "with the flag off, the foreground command must not be re-run")
     }
 
+    func testRestoreReRunsShellScriptWrapper() throws {
+        // a shell RUNNING a command (argv0 a shell WITH a payload arg) must be captured, not skipped as an
+        // idle prompt. The real `cld` claude-code launcher is a `#!/bin/sh` wrapper whose foreground is
+        // `/bin/sh <script>`; this uses `sh -c 'tee …; true'` (a compound list, so sh stays the foreground
+        // with a payload arg) because the XCUITest runner can't drop an executable script the sandboxed app
+        // is allowed to run. Same isIdleShell path: a shell with a payload is captured.
+        seedRestoreFlag(true)
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session row")
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        app.typeText("sh -c 'tee \(marker.path); true'\n")
+        XCTAssertTrue(poll { FileManager.default.fileExists(atPath: self.marker.path) },
+                      "the `sh -c` wrapper's tee should create the marker on start")
+
+        try FileManager.default.removeItem(at: marker)
+        gracefulQuit()
+        app.launchForUITest()
+        XCTAssertTrue(poll { FileManager.default.fileExists(atPath: self.marker.path) },
+                      "restore should re-run the captured `sh -c` wrapper and recreate the marker")
+    }
+
     func testRestoreSkipsIdleShellPane() throws {
         seedRestoreFlag(true)
         app.launchForUITest()
