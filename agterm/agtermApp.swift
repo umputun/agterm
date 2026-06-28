@@ -236,8 +236,9 @@ struct agtermApp: App {
                     .keyboardShortcut(shortcut(for: .renameSession))
                     .disabled(library.activeStore?.activeSession == nil)
                 Button("Close Session") {
-                    if library.activeStore?.activeSession != nil { actions.closeActiveSession() }
-                    else { NSApp.keyWindow?.performClose(nil) }
+                    // closeActiveSession dismisses any cover (quick terminal / overlay / scratch) or closes the
+                    // active session; only when it handled nothing (no cover, no session) fall back to the window.
+                    if !actions.closeActiveSession() { NSApp.keyWindow?.performClose(nil) }
                 }
                 .keyboardShortcut(shortcut(for: .closeSession))
                 Button("Clear Status") { actions.clearActiveSessionStatus() }

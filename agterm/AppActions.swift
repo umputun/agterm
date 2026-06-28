@@ -92,19 +92,22 @@ final class AppActions {
         focusActiveSession()
     }
 
-    func closeActiveSession() {
-        // ⌘W dismisses a focus-stealing cover (quick terminal / overlay / scratch) rather than closing the
-        // session hidden behind it — the cover is the "current terminal" on screen. precedence follows the
-        // z-order: the quick terminal is window-topmost, a full overlay sits above the scratch within a session.
-        if let quick = frontmostQuickTerminal, quick.isVisible { quick.hide(); return }
-        guard let store else { return }
-        if let session = store.activeSession {
-            if session.overlayActive { store.closeOverlay(session.id); return }
-            if session.scratchActive { store.toggleScratch(session.id); return }
-        }
-        guard let id = store.selectedSessionID else { return }
-        store.closeSession(id)
+    // closes the active session, or dismisses a focus-stealing cover on top of it. returns whether it
+    // handled the keystroke, so the ⌘W menu item falls back to closing the window only when nothing was
+    // dismissed or closed (no cover, no session). precedence follows the z-order: the quick terminal is
+    // window-topmost (works even with no active session), then within a session an overlay sits above the
+    // scratch. the overlay is destroyed (closeOverlay, run-once ephemeral) while the quick terminal and
+    // scratch are hidden keep-alive; a floating overlay also holds first responder, so ANY overlay is
+    // dismissed, not only a full one.
+    @discardableResult
+    func closeActiveSession() -> Bool {
+        if let quick = frontmostQuickTerminal, quick.isVisible { quick.hide(); return true }
+        guard let store, let session = store.activeSession else { return false }
+        if session.overlayActive { store.closeOverlay(session.id); return true }
+        if session.scratchActive { store.toggleScratch(session.id); return true }
+        store.closeSession(session.id)
         focusActiveSession()
+        return true
     }
 
     /// Clear the active session's agent-status indicator back to idle (the same effect as `agtermctl

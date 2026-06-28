@@ -920,6 +920,15 @@ final class ControlAPIUITests: XCTestCase {
             .firstMatch.exists
     }
 
+    /// The id of the seeded (active) session from the tree.
+    private func activeSessionID() throws -> String {
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let result = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let t = try XCTUnwrap(result["tree"] as? [String: Any], "result should carry a tree")
+        let ws = try XCTUnwrap((t["workspaces"] as? [[String: Any]])?.first, "should have a workspace")
+        return try XCTUnwrap((ws["sessions"] as? [[String: Any]])?.first?["id"] as? String, "seeded session id")
+    }
+
     // session.split toggle shows split:true in the tree; off hides it (keep-alive, mirrors ⌘D — the
     // pane's surface is NOT destroyed, only closeSplit on shell-exit does that), clearing split:false.
     func testSessionSplitToggle() throws {
@@ -967,30 +976,72 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertEqual(on["ok"] as? Bool, true, "session.scratch on should succeed: \(on)")
         XCTAssertTrue(pollActiveSessionScratch(true, timeout: 10), "the scratch should be shown")
 
+        app.activate() // set up entirely over the socket, so ensure the app is frontmost before ⌘W
         app.typeKey("w", modifierFlags: .command)
 
-        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "⌘W must not close the session behind the scratch")
+        // the flag poll is the real oracle: a CLOSED session vanishes from the tree, so scratch:false can
+        // never be observed and this times out (catching the bug). row-count is a post-dismiss invariant
+        // (checked AFTER the dismiss so it can't early-return on stale pre-close state).
         XCTAssertTrue(pollActiveSessionScratch(false, timeout: 10), "⌘W should hide the scratch")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "⌘W must not close the session behind the scratch")
     }
 
     // ⌘W with a full overlay up DISMISSES the overlay (closes it), not the session under it. `cat` blocks
     // so the overlay stays up until ⌘W; the session row surviving proves the session wasn't closed instead.
     func testCloseSessionShortcutClosesOverlayInsteadOfClosingSession() throws {
-        // the seeded session is active; capture its id to address the overlay + poll its flag.
-        let tree = try sendCommand(#"{"cmd":"tree"}"#)
-        let result = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
-        let t = try XCTUnwrap(result["tree"] as? [String: Any], "result should carry a tree")
-        let ws = try XCTUnwrap((t["workspaces"] as? [[String: Any]])?.first, "should have a workspace")
-        let seededID = try XCTUnwrap((ws["sessions"] as? [[String: Any]])?.first?["id"] as? String, "seeded session id")
+        let seededID = try activeSessionID()
 
         let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(seededID)","args":{"command":"cat"}}"#)
         XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
         XCTAssertTrue(pollSessionOverlay(id: seededID, expected: true, timeout: 10), "the overlay should be up")
 
+        app.activate()
         app.typeKey("w", modifierFlags: .command)
 
-        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "⌘W must not close the session behind the overlay")
         XCTAssertTrue(pollSessionOverlay(id: seededID, expected: false, timeout: 10), "⌘W should close the overlay")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "⌘W must not close the session behind the overlay")
+    }
+
+    // ⌘W closes a FLOATING overlay (sizePercent set, session visible behind it) without closing the session.
+    // The floating overlay still holds first responder, so the close shortcut targets it, not the session.
+    func testCloseSessionShortcutClosesFloatingOverlayInsteadOfClosingSession() throws {
+        let seededID = try activeSessionID()
+
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(seededID)","args":{"command":"cat","sizePercent":70}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "floating overlay open should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: seededID, expected: true, timeout: 10), "the floating overlay should be up")
+
+        app.activate()
+        app.typeKey("w", modifierFlags: .command)
+
+        XCTAssertTrue(pollSessionOverlay(id: seededID, expected: false, timeout: 10), "⌘W should close the floating overlay")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "⌘W must not close the session behind the floating overlay")
+    }
+
+    // ⌘W peels stacked covers in z-order: a full overlay (zIndex 2) opened over a shown scratch (zIndex 1).
+    // First ⌘W closes the overlay (scratch stays), second ⌘W hides the scratch, and the session survives both.
+    func testCloseSessionShortcutPeelsStackedCoversInPrecedenceOrder() throws {
+        let seededID = try activeSessionID()
+
+        let onScratch = try sendCommand(#"{"cmd":"session.scratch","target":"active","args":{"mode":"on"}}"#)
+        XCTAssertEqual(onScratch["ok"] as? Bool, true, "session.scratch on should succeed: \(onScratch)")
+        XCTAssertTrue(pollActiveSessionScratch(true, timeout: 10), "the scratch should be shown")
+
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(seededID)","args":{"command":"cat"}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "overlay open over the scratch should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: seededID, expected: true, timeout: 10), "the overlay should be up over the scratch")
+
+        app.activate()
+        // ⌘W #1: the overlay is topmost, so it closes; the scratch stays shown.
+        app.typeKey("w", modifierFlags: .command)
+        XCTAssertTrue(pollSessionOverlay(id: seededID, expected: false, timeout: 10), "⌘W #1 should close the overlay")
+        XCTAssertTrue(pollActiveSessionScratch(true, timeout: 10), "the scratch should remain after the overlay closes")
+
+        app.activate()
+        // ⌘W #2: now the scratch is topmost, so it hides.
+        app.typeKey("w", modifierFlags: .command)
+        XCTAssertTrue(pollActiveSessionScratch(false, timeout: 10), "⌘W #2 should hide the scratch")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "the session survives peeling both covers")
     }
 
     // session.scratch --command runs the command AS the scratch's process (not a shell): the command
