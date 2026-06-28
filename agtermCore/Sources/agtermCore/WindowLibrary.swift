@@ -163,6 +163,12 @@ public final class WindowLibrary {
         windows.map(\.id).filter { stores[$0] != nil }
     }
 
+    /// Every session across all open windows, flattened — the shared walk for the per-session sweeps
+    /// (restore-running-command capture + `restore.clear`).
+    public func allOpenSessions() -> [Session] {
+        openIDs().compactMap { stores[$0] }.flatMap { $0.workspaces.flatMap(\.sessions) }
+    }
+
     /// The number of currently-open windows and the total number of sessions across them — the
     /// counts the quit confirmation reports. A window is open iff its store is loaded.
     public func openCounts() -> (windows: Int, sessions: Int) {

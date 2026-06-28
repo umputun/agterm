@@ -850,15 +850,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor
     private func captureForegroundCommands(library: WindowLibrary) {
         let shellBasename = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
-        for id in library.openIDs() {
-            guard let store = library.store(for: id) else { continue }
-            for session in store.workspaces.flatMap(\.sessions) {
-                if let view = session.surface as? GhosttySurfaceView {
-                    session.foregroundCommand = ForegroundProcess.command(for: view, shellBasename: shellBasename)
-                }
-                if let split = session.splitSurface as? GhosttySurfaceView {
-                    session.splitForegroundCommand = ForegroundProcess.command(for: split, shellBasename: shellBasename)
-                }
+        for session in library.allOpenSessions() {
+            if let view = session.surface as? GhosttySurfaceView {
+                session.foregroundCommand = ForegroundProcess.command(for: view, shellBasename: shellBasename)
+            }
+            // only a SHOWN split is recreated on restore (the factory runs when isSplit is true), so
+            // capturing a HIDDEN split's command would leave it stale to fire on the next manual ⌘D.
+            // Gate on isSplit so capture and restore agree.
+            if session.isSplit, let split = session.splitSurface as? GhosttySurfaceView {
+                session.splitForegroundCommand = ForegroundProcess.command(for: split, shellBasename: shellBasename)
             }
         }
     }

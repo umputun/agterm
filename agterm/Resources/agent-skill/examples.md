@@ -6,8 +6,20 @@ Worked `agtermctl` examples. See `reference.md` for exact flags and return shape
 ## Inspect the current state
 
 ```bash
-agtermctl tree --json        # workspaces -> sessions, with active/split/overlay/scratch flags
+agtermctl tree --json        # workspaces -> sessions, with active/split/overlay/scratch/flagged flags
 agtermctl window list --json # windows, with open/active flags
+
+# what is each pane RUNNING right now (foreground argv; absent when at the shell prompt)
+agtermctl tree --json | jq -r '.result.tree.workspaces[].sessions[] | "\(.name): \(.foreground // "shell")"'
+```
+
+## Reset the restore-on-restart commands
+
+The opt-in "Restore running commands on restart" setting saves each pane's foreground command at quit.
+Clear those saved commands so the next launch restores plain shells:
+
+```bash
+agtermctl restore clear
 ```
 
 ## Create a session and type into it

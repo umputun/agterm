@@ -55,7 +55,39 @@ final class RestoreCommandUITests: XCTestCase {
                        "with the flag off, the foreground command must not be re-run")
     }
 
+    func testRestoreSkipsIdleShellPane() throws {
+        seedRestoreFlag(true)
+        app.launchForUITest()
+        // leave the pane at its prompt (no command run), then quit. Capture runs (flag on), but the idle
+        // login shell — argv0 `-/bin/zsh`, recognized by isKnownShell — must NOT be captured as a command.
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session")
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        gracefulQuit()
+        XCTAssertTrue(capturedForegroundCommands().isEmpty,
+                      "an idle login-shell pane must not be captured as a foreground command, got \(capturedForegroundCommands())")
+    }
+
     // MARK: - Helpers
+
+    /// Every persisted `foregroundCommand` across the window snapshots written at quit (the capture oracle).
+    private func capturedForegroundCommands() -> [[String]] {
+        let windowsDir = stateDir.appendingPathComponent("windows")
+        guard let files = try? FileManager.default.contentsOfDirectory(at: windowsDir, includingPropertiesForKeys: nil)
+        else { return [] }
+        var result: [[String]] = []
+        for file in files where file.pathExtension == "json" {
+            guard let data = try? Data(contentsOf: file),
+                  let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let workspaces = obj["workspaces"] as? [[String: Any]] else { continue }
+            for ws in workspaces {
+                for s in (ws["sessions"] as? [[String: Any]]) ?? [] {
+                    if let fg = s["foregroundCommand"] as? [String] { result.append(fg) }
+                    if let fg = s["splitForegroundCommand"] as? [String] { result.append(fg) }
+                }
+            }
+        }
+        return result
+    }
 
     /// Seed `restoreRunningCommand` into the isolated `settings.json` before launch.
     private func seedRestoreFlag(_ on: Bool) {

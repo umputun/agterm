@@ -561,12 +561,9 @@ final class ControlServer {
     /// the force-quit re-fire window. Drives `restore.clear` / `agtermctl restore clear`. App-global like
     /// `keymap.reload` (no `--window` selector — it clears every open window).
     private func clearSavedCommands() -> ControlResponse {
-        for id in library.openIDs() {
-            guard let store = library.store(for: id) else { continue }
-            for session in store.workspaces.flatMap(\.sessions) {
-                session.foregroundCommand = nil
-                session.splitForegroundCommand = nil
-            }
+        for session in library.allOpenSessions() {
+            session.foregroundCommand = nil
+            session.splitForegroundCommand = nil
         }
         library.saveAllOpen()
         return ControlResponse(ok: true)

@@ -8,11 +8,17 @@ public enum CommandRestore {
     /// The login shells treated as "no program to restore" (the pane was at its prompt).
     private static let knownShells: Set<String> = ["zsh", "bash", "sh", "fish", "dash", "ksh", "tcsh", "csh"]
 
-    /// Stateful programs whose re-run is lossy or harmful (editors, pagers, REPLs); skipped on restore,
-    /// leaving a plain shell. Matched on the argv[0] basename.
+    /// Sanity cap on argc: a corrupt header must not drive `reserveCapacity` into a huge allocation.
+    private static let maxArgCount: Int32 = 4096
+
+    /// Stateful programs whose re-run is lossy or harmful (editors, pagers, REPLs, multiplexers, DB
+    /// clients); skipped on restore, leaving a plain shell. Matched on the argv[0] basename.
     private static let denylist: Set<String> = [
-        "vim", "nvim", "vi", "view", "nano", "emacs", "emacsclient", "less", "more", "man",
-        "python", "python3", "node", "irb", "ipython", "pry", "lua", "ghci",
+        "vim", "nvim", "vi", "view", "nano", "emacs", "emacsclient", "helix", "hx", "kak", "ed",
+        "less", "more", "man",
+        "tmux", "screen", "zellij",
+        "python", "python3", "node", "irb", "ipython", "bpython", "ptpython", "pry", "lua", "ghci",
+        "psql", "mysql", "sqlite3", "redis-cli", "iex", "julia",
     ]
 
     /// The last path component of `path` (basename), or `path` itself when it has no slash.
@@ -21,10 +27,13 @@ public enum CommandRestore {
     }
 
     /// Whether `basename` is a login shell to skip, optionally also matching the user's `$SHELL`
-    /// basename passed as `extra` (so a non-standard login shell is recognized too).
+    /// basename passed as `extra` (so a non-standard login shell is recognized too). A leading `-` is
+    /// stripped first: macOS marks a login shell with a dash in argv[0], which for a bare-name argv0
+    /// (`-zsh`) survives `basename` (a path form like `-/bin/zsh` already loses it on the `/` split).
     public static func isKnownShell(_ basename: String, extra: String? = nil) -> Bool {
-        if knownShells.contains(basename) { return true }
-        if let extra, !extra.isEmpty, basename == extra { return true }
+        let name = basename.hasPrefix("-") ? String(basename.dropFirst()) : basename
+        if knownShells.contains(name) { return true }
+        if let extra, !extra.isEmpty, name == extra { return true }
         return false
     }
 
@@ -54,7 +63,7 @@ public enum CommandRestore {
         let bytes = [UInt8](data)
         guard bytes.count > 4 else { return nil }
         let argc = bytes.prefix(4).withUnsafeBytes { $0.loadUnaligned(as: Int32.self) }
-        guard argc > 0, argc < 4096 else { return nil }
+        guard argc > 0, argc < maxArgCount else { return nil }
 
         var i = 4
         // skip the executable path up to its NUL...

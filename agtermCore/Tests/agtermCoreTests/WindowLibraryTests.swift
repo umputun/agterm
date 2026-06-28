@@ -47,6 +47,16 @@ final class WindowLibraryTests {
         #expect(library.openIDs() == [library.windows[0].id])
     }
 
+    @Test func allOpenSessionsFlattensEverySessionAcrossWindows() {
+        let library = WindowLibrary(directory: directory)
+        #expect(library.allOpenSessions().count == 1) // the seeded window's one session
+        let second = library.newWindow(name: "work")
+        let store = try! #require(library.store(for: second.id))
+        _ = store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp")
+        // two windows: window 1 (1 session) + work (2 sessions) = 3.
+        #expect(library.allOpenSessions().count == 3)
+    }
+
     @Test func defaultWindowNameCountsUp() {
         let library = WindowLibrary(directory: directory)
         #expect(library.defaultWindowName == "window 2")

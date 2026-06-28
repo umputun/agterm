@@ -448,8 +448,10 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
             config.command = nil // login shell
         }
         // restore-running-command: feed the captured command line to the login shell as if typed, so it
-        // re-runs and exits back to a prompt. Same strdup'd-buffer lifetime as working_directory.
-        if let initialInput, let p = strdup(initialInput) {
+        // re-runs and exits back to a prompt. Same strdup'd-buffer lifetime as working_directory. Mutually
+        // exclusive with `command` (which REPLACES the shell): a command surface ignores initialInput, so
+        // the invariant is enforced here, not just by caller discipline.
+        if command == nil, let initialInput, let p = strdup(initialInput) {
             configCStrings.append(p)
             config.initial_input = UnsafePointer(p)
         }

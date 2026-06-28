@@ -93,7 +93,7 @@ private struct GeneralSettingsView: View {
             Section("Sessions") {
                 Toggle("Restore running commands on restart", isOn: restoreRunningCommand)
                     .accessibilityIdentifier("settings-restore-running-command")
-                Text("Re-runs each pane's foreground command when the app relaunches. Only single-process commands restore faithfully; editors and REPLs start fresh and are skipped.")
+                Text("Re-runs each pane's foreground command when the app relaunches. Only single-process commands restore faithfully; stateful programs (editors, pagers, REPLs, multiplexers) start fresh and are skipped.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
