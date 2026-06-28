@@ -93,11 +93,16 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     /// (e.g. an `ssh …` shortcut) re-runs its command on restore instead of coming back a plain shell. A
     /// live `foregroundCommand` takes precedence at restore. Optional for forward-compat like the fields above.
     public var initialCommand: String?
+    /// The session's background watermark (image or rasterized text), or nil for none. Optional so a
+    /// snapshot already on disk before this field was added still decodes (as nil → no watermark) instead
+    /// of failing the load and wiping the saved tree, like the fields above. A `.text` watermark
+    /// re-renders its PNG on restore.
+    public var backgroundWatermark: BackgroundWatermark?
 
     public init(id: UUID, customName: String?, cwd: String, isSplit: Bool? = nil, fontSize: Double? = nil,
                 splitCwd: String? = nil, splitRatio: Double? = nil, flagged: Bool? = nil,
                 foregroundCommand: [String]? = nil, splitForegroundCommand: [String]? = nil,
-                initialCommand: String? = nil) {
+                initialCommand: String? = nil, backgroundWatermark: BackgroundWatermark? = nil) {
         self.id = id
         self.customName = customName
         self.cwd = cwd
@@ -109,5 +114,6 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         self.foregroundCommand = foregroundCommand
         self.splitForegroundCommand = splitForegroundCommand
         self.initialCommand = initialCommand
+        self.backgroundWatermark = backgroundWatermark
     }
 }

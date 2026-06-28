@@ -176,6 +176,36 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertEqual(resp["ok"] as? Bool, true, "restore.clear should succeed: \(resp)")
     }
 
+    // session.background sets a text watermark and clears it; bad input (missing image, invalid fit) is
+    // rejected and the server stays alive. The actual pixels are not AX-observable (Metal surface), so this
+    // covers the control round-trip + validation, like the other surface-state commands.
+    func testSessionBackgroundSetClearAndValidation() throws {
+        let sid = try activeSessionID()
+
+        let text = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"text","text":"STAGING","opacity":0.2}}"#)
+        XCTAssertEqual(text["ok"] as? Bool, true, "session.background text should succeed: \(text)")
+
+        let missing = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"image","path":"/no/such.png"}}"#)
+        XCTAssertEqual(missing["ok"] as? Bool, false, "a missing image file should be rejected")
+
+        let badFit = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"image","path":"/no/such.png","fit":"fill"}}"#)
+        XCTAssertEqual(badFit["ok"] as? Bool, false, "an invalid fit should be rejected")
+
+        let badOpacity = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"text","text":"X","opacity":5}}"#)
+        XCTAssertEqual(badOpacity["ok"] as? Bool, false, "an out-of-range opacity should be rejected")
+
+        // an over-long text must be rejected at the boundary so the renderer never attempts a huge bitmap.
+        let longText = String(repeating: "A", count: 5000)
+        let tooLong = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"text","text":"\#(longText)"}}"#)
+        XCTAssertEqual(tooLong["ok"] as? Bool, false, "an over-long watermark text should be rejected")
+
+        let cleared = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"clear"}}"#)
+        XCTAssertEqual(cleared["ok"] as? Bool, true, "session.background clear should succeed: \(cleared)")
+
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        XCTAssertEqual(tree["ok"] as? Bool, true, "the server should stay alive after background commands")
+    }
+
     // a malformed JSON line returns ok:false with an error, and the server stays alive: a
     // subsequent valid `tree` still succeeds.
     func testMalformedRequestErrorsAndServerStaysAlive() throws {

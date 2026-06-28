@@ -98,6 +98,14 @@ public final class Session: Identifiable {
     /// it is read imperatively at surface creation and captured by `snapshot()`.
     @ObservationIgnored public var fontSize: Double?
 
+    /// The session's background watermark (an image or rasterized text composited behind the terminal),
+    /// or nil for none. The app target applies it to the session's surface(s) via a per-surface ghostty
+    /// config overlay (see `WatermarkConfig`) at creation, on change, and after a global config reload.
+    /// `@ObservationIgnored` like `fontSize`: nothing in SwiftUI reacts — it is read imperatively when a
+    /// surface is (re)configured and captured by `snapshot()`, so it survives a relaunch (a `.text`
+    /// watermark re-renders its PNG on restore).
+    @ObservationIgnored public var backgroundWatermark: BackgroundWatermark?
+
     /// A command to run as the session's process instead of the login shell (like kitty's `launch
     /// <cmd>` / ghostty's `command`), set at creation via `session.new --command`. The surface factory
     /// reads it once; on the command exiting the session closes (the normal single-pane exit path).

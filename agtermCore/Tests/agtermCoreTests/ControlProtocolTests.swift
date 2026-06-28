@@ -201,6 +201,31 @@ struct ControlProtocolTests {
         #expect(decoded.target == "active")
     }
 
+    @Test func sessionBackgroundRoundTrips() throws {
+        let cases: [ControlRequest] = [
+            ControlRequest(cmd: .sessionBackground, target: "active",
+                           args: ControlArgs(mode: "image", path: "/tmp/bg.png", opacity: 0.2,
+                                             fit: "cover", position: "top-left", repeats: true)),
+            ControlRequest(cmd: .sessionBackground, target: "9f3c",
+                           args: ControlArgs(text: "DRAFT", mode: "text", color: "#ff0000",
+                                             opacity: 0.15, fit: "contain", position: "center")),
+            ControlRequest(cmd: .sessionBackground, target: "active", args: ControlArgs(mode: "clear")),
+        ]
+        for request in cases {
+            #expect(try roundTrip(request) == request)
+        }
+    }
+
+    @Test func sessionBackgroundRawStringMapsToCommandAndArgs() throws {
+        let raw = ##"{"cmd":"session.background","target":"active","args":{"mode":"text","text":"DRAFT","color":"#ff0000","opacity":0.15}}"##
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(raw.utf8))
+        #expect(decoded.cmd == .sessionBackground)
+        #expect(decoded.args?.mode == "text")
+        #expect(decoded.args?.text == "DRAFT")
+        #expect(decoded.args?.color == "#ff0000")
+        #expect(decoded.args?.opacity == 0.15)
+    }
+
     @Test func treeSessionNodeRoundTripsWithFlagged() throws {
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false, flagged: true)
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(

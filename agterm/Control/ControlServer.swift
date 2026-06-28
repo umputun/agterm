@@ -458,6 +458,11 @@ final class ControlServer {
                                                          autoReset: request.args?.autoReset, sound: request.args?.sound))
         case .sessionFlag:
             return flagSession(request.target, window: request.args?.window, mode: request.args?.mode)
+        case .sessionBackground:
+            return setBackground(request.target, window: request.args?.window, mode: request.args?.mode,
+                                 path: request.args?.path, text: request.args?.text, color: request.args?.color,
+                                 opacity: request.args?.opacity, fit: request.args?.fit,
+                                 position: request.args?.position, repeats: request.args?.repeats)
         case .sessionCopy:
             return copySelection(request.target, window: request.args?.window)
         case .sessionSearch:
@@ -972,6 +977,75 @@ final class ControlServer {
                 return ControlResponse(ok: false, error: "no selection")
             }
             return ControlResponse(ok: true, result: ControlResult(text: text))
+        }
+    }
+
+    /// Set or clear a session's background watermark (`session.background`, mode `image|text|clear`):
+    /// validate the inputs (shared `WatermarkConfig` enum checks; image format + existence), build the
+    /// `BackgroundWatermark` spec (nil for `clear`), persist it on the session (`AppStore`, so it rides
+    /// `SessionSnapshot`), then apply it to the session's realized surface(s). A never-shown session keeps
+    /// the spec and applies it itself when its surface is created. Returns the session id.
+    private func setBackground(_ target: String?, window: String?, mode: String?, path: String?, text: String?,
+                               color: String?, opacity: Double?, fit: String?, position: String?,
+                               repeats: Bool?) -> ControlResponse {
+        if let fit, !WatermarkConfig.isValidFit(fit) {
+            return ControlResponse(ok: false, error: "invalid fit: \(fit) (contain|cover|stretch|none)")
+        }
+        if let position, !WatermarkConfig.isValidPosition(position) {
+            return ControlResponse(ok: false, error: "invalid position: \(position)")
+        }
+        if let opacity, !WatermarkConfig.isValidOpacity(opacity) {
+            return ControlResponse(ok: false, error: "invalid opacity: \(opacity) (0.0-1.0)")
+        }
+        let watermark: BackgroundWatermark?
+        switch mode {
+        case "image":
+            guard let path, !path.isEmpty else {
+                return ControlResponse(ok: false, error: "session.background image requires a path")
+            }
+            guard WatermarkRenderer.isSupportedImage(path) else {
+                return ControlResponse(ok: false, error: "unsupported image (PNG or JPEG only): \(path)")
+            }
+            guard FileManager.default.fileExists(atPath: path) else {
+                return ControlResponse(ok: false, error: "no such image file: \(path)")
+            }
+            watermark = BackgroundWatermark(kind: .image, imagePath: path, opacity: opacity,
+                                            fit: fit, position: position, repeats: repeats)
+        case "text":
+            guard let text, !text.isEmpty else {
+                return ControlResponse(ok: false, error: "session.background text requires text")
+            }
+            guard text.count <= WatermarkConfig.maxTextLength else {
+                return ControlResponse(ok: false,
+                                       error: "session.background text too long (max \(WatermarkConfig.maxTextLength) characters)")
+            }
+            if let color, !WatermarkConfig.isValidColorHex(color) {
+                return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
+            }
+            watermark = BackgroundWatermark(kind: .text, text: text, colorHex: color,
+                                            opacity: opacity, fit: fit, position: position)
+        case "clear", .none:
+            watermark = nil
+        default:
+            return ControlResponse(ok: false, error: "invalid background mode: \(mode ?? "") (image|text|clear)")
+        }
+        return resolveSession(target, window: window) { store, id in
+            guard let session = store.session(withID: id) else {
+                return ControlResponse(ok: false, error: "no such session")
+            }
+            // clearing a `.text` watermark drops its rendered PNG so the state dir doesn't accumulate.
+            if watermark == nil { WatermarkStorage.removeRenderedText(sessionID: id) }
+            store.setBackgroundWatermark(watermark, forSession: id)
+            applyWatermark(to: session)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    /// Apply a session's current watermark spec to its realized main + split surfaces. A never-realized
+    /// surface (nil) is skipped — it applies the spec itself on creation (`GhosttySurfaceView.createSurface`).
+    private func applyWatermark(to session: Session) {
+        for surface in [session.surface, session.splitSurface] {
+            (surface as? GhosttySurfaceView)?.applyWatermarkFromSession()
         }
     }
 
