@@ -62,15 +62,16 @@ final class QuickTerminalUITests: XCTestCase {
         app.typeKey("w", modifierFlags: .command)
         XCTAssertTrue(row.waitForNonExistence(timeout: 10), "⌘W with no cover should close the only session")
 
-        // open the quick terminal over the now session-less window.
+        // open the quick terminal over the now session-less window; the cover element proves it is shown.
         let button = app.buttons["quick-terminal-toggle"]
         XCTAssertTrue(button.waitForExistence(timeout: 5), "quick-terminal toolbar button should exist")
         button.click()
-        usleep(900_000)
+        let cover = app.descendants(matching: .any).matching(identifier: "quick-terminal").firstMatch
+        XCTAssertTrue(cover.waitForExistence(timeout: 5), "the quick terminal cover should be shown")
 
-        // ⌘W must dismiss the quick terminal, NOT close the (last) window.
+        // ⌘W must DISMISS the quick terminal (cover gone) and NOT close the (last) window (toolbar survives).
         app.typeKey("w", modifierFlags: .command)
-        usleep(900_000)
+        XCTAssertTrue(cover.waitForNonExistence(timeout: 10), "⌘W should dismiss the quick terminal cover")
         XCTAssertTrue(app.buttons["quick-terminal-toggle"].waitForExistence(timeout: 10),
                       "⌘W must not close the window when the quick terminal is the only cover and no session is active")
     }
