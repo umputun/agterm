@@ -285,6 +285,10 @@ opt-in **Restore running commands on restart** setting: that setting captures ea
 command at a clean quit and re-runs it on relaunch; `restore clear` wipes those saved commands now
 (also closing the force-quit re-fire window). App-global (no `--window`), prints `ok`.
 
+Which programs are NOT re-run is controlled by `restore-denylist.conf` in the config directory (one
+command name per line, seeded with the terminal multiplexers `tmux`/`screen`/`zellij`). It is a plain
+user-edited file read at launch — there is no control command for it.
+
 ## Errors you may see
 
 `notFound` / `ambiguous` (target resolution), `no such session`, `invalid split mode` /

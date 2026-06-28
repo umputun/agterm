@@ -27,6 +27,12 @@ public enum ConfigPaths {
         configDirectory.appendingPathComponent("ghostty.conf")
     }
 
+    /// The restore-running-command denylist file within a resolved config directory:
+    /// `<dir>/restore-denylist.conf`. Co-located with `keymap.conf`/`ghostty.conf`.
+    public static func restoreDenylistPath(configDirectory: URL) -> URL {
+        configDirectory.appendingPathComponent("restore-denylist.conf")
+    }
+
     /// The shell command that opens `path` in the user's editor (`$VISUAL` else `$EDITOR` else `vi`),
     /// working under POSIX login shells (zsh/bash/dash) AND fish. Shared by the keymap and ghostty-config
     /// editor overlays.

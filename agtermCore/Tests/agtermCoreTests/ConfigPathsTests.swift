@@ -36,6 +36,11 @@ struct ConfigPathsTests {
         #expect(ConfigPaths.ghosttyConfigPath(configDirectory: dir).path == "/Users/test/.config/agterm/ghostty.conf")
     }
 
+    @Test func restoreDenylistPathIsRestoreDenylistConfInDir() {
+        let dir = URL(fileURLWithPath: "/Users/test/.config/agterm")
+        #expect(ConfigPaths.restoreDenylistPath(configDirectory: dir).path == "/Users/test/.config/agterm/restore-denylist.conf")
+    }
+
     @Test func editorCommandRunsThroughInteractiveLoginShellThenPosixSh() {
         // the login shell (-ilc) sources its rc + exports $EDITOR/$VISUAL, then execs /bin/sh which does the
         // POSIX ${VISUAL:-${EDITOR:-vi}} resolution — the POSIX text rides inside single quotes so a

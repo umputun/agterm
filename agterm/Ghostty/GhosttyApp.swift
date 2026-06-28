@@ -55,6 +55,10 @@ final class GhosttyApp {
     /// captured command as `initial_input`; `SettingsModel` writes it. Not ghostty-resolved, and it only
     /// affects the next restore, so no live re-render notification.
     private(set) var restoreRunningCommand: Bool = false
+    /// Program basenames NOT to re-run on restore — the parsed user-editable `restore-denylist.conf`
+    /// (seeded with the terminal multiplexers). The surface factories read it via
+    /// `CommandRestore.shouldRestore`; `SettingsModel` parses the file and writes it. Read at launch only.
+    private(set) var restoreDenylist: Set<String> = []
     /// Inactive-split-pane text mute strength on the 0...10 scale. NOT ghostty-resolved: the detail
     /// pane's `paneDim` overlay reads it (via `AppSettings.muteOpacity`), `SettingsModel` writes it. The
     /// re-render rides the `.agtermAppearanceChanged` notification, like `compactToolbar`.
@@ -140,6 +144,12 @@ final class GhosttyApp {
     /// launch and on every change; read by the surface factories at restore time.
     func setRestoreRunningCommand(_ enabled: Bool) {
         restoreRunningCommand = enabled
+    }
+
+    /// Set the parsed restore denylist (program basenames not to re-run). Called by `SettingsModel` at
+    /// launch from `restore-denylist.conf`; read by the surface factories at restore time.
+    func setRestoreDenylist(_ denylist: Set<String>) {
+        restoreDenylist = denylist
     }
 
     /// Set the inactive-split-pane mute strength (0...10). Called by `SettingsModel` at launch and on

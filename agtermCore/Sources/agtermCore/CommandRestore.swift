@@ -11,16 +11,6 @@ public enum CommandRestore {
     /// Sanity cap on argc: a corrupt header must not drive `reserveCapacity` into a huge allocation.
     private static let maxArgCount: Int32 = 4096
 
-    /// Stateful programs whose re-run is lossy or harmful (editors, pagers, REPLs, multiplexers, DB
-    /// clients); skipped on restore, leaving a plain shell. Matched on the argv[0] basename.
-    private static let denylist: Set<String> = [
-        "vim", "nvim", "vi", "view", "nano", "emacs", "emacsclient", "helix", "hx", "kak", "ed",
-        "less", "more", "man",
-        "tmux", "screen", "zellij",
-        "python", "python3", "node", "irb", "ipython", "bpython", "ptpython", "pry", "lua", "ghci",
-        "psql", "mysql", "sqlite3", "redis-cli", "iex", "julia",
-    ]
-
     /// The last path component of `path` (basename), or `path` itself when it has no slash.
     public static func basename(_ path: String) -> String {
         path.split(separator: "/").last.map(String.init) ?? path
@@ -38,10 +28,24 @@ public enum CommandRestore {
     }
 
     /// Whether a captured argv should be re-run on restore: false for an empty argv or one whose
-    /// `argv[0]` basename is denylisted (editors/pagers/REPLs), true otherwise.
-    public static func shouldRestore(argv: [String]) -> Bool {
+    /// `argv[0]` basename is in `denylist`, true otherwise. The denylist is the user-editable
+    /// `restore-denylist.conf` (no built-in entries) — `parseDenylist` builds it.
+    public static func shouldRestore(argv: [String], denylist: Set<String>) -> Bool {
         guard let first = argv.first, !first.isEmpty else { return false }
         return !denylist.contains(basename(first))
+    }
+
+    /// Parse `restore-denylist.conf` into a set of program basenames NOT to re-run on restore: one entry
+    /// per line, trimmed; blank lines and `#` comments ignored. There is NO built-in list — the file is
+    /// the whole source (seeded with the terminal multiplexers on first launch).
+    public static func parseDenylist(_ text: String) -> Set<String> {
+        var result: Set<String> = []
+        for raw in text.split(separator: "\n", omittingEmptySubsequences: false) {
+            let line = raw.trimmingCharacters(in: .whitespaces)
+            if line.isEmpty || line.hasPrefix("#") { continue }
+            result.insert(line)
+        }
+        return result
     }
 
     /// Render an argv into a single POSIX shell command line by single-quoting each argument (so spaces,

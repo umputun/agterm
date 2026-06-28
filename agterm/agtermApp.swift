@@ -469,11 +469,13 @@ struct agtermApp: App {
     }
 
     /// The `initial_input` for a restored pane: the captured foreground argv re-rendered as a shell
-    /// command line + newline, or nil when the restore-running-command flag is off or the command is
-    /// denylisted (editor/REPL → plain shell). The host-free decisions live in `CommandRestore`.
+    /// command line + newline, or nil when the restore-running-command flag is off or the command's
+    /// basename is in the user's `restore-denylist.conf` (→ plain shell). Host-free decisions live in
+    /// `CommandRestore`; the denylist is parsed at launch into `GhosttyApp.shared.restoreDenylist`.
     @MainActor
     private static func restoreInitialInput(_ argv: [String]?) -> String? {
-        guard GhosttyApp.shared.restoreRunningCommand, let argv, CommandRestore.shouldRestore(argv: argv) else { return nil }
+        guard GhosttyApp.shared.restoreRunningCommand, let argv,
+              CommandRestore.shouldRestore(argv: argv, denylist: GhosttyApp.shared.restoreDenylist) else { return nil }
         return CommandRestore.shellQuotedLine(argv) + "\n"
     }
 

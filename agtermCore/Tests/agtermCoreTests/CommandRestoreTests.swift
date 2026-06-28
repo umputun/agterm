@@ -49,15 +49,34 @@ struct CommandRestoreTests {
     }
 
     @Test func shouldRestoreSkipsDenylistByBasename() {
-        #expect(CommandRestore.shouldRestore(argv: ["ssh", "gate"]))
-        #expect(CommandRestore.shouldRestore(argv: ["top"]))
-        #expect(!CommandRestore.shouldRestore(argv: ["/usr/bin/vim", "file"])) // basename match
-        #expect(!CommandRestore.shouldRestore(argv: ["python3"]))
-        #expect(!CommandRestore.shouldRestore(argv: ["tmux"]))                     // multiplexer
-        #expect(!CommandRestore.shouldRestore(argv: ["/opt/homebrew/bin/hx", "."])) // editor, basename match
-        #expect(!CommandRestore.shouldRestore(argv: ["psql"]))                     // db client
-        #expect(!CommandRestore.shouldRestore(argv: []))
-        #expect(!CommandRestore.shouldRestore(argv: [""]))
+        let denylist: Set<String> = ["vim", "tmux", "hx"]
+        #expect(CommandRestore.shouldRestore(argv: ["ssh", "gate"], denylist: denylist))
+        #expect(CommandRestore.shouldRestore(argv: ["top"], denylist: denylist))
+        // interpreters / servers are NOT denied (not in the list): usually scripts or servers worth restoring.
+        #expect(CommandRestore.shouldRestore(argv: ["python3", "worker.py"], denylist: denylist))
+        #expect(CommandRestore.shouldRestore(argv: ["node", "server.js"], denylist: denylist))
+        // denylisted entries are matched on the basename.
+        #expect(!CommandRestore.shouldRestore(argv: ["/usr/bin/vim", "file"], denylist: denylist))
+        #expect(!CommandRestore.shouldRestore(argv: ["tmux"], denylist: denylist))
+        #expect(!CommandRestore.shouldRestore(argv: ["/opt/homebrew/bin/hx", "."], denylist: denylist))
+        // an empty denylist restores every non-empty argv; an empty argv never restores.
+        #expect(CommandRestore.shouldRestore(argv: ["vim", "x"], denylist: []))
+        #expect(!CommandRestore.shouldRestore(argv: [], denylist: denylist))
+        #expect(!CommandRestore.shouldRestore(argv: [""], denylist: denylist))
+    }
+
+    @Test func parseDenylistReadsBasenamesIgnoringCommentsAndBlanks() {
+        let text = """
+        # programs not to restore
+        tmux
+          screen\u{0020}\u{0020}
+        \u{0020}
+        # vim   (commented out, not active)
+        zellij
+        """
+        #expect(CommandRestore.parseDenylist(text) == ["tmux", "screen", "zellij"])
+        #expect(CommandRestore.parseDenylist("").isEmpty)
+        #expect(CommandRestore.parseDenylist("# only comments\n\n").isEmpty)
     }
 
     @Test func parseProcArgsRejectsImplausibleArgc() {
