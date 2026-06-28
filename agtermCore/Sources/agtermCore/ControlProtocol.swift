@@ -49,6 +49,7 @@ public enum Command: String, Codable, Sendable {
     case configReload = "config.reload"
     case themeSet = "theme.set"
     case themeList = "theme.list"
+    case restoreClear = "restore.clear"
 }
 
 /// A bag of optional command parameters. Each command reads only the fields it needs; the rest stay
@@ -177,9 +178,16 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let overlay: Bool
     public let scratch: Bool
     public let flagged: Bool
+    /// The LIVE foreground process command (full argv) in the main pane, or nil when the pane is at its
+    /// shell prompt (omitted from the JSON). The same capture the restore-running-command feature uses,
+    /// surfaced for introspection ("what is each pane running").
+    public let foreground: [String]?
+    /// The split (right) pane's live foreground command (full argv), the split analogue of `foreground`.
+    public let splitForeground: [String]?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
-                overlay: Bool = false, scratch: Bool = false, flagged: Bool = false) {
+                overlay: Bool = false, scratch: Bool = false, flagged: Bool = false,
+                foreground: [String]? = nil, splitForeground: [String]? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -189,6 +197,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.overlay = overlay
         self.scratch = scratch
         self.flagged = flagged
+        self.foreground = foreground
+        self.splitForeground = splitForeground
     }
 }
 

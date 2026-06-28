@@ -76,7 +76,7 @@ public struct Agtermctl: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "agtermctl",
         abstract: "Drive agterm over its control socket.",
-        subcommands: [Tree.self, Workspace.self, Session.self, Window.self, Quick.self, Sidebar.self, Notify.self, Font.self, Keymap.self, Config.self, Theme.self]
+        subcommands: [Tree.self, Workspace.self, Session.self, Window.self, Quick.self, Sidebar.self, Notify.self, Font.self, Keymap.self, Config.self, Theme.self, Restore.self]
     )
 
     public init() {}
@@ -633,6 +633,21 @@ struct Config: ParsableCommand {
         @OptionGroup var options: BasicOptions
 
         func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .configReload) }
+    }
+}
+
+struct Restore: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Restore-running-command commands.",
+        subcommands: [Clear.self]
+    )
+
+    struct Clear: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Clear every session's saved foreground command so the next restart restores plain shells.")
+        // restore.clear is app-global (clears every open window), so no `--window` selector.
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .restoreClear) }
     }
 }
 

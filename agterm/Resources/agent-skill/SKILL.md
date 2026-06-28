@@ -89,12 +89,14 @@ a global `--window <id|prefix|active>` to operate on a specific window's tree (d
 
 Scripts rarely type ids: create with `*.new` (capture the returned id), or act on `active`.
 
-## Command summary (45 commands)
+## Command summary (46 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
 
-**tree** — print the workspace/session tree (`--json` for structured).
+**tree** — print the workspace/session tree (`--json` for structured). Each session node carries
+`foreground`/`splitForeground` (the live argv of each pane's foreground process, omitted when the pane
+is at its shell prompt) — i.e. what each pane is currently running.
 
 **workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom` ·
 `focus [on|off|toggle]` (collapse the sidebar tree to a single workspace).
@@ -145,6 +147,9 @@ Visibility/mode act on the frontmost window; `expand`/`collapse` default to the 
 **theme** — `theme list` (bundled themes, current marked `*`) · `theme set [name]` — set + persist the
 terminal theme app-wide. The app default is the bundled **agterm** theme; omit the name for ghostty's
 built-in default ("default ghostty"); an unknown name errors.
+
+**restore** — `restore clear` — clear every session's saved foreground command (the
+restore-running-command capture) so the next restart restores plain shells.
 
 ## Displaying an image inline
 

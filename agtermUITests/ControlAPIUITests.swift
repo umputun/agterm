@@ -85,6 +85,40 @@ final class ControlAPIUITests: XCTestCase {
         return sessions.first?["title"] as? String
     }
 
+    // tree exposes each session's LIVE foreground command: run a non-shell blocking process (`tee` opens
+    // its file on start, then blocks reading the pty) so the foreground is `tee`, not the shell prompt.
+    func testTreeExposesForegroundProcess() throws {
+        let marker = markerDir.appendingPathComponent("fg-\(UUID().uuidString)").path
+        let payload: [String: Any] = ["cmd": "session.type", "args": ["text": "tee \(marker)\n"]]
+        let line = String(data: try JSONSerialization.data(withJSONObject: payload), encoding: .utf8)!
+        XCTAssertEqual(try sendCommand(line)["ok"] as? Bool, true, "session.type should succeed")
+
+        var fg: [String]?
+        for _ in 0..<40 {
+            let resp = try sendCommand(#"{"cmd":"tree"}"#)
+            if let f = firstSessionForeground(resp), f.first == "tee" { fg = f; break }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        XCTAssertEqual(fg, ["tee", marker], "tree should expose the session's live foreground command")
+    }
+
+    /// The first session's `foreground` argv from a `tree` response dict, or nil if at the prompt.
+    private func firstSessionForeground(_ response: [String: Any]) -> [String]? {
+        guard let result = response["result"] as? [String: Any],
+              let tree = result["tree"] as? [String: Any],
+              let workspaces = tree["workspaces"] as? [[String: Any]],
+              let sessions = workspaces.first?["sessions"] as? [[String: Any]] else { return nil }
+        return sessions.first?["foreground"] as? [String]
+    }
+
+    // restore.clear succeeds and the server keeps serving. The saved-command WIPE is only observable across
+    // a quit (the field is populated at quit, consumed at restore), so the cross-relaunch behavior is left
+    // to the arm's trivial nil+saveAllOpen logic plus the protocol round-trip + CLI parse tests.
+    func testRestoreClearSucceeds() throws {
+        let resp = try sendCommand(#"{"cmd":"restore.clear"}"#)
+        XCTAssertEqual(resp["ok"] as? Bool, true, "restore.clear should succeed: \(resp)")
+    }
+
     // a malformed JSON line returns ok:false with an error, and the server stays alive: a
     // subsequent valid `tree` still succeeds.
     func testMalformedRequestErrorsAndServerStaysAlive() throws {

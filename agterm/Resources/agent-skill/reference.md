@@ -34,7 +34,9 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 `id`, `name`, `cwd`, `title` (the raw OSC terminal title — e.g. a remote host over SSH — omitted
 when none reported; distinct from `name`, the derived sidebar label), `active` (selected),
 `split` (split shown), `overlay` (overlay shown), `scratch` (scratch shown), `flagged` (in the
-flagged working-set). Workspace nodes carry `id`, `name`, `active`, `sessions`.
+flagged working-set), and `foreground`/`splitForeground` (the live argv of each pane's foreground
+process — what it is running — omitted when the pane sits at its shell prompt). Workspace nodes carry
+`id`, `name`, `active`, `sessions`.
 
 ## workspace
 
@@ -274,6 +276,14 @@ default ("default ghostty"). An unknown name returns `unknown theme: <name>`. Re
 = the applied name (absent = ghostty built-in); human output prints `ok`. App-global (no `--window`).
 The GUI's live-preview picker (View ▸ Select Theme…) is keyboard-only; over the socket `theme set` is
 the commit, with no preview.
+
+## restore
+
+`agtermctl restore clear` — clear every session's saved foreground command and persist, so the next
+restart restores plain shells (not whatever each pane was running). This is the counterpart to the
+opt-in **Restore running commands on restart** setting: that setting captures each pane's foreground
+command at a clean quit and re-runs it on relaunch; `restore clear` wipes those saved commands now
+(also closing the force-quit re-fire window). App-global (no `--window`), prints `ok`.
 
 ## Errors you may see
 

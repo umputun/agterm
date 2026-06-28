@@ -550,7 +550,26 @@ final class ControlServer {
         case .themeList:
             return ControlResponse(ok: true, result: ControlResult(theme: actions.currentTheme,
                                                                     themes: actions.availableThemes()))
+        case .restoreClear:
+            return clearSavedCommands()
         }
+    }
+
+    /// Clear every open session's saved foreground command (the restore-running-command capture) and
+    /// persist, so the next launch restores plain shells. The live fields are normally already nil
+    /// (consumed at restore); the SAVE is what wipes the on-disk copy from the last quit, also closing
+    /// the force-quit re-fire window. Drives `restore.clear` / `agtermctl restore clear`. App-global like
+    /// `keymap.reload` (no `--window` selector — it clears every open window).
+    private func clearSavedCommands() -> ControlResponse {
+        for id in library.openIDs() {
+            guard let store = library.store(for: id) else { continue }
+            for session in store.workspaces.flatMap(\.sessions) {
+                session.foregroundCommand = nil
+                session.splitForegroundCommand = nil
+            }
+        }
+        library.saveAllOpen()
+        return ControlResponse(ok: true)
     }
 
     // MARK: - Control actions
@@ -1033,13 +1052,17 @@ final class ControlServer {
     private func buildTree(in store: AppStore) -> ControlTree {
         let activeID = store.selectedSessionID
         let activeWorkspaceID = activeID.flatMap { store.workspace(forSession: $0)?.id }
+        let shellBasename = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
         let workspaces = store.workspaces.map { workspace in
             let sessions = workspace.sessions.map { session in
-                ControlSessionNode(id: session.id.uuidString, name: session.displayName,
-                                   cwd: session.effectiveCwd, title: session.oscTitle,
-                                   active: session.id == activeID,
-                                   split: session.isSplit, overlay: session.overlayActive,
-                                   scratch: session.scratchActive, flagged: session.flagged)
+                let fg = (session.surface as? GhosttySurfaceView).flatMap { ForegroundProcess.command(for: $0, shellBasename: shellBasename) }
+                let splitFg = (session.splitSurface as? GhosttySurfaceView).flatMap { ForegroundProcess.command(for: $0, shellBasename: shellBasename) }
+                return ControlSessionNode(id: session.id.uuidString, name: session.displayName,
+                                          cwd: session.effectiveCwd, title: session.oscTitle,
+                                          active: session.id == activeID,
+                                          split: session.isSplit, overlay: session.overlayActive,
+                                          scratch: session.scratchActive, flagged: session.flagged,
+                                          foreground: fg, splitForeground: splitFg)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID, sessions: sessions)
