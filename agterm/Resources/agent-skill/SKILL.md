@@ -15,7 +15,7 @@ description: >
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.scratch, session.focus, session.resize, session.go, session.copy, session.search, session.status,
-  session.flag, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
+  session.flag, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
   theme.set, theme.list, select theme, edit keymap, show an image, display an image inline, show-image,
   AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: troubleshoot agterm,
@@ -124,6 +124,11 @@ via `session status`: `active`|`completed`|`blocked`, omitted when idle).
   a fraction. Prints the applied (clamped) fraction.
 - `status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME]` — set the sidebar agent glyph (`--sound default` or a system sound name plays a one-shot sound).
 - `flag [on|off|toggle|clear]` — flag a session for the flagged working-set view (`clear` unflags all).
+- `background image <path> [--opacity F] [--fit contain|cover|stretch|none] [--position P] [--repeat]` ·
+  `background text <text> [--color #rrggbb] [--opacity F] [--fit ...] [--position ...]` ·
+  `background clear` — composite an image (PNG/JPEG) or rasterized text behind the terminal as a
+  watermark, auto-fitting the window (re-fits on resize). Per session; survives restart. `--opacity`
+  0.0–1.0. (A watermark renders the pane opaque, overriding window translucency, so the image shows.)
 - `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N]` · `overlay close` ·
   `overlay result` — run a program on top of a session; `--block` waits and exits with its status. An
   overlay is a real terminal (pty), which is also how you **display an image inline** — via the bundled

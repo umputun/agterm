@@ -159,7 +159,7 @@ paths:
 - **Command catalog (48 commands):**
   - `tree`
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`
-  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.search`/`session.status`/`session.flag`/`session.overlay.open`/`session.overlay.close`/`session.overlay.result`
+  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.search`/`session.status`/`session.flag`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.result`
   - `quick`
   - `sidebar`/`sidebar.mode`/`sidebar.expand`/`sidebar.collapse`
   - `notify`
@@ -577,6 +577,35 @@ paths:
   (4) round-trip (`restoreClearRoundTrips` + `treeSessionNodeRoundTripsWithForeground`/`…OmitsForegroundWhenNil`)
   in `ControlProtocolTests` + the e2e (`testTreeExposesForegroundProcess`,
   `testRestoreClearSucceeds`) in `ControlAPIUITests`.
+  `session.background` (target = session) sets or clears a per-session background watermark composited
+  behind the terminal grid by libghostty `background-image*` keys — `args.mode` is `image`/`text`/`clear`:
+  `image` needs `args.path` (PNG/JPEG, validated for format + existence + no control chars in the path),
+  `text` needs `args.text` (capped at 256 chars; + optional `args.color` #rrggbb, default the terminal
+  foreground), and both accept `args.opacity` (0...1)/`args.fit`/`args.position`/`args.repeats` — opacity/color/fit/position
+  validated against the shared host-free `WatermarkConfig`, used by BOTH the CLI `validate()` and the server.
+  The `BackgroundWatermark` spec (host-free, `Codable`) is persisted in `SessionSnapshot` (survives restart)
+  via `AppStore.setBackgroundWatermark`, then applied to the session main + split surfaces as a PER-SURFACE
+  ghostty config overlay: `GhosttyApp.configWithOverlay` builds the same base files + an overlay file
+  (`WatermarkConfig.overlayText`: the `background-image*` lines + `background-opacity = 1` so the image
+  shows even under window translucency, which pins the global `background-opacity` to 0, + a `font-size`
+  line so the per-session cmd-+/- zoom is not reset by the push), and `GhosttySurfaceView.applyWatermarkFromSession`
+  calls `ghostty_surface_update_config`, RETAINING each per-surface config in `ownedConfigs` and freeing
+  it only on surface teardown (safe — the consumer is gone — unlike the never-freed app-wide config).
+  libghostty auto-fits the image to the surface and RE-FITS on resize (no app-side resize code);
+  a `.text` watermark rasterizes to a PNG under `<stateDir>/watermarks/<sessionID>.png` via the app-side
+  `WatermarkRenderer` (AppKit; default tint = the live terminal foreground), regenerated on restore +
+  cleared on `clear`, on `text`→`image` switch, and on permanent session/workspace/window removal.
+  A global `config.reload`/settings change broadcasts the SHARED config (no image) to every surface via
+  `applyConfig`, WIPING any watermark — so `GhosttyApp.reloadConfig` re-resolves the theme colors and
+  then calls `reapplyWatermarkIfNeeded` on each surface AFTER the broadcast to re-assert it (the theme
+  colors first, so a default-tinted `.text` watermark re-renders with the new foreground, not the old).
+  Four-point keep-in-sync audit for `session.background`: (1) `case sessionBackground = "session.background"`
+  + `ControlArgs.path`/`color`/`opacity`/`fit`/`position`/`repeats` in `ControlProtocol.swift`,
+  (2) the `.sessionBackground` dispatch arm (`setBackground`, validating + building the spec, then `applyWatermark`
+  to the realized surfaces) in `ControlServer`, (3) the `session background image|text|clear` subcommands
+  in `agtermctlKit` (shared opacity/color/fit/position `validate()`), (4) round-trip in `ControlProtocolTests`
+  + `WatermarkConfigTests` + `WatermarkStorageTests` + `CommandsTests` (CLI parse + bad-arg rejection)
+  + the e2e `testSessionBackgroundSetClearAndValidation` in `ControlAPIUITests`.
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
   examples.md recipes) and the command count there is bumped to 48 to match.
