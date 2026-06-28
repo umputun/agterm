@@ -22,6 +22,11 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// surface to run one program (e.g. a TUI) whose exit closes the overlay.
     private let command: String?
 
+    /// Text fed to the pty as if typed at startup (libghostty `initial_input`), or nil for none. Used by
+    /// the restore-running-command feature: the captured foreground command line + `\n`, so a restored
+    /// login shell re-runs it and returns to a prompt on exit (UNLIKE `command`, which replaces the shell).
+    private let initialInput: String?
+
     /// Whether, when a `command` exits, libghostty keeps the surface open with its "press any key to
     /// close" prompt (`true`) instead of closing immediately (`false`). Only meaningful with `command`.
     private let waitAfterCommand: Bool
@@ -166,11 +171,12 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     private var currentKeyEvent: NSEvent?
     private var currentTrackingArea: NSTrackingArea?
 
-    init(workingDirectory: String, fontSize: Float? = nil, command: String? = nil,
+    init(workingDirectory: String, fontSize: Float? = nil, command: String? = nil, initialInput: String? = nil,
          waitAfterCommand: Bool = false, autoFocus: Bool = false, env: [String: String] = [:]) {
         self.workingDirectory = workingDirectory
         self.initialFontSize = fontSize
         self.command = command
+        self.initialInput = initialInput
         self.waitAfterCommand = waitAfterCommand
         self.autoFocus = autoFocus
         self.env = env
@@ -322,6 +328,15 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         return String(decoding: UnsafeRawBufferPointer(start: ptr, count: Int(t.text_len)), as: UTF8.self)
     }
 
+    /// This surface's foreground process pid (libghostty `ghostty_surface_foreground_pid`), or nil when
+    /// the surface has not been created or the call returns 0. Read at quit by the restore-running-command
+    /// capture (`ForegroundProcess.command(for:shellBasename:)`); not focus-dependent, like `readSelection`.
+    func foregroundPid() -> pid_t? {
+        guard let surface else { return nil }
+        let pid = ghostty_surface_foreground_pid(surface)
+        return pid > 0 ? pid_t(pid) : nil
+    }
+
     /// Synthesizes a Return keypress (press + release) on `surface` via the same key path the keyboard
     /// uses, so the shell treats it as Enter. Keycode 36 is the macOS virtual keycode for Return.
     private func sendReturn(to surface: ghostty_surface_t) {
@@ -431,6 +446,12 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
             config.wait_after_command = waitAfterCommand
         } else {
             config.command = nil // login shell
+        }
+        // restore-running-command: feed the captured command line to the login shell as if typed, so it
+        // re-runs and exits back to a prompt. Same strdup'd-buffer lifetime as working_directory.
+        if let initialInput, let p = strdup(initialInput) {
+            configCStrings.append(p)
+            config.initial_input = UnsafePointer(p)
         }
         // a persisted/restored size overrides the config default; nil leaves
         // config_new's default (the ghostty config font-size) in place.

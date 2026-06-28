@@ -16,7 +16,7 @@ struct SettingsView: View {
             KeyMappingSettingsView(model: model)
                 .tabItem { Label("Key Mapping", systemImage: "keyboard") }
         }
-        .frame(width: 480, height: 560)
+        .frame(width: 480, height: 640)
         // keep macOS from saving/restoring the Settings window across launches. Otherwise a
         // process-launch reopen (see agtermApp's FB11763863 workaround) resurrects a stale Settings
         // window on whatever tab it was last on, which steals key focus from the real launch window.
@@ -89,6 +89,14 @@ private struct GeneralSettingsView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
+
+            Section("Sessions") {
+                Toggle("Restore running commands on restart", isOn: restoreRunningCommand)
+                    .accessibilityIdentifier("settings-restore-running-command")
+                Text("Re-runs each pane's foreground command when the app relaunches. Only single-process commands restore faithfully; editors and REPLs start fresh and are skipped.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .padding()
@@ -106,6 +114,13 @@ private struct GeneralSettingsView: View {
     private var notificationBadgeEnabled: Binding<Bool> {
         Binding(get: { model.settings.notificationBadgeEnabled ?? true },
                 set: { model.setNotificationBadgeEnabled($0 ? nil : false) })
+    }
+
+    /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json
+    /// minimal until the user opts in.
+    private var restoreRunningCommand: Binding<Bool> {
+        Binding(get: { model.settings.restoreRunningCommand ?? false },
+                set: { model.setRestoreRunningCommand($0 ? true : nil) })
     }
 
     /// nil (the default) reads as 3; stepping back to 3 stores nil so settings.json stays minimal. The

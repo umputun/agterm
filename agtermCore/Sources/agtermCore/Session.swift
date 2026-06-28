@@ -98,6 +98,14 @@ public final class Session: Identifiable {
     /// restored session is a plain shell.
     @ObservationIgnored public var initialCommand: String?
 
+    /// The main pane's foreground command (full argv) captured at the last clean quit, for the
+    /// restore-running-command feature. `@ObservationIgnored`: written imperatively by the quit-flush
+    /// capture and read once by the surface factory on restore (then cleared, like `scratchCommand`).
+    /// Persisted via `SessionSnapshot.foregroundCommand`; nil when the pane was at its prompt.
+    @ObservationIgnored public var foregroundCommand: [String]?
+    /// The split (right) pane's foreground command (full argv), the split analogue of `foregroundCommand`.
+    @ObservationIgnored public var splitForegroundCommand: [String]?
+
     /// Whether an ephemeral overlay terminal is shown on top of this session (full single-pane
     /// size, hiding the single/split content underneath). Observed, so the detail pane shows/hides
     /// the overlay. Driven only by the control channel; NOT persisted (absent from `snapshot()`), so

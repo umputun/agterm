@@ -50,6 +50,11 @@ final class GhosttyApp {
     /// sidebar Coordinator reads it (gating the count to 0 when off), `SettingsModel` writes it. The
     /// re-render rides the `.agtermAppearanceChanged` notification, like `compactToolbar`.
     private(set) var notificationBadgeEnabled: Bool = true
+    /// Whether a restored pane re-runs the command it had in the foreground at the last clean quit
+    /// (`AppSettings.restoreRunningCommand`). The surface factories read it to decide whether to feed the
+    /// captured command as `initial_input`; `SettingsModel` writes it. Not ghostty-resolved, and it only
+    /// affects the next restore, so no live re-render notification.
+    private(set) var restoreRunningCommand: Bool = false
     /// Inactive-split-pane text mute strength on the 0...10 scale. NOT ghostty-resolved: the detail
     /// pane's `paneDim` overlay reads it (via `AppSettings.muteOpacity`), `SettingsModel` writes it. The
     /// re-render rides the `.agtermAppearanceChanged` notification, like `compactToolbar`.
@@ -129,6 +134,12 @@ final class GhosttyApp {
     /// and on every change; the sidebar re-reconcile rides the `.agtermAppearanceChanged` notification.
     func setNotificationBadgeEnabled(_ enabled: Bool) {
         notificationBadgeEnabled = enabled
+    }
+
+    /// Set whether restored panes re-run their captured foreground command. Called by `SettingsModel` at
+    /// launch and on every change; read by the surface factories at restore time.
+    func setRestoreRunningCommand(_ enabled: Bool) {
+        restoreRunningCommand = enabled
     }
 
     /// Set the inactive-split-pane mute strength (0...10). Called by `SettingsModel` at launch and on

@@ -557,6 +557,32 @@ struct AppStoreTests {
         #expect(r.isSplit == true)
     }
 
+    @Test func foregroundCommandRoundTripsThroughSnapshot() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.foregroundCommand = ["ssh", "gate", "-p", "22"]
+        session.splitForegroundCommand = ["tail", "-f", "/var/log/x"]
+        let snap = store.snapshot()
+        let snapped = snap.workspaces[0].sessions[0]
+        #expect(snapped.foregroundCommand == ["ssh", "gate", "-p", "22"])
+        #expect(snapped.splitForegroundCommand == ["tail", "-f", "/var/log/x"])
+        let restored = Self.makeStore()
+        restored.restore(from: snap)
+        let r = restored.workspaces[0].sessions[0]
+        #expect(r.foregroundCommand == ["ssh", "gate", "-p", "22"])
+        #expect(r.splitForegroundCommand == ["tail", "-f", "/var/log/x"])
+    }
+
+    @Test func legacySnapshotWithoutForegroundCommandDecodesNil() throws {
+        // a snapshot written before this field existed must still decode (nil = plain shell on restore).
+        let json = #"{"id":"00000000-0000-0000-0000-000000000001","cwd":"/tmp"}"#
+        let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        #expect(snap.foregroundCommand == nil)
+        #expect(snap.splitForegroundCommand == nil)
+        #expect(snap.cwd == "/tmp")
+    }
+
     @Test func sidebarWidthAndVisibilityRoundTripThroughSnapshot() {
         let store = Self.makeStore()
         _ = store.addWorkspace(name: "work")

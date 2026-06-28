@@ -101,6 +101,16 @@ struct AppSettingsTests {
         #expect(AppSettings(notificationsEnabled: false).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
     }
 
+    @Test func restoreRunningCommandRoundTripsAndIsNotAConfigLine() throws {
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(restoreRunningCommand: true)))
+        #expect(decoded.restoreRunningCommand == true)
+        // absent in a legacy file decodes to nil (off).
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
+        #expect(legacy.restoreRunningCommand == nil)
+        // an app-level behavior flag, never a ghostty config key — only the scroll default is emitted.
+        #expect(AppSettings(restoreRunningCommand: true).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
+    }
+
     @Test func compactToolbarRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(compactToolbar: true)))
         #expect(decoded.compactToolbar == true)

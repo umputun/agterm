@@ -82,9 +82,16 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     /// this field was added still decodes (as nil → not flagged) instead of failing the load and wiping
     /// the saved tree, like the fields above.
     public var flagged: Bool?
+    /// The main pane's foreground command (full argv) at the last clean quit, re-run on restore when
+    /// `AppSettings.restoreRunningCommand` is on. nil when the pane was at its shell prompt (nothing to
+    /// restore) or the feature was off. Optional for forward-compat like the fields above.
+    public var foregroundCommand: [String]?
+    /// The split (right) pane's foreground command (full argv), the split analogue of `foregroundCommand`.
+    public var splitForegroundCommand: [String]?
 
     public init(id: UUID, customName: String?, cwd: String, isSplit: Bool? = nil, fontSize: Double? = nil,
-                splitCwd: String? = nil, splitRatio: Double? = nil, flagged: Bool? = nil) {
+                splitCwd: String? = nil, splitRatio: Double? = nil, flagged: Bool? = nil,
+                foregroundCommand: [String]? = nil, splitForegroundCommand: [String]? = nil) {
         self.id = id
         self.customName = customName
         self.cwd = cwd
@@ -93,5 +100,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         self.splitCwd = splitCwd
         self.splitRatio = splitRatio
         self.flagged = flagged
+        self.foregroundCommand = foregroundCommand
+        self.splitForegroundCommand = splitForegroundCommand
     }
 }

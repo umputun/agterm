@@ -67,6 +67,7 @@ final class SettingsModel {
         applyInactivePaneMute()
         applySidebarBackgroundShift()
         applyAgentStatusColors()
+        applyRestoreRunningCommand()
         // create the commented starter keymap on first launch, then load + parse it.
         ensureStarterKeymap()
         loadKeymap()
@@ -83,6 +84,8 @@ final class SettingsModel {
     func setMouseScrollMultiplier(_ value: Double?) { settings.mouseScrollMultiplier = value; persistAndApply() }
     func setInactivePaneMuteStrength(_ value: Int?) { settings.inactivePaneMuteStrength = value; persistAndApply() }
     func setSidebarBackgroundShift(_ value: Int?) { settings.sidebarBackgroundShift = value; persistAndApply() }
+    // not a ghostty key, so persistAndApply()'s writeGhosttyConfig() no-ops and no surface reload fires.
+    func setRestoreRunningCommand(_ value: Bool?) { settings.restoreRunningCommand = value; persistAndApply() }
     func setActiveStatusColorHex(_ hex: String?) { settings.activeStatusColorHex = hex; persistAndApply() }
     func setBlockedStatusColorHex(_ hex: String?) { settings.blockedStatusColorHex = hex; persistAndApply() }
     func setCompletedStatusColorHex(_ hex: String?) { settings.completedStatusColorHex = hex; persistAndApply() }
@@ -423,6 +426,7 @@ final class SettingsModel {
         applyInactivePaneMute()
         applySidebarBackgroundShift()
         applyAgentStatusColors()
+        applyRestoreRunningCommand()
         // refresh the app chrome (title bar + sidebar + quick terminal) with the new terminal color,
         // window translucency, and toolbar style immediately, rather than only when the window next
         // re-keys. The title-bar re-sync and the cwd-subtitle drop both ride this notification.
@@ -445,6 +449,10 @@ final class SettingsModel {
 
     private func applyNotificationBadgeEnabled() {
         GhosttyApp.shared.setNotificationBadgeEnabled(settings.notificationBadgeEnabled ?? true)
+    }
+
+    private func applyRestoreRunningCommand() {
+        GhosttyApp.shared.setRestoreRunningCommand(settings.restoreRunningCommand ?? false)
     }
 
     private func applyInactivePaneMute() {

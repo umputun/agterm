@@ -77,6 +77,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// SwiftUI wash behind the sidebar (see `sidebarShiftAmount`), NOT a ghostty key — it never appears
     /// in `ghosttyConfigLines()`.
     public var sidebarBackgroundShift: Int?
+    /// Whether, on app restart, each pane re-runs the command it had in the foreground at the last clean
+    /// quit (captured via `SessionSnapshot.foregroundCommand`). nil means the default (off). An app-level
+    /// behavior flag, NOT a ghostty key — it never appears in `ghosttyConfigLines()`.
+    public var restoreRunningCommand: Bool?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 backgroundOpacity: Double? = nil, backgroundBlur: Int? = nil, notificationsEnabled: Bool? = nil,
@@ -84,7 +88,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 activeStatusColorHex: String? = nil, blockedStatusColorHex: String? = nil,
                 completedStatusColorHex: String? = nil, configDirectory: String? = nil,
                 mouseScrollMultiplier: Double? = nil, inactivePaneMuteStrength: Int? = nil,
-                sidebarBackgroundShift: Int? = nil) {
+                sidebarBackgroundShift: Int? = nil, restoreRunningCommand: Bool? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -100,6 +104,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.mouseScrollMultiplier = mouseScrollMultiplier
         self.inactivePaneMuteStrength = inactivePaneMuteStrength
         self.sidebarBackgroundShift = sidebarBackgroundShift
+        self.restoreRunningCommand = restoreRunningCommand
     }
 
     /// The SwiftUI overlay opacity for a given inactive-pane mute strength: the strength is clamped to

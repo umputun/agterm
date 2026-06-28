@@ -66,6 +66,14 @@ final class SettingsUITests: XCTestCase {
                       "turning compact toolbar on should persist compactToolbar=true")
     }
 
+    func testRestoreRunningCommandTogglePersists() throws {
+        let toggle = settingsControl(tab: "General", control: "settings-restore-running-command")
+        toggle.click() // turn it on (default off)
+
+        XCTAssertTrue(poll { self.settingsBool("restoreRunningCommand") == true },
+                      "turning restore-running-commands on should persist restoreRunningCommand=true")
+    }
+
     func testScrollSpeedSliderPersists() throws {
         let slider = settingsControl(tab: "General", control: "settings-scroll-speed")
         slider.adjust(toNormalizedSliderPosition: 1.0) // drag to max (10), away from the default 3

@@ -438,8 +438,14 @@ struct agtermApp: App {
                                     library: WindowLibrary) -> GhosttySurfaceView {
         // `initialCommand` (from `session.new --command`) runs as the surface's process instead of the
         // login shell; on its exit the surface's onExit (below) closes the single session, like kitty.
+        // restore-running-command: feed the captured foreground command as `initial_input` (re-run inside
+        // the login shell, exits to a prompt) — but only when there's no `initialCommand` (those are
+        // mutually exclusive ways to seed a surface). Consumed run-once, like `scratchCommand`.
+        let restoreInput = Self.restoreInitialInput(session.foregroundCommand)
+        session.foregroundCommand = nil
         let view = GhosttySurfaceView(workingDirectory: session.initialCwd, fontSize: session.fontSize.map(Float.init),
-                                      command: session.initialCommand, env: env)
+                                      command: session.initialCommand,
+                                      initialInput: session.initialCommand == nil ? restoreInput : nil, env: env)
         view.session = session
         let sessionID = session.id
         view.onExit = {
@@ -460,6 +466,15 @@ struct agtermApp: App {
         view.onFontSizeChange = { store.setFontSize(sessionID, $0) }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
         return view
+    }
+
+    /// The `initial_input` for a restored pane: the captured foreground argv re-rendered as a shell
+    /// command line + newline, or nil when the restore-running-command flag is off or the command is
+    /// denylisted (editor/REPL → plain shell). The host-free decisions live in `CommandRestore`.
+    @MainActor
+    private static func restoreInitialInput(_ argv: [String]?) -> String? {
+        guard GhosttyApp.shared.restoreRunningCommand, let argv, CommandRestore.shouldRestore(argv: argv) else { return nil }
+        return CommandRestore.shellQuotedLine(argv) + "\n"
     }
 
     /// Wire the four `onSearch*` surface callbacks to the owning session's search fields, resolving the
@@ -524,8 +539,12 @@ struct agtermApp: App {
         // own directory, not the primary's), falling back to the session's effectiveCwd for a fresh
         // split. Font size matches the primary; its own cmd +/- changes aren't persisted. It inherits
         // the parent session's window/workspace/session ids in the env.
+        // restore-running-command: re-run the split pane's captured foreground command via initial_input
+        // (consumed run-once). Splits never carry an `initialCommand`, so no mutual-exclusion guard.
+        let restoreInput = Self.restoreInitialInput(session.splitForegroundCommand)
+        session.splitForegroundCommand = nil
         let view = GhosttySurfaceView(workingDirectory: session.initialSplitCwd ?? session.effectiveCwd,
-                                      fontSize: session.fontSize.map(Float.init), env: env)
+                                      fontSize: session.fontSize.map(Float.init), initialInput: restoreInput, env: env)
         view.session = session
         view.isSplitPane = true
         let sessionID = session.id
@@ -810,6 +829,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // mark terminating so the per-window willClose close-reporting can't zero the open-set as each
         // window tears down during quit — the set must survive for the next launch's reopen-all.
         library?.isTerminating = true
+        // restore-running-command: capture each pane's live foreground command into the session fields
+        // BEFORE the snapshot save below, so a restored pane can re-run it. Only when the feature is on;
+        // a force-quit/crash skips this (sessions + cwd still restore from the debounced snapshot).
+        if settingsModel?.settings.restoreRunningCommand == true, let library {
+            captureForegroundCommands(library: library)
+        }
         // flush every open window's store (per-window cwd changes since the last structural mutation
         // aren't auto-persisted) and the index. replaces the single-store save.
         library?.saveAllOpen()
@@ -817,6 +842,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // flush the settings model's pending debounced writes (a keyboard-driven opacity/blur change
         // holds a ~0.3s deferred save that no drag-end commit fires) so they survive ⌘Q.
         settingsModel?.flushPendingSaves()
+    }
+
+    /// Capture every open pane's foreground command (main + split) into its `Session` fields, so the
+    /// snapshot save persists them for the next launch's restore. `ForegroundProcess` returns nil for a
+    /// pane sitting at its shell prompt, so plain shells stay plain on restore.
+    @MainActor
+    private func captureForegroundCommands(library: WindowLibrary) {
+        let shellBasename = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
+        for id in library.openIDs() {
+            guard let store = library.store(for: id) else { continue }
+            for session in store.workspaces.flatMap(\.sessions) {
+                if let view = session.surface as? GhosttySurfaceView {
+                    session.foregroundCommand = ForegroundProcess.command(for: view, shellBasename: shellBasename)
+                }
+                if let split = session.splitSurface as? GhosttySurfaceView {
+                    session.splitForegroundCommand = ForegroundProcess.command(for: split, shellBasename: shellBasename)
+                }
+            }
+        }
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {

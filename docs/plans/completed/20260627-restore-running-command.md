@@ -80,11 +80,11 @@ App target: `enum ForegroundProcess { static func command(for surface:, shellBas
 - Modify: `agtermCore/Sources/agtermCore/AppStore.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTests.swift`
 
-- [ ] add `var foregroundCommand: [String]?` + `var splitForegroundCommand: [String]?` to `SessionSnapshot` (Codable, default nil), beside `splitCwd`
-- [ ] add matching `@ObservationIgnored var foregroundCommand: [String]?` / `splitForegroundCommand: [String]?` on `Session`
-- [ ] capture both in `AppStore.snapshot()` (`:639`); seed both back in `AppStore.restore(from:)` (`:661`)
-- [ ] write tests in `AppStoreTests.swift`, mirroring `splitCwdRoundTripsThroughSnapshot` (`:540`): both fields round-trip; a snapshot lacking the keys decodes to nil (legacy stays a plain shell)
-- [ ] run `cd agtermCore && swift test` — must pass before next task
+- [x] add `var foregroundCommand: [String]?` + `var splitForegroundCommand: [String]?` to `SessionSnapshot` (Codable, default nil), beside `splitCwd`
+- [x] add matching `@ObservationIgnored var foregroundCommand: [String]?` / `splitForegroundCommand: [String]?` on `Session`
+- [x] capture both in `AppStore.snapshot()` (`:639`); seed both back in `AppStore.restore(from:)` (`:661`)
+- [x] write tests in `AppStoreTests.swift`, mirroring `splitCwdRoundTripsThroughSnapshot` (`:540`): both fields round-trip; a snapshot lacking the keys decodes to nil (legacy stays a plain shell)
+- [x] run `cd agtermCore && swift test` — must pass before next task
 
 ### Task 2: CommandRestore host-free logic (parse / shell / denylist / quote)
 
@@ -92,12 +92,12 @@ App target: `enum ForegroundProcess { static func command(for surface:, shellBas
 - Create: `agtermCore/Sources/agtermCore/CommandRestore.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/CommandRestoreTests.swift`
 
-- [ ] create `enum CommandRestore` with `parseProcArgs(_:)`, `isKnownShell(_:extra:)`, `shouldRestore(argv:)`, `shellQuotedLine(_:)` (signatures in Technical Details)
-- [ ] implement `parseProcArgs` against the documented `KERN_PROCARGS2` layout — read `argc`, skip the exec path AND its trailing NUL padding before reading `argc` NUL-separated args; nil on truncated/short input
-- [ ] implement the predicates + POSIX single-quote join
-- [ ] write tests for `parseProcArgs`: a synthetic multi-arg blob WITH exec-path NUL padding between exec path and argv0 (the real-world gotcha); a truncated-argc blob; an empty blob → nil
-- [ ] write tests for `isKnownShell` (zsh/bash → true, ssh/vim → false, `extra` match → true), `shouldRestore` (ssh/top → true, `/usr/bin/vim` → false by basename, empty → false), `shellQuotedLine` (spaces, quotes, `$`, glob chars survive)
-- [ ] run `cd agtermCore && swift test` — must pass before next task
+- [x] create `enum CommandRestore` with `parseProcArgs(_:)`, `isKnownShell(_:extra:)`, `shouldRestore(argv:)`, `shellQuotedLine(_:)` (signatures in Technical Details)
+- [x] implement `parseProcArgs` against the documented `KERN_PROCARGS2` layout — read `argc`, skip the exec path AND its trailing NUL padding before reading `argc` NUL-separated args; nil on truncated/short input
+- [x] implement the predicates + POSIX single-quote join
+- [x] write tests for `parseProcArgs`: a synthetic multi-arg blob WITH exec-path NUL padding between exec path and argv0 (the real-world gotcha); a truncated-argc blob; an empty blob → nil
+- [x] write tests for `isKnownShell` (zsh/bash → true, ssh/vim → false, `extra` match → true), `shouldRestore` (ssh/top → true, `/usr/bin/vim` → false by basename, empty → false), `shellQuotedLine` (spaces, quotes, `$`, glob chars survive)
+- [x] run `cd agtermCore && swift test` — must pass before next task
 
 ### Task 3: Add the restoreRunningCommand setting
 
@@ -105,11 +105,11 @@ App target: `enum ForegroundProcess { static func command(for surface:, shellBas
 - Modify: `agtermCore/Sources/agtermCore/AppSettings.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/SettingsStoreTests.swift` (the AppSettings/SettingsStore test file)
 
-- [ ] add `var restoreRunningCommand: Bool?` to `AppSettings` (nil = off), beside the other `Bool?` toggles
-- [ ] add the matching parameter to the hand-written public `init` (`:81-103`) so callers/tests can construct it
-- [ ] confirm `ghosttyConfigLines()` is unaffected (this flag drives app behavior, not ghostty config)
-- [ ] write tests: decode with the key true/false and absent (nil → off); Equatable round-trip unchanged
-- [ ] run `cd agtermCore && swift test` — must pass before next task
+- [x] add `var restoreRunningCommand: Bool?` to `AppSettings` (nil = off), beside the other `Bool?` toggles
+- [x] add the matching parameter to the hand-written public `init` (`:81-103`) so callers/tests can construct it
+- [x] confirm `ghosttyConfigLines()` is unaffected (this flag drives app behavior, not ghostty config)
+- [x] write tests: decode with the key true/false and absent (nil → off); Equatable round-trip unchanged
+- [x] run `cd agtermCore && swift test` — must pass before next task
 
 ### Task 4: SettingsModel setter + General toggle
 
@@ -118,11 +118,11 @@ App target: `enum ForegroundProcess { static func command(for surface:, shellBas
 - Modify: `agterm/Views/SettingsView.swift`
 - Modify: `agtermUITests/SettingsUITests.swift` (or the existing settings-persistence UI test file)
 
-- [ ] add `func setRestoreRunningCommand(_ value: Bool?) { settings.restoreRunningCommand = value; persistAndApply() }` (`persistAndApply` no-ops the surface reload — not a ghostty key)
-- [ ] add a General-tab `Toggle("Restore running commands on restart", isOn: …)` bound via `model.setRestoreRunningCommand`, mirroring the `notificationsEnabled` binding (`:99-102`), with an `accessibilityIdentifier` `settings-restore-running-command`
-- [ ] add an honest caption: re-runs each pane's foreground command on relaunch; only single-process commands restore faithfully; stateful programs (editors, REPLs) start fresh and are skipped
-- [ ] write a UI test asserting the toggle persists into `settings.json` (mirror the existing notification-badge settings test)
-- [ ] run the focused Settings UI test — must pass before next task
+- [x] add `func setRestoreRunningCommand(_ value: Bool?) { settings.restoreRunningCommand = value; persistAndApply() }` (`persistAndApply` no-ops the surface reload — not a ghostty key)
+- [x] add a General-tab `Toggle("Restore running commands on restart", isOn: …)` bound via `model.setRestoreRunningCommand`, mirroring the `notificationsEnabled` binding (`:99-102`), with an `accessibilityIdentifier` `settings-restore-running-command`
+- [x] add an honest caption: re-runs each pane's foreground command on relaunch; only single-process commands restore faithfully; stateful programs (editors, REPLs) start fresh and are skipped
+- [x] write a UI test asserting the toggle persists into `settings.json` (mirror the existing notification-badge settings test)
+- [x] run the focused Settings UI test — must pass before next task
 
 ### Task 5: Capture the foreground command at clean quit
 
@@ -130,11 +130,11 @@ App target: `enum ForegroundProcess { static func command(for surface:, shellBas
 - Create: `agterm/Ghostty/ForegroundProcess.swift`
 - Modify: `agterm/agtermApp.swift` (the quit-flush in `AppDelegate.applicationWillTerminate`)
 
-- [ ] ⚠️ FIRST: empirically confirm what `ghostty_surface_foreground_pid` returns (foreground-group leader vs running leaf vs a backgrounded shell) with a throwaway probe in an isolated dev instance; record the finding — it decides whether `sh -c 'a; b'` captures `sh` or `b`. The Task 7 marker is designed to be robust either way, but capture must guard correctly.
-- [ ] add `enum ForegroundProcess { static func command(for surface:, shellBasename:) -> [String]? }` — `ghostty_surface_foreground_pid` → guard `pid != 0` → `sysctl KERN_PROCARGS2` (guard failure → nil) → `CommandRestore.parseProcArgs`; return nil when `CommandRestore.isKnownShell(argv[0].basename, extra: shellBasename)`
-- [ ] in the quit-flush, only when `settings.restoreRunningCommand == true`, walk each session's main + split surface and set `session.foregroundCommand` / `session.splitForegroundCommand` from `ForegroundProcess.command(for:shellBasename:)` (`shellBasename` = `$SHELL` basename), before the final snapshot/save
-- [ ] write tests: the decision seams are host-free and already covered (Task 2 `parseProcArgs`/`isKnownShell`); the live `sysctl` + at-prompt-captures-nothing path is covered by Task 7 (note this explicitly — no own-task host-free test is possible for the syscall)
-- [ ] run `make build` + `cd agtermCore && swift test` — must pass before next task
+- [x] ⚠️ FIRST: empirically confirm what `ghostty_surface_foreground_pid` returns (foreground-group leader vs running leaf vs a backgrounded shell) with a throwaway probe in an isolated dev instance; record the finding — it decides whether `sh -c 'a; b'` captures `sh` or `b`. The Task 7 marker is designed to be robust either way, but capture must guard correctly.
+- [x] add `enum ForegroundProcess { static func command(for surface:, shellBasename:) -> [String]? }` — `ghostty_surface_foreground_pid` → guard `pid != 0` → `sysctl KERN_PROCARGS2` (guard failure → nil) → `CommandRestore.parseProcArgs`; return nil when `CommandRestore.isKnownShell(argv[0].basename, extra: shellBasename)`
+- [x] in the quit-flush, only when `settings.restoreRunningCommand == true`, walk each session's main + split surface and set `session.foregroundCommand` / `session.splitForegroundCommand` from `ForegroundProcess.command(for:shellBasename:)` (`shellBasename` = `$SHELL` basename), before the final snapshot/save
+- [x] write tests: the decision seams are host-free and already covered (Task 2 `parseProcArgs`/`isKnownShell`); the live `sysctl` + at-prompt-captures-nothing path is covered by Task 7 (note this explicitly — no own-task host-free test is possible for the syscall)
+- [x] run `make build` + `cd agtermCore && swift test` — must pass before next task
 
 ### Task 6: Re-run the command on restore via initial_input
 
@@ -142,30 +142,30 @@ App target: `enum ForegroundProcess { static func command(for surface:, shellBas
 - Modify: `agterm/Ghostty/GhosttySurfaceView.swift` (add `initialInput` init param → `config.initial_input`)
 - Modify: `agterm/agtermApp.swift` (the `makeSurface` / `makeSplitSurface` factories)
 
-- [ ] add an `initialInput: String?` init param to `GhosttySurfaceView`; when non-nil, set `config.initial_input` (strdup'd, same buffer lifetime as `working_directory`)
-- [ ] in `makeSurface`/`makeSplitSurface`, when `settings.restoreRunningCommand == true` and the session's `foregroundCommand`/`splitForegroundCommand` passes `CommandRestore.shouldRestore`, pass `initialInput = CommandRestore.shellQuotedLine(argv) + "\n"`; else nil
-- [ ] CLEAR run-once IN THE FACTORY on the `Session` field (`let cmd = session.foregroundCommand; session.foregroundCommand = nil`), exactly mirroring the `scratchCommand` read-then-nil at `agtermApp.swift:597-599`, so a later in-session structural `save()` cannot re-persist and re-fire it
-- [ ] confirm the restored command runs INSIDE the login shell (exit returns to prompt), NOT via `config.command`
-- [ ] write tests: gating logic is host-free + already covered (Task 2 `shouldRestore`/`shellQuotedLine`); the live re-run is covered by Task 7 (note this — no own-task host-free test for `initial_input`)
-- [ ] run `make build` — must pass before next task
+- [x] add an `initialInput: String?` init param to `GhosttySurfaceView`; when non-nil, set `config.initial_input` (strdup'd, same buffer lifetime as `working_directory`)
+- [x] in `makeSurface`/`makeSplitSurface`, when `settings.restoreRunningCommand == true` and the session's `foregroundCommand`/`splitForegroundCommand` passes `CommandRestore.shouldRestore`, pass `initialInput = CommandRestore.shellQuotedLine(argv) + "\n"`; else nil
+- [x] CLEAR run-once IN THE FACTORY on the `Session` field (`let cmd = session.foregroundCommand; session.foregroundCommand = nil`), exactly mirroring the `scratchCommand` read-then-nil at `agtermApp.swift:597-599`, so a later in-session structural `save()` cannot re-persist and re-fire it
+- [x] confirm the restored command runs INSIDE the login shell (exit returns to prompt), NOT via `config.command`
+- [x] write tests: gating logic is host-free + already covered (Task 2 `shouldRestore`/`shellQuotedLine`); the live re-run is covered by Task 7 (note this — no own-task host-free test for `initial_input`)
+- [x] run `make build` — must pass before next task
 
 ### Task 7: XCUITest — capture → relaunch → re-run cycle
 
 **Files:**
 - Create: `agtermUITests/RestoreCommandUITests.swift`
 
-- [ ] `testRestoreReRunsForegroundCommand`: seed `restoreRunningCommand=true` in the isolated `AGTERM_STATE_DIR` settings.json; start a session whose foreground is `sh -c 'printf x >> <COUNTER>; read _'` (blocks on the `read` BUILTIN, so the single foreground process IS the re-runnable `sh -c` shell — avoids the `sleep`/leaf-capture trap); confirm `<COUNTER>` has 1 byte; quit (`terminate()`), relaunch (per `MultiWindowUITests.relaunch()` `:217`), assert `<COUNTER>` grows to 2 bytes (proves the command re-ran)
-- [ ] `testRestoreOffDoesNotReRun`: flag off, same setup, relaunch, assert `<COUNTER>` stays 1 byte
-- [ ] follow `.claude/rules/ui-tests.md`: `launchForUITest`, isolated state dir, observable side effects; ASK before a full UI run, run only this class. (Drop a `vim` denylist e2e — it is unobservable and fully covered host-free by Task 2's `shouldRestore('/usr/bin/vim') == false`.)
-- [ ] run `xcodebuild test … -only-testing:agtermUITests/RestoreCommandUITests` — must pass before next task
+- [x] `testRestoreReRunsForegroundCommand`: seed `restoreRunningCommand=true` in the isolated `AGTERM_STATE_DIR` settings.json; start a session whose foreground is `sh -c 'printf x >> <COUNTER>; read _'` (blocks on the `read` BUILTIN, so the single foreground process IS the re-runnable `sh -c` shell — avoids the `sleep`/leaf-capture trap); confirm `<COUNTER>` has 1 byte; quit (`terminate()`), relaunch (per `MultiWindowUITests.relaunch()` `:217`), assert `<COUNTER>` grows to 2 bytes (proves the command re-ran)
+- [x] `testRestoreOffDoesNotReRun`: flag off, same setup, relaunch, assert `<COUNTER>` stays 1 byte
+- [x] follow `.claude/rules/ui-tests.md`: `launchForUITest`, isolated state dir, observable side effects; ASK before a full UI run, run only this class. (Drop a `vim` denylist e2e — it is unobservable and fully covered host-free by Task 2's `shouldRestore('/usr/bin/vim') == false`.)
+- [x] run `xcodebuild test … -only-testing:agtermUITests/RestoreCommandUITests` — must pass before next task
 
 ### Task 8: Verify acceptance criteria
 
-- [ ] verify all Overview requirements: opt-in flag (default off), full-argv capture, denylist skip, re-run via `initial_input` returns to a prompt on exit
-- [ ] verify edge cases: legacy snapshot (no fields) → plain shell; flag off → no capture + no re-run; split pane captured independently; at-prompt/blank panes capture nothing (pid==0 / known-shell → nil)
-- [ ] run the full host-free suite: `cd agtermCore && swift test`
-- [ ] run the focused UI class: `xcodebuild test … -only-testing:agtermUITests/RestoreCommandUITests`
-- [ ] confirm keep-in-sync: no `AppActions`/`AppStore` user action and no `ControlSessionNode`/`tree --json` exposure were introduced, so control-API + agent-skill are correctly untouched (justified in Task 9)
+- [x] verify all Overview requirements: opt-in flag (default off), full-argv capture, denylist skip, re-run via `initial_input` returns to a prompt on exit
+- [x] verify edge cases: legacy snapshot (no fields) → plain shell; flag off → no capture + no re-run; split pane captured independently; at-prompt/blank panes capture nothing (pid==0 / known-shell → nil)
+- [x] run the full host-free suite: `cd agtermCore && swift test`
+- [x] run the focused UI class: `xcodebuild test … -only-testing:agtermUITests/RestoreCommandUITests`
+- [x] confirm keep-in-sync: no `AppActions`/`AppStore` user action and no `ControlSessionNode`/`tree --json` exposure were introduced, so control-API + agent-skill are correctly untouched (justified in Task 9)
 
 ### Task 9: [Final] Update documentation
 
@@ -174,11 +174,11 @@ App target: `enum ForegroundProcess { static func command(for surface:, shellBas
 - Modify: `.claude/rules/settings.md` (the new flag + capture/restore behavior)
 - Move: this plan → `docs/plans/completed/`
 
-- [ ] document the toggle in README's Settings section; in the persistence bullet, note command-restore alongside path-restore AND the single-process limitation (pipelines/compound lines do not restore faithfully)
-- [ ] add the flag + the capture-at-quit / restore-via-`initial_input` behavior to `.claude/rules/settings.md`
-- [ ] state the keep-in-sync justification explicitly: NOT a control-API change because every `AppSettings` toggle (`notificationsEnabled`/`notificationBadgeEnabled`/`compactToolbar`/`mouseScrollMultiplier`/…) is GUI-only — there is no `settings.*` control surface (only `theme.set`/`config.reload` touch settings), so a one-off command for this single flag would be inconsistent scope creep
-- [ ] state the agent-skill is unchanged: the new `SessionSnapshot` field is internal (not added to `ControlSessionNode` / `tree --json`, no new command), so the 4th keep-in-sync surface needs no edit
-- [ ] `mkdir -p docs/plans/completed && git mv` this plan into `docs/plans/completed/`
+- [x] document the toggle in README's Settings section; in the persistence bullet, note command-restore alongside path-restore AND the single-process limitation (pipelines/compound lines do not restore faithfully)
+- [x] add the flag + the capture-at-quit / restore-via-`initial_input` behavior to `.claude/rules/settings.md`
+- [x] state the keep-in-sync justification explicitly: NOT a control-API change because every `AppSettings` toggle (`notificationsEnabled`/`notificationBadgeEnabled`/`compactToolbar`/`mouseScrollMultiplier`/…) is GUI-only — there is no `settings.*` control surface (only `theme.set`/`config.reload` touch settings), so a one-off command for this single flag would be inconsistent scope creep
+- [x] state the agent-skill is unchanged: the new `SessionSnapshot` field is internal (not added to `ControlSessionNode` / `tree --json`, no new command), so the 4th keep-in-sync surface needs no edit
+- [x] `mkdir -p docs/plans/completed && git mv` this plan into `docs/plans/completed/`
 
 ## Post-Completion
 

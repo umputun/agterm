@@ -642,7 +642,9 @@ public final class AppStore {
                 SessionSnapshot(id: session.id, customName: session.customName, cwd: session.currentCwd ?? session.initialCwd,
                                 isSplit: session.isSplit, fontSize: session.fontSize,
                                 splitCwd: session.splitCwd ?? session.initialSplitCwd, splitRatio: session.splitRatio,
-                                flagged: session.flagged)
+                                flagged: session.flagged,
+                                foregroundCommand: session.foregroundCommand,
+                                splitForegroundCommand: session.splitForegroundCommand)
             })
         }
         return Snapshot(selectedSessionID: selectedSessionID, workspaces: workspaceSnapshots,
@@ -670,6 +672,8 @@ public final class AppStore {
                 // fraction into NSSplitView.setPosition; nil stays nil (the even default).
                 session.splitRatio = sessionSnapshot.splitRatio.map { min(AppStore.splitRatioMax, max(AppStore.splitRatioMin, $0)) }
                 session.flagged = sessionSnapshot.flagged ?? false
+                session.foregroundCommand = sessionSnapshot.foregroundCommand
+                session.splitForegroundCommand = sessionSnapshot.splitForegroundCommand
                 return session
             }
             return Workspace(id: workspaceSnapshot.id, name: workspaceSnapshot.name, sessions: sessions)
