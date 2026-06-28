@@ -112,7 +112,9 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 - `copy` — print the session's selected text (does NOT touch the system clipboard).
 - `search [needle] [--next|--prev|--close]` — search the terminal scrollback; prints the "N of M" counter.
 - `split [on|off|toggle]` — side-by-side second shell (hide keeps it alive).
-- `scratch [on|off|toggle]` — full-coverage third shell (hide keeps it alive; `exit` recreates).
+- `scratch [on|off|toggle] [--command CMD]` — full-coverage third shell (hide keeps it alive; `exit`
+  recreates). `--command` (when showing) runs a program instead of a shell, run-once like `session new
+  --command` (respawns the scratch if one is open).
 - `focus [left|right|other]` — move focus between split panes.
 - `status <idle|active|completed|blocked> [--blink] [--auto-reset]` — set the sidebar agent glyph.
 - `flag [on|off|toggle|clear]` — flag a session for the flagged working-set view (`clear` unflags all).

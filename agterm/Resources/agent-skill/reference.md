@@ -99,11 +99,14 @@ flagged working-set). Workspace nodes carry `id`, `name`, `active`, `sessions`.
 - `session split [on|off|toggle] [--target] [--window W]` — side-by-side second shell. `off` HIDES it
   but keeps the shell alive (mirrors ⌘D); the pane's surface is torn down only when its shell exits.
   Unknown mode errors.
-- `session scratch [on|off|toggle] [--target] [--window W]` — a third, full-coverage shell that
-  renders like a full overlay but behaves like the split. `off` hides it keep-alive; typing `exit` in
-  it closes it and the next `on` spawns a fresh shell. `on` selects the target first (the scratch is
-  full-coverage and owns focus). Not persisted. Unknown mode errors. The tree's `scratch` flag tracks
-  visibility.
+- `session scratch [on|off|toggle] [--command CMD] [--target] [--window W]` — a third, full-coverage
+  shell that renders like a full overlay but behaves like the split. `off` hides it keep-alive; typing
+  `exit` in it closes it and the next `on` spawns a fresh shell. `on` selects the target first (the
+  scratch is full-coverage and owns focus). `--command` (only when showing) runs that program as the
+  scratch's process instead of a login shell — argv-style (no shell; wrap operators yourself as
+  `"sh -c '…'"`) and RUN-ONCE like `session new --command` (after it exits, the next `on` is a plain
+  shell). A scratch is expendable, so passing `--command` while one is already open respawns it. Not
+  persisted. Unknown mode errors. The tree's `scratch` flag tracks visibility.
 - `session focus [left|right|other] [--target] [--window W]` — move keyboard focus between the two
   split panes (`other` toggles, the default). Errors when the session has no split. Works whether the
   split is shown side-by-side or hidden (maximized) — when hidden, focusing a pane swaps which one shows.

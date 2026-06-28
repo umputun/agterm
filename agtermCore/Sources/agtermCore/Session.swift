@@ -142,11 +142,17 @@ public final class Session: Identifiable {
     /// hides the scratch. NOT persisted (absent from `snapshot()`), so it never survives a relaunch.
     public var scratchActive: Bool = false
 
-    /// The scratch terminal's surface: a plain login shell, lazily created on first show and kept
-    /// alive across hides (`scratchSurface != nil` is "alive but hidden"). Freed only on
-    /// `closeScratch` (an explicit close, the shell's own `exit`, or session/workspace/window
+    /// The scratch terminal's surface: a login shell (or `scratchCommand` when set), lazily created on
+    /// first show and kept alive across hides (`scratchSurface != nil` is "alive but hidden"). Freed only
+    /// on `closeScratch` (an explicit close, the shell's own `exit`, or session/workspace/window
     /// teardown) — after which the next show spawns a fresh shell. `@ObservationIgnored` like `surface`.
     @ObservationIgnored public var scratchSurface: (any TerminalSurface)?
+
+    /// A command to run as the scratch's process instead of a login shell (set via `session.scratch
+    /// --command`), the scratch analogue of `initialCommand`. RUN-ONCE: the scratch surface factory reads
+    /// it once when it spawns and clears it, so after the command exits the next show is a plain shell.
+    /// `@ObservationIgnored` + absent from `snapshot()`: transient like the scratch itself, never persisted.
+    @ObservationIgnored public var scratchCommand: String?
 
     /// Whether the in-terminal search bar is shown over this session's focused pane (⌘F). Observed,
     /// so the detail pane shows/hides the bar. Written directly (from the surface factory's search

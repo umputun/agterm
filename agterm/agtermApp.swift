@@ -580,12 +580,13 @@ struct agtermApp: App {
         return view
     }
 
-    /// Scratch-terminal surface factory: a third per-session login shell, full-overlay rendered. Like
-    /// the overlay it is NOT wired to the session (no `view.session`/`isSplitPane`), so its PWD/title
-    /// never clobber the session's sidebar name; unlike the overlay it runs a plain login shell (no
-    /// command) and is kept alive when hidden. `autoFocus` grabs first responder on show (winning the
-    /// SwiftUI/AppKit responder race); on the shell's `exit`, `closeScratch` hides + tears it down so
-    /// the next show spawns a fresh shell. Seeds from the session's current dir + inherits its env ids.
+    /// Scratch-terminal surface factory: a third per-session shell, full-overlay rendered. Like the
+    /// overlay it is NOT wired to the session (no `view.session`/`isSplitPane`), so its PWD/title never
+    /// clobber the session's sidebar name; unlike the overlay it is kept alive when hidden. Runs a plain
+    /// login shell, or `session.scratchCommand` when set (`session.scratch --command`) — RUN-ONCE: the
+    /// command is consumed here so a respawn after it exits is a plain shell. `autoFocus` grabs first
+    /// responder on show (winning the SwiftUI/AppKit responder race); on the shell's `exit`, `closeScratch`
+    /// hides + tears it down so the next show spawns fresh. Seeds from the session's current dir + env ids.
     @MainActor
     private static func makeScratchSurface(for session: Session, store: AppStore, env: [String: String],
                                           suppressAutoFocus: Bool, library: WindowLibrary) -> GhosttySurfaceView {
@@ -593,8 +594,12 @@ struct agtermApp: App {
         // surface already owns focus above the scratch (a full overlay, or the window-level quick
         // terminal), so a scratch created under one can't steal first responder. Re-shows are focused
         // via the `scratchActive` onChange (which also defers to those covers).
+        // scratchCommand is run-once: read it for this spawn, then clear so a post-exit respawn is a shell.
+        let command = session.scratchCommand
+        session.scratchCommand = nil
         let view = GhosttySurfaceView(workingDirectory: session.effectiveCwd,
                                       fontSize: session.fontSize.map(Float.init),
+                                      command: command,
                                       autoFocus: !suppressAutoFocus, env: env)
         let sessionID = session.id
         view.onExit = { store.closeScratch(sessionID) }

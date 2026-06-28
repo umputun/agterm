@@ -445,7 +445,8 @@ final class ControlServer {
         case .sessionSplit:
             return splitSession(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionScratch:
-            return scratchSession(request.target, window: request.args?.window, mode: request.args?.mode)
+            return scratchSession(request.target, window: request.args?.window, mode: request.args?.mode,
+                                  command: request.args?.command)
         case .sessionFocus:
             return focusSessionPane(request.target, window: request.args?.window, pane: request.args?.pane)
         case .sessionStatus:
@@ -581,11 +582,14 @@ final class ControlServer {
         }
     }
 
-    /// Resolve the target session and show/hide its scratch terminal — a third, full-overlay login
-    /// shell. `mode` is `on|off|toggle`, computed against the session's current `scratchActive` so
-    /// `on`/`off` are idempotent. Like the split, hiding keeps the shell alive (`toggleScratch`);
-    /// `closeScratch` (tear down) is reserved for the shell's own `exit`.
-    private func scratchSession(_ target: String?, window: String?, mode: String?) -> ControlResponse {
+    /// Resolve the target session and show/hide its scratch terminal — a third, full-overlay shell.
+    /// `mode` is `on|off|toggle`, computed against the session's current `scratchActive` so `on`/`off`
+    /// are idempotent. Like the split, hiding keeps the shell alive (`toggleScratch`); `closeScratch`
+    /// (tear down) is reserved for the shell's own `exit`. `command` (only meaningful when showing) runs
+    /// that program as the scratch's process instead of a login shell, run-once like `session.new
+    /// --command`: a scratch is expendable, so if one is already alive it is torn down and respawned
+    /// with the command (otherwise the flag would be silently inert).
+    private func scratchSession(_ target: String?, window: String?, mode: String?, command: String?) -> ControlResponse {
         let mode = mode ?? "toggle"
         return resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
@@ -597,6 +601,13 @@ final class ControlServer {
             case "off": want = false
             case "toggle": want = !session.scratchActive
             default: return ControlResponse(ok: false, error: "invalid scratch mode: \(mode)")
+            }
+            if want, let command, !command.isEmpty {
+                // run the command as the scratch process: respawn if one is already alive (a scratch is
+                // expendable), so the command is never silently ignored. closeScratch clears scratchActive,
+                // so the toggle below re-shows it and the factory consumes scratchCommand.
+                if session.scratchSurface != nil { store.closeScratch(id) }
+                session.scratchCommand = command
             }
             if want, store.selectedSessionID != id {
                 // the scratch is a full-coverage surface that grabs focus on show; it only makes sense on

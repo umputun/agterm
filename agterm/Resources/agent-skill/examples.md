@@ -112,6 +112,7 @@ A third per-session full-coverage shell. Hide keeps it alive; `exit` in it recre
 agtermctl session scratch on        # show (selects the target)
 agtermctl session scratch off       # hide, shell stays alive
 agtermctl session scratch toggle
+agtermctl session scratch on --command "lazygit"   # run a program instead of a shell (run-once)
 ```
 
 ## Flag a working set and view just the flagged sessions

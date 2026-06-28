@@ -926,6 +926,26 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertTrue((bad["error"] as? String ?? "").contains("invalid scratch mode"), "should report invalid mode: \(bad)")
     }
 
+    // session.scratch --command runs the command AS the scratch's process (not a shell): the command
+    // writes a marker file, proving it ran. It exits immediately (run-once), so the scratch then closes —
+    // the marker is the oracle. The command is argv-style (no shell), so the redirect is wrapped in sh -c.
+    func testSessionScratchCommandRunsAsProcess() throws {
+        let marker = NSTemporaryDirectory() + "agterm-scratchcmd-\(UUID().uuidString).txt"
+        let payload: [String: Any] = ["cmd": "session.scratch", "target": "active",
+                                      "args": ["mode": "on", "command": "sh -c 'printf SCRATCHRAN > \(marker)'"]]
+        let line = String(data: try JSONSerialization.data(withJSONObject: payload), encoding: .utf8)!
+        let resp = try sendCommand(line)
+        XCTAssertEqual(resp["ok"] as? Bool, true, "session.scratch --command should succeed: \(resp)")
+
+        var ran = false
+        for _ in 0..<40 {
+            if let s = try? String(contentsOfFile: marker, encoding: .utf8), s == "SCRATCHRAN" { ran = true; break }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        XCTAssertTrue(ran, "the scratch command should run as the scratch's process")
+        try? FileManager.default.removeItem(atPath: marker)
+    }
+
     // session.scratch on a NON-active target selects it first (the scratch is full-coverage and grabs
     // focus on show, so it must be the visible session), then shows the scratch on it.
     func testSessionScratchOnSelectsTarget() throws {

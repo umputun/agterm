@@ -106,6 +106,7 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionSplit, target: "active", args: ControlArgs(mode: "toggle")),
             ControlRequest(cmd: .sessionScratch, target: "active", args: ControlArgs(mode: "toggle")),
             ControlRequest(cmd: .sessionScratch, target: "9f3c", args: ControlArgs(mode: "on")),
+            ControlRequest(cmd: .sessionScratch, target: "active", args: ControlArgs(mode: "on", command: "htop")),
             ControlRequest(cmd: .quick, args: ControlArgs(mode: "show")),
             ControlRequest(cmd: .sidebar, args: ControlArgs(mode: "hide")),
             ControlRequest(cmd: .sessionFlag, target: "active", args: ControlArgs(mode: "toggle")),
@@ -120,6 +121,14 @@ struct ControlProtocolTests {
         for request in cases {
             #expect(try roundTrip(request) == request)
         }
+    }
+
+    @Test func sessionScratchRoundTripsWithCommand() throws {
+        let request = ControlRequest(cmd: .sessionScratch, target: "active", args: ControlArgs(mode: "on", command: "htop"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.mode == "on")
+        #expect(decoded.args?.command == "htop")
     }
 
     @Test func sessionFlagRawStringMapsToCommandAndMode() throws {
