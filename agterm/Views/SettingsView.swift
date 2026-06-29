@@ -97,6 +97,14 @@ private struct GeneralSettingsView: View {
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
+
+            Section("Ghostty Config") {
+                Toggle("Use my global Ghostty config", isOn: inheritGlobalGhosttyConfig)
+                    .accessibilityIdentifier("settings-inherit-global-ghostty")
+                Text("Also load ~/.config/ghostty/config on top of agterm's own config. Off by default so agterm stays self-contained — a config written for Ghostty.app won't silently change agterm. To customize agterm, edit ~/.config/agterm/ghostty.conf (File ▸ Edit ghostty.conf…); it is always loaded.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .padding()
@@ -121,6 +129,13 @@ private struct GeneralSettingsView: View {
     private var restoreRunningCommand: Binding<Bool> {
         Binding(get: { model.settings.restoreRunningCommand ?? false },
                 set: { model.setRestoreRunningCommand($0 ? true : nil) })
+    }
+
+    /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json
+    /// minimal until the user opts into inheriting the global ghostty config.
+    private var inheritGlobalGhosttyConfig: Binding<Bool> {
+        Binding(get: { model.settings.inheritGlobalGhosttyConfig ?? false },
+                set: { model.setInheritGlobalGhosttyConfig($0 ? true : nil) })
     }
 
     /// nil (the default) reads as 3; stepping back to 3 stores nil so settings.json stays minimal. The

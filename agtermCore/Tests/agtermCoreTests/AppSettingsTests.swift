@@ -199,4 +199,17 @@ struct AppSettingsTests {
         #expect(!AppSettings().ghosttyConfigLines().contains { $0.hasPrefix("theme = ") })
         #expect(AppSettings(theme: AppSettings.defaultTheme).ghosttyConfigLines().contains("theme = agterm"))
     }
+
+    @Test func inheritGlobalGhosttyConfigDefaultsOffAndIsNotAGhosttyKey() throws {
+        // default (nil) = off; an app-level flag, so it adds NO ghostty config line.
+        #expect(AppSettings().inheritGlobalGhosttyConfig == nil)
+        #expect(AppSettings(inheritGlobalGhosttyConfig: true).ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
+        // round-trips each state; a legacy settings.json without the key decodes to nil (off).
+        for value: Bool? in [nil, true, false] {
+            let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(inheritGlobalGhosttyConfig: value)))
+            #expect(decoded.inheritGlobalGhosttyConfig == value)
+        }
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(legacy.inheritGlobalGhosttyConfig == nil)
+    }
 }
