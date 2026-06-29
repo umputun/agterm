@@ -34,7 +34,8 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 `id`, `name`, `cwd`, `title` (the raw OSC terminal title — e.g. a remote host over SSH — omitted
 when none reported; distinct from `name`, the derived sidebar label), `active` (selected),
 `split` (split shown), `overlay` (overlay shown), `scratch` (scratch shown), `flagged` (in the
-flagged working-set), and `foreground`/`splitForeground` (the live argv of each pane's foreground
+flagged working-set), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
+idle), and `foreground`/`splitForeground` (the live argv of each pane's foreground
 process — what it is running — omitted when the pane sits at its shell prompt). Workspace nodes carry
 `id`, `name`, `active`, `sessions`.
 

@@ -216,11 +216,11 @@ A single source of truth — `AppStore.attentionSessions` (host-free, per-window
 - Modify: `.claude/rules/settings.md` (the `attentionButtonEnabled` chrome flag, alongside `notificationBadgeEnabled`/`compactToolbar`)
 - Modify: `README.md`, `ARCHITECTURE.md` (if they enumerate palette modes / titlebar chrome / control fields)
 
-- [ ] update the agent-skill `reference.md` so the `tree` command documents the new per-session `status` field (no command-count change — still 46 commands)
-- [ ] bump the rebindable-action counts in `.claude/rules/keymap.md`: "the 34 rebindable actions" → 35 and "28 of the 34" → "29 of the 35" (the new `showAttention` is expressible/pure-`defaultChord`-driven, not an arrow exception)
-- [ ] document the `.attention` palette mode + ⌃⇧I + the titlebar icon + the `attentionButtonEnabled` setting in the relevant `.claude/rules/*.md`
-- [ ] update README/ARCHITECTURE where palette modes, titlebar chrome, or control tree fields are listed
-- [ ] no test (docs only) — verify the agent-skill is edited ONLY under `agterm/Resources/agent-skill/` (never the installed copies)
+- [x] update the agent-skill `reference.md` so the `tree` command documents the new per-session `status` field (no command-count change — still 46 commands)
+- [x] bump the rebindable-action counts in `.claude/rules/keymap.md`: "the 34 rebindable actions" → 35 and "28 of the 34" → "29 of the 35" (the new `showAttention` is expressible/pure-`defaultChord`-driven, not an arrow exception)
+- [x] document the `.attention` palette mode + ⌃⇧I + the titlebar icon + the `attentionButtonEnabled` setting in the relevant `.claude/rules/*.md`
+- [x] update README/ARCHITECTURE where palette modes, titlebar chrome, or control tree fields are listed
+- [x] no test (docs only) — verify the agent-skill is edited ONLY under `agterm/Resources/agent-skill/` (never the installed copies)
 
 ### Task 13: Verify acceptance criteria
 

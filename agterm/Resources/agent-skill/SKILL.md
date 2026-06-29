@@ -71,7 +71,7 @@ Separately, each window has one **quick terminal** (a scratch overlay at 90% of 
 of the tree).
 
 Inspect the live tree any time with `agtermctl tree --json` (workspaces → sessions, each with
-`id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `scratch`). `title` is the raw OSC
+`id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `scratch`, `status`). `title` is the raw OSC
 terminal title (e.g. a remote host over SSH), omitted when none was reported — read it when a
 session's local `cwd` is stale because it's connected to a remote. List windows with
 `agtermctl window list --json`.
@@ -96,7 +96,8 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 
 **tree** — print the workspace/session tree (`--json` for structured). Each session node carries
 `foreground`/`splitForeground` (the live argv of each pane's foreground process, omitted when the pane
-is at its shell prompt) — i.e. what each pane is currently running.
+is at its shell prompt) — i.e. what each pane is currently running — and `status` (the agent-status set
+via `session status`: `active`|`completed`|`blocked`, omitted when idle).
 
 **workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom` ·
 `focus [on|off|toggle]` (collapse the sidebar tree to a single workspace).
