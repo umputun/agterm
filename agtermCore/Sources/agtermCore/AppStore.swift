@@ -205,10 +205,13 @@ public final class AppStore {
     }
 
     /// Sets a session's agent status indicator (the sidebar status glyph). The single mutation point
-    /// for the control channel's `session.status`. No-op for an unknown id. Not persisted (the
-    /// indicator is ephemeral), so it never triggers a `save()`.
+    /// for the control channel's `session.status`. Stamps `statusChangedAt` with the current time on any
+    /// non-idle status (the attention list's newest-first sort key) and clears it on idle. No-op for an
+    /// unknown id. Not persisted (the indicator is ephemeral), so it never triggers a `save()`.
     public func setAgentIndicator(_ indicator: AgentIndicator, forSession id: UUID) {
-        session(withID: id)?.agentIndicator = indicator
+        guard let session = session(withID: id) else { return }
+        session.agentIndicator = indicator
+        session.statusChangedAt = indicator.status == .idle ? nil : Date()
     }
 
     /// Pushes the current selection to the front of the recency stack (the Ctrl-Tab order).

@@ -72,10 +72,10 @@ A single source of truth — `AppStore.attentionSessions` (host-free, per-window
 - Modify: `agtermCore/Sources/agtermCore/AppStore.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTests.swift`
 
-- [ ] write failing tests: `setAgentIndicator` to a non-idle status sets `statusChangedAt` (non-nil); to `.idle` clears it to nil; re-asserting a non-idle status updates it
-- [ ] add `@ObservationIgnored var statusChangedAt: Date?` to `Session` (ephemeral; confirm `SessionSnapshot` does NOT capture it)
-- [ ] in `AppStore.setAgentIndicator(_:forSession:)` stamp `Date()` when `indicator.status != .idle`, else nil
-- [ ] run `cd agtermCore && swift test` — must pass before next task
+- [x] write failing tests: `setAgentIndicator` to a non-idle status sets `statusChangedAt` (non-nil); to `.idle` clears it to nil; re-asserting a non-idle status updates it
+- [x] add `@ObservationIgnored var statusChangedAt: Date?` to `Session` (ephemeral; confirm `SessionSnapshot` does NOT capture it)
+- [x] in `AppStore.setAgentIndicator(_:forSession:)` stamp `Date()` when `indicator.status != .idle`, else nil
+- [x] run `cd agtermCore && swift test` — must pass before next task
 
 ### Task 2: AgentStatus presentation + rank helpers
 

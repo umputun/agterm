@@ -43,6 +43,12 @@ public final class Session: Identifiable {
     /// capture it, so it never survives a relaunch.
     public var agentIndicator = AgentIndicator()
 
+    /// When the agent status last became non-idle, stamped by `AppStore.setAgentIndicator` (`Date()` for
+    /// any non-idle status, nil on idle). Sort key only — the attention list orders same-status sessions
+    /// newest-change-first. `@ObservationIgnored` (no view reacts to it; the list reads it as a sort key)
+    /// and ephemeral: `SessionSnapshot` doesn't capture it, so it never survives a relaunch.
+    @ObservationIgnored public var statusChangedAt: Date?
+
     /// Whether this session is in the flagged working-set — a durable, user-set flag that surfaces the
     /// session in the sidebar's flat flagged view (across workspaces) and swaps its tree row to the
     /// filled icon variant. Observed, so the sidebar reacts to a toggle. Persisted via `SessionSnapshot.flagged`,

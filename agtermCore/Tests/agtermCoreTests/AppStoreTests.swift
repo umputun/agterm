@@ -187,6 +187,49 @@ struct AppStoreTests {
         #expect(a.agentIndicator == AgentIndicator()) // existing session untouched
     }
 
+    @Test func setAgentIndicatorStampsStatusChangedAtOnNonIdle() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        #expect(a.statusChangedAt == nil) // a fresh session has no stamp
+        let before = Date()
+        store.setAgentIndicator(AgentIndicator(status: .active), forSession: a.id)
+        let stamp = try! #require(a.statusChangedAt) // a non-idle status stamps the change time
+        #expect(stamp >= before)
+    }
+
+    @Test func setAgentIndicatorClearsStatusChangedAtOnIdle() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: a.id)
+        #expect(a.statusChangedAt != nil)
+        store.setAgentIndicator(AgentIndicator(), forSession: a.id) // back to idle clears the stamp
+        #expect(a.statusChangedAt == nil)
+    }
+
+    @Test func setAgentIndicatorReassertingNonIdleUpdatesStatusChangedAt() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        a.statusChangedAt = Date(timeIntervalSince1970: 0) // pretend a stale stamp
+        store.setAgentIndicator(AgentIndicator(status: .active), forSession: a.id)
+        let stamp = try! #require(a.statusChangedAt)
+        #expect(stamp > Date(timeIntervalSince1970: 0)) // re-asserting a non-idle status moves the stamp forward
+    }
+
+    @Test func statusChangedAtDoesNotSurviveSnapshotRestore() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.setAgentIndicator(AgentIndicator(status: .completed), forSession: session.id)
+        #expect(session.statusChangedAt != nil)
+        let restored = Self.makeStore()
+        restored.restore(from: store.snapshot())
+        // the stamp is ephemeral like the indicator: a restored session falls back to nil.
+        #expect(restored.workspaces[0].sessions[0].statusChangedAt == nil)
+    }
+
     @Test func agentIndicatorDoesNotSurviveSnapshotRestore() {
         let store = Self.makeStore()
         let ws = store.addWorkspace(name: "work")
