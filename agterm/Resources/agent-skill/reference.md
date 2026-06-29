@@ -254,14 +254,16 @@ as the GUI's File ▸ Reload Config menu/palette item, which posts a warning ban
 
 ### ghostty.conf
 
-`<config dir>/ghostty.conf` (default `~/.config/agterm`, next to `keymap.conf`) is an agterm-scoped
-ghostty config. The app loads four config sources in order, each overriding the one before: ghostty's
-bundled defaults, then your global `~/.config/ghostty/config`, then `<config dir>/ghostty.conf`, then
-agterm's own Settings (font, theme, background opacity/blur, scroll speed), which load last and win for
-the keys the UI manages. The file is scoped to agterm; the standalone Ghostty.app never reads it. Put
-any other ghostty key here (e.g. `macos-option-as-alt = true`); the full reference is at
-https://ghostty.org/docs/config. Editing it from a terminal: open `ghostty.conf` in `$EDITOR`, then
-`agtermctl config reload`.
+`<config dir>/ghostty.conf` (default `~/.config/agterm`, next to `keymap.conf`) is the agterm-scoped
+ghostty config and the place to put agterm overrides/customizations. It is ALWAYS loaded. The app builds
+its terminal config in order, each source overriding the one before: ghostty's bundled defaults, then
+your global `~/.config/ghostty/config` (OFF by default — opt in with Settings ▸ General ▸ Use my global
+Ghostty config), then `<config dir>/ghostty.conf`, then agterm's own Settings (font, theme, background
+opacity/blur, scroll speed), which load last and win for the keys the UI manages. The scoped file is
+agterm-only; the standalone Ghostty.app never reads it. agterm is self-contained by default, so a config
+written for Ghostty.app does not silently change agterm — put agterm overrides in `ghostty.conf` (e.g.
+`macos-option-as-alt = true`); the full reference is at https://ghostty.org/docs/config. Editing it from
+a terminal: open `ghostty.conf` in `$EDITOR`, then `agtermctl config reload`.
 
 ## theme
 

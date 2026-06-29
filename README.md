@@ -308,14 +308,17 @@ v1 limitations:
 
 ## Ghostty config
 
-`agterm` builds its terminal config from four sources, each overriding the one before it:
+`agterm` builds its terminal config from these sources, each overriding the one before it:
 
 ```
 ghostty's bundled defaults  →  ~/.config/ghostty/config  →  <config dir>/ghostty.conf  →  agterm Settings
-       (lowest)                    (your global config)         (agterm-scoped)             (UI wins)
+       (lowest)                  (your global config,           (agterm-scoped,             (UI wins)
+                                   OFF by default)                always loaded)
 ```
 
-`<config dir>/ghostty.conf` sits next to `keymap.conf` (default `~/.config/agterm/ghostty.conf`; the directory is the one set in **Settings ▸ Key Mapping**). It is scoped to agterm, so the standalone Ghostty.app never reads it. Put any ghostty config key there to override the bundled defaults and your global `~/.config/ghostty/config` for agterm only. The keys agterm manages from its Settings window (font, theme, background opacity and blur, scroll speed) still win, because the generated Settings file loads last, so set those in Settings and put everything else here. The file is optional: a commented starter is written on first launch and stays a no-op until you edit it.
+agterm is self-contained: **by default it does not read your global `~/.config/ghostty/config`**, so a config written for the standalone Ghostty.app never silently changes agterm. Turn on **Settings ▸ General ▸ Use my global Ghostty config** to fold it into the chain.
+
+`<config dir>/ghostty.conf` is the place to customize agterm. It sits next to `keymap.conf` (default `~/.config/agterm/ghostty.conf`; the directory is the one set in **Settings ▸ Key Mapping**), is always loaded, and is scoped to agterm so the standalone Ghostty.app never reads it. Put any ghostty config key there to override the bundled defaults for agterm only. The keys agterm manages from its Settings window (font, theme, background opacity and blur, scroll speed) still win, because the generated Settings file loads last, so set those in Settings and put everything else here. The file is optional: a commented starter is written on first launch and stays a no-op until you edit it.
 
 A common use is making the macOS Option key send Alt:
 
@@ -323,7 +326,7 @@ A common use is making the macOS Option key send Alt:
 macos-option-as-alt = true
 ```
 
-That works in `ghostty.conf`, and because `~/.config/ghostty/config` is already in the chain, in your global ghostty config too. The full key reference is at <https://ghostty.org/docs/config>.
+Put that in `ghostty.conf`. It also works in your global `~/.config/ghostty/config` once you enable the toggle above. The full key reference is at <https://ghostty.org/docs/config>.
 
 Open the file with **File ▸ Edit ghostty.conf…** or the ⌃⇧P palette ("Edit ghostty.conf"): it opens in a 95% overlay running `$VISUAL`/`$EDITOR` (falling back to `vi`), the same as Edit Keymap, and reloads when you save and quit. Apply edits made elsewhere with **File ▸ Reload Config**, the action palette ("Reload Config"), or `agtermctl config reload`. A malformed line does not break the load: the bad lines are skipped and the good ones still apply. The diagnostic count (shown in a banner and returned by `config.reload`) covers every ghostty config source, not just `ghostty.conf`, because the diagnostics do not record which file they came from. The Console log shows the offending line.
 

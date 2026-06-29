@@ -81,6 +81,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// quit (captured via `SessionSnapshot.foregroundCommand`). nil means the default (off). An app-level
     /// behavior flag, NOT a ghostty key — it never appears in `ghosttyConfigLines()`.
     public var restoreRunningCommand: Bool?
+    /// Whether agterm also loads the user's GLOBAL ghostty config (`~/.config/ghostty/config`) on top of
+    /// its bundled defaults. nil means the default (off): agterm is self-contained, so a config written
+    /// for the standalone Ghostty.app does NOT silently change agterm. Opt in to share one config across
+    /// both. The agterm-scoped `~/.config/agterm/ghostty.conf` is ALWAYS loaded regardless and is the
+    /// place for agterm overrides/customizations. An app-level flag read at config-load time (NOT a
+    /// ghostty key, so it never appears in `ghosttyConfigLines()`), gating which files `loadConfig` reads.
+    public var inheritGlobalGhosttyConfig: Bool?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 backgroundOpacity: Double? = nil, backgroundBlur: Int? = nil, notificationsEnabled: Bool? = nil,
@@ -88,7 +95,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 activeStatusColorHex: String? = nil, blockedStatusColorHex: String? = nil,
                 completedStatusColorHex: String? = nil, configDirectory: String? = nil,
                 mouseScrollMultiplier: Double? = nil, inactivePaneMuteStrength: Int? = nil,
-                sidebarBackgroundShift: Int? = nil, restoreRunningCommand: Bool? = nil) {
+                sidebarBackgroundShift: Int? = nil, restoreRunningCommand: Bool? = nil,
+                inheritGlobalGhosttyConfig: Bool? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -105,6 +113,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.inactivePaneMuteStrength = inactivePaneMuteStrength
         self.sidebarBackgroundShift = sidebarBackgroundShift
         self.restoreRunningCommand = restoreRunningCommand
+        self.inheritGlobalGhosttyConfig = inheritGlobalGhosttyConfig
     }
 
     /// The SwiftUI overlay opacity for a given inactive-pane mute strength: the strength is clamped to

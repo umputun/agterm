@@ -89,6 +89,17 @@ final class SettingsModel {
     func setSidebarBackgroundShift(_ value: Int?) { settings.sidebarBackgroundShift = value; persistAndApply() }
     // not a ghostty key, so persistAndApply()'s writeGhosttyConfig() no-ops and no surface reload fires.
     func setRestoreRunningCommand(_ value: Bool?) { settings.restoreRunningCommand = value; persistAndApply() }
+
+    /// Persist whether agterm inherits the user's global `~/.config/ghostty/config` and FULLY reload the
+    /// ghostty config so the change takes effect live. NOT a `ghosttyConfigLines()` key, so
+    /// `persistAndApply`'s text-diff guard would skip the reload — but it changes WHICH files `loadConfig`
+    /// reads, so it takes the unconditional reload path (like `setConfigDirectory`). nil/false = off (the
+    /// default): agterm stays self-contained; the scoped `ghostty.conf` is the place for customizations.
+    func setInheritGlobalGhosttyConfig(_ value: Bool?) {
+        settings.inheritGlobalGhosttyConfig = value
+        try? settingsStore.save(settings)
+        reloadGhosttyConfig()
+    }
     func setActiveStatusColorHex(_ hex: String?) { settings.activeStatusColorHex = hex; persistAndApply() }
     func setBlockedStatusColorHex(_ hex: String?) { settings.blockedStatusColorHex = hex; persistAndApply() }
     func setCompletedStatusColorHex(_ hex: String?) { settings.completedStatusColorHex = hex; persistAndApply() }
