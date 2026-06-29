@@ -356,6 +356,8 @@ struct agtermApp: App {
                     .keyboardShortcut(shortcut(for: .commandPalette))
                 Button { palette.toggle(.customCommands) } label: { Label("Custom Commands", systemImage: "terminal") }
                     .keyboardShortcut(shortcut(for: .customCommandPalette))
+                Button { actions.toggleAttentionPalette() } label: { Label("Go to Attention…", systemImage: "bell") }
+                    .keyboardShortcut(shortcut(for: .showAttention))
                 Divider()
                 // step between sessions in the sidebar's flattened order. Prev/Next ride ⌥⌘↑/↓ (NOT bare
                 // ⌘+arrows, which shadow text-field caret nav in the rename/palette/settings fields); ⌥⌘↑/↓

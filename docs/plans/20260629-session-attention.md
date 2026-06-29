@@ -160,12 +160,12 @@ A single source of truth — `AppStore.attentionSessions` (host-free, per-window
 - Modify: `agterm/AppActions.swift`
 - Modify: `agterm/agtermApp.swift`
 
-- [ ] write failing test: `BuiltinAction.showAttention` exists with rawValue `show_attention` and `defaultChord` = ⌃⇧I (`Chord(mods:[.control,.shift], key:"i")`)
-- [ ] update the EXISTING `BuiltinActionTests` assertions broken by the new case: bump `allCases.count == 34` → `35` (line 25) and add `.showAttention: Chord(mods:[.control,.shift], key:"i")` to the exhaustive `expected` map (so `expected.count == allCases.count` at line 72 holds and the per-action chord check passes)
-- [ ] add the `showAttention` case + its `defaultChord` arm in `BuiltinAction`
-- [ ] add `AppActions.toggleAttentionPalette()` → `palette.toggle(.attention)`; wire `showAttention` to it wherever `BuiltinAction`s dispatch
-- [ ] add the Navigate menu item ("Go to Attention…", reading `equivalent(for: .showAttention)`) in `agtermApp`'s Navigate `CommandMenu`, plus a "Show Attention" entry in `AppActions.paletteActions()`
-- [ ] run `cd agtermCore && swift test` and build (`make build`) — must pass before next task
+- [x] write failing test: `BuiltinAction.showAttention` exists with rawValue `show_attention` and `defaultChord` = ⌃⇧I (`Chord(mods:[.control,.shift], key:"i")`)
+- [x] update the EXISTING `BuiltinActionTests` assertions broken by the new case: bump `allCases.count == 34` → `35` (line 25) and add `.showAttention: Chord(mods:[.control,.shift], key:"i")` to the exhaustive `expected` map (so `expected.count == allCases.count` at line 72 holds and the per-action chord check passes)
+- [x] add the `showAttention` case + its `defaultChord` arm in `BuiltinAction`
+- [x] add `AppActions.toggleAttentionPalette()` → `palette.toggle(.attention)`; wire `showAttention` to it wherever `BuiltinAction`s dispatch
+- [x] add the Navigate menu item ("Go to Attention…", reading `equivalent(for: .showAttention)`) in `agtermApp`'s Navigate `CommandMenu`, plus a "Show Attention" entry in `AppActions.paletteActions()`
+- [x] run `cd agtermCore && swift test` and build (`make build`) — must pass before next task
 
 **Note:** ⌃I alone is Tab, but ⌃⇧I is a distinct, parseable single-char chord (`key:"i"` + shift) swallowed by menu/keymap dispatch before the terminal, exactly like ⌃⇧P/⌃⇧O. Not a reserved monitor chord, so it passes `parseKeymap` validation.
 

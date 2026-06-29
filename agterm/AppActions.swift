@@ -456,6 +456,7 @@ final class AppActions {
             PaletteItem(title: "Next Attention Session", shortcut: paletteHint(for: .nextAttentionSession)) { [weak self] in self?.selectNextAttentionSession() },
             PaletteItem(title: "First Session", shortcut: paletteHint(for: .firstSession)) { [weak self] in self?.selectFirstSession() },
             PaletteItem(title: "Last Session", shortcut: paletteHint(for: .lastSession)) { [weak self] in self?.selectLastSession() },
+            PaletteItem(title: "Show Attention", shortcut: paletteHint(for: .showAttention)) { [weak self] in self?.toggleAttentionPalette() },
             PaletteItem(title: "Toggle Split", shortcut: paletteHint(for: .toggleSplit)) { [weak self] in self?.toggleSplit() },
             PaletteItem(title: "Toggle Scratch", shortcut: paletteHint(for: .toggleScratch)) { [weak self] in self?.toggleScratch() },
             PaletteItem(title: "Toggle Sidebar", shortcut: paletteHint(for: .toggleSidebar)) { [weak self] in self?.toggleSidebar() },
@@ -579,6 +580,13 @@ final class AppActions {
                 store.selectSession(id)
             }
         }
+    }
+
+    /// Toggle the `.attention` command palette (the window's non-idle sessions). Driven by the ⌃⇧I
+    /// `BuiltinAction.showAttention`, the Navigate ▸ Go to Attention… menu item, the ⌃⇧P launcher entry,
+    /// and the titlebar bell icon — all the same `palette.toggle(.attention)`.
+    func toggleAttentionPalette() {
+        palette?.toggle(.attention)
     }
 
     // MARK: - Theme picker
