@@ -1832,6 +1832,97 @@ final class ControlAPIUITests: XCTestCase {
                        "window should restore toward \(normal) after a second window.zoom, got \(window.frame.size)")
     }
 
+    // A point 14pt below the top edge, horizontally centred: clears the top resize strip, lands inside the
+    // titlebar band (compact 30 / tall 48), and sits in the empty header (a Spacer) — clear of the traffic
+    // lights on the left and the toolbar buttons on the right, so the click falls through the decorative
+    // regions' `.allowsHitTesting(false)` to the `WindowControlArea` layer behind the custom header.
+    // Re-resolved at each interaction, so it stays in the header even after a zoom grows the window.
+    private func emptyHeaderPoint(_ window: XCUIElement) -> XCUICoordinate {
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0)).withOffset(CGVector(dx: 0, dy: 14))
+    }
+
+    // The double-click-header GESTURE (the actual mouse event, not the window.zoom control command) must
+    // zoom the window. Mirrors testWindowZoom's settle logic but drives the real cursor: resize to a known
+    // small frame, double-click the empty header centre, assert the window grows, then double-click again
+    // and assert it restores.
+    func testDoubleClickHeaderZoomsAndRestores() throws {
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 5), "window should exist")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.resize","args":{"width":800,"height":600}}"#)["ok"] as? Bool, true)
+        var deadline = Date().addingTimeInterval(5)
+        while Date() < deadline, !(abs(window.frame.size.width - 800) < 8 && abs(window.frame.size.height - 600) < 8) {
+            usleep(150_000)
+        }
+        let normal = window.frame.size
+        XCTAssertEqual(normal.width, 800, accuracy: 8, "window should settle near 800 wide before the gesture, got \(normal)")
+
+        emptyHeaderPoint(window).doubleClick()
+        deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            let s = window.frame.size
+            if s.width > normal.width + 50 || s.height > normal.height + 50 { break }
+            usleep(150_000)
+        }
+        XCTAssertTrue(window.frame.size.width > normal.width + 50 || window.frame.size.height > normal.height + 50,
+                      "double-clicking the header should zoom (grow) the window: normal=\(normal) now=\(window.frame.size)")
+
+        emptyHeaderPoint(window).doubleClick()
+        deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            let s = window.frame.size
+            if abs(s.width - normal.width) < 40, abs(s.height - normal.height) < 40 { break }
+            usleep(150_000)
+        }
+        XCTAssertEqual(window.frame.size.width, normal.width, accuracy: 40,
+                       "a second header double-click should restore the window toward \(normal), got \(window.frame.size)")
+    }
+
+    // The `WindowControlArea` drag/zoom layer sits BEHIND the header; the toolbar buttons render in front
+    // and must keep their own clicks. A double-click on the empty header must zoom (not reach a button);
+    // a click on quick-terminal-toggle must still open the quick terminal cover despite the layer behind.
+    func testHeaderButtonsStillReceiveClicksOverControlArea() throws {
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 5), "window should exist")
+        let cover = app.descendants(matching: .any).matching(identifier: "quick-terminal").firstMatch
+
+        // double-clicking the empty header zooms the window; it must NOT open the quick terminal.
+        emptyHeaderPoint(window).doubleClick()
+        XCTAssertFalse(cover.waitForExistence(timeout: 2), "double-clicking the header must not open the quick terminal")
+
+        // the button itself still takes its click even though the control-area layer is behind the header.
+        let button = app.buttons["quick-terminal-toggle"]
+        XCTAssertTrue(button.waitForExistence(timeout: 5), "quick-terminal toolbar button should exist")
+        button.click()
+        XCTAssertTrue(cover.waitForExistence(timeout: 5), "clicking quick-terminal-toggle should open the quick terminal cover")
+    }
+
+    // A single-click-drag anywhere on the full custom header moves the window (performDrag), not just the
+    // native top band. Resize + position to a known on-screen frame so the drag stays on screen and the
+    // delta is unambiguous, record the origin, drag the empty header, and assert the window's origin moved.
+    func testDragHeaderMovesWindow() throws {
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 5), "window should exist")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.resize","args":{"width":800,"height":600}}"#)["ok"] as? Bool, true)
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.move","args":{"x":140,"y":140}}"#)["ok"] as? Bool, true)
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline, abs(window.frame.size.width - 800) > 8 { usleep(150_000) }
+        let origin = window.frame.origin
+
+        let from = emptyHeaderPoint(window)
+        let to = from.withOffset(CGVector(dx: 90, dy: 70))
+        from.click(forDuration: 0.3, thenDragTo: to, withVelocity: 180, thenHoldForDuration: 0.25)
+
+        let settle = Date().addingTimeInterval(5)
+        while Date() < settle {
+            let o = window.frame.origin
+            if abs(o.x - origin.x) > 20 || abs(o.y - origin.y) > 20 { break }
+            usleep(150_000)
+        }
+        let moved = window.frame.origin
+        XCTAssertTrue(abs(moved.x - origin.x) > 20 || abs(moved.y - origin.y) > 20,
+                      "dragging the header should move the window: origin=\(origin) now=\(moved)")
+    }
+
     // window.close marks the window closed, after which a session command targeting it returns the
     // "window not open" error. (--window routing into the second window is exercised first to prove
     // the round-trip, then the close flips it to the error path.)
