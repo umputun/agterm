@@ -17,7 +17,7 @@ if not set -q AGTERM_SESSION_ID
 end
 
 # Locate agterm-agent-status.sh relative to this file
-set -l _ags_dir (dirname (status filename))/..
+set -l _ags_dir (dirname (dirname (status filename)))
 if not set -q AGTERM_AGENT_BIN
     set -g AGTERM_AGENT_BIN "$_ags_dir/agterm-agent-status.sh"
 end

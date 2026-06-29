@@ -13,6 +13,9 @@ public enum AgentHooksInstall {
     /// The shell integration script sourced from the user's rc files, relative to the script directory.
     public static let integrationRelativePath = "shell/integration.sh"
 
+    /// The fish shell integration script sourced from the user's config.fish, relative to the script directory.
+    public static let fishIntegrationRelativePath = "shell/integration.fish"
+
     /// Marker lines bracketing the agterm-managed block in a shell rc file. The opening marker is also
     /// the idempotency probe (present → already installed).
     public static let rcMarkerBegin = "# >>> agterm agent-status >>>"

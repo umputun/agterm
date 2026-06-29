@@ -161,13 +161,14 @@ enum AgentHooksInstaller {
         let home = FileManager.default.homeDirectoryForCurrentUser
         for name in [".zshrc", ".bashrc", ".config/fish/config.fish"] {
             let rc = home.appendingPathComponent(name)
+            if name.hasSuffix(".fish") {
+                // Only create/append to config.fish if the user already has a ~/.config/fish directory
+                guard FileManager.default.fileExists(atPath: rc.deletingLastPathComponent().path) else { continue }
+            }
             let existing = (try? String(contentsOf: rc, encoding: .utf8)) ?? ""
-            let scriptName = name.hasSuffix(".fish") ? "shell/integration.fish" : AgentHooksInstall.integrationRelativePath
+            let scriptName = name.hasSuffix(".fish") ? AgentHooksInstall.fishIntegrationRelativePath : AgentHooksInstall.integrationRelativePath
             let result = AgentHooksInstall.appendShellRC(existing: existing, scriptDir: destinationFolder.path, scriptName: scriptName)
             guard result.changed else { continue }
-            if name.hasSuffix(".fish") {
-                try FileManager.default.createDirectory(at: rc.deletingLastPathComponent(), withIntermediateDirectories: true)
-            }
             try writePreservingSymlink(result.contents, to: rc)
         }
     }
@@ -186,7 +187,7 @@ enum AgentHooksInstaller {
         return """
         Scripts installed to \(destinationFolder.path).
         \(claudeLine)
-        The source line was added to ~/.zshrc, ~/.bashrc, and ~/.config/fish/config.fish.
+        The source line was added to ~/.zshrc, ~/.bashrc (and ~/.config/fish/config.fish if fish is installed).
 
         For Codex, add this line to ~/.codex/config.toml manually:
         \(codexNotifyLine)
