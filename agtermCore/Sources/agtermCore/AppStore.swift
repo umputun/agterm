@@ -631,13 +631,17 @@ public final class AppStore {
     }
 
     /// Sets (or clears) a session's background watermark and persists it. Clean no-op (no write) for an
-    /// unknown id or when the spec is unchanged, so a repeated `session.background` set is idempotent. The
-    /// app target applies it to the session's surface(s) after this returns (the host-free store owns only
-    /// the spec; the C-boundary apply lives in `ControlServer`/`GhosttySurfaceView`).
-    public func setBackgroundWatermark(_ watermark: BackgroundWatermark?, forSession id: UUID) {
-        guard let session = session(withID: id), session.backgroundWatermark != watermark else { return }
+    /// unknown id or when the spec is unchanged, so a repeated `session.background` set is idempotent.
+    /// Returns whether the spec actually CHANGED, so the app target can gate the (retained, teardown-only-
+    /// freed) per-surface config apply on a real change — without it, a scripted set-loop keeps appending
+    /// owned configs. The app target applies it to the session's surface(s) after this returns (the
+    /// host-free store owns only the spec; the C-boundary apply lives in `ControlServer`/`GhosttySurfaceView`).
+    @discardableResult
+    public func setBackgroundWatermark(_ watermark: BackgroundWatermark?, forSession id: UUID) -> Bool {
+        guard let session = session(withID: id), session.backgroundWatermark != watermark else { return false }
         session.backgroundWatermark = watermark
         save()
+        return true
     }
 
     /// Unflags every session across all workspaces in one `save()`. No-ops (no write) when nothing is

@@ -486,7 +486,7 @@ struct Session: ParsableCommand {
         /// parse error before any socket round-trip, matching the server's rejection exactly. The enum
         /// checks reject `""` too, so no separate empty-string special-case is needed.
         static func validate(fit: String? = nil, position: String? = nil, opacity: Double? = nil,
-                             color: String? = nil, text: String? = nil) throws {
+                             color: String? = nil, text: String? = nil, path: String? = nil) throws {
             if let fit, !WatermarkConfig.isValidFit(fit) {
                 throw ValidationError("fit must be one of: \(WatermarkConfig.validFits.joined(separator: ", "))")
             }
@@ -502,6 +502,9 @@ struct Session: ParsableCommand {
             if let text, !WatermarkConfig.isValidText(text) {
                 throw ValidationError("text must be 1–\(WatermarkConfig.maxTextLength) characters")
             }
+            if let path, !WatermarkConfig.isValidImagePath(path) {
+                throw ValidationError("image path must not contain control characters")
+            }
         }
 
         struct Image: RequestCommand {
@@ -514,7 +517,7 @@ struct Session: ParsableCommand {
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
-            func validate() throws { try Background.validate(fit: fit, position: position, opacity: opacity) }
+            func validate() throws { try Background.validate(fit: fit, position: position, opacity: opacity, path: path) }
 
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionBackground, target: target.target,

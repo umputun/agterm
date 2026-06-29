@@ -119,6 +119,20 @@ struct WatermarkConfigTests {
         #expect(!WatermarkConfig.isValidColorHex(hex))
     }
 
+    @Test(arguments: ["/tmp/bg.png", "/Users/me/My Pictures/x.png", "relative/path.png", "/tmp/日本語.png", ""])
+    func imagePathWithoutControlCharsAccepted(_ path: String) {
+        // spaces + unicode are fine (the path rides a raw, whole-line-remainder config value); emptiness is
+        // a separate boundary check, so "" passes the control-char gate.
+        #expect(WatermarkConfig.isValidImagePath(path))
+    }
+
+    @Test(arguments: ["x.png\nclipboard-read = allow\ny.png", "a.png\r", "a\tb.png", "a.png\u{0}", "\u{1b}[2J"])
+    func imagePathWithControlCharsRejected(_ path: String) {
+        // the injection vector: a newline (or any scalar < 0x20) would split `background-image = <path>`
+        // and let the tail inject an arbitrary ghostty key into the per-surface overlay.
+        #expect(!WatermarkConfig.isValidImagePath(path))
+    }
+
     @Test func textValidationEnforcesNonEmptyAndMaxLength() {
         #expect(WatermarkConfig.maxTextLength == 256)
         #expect(WatermarkConfig.isValidText("X"))

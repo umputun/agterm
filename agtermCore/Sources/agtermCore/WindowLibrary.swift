@@ -335,6 +335,12 @@ public final class WindowLibrary {
         // an un-cancelled pending save would fire after removeItem and re-create windows/<id>.json as an
         // orphan that a future index loss would resurrect via recoverOrphanedWindows().
         stores[id]?.cancelPendingSave()
+        // sweep each session's rendered `.text` watermark PNG before dropping the store: deleting a window
+        // permanently destroys its sessions (like closeSession/removeWorkspace), so their PNGs must go too —
+        // window-CLOSE keeps the sessions and is handled elsewhere, but window-DELETE has no later sweep.
+        for session in stores[id]?.workspaces.flatMap(\.sessions) ?? [] {
+            WatermarkStorage.removeRenderedText(sessionID: session.id)
+        }
         stores[id] = nil
         windows.remove(at: index)
         if frontmostWindowID == id { frontmostWindowID = nil }

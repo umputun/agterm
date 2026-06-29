@@ -43,6 +43,17 @@ public enum WatermarkConfig {
         return s.count == 6 && s.allSatisfy(\.isHexDigit)
     }
 
+    /// Valid `.image` watermark path: no ASCII control character (any scalar `< 0x20`). `imagePath` is the
+    /// ONLY free-text field that reaches a ghostty config line, and it is emitted RAW/unquoted as
+    /// `background-image = <path>` (`overlayText`) — so an embedded newline would split the value and let
+    /// the line's tail inject an arbitrary ghostty key (e.g. `clipboard-read = allow`) into the per-surface
+    /// overlay, which wins on that surface. The owner-only socket + the `fileExists` gate keep it well short
+    /// of RCE, but the spec is persisted and re-applied on restore from semi-trusted (agent) input, so the
+    /// injection vector is closed at the boundary. Shared by the control server and the CLI `validate()`.
+    public static func isValidImagePath(_ path: String) -> Bool {
+        !path.unicodeScalars.contains { $0.value < 0x20 }
+    }
+
     /// The per-surface ghostty config overlay (loaded LAST, so it wins) for `watermark` pointed at
     /// `resolvedImagePath` (the user's file for `.image`, the rendered PNG for `.text`):
     ///

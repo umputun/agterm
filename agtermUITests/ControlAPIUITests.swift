@@ -191,6 +191,14 @@ final class ControlAPIUITests: XCTestCase {
         let badFit = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"image","path":"/no/such.png","fit":"fill"}}"#)
         XCTAssertEqual(badFit["ok"] as? Bool, false, "an invalid fit should be rejected")
 
+        // config-injection vector: a newline in the image path would smuggle an extra ghostty key into the
+        // per-surface overlay. The control-char guard runs BEFORE the format/existence checks, so its own
+        // error proves it (not fileExists) did the rejecting.
+        let injection = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"image","path":"x.png\nclipboard-read = allow\ny.png"}}"#)
+        XCTAssertEqual(injection["ok"] as? Bool, false, "an image path with a control char must be rejected")
+        XCTAssertEqual(injection["error"] as? String, "image path must not contain control characters",
+                       "the control-char guard, not the fileExists check, should reject it")
+
         let badOpacity = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"text","text":"X","opacity":5}}"#)
         XCTAssertEqual(badOpacity["ok"] as? Bool, false, "an out-of-range opacity should be rejected")
 

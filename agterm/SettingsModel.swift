@@ -308,8 +308,13 @@ final class SettingsModel {
     /// Edit-ghostty overlay close, a Key Mapping directory change, and the `config.reload` control command.
     @discardableResult
     func reloadGhosttyConfig() -> Int {
-        let count = GhosttyApp.shared.reloadConfig(surfaces: liveSurfaces())
+        // Reset per-session zoom BEFORE the reload: `reloadConfig` re-asserts each watermarked surface's
+        // overlay (`reapplyWatermarkIfNeeded`), which re-emits `font-size` from `session.fontSize`. Clearing
+        // it first makes that re-emit read nil — so a watermarked pane drops its zoom on screen and the
+        // snapshot persists `fontSize == nil` in agreement, matching the "reload clears per-session zoom"
+        // contract (resetting AFTER would leave the surface zoomed while the model said nil).
         library.resetSessionFontSizesAllWindows()
+        let count = GhosttyApp.shared.reloadConfig(surfaces: liveSurfaces())
         NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
         if count > 0 { NotificationManager.shared.notifyConfigDiagnostics(count: count) }
         return count

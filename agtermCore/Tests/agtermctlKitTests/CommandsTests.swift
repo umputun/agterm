@@ -742,4 +742,10 @@ struct CommandsTests {
         #expect(validationMessage(["session", "background", "text",
                                    String(repeating: "A", count: WatermarkConfig.maxTextLength + 1)]) != nil)
     }
+
+    @Test func sessionBackgroundImageRejectsControlCharPath() {
+        // the config-injection vector: a newline in the path would smuggle an extra ghostty key into the
+        // per-surface overlay. Caught CLI-side (matching the server boundary) before any round-trip.
+        #expect(validationMessage(["session", "background", "image", "x.png\nclipboard-read = allow\ny.png"]) != nil)
+    }
 }

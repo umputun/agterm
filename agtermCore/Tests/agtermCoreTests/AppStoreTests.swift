@@ -2075,6 +2075,21 @@ struct AppStoreTests {
         // no statuses set: every session is idle, so the attention list is empty
         #expect(store.attentionSessions.isEmpty)
     }
+
+    @Test func setBackgroundWatermarkReportsWhetherChanged() {
+        // the change-gate the control server uses to skip a redundant per-surface config apply (which
+        // retains an owned config freed only at teardown) on a scripted set-loop.
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "w")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/tmp")!
+        let mark = BackgroundWatermark(kind: .text, text: "PROD")
+
+        #expect(store.setBackgroundWatermark(mark, forSession: session.id))       // first set changes
+        #expect(!store.setBackgroundWatermark(mark, forSession: session.id))      // identical re-set: no change
+        #expect(store.setBackgroundWatermark(nil, forSession: session.id))        // clear changes
+        #expect(!store.setBackgroundWatermark(nil, forSession: session.id))       // clear again: no change
+        #expect(!store.setBackgroundWatermark(mark, forSession: UUID()))          // unknown id: no change
+    }
 }
 
 private final class SpySurface: TerminalSurface {

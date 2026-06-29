@@ -1003,6 +1003,9 @@ final class ControlServer {
             guard let path, !path.isEmpty else {
                 return ControlResponse(ok: false, error: "session.background image requires a path")
             }
+            guard WatermarkConfig.isValidImagePath(path) else {
+                return ControlResponse(ok: false, error: "image path must not contain control characters")
+            }
             guard WatermarkRenderer.isSupportedImage(path) else {
                 return ControlResponse(ok: false, error: "unsupported image (PNG or JPEG only): \(path)")
             }
@@ -1033,9 +1036,14 @@ final class ControlServer {
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session")
             }
+            // gate on a real change: applyWatermark RETAINS a per-surface config freed only on teardown, so
+            // re-applying an unchanged spec (a scripted set-loop) would leak owned configs. The store no-ops
+            // its own write the same way.
+            guard store.setBackgroundWatermark(watermark, forSession: id) else {
+                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+            }
             // clearing a `.text` watermark drops its rendered PNG so the state dir doesn't accumulate.
             if watermark == nil { WatermarkStorage.removeRenderedText(sessionID: id) }
-            store.setBackgroundWatermark(watermark, forSession: id)
             applyWatermark(to: session)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }

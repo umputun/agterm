@@ -143,7 +143,8 @@ process — what it is running — omitted when the pane sits at its shell promp
   `--fit` defaults to `contain`; `--position` is `center` (default) or an edge/corner anchor
   (`top-left`, `top-center`, `top-right`, `center-left`, `center-right`, `bottom-left`, `bottom-center`,
   `bottom-right`); `--repeat` tiles to fill blank space. Errors on a bad fit/position, an out-of-range
-  `--opacity` (must be 0.0–1.0), an unsupported format, or a missing file.
+  `--opacity` (must be 0.0–1.0), an unsupported format, a missing file, or a path containing control
+  characters (the path reaches a ghostty config line, so a newline could inject other keys).
 - `session background text <text> [--color #rrggbb] [--opacity F] [--fit ...] [--position ...] [--target] [--window W]`
   — rasterize `text` to a watermark behind the terminal. `--color` defaults to the terminal foreground
   (must be a `#rrggbb` hex value); `--opacity`/`--fit`/`--position` as above. `text` is capped at 256
@@ -335,7 +336,7 @@ user-edited file read at launch — there is no control command for it.
 `invalid scratch mode`, `session has no split` (focus), `no selection` (copy), `overlay already open` /
 `no overlay` / `still running` / `no result` (overlay), `invalid flag mode` (session flag),
 `invalid fit` / `invalid position` / `invalid opacity` / `invalid color` / `text too long` /
-`unsupported image (PNG or JPEG only)` / `no such image file` / `invalid background mode` (session background),
+`unsupported image (PNG or JPEG only)` / `no such image file` / `image path must not contain control characters` / `invalid background mode` (session background),
 `invalid sidebar mode` (sidebar), `invalid focus mode` (workspace focus),
 `no open window` (quick/sidebar), `window not open`
 (resize/move/`--window`), `unknown theme: <name>` (theme set), `unknown sound: <name>` (session status --sound). Unknown commands fail to decode and return a structured error, never a crash.
