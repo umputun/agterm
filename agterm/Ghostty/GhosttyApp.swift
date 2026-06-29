@@ -175,6 +175,18 @@ final class GhosttyApp {
         completedStatusColor = NSColor(agtermHex: completedHex) ?? .systemGreen
     }
 
+    /// The configured tint for a status glyph, shared by the AppKit sidebar `StatusIconView` and the
+    /// SwiftUI `StatusGlyph` so the two can't drift. `idle` never renders a glyph (it is filtered out
+    /// before any glyph is built), so its color is unused — it returns `.clear` as a benign default.
+    func statusColor(for status: AgentStatus) -> NSColor {
+        switch status {
+        case .active: return activeStatusColor
+        case .blocked: return blockedStatusColor
+        case .completed: return completedStatusColor
+        case .idle: return .clear
+        }
+    }
+
     // MARK: - Config
 
     /// Path to agterm's generated ghostty config (font/size/theme from the Settings window), in the

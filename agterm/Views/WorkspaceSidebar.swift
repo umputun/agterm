@@ -156,17 +156,12 @@ private final class StatusIconView: NSImageView {
     }
 
     private static func icon(for status: AgentStatus) -> NSImage? {
-        let symbol: String
-        let color: NSColor
-        switch status {
-        case .active: (symbol, color) = ("ellipsis.circle.fill", GhosttyApp.shared.activeStatusColor)
-        case .blocked: (symbol, color) = ("exclamationmark.circle.fill", GhosttyApp.shared.blockedStatusColor)
-        case .completed: (symbol, color) = ("checkmark.circle.fill", GhosttyApp.shared.completedStatusColor)
-        case .idle: return nil // unreachable: `apply` returns early on `.idle` before drawing
-        }
+        guard status != .idle else { return nil } // unreachable: `apply` returns early on `.idle` before drawing
+        // symbol + color come from the shared mapping (AgentStatus.symbolName + GhosttyApp.statusColor)
+        // so this glyph and the SwiftUI StatusGlyph stay identical.
         let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
-            .applying(NSImage.SymbolConfiguration(paletteColors: [color]))
-        return NSImage(systemSymbolName: symbol, accessibilityDescription: status.rawValue)?
+            .applying(NSImage.SymbolConfiguration(paletteColors: [GhosttyApp.shared.statusColor(for: status)]))
+        return NSImage(systemSymbolName: status.symbolName, accessibilityDescription: status.rawValue)?
             .withSymbolConfiguration(config)
     }
 }

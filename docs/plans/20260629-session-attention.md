@@ -124,11 +124,11 @@ A single source of truth — `AppStore.attentionSessions` (host-free, per-window
 - Modify: `agterm/Views/WorkspaceSidebar.swift`
 - Create: `agterm/Views/StatusGlyph.swift`
 
-- [ ] add `func statusColor(for: AgentStatus) -> NSColor` to `GhosttyApp` (returns the configured active/blocked/completed tint)
-- [ ] refactor `StatusIconView.apply` (`WorkspaceSidebar.swift:162-164`) to use `AgentStatus.symbolName` + `GhosttyApp.shared.statusColor(for:)` instead of the inline switch (no behavior change — same symbols/colors)
-- [ ] create `StatusGlyph: View` (SwiftUI) rendering `Image(systemName: status.symbolName).foregroundStyle(Color(nsColor: GhosttyApp.shared.statusColor(for: status)))`
-- [ ] verify the sidebar still renders identical glyphs (build + visual check noted in Post-Completion); no unit test for AppKit rendering
-- [ ] build (`make build`) — must succeed before next task
+- [x] add `func statusColor(for: AgentStatus) -> NSColor` to `GhosttyApp` (returns the configured active/blocked/completed tint)
+- [x] refactor `StatusIconView.apply` (`WorkspaceSidebar.swift:162-164`) to use `AgentStatus.symbolName` + `GhosttyApp.shared.statusColor(for:)` instead of the inline switch (no behavior change — same symbols/colors)
+- [x] create `StatusGlyph: View` (SwiftUI) rendering `Image(systemName: status.symbolName).foregroundStyle(Color(nsColor: GhosttyApp.shared.statusColor(for: status)))`
+- [x] verify the sidebar still renders identical glyphs — refactor is behavior-preserving (same `symbolName` symbols + same `statusColor` tints); confirmed by build + code review, visual check in Post-Completion (no unit test for AppKit rendering)
+- [x] build (`make build`) — must succeed before next task
 
 ### Task 7: PaletteItem status glyph capability
 
