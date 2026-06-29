@@ -23,9 +23,6 @@ final class ControlServer {
     private let settingsModel: SettingsModel
     private let socketPath: String
 
-    /// Plays the one-shot sound requested by `session.status --sound`.
-    private let soundPlayer = StatusSoundPlayer()
-
     /// The frontmost open window's store — the default target of a placement/`active` command. Falls
     /// back to an empty throwaway only in the all-windows-closed state (the app is quitting), where no
     /// command can meaningfully run; the library is never windowless at launch.
@@ -669,26 +666,27 @@ final class ControlServer {
     /// value is the structured `invalid status` error. `blink` (default false) pulses the glyph;
     /// `autoReset` (default false) clears the indicator to idle once the session is visited. `sound`, when
     /// set, plays a one-shot sound once the status is applied (`default`/`beep` = system alert, any other
-    /// value = named system sound); it is resolved up-front so an unknown name is an `unknown sound` error
-    /// that leaves the status unchanged. The indicator is ephemeral and rendered only on sessions you are
-    /// not currently looking at.
+    /// value = named system sound); it is validated up-front so an unknown name is an `unknown sound` error
+    /// that leaves the status unchanged. When no per-call `sound` is given and the status is `blocked`, the
+    /// user's configured Settings "Blocked sound" (`blockedStatusSoundName`) plays as a best-effort default.
+    /// The indicator is ephemeral and rendered only on sessions you are not currently looking at.
     private func setSessionStatus(_ target: String?, window: String?, status: String?, blink: Bool?,
                                   autoReset: Bool?, sound: String?) -> ControlResponse {
         guard let parsed = AgentStatus(rawValue: status ?? "") else {
             return ControlResponse(ok: false, error: "invalid status")
         }
-        var fireSound: (() -> Void)?
-        if let sound {
-            guard let action = soundPlayer.action(for: sound) else {
-                let hint = StatusSoundPlayer.standardNames.joined(separator: ", ")
-                return ControlResponse(ok: false, error: "unknown sound: \(sound) (use 'default' or one of: \(hint))")
-            }
-            fireSound = action
+        // an explicit per-call sound is validated up-front: an unknown name errors without changing status.
+        if let sound, StatusSoundPlayer.shared.action(for: sound) == nil {
+            let hint = StatusSoundPlayer.standardNames.joined(separator: ", ")
+            return ControlResponse(ok: false, error: "unknown sound: \(sound) (use 'default' or one of: \(hint))")
         }
         return resolveSession(target, window: window) { store, id in
             store.setAgentIndicator(AgentIndicator(status: parsed, blink: blink ?? false,
                                                    autoReset: autoReset ?? false), forSession: id)
-            fireSound?()
+            // explicit per-call sound wins; otherwise the configured default plays, but only for `blocked`.
+            let effective = parsed.effectiveSound(perCall: sound,
+                                                  blockedDefault: self.settingsModel.settings.blockedStatusSoundName)
+            if let effective { StatusSoundPlayer.shared.action(for: effective)?() }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

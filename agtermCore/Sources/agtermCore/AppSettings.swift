@@ -92,6 +92,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// a glance). nil means the default (off). An app-level chrome flag, NOT a ghostty key — it never
     /// appears in `ghosttyConfigLines()`; it only gates whether the titlebar builds the icon.
     public var attentionButtonEnabled: Bool?
+    /// Name of the system sound played when a session enters the `blocked` status (e.g. `Glass`, resolved by
+    /// `NSSound(named:)`), or nil/empty for no sound (the default). A per-call `session.status --sound`
+    /// overrides this. An app-level value played at the AppKit level, NOT a ghostty key — it never appears
+    /// in `ghosttyConfigLines()`.
+    public var blockedStatusSoundName: String?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 backgroundOpacity: Double? = nil, backgroundBlur: Int? = nil, notificationsEnabled: Bool? = nil,
@@ -100,7 +105,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 completedStatusColorHex: String? = nil, configDirectory: String? = nil,
                 mouseScrollMultiplier: Double? = nil, inactivePaneMuteStrength: Int? = nil,
                 sidebarBackgroundShift: Int? = nil, restoreRunningCommand: Bool? = nil,
-                inheritGlobalGhosttyConfig: Bool? = nil, attentionButtonEnabled: Bool? = nil) {
+                inheritGlobalGhosttyConfig: Bool? = nil, attentionButtonEnabled: Bool? = nil,
+                blockedStatusSoundName: String? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -119,6 +125,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.restoreRunningCommand = restoreRunningCommand
         self.inheritGlobalGhosttyConfig = inheritGlobalGhosttyConfig
         self.attentionButtonEnabled = attentionButtonEnabled
+        self.blockedStatusSoundName = blockedStatusSoundName
     }
 
     /// The SwiftUI overlay opacity for a given inactive-pane mute strength: the strength is clamped to

@@ -106,6 +106,9 @@ final class SettingsModel {
     func setActiveStatusColorHex(_ hex: String?) { settings.activeStatusColorHex = hex; persistAndApply() }
     func setBlockedStatusColorHex(_ hex: String?) { settings.blockedStatusColorHex = hex; persistAndApply() }
     func setCompletedStatusColorHex(_ hex: String?) { settings.completedStatusColorHex = hex; persistAndApply() }
+    /// Persist the system sound played when a session enters `blocked` (nil/empty = none). Not a ghostty
+    /// key and nothing renders it continuously, so it only saves — `ControlServer` reads it on demand.
+    func setBlockedStatusSoundName(_ name: String?) { settings.blockedStatusSoundName = name; try? settingsStore.save(settings) }
 
     /// Apply a new background opacity live WITHOUT an immediate save — the live-drag half of the opacity
     /// slider. Updates translucency on every drag tick (apply-without-save) and schedules a debounced

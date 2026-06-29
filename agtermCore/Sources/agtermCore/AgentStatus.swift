@@ -37,6 +37,16 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
         }
     }
 
+    /// The sound to play for a `session.status` call, or nil for none. An explicit per-call sound
+    /// (`session.status --sound`) always wins; otherwise the caller-configured `blockedDefault` plays, but
+    /// ONLY for the `blocked` state (the Settings "Blocked sound"). Empty strings count as unset. The app
+    /// resolves the returned name with `NSSound(named:)`; this is just the host-free precedence decision.
+    public func effectiveSound(perCall: String?, blockedDefault: String?) -> String? {
+        if let perCall, !perCall.isEmpty { return perCall }
+        if self == .blocked, let blockedDefault, !blockedDefault.isEmpty { return blockedDefault }
+        return nil
+    }
+
     /// SF Symbol name for the status glyph, shared by the AppKit sidebar and the SwiftUI attention list.
     /// `idle` returns the empty string — idle never renders a glyph, so it is filtered out before any
     /// glyph is built and this value is never used.

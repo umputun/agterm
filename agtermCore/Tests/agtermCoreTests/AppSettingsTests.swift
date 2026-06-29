@@ -111,6 +111,16 @@ struct AppSettingsTests {
         #expect(AppSettings(restoreRunningCommand: true).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
     }
 
+    @Test func blockedStatusSoundNameRoundTripsAndIsNotAConfigLine() throws {
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(blockedStatusSoundName: "Glass")))
+        #expect(decoded.blockedStatusSoundName == "Glass")
+        // absent in a legacy file decodes to nil (no sound).
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
+        #expect(legacy.blockedStatusSoundName == nil)
+        // an app-level value, never a ghostty config key — only the scroll default is emitted.
+        #expect(AppSettings(blockedStatusSoundName: "Glass").ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
+    }
+
     @Test func compactToolbarRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(compactToolbar: true)))
         #expect(decoded.compactToolbar == true)

@@ -13,6 +13,10 @@ import AppKit
 /// the clip is cut off.
 @MainActor
 final class StatusSoundPlayer {
+    /// Shared player so the control server (per-call + blocked-default sounds) and the Settings picker
+    /// preview share one `NSSound` cache.
+    static let shared = StatusSoundPlayer()
+
     private var cache: [String: NSSound] = [:]
 
     /// The standard macOS system sound names, used only to suggest valid values in the `unknown sound`

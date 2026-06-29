@@ -119,6 +119,8 @@ process — what it is running — omitted when the pane sits at its shell promp
   one-shot sound when the status is set: `default` (the system alert sound) or a system sound name
   (`Basso`, `Blow`, `Bottle`, `Frog`, `Funk`, `Glass`, `Hero`, `Morse`, `Ping`, `Pop`, `Purr`,
   `Sosumi`, `Submarine`, `Tink`; also any custom sound in `~/Library/Sounds`) — an unknown name errors.
+  Without `--sound`, a `blocked` status plays the user's Settings "Blocked sound" if they configured one
+  (Appearance ▸ Agent Status; off by default); an explicit `--sound` always overrides it.
   An unknown state errors. Setting non-idle is for agents/hooks; `idle` clears it (also available in the GUI).
 - `session flag [on|off|toggle|clear] [--target] [--window W]` — flag/unflag a session for the flagged
   working-set view (a durable, persisted membership). `on`/`off`/`toggle` act on `--target` (default

@@ -60,6 +60,26 @@ struct AgentStatusTests {
         #expect(AgentIndicator(status: .completed, autoReset: true) == AgentIndicator(status: .completed, autoReset: true))
     }
 
+    @Test func effectiveSoundPrefersPerCallOverDefault() {
+        // explicit per-call sound wins on any status, even when a blocked default is set.
+        #expect(AgentStatus.blocked.effectiveSound(perCall: "Glass", blockedDefault: "Sosumi") == "Glass")
+        #expect(AgentStatus.active.effectiveSound(perCall: "Glass", blockedDefault: "Sosumi") == "Glass")
+    }
+
+    @Test func effectiveSoundUsesBlockedDefaultOnlyForBlocked() {
+        // no per-call sound: the configured default plays for blocked, but never for the other states.
+        #expect(AgentStatus.blocked.effectiveSound(perCall: nil, blockedDefault: "Sosumi") == "Sosumi")
+        #expect(AgentStatus.active.effectiveSound(perCall: nil, blockedDefault: "Sosumi") == nil)
+        #expect(AgentStatus.completed.effectiveSound(perCall: nil, blockedDefault: "Sosumi") == nil)
+        #expect(AgentStatus.idle.effectiveSound(perCall: nil, blockedDefault: "Sosumi") == nil)
+    }
+
+    @Test func effectiveSoundTreatsEmptyAsUnset() {
+        #expect(AgentStatus.blocked.effectiveSound(perCall: "", blockedDefault: "Sosumi") == "Sosumi")
+        #expect(AgentStatus.blocked.effectiveSound(perCall: nil, blockedDefault: "") == nil)
+        #expect(AgentStatus.blocked.effectiveSound(perCall: nil, blockedDefault: nil) == nil)
+    }
+
     @Test func indicatorEquatableNotEqual() {
         #expect(AgentIndicator(status: .active) != AgentIndicator(status: .completed))
         #expect(AgentIndicator(status: .active, blink: true) != AgentIndicator(status: .active, blink: false))

@@ -248,9 +248,16 @@ private struct AppearanceSettingsView: View {
                     .accessibilityIdentifier("settings-status-blocked")
                 ColorPicker("Completed", selection: completedStatusColor, supportsOpacity: false)
                     .accessibilityIdentifier("settings-status-completed")
+                Picker("Blocked sound", selection: blockedStatusSound) {
+                    Text("None").tag("None")
+                    ForEach(StatusSoundPlayer.standardNames, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                }
+                .accessibilityIdentifier("settings-status-blocked-sound")
                 Button("Reset to defaults") { model.resetStatusColors() }
                     .accessibilityIdentifier("settings-status-reset")
-                Text("Colors for the per-session agent-status glyph in the sidebar.")
+                Text("Colors for the per-session agent-status glyph in the sidebar, and an optional sound played when a session becomes blocked.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -323,6 +330,16 @@ private struct AppearanceSettingsView: View {
                 set: { model.setBlockedStatusColorHex(NSColor($0).agtermHexString) })
     }
 
+    // the system sound played when a session enters `blocked`; "None" maps to nil. Selecting a sound
+    // previews it so you hear the choice, the way macOS sound settings do.
+    private var blockedStatusSound: Binding<String> {
+        Binding(get: { model.settings.blockedStatusSoundName ?? "None" },
+                set: { name in
+                    let value = name == "None" ? nil : name
+                    model.setBlockedStatusSoundName(value)
+                    if let value { StatusSoundPlayer.shared.action(for: value)?() }
+                })
+    }
     private var completedStatusColor: Binding<Color> {
         Binding(get: { Color(nsColor: NSColor(agtermHex: model.settings.completedStatusColorHex) ?? .systemGreen) },
                 set: { model.setCompletedStatusColorHex(NSColor($0).agtermHexString) })
