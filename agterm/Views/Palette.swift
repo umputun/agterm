@@ -167,7 +167,17 @@ struct CommandPalette: View {
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.1)))
         .shadow(radius: 24)
         .accessibilityIdentifier("command-palette")
-        .onAppear { fieldFocused = true; updateFiltered(); syncThemeSession() }
+        .onAppear {
+            fieldFocused = true
+            updateFiltered()
+            syncThemeSession()
+            // a palette opened from a title-bar button (the attention bell) mounts while that button
+            // still holds first responder, so the synchronous focus above loses the race and the field
+            // never takes the keyboard. re-assert on the next runloop tick — after the click settles —
+            // so the field wins. for the menu/hotkey/⌃P paths the field is already focused by then, so
+            // this is a no-op (see swiftui focus-pattern: onAppear focus may need a main-async kick).
+            DispatchQueue.main.async { fieldFocused = true }
+        }
         .onChange(of: controller.mode) { selection = 0; updateFiltered(); syncThemeSession() }
         .onDisappear { actions.cancelThemePreview() }
     }

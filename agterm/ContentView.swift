@@ -179,6 +179,10 @@ private struct WindowContentView: View {
     /// (title bar text + buttons, sidebar bottom bar) so non-terminal text tracks the theme. Refreshed
     /// on `.agtermAppearanceChanged`, like `terminalColor`.
     @State private var chromeText: Color = WindowContentView.resolvedChromeText()
+    /// Mirror of `GhosttyApp.attentionButtonEnabled`: when true the title bar shows the attention bell.
+    /// Refreshed on `.agtermAppearanceChanged`, like `compactToolbar`, so flipping the Settings toggle
+    /// shows/hides the bell live without a relaunch.
+    @State private var attentionButtonEnabled: Bool = WindowContentView.resolvedAttentionButtonEnabled()
     /// Custom sidebar width and show/hide both live on the per-window `AppStore` (`sidebarWidth` /
     /// `sidebarVisible`), persisted in `Snapshot` so they restore on relaunch. The toolbar button, the View
     /// menu, the palette, and the `sidebar` control command share `sidebarVisible`.
@@ -228,6 +232,7 @@ private struct WindowContentView: View {
             terminalColor = WindowContentView.resolvedTerminalColor()
             compactToolbar = WindowContentView.resolvedCompactToolbar()
             chromeText = WindowContentView.resolvedChromeText()
+            attentionButtonEnabled = WindowContentView.resolvedAttentionButtonEnabled()
             inactivePaneMute = WindowContentView.resolvedInactivePaneMute()
             sidebarShift = WindowContentView.resolvedSidebarShift()
         }
@@ -573,6 +578,12 @@ private struct WindowContentView: View {
         GhosttyApp.shared.compactToolbar
     }
 
+    /// The attention-button flag from the (non-observable) `GhosttyApp`, mirrored into view state so a
+    /// settings change (posting `.agtermAppearanceChanged`) shows/hides the title bar bell live.
+    private static func resolvedAttentionButtonEnabled() -> Bool {
+        GhosttyApp.shared.attentionButtonEnabled
+    }
+
     /// The inactive-pane mute strength from the (non-observable) `GhosttyApp`, mirrored into view state
     /// so a settings change (posting `.agtermAppearanceChanged`) re-renders the inactive pane live.
     private static func resolvedInactivePaneMute() -> Int {
@@ -641,6 +652,9 @@ private struct WindowContentView: View {
                 Spacer().frame(width: 12)
             }
             titleLabel
+            if attentionButtonEnabled {
+                attentionButton.labelStyle(.iconOnly).padding(.leading, 10)
+            }
             Spacer(minLength: 12)
             HStack(spacing: 14) {
                 scratchButton.labelStyle(.iconOnly)
@@ -715,6 +729,31 @@ private struct WindowContentView: View {
         }
         .help("Quick Terminal")
         .accessibilityIdentifier("quick-terminal-toggle")
+    }
+
+    /// Title-bar bell reflecting the window's attention state at a glance (opt-in, gated by the
+    /// `attentionButtonEnabled` mirror). Three states from `store.attentionSessions`: empty → a dimmed
+    /// disabled outline bell; non-empty with nothing blocked → a plain enabled bell in `chromeText`; any
+    /// blocked session → a filled bell tinted the blocked-status color. No count, no pulse. Click opens
+    /// the `.attention` palette. Reading `store.attentionSessions` in the body registers the per-session
+    /// `agentIndicator` observation, so the glyph re-renders live as a status changes. `.accessibilityValue`
+    /// (none|attention|blocked) exposes the otherwise-unobservable bell↔bell.fill state to XCUITest,
+    /// mirroring `StatusIconView`'s state-name value.
+    private var attentionButton: some View {
+        let sessions = store.attentionSessions
+        let blocked = sessions.contains { $0.agentIndicator.status == .blocked }
+        let empty = sessions.isEmpty
+        return Button {
+            actions.toggleAttentionPalette()
+        } label: {
+            Label("Attention", systemImage: blocked ? "bell.fill" : "bell")
+        }
+        .foregroundStyle(blocked ? Color(nsColor: GhosttyApp.shared.blockedStatusColor) : chromeText)
+        .opacity(empty ? 0.35 : 1)
+        .disabled(empty)
+        .help(empty ? "No sessions need attention" : "Show sessions that need attention")
+        .accessibilityIdentifier("attention-button")
+        .accessibilityValue(empty ? "none" : (blocked ? "blocked" : "attention"))
     }
 
     /// The quick-terminal overlay: the scratch terminal centered at 90% of the window, framed by a

@@ -191,15 +191,18 @@ A single source of truth — `AppStore.attentionSessions` (host-free, per-window
 
 **Files:**
 - Modify: `agterm/ContentView.swift`
-- Modify: `agtermUITests/` (new or existing titlebar/control test file)
+- Modify: `agterm/Views/Palette.swift` (➕ focus fix — see note below)
+- Create: `agtermUITests/AttentionButtonUITests.swift`
 
-- [ ] add `@State private var attentionButtonEnabled` to `WindowContentView`, seeded by a `static func resolvedAttentionButtonEnabled() -> Bool` reading the `GhosttyApp.shared.attentionButtonEnabled` mirror (the `compactToolbar`/`resolvedCompactToolbar()` precedent at ContentView.swift:170/572) — do NOT read `model.settings` directly in the titlebar (WindowContentView mirrors chrome flags, not SettingsModel)
-- [ ] refresh that `@State` in the existing `.agtermAppearanceChanged` `onReceive` (alongside `compactToolbar`/`terminalColor`), so flipping the Settings toggle re-renders the titlebar live
-- [ ] add an `attentionButton` to `customTitlebar`, placed just after `titleLabel`, built only when `attentionButtonEnabled`
-- [ ] derive state from `store.attentionSessions`: empty → `bell`, ~0.35 opacity, `.disabled(true)`; non-empty no-blocked → `bell`, `chromeText`, enabled; any `.blocked` → `bell.fill` tinted `Color(nsColor: GhosttyApp.shared.blockedStatusColor)`, enabled. No count, no pulse. Click → `actions.toggleAttentionPalette()`. Reading `attentionSessions` registers the `agentIndicator` observation dependencies, so the icon updates live on status change
-- [ ] give it `.accessibilityIdentifier("attention-button")`, a `.help` string, AND an `.accessibilityValue` of `none`|`attention`|`blocked` (empty / non-empty-no-blocked / any-blocked) — mirroring `StatusIconView`'s state-name `accessibilityValue` (WorkspaceSidebar.swift) so XCUITest can read the otherwise-unobservable `bell`↔`bell.fill` highlight
-- [ ] add XCUITest: with the toggle on, drive `agtermctl session status` to move a session idle→active→blocked and assert the button's `isEnabled` AND its `accessibilityValue` (`none`→`attention`→`blocked`) transitions; click it opens `command-palette` in attention mode; selecting a row selects the session; with the toggle off the button is absent
-- [ ] build + run the XCUITest — must pass before next task
+- [x] add `@State private var attentionButtonEnabled` to `WindowContentView`, seeded by a `static func resolvedAttentionButtonEnabled() -> Bool` reading the `GhosttyApp.shared.attentionButtonEnabled` mirror (the `compactToolbar`/`resolvedCompactToolbar()` precedent at ContentView.swift:170/572) — do NOT read `model.settings` directly in the titlebar (WindowContentView mirrors chrome flags, not SettingsModel)
+- [x] refresh that `@State` in the existing `.agtermAppearanceChanged` `onReceive` (alongside `compactToolbar`/`terminalColor`), so flipping the Settings toggle re-renders the titlebar live
+- [x] add an `attentionButton` to `customTitlebar`, placed just after `titleLabel`, built only when `attentionButtonEnabled`
+- [x] derive state from `store.attentionSessions`: empty → `bell`, ~0.35 opacity, `.disabled(true)`; non-empty no-blocked → `bell`, `chromeText`, enabled; any `.blocked` → `bell.fill` tinted `Color(nsColor: GhosttyApp.shared.blockedStatusColor)`, enabled. No count, no pulse. Click → `actions.toggleAttentionPalette()`. Reading `attentionSessions` registers the `agentIndicator` observation dependencies, so the icon updates live on status change
+- [x] give it `.accessibilityIdentifier("attention-button")`, a `.help` string, AND an `.accessibilityValue` of `none`|`attention`|`blocked` (empty / non-empty-no-blocked / any-blocked) — mirroring `StatusIconView`'s state-name `accessibilityValue` (WorkspaceSidebar.swift) so XCUITest can read the otherwise-unobservable `bell`↔`bell.fill` highlight
+- [x] add XCUITest: with the toggle on, drive `agtermctl session status` to move a session idle→active→blocked and assert the button's `isEnabled` AND its `accessibilityValue` (`none`→`attention`→`blocked`) transitions; click it opens `command-palette` in attention mode; selecting a row selects the session; with the toggle off the button is absent
+- [x] build + run the XCUITest — must pass before next task (3/3 AttentionButtonUITests + 8/8 PaletteUITests pass, no regression)
+
+➕ **Discovered + fixed: palette field focus on a button-open.** The new XCUITest surfaced a real bug — a palette opened from a title-bar button (the bell) mounts while that button still holds first responder, so `CommandPalette.onAppear`'s synchronous `fieldFocused = true` loses the race and the search field never takes the keyboard (Return/typing/arrows do nothing). Menu/hotkey/⌃P opens were unaffected (no competing responder). Fix in `agterm/Views/Palette.swift`: re-assert `fieldFocused = true` on the next runloop tick via `DispatchQueue.main.async` (a no-op for the already-focused menu/hotkey paths — verified by the 8/8 PaletteUITests, incl. the theme-picker auto-focus + session-palette select). Grounded in the SwiftUI focus pattern "onAppear focus may need a main-async kick."
 
 **Keep-in-sync:** the icon is pure visual chrome (it opens the already-controllable attention palette / `session.select`) — keep-in-sync EXEMPT, like the other titlebar buttons and the palette opens.
 
