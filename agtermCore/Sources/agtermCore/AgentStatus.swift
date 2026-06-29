@@ -24,6 +24,30 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
         case .idle: return false
         }
     }
+
+    /// Sort priority for the attention list: lower comes first. `blocked` (0) is most urgent, then
+    /// `active` (1), then `completed` (2). `idle` (3) is never sorted — idle sessions are filtered out
+    /// before the list is built — but it ranks last so any accidental inclusion sorts after the rest.
+    public var attentionRank: Int {
+        switch self {
+        case .blocked: return 0
+        case .active: return 1
+        case .completed: return 2
+        case .idle: return 3
+        }
+    }
+
+    /// SF Symbol name for the status glyph, shared by the AppKit sidebar and the SwiftUI attention list.
+    /// `idle` returns the empty string — idle never renders a glyph, so it is filtered out before any
+    /// glyph is built and this value is never used.
+    public var symbolName: String {
+        switch self {
+        case .active: return "ellipsis.circle.fill"
+        case .blocked: return "exclamationmark.circle.fill"
+        case .completed: return "checkmark.circle.fill"
+        case .idle: return ""
+        }
+    }
 }
 
 /// AgentIndicator is the per-session agent status value: the state plus an optional blink flag (pulse

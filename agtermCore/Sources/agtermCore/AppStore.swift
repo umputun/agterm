@@ -205,10 +205,13 @@ public final class AppStore {
     }
 
     /// Sets a session's agent status indicator (the sidebar status glyph). The single mutation point
-    /// for the control channel's `session.status`. No-op for an unknown id. Not persisted (the
-    /// indicator is ephemeral), so it never triggers a `save()`.
+    /// for the control channel's `session.status`. Stamps `statusChangedAt` with the current time on any
+    /// non-idle status (the attention list's newest-first sort key) and clears it on idle. No-op for an
+    /// unknown id. Not persisted (the indicator is ephemeral), so it never triggers a `save()`.
     public func setAgentIndicator(_ indicator: AgentIndicator, forSession id: UUID) {
-        session(withID: id)?.agentIndicator = indicator
+        guard let session = session(withID: id) else { return }
+        session.agentIndicator = indicator
+        session.statusChangedAt = indicator.status == .idle ? nil : Date()
     }
 
     /// Pushes the current selection to the front of the recency stack (the Ctrl-Tab order).
@@ -629,6 +632,28 @@ public final class AppStore {
     /// paletteSessions`), so all follow the same filter as the visible sidebar.
     public var navigableSessions: [Session] {
         sidebarMode == .flagged ? flaggedSessions : visibleWorkspaces.flatMap(\.sessions)
+    }
+
+    /// The window-wide non-idle sessions, the single source of truth for the titlebar attention icon
+    /// and the `.attention` palette. Spans ALL workspaces (`workspaces.flatMap(\.sessions)`) and
+    /// deliberately IGNORES the focus/flagged sidebar filter (unlike `navigableSessions`) — the point
+    /// is window-wide visibility even when the sidebar is hidden. Sorted by `attentionRank` ascending
+    /// (blocked → active → completed) then `statusChangedAt` DESCENDING (newest change first; a nil
+    /// stamp sorts last within its rank group).
+    public var attentionSessions: [Session] {
+        workspaces.flatMap(\.sessions)
+            .filter { $0.agentIndicator.status != .idle }
+            .sorted { lhs, rhs in
+                let lrank = lhs.agentIndicator.status.attentionRank
+                let rrank = rhs.agentIndicator.status.attentionRank
+                if lrank != rrank { return lrank < rrank }
+                switch (lhs.statusChangedAt, rhs.statusChangedAt) {
+                case let (l?, r?): return l > r // newest change first within the rank group
+                case (_?, nil): return true     // a stamped session sorts before an unstamped one
+                case (nil, _?): return false
+                case (nil, nil): return false
+                }
+            }
     }
 
     // MARK: - Persistence

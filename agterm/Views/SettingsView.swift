@@ -60,6 +60,12 @@ private struct GeneralSettingsView: View {
                 Text("The red unseen-count pill on sidebar rows. The count keeps tracking either way, so it reappears with the current count when turned back on.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+
+                Toggle("Show attention indicator", isOn: attentionButtonEnabled)
+                    .accessibilityIdentifier("settings-attention-button")
+                Text("A bell icon in the title bar that highlights when a session needs attention, even with the sidebar hidden. Click it to jump to the session.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
             }
 
             Section("Scrolling") {
@@ -129,6 +135,13 @@ private struct GeneralSettingsView: View {
     private var restoreRunningCommand: Binding<Bool> {
         Binding(get: { model.settings.restoreRunningCommand ?? false },
                 set: { model.setRestoreRunningCommand($0 ? true : nil) })
+    }
+
+    /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json
+    /// minimal until the user opts into the title-bar attention bell.
+    private var attentionButtonEnabled: Binding<Bool> {
+        Binding(get: { model.settings.attentionButtonEnabled ?? false },
+                set: { model.setAttentionButtonEnabled($0 ? true : nil) })
     }
 
     /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json

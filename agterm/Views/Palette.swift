@@ -14,6 +14,9 @@ struct PaletteItem: Identifiable {
     let shortcut: String?
     /// A small trailing badge label (e.g. `custom` for user-defined keymap commands), nil for none.
     let badge: String?
+    /// A leading agent-status glyph (the attention palette's rows carry it), nil for items with no
+    /// status — only the `.attention` palette sets it, so the other palettes render no glyph.
+    let status: AgentStatus?
     /// Fired when this item BECOMES the selection (keyboard navigation), distinct from `run` (Enter/
     /// click). Only the `.themes` palette sets it — it drives the live theme preview; nil everywhere
     /// else, so the other palettes have no selection side effect.
@@ -21,12 +24,13 @@ struct PaletteItem: Identifiable {
     let run: () -> Void
 
     init(id: String? = nil, title: String, subtitle: String? = nil, shortcut: String? = nil,
-         badge: String? = nil, onSelect: (() -> Void)? = nil, run: @escaping () -> Void) {
+         badge: String? = nil, status: AgentStatus? = nil, onSelect: (() -> Void)? = nil, run: @escaping () -> Void) {
         self.id = id ?? title
         self.title = title
         self.subtitle = subtitle
         self.shortcut = shortcut
         self.badge = badge
+        self.status = status
         self.onSelect = onSelect
         self.run = run
     }
@@ -41,6 +45,7 @@ enum PaletteMode {
     case sessions
     case themes
     case customCommands
+    case attention
 }
 
 /// Drives the command palettes: `mode` is nil when closed, else the open palette. App-global, set
@@ -83,6 +88,7 @@ struct CommandPalette: View {
         case .sessions: return actions.paletteSessions()
         case .themes: return actions.paletteThemes()
         case .customCommands: return actions.paletteCustomCommands()
+        case .attention: return actions.paletteAttention()
         case .none: return []
         }
     }
@@ -92,6 +98,16 @@ struct CommandPalette: View {
     /// equal-scoring matches are ordered predictably).
     private func updateFiltered() {
         let q = query.trimmingCharacters(in: .whitespaces)
+        // the attention palette's empty-query order is the paletteAttention()/attentionSessions ranking
+        // (blocked→active→completed, newest change first). preserve it verbatim instead of falling through
+        // to the alphabetical tie-break below — every row scores 0 for an empty query, so that tie-break
+        // would re-sort them A→Z and Return would jump to the alphabetically-first session, not the blocked
+        // one. fuzzy filtering still applies once the user types.
+        if controller.mode == .attention, q.isEmpty {
+            filtered = allItems
+            selection = filtered.isEmpty ? 0 : min(selection, filtered.count - 1)
+            return
+        }
         let scored: [(item: PaletteItem, score: Int)] = allItems.compactMap { item in
             let scores = [fuzzyScore(query: q, target: item.title),
                           item.subtitle.flatMap { fuzzyScore(query: q, target: $0) }].compactMap { $0 }
@@ -111,6 +127,7 @@ struct CommandPalette: View {
         case .sessions: return "Go to session…"
         case .themes: return "Select a theme…"
         case .customCommands: return "Run a custom command…"
+        case .attention: return "Go to a session that needs attention…"
         default: return "Run an action…"
         }
     }
@@ -160,7 +177,17 @@ struct CommandPalette: View {
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.1)))
         .shadow(radius: 24)
         .accessibilityIdentifier("command-palette")
-        .onAppear { fieldFocused = true; updateFiltered(); syncThemeSession() }
+        .onAppear {
+            fieldFocused = true
+            updateFiltered()
+            syncThemeSession()
+            // a palette opened from a title-bar button (the attention bell) mounts while that button
+            // still holds first responder, so the synchronous focus above loses the race and the field
+            // never takes the keyboard. re-assert on the next runloop tick — after the click settles —
+            // so the field wins. for the menu/hotkey/⌃P paths the field is already focused by then, so
+            // this is a no-op (see swiftui focus-pattern: onAppear focus may need a main-async kick).
+            DispatchQueue.main.async { fieldFocused = true }
+        }
         .onChange(of: controller.mode) { selection = 0; updateFiltered(); syncThemeSession() }
         .onDisappear { actions.cancelThemePreview() }
     }
@@ -189,6 +216,9 @@ struct CommandPalette: View {
 
     private func row(_ item: PaletteItem, index: Int) -> some View {
         HStack {
+            if let status = item.status {
+                StatusGlyph(status: status)
+            }
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title)
                 if let subtitle = item.subtitle {

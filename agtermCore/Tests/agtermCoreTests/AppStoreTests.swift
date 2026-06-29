@@ -187,6 +187,50 @@ struct AppStoreTests {
         #expect(a.agentIndicator == AgentIndicator()) // existing session untouched
     }
 
+    @Test func setAgentIndicatorStampsStatusChangedAtOnNonIdle() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        #expect(a.statusChangedAt == nil) // a fresh session has no stamp
+        let before = Date()
+        store.setAgentIndicator(AgentIndicator(status: .active), forSession: a.id)
+        let stamp = try! #require(a.statusChangedAt) // a non-idle status stamps the change time
+        #expect(stamp >= before)
+    }
+
+    @Test func setAgentIndicatorClearsStatusChangedAtOnIdle() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: a.id)
+        #expect(a.statusChangedAt != nil)
+        store.setAgentIndicator(AgentIndicator(), forSession: a.id) // back to idle clears the stamp
+        #expect(a.statusChangedAt == nil)
+    }
+
+    @Test func setAgentIndicatorReassertingNonIdleUpdatesStatusChangedAt() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        a.statusChangedAt = Date(timeIntervalSince1970: 0) // pretend a stale stamp
+        let before = Date()
+        store.setAgentIndicator(AgentIndicator(status: .active), forSession: a.id)
+        let stamp = try! #require(a.statusChangedAt)
+        #expect(stamp >= before) // re-asserting a non-idle status moves the stamp to ~now, not just off epoch-0
+    }
+
+    @Test func statusChangedAtDoesNotSurviveSnapshotRestore() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.setAgentIndicator(AgentIndicator(status: .completed), forSession: session.id)
+        #expect(session.statusChangedAt != nil)
+        let restored = Self.makeStore()
+        restored.restore(from: store.snapshot())
+        // the stamp is ephemeral like the indicator: a restored session falls back to nil.
+        #expect(restored.workspaces[0].sessions[0].statusChangedAt == nil)
+    }
+
     @Test func agentIndicatorDoesNotSurviveSnapshotRestore() {
         let store = Self.makeStore()
         let ws = store.addWorkspace(name: "work")
@@ -1907,6 +1951,90 @@ struct AppStoreTests {
         store.setFocusedWorkspace(nil) // clearing focus restores the full navigable set
         store.navigateSession(.next)
         #expect(store.selectedSessionID == ids[2]) // now crosses into the personal workspace
+    }
+
+    // MARK: - attentionSessions
+
+    @Test func attentionSessionsFiltersOutIdle() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        _ = store.addSession(toWorkspace: ws.id, cwd: "/idle") // stays idle
+        let active = store.addSession(toWorkspace: ws.id, cwd: "/active")!
+        store.setAgentIndicator(AgentIndicator(status: .active), forSession: active.id)
+        // idle sessions are dropped; only the non-idle one is listed
+        #expect(store.attentionSessions.map(\.id) == [active.id])
+    }
+
+    @Test func attentionSessionsOrderBlockedActiveCompleted() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let completed = store.addSession(toWorkspace: ws.id, cwd: "/c")!
+        let active = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let blocked = store.addSession(toWorkspace: ws.id, cwd: "/b")!
+        // set in a non-rank order; the list must still sort blocked -> active -> completed
+        store.setAgentIndicator(AgentIndicator(status: .completed), forSession: completed.id)
+        store.setAgentIndicator(AgentIndicator(status: .active), forSession: active.id)
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: blocked.id)
+        #expect(store.attentionSessions.map(\.id) == [blocked.id, active.id, completed.id])
+    }
+
+    @Test func attentionSessionsWithinRankOrderNewestFirstNilLast() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let oldest = store.addSession(toWorkspace: ws.id, cwd: "/old")!
+        let newest = store.addSession(toWorkspace: ws.id, cwd: "/new")!
+        let unstamped = store.addSession(toWorkspace: ws.id, cwd: "/none")!
+        // all three are blocked (same rank), so the tie-break is statusChangedAt descending, nil last
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: oldest.id)
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: newest.id)
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: unstamped.id)
+        oldest.statusChangedAt = Date(timeIntervalSince1970: 100)
+        newest.statusChangedAt = Date(timeIntervalSince1970: 200)
+        unstamped.statusChangedAt = nil // a missing stamp sorts last within the rank group
+        #expect(store.attentionSessions.map(\.id) == [newest.id, oldest.id, unstamped.id])
+    }
+
+    @Test func attentionSessionsTieBreakStableForEqualAndNilStamps() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let stampedA = store.addSession(toWorkspace: ws.id, cwd: "/sa")!
+        let stampedB = store.addSession(toWorkspace: ws.id, cwd: "/sb")!
+        let nilA = store.addSession(toWorkspace: ws.id, cwd: "/na")!
+        let nilB = store.addSession(toWorkspace: ws.id, cwd: "/nb")!
+        // all blocked (same rank); two share an equal stamp, two share a nil stamp — exercising the
+        // comparator's (l?, r?)-equal and (nil, nil) branches (both return false). the stamped pair still
+        // precedes the nil pair, and within each tie group the stable sort keeps insertion order.
+        for s in [stampedA, stampedB, nilA, nilB] { store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: s.id) }
+        stampedA.statusChangedAt = Date(timeIntervalSince1970: 500)
+        stampedB.statusChangedAt = Date(timeIntervalSince1970: 500) // equal stamp -> stable, keeps order
+        nilA.statusChangedAt = nil
+        nilB.statusChangedAt = nil
+        #expect(store.attentionSessions.map(\.id) == [stampedA.id, stampedB.id, nilA.id, nilB.id])
+    }
+
+    @Test func attentionSessionsSpanAllWorkspacesIgnoringFocusAndFlagged() {
+        let store = Self.makeStore()
+        let work = store.addWorkspace(name: "work")
+        let other = store.addWorkspace(name: "other")
+        let here = store.addSession(toWorkspace: work.id, cwd: "/here")!
+        let away = store.addSession(toWorkspace: other.id, cwd: "/away")!
+        store.setAgentIndicator(AgentIndicator(status: .active), forSession: here.id)
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: away.id)
+        // focusing one workspace must NOT shrink the list — a blocked session in another workspace still shows
+        store.setFocusedWorkspace(work.id)
+        #expect(store.attentionSessions.map(\.id) == [away.id, here.id]) // blocked(away) before active(here)
+        // flagged mode is likewise ignored: nothing is flagged, but the non-idle sessions still list
+        store.setSidebarMode(.flagged)
+        #expect(store.attentionSessions.map(\.id) == [away.id, here.id])
+    }
+
+    @Test func attentionSessionsEmptyWhenAllIdle() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        _ = store.addSession(toWorkspace: ws.id, cwd: "/a")
+        _ = store.addSession(toWorkspace: ws.id, cwd: "/b")
+        // no statuses set: every session is idle, so the attention list is empty
+        #expect(store.attentionSessions.isEmpty)
     }
 }
 
