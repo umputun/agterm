@@ -96,6 +96,12 @@ private struct GeneralSettingsView: View {
                 Text("Re-runs each pane's foreground command when the app relaunches. Only single-process commands restore faithfully; programs listed in restore-denylist.conf (terminal multiplexers by default) start fresh.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+
+                Toggle("Show attention button in the title bar", isOn: attentionButtonEnabled)
+                    .accessibilityIdentifier("settings-attention-button")
+                Text("A bell icon in the title bar that highlights when a session needs attention, even with the sidebar hidden. Click it to jump to the session.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
             }
 
             Section("Ghostty Config") {
@@ -129,6 +135,13 @@ private struct GeneralSettingsView: View {
     private var restoreRunningCommand: Binding<Bool> {
         Binding(get: { model.settings.restoreRunningCommand ?? false },
                 set: { model.setRestoreRunningCommand($0 ? true : nil) })
+    }
+
+    /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json
+    /// minimal until the user opts into the title-bar attention bell.
+    private var attentionButtonEnabled: Binding<Bool> {
+        Binding(get: { model.settings.attentionButtonEnabled ?? false },
+                set: { model.setAttentionButtonEnabled($0 ? true : nil) })
     }
 
     /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json

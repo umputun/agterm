@@ -68,6 +68,7 @@ final class SettingsModel {
         applySidebarBackgroundShift()
         applyAgentStatusColors()
         applyRestoreRunningCommand()
+        applyAttentionButtonEnabled()
         // create the commented starter keymap on first launch, then load + parse it.
         ensureStarterKeymap()
         loadKeymap()
@@ -89,6 +90,8 @@ final class SettingsModel {
     func setSidebarBackgroundShift(_ value: Int?) { settings.sidebarBackgroundShift = value; persistAndApply() }
     // not a ghostty key, so persistAndApply()'s writeGhosttyConfig() no-ops and no surface reload fires.
     func setRestoreRunningCommand(_ value: Bool?) { settings.restoreRunningCommand = value; persistAndApply() }
+    // chrome flag, not a ghostty key: persistAndApply() no-ops the config but rides .agtermAppearanceChanged.
+    func setAttentionButtonEnabled(_ value: Bool?) { settings.attentionButtonEnabled = value; persistAndApply() }
 
     /// Persist whether agterm inherits the user's global `~/.config/ghostty/config` and FULLY reload the
     /// ghostty config so the change takes effect live. NOT a `ghosttyConfigLines()` key, so
@@ -490,6 +493,7 @@ final class SettingsModel {
         applySidebarBackgroundShift()
         applyAgentStatusColors()
         applyRestoreRunningCommand()
+        applyAttentionButtonEnabled()
         // refresh the app chrome (title bar + sidebar + quick terminal) with the new terminal color,
         // window translucency, and toolbar style immediately, rather than only when the window next
         // re-keys. The title-bar re-sync and the cwd-subtitle drop both ride this notification.
@@ -516,6 +520,10 @@ final class SettingsModel {
 
     private func applyRestoreRunningCommand() {
         GhosttyApp.shared.setRestoreRunningCommand(settings.restoreRunningCommand ?? false)
+    }
+
+    private func applyAttentionButtonEnabled() {
+        GhosttyApp.shared.setAttentionButtonEnabled(settings.attentionButtonEnabled ?? false)
     }
 
     private func applyInactivePaneMute() {

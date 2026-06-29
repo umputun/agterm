@@ -88,6 +88,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// place for agterm overrides/customizations. An app-level flag read at config-load time (NOT a
     /// ghostty key, so it never appears in `ghosttyConfigLines()`), gating which files `loadConfig` reads.
     public var inheritGlobalGhosttyConfig: Bool?
+    /// Whether the window title bar shows the attention bell icon (window-wide non-idle session status at
+    /// a glance). nil means the default (off). An app-level chrome flag, NOT a ghostty key — it never
+    /// appears in `ghosttyConfigLines()`; it only gates whether the titlebar builds the icon.
+    public var attentionButtonEnabled: Bool?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 backgroundOpacity: Double? = nil, backgroundBlur: Int? = nil, notificationsEnabled: Bool? = nil,
@@ -96,7 +100,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 completedStatusColorHex: String? = nil, configDirectory: String? = nil,
                 mouseScrollMultiplier: Double? = nil, inactivePaneMuteStrength: Int? = nil,
                 sidebarBackgroundShift: Int? = nil, restoreRunningCommand: Bool? = nil,
-                inheritGlobalGhosttyConfig: Bool? = nil) {
+                inheritGlobalGhosttyConfig: Bool? = nil, attentionButtonEnabled: Bool? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -114,6 +118,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.sidebarBackgroundShift = sidebarBackgroundShift
         self.restoreRunningCommand = restoreRunningCommand
         self.inheritGlobalGhosttyConfig = inheritGlobalGhosttyConfig
+        self.attentionButtonEnabled = attentionButtonEnabled
     }
 
     /// The SwiftUI overlay opacity for a given inactive-pane mute strength: the strength is clamped to

@@ -178,12 +178,12 @@ A single source of truth — `AppStore.attentionSessions` (host-free, per-window
 - Modify: `agterm/Ghostty/GhosttyApp.swift`
 - Modify: `agterm/Views/SettingsView.swift`
 
-- [ ] write failing test: `AppSettings` with `attentionButtonEnabled` set round-trips through encode/decode; absent decodes to nil (treated as false). Mirror the default-OFF precedent (`restoreRunningCommand`/`inheritGlobalGhosttyConfig`), NOT `notificationBadgeEnabled` (default-ON)
-- [ ] add `var attentionButtonEnabled: Bool?` to `AppSettings` + its `init` parameter
-- [ ] add `private(set) var attentionButtonEnabled: Bool = false` + `func setAttentionButtonEnabled(_:)` to `GhosttyApp` (the non-observable chrome mirror, like `setNotificationBadgeEnabled` at GhosttyApp.swift:141 / `compactToolbar`)
-- [ ] add `SettingsModel.setAttentionButtonEnabled(_ value: Bool?)` (`settings.attentionButtonEnabled = value; persistAndApply()`) + an `applyAttentionButtonEnabled()` that pushes `settings.attentionButtonEnabled ?? false` into the `GhosttyApp` mirror, called from `persistAndApply`'s chrome-apply path (alongside `applyCompactToolbar`/`applyNotificationBadgeEnabled`, which posts `.agtermAppearanceChanged`). NOT a ghostty key — no surface reload
-- [ ] add a General-tab `Toggle("Show attention button in the title bar", isOn:)` whose `Binding` uses get `model.settings.attentionButtonEnabled ?? false` and set `model.setAttentionButtonEnabled($0 ? true : nil)` — mirror the default-OFF binding at `SettingsView.swift:129-137` (restoreRunningCommand/inheritGlobalGhosttyConfig), NOT the default-ON one at `:122`
-- [ ] run `cd agtermCore && swift test` and build — must pass before next task
+- [x] write failing test: `AppSettings` with `attentionButtonEnabled` set round-trips through encode/decode; absent decodes to nil (treated as false). Mirror the default-OFF precedent (`restoreRunningCommand`/`inheritGlobalGhosttyConfig`), NOT `notificationBadgeEnabled` (default-ON)
+- [x] add `var attentionButtonEnabled: Bool?` to `AppSettings` + its `init` parameter
+- [x] add `private(set) var attentionButtonEnabled: Bool = false` + `func setAttentionButtonEnabled(_:)` to `GhosttyApp` (the non-observable chrome mirror, like `setNotificationBadgeEnabled` at GhosttyApp.swift:141 / `compactToolbar`)
+- [x] add `SettingsModel.setAttentionButtonEnabled(_ value: Bool?)` (`settings.attentionButtonEnabled = value; persistAndApply()`) + an `applyAttentionButtonEnabled()` that pushes `settings.attentionButtonEnabled ?? false` into the `GhosttyApp` mirror, called from `persistAndApply`'s chrome-apply path (alongside `applyCompactToolbar`/`applyNotificationBadgeEnabled`, which posts `.agtermAppearanceChanged`). NOT a ghostty key — no surface reload
+- [x] add a General-tab `Toggle("Show attention button in the title bar", isOn:)` whose `Binding` uses get `model.settings.attentionButtonEnabled ?? false` and set `model.setAttentionButtonEnabled($0 ? true : nil)` — mirror the default-OFF binding at `SettingsView.swift:129-137` (restoreRunningCommand/inheritGlobalGhosttyConfig), NOT the default-ON one at `:122`
+- [x] run `cd agtermCore && swift test` and build — must pass before next task
 
 **Keep-in-sync:** the settings toggle is GUI-only and keep-in-sync EXEMPT — only `theme.set`/`config.reload` touch settings over the control socket (same exemption as `restoreRunningCommand`/`inheritGlobalGhosttyConfig`).
 

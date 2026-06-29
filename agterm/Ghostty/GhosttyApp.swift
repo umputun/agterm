@@ -55,6 +55,10 @@ final class GhosttyApp {
     /// captured command as `initial_input`; `SettingsModel` writes it. Not ghostty-resolved, and it only
     /// affects the next restore, so no live re-render notification.
     private(set) var restoreRunningCommand: Bool = false
+    /// Whether the window title bar shows the attention bell icon. NOT ghostty-resolved: the title bar
+    /// reads it (via `WindowContentView`'s mirrored chrome state), `SettingsModel` writes it. The
+    /// re-render rides the `.agtermAppearanceChanged` notification, like `compactToolbar`. Defaults off.
+    private(set) var attentionButtonEnabled: Bool = false
     /// Program basenames NOT to re-run on restore — the parsed user-editable `restore-denylist.conf`
     /// (seeded with the terminal multiplexers). The surface factories read it via
     /// `CommandRestore.shouldRestore`; `SettingsModel` parses the file and writes it. Read at launch only.
@@ -146,6 +150,12 @@ final class GhosttyApp {
     /// launch and on every change; read by the surface factories at restore time.
     func setRestoreRunningCommand(_ enabled: Bool) {
         restoreRunningCommand = enabled
+    }
+
+    /// Set whether the title bar shows the attention bell icon. Called by `SettingsModel` at launch and on
+    /// every change; the title-bar re-render rides the `.agtermAppearanceChanged` notification.
+    func setAttentionButtonEnabled(_ enabled: Bool) {
+        attentionButtonEnabled = enabled
     }
 
     /// Set the parsed restore denylist (program basenames not to re-run). Called by `SettingsModel` at
