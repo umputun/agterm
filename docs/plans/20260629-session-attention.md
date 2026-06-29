@@ -224,11 +224,11 @@ A single source of truth — `AppStore.attentionSessions` (host-free, per-window
 
 ### Task 13: Verify acceptance criteria
 
-- [ ] verify every Overview item is implemented: icon 3 states, opt-in toggle (off by default), list mode with glyphs + sort, ⌃⇧I + menu + launcher, `tree` reports status
-- [ ] verify edge cases: all-idle window (icon disabled, list empty, hotkey opens an empty palette gracefully), blocked highlight clears when the session leaves blocked, sort tie-break newest-first, scope spans all workspaces ignoring focus/flagged filter
-- [ ] run full core suite: `cd agtermCore && swift test`
-- [ ] run the XCUITest suite for the new tests
-- [ ] confirm `golangci`-equivalent is N/A (Swift); the app builds clean via `make build`
+- [x] verify every Overview item is implemented: icon 3 states, opt-in toggle (off by default), list mode with glyphs + sort, ⌃⇧I + menu + launcher, `tree` reports status
+- [x] verify edge cases: all-idle window (icon disabled, list empty, hotkey opens an empty palette gracefully), blocked highlight clears when the session leaves blocked, sort tie-break newest-first, scope spans all workspaces ignoring focus/flagged filter — confirmed by unit tests `attentionSessionsFiltersOutIdle`/`...OrderBlockedActiveCompleted`/`...WithinRankOrderNewestFirstNilLast`/`...SpanAllWorkspacesIgnoringFocusAndFlagged`/`...EmptyWhenAllIdle` in `AppStoreTests`
+- [x] run full core suite: `cd agtermCore && swift test` — 784 tests in 32 suites passed
+- [x] run the XCUITest suite for the new tests — satisfied by prior passing runs earlier this session: `ControlAPIUITests/testTreeExposesAgentStatus`, all 3 `AttentionButtonUITests`, and all 8 `PaletteUITests` (regression check after the shared CommandPalette focus fix); not re-run here to avoid hijacking the user's screen
+- [x] confirm `golangci`-equivalent is N/A (Swift); the app builds clean via `make build` — BUILD SUCCEEDED
 
 ### Task 14: Update documentation and close out
 
