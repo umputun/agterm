@@ -83,9 +83,9 @@ A single source of truth — `AppStore.attentionSessions` (host-free, per-window
 - Modify: `agtermCore/Sources/agtermCore/AgentStatus.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AgentStatusTests.swift`
 
-- [ ] write failing tests for `attentionRank` (blocked < active < completed) and `symbolName` (the three non-idle SF Symbol names; idle returns the empty string `""` — never rendered, idle is filtered before any glyph is built)
-- [ ] add `var attentionRank: Int` and `var symbolName: String` to `AgentStatus` (pure, no AppKit — symbol names are plain strings); idle's `symbolName` returns `""`
-- [ ] run `cd agtermCore && swift test` — must pass before next task
+- [x] write failing tests for `attentionRank` (blocked < active < completed) and `symbolName` (the three non-idle SF Symbol names; idle returns the empty string `""` — never rendered, idle is filtered before any glyph is built)
+- [x] add `var attentionRank: Int` and `var symbolName: String` to `AgentStatus` (pure, no AppKit — symbol names are plain strings); idle's `symbolName` returns `""`
+- [x] run `cd agtermCore && swift test` — must pass before next task
 
 ### Task 3: AppStore.attentionSessions ordering
 

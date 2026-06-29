@@ -65,4 +65,23 @@ struct AgentStatusTests {
         #expect(AgentIndicator(status: .active, blink: true) != AgentIndicator(status: .active, blink: false))
         #expect(AgentIndicator(status: .completed, autoReset: true) != AgentIndicator(status: .completed, autoReset: false))
     }
+
+    @Test func attentionRankOrdersBlockedActiveCompleted() {
+        // blocked is most urgent, then active, then completed
+        #expect(AgentStatus.blocked.attentionRank < AgentStatus.active.attentionRank)
+        #expect(AgentStatus.active.attentionRank < AgentStatus.completed.attentionRank)
+        #expect(AgentStatus.blocked.attentionRank == 0)
+        #expect(AgentStatus.active.attentionRank == 1)
+        #expect(AgentStatus.completed.attentionRank == 2)
+        // idle is never sorted (filtered out first); sorts after the non-idle states
+        #expect(AgentStatus.completed.attentionRank < AgentStatus.idle.attentionRank)
+    }
+
+    @Test func symbolNameMapsNonIdleStatesAndIdleIsEmpty() {
+        #expect(AgentStatus.active.symbolName == "ellipsis.circle.fill")
+        #expect(AgentStatus.blocked.symbolName == "exclamationmark.circle.fill")
+        #expect(AgentStatus.completed.symbolName == "checkmark.circle.fill")
+        // idle never renders a glyph
+        #expect(AgentStatus.idle.symbolName == "")
+    }
 }
