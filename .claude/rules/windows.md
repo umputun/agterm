@@ -146,7 +146,32 @@ never two bundles in one window.
   `AGTERM_SOCKET` is the path `ControlServer` *actually bound* (`ControlServer.boundSocketPath`,
   nil before bind → the var is omitted), so a test-overridden `AGTERM_CONTROL_SOCKET` and the injected
   env agree.
-- **`window.*` control additions (eight commands).**
+- **`window.zoom` (maximize-to-screen toggle, control + double-click-header GUI).** `WindowRegistry.zoom(_:)`
+  drives the standard `NSWindow.zoom(nil)` — toggles between the normal frame and the screen's visible frame
+  (NOT native fullscreen); a second call restores.
+  Unlike `resize`/`move` it has a GUI surface: a custom-titlebar SwiftUI view can't receive the OS
+  double-click handling, so `WindowControlArea` (an `NSViewRepresentable` behind `customTitlebar`'s decorative
+  regions in `ContentView.swift`) handles `mouseDown` — `clickCount == 2` runs the user's configured title-bar
+  action, else `performDrag` (also making the FULL header draggable, not just the native top band);
+  `mouseDownCanMoveWindow = false` so our handler sees the double-click.
+  The double-click honors the macOS **Desktop & Dock ▸ "Double-click a window's title bar to"** setting
+  (`AppleActionOnDoubleClick` in `NSGlobalDomain`, read LIVE per click): Zoom/Fill → `window.zoom(nil)`,
+  Minimize → `performMiniaturize`, "Do Nothing" → no-op; the key is absent until the user changes it from the
+  macOS default (Zoom), so an untouched system still zooms (the prior behavior).
+  So the GUI double-click is NOT always-zoom — only the `window.zoom` control command unconditionally zooms.
+  A UITest env override (`AGTERM_UITEST_DOUBLECLICK_ACTION`, read ahead of the system default) pins the action
+  so the gesture tests are hermetic regardless of the host setting; it rides the environment, not launch
+  arguments (FB11763863 — see `ui-tests.md`).
+  The header's decorative parts (the traffic-light spacer, the divider gap, the title text) opt out via
+  `.allowsHitTesting(false)` so their region falls through to the layer; the buttons stay in front.
+  Requires the window OPEN (closed → the `window not open` error), like `resize`/`move`.
+  Four-point keep-in-sync audit: (1) `case windowZoom = "window.zoom"` in `ControlProtocol.swift`,
+  (2) the `.windowZoom` dispatch arm (`windowZoom`) in `ControlServer` → `WindowRegistry.shared.zoom`,
+  (3) the `window zoom <id>` subcommand in `agtermctlKit`, (4) `.windowZoom` in `windowCommandsRoundTrip`
+  (`ControlProtocolTests`) + the e2e `testWindowZoom` plus the gesture tests
+  `testDoubleClickHeaderZoomsAndRestores` / `testDoubleClickHeaderHonorsNoneSetting` /
+  `testHeaderButtonsStillReceiveClicksOverControlArea` / `testDragHeaderMovesWindow` in `ControlAPIUITests`.
+- **`window.*` control additions (eight commands, plus `window.zoom`).**
   `window.new` (returns the new id + opens its window), `window.list` (returns `windows` with each window's
   `open`/`active` flag), `window.select` (raise-or-open), `window.close` (`WindowRegistry.close` → standard
   teardown), `window.rename`, `window.delete` (`canRemoveWindow` keep-at-least-one → error,

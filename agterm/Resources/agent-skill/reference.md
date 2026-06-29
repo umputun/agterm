@@ -172,6 +172,10 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
 - `window move <id> --x X --y Y [--display N]` — top-left position in points, relative to display `N`
   (default the window's current display; y measured from the display top). The window must be open. The
   origin is clamped so an off-screen request keeps a grabbable strip of the window on the target display.
+- `window zoom <id>` — toggle the window between its normal frame and a maximized (fill-screen, NOT
+  native fullscreen) frame, via the standard `NSWindow.zoom`. A second call restores the prior frame.
+  The window must be open. This is the control half of the double-click-on-header gesture (and the green
+  zoom button); `resize`/`move` are control-native, but `zoom` mirrors a GUI action.
 
 `window resize`/`move` are control-native (no GUI equivalent — the title bar already drags-to-resize).
 

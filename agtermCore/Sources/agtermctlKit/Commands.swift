@@ -565,7 +565,7 @@ struct Session: ParsableCommand {
 struct Window: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Window commands.",
-        subcommands: [New.self, List.self, Select.self, Close.self, Rename.self, Delete.self, Resize.self, Move.self]
+        subcommands: [New.self, List.self, Select.self, Close.self, Rename.self, Delete.self, Resize.self, Move.self, Zoom.self]
     )
 
     struct New: RequestCommand {
@@ -644,6 +644,14 @@ struct Window: ParsableCommand {
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .windowMove, target: id, args: ControlArgs(x: x, y: y, display: display))
         }
+    }
+
+    struct Zoom: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Zoom a window (maximize-to-screen toggle).")
+        @Argument(help: "Window id, unique prefix, or 'active'.") var id: String = "active"
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .windowZoom, target: id) }
     }
 }
 

@@ -1794,6 +1794,44 @@ final class ControlAPIUITests: XCTestCase {
         XCTFail("window did not move right+down: first=\(first) now=\(window.frame.origin)")
     }
 
+    // window.zoom toggles the active window between its normal frame and a maximized (fill-screen) frame —
+    // the control half of the double-click-header gesture. From a known small frame the first zoom clearly
+    // enlarges; a second zoom restores it toward that frame.
+    func testWindowZoom() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session")
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 5), "window should exist")
+        // start from a known un-maximized size so the first zoom unambiguously grows the window.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.resize","args":{"width":800,"height":600}}"#)["ok"] as? Bool, true)
+        var deadline = Date().addingTimeInterval(5)
+        while Date() < deadline, !(abs(window.frame.size.width - 800) < 8 && abs(window.frame.size.height - 600) < 8) {
+            usleep(150_000)
+        }
+        let normal = window.frame.size
+        XCTAssertEqual(normal.width, 800, accuracy: 8, "window should settle near 800 wide before zoom, got \(normal)")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.zoom"}"#)["ok"] as? Bool, true)
+        deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            let s = window.frame.size
+            if s.width > normal.width + 50 || s.height > normal.height + 50 { break }
+            usleep(150_000)
+        }
+        XCTAssertTrue(window.frame.size.width > normal.width + 50 || window.frame.size.height > normal.height + 50,
+                      "window should grow after window.zoom: normal=\(normal) now=\(window.frame.size)")
+
+        // a second zoom restores the window toward its previous (normal) frame.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.zoom"}"#)["ok"] as? Bool, true)
+        deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            let s = window.frame.size
+            if abs(s.width - normal.width) < 40, abs(s.height - normal.height) < 40 { break }
+            usleep(150_000)
+        }
+        XCTAssertEqual(window.frame.size.width, normal.width, accuracy: 40,
+                       "window should restore toward \(normal) after a second window.zoom, got \(window.frame.size)")
+    }
+
     // window.close marks the window closed, after which a session command targeting it returns the
     // "window not open" error. (--window routing into the second window is exercised first to prove
     // the round-trip, then the close flips it to the error path.)

@@ -639,19 +639,23 @@ private struct WindowContentView: View {
     /// traffic lights.
     private var customTitlebar: some View {
         HStack(spacing: 0) {
-            Color.clear.frame(width: 78) // system traffic lights
+            Color.clear.frame(width: 78).allowsHitTesting(false) // system traffic lights
             if store.sidebarVisible {
                 HStack(spacing: 0) {
                     Spacer(minLength: 0)
                     sidebarToggleButton.labelStyle(.iconOnly)
                 }
                 .frame(width: max(40, CGFloat(store.sidebarWidth) - 78))
-                Color.clear.frame(width: 11) // 1px divider + gap to the title
+                Color.clear.frame(width: 11).allowsHitTesting(false) // 1px divider + gap to the title
             } else {
                 sidebarToggleButton.labelStyle(.iconOnly)
                 Spacer().frame(width: 12)
             }
             titleLabel
+                // the title text falls through to the drag/zoom layer behind it (see `.background` below),
+                // so double-clicking it zooms and dragging it moves the window — the rest of the row is
+                // empty spacers (already non-hittable) and the buttons, which keep their own clicks.
+                .allowsHitTesting(false)
             if attentionButtonEnabled {
                 attentionButton.labelStyle(.iconOnly).padding(.leading, 10)
             }
@@ -674,6 +678,11 @@ private struct WindowContentView: View {
         .imageScale(compactToolbar ? .medium : .large)
         .frame(height: titlebarHeight)
         .frame(maxWidth: .infinity)
+        // make the header behave like a standard title bar: single-click drag moves the window, double-click
+        // zooms it (the maximize-to-screen toggle). The layer sits BEHIND the row, so the buttons render in
+        // front and keep their clicks; the empty spacers + the title text opt out of hit-testing (above) so
+        // their region falls through to it. Custom titlebar = no native double-click-to-zoom, hence this.
+        .background { WindowControlArea() }
     }
 
     /// Our own sidebar show/hide toggle (the custom split has no system one). Animated collapse.
@@ -1197,6 +1206,32 @@ private struct WindowAccessor: NSViewRepresentable {
     }
 }
 
+/// A transparent AppKit layer placed behind the custom titlebar's decorative regions (the title text and
+/// the empty spacers, which opt out of SwiftUI hit-testing) so the header behaves like a real title bar:
+/// a single-click drag moves the window (`performDrag`) and a double-click zooms it (`NSWindow.zoom`, the
+/// standard maximize-to-screen toggle — the same action as the green button and the `window.zoom` control
+/// command). The custom titlebar is a SwiftUI view, not AppKit's native title bar, so the OS double-click-
+/// to-zoom never reaches it; this restores it. The interactive header buttons render in front and keep
+/// their own clicks. `mouseDownCanMoveWindow` is off so our `mouseDown` — not AppKit's automatic move —
+/// sees the event and can tell a double-click apart from a drag.
+private struct WindowControlArea: NSViewRepresentable {
+    func makeNSView(context _: Context) -> TitlebarControlView { TitlebarControlView() }
+    func updateNSView(_: TitlebarControlView, context _: Context) {}
+
+    final class TitlebarControlView: NSView {
+        override var mouseDownCanMoveWindow: Bool { false }
+
+        override func mouseDown(with event: NSEvent) {
+            if event.clickCount == 2 {
+                window?.zoom(nil)
+                return
+            }
+            // a single click that turns into a drag moves the window; a plain click returns at once.
+            window?.performDrag(with: event)
+        }
+    }
+}
+
 /// App-side bridge mapping a `WindowInfo.ID` to its live `NSWindow`. `WindowLibrary` is host-free
 /// (no AppKit), so the NSWindow handles live here. `TitleProbeView` registers/unregisters on window
 /// attach/close; `raise(_:)` brings an already-open window forward (the dedup-by-id raise path) and
@@ -1289,6 +1324,17 @@ final class WindowRegistry {
         let origin = WindowGeometry.clampOrigin(requested, windowSize: WindowGeometry.Size(size),
                                                 displayFrame: WindowGeometry.Rect(screen.frame)).cgPoint
         window.setFrameOrigin(origin)
+        return true
+    }
+
+    /// Zooms (the maximize-to-screen toggle) the on-screen window for `id` if one is live, driving the
+    /// standard `NSWindow.zoom` — the same action as the green zoom button and the double-click-header
+    /// gesture. A second call restores the prior frame. Returns false if no window is registered for `id`
+    /// (not open). The control-channel `window.zoom` path.
+    @discardableResult
+    func zoom(_ id: WindowInfo.ID) -> Bool {
+        guard let window = windows[id] else { return false }
+        window.zoom(nil)
         return true
     }
 }

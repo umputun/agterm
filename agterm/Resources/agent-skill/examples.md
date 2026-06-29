@@ -233,6 +233,7 @@ agtermctl session go --to next-attention  # jump to the next blocked/completed s
 w=$(agtermctl window new "scratch" --json | jq -r '.result.id')
 agtermctl window resize "$w" --width 1200 --height 800
 agtermctl window move "$w" --x 100 --y 100 --display 0
+agtermctl window zoom "$w"                 # maximize-to-screen toggle (call again to restore)
 agtermctl window select "$w"
 ```
 

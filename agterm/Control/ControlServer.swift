@@ -544,6 +544,8 @@ final class ControlServer {
             return windowResize(request.target, width: request.args?.width, height: request.args?.height)
         case .windowMove:
             return windowMove(request.target, x: request.args?.x, y: request.args?.y, display: request.args?.display)
+        case .windowZoom:
+            return windowZoom(request.target)
         case .keymapReload:
             return reloadKeymap()
         case .configReload:
@@ -1373,6 +1375,18 @@ final class ControlServer {
         }
         return resolveWindowID(target) { id in
             guard WindowRegistry.shared.move(id, x: x, y: y, display: display) else {
+                return ControlResponse(ok: false, error: "window not open — window.select it first")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    /// Resolve a window id and zoom (maximize-to-screen toggle) its on-screen window. The window must be
+    /// open; a closed window errors. The control half of the double-click-header gesture / the green zoom
+    /// button — drives the same `NSWindow.zoom` as `WindowRegistry.zoom`.
+    private func windowZoom(_ target: String?) -> ControlResponse {
+        return resolveWindowID(target) { id in
+            guard WindowRegistry.shared.zoom(id) else {
                 return ControlResponse(ok: false, error: "window not open — window.select it first")
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))

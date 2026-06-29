@@ -376,6 +376,7 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .windowClose, target: "9f3c"),
             ControlRequest(cmd: .windowRename, target: "active", args: ControlArgs(name: "renamed")),
             ControlRequest(cmd: .windowDelete, target: "9f3c"),
+            ControlRequest(cmd: .windowZoom, target: "9f3c"),
         ]
         for request in cases {
             #expect(try roundTrip(request) == request)
