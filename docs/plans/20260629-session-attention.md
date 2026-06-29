@@ -93,9 +93,9 @@ A single source of truth — `AppStore.attentionSessions` (host-free, per-window
 - Modify: `agtermCore/Sources/agtermCore/AppStore.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTests.swift`
 
-- [ ] write failing tests: filters out idle; orders blocked→active→completed; within a status group orders by `statusChangedAt` newest-first (nil last); spans all workspaces ignoring focus/flagged filter; empty when all idle
-- [ ] add `var attentionSessions: [Session]` to `AppStore` — `workspaces.flatMap(\.sessions)`, drop idle, sort by `(attentionRank, statusChangedAt desc)`
-- [ ] run `cd agtermCore && swift test` — must pass before next task
+- [x] write failing tests: filters out idle; orders blocked→active→completed; within a status group orders by `statusChangedAt` newest-first (nil last); spans all workspaces ignoring focus/flagged filter; empty when all idle
+- [x] add `var attentionSessions: [Session]` to `AppStore` — `workspaces.flatMap(\.sessions)`, drop idle, sort by `(attentionRank, statusChangedAt desc)`
+- [x] run `cd agtermCore && swift test` — must pass before next task
 
 ### Task 4: ControlSessionNode.status protocol field
 
