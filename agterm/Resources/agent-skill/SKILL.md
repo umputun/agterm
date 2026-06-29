@@ -21,7 +21,6 @@ when_to_use: >
   AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: troubleshoot agterm,
   keymap editor won't open, custom action / custom command not working, agterm logs, file an agterm
   bug, report an agterm issue, open an agterm discussion / feature request.
-user-invocable: false
 allowed-tools: Bash(agtermctl *)
 ---
 
