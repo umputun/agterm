@@ -191,6 +191,12 @@ final class AttentionButtonUITests: XCTestCase {
             if target.exists, target.isHittable { return target }
             if tabButton.exists, tabButton.isHittable {
                 tabButton.click()
+                // the General tab's Form exceeds the fixed 480×640 Settings window, so a control low in
+                // its section (the attention toggle is the last row of "Sessions") sits below the fold —
+                // present in the AX tree but not hittable. scroll the Form down to bring it into view.
+                if target.exists, !target.isHittable, app.scrollViews.firstMatch.exists {
+                    app.scrollViews.firstMatch.scroll(byDeltaX: 0, deltaY: -200)
+                }
             } else {
                 app.typeKey(",", modifierFlags: .command) // settings not open yet (or lost) — (re)open
             }
