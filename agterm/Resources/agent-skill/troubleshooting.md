@@ -51,6 +51,17 @@ modifier); it only fires while a terminal pane has keyboard focus; it runs in a 
 non-zero exit posts a failure banner (meaning it DID fire and failed). Reload after edits:
 `agtermctl keymap reload`.
 
+### "⌘C/⌘V (or a shortcut) doesn't work on a non-Latin / alternative layout"
+
+⌘C/⌘V copy/paste on any layout by default — agterm's bundled ghostty defaults bind them to the physical
+key POSITIONS (`super+key_c`/`super+key_v`), matched by keycode regardless of the character the layout
+prints. (ghostty's own `super+c`/`super+v` match the produced CHARACTER, so they miss on a Russian/Greek/
+etc. layout where the physical V key yields `м`.) To remap any shortcut: a physical key name (`key_c`,
+`key_v`, …) matches by position on any layout; a bare letter (`c`, `v`) matches the produced character.
+A Dvorak/Colemak user who wants ⌘C/⌘V at their own letter positions overrides in
+`~/.config/agterm/ghostty.conf` (`super+key_c=unbind` + `super+c=copy_to_clipboard`, same for `v`), then
+`agtermctl config reload`.
+
 ## Reporting: decide bug vs unsupported FIRST
 
 - A **supported** thing misbehaves (a documented command/feature does the wrong thing, a crash, a parse

@@ -94,6 +94,28 @@ A reload applies most keys to your open terminals right away — colors, theme, 
 
 The full ghostty key reference is at <https://ghostty.org/docs/config>.
 
+## Copy/paste and shortcuts on a non-Latin or alternative layout
+
+⌘C and ⌘V copy and paste on any keyboard layout, non-Latin ones (Russian, Greek, and so on) included, because agterm binds them to the physical key positions rather than to the character a layout prints. The physical C and V keys then work no matter what those keys produce in the active layout.
+
+The reason is that ghostty's own copy/paste binds match the produced character: on a Russian layout the physical V key yields `м`, so the built-in `super+v` bind never fires. The bundled agterm defaults add physical-key binds (`super+key_c`, `super+key_v`) that match by position instead.
+
+The same distinction lets you remap any shortcut for your layout:
+
+- A physical key name (`key_c`, `key_v`, `key_a`, and so on) matches the key's position, whatever character it prints.
+- A bare letter (`c`, `v`) matches the character the active layout produces at that key.
+
+If you use a Latin alternative layout (Dvorak, Colemak, AZERTY) and want ⌘C/⌘V at your layout's own C and V letters instead of the QWERTY physical positions, override them in `~/.config/agterm/ghostty.conf` with character-based binds, and unbind the physical defaults so the QWERTY positions are freed:
+
+```
+keybind = super+key_c=unbind
+keybind = super+key_v=unbind
+keybind = super+c=copy_to_clipboard
+keybind = super+v=paste_from_clipboard
+```
+
+Reload with **File ▸ Reload Config** or `agtermctl config reload`. The keybind syntax is at <https://ghostty.org/docs/config/keybind/reference>.
+
 ## Other common issues
 
 - **`agtermctl: command not found`.** Install it from Help ▸ Install Command Line Tool… (it symlinks into `/usr/local/bin`). You can also call it by its full path inside the app bundle: `agterm.app/Contents/MacOS/agtermctl`.
