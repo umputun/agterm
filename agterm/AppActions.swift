@@ -564,6 +564,23 @@ final class AppActions {
         }
     }
 
+    /// The window's non-idle sessions as palette items (the `.attention` mode), each row carrying the
+    /// session's agent-status glyph. Sourced from `store.attentionSessions` (blocked→active→completed,
+    /// newest status-change first) so the empty-query order matches that ranking; choosing one selects
+    /// it. Same subtitle shape as `paletteSessions()` (owning workspace · `subtitleDetail`).
+    func paletteAttention() -> [PaletteItem] {
+        guard let store else { return [] }
+        return store.attentionSessions.map { session in
+            let id = session.id
+            let workspaceName = store.workspace(forSession: id)?.name ?? ""
+            let subtitle = "\(workspaceName) · \(session.subtitleDetail)"
+            return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: subtitle,
+                               status: session.agentIndicator.status) {
+                store.selectSession(id)
+            }
+        }
+    }
+
     // MARK: - Theme picker
 
     /// Open the `.themes` command palette (the live-preview theme picker). Invoked by the action-palette

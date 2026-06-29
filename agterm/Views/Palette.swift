@@ -45,6 +45,7 @@ enum PaletteMode {
     case sessions
     case themes
     case customCommands
+    case attention
 }
 
 /// Drives the command palettes: `mode` is nil when closed, else the open palette. App-global, set
@@ -87,6 +88,7 @@ struct CommandPalette: View {
         case .sessions: return actions.paletteSessions()
         case .themes: return actions.paletteThemes()
         case .customCommands: return actions.paletteCustomCommands()
+        case .attention: return actions.paletteAttention()
         case .none: return []
         }
     }
@@ -115,6 +117,7 @@ struct CommandPalette: View {
         case .sessions: return "Go to session…"
         case .themes: return "Select a theme…"
         case .customCommands: return "Run a custom command…"
+        case .attention: return "Go to a session that needs attention…"
         default: return "Run an action…"
         }
     }

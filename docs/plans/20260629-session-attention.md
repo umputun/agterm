@@ -147,10 +147,10 @@ A single source of truth — `AppStore.attentionSessions` (host-free, per-window
 - Modify: `agterm/AppActions.swift`
 - Modify: `agterm/Views/Palette.swift`
 
-- [ ] add `func paletteAttention() -> [PaletteItem]` to `AppActions` — map `store.attentionSessions` to items (id=`uuidString`, title=`displayName`, subtitle="`workspace` · `subtitleDetail`", `status:` set from Task 7's field), `run` = `store.selectSession(id)` — mirroring `paletteSessions()`
-- [ ] add `case attention` to `PaletteMode` with its `allItems` arm (`actions.paletteAttention()`) and `placeholder` ("Go to a session that needs attention…") in the SAME task, so the exhaustive switch and its provider land together
-- [ ] confirm `.attention` needs no theme-preview wiring (`syncThemeSession` already guards on `.themes`); verify the empty-query order is the `attentionSessions` order (the palette re-sorts by fuzzy score only once the user types)
-- [ ] build (`make build`) — must succeed before next task
+- [x] add `func paletteAttention() -> [PaletteItem]` to `AppActions` — map `store.attentionSessions` to items (id=`uuidString`, title=`displayName`, subtitle="`workspace` · `subtitleDetail`", `status:` set from Task 7's field), `run` = `store.selectSession(id)` — mirroring `paletteSessions()`
+- [x] add `case attention` to `PaletteMode` with its `allItems` arm (`actions.paletteAttention()`) and `placeholder` ("Go to a session that needs attention…") in the SAME task, so the exhaustive switch and its provider land together
+- [x] confirm `.attention` needs no theme-preview wiring (`syncThemeSession` already guards on `.themes`); verify the empty-query order is the `attentionSessions` order (the palette re-sorts by fuzzy score only once the user types)
+- [x] build (`make build`) — must succeed before next task
 
 ### Task 9: Hotkey, menu, and launcher entry points
 
