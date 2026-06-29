@@ -60,6 +60,12 @@ private struct GeneralSettingsView: View {
                 Text("The red unseen-count pill on sidebar rows. The count keeps tracking either way, so it reappears with the current count when turned back on.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
+
+                Toggle("Show attention indicator", isOn: attentionButtonEnabled)
+                    .accessibilityIdentifier("settings-attention-button")
+                Text("A bell icon in the title bar that highlights when a session needs attention, even with the sidebar hidden. Click it to jump to the session.")
+                    .font(.system(size: 11))
+                    .foregroundStyle(.secondary)
             }
 
             Section("Scrolling") {
@@ -94,12 +100,6 @@ private struct GeneralSettingsView: View {
                 Toggle("Restore running commands on restart", isOn: restoreRunningCommand)
                     .accessibilityIdentifier("settings-restore-running-command")
                 Text("Re-runs each pane's foreground command when the app relaunches. Only single-process commands restore faithfully; programs listed in restore-denylist.conf (terminal multiplexers by default) start fresh.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-
-                Toggle("Show attention button in the title bar", isOn: attentionButtonEnabled)
-                    .accessibilityIdentifier("settings-attention-button")
-                Text("A bell icon in the title bar that highlights when a session needs attention, even with the sidebar hidden. Click it to jump to the session.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
