@@ -135,9 +135,9 @@ A single source of truth — `AppStore.attentionSessions` (host-free, per-window
 **Files:**
 - Modify: `agterm/Views/Palette.swift`
 
-- [ ] add `status: AgentStatus?` (default nil) to `PaletteItem` and its initializer (existing call sites keep nil — no behavior change yet)
-- [ ] in `CommandPalette.row`, render a leading `StatusGlyph(status:)` when `item.status != nil` (left of the title VStack)
-- [ ] build (`make build`) — must succeed before next task
+- [x] add `status: AgentStatus?` (default nil) to `PaletteItem` and its initializer (existing call sites keep nil — no behavior change yet)
+- [x] in `CommandPalette.row`, render a leading `StatusGlyph(status:)` when `item.status != nil` (left of the title VStack)
+- [x] build (`make build`) — must succeed before next task
 
 **Note:** no `.attention` mode and no `paletteAttention()` here — added together in Task 8 — so this task introduces no forward reference (`PaletteMode.allItems` is an exhaustive switch with no default, so a `.attention` case without its provider would not compile).
 
