@@ -1,5 +1,8 @@
 import AppKit
 import agtermCore
+import os
+
+private let logger = Logger(subsystem: "com.umputun.agterm", category: "WatermarkRenderer")
 
 /// Turns a `BackgroundWatermark` into a PNG file path for libghostty's `background-image`. For `.image`
 /// it validates and returns the user's file; for `.text` it rasterizes the string (via Core Text on a
@@ -56,16 +59,25 @@ enum WatermarkRenderer {
         guard width > 0, height > 0, width * height <= maxPixels,
               let rep = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: width, pixelsHigh: height,
                                          bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false,
-                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else { return false }
+                                         colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0) else {
+            // not a client error (text length is capped at the boundary): a degenerate/oversized canvas or a
+            // bitmap allocation failure — Warn, since the watermark silently won't appear with no other signal.
+            logger.warning("watermark text bitmap alloc failed (\(width, privacy: .public)x\(height, privacy: .public))")
+            return false
+        }
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = NSGraphicsContext(bitmapImageRep: rep)
         attributed.draw(at: NSPoint(x: padding, y: padding))
         NSGraphicsContext.restoreGraphicsState()
-        guard let data = rep.representation(using: .png, properties: [:]) else { return false }
+        guard let data = rep.representation(using: .png, properties: [:]) else {
+            logger.warning("watermark text PNG encoding failed")
+            return false
+        }
         do {
             try data.write(to: url)
             return true
         } catch {
+            logger.warning("watermark text PNG write failed: \(error.localizedDescription, privacy: .public)")
             return false
         }
     }

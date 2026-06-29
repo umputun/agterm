@@ -260,12 +260,15 @@ final class GhosttyApp {
         guard let newConfig = loadConfig(inputs) else { return lastConfigDiagnosticsCount }
         ghostty_app_update_config(app, newConfig)
         for surface in surfaces { surface.applyConfig(newConfig) }
+        config = newConfig
+        // refresh the chrome colors from the NEW config BEFORE the watermark re-assert below: a default-tinted
+        // `.text` watermark re-renders its PNG reading `terminalForegroundColor`, so the foreground must already
+        // reflect the new theme — otherwise the text watermark's color lags one reload behind a theme change.
+        resolveThemeColors(from: newConfig, inputs: inputs)
         // the broadcast above pushes the shared config (no background image) to every surface, wiping any
         // per-surface watermark — so re-assert each watermarked surface's overlay afterwards. No-op for the
         // surfaces without one. (Mirrors how per-session font zoom is reconciled, but re-applied not reset.)
         for surface in surfaces { surface.reapplyWatermarkIfNeeded() }
-        config = newConfig
-        resolveThemeColors(from: newConfig, inputs: inputs)
         return lastConfigDiagnosticsCount
     }
 
