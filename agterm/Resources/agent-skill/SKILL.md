@@ -118,7 +118,7 @@ via `session status`: `active`|`completed`|`blocked`, omitted when idle).
   recreates). `--command` (when showing) runs a program instead of a shell, run-once like `session new
   --command` (respawns the scratch if one is open).
 - `focus [left|right|other]` — move focus between split panes.
-- `status <idle|active|completed|blocked> [--blink] [--auto-reset]` — set the sidebar agent glyph.
+- `status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME]` — set the sidebar agent glyph (`--sound default` or a system sound name plays a one-shot sound).
 - `flag [on|off|toggle|clear]` — flag a session for the flagged working-set view (`clear` unflags all).
 - `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N]` · `overlay close` ·
   `overlay result` — run a program on top of a session; `--block` waits and exits with its status. An

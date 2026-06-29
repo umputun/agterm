@@ -23,6 +23,9 @@ final class ControlServer {
     private let settingsModel: SettingsModel
     private let socketPath: String
 
+    /// Plays the one-shot sound requested by `session.status --sound`.
+    private let soundPlayer = StatusSoundPlayer()
+
     /// The frontmost open window's store — the default target of a placement/`active` command. Falls
     /// back to an empty throwaway only in the all-windows-closed state (the app is quitting), where no
     /// command can meaningfully run; the library is never windowless at launch.
@@ -452,7 +455,7 @@ final class ControlServer {
         case .sessionStatus:
             return setSessionStatus(request.target, window: request.args?.window,
                                     status: request.args?.status, blink: request.args?.blink,
-                                    autoReset: request.args?.autoReset)
+                                    autoReset: request.args?.autoReset, sound: request.args?.sound)
         case .sessionFlag:
             return flagSession(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionCopy:
@@ -664,16 +667,28 @@ final class ControlServer {
     /// Set the target session's agent-status indicator (control-native: no GUI/menu equivalent, like
     /// `notify`/`session.type`/`session.copy`). `status` is `idle|active|completed|blocked`; an unknown
     /// value is the structured `invalid status` error. `blink` (default false) pulses the glyph;
-    /// `autoReset` (default false) clears the indicator to idle once the session is visited. The
-    /// indicator is ephemeral and rendered only on sessions you are not currently looking at.
+    /// `autoReset` (default false) clears the indicator to idle once the session is visited. `sound`, when
+    /// set, plays a one-shot sound once the status is applied (`default`/`beep` = system alert, any other
+    /// value = named system sound); it is resolved up-front so an unknown name is an `unknown sound` error
+    /// that leaves the status unchanged. The indicator is ephemeral and rendered only on sessions you are
+    /// not currently looking at.
     private func setSessionStatus(_ target: String?, window: String?, status: String?, blink: Bool?,
-                                  autoReset: Bool?) -> ControlResponse {
+                                  autoReset: Bool?, sound: String?) -> ControlResponse {
         guard let parsed = AgentStatus(rawValue: status ?? "") else {
             return ControlResponse(ok: false, error: "invalid status")
+        }
+        var fireSound: (() -> Void)?
+        if let sound {
+            guard let action = soundPlayer.action(for: sound) else {
+                let hint = StatusSoundPlayer.standardNames.joined(separator: ", ")
+                return ControlResponse(ok: false, error: "unknown sound: \(sound) (use 'default' or one of: \(hint))")
+            }
+            fireSound = action
         }
         return resolveSession(target, window: window) { store, id in
             store.setAgentIndicator(AgentIndicator(status: parsed, blink: blink ?? false,
                                                    autoReset: autoReset ?? false), forSession: id)
+            fireSound?()
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

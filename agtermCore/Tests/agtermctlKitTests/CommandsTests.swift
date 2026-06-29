@@ -244,6 +244,20 @@ struct CommandsTests {
                                       args: ControlArgs(status: "completed", autoReset: true)))
     }
 
+    @Test func sessionStatusWithSound() throws {
+        let req = try request(["session", "status", "blocked", "--sound", "Glass"])
+        #expect(req.cmd == .sessionStatus)
+        #expect(req.args?.status == "blocked")
+        #expect(req.args?.sound == "Glass")
+        #expect(req == ControlRequest(cmd: .sessionStatus, target: "active",
+                                      args: ControlArgs(status: "blocked", sound: "Glass")))
+    }
+
+    @Test func sessionStatusWithoutSound() throws {
+        let req = try request(["session", "status", "active"])
+        #expect(req.args?.sound == nil)
+    }
+
     @Test func sessionSearchWithNeedle() throws {
         let expected = ControlRequest(cmd: .sessionSearch, target: "active", args: ControlArgs(text: "error"))
         #expect(try request(["session", "search", "error"]) == expected)

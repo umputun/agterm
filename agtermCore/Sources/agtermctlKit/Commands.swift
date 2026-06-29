@@ -373,13 +373,14 @@ struct Session: ParsableCommand {
         @Argument(help: "State: idle, active, completed, or blocked.") var state: String
         @Flag(name: .long, help: "Pulse the indicator for attention.") var blink = false
         @Flag(name: .long, help: "Reset the indicator to idle once the session is visited.") var autoReset = false
+        @Option(name: .long, help: "Play a sound when set: 'default' for the system alert sound, or a system sound name (Basso, Blow, Bottle, Frog, Funk, Glass, Hero, Morse, Ping, Pop, Purr, Sosumi, Submarine, Tink).") var sound: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionStatus, target: target.target,
                            args: options.withWindow(ControlArgs(status: state, blink: blink ? true : nil,
-                                                                 autoReset: autoReset ? true : nil)))
+                                                                 autoReset: autoReset ? true : nil, sound: sound)))
         }
     }
 

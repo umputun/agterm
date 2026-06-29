@@ -75,6 +75,28 @@ struct ControlProtocolTests {
         #expect(decoded.args?.autoReset == true)
     }
 
+    @Test func sessionStatusRoundTripsWithSound() throws {
+        let request = ControlRequest(cmd: .sessionStatus, target: "9f3c",
+                                     args: ControlArgs(status: "blocked", sound: "Glass"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.sound == "Glass")
+    }
+
+    @Test func sessionStatusOmitsSoundWhenNil() throws {
+        let request = ControlRequest(cmd: .sessionStatus, target: "9f3c", args: ControlArgs(status: "active"))
+        let decoded = try roundTrip(request)
+        #expect(decoded.args?.sound == nil)
+    }
+
+    @Test func sessionStatusDecodesSound() throws {
+        let json = #"{"cmd":"session.status","args":{"status":"blocked","sound":"default"}}"#
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8))
+        #expect(decoded.cmd == .sessionStatus)
+        #expect(decoded.args?.status == "blocked")
+        #expect(decoded.args?.sound == "default")
+    }
+
     @Test func sessionStatusRawStringMapsToCommandAndArgs() throws {
         let json = #"{"cmd":"session.status","args":{"status":"blocked"}}"#
         let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8))

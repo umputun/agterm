@@ -115,13 +115,17 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var blink: Bool?
     /// Whether the `session.status` indicator resets to idle once the session is visited (selected).
     public var autoReset: Bool?
+    /// One-shot sound to play when `session.status` is set (caller-driven, not stored on the indicator):
+    /// `default`/`beep` is the system alert sound, any other value is a named system sound
+    /// (`NSSound(named:)`, e.g. `Glass`, also resolving custom sounds in `~/Library/Sounds`). nil = silent.
+    public var sound: String?
 
     public init(name: String? = nil, cwd: String? = nil, workspace: String? = nil, workspaceName: String? = nil,
                 createWorkspace: Bool? = nil, text: String? = nil, select: Bool? = nil, mode: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, window: String? = nil,
                 pane: String? = nil, to: String? = nil, title: String? = nil, body: String? = nil,
                 width: Int? = nil, height: Int? = nil, x: Int? = nil, y: Int? = nil, display: Int? = nil,
-                status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil) {
+                status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil, sound: String? = nil) {
         self.name = name
         self.cwd = cwd
         self.workspace = workspace
@@ -146,6 +150,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.status = status
         self.blink = blink
         self.autoReset = autoReset
+        self.sound = sound
     }
 }
 

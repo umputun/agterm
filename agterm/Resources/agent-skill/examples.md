@@ -204,6 +204,8 @@ agtermctl notify "tests failed" --target "$sid"               # a specific sessi
 ```bash
 agtermctl session status active --blink --target "$AGTERM_SESSION_ID"   # working
 agtermctl session status completed --auto-reset --target "$AGTERM_SESSION_ID"  # one-shot done flash
+agtermctl session status blocked --sound default --target "$AGTERM_SESSION_ID" # needs input, with a beep
+agtermctl session status completed --sound Glass --target "$AGTERM_SESSION_ID" # done, with a named sound
 agtermctl session status idle --target "$AGTERM_SESSION_ID"             # clear
 ```
 

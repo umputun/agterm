@@ -1187,6 +1187,25 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertTrue(error.hasPrefix("no such session"), "should report no such session, got: \(error)")
     }
 
+    func testSessionStatusSoundValidatesName() throws {
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let root = try XCTUnwrap(treeResult["tree"] as? [String: Any], "result should carry a tree")
+        let workspaces = try XCTUnwrap(root["workspaces"] as? [[String: Any]], "tree should list workspaces")
+        let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
+        let seeded = try XCTUnwrap(sessions.first?["id"] as? String, "should have a seeded session id")
+
+        // the default-beep keyword resolves and the command succeeds.
+        let ok = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"active","sound":"default"}}"#)
+        XCTAssertEqual(ok["ok"] as? Bool, true, "session.status --sound default should succeed: \(ok)")
+
+        // an unknown sound name is rejected up-front (status unchanged), echoing the bad name.
+        let bad = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"active","sound":"NoSuchSoundXYZ"}}"#)
+        XCTAssertEqual(bad["ok"] as? Bool, false, "an unknown sound should fail: \(bad)")
+        let error = try XCTUnwrap(bad["error"] as? String, "an unknown sound should carry an error")
+        XCTAssertTrue(error.hasPrefix("unknown sound: NoSuchSoundXYZ"), "should report the unknown sound, got: \(error)")
+    }
+
     // the agent-status icon is gated by the visibility rule: it shows only on a session that is NOT the
     // frontmost window's selected one. Set status on a non-selected session → the icon appears; select that
     // session → it hides; select a different session → it reappears (mirrors the notify-badge test).
