@@ -306,4 +306,4 @@ user-edited file read at launch — there is no control command for it.
 `no overlay` / `still running` / `no result` (overlay), `invalid flag mode` (session flag),
 `invalid sidebar mode` (sidebar), `invalid focus mode` (workspace focus),
 `no open window` (quick/sidebar), `window not open`
-(resize/move/`--window`), `unknown theme: <name>` (theme set). Unknown commands fail to decode and return a structured error, never a crash.
+(resize/move/`--window`), `unknown theme: <name>` (theme set), `unknown sound: <name>` (session status --sound). Unknown commands fail to decode and return a structured error, never a crash.

@@ -117,7 +117,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var autoReset: Bool?
     /// One-shot sound to play when `session.status` is set (caller-driven, not stored on the indicator):
     /// `default`/`beep` is the system alert sound, any other value is a named system sound
-    /// (`NSSound(named:)`, e.g. `Glass`, also resolving custom sounds in `~/Library/Sounds`). nil = silent.
+    /// (`NSSound(named:)`, e.g. `Glass`, also resolving custom sounds in `~/Library/Sounds`). nil/empty means
+    /// no per-call sound — the app may still play the Settings "Blocked sound" default on a `blocked` status.
     public var sound: String?
 
     public init(name: String? = nil, cwd: String? = nil, workspace: String? = nil, workspaceName: String? = nil,

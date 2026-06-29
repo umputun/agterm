@@ -1195,15 +1195,30 @@ final class ControlAPIUITests: XCTestCase {
         let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
         let seeded = try XCTUnwrap(sessions.first?["id"] as? String, "should have a seeded session id")
 
+        // reads the seeded session's current status from a fresh tree (nil when idle/absent).
+        func currentStatus() throws -> String? {
+            let t = try sendCommand(#"{"cmd":"tree"}"#)
+            let r = try XCTUnwrap(t["result"] as? [String: Any])
+            let ws = try XCTUnwrap((r["tree"] as? [String: Any])?["workspaces"] as? [[String: Any]])
+            let all = ws.flatMap { $0["sessions"] as? [[String: Any]] ?? [] }
+            return all.first { ($0["id"] as? String) == seeded }?["status"] as? String
+        }
+
         // the default-beep keyword resolves and the command succeeds.
         let ok = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"active","sound":"default"}}"#)
         XCTAssertEqual(ok["ok"] as? Bool, true, "session.status --sound default should succeed: \(ok)")
 
-        // an unknown sound name is rejected up-front (status unchanged), echoing the bad name.
+        // establish a known baseline, then try to set a DIFFERENT status with an unknown sound.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"completed"}}"#)["ok"] as? Bool, true)
+        XCTAssertEqual(try currentStatus(), "completed", "baseline status should be completed")
+
         let bad = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"active","sound":"NoSuchSoundXYZ"}}"#)
         XCTAssertEqual(bad["ok"] as? Bool, false, "an unknown sound should fail: \(bad)")
         let error = try XCTUnwrap(bad["error"] as? String, "an unknown sound should carry an error")
         XCTAssertTrue(error.hasPrefix("unknown sound: NoSuchSoundXYZ"), "should report the unknown sound, got: \(error)")
+
+        // the rejected call must NOT have changed the status — validation happens before the mutation.
+        XCTAssertEqual(try currentStatus(), "completed", "an unknown sound must leave the status unchanged")
     }
 
     // the agent-status icon is gated by the visibility rule: it shows only on a session that is NOT the

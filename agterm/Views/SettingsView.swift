@@ -255,7 +255,7 @@ private struct AppearanceSettingsView: View {
                     }
                 }
                 .accessibilityIdentifier("settings-status-blocked-sound")
-                Button("Reset to defaults") { model.resetStatusColors() }
+                Button("Reset to defaults") { model.resetAgentStatus() }
                     .accessibilityIdentifier("settings-status-reset")
                 Text("Colors for the per-session agent-status glyph in the sidebar, and an optional sound played when a session becomes blocked.")
                     .font(.system(size: 11))
