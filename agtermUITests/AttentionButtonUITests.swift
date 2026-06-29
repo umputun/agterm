@@ -46,6 +46,10 @@ final class AttentionButtonUITests: XCTestCase {
         XCTAssertTrue(pollButton(bell, value: "attention", enabled: true),
                       "a non-blocked attention session should enable the bell as attention")
 
+        try setStatus("completed", target: seeded)
+        XCTAssertTrue(pollButton(bell, value: "attention", enabled: true),
+                      "a completed (non-blocked) attention session should keep the bell enabled as attention")
+
         try setStatus("blocked", target: seeded)
         XCTAssertTrue(pollButton(bell, value: "blocked", enabled: true),
                       "a blocked session should mark the bell blocked")
@@ -77,15 +81,12 @@ final class AttentionButtonUITests: XCTestCase {
         XCTAssertTrue(palette.waitForExistence(timeout: 5), "clicking the bell should open the command palette")
 
         // the panel enters the AX tree before its field grabs first responder, and a button-open settles
-        // focus a beat slower than a menu-open — so give the auto-focus a moment before driving the
-        // keyboard (a real user pressing Return is always well past this), then Return picks the top match.
+        // focus a beat slower than a menu-open — so a single Return can land before the field is
+        // keyboard-ready and do nothing. re-send Return each tick until the seeded (only attention) row's
+        // session is selected, so the test is deterministic rather than racing a fixed delay.
         let field = app.textFields.firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5), "the attention palette field should appear")
-        RunLoop.current.run(until: Date().addingTimeInterval(0.6))
-        // the only attention row is the blocked seeded session, so Return on the top match selects it
-        // (selection moves off the new second session back to seeded).
-        app.typeKey(.return, modifierFlags: [])
-        XCTAssertTrue(pollSelectedSessionID(seeded), "choosing the attention row should select that session")
+        XCTAssertTrue(pollReturnSelects(seeded), "choosing the attention row should select that session")
     }
 
     // with the toggle off (the default — no seeded setting), the bell is absent from the title bar.
@@ -95,6 +96,24 @@ final class AttentionButtonUITests: XCTestCase {
         // not-yet-laid-out race.
         XCTAssertTrue(app.buttons["sidebar-toggle-button"].waitForExistence(timeout: 10), "the title bar should render")
         XCTAssertFalse(app.buttons["attention-button"].exists, "the bell should be absent with the toggle off")
+    }
+
+    // flipping the Settings toggle at runtime shows/hides the bell live (the .agtermAppearanceChanged
+    // refresh path) without a relaunch — every other test seeds settings.json before launch. launch
+    // WITHOUT the toggle (bell absent), open Settings (Cmd+,), flip the toggle on (bell appears), flip it
+    // back off (bell hides).
+    func testAttentionButtonTogglesLiveFromSettings() throws {
+        launch(attentionEnabled: false)
+        XCTAssertTrue(app.buttons["sidebar-toggle-button"].waitForExistence(timeout: 10), "the title bar should render")
+        let bell = app.buttons["attention-button"]
+        XCTAssertFalse(bell.exists, "the bell should be absent before the toggle is flipped on")
+
+        let toggle = settingsControl(tab: "General", control: "settings-attention-button")
+        toggle.click() // turn it on (default off)
+        XCTAssertTrue(bell.waitForExistence(timeout: 10), "flipping the toggle on should show the bell live")
+
+        toggle.click() // turn it back off
+        XCTAssertTrue(pollAbsent(bell), "flipping the toggle back off should hide the bell live")
     }
 
     // MARK: - Launch + seeding
@@ -132,6 +151,53 @@ final class AttentionButtonUITests: XCTestCase {
         stateDir.pollSnapshot(equals: expected.lowercased(), timeout: timeout) { obj in
             (obj["selectedSessionID"] as? String)?.lowercased()
         }
+    }
+
+    /// Re-sends Return each tick (the only attention row is the blocked seeded session, so Return on the
+    /// top match selects it) until the snapshot reports `expected` selected, bounded by `timeout`. A
+    /// button-opened palette settles field focus a beat slower than a menu-open, so a single keypress can
+    /// race the focus and no-op; re-sending until the selection lands makes the assertion deterministic.
+    private func pollReturnSelects(_ expected: String, timeout: TimeInterval = 8) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            app.typeKey(.return, modifierFlags: [])
+            if pollSelectedSessionID(expected, timeout: 0.4) { return true }
+        }
+        return false
+    }
+
+    /// Polls until the element is gone from the AX tree (the bell after the toggle is flipped off), or the
+    /// timeout elapses.
+    private func pollAbsent(_ element: XCUIElement, timeout: TimeInterval = 8) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if !element.exists { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        return !element.exists
+    }
+
+    /// Opens the Settings window (Cmd+,) if needed, switches to `tab`, and returns the control with
+    /// `control` id once it is hittable — RETRYING the tab click each tick (mirrors SettingsUITests). A
+    /// stale/half-open Settings window can silently drop the first tab click, so retry until the control
+    /// is actually hittable.
+    @discardableResult
+    private func settingsControl(tab: String, control: String, timeout: TimeInterval = 12,
+                                 file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
+        let target = app.descendants(matching: .any).matching(identifier: control).firstMatch
+        let tabButton = app.buttons[tab].firstMatch
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if target.exists, target.isHittable { return target }
+            if tabButton.exists, tabButton.isHittable {
+                tabButton.click()
+            } else {
+                app.typeKey(",", modifierFlags: .command) // settings not open yet (or lost) — (re)open
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        XCTFail("Settings '\(tab)' control '\(control)' never became hittable", file: file, line: line)
+        return target
     }
 
     /// The seeded (first) session's id from a `tree` response.

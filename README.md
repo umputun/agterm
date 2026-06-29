@@ -282,10 +282,13 @@ new_session        open_directory     rename_session
 close_session      clear_status
 increase_font_size decrease_font_size reset_font_size
 toggle_split       toggle_scratch     toggle_search
-focus_left_pane    focus_right_pane
+toggle_sidebar     toggle_flag        toggle_flagged_view
+focus_left_pane    focus_right_pane   focus_workspace
 previous_session   next_session       first_session      last_session
 previous_attention_session            next_attention_session
 quick_terminal     session_palette    command_palette
+custom_command_palette                show_attention
+select_theme
 ```
 
 The shell line of a `command` may use these `{AGT_X}` tokens, expanded at fire time (the same values are also exported as `$AGT_X` environment variables on the spawned process):

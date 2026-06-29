@@ -213,9 +213,10 @@ struct AppStoreTests {
         let ws = store.addWorkspace(name: "work")
         let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         a.statusChangedAt = Date(timeIntervalSince1970: 0) // pretend a stale stamp
+        let before = Date()
         store.setAgentIndicator(AgentIndicator(status: .active), forSession: a.id)
         let stamp = try! #require(a.statusChangedAt)
-        #expect(stamp > Date(timeIntervalSince1970: 0)) // re-asserting a non-idle status moves the stamp forward
+        #expect(stamp >= before) // re-asserting a non-idle status moves the stamp to ~now, not just off epoch-0
     }
 
     @Test func statusChangedAtDoesNotSurviveSnapshotRestore() {
@@ -1991,6 +1992,24 @@ struct AppStoreTests {
         newest.statusChangedAt = Date(timeIntervalSince1970: 200)
         unstamped.statusChangedAt = nil // a missing stamp sorts last within the rank group
         #expect(store.attentionSessions.map(\.id) == [newest.id, oldest.id, unstamped.id])
+    }
+
+    @Test func attentionSessionsTieBreakStableForEqualAndNilStamps() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let stampedA = store.addSession(toWorkspace: ws.id, cwd: "/sa")!
+        let stampedB = store.addSession(toWorkspace: ws.id, cwd: "/sb")!
+        let nilA = store.addSession(toWorkspace: ws.id, cwd: "/na")!
+        let nilB = store.addSession(toWorkspace: ws.id, cwd: "/nb")!
+        // all blocked (same rank); two share an equal stamp, two share a nil stamp — exercising the
+        // comparator's (l?, r?)-equal and (nil, nil) branches (both return false). the stamped pair still
+        // precedes the nil pair, and within each tie group the stable sort keeps insertion order.
+        for s in [stampedA, stampedB, nilA, nilB] { store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: s.id) }
+        stampedA.statusChangedAt = Date(timeIntervalSince1970: 500)
+        stampedB.statusChangedAt = Date(timeIntervalSince1970: 500) // equal stamp -> stable, keeps order
+        nilA.statusChangedAt = nil
+        nilB.statusChangedAt = nil
+        #expect(store.attentionSessions.map(\.id) == [stampedA.id, stampedB.id, nilA.id, nilB.id])
     }
 
     @Test func attentionSessionsSpanAllWorkspacesIgnoringFocusAndFlagged() {

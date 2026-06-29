@@ -26,11 +26,12 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
     ///
     /// `nil` covers two groups: the keyless actions (`rename_*`/`delete_*`/`clear_status`/
     /// `first_session`/`last_session`/`select_theme`/`toggle_flagged_view`/`focus_workspace`),
-    /// which gain a key only when the user `map`s one; AND the
+    /// which gain a key only when the user `map`s one; AND the six
     /// arrow-bound actions (`focus_left_pane` ⌘⌥←, `focus_right_pane` ⌘⌥→, `previous_session` ⌥⌘↑,
-    /// `next_session` ⌥⌘↓). Arrows are NOT expressible as a parsed `Chord` (`parseKeybind` only accepts
-    /// single-char keys or `tab`/`space`/`return`/`delete`), so they cannot round-trip through the
-    /// keymap grammar and are not returned here. The menu keeps its hardcoded arrow shortcut as the
+    /// `next_session` ⌥⌘↓, `previous_attention_session` ⌃⌥↑, `next_attention_session` ⌃⌥↓). Arrows are
+    /// NOT expressible as a parsed `Chord` (`parseKeybind` only accepts single-char keys or
+    /// `tab`/`space`/`return`/`delete`), so they cannot round-trip through the keymap grammar and are not
+    /// returned here. The menu keeps its hardcoded arrow shortcut as the
     /// fallback when `equivalent(for:)` is nil; the user can still re-`map` these to a parseable chord.
     public var defaultChord: Chord? {
         switch self {

@@ -98,6 +98,16 @@ struct CommandPalette: View {
     /// equal-scoring matches are ordered predictably).
     private func updateFiltered() {
         let q = query.trimmingCharacters(in: .whitespaces)
+        // the attention palette's empty-query order is the paletteAttention()/attentionSessions ranking
+        // (blocked→active→completed, newest change first). preserve it verbatim instead of falling through
+        // to the alphabetical tie-break below — every row scores 0 for an empty query, so that tie-break
+        // would re-sort them A→Z and Return would jump to the alphabetically-first session, not the blocked
+        // one. fuzzy filtering still applies once the user types.
+        if controller.mode == .attention, q.isEmpty {
+            filtered = allItems
+            selection = filtered.isEmpty ? 0 : min(selection, filtered.count - 1)
+            return
+        }
         let scored: [(item: PaletteItem, score: Int)] = allItems.compactMap { item in
             let scores = [fuzzyScore(query: q, target: item.title),
                           item.subtitle.flatMap { fuzzyScore(query: q, target: $0) }].compactMap { $0 }

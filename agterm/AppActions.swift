@@ -456,7 +456,7 @@ final class AppActions {
             PaletteItem(title: "Next Attention Session", shortcut: paletteHint(for: .nextAttentionSession)) { [weak self] in self?.selectNextAttentionSession() },
             PaletteItem(title: "First Session", shortcut: paletteHint(for: .firstSession)) { [weak self] in self?.selectFirstSession() },
             PaletteItem(title: "Last Session", shortcut: paletteHint(for: .lastSession)) { [weak self] in self?.selectLastSession() },
-            PaletteItem(title: "Show Attention", shortcut: paletteHint(for: .showAttention)) { [weak self] in self?.toggleAttentionPalette() },
+            PaletteItem(title: "Show Attention", shortcut: paletteHint(for: .showAttention)) { [weak self] in self?.openAttentionPalette() },
             PaletteItem(title: "Toggle Split", shortcut: paletteHint(for: .toggleSplit)) { [weak self] in self?.toggleSplit() },
             PaletteItem(title: "Toggle Scratch", shortcut: paletteHint(for: .toggleScratch)) { [weak self] in self?.toggleScratch() },
             PaletteItem(title: "Toggle Sidebar", shortcut: paletteHint(for: .toggleSidebar)) { [weak self] in self?.toggleSidebar() },
@@ -555,14 +555,7 @@ final class AppActions {
     /// `subtitleDetail` (the focused pane's terminal title for a remote session, else its cwd).
     func paletteSessions() -> [PaletteItem] {
         guard let store else { return [] }
-        return store.navigableSessions.map { session in
-            let id = session.id
-            let workspaceName = store.workspace(forSession: id)?.name ?? ""
-            let subtitle = "\(workspaceName) · \(session.subtitleDetail)"
-            return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: subtitle) {
-                store.selectSession(id)
-            }
-        }
+        return store.navigableSessions.map { paletteItem(for: $0, in: store) }
     }
 
     /// The window's non-idle sessions as palette items (the `.attention` mode), each row carrying the
@@ -571,22 +564,36 @@ final class AppActions {
     /// it. Same subtitle shape as `paletteSessions()` (owning workspace · `subtitleDetail`).
     func paletteAttention() -> [PaletteItem] {
         guard let store else { return [] }
-        return store.attentionSessions.map { session in
-            let id = session.id
-            let workspaceName = store.workspace(forSession: id)?.name ?? ""
-            let subtitle = "\(workspaceName) · \(session.subtitleDetail)"
-            return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: subtitle,
-                               status: session.agentIndicator.status) {
-                store.selectSession(id)
-            }
+        return store.attentionSessions.map { paletteItem(for: $0, in: store, status: $0.agentIndicator.status) }
+    }
+
+    /// Maps one session to a palette row — title=`displayName`, subtitle="`workspace` · `subtitleDetail`",
+    /// `run` selects it. Shared by `paletteSessions()` (status nil) and `paletteAttention()` (status set so
+    /// `CommandPalette.row` renders the leading `StatusGlyph`).
+    private func paletteItem(for session: Session, in store: AppStore, status: AgentStatus? = nil) -> PaletteItem {
+        let id = session.id
+        let workspaceName = store.workspace(forSession: id)?.name ?? ""
+        let subtitle = "\(workspaceName) · \(session.subtitleDetail)"
+        return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: subtitle, status: status) {
+            store.selectSession(id)
         }
     }
 
     /// Toggle the `.attention` command palette (the window's non-idle sessions). Driven by the ⌃⇧I
-    /// `BuiltinAction.showAttention`, the Navigate ▸ Go to Attention… menu item, the ⌃⇧P launcher entry,
-    /// and the titlebar bell icon — all the same `palette.toggle(.attention)`.
+    /// `BuiltinAction.showAttention`, the Navigate ▸ Go to Attention… menu item, and the titlebar bell
+    /// icon — none of these route through the action palette's `runItem`, so a synchronous toggle is
+    /// correct. The ⌃⇧P launcher uses `openAttentionPalette()` instead (it must reopen async).
     func toggleAttentionPalette() {
         palette?.toggle(.attention)
+    }
+
+    /// Open the `.attention` command palette from the action-palette "Show Attention" launcher. Opened on
+    /// the next runloop tick (mirroring `openThemePalette()`): the launcher runs inside the open action
+    /// palette's `runItem`, which calls `controller.close()` right after this returns, so a synchronous
+    /// `toggle` would be undone by that close. The async `open` lets `.attention` reopen a tick later as a
+    /// fresh view that survives the close.
+    func openAttentionPalette() {
+        DispatchQueue.main.async { [weak self] in self?.palette?.open(.attention) }
     }
 
     // MARK: - Theme picker
