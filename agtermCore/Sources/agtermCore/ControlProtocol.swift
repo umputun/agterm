@@ -184,10 +184,13 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let foreground: [String]?
     /// The split (right) pane's live foreground command (full argv), the split analogue of `foreground`.
     public let splitForeground: [String]?
+    /// The session's agent status (`active`/`completed`/`blocked`) as the `AgentStatus` raw value, or nil
+    /// when the session is idle (omitted from the JSON). The read side of `session.status`.
+    public let status: String?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 overlay: Bool = false, scratch: Bool = false, flagged: Bool = false,
-                foreground: [String]? = nil, splitForeground: [String]? = nil) {
+                foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -199,6 +202,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.flagged = flagged
         self.foreground = foreground
         self.splitForeground = splitForeground
+        self.status = status
     }
 }
 

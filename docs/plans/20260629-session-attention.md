@@ -103,9 +103,9 @@ A single source of truth — `AppStore.attentionSessions` (host-free, per-window
 - Modify: `agtermCore/Sources/agtermCore/ControlProtocol.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlProtocolTests.swift`
 
-- [ ] write failing round-trip tests: `ControlSessionNode` with a `status` encodes/decodes; nil `status` is omitted from JSON (matches the existing optional-field convention, e.g. `foreground`)
-- [ ] add `status: String?` to `ControlSessionNode` (optional, omit-when-nil) and thread it through the initializer
-- [ ] run `cd agtermCore && swift test` — must pass before next task
+- [x] write failing round-trip tests: `ControlSessionNode` with a `status` encodes/decodes; nil `status` is omitted from JSON (matches the existing optional-field convention, e.g. `foreground`)
+- [x] add `status: String?` to `ControlSessionNode` (optional, omit-when-nil) and thread it through the initializer
+- [x] run `cd agtermCore && swift test` — must pass before next task
 
 ### Task 5: Populate status in the tree builder
 
