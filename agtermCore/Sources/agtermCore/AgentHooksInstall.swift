@@ -73,11 +73,11 @@ public enum AgentHooksInstall {
     /// `existing` is the rc file's current contents; `scriptDir` is the installed script directory.
     /// Returns the new contents and whether anything was appended. Idempotent: if the begin marker is
     /// already present the input is returned unchanged with `changed == false`.
-    public static func appendShellRC(existing: String, scriptDir: String) -> (contents: String, changed: Bool) {
+    public static func appendShellRC(existing: String, scriptDir: String, scriptName: String = integrationRelativePath) -> (contents: String, changed: Bool) {
         if existing.contains(rcMarkerBegin) {
             return (existing, false) // already installed
         }
-        let source = "source \(shellQuote(scriptDir + "/" + integrationRelativePath))"
+        let source = "source \(shellQuote(scriptDir + "/" + scriptName))"
         var block = rcMarkerBegin + "\n" + source + "\n" + rcMarkerEnd + "\n"
         if existing.isEmpty {
             return (block, true)
