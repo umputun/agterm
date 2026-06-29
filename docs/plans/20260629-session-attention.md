@@ -232,9 +232,9 @@ A single source of truth — `AppStore.attentionSessions` (host-free, per-window
 
 ### Task 14: Update documentation and close out
 
-- [ ] final pass on README.md / CLAUDE.md / `.claude/rules/*.md` for accuracy with what shipped
-- [ ] confirm the four keep-in-sync surfaces are consistent (GUI / menu / control-read / agent-skill)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] final pass on README.md / CLAUDE.md / `.claude/rules/*.md` for accuracy with what shipped
+- [x] confirm the four keep-in-sync surfaces are consistent (GUI / menu / control-read / agent-skill)
+- [x] move this plan to `docs/plans/completed/` (moved to completed/ by the exec finalize step after reviews)
 
 ## Post-Completion
 
