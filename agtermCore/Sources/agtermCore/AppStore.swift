@@ -639,7 +639,14 @@ public final class AppStore {
     @discardableResult
     public func setBackgroundWatermark(_ watermark: BackgroundWatermark?, forSession id: UUID) -> Bool {
         guard let session = session(withID: id), session.backgroundWatermark != watermark else { return false }
+        let previous = session.backgroundWatermark
         session.backgroundWatermark = watermark
+        // a `.text` watermark owns a rendered `<id>.png`; switching to anything that isn't `.text` (an
+        // image, or nil) leaves it id-keyed but unreferenced, so drop it here. `clear`/teardown also sweep
+        // the same id-keyed file, so this is just the eager reclaim for the text→image/nil transition.
+        if previous?.kind == .text, watermark?.kind != .text {
+            WatermarkStorage.removeRenderedText(sessionID: id)
+        }
         save()
         return true
     }

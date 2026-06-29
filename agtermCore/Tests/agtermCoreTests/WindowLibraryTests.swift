@@ -161,6 +161,53 @@ final class WindowLibraryTests {
         _ = store // keep the store alive through the assertions above (mirrors the willClose retention)
     }
 
+    @Test func removeWindowSweepsRenderedTextPNGsOfAClosedWindow() throws {
+        // deleting a CLOSED window (no live store) must still sweep its sessions' rendered `.text`
+        // watermark PNGs — `removeWindow` reads the session ids from the persisted snapshot, not the
+        // (absent) store. The state-dir root is the test `directory` (WindowLibrary + WatermarkStorage
+        // resolve against the same root), so the PNGs land where the sweep looks, no env mutation.
+        let closed = UUID(), kept = UUID()
+        let doomedSession = UUID(), keptSession = UUID()
+        try writeWindowFile(closed, Snapshot(workspaces: [WorkspaceSnapshot(
+            id: UUID(), name: "ws", sessions: [SessionSnapshot(id: doomedSession, customName: nil, cwd: "/tmp")])]))
+        try writeWindowFile(kept, Snapshot(workspaces: [WorkspaceSnapshot(
+            id: UUID(), name: "ws", sessions: [SessionSnapshot(id: keptSession, customName: nil, cwd: "/tmp")])]))
+        try writeIndex(WindowsIndex(frontmost: kept, windows: [
+            WindowEntry(id: closed, name: "closed", isOpen: false),
+            WindowEntry(id: kept, name: "kept", isOpen: true),
+        ]))
+
+        // stand in for WatermarkRenderer's PNGs (host-free test, no AppKit), keyed by session id.
+        WatermarkStorage.ensureDirectory(stateDir: directory)
+        let doomedPNG = WatermarkStorage.renderedTextURL(sessionID: doomedSession, stateDir: directory)
+        let keptPNG = WatermarkStorage.renderedTextURL(sessionID: keptSession, stateDir: directory)
+        try Data("png".utf8).write(to: doomedPNG)
+        try Data("png".utf8).write(to: keptPNG)
+
+        let library = WindowLibrary(directory: directory)
+        #expect(!library.isOpen(closed)) // precondition: the target window is closed (no store to sweep from)
+        library.removeWindow(closed)
+
+        #expect(!FileManager.default.fileExists(atPath: doomedPNG.path)) // deleted window's PNG swept
+        #expect(FileManager.default.fileExists(atPath: keptPNG.path))    // surviving window's PNG untouched
+    }
+
+    @Test func removeWindowSweepsRenderedTextPNGsOfAnOpenWindow() throws {
+        // the OPEN-window path reads session ids from the live store; it must sweep into the same
+        // state-dir root (the test `directory`) so a deleted open window's PNGs go too.
+        let library = WindowLibrary(directory: directory)
+        let extra = library.newWindow(name: "extra")
+        let store = try #require(library.store(for: extra.id))
+        let session = try #require(store.workspaces.first?.sessions.first)
+
+        WatermarkStorage.ensureDirectory(stateDir: directory)
+        let png = WatermarkStorage.renderedTextURL(sessionID: session.id, stateDir: directory)
+        try Data("png".utf8).write(to: png)
+
+        library.removeWindow(extra.id)
+        #expect(!FileManager.default.fileExists(atPath: png.path))
+    }
+
     // MARK: - Open-set / frontmost / close
 
     @Test func closeWindowMarksClosedButKeepsEntry() {
