@@ -111,6 +111,57 @@ final class ControlAPIUITests: XCTestCase {
         return sessions.first?["foreground"] as? [String]
     }
 
+    // tree exposes each session's agent status: setting `blocked` surfaces `status: "blocked"` on that
+    // session's node, while a session left idle omits the key entirely (the read side of session.status).
+    func testTreeExposesAgentStatus() throws {
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let root = try XCTUnwrap(treeResult["tree"] as? [String: Any], "result should carry a tree")
+        let workspaces = try XCTUnwrap(root["workspaces"] as? [[String: Any]], "tree should list workspaces")
+        let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
+        let seeded = try XCTUnwrap(sessions.first?["id"] as? String, "should have a seeded session id")
+
+        // a second session stays idle so its node can prove the status key is omitted when idle.
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let createdResult = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
+        let idleID = try XCTUnwrap(createdResult["id"] as? String, "session.new should return the new id")
+        XCTAssertTrue(pollSessionCount(2, timeout: 10), "the new session should land")
+
+        // baseline: every fresh session is idle, so the seeded node omits the status key.
+        let before = try sendCommand(#"{"cmd":"tree"}"#)
+        XCTAssertNil(sessionNode(before, id: seeded)?["status"], "an idle session should omit the status key")
+
+        // set blocked on the seeded session; its node now reports status "blocked".
+        let set = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"blocked"}}"#)
+        XCTAssertEqual(set["ok"] as? Bool, true, "session.status blocked should succeed: \(set)")
+
+        var seededStatus: String?
+        for _ in 0..<40 {
+            let resp = try sendCommand(#"{"cmd":"tree"}"#)
+            if let s = sessionNode(resp, id: seeded)?["status"] as? String { seededStatus = s; break }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        XCTAssertEqual(seededStatus, "blocked", "tree should report the seeded session's blocked status")
+
+        // the untouched second session is still idle, so it omits the status key.
+        let after = try sendCommand(#"{"cmd":"tree"}"#)
+        XCTAssertNil(sessionNode(after, id: idleID)?["status"], "an idle session should omit the status key")
+    }
+
+    /// The session node matching `id` (case-insensitive) anywhere in a `tree` response, or nil.
+    private func sessionNode(_ response: [String: Any], id: String) -> [String: Any]? {
+        guard let result = response["result"] as? [String: Any],
+              let tree = result["tree"] as? [String: Any],
+              let workspaces = tree["workspaces"] as? [[String: Any]] else { return nil }
+        for workspace in workspaces {
+            guard let sessions = workspace["sessions"] as? [[String: Any]] else { continue }
+            if let match = sessions.first(where: { ($0["id"] as? String)?.lowercased() == id.lowercased() }) {
+                return match
+            }
+        }
+        return nil
+    }
+
     // restore.clear succeeds and the server keeps serving. The saved-command WIPE is only observable across
     // a quit (the field is populated at quit, consumed at restore), so the cross-relaunch behavior is left
     // to the arm's trivial nil+saveAllOpen logic plus the protocol round-trip + CLI parse tests.

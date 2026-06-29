@@ -1054,12 +1054,13 @@ final class ControlServer {
             let sessions = workspace.sessions.map { session in
                 let fg = (session.surface as? GhosttySurfaceView).flatMap { ForegroundProcess.command(for: $0, shellBasename: shellBasename) }
                 let splitFg = (session.splitSurface as? GhosttySurfaceView).flatMap { ForegroundProcess.command(for: $0, shellBasename: shellBasename) }
+                let status = session.agentIndicator.status == .idle ? nil : session.agentIndicator.status.rawValue
                 return ControlSessionNode(id: session.id.uuidString, name: session.displayName,
                                           cwd: session.effectiveCwd, title: session.oscTitle,
                                           active: session.id == activeID,
                                           split: session.isSplit, overlay: session.overlayActive,
                                           scratch: session.scratchActive, flagged: session.flagged,
-                                          foreground: fg, splitForeground: splitFg)
+                                          foreground: fg, splitForeground: splitFg, status: status)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID, sessions: sessions)

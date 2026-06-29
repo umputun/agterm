@@ -113,9 +113,9 @@ A single source of truth — `AppStore.attentionSessions` (host-free, per-window
 - Modify: `agterm/Control/ControlServer.swift`
 - Modify: `agtermUITests/ControlAPIUITests.swift`
 
-- [ ] in `buildTree`, set `status` from `session.agentIndicator.status` — nil when `.idle`, else `rawValue` (so idle sessions omit the field)
-- [ ] add an e2e: set a session's status via `agtermctl session status blocked`, read `tree --json`, assert that session's node reports `status: "blocked"`; assert an idle session omits it
-- [ ] build (`make build`) and run the new XCUITest — must pass before next task
+- [x] in `buildTree`, set `status` from `session.agentIndicator.status` — nil when `.idle`, else `rawValue` (so idle sessions omit the field)
+- [x] add an e2e: set a session's status via `agtermctl session status blocked`, read `tree --json`, assert that session's node reports `status: "blocked"`; assert an idle session omits it
+- [x] build (`make build`) and run the new XCUITest — must pass before next task
 
 ### Task 6: Shared status→glyph mapping + SwiftUI StatusGlyph
 
