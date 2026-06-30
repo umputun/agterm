@@ -12,16 +12,178 @@ paths:
 
 ## Sidebar
 
-- The sidebar is an AppKit `NSOutlineView` (`WorkspaceSidebar`, an `NSViewRepresentable`), not a SwiftUI `List` — chosen for native cross-workspace drag-and-drop. Its `@MainActor` `Coordinator` is the data source/delegate, backed by `AppStore`. Outline items are cached reference-type `SidebarNode`s, reused across reloads for stable identity (expansion/selection survive `reloadData`).
-- **Drag reorder (sessions AND workspaces).** The Coordinator's `validateDrop`/`acceptDrop` now HONOR `proposedChildIndex` (via the shared `resolveSessionMove`/`resolveWorkspaceMove` helpers that compute target + insert index + no-op detection in ONE place so validate and accept agree exactly) instead of force-retargeting every drop to `NSOutlineViewDropOnItemIndex` — enabling intra-workspace SESSION reorder (drop between rows for a precise slot) AND precise cross-workspace placement (a cross-workspace drag now lands at the drop position, no longer always-append). Workspace ROWS are draggable too: a second pasteboard type `com.umputun.agterm.workspace` is added to `registerForDraggedTypes` (LOAD-BEARING — without it AppKit never delivers validate/accept for workspace drags) and `pasteboardWriterForItem` emits it (carrying the workspace UUID) for workspace nodes. **Workspace reorder is a TOP-LEVEL move, but it does NOT use AppKit's proposed `item`/`childIndex`.** With workspaces expanded their sessions fill the gaps between workspace rows, so `NSOutlineView` only ever proposes drops INTO a workspace's children (`proposedItem != nil`) — never the clean root between-rows slot — so the old `proposedItem == nil`-only gate rejected EVERY drop and made workspace drag impossible once any workspace held sessions (the real-world state). `resolveWorkspaceMove` therefore IGNORES the proposed item/index and derives the insert slot from the CURSOR Y against the workspace ROWS' midpoints (`info.draggingLocation` → `rect(ofRow:).midY`, sessions ignored): the slot is the count of workspace rows whose midpoint sits above the cursor, so the top half of a row drops before it and the bottom half after it — reachable everywhere. It still feeds that slot to the host-free `SidebarDrop.resolveWorkspace` for the post-removal/no-op math, and `validateDrop` highlights it via `setDropItem(nil, dropChildIndex:)`. Covered by `ReorderUITests.testReorderWorkspaceOntoSessionRow` (drag a workspace onto a session row — the case the `proposedItem == nil` gate broke). The session helper still HONORS `proposedChildIndex` (sessions are real same-level siblings, so the outline proposes precise between-rows slots). Both feed `SidebarDrop`, which applies the same-parent downward `childIndex - 1` post-removal adjustment (only when `sourceIndex < childIndex`), since `moveSession`/`moveWorkspace` remove-then-insert so `at:` is a POST-removal index while the fed insert slot is PRE-removal. The PURE index arithmetic (drop-on-row `sessionIndex + 1` redirect, the downward `-1`, cross-workspace vs same-parent index spaces, and a CLAMPED same-workspace no-op check that also catches re-appending an already-last element) lives host-free in `agtermCore.SidebarDrop` (`resolveSession`/`resolveWorkspace`), table-tested in `SidebarDropTests`; the two Coordinator helpers only do the AppKit/store glue (read the pasteboard, resolve ids → indices via `AppStore.sessionLocation(ofSession:)`) and feed `SidebarDrop`, so the trickiest part is unit-covered without the fragile XCUITest drag.
-- Add affordances live in a bottom bar in `ContentView`: a workspace button and a session menu (New Session / Open Directory…). The two session actions are also on each workspace row's right-click menu.
-- Accessibility identifiers `session-row`, `workspace-row`, `edit-field`, and `add-session` back the XCUITests. Note the rename field surfaces as a `TextField` for sessions and a `StaticText` for workspaces, so UI tests match `edit-field` by identifier across element types.
-- **Flagged working-set view (`AppStore.sidebarMode` `.tree`/`.flagged`).** `SidebarMode` (`agtermCore/SidebarMode.swift`, `String`-backed `Codable`/`Sendable`) drives a per-window MODE toggle between the normal two-level tree and a FLAT list of just the flagged sessions. A session is flagged via the observed `Session.flagged: Bool`; the flat list is the PURE derived projection `AppStore.flaggedSessions` (`workspaces.flatMap(\.sessions).filter(\.flagged)`, already in tree order — workspace-then-session). No second container: a session always has exactly one home workspace, the flag dies with the session and survives a workspace move (the projection re-sorts). The ONE `NSOutlineView` renders either source — `numberOfChildrenOfItem`/`child`/`isItemExpandable` branch on `store.sidebarMode`; in `.flagged` the root's children are `flaggedSessions` as flat, non-expandable rows labeled `session : workspace` (the session `displayName`, then the owning workspace name) with the base leading icon — a plain terminal for a single session, the split-rectangle for a split one so a split stays distinguishable (the FILLED flag variant is suppressed; every row here is flagged) — plus the usual `StatusIconView` + `BadgeView`. A row click routes through the existing `selectSession`; the mode switch is VIEW-ONLY (never re-selects/refocuses). Drag-reorder is DISABLED in `.flagged` mode. An empty flagged set shows a centered, non-scrolling empty-state hint ("No flagged sessions. / Right-click a session → Flag.") overlaid in the scroll view, re-tinted on `.agtermAppearanceChanged` and toggled by `updateEmptyStateHint` (visible only in `.flagged` with `flaggedSessions.isEmpty`). Mutators: `AppStore.setFlag(_:forSession:)` (clean no-op + no save on unknown id or unchanged value), `clearFlags()` (single save), `setSidebarMode(_:)` (save). GUI half: the bottom-bar `flagged-view-toggle` button (right of the trailing `Spacer()`, 2-state flag/checkmark glyph, tinted `chromeText`, flips `sidebarMode` and animates via `ContentView`'s `.animation(value:)`), the row context-menu Flag/Unflag → `AppActions.toggleFlag(_:)`, the View-menu Show Flagged/Show All + Flag Session + Clear Flagged, the ⌃⇧P palette entries, and the two `BuiltinAction`s `toggleFlaggedView`/`toggleFlag` (expressible/keyless). **Clear Flagged** is a plain menu/palette item (NOT a `BuiltinAction`, mirroring Reload/Edit Keymap) → `AppActions.clearFlags()` with a light confirm alert when the set is non-empty (skipped under the XCUITest launch, like the quit-confirm).
-- **Tree-mode flagged indicator (filled-icon variant).** In `.tree` mode a flagged session's row swaps its leading icon to the FILLED SF Symbol variant of its base glyph — `terminal.fill` for a single session, `rectangle.split.2x1.fill` for a split (the SAME filled split symbol the titlebar split button uses; outline = unflagged, filled = flagged, mirroring the titlebar split indicator) — via the cached `flaggedSessionIcon`/`flaggedSplitSessionIcon` template images, tinted with the chrome/theme color. It is a pure SF Symbol swap (`Self.rowIcon(...)`), NOT a composited corner badge — same-size, so it is inherently layout-shift-free. `flagged` is folded into the row's `RowContent` (Equatable), so a flag/unflag re-renders ONLY that row (per-row `reloadItem`). The filled variant is tree-mode only — the flat flagged view shows the unfilled base icon, so a split session still gets the split-rectangle to stay distinguishable; only the FILLED flag variant is suppressed there (every row is flagged).
-- **Focus filter (`AppStore.focusedWorkspaceID`).** A per-workspace toggle collapses the `.tree` to a single root: `visibleWorkspaces` is the focused workspace when `focusedWorkspaceID` is set AND still present, else ALL workspaces — the source of truth the tree filters on (the data source maps `store.visibleWorkspaces` in `.tree`). Focus is ORTHOGONAL to flagged: the flat flagged view ignores focus (it always shows the full cross-workspace set). `setFocusedWorkspace(_:)` (delta-guarded so callers stay idempotent, nil unfocuses, saves) is driven by the workspace-row context-menu Focus/Unfocus → `AppActions.focusWorkspace(_:)`, the bottom-bar `focus-pill` ("<name> ✕" — the focused workspace name with no "Focused:" prefix, shown only while focused, ✕ unfocuses), `AppActions.focusActiveWorkspace()` (targets `currentWorkspaceID`, analogous to `deleteActiveWorkspace`) wired to `BuiltinAction.focusWorkspace` + a View-menu/palette "Focus Workspace", and `AppActions.clearFocus()` (a plain menu/palette "Clear Focus", NOT a `BuiltinAction`). `removeWorkspace` clears focus when the removed workspace was the focused one.
-- **Scoped session navigation (the VISIBLE/FILTERED set).** Session navigation operates over `AppStore.navigableSessions`, NOT the whole tree: `sidebarMode == .flagged ? flaggedSessions : visibleWorkspaces.flatMap(\.sessions)` — i.e. the flagged set in `.flagged` mode, the focused workspace's sessions when a workspace is focused (tree mode), else ALL sessions. Computed LIVE (`visibleWorkspaces` already collapses to the focused workspace or the full tree, including the stale-focus-id fallback), so clearing the flag/focus naturally restores the full set. `navigateSession(_:)` flattens `navigableSessions` for EVERY direction — next/prev/first/last AND attention-nav (next-attention/prev-attention scope to the filtered set too) — keeping the same "no/invalid selection → first of the filtered list", "stop at ends, no wrap (attention wraps)" semantics over the filtered list. This is shared by `session.go` (control, no ControlServer change — it already routes through `navigateSession`), the ⌥⌘↑/↓ + ⌃⌥↑/↓ menu/palette nav, the Ctrl-Tab MRU switcher (`SessionSwitcher.begin()` scopes its candidate set to `store.navigableSessions.map(\.id)`; the MRU ORDER still comes from `sessionRecency`), AND the ⌃P fuzzy session palette (`AppActions.paletteSessions()` lists `store.navigableSessions`, so the searchable set matches the visible sidebar — in a focused workspace ⌃P shows only that workspace's sessions, in flagged mode only the flagged ones). This SUPERSEDES the earlier "global nav reveals its target" behavior.
-- **Focus×selection auto-unfocus contract (load-bearing, now the cross-set safety net).** Because nav is scoped, its targets are ALWAYS in-set, so nav never crosses the focus boundary. `selectSession` still AUTO-CLEARS focus when the newly selected session is NOT in the focused workspace (`workspace(forSession:)?.id != focusedWorkspaceID` → `focusedWorkspaceID = nil`) — but this now only fires for an EXPLICIT cross-set select: `session.select <id>` of a hidden session, a notification reveal, or a move/close that reselects elsewhere. This keeps the active session inside the visible set for those cases, which also keeps `currentWorkspaceID` (new-session placement) consistent with NO special-case. No-op when unfocused or nothing selected. The contract is ONE-DIRECTIONAL by design: an explicit cross-set select auto-unfocuses (reveal), but focusing a workspace that does NOT contain the active session deliberately does NOT reselect or switch the active terminal — focus is a pure view filter, never a terminal switch, so the active session's terminal keeps rendering while the sidebar shows no selection until the next select (the focus pill signals the state, and it self-heals on the next `selectSession`/`addSession`). This stranded-selection state is intentional, not a bug.
-- **Mode/focus-aware reconcile signal.** The reconcile `TreeShape` is computed from the MODE-selected/filtered roots: in `.tree` it is `visibleWorkspaces` → `(workspaceID, sessionIDs)` (so a focus flip re-shapes), in `.flagged` it is a SINGLE flat group keyed on a stable pseudo-id (`flaggedShapeID`, so within flagged mode only a change to the flagged list — not a fresh per-call id — rebuilds). A `lastMode` flip swaps the whole data source and forces a `rebuildAndReload` regardless of the shape diff; `sidebarMode`, `focusedWorkspaceID`, and each session's `flagged` are folded into the `updateNSView` dependency read so a mode/focus/flag change is seen. **Task 9 expansion-restore fix:** `NSOutlineView` discards the expansion state of items DROPPED from the data source during a flagged-mode reload, so expanded workspace ids are tracked independently in `expandedWorkspaceIDs` via the `outlineViewItemDidExpand`/`outlineViewItemDidCollapse` delegate callbacks (and `expandAll`) and re-applied in `rebuildAndReload` (`expandItem` for each tracked id), surviving the round-trip through flagged mode.
-- **Expand / collapse all workspaces (per-window).** Two sidebar tree operations: **Expand Workspaces** (`AppActions.expandAllWorkspaces(in:)` → the Coordinator's existing `expandAll`, every workspace open) and **Collapse Workspaces** (`collapseOtherWorkspaces(in:)` → the Coordinator's `collapseOthers`, every workspace collapsed EXCEPT the active session's `currentWorkspaceID`, kept expanded + `scrollRowToVisible`'d). Both keep `expandedWorkspaceIDs` in sync (so the state survives a flagged-mode round-trip). Per-window scoping rides a notification (`.agtermExpandWorkspaces`/`.agtermCollapseWorkspaces`) posted with the TARGET window's `AppStore` as the object; each Coordinator registers its observer with `object: store`, so only the matching window's sidebar acts (unlike the rename notifications, which self-scope via the selected-session guard). This object-scoping is what lets the control path target ANY open window. Graceful no-op in `flagged` mode (no workspace rows). GUI surfaces (frontmost window): View ▸ Expand/Collapse Workspaces (plain keyless items, disabled with no store or in flagged mode) + the ⌃⇧P palette (tree-mode only). Control: `sidebar.expand`/`sidebar.collapse` resolve the target store via `resolvePlacementStore(window)` (frontmost by default, the global `--window` selector for any open window) and call the `(in:)` variants — so unlike the frontmost-only `sidebar`/`sidebar.mode`, these can drive a background window's tree (see the Control API catalog).
-- **Persistence (per-window, no version bump).** `Session.flagged` persists via `SessionSnapshot.flagged: Bool?` (decode → `false`), `sidebarMode` via `Snapshot.sidebarMode: SidebarMode?` (→ `.tree`), `focusedWorkspaceID` via `Snapshot.focusedWorkspaceID: UUID?` (naturally Optional → nil). All three Optional fields, so legacy JSON with none of the keys decodes to the unflagged / `.tree` / unfocused defaults without throwing (the load-fresh-on-decode-failure contract) — no `Snapshot` version bump. Round-trips + legacy-decode covered in `PersistenceTests`, mutations/derived-list/focus-clear/auto-unfocus in `AppStoreTests`.
+- The sidebar is an AppKit `NSOutlineView` (`WorkspaceSidebar`, an `NSViewRepresentable`),
+  not a SwiftUI `List` — chosen for native cross-workspace drag-and-drop.
+  Its `@MainActor` `Coordinator` is the data source/delegate, backed by `AppStore`.
+  Outline items are cached reference-type `SidebarNode`s, reused across reloads for stable identity (expansion/selection
+  survive `reloadData`).
+- **Drag reorder (sessions AND workspaces).**
+  The Coordinator's `validateDrop`/`acceptDrop` now HONOR `proposedChildIndex` (via the shared `resolveSessionMove`/`resolveWorkspaceMove`
+  helpers that compute target + insert index + no-op detection in ONE place so validate and accept agree
+  exactly) instead of force-retargeting every drop to `NSOutlineViewDropOnItemIndex` — enabling intra-workspace
+  SESSION reorder (drop between rows for a precise slot) AND precise cross-workspace placement (a cross-workspace
+  drag now lands at the drop position, no longer always-append).
+  Workspace ROWS are draggable too: a second pasteboard type `com.umputun.agterm.workspace` is added
+  to `registerForDraggedTypes` (LOAD-BEARING — without it AppKit never delivers validate/accept for workspace
+  drags) and `pasteboardWriterForItem` emits it (carrying the workspace UUID) for workspace nodes.
+  **Workspace reorder is a TOP-LEVEL move, but it does NOT use AppKit's proposed `item`/`childIndex`.**
+  With workspaces expanded their sessions fill the gaps between workspace rows,
+  so `NSOutlineView` only ever proposes drops INTO a workspace's children (`proposedItem != nil`) — never
+  the clean root between-rows slot — so the old `proposedItem == nil`-only gate rejected EVERY drop and
+  made workspace drag impossible once any workspace held sessions (the real-world state).
+  `resolveWorkspaceMove` therefore IGNORES the proposed item/index and derives the insert slot from the
+  CURSOR Y against the workspace ROWS' midpoints (`info.draggingLocation` → `rect(ofRow:).midY`,
+  sessions ignored): the slot is the count of workspace rows whose midpoint sits above the cursor,
+  so the top half of a row drops before it and the bottom half after it — reachable everywhere.
+  It still feeds that slot to the host-free `SidebarDrop.resolveWorkspace` for the post-removal/no-op
+  math, and `validateDrop` highlights it via `setDropItem(nil, dropChildIndex:)`.
+  Covered by `ReorderUITests.testReorderWorkspaceOntoSessionRow` (drag a workspace onto a session row
+  — the case the `proposedItem == nil` gate broke).
+  The session helper still HONORS `proposedChildIndex` (sessions are real same-level siblings,
+  so the outline proposes precise between-rows slots).
+  Both feed `SidebarDrop`, which applies the same-parent downward `childIndex - 1` post-removal adjustment
+  (only when `sourceIndex < childIndex`), since `moveSession`/`moveWorkspace` remove-then-insert so `at:`
+  is a POST-removal index while the fed insert slot is PRE-removal.
+  The PURE index arithmetic (drop-on-row `sessionIndex + 1` redirect, the downward `-1`,
+  cross-workspace vs same-parent index spaces, and a CLAMPED same-workspace no-op check that also catches
+  re-appending an already-last element) lives host-free in `agtermCore.SidebarDrop` (`resolveSession`/`resolveWorkspace`),
+  table-tested in `SidebarDropTests`; the two Coordinator helpers only do the AppKit/store glue (read
+  the pasteboard, resolve ids → indices via `AppStore.sessionLocation(ofSession:)`) and feed `SidebarDrop`,
+  so the trickiest part is unit-covered without the fragile XCUITest drag.
+- Add affordances live in a bottom bar in `ContentView`: a workspace button and a session menu (New Session
+  / Open Directory…).
+  The two session actions are also on each workspace row's right-click menu.
+- Accessibility identifiers `session-row`, `workspace-row`, `edit-field`,
+  and `add-session` back the XCUITests.
+  Note the rename field surfaces as a `TextField` for sessions and a `StaticText` for workspaces,
+  so UI tests match `edit-field` by identifier across element types.
+- **Flagged working-set view (`AppStore.sidebarMode` `.tree`/`.flagged`).**
+  `SidebarMode` (`agtermCore/SidebarMode.swift`, `String`-backed `Codable`/`Sendable`) drives a per-window
+  MODE toggle between the normal two-level tree and a FLAT list of just the flagged sessions.
+  A session is flagged via the observed `Session.flagged: Bool`; the flat list is the PURE derived projection
+  `AppStore.flaggedSessions` (`workspaces.flatMap(\.sessions).filter(\.flagged)`,
+  already in tree order — workspace-then-session).
+  No second container: a session always has exactly one home workspace, the flag dies with the session
+  and survives a workspace move (the projection re-sorts).
+  The ONE `NSOutlineView` renders either source — `numberOfChildrenOfItem`/`child`/`isItemExpandable`
+  branch on `store.sidebarMode`; in `.flagged` the root's children are `flaggedSessions` as flat,
+  non-expandable rows labeled `session : workspace` (the session `displayName`,
+  then the owning workspace name) with the base leading icon — a plain terminal for a single session,
+  the split-rectangle for a split one so a split stays distinguishable (the FILLED flag variant is suppressed;
+  every row here is flagged) — plus the usual `StatusIconView` + `BadgeView`.
+  A row click routes through the existing `selectSession`; the mode switch is VIEW-ONLY (never re-selects/refocuses).
+  Drag-reorder is DISABLED in `.flagged` mode.
+  An empty flagged set shows a centered, non-scrolling empty-state hint ("No flagged sessions. / Right-click
+  a session → Flag.") overlaid in the scroll view, re-tinted on `.agtermAppearanceChanged` and toggled
+  by `updateEmptyStateHint` (visible only in `.flagged` with `flaggedSessions.isEmpty`).
+  Mutators: `AppStore.setFlag(_:forSession:)` (clean no-op + no save on unknown id or unchanged value),
+  `clearFlags()` (single save), `setSidebarMode(_:)` (save).
+  GUI half: the bottom-bar `flagged-view-toggle` button (right of the trailing `Spacer()`,
+  2-state flag/checkmark glyph, tinted `chromeText`, flips `sidebarMode` and animates via `ContentView`'s
+  `.animation(value:)`), the row context-menu Flag/Unflag → `AppActions.toggleFlag(_:)`,
+  the View-menu Show Flagged/Show All + Flag Session + Clear Flagged, the ⌃⇧P palette entries,
+  and the two `BuiltinAction`s `toggleFlaggedView`/`toggleFlag` (expressible/keyless).
+  **Clear Flagged** is a plain menu/palette item (NOT a `BuiltinAction`,
+  mirroring Reload/Edit Keymap) → `AppActions.clearFlags()` with a light confirm alert when the set is
+  non-empty (skipped under the XCUITest launch, like the quit-confirm).
+- **Tree-mode flagged indicator (filled-icon variant).**
+  In `.tree` mode a flagged session's row swaps its leading icon to the FILLED SF Symbol variant of its
+  base glyph — `terminal.fill` for a single session, `rectangle.split.2x1.fill` for a split (the SAME
+  filled split symbol the titlebar split button uses; outline = unflagged,
+  filled = flagged, mirroring the titlebar split indicator) — via the cached `flaggedSessionIcon`/`flaggedSplitSessionIcon`
+  template images, tinted with the chrome/theme color.
+  It is a pure SF Symbol swap (`Self.rowIcon(...)`), NOT a composited corner badge — same-size,
+  so it is inherently layout-shift-free.
+  `flagged` is folded into the row's `RowContent` (Equatable), so a flag/unflag re-renders ONLY that
+  row (per-row `reloadItem`).
+  The filled variant is tree-mode only — the flat flagged view shows the unfilled base icon,
+  so a split session still gets the split-rectangle to stay distinguishable;
+  only the FILLED flag variant is suppressed there (every row is flagged).
+- **Focus filter (`AppStore.focusedWorkspaceID`).**
+  A per-workspace toggle collapses the `.tree` to a single root: `visibleWorkspaces` is the focused workspace
+  when `focusedWorkspaceID` is set AND still present, else ALL workspaces — the source of truth the tree
+  filters on (the data source maps `store.visibleWorkspaces` in `.tree`).
+  Focus is ORTHOGONAL to flagged: the flat flagged view ignores focus (it always shows the full cross-workspace
+  set).
+  `setFocusedWorkspace(_:)` (delta-guarded so callers stay idempotent, nil unfocuses,
+  saves) is driven by the workspace-row context-menu Focus/Unfocus → `AppActions.focusWorkspace(_:)`,
+  the bottom-bar `focus-pill` ("<name> ✕" — the focused workspace name with no "Focused:" prefix,
+  shown only while focused, ✕ unfocuses), `AppActions.focusActiveWorkspace()` (targets `currentWorkspaceID`,
+  analogous to `deleteActiveWorkspace`) wired to `BuiltinAction.focusWorkspace` + a View-menu/palette
+  "Focus Workspace", and `AppActions.clearFocus()` (a plain menu/palette "Clear Focus",
+  NOT a `BuiltinAction`).
+  `removeWorkspace` clears focus when the removed workspace was the focused one.
+- **Scoped session navigation (the VISIBLE/FILTERED set).**
+  Session navigation operates over `AppStore.navigableSessions`, NOT the whole tree:
+  `sidebarMode == .flagged ? flaggedSessions : visibleWorkspaces.flatMap(\.sessions)` — i.e. the flagged
+  set in `.flagged` mode, the focused workspace's sessions when a workspace is focused (tree mode),
+  else ALL sessions.
+  Computed LIVE (`visibleWorkspaces` already collapses to the focused workspace or the full tree,
+  including the stale-focus-id fallback), so clearing the flag/focus naturally restores the full set.
+  `navigateSession(_:)` flattens `navigableSessions` for EVERY direction — next/prev/first/last AND attention-nav
+  (next-attention/prev-attention scope to the filtered set too) — keeping the same "no/invalid selection
+  → first of the filtered list", "stop at ends, no wrap (attention wraps)" semantics over the filtered
+  list.
+  This is shared by `session.go` (control, no ControlServer change — it already routes through `navigateSession`),
+  the ⌥⌘↑/↓ + ⌃⌥↑/↓ menu/palette nav, the Ctrl-Tab MRU switcher (`SessionSwitcher.begin()` scopes its
+  candidate set to `store.navigableSessions.map(\.id)`; the MRU ORDER still comes from `sessionRecency`),
+  AND the ⌃P fuzzy session palette (`AppActions.paletteSessions()` lists `store.navigableSessions`,
+  so the searchable set matches the visible sidebar — in a focused workspace ⌃P shows only that workspace's
+  sessions, in flagged mode only the flagged ones).
+  This SUPERSEDES the earlier "global nav reveals its target" behavior.
+- **Focus×selection auto-unfocus contract (load-bearing, now the cross-set safety net).** Because nav
+  is scoped, its targets are ALWAYS in-set, so nav never crosses the focus boundary.
+  `selectSession` still AUTO-CLEARS focus when the newly selected session is NOT in the focused workspace
+  (`workspace(forSession:)?.id != focusedWorkspaceID` → `focusedWorkspaceID = nil`) — but this now only
+  fires for an EXPLICIT cross-set select: `session.select <id>` of a hidden session,
+  a notification reveal, or a move/close that reselects elsewhere.
+  This keeps the active session inside the visible set for those cases, which also keeps `currentWorkspaceID`
+  (new-session placement) consistent with NO special-case.
+  No-op when unfocused or nothing selected.
+  The contract is ONE-DIRECTIONAL by design: an explicit cross-set select auto-unfocuses (reveal),
+  but focusing a workspace that does NOT contain the active session deliberately does NOT reselect or
+  switch the active terminal — focus is a pure view filter, never a terminal switch,
+  so the active session's terminal keeps rendering while the sidebar shows no selection until the next
+  select (the focus pill signals the state, and it self-heals on the next `selectSession`/`addSession`).
+  This stranded-selection state is intentional, not a bug.
+- **Mode/focus-aware reconcile signal.**
+  The reconcile `TreeShape` is computed from the MODE-selected/filtered roots:
+  in `.tree` it is `visibleWorkspaces` → `(workspaceID, sessionIDs)` (so a focus flip re-shapes),
+  in `.flagged` it is a SINGLE flat group keyed on a stable pseudo-id (`flaggedShapeID`,
+  so within flagged mode only a change to the flagged list — not a fresh per-call id — rebuilds).
+  A `lastMode` flip swaps the whole data source and forces a `rebuildAndReload` regardless of the shape
+  diff; `sidebarMode`, `focusedWorkspaceID`, and each session's `flagged` are folded into the `updateNSView`
+  dependency read so a mode/focus/flag change is seen.
+  **Task 9 expansion-restore fix:** `NSOutlineView` discards the expansion state of items DROPPED from
+  the data source during a flagged-mode reload, so expanded workspace ids are tracked independently in
+  `expandedWorkspaceIDs` via the `outlineViewItemDidExpand`/`outlineViewItemDidCollapse` delegate callbacks
+  (and `expandAll`) and re-applied in `rebuildAndReload` (`expandItem` for each tracked id),
+  surviving the round-trip through flagged mode.
+- **Expand / collapse all workspaces (per-window).**
+  Two sidebar tree operations: **Expand Workspaces** (`AppActions.expandAllWorkspaces(in:)` → the Coordinator's
+  existing `expandAll`, every workspace open) and **Collapse Workspaces** (`collapseOtherWorkspaces(in:)`
+  → the Coordinator's `collapseOthers`, every workspace collapsed EXCEPT the active session's `currentWorkspaceID`,
+  kept expanded + `scrollRowToVisible`'d).
+  Both keep `expandedWorkspaceIDs` in sync (so the state survives a flagged-mode round-trip).
+  Per-window scoping rides a notification (`.agtermExpandWorkspaces`/`.agtermCollapseWorkspaces`) posted
+  with the TARGET window's `AppStore` as the object; each Coordinator registers its observer with `object: store`,
+  so only the matching window's sidebar acts (unlike the rename notifications,
+  which self-scope via the selected-session guard).
+  This object-scoping is what lets the control path target ANY open window.
+  Graceful no-op in `flagged` mode (no workspace rows).
+  GUI surfaces (frontmost window): View ▸ Expand/Collapse Workspaces (plain keyless items,
+  disabled with no store or in flagged mode) + the ⌃⇧P palette (tree-mode only).
+  Control: `sidebar.expand`/`sidebar.collapse` resolve the target store via `resolvePlacementStore(window)`
+  (frontmost by default, the global `--window` selector for any open window) and call the `(in:)` variants
+  — so unlike the frontmost-only `sidebar`/`sidebar.mode`, these can drive a background window's tree
+  (see the Control API catalog).
+- **Persistence (per-window, no version bump).**
+  `Session.flagged` persists via `SessionSnapshot.flagged: Bool?` (decode → `false`),
+  `sidebarMode` via `Snapshot.sidebarMode: SidebarMode?` (→ `.tree`), `focusedWorkspaceID` via `Snapshot.focusedWorkspaceID: UUID?`
+  (naturally Optional → nil).
+  All three Optional fields, so legacy JSON with none of the keys decodes to the unflagged / `.tree`
+  / unfocused defaults without throwing (the load-fresh-on-decode-failure contract) — no `Snapshot` version
+  bump.
+  Round-trips + legacy-decode covered in `PersistenceTests`, mutations/derived-list/focus-clear/auto-unfocus
+  in `AppStoreTests`.
 
