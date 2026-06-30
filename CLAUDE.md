@@ -256,6 +256,10 @@ but a cross-cutting edit that touches only a hub file (`AppStore.swift`,
 `ContentView.swift`, `agtermApp.swift`) may not match a glob, so consult this index and open the rule
 yourself.
 
+**When writing or editing these notes — this file and `.claude/rules/*.md` — use semantic line breaks: one sentence per line, never a giant single-line bullet.**
+Break after every sentence (split a long sentence further at clause boundaries, around 100 columns), keep inline-code spans intact, and render any long enumeration (e.g. a command catalog) as a real markdown list rather than one inline run.
+This only changes raw-text line breaks — the rendered markdown is identical — but it keeps a diff scoped to the sentence that changed and stops two branches that edit the same note from conflicting on the whole paragraph.
+
 - `sidebar.md` — `NSOutlineView` sidebar: drag-reorder (sessions + workspaces),
   flagged working-set view, focus filter, scoped session nav, reconcile signal,
   persistence.
