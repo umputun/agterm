@@ -39,6 +39,41 @@ struct KeymapTests {
         #expect(keymap.commands.isEmpty)
     }
 
+    // MARK: glyphHint — the shortcut shown in the palette and toolbar tooltips
+
+    @Test func glyphHintRendersDefaultChordAsGlyphs() {
+        let keymap = Keymap(builtinOverrides: [:], commands: [])
+        #expect(keymap.glyphHint(for: .newSession) == "⌘N")
+        #expect(keymap.glyphHint(for: .toggleSidebar) == "⌃⌘S")
+        #expect(keymap.glyphHint(for: .toggleSplit) == "⌘D")
+    }
+
+    @Test func glyphHintUsesOverrideWhenPresent() {
+        let keymap = Keymap(builtinOverrides: [.toggleSidebar: Chord(mods: [.command], key: "k")], commands: [])
+        #expect(keymap.glyphHint(for: .toggleSidebar) == "⌘K")
+    }
+
+    @Test func glyphHintFallsBackToArrowGlyphForArrowActions() {
+        // arrow-bound actions have no expressible default chord, so the hint comes from the fallback.
+        let keymap = Keymap(builtinOverrides: [:], commands: [])
+        #expect(keymap.glyphHint(for: .previousSession) == "⌥⌘↑")
+        #expect(keymap.glyphHint(for: .focusLeftPane) == "⌥⌘←")
+    }
+
+    @Test func glyphHintOverrideWinsOverArrowFallback() {
+        // a user-mapped parseable chord beats the hardcoded arrow glyph.
+        let keymap = Keymap(builtinOverrides: [.previousSession: Chord(mods: [.command], key: "p")], commands: [])
+        #expect(keymap.glyphHint(for: .previousSession) == "⌘P")
+    }
+
+    @Test func glyphHintIsNilForUnconfiguredAction() {
+        // a keyless, non-arrow action shows nothing until the user maps a chord — the "if not
+        // configured, don't add" rule that keeps tooltips clean.
+        let keymap = Keymap(builtinOverrides: [:], commands: [])
+        #expect(keymap.glyphHint(for: .toggleFlaggedView) == nil)
+        #expect(keymap.glyphHint(for: .firstSession) == nil)
+    }
+
     @Test func rebindToggleSearchResolvesThroughGenericPath() {
         // toggle_search rebinds like any other built-in: the generic parse/resolve path (no per-action
         // special-casing) parses the chord, maps the raw name to .toggleSearch, and equivalent(for:)

@@ -686,6 +686,15 @@ private struct WindowContentView: View {
         .background { WindowControlArea() }
     }
 
+    /// A tooltip string with the action's current shortcut appended in parentheses (e.g. `Toggle
+    /// Sidebar (⌃⌘S)`), or just the base text when the action has no configured shortcut. Keeps the
+    /// toolbar/sidebar hints in lockstep with the keymap — a rebind shows the new chord, an unbound
+    /// action shows none — via the SAME `AppActions.shortcutGlyph` resolver the action palette uses.
+    private func helpHint(_ base: String, _ action: BuiltinAction) -> String {
+        guard let glyph = actions.shortcutGlyph(for: action) else { return base }
+        return "\(base) (\(glyph))"
+    }
+
     /// Our own sidebar show/hide toggle (the custom split has no system one). Animated collapse.
     private var sidebarToggleButton: some View {
         Button {
@@ -693,7 +702,7 @@ private struct WindowContentView: View {
         } label: {
             Label("Toggle Sidebar", systemImage: "sidebar.left")
         }
-        .help("Toggle Sidebar")
+        .help(helpHint("Toggle Sidebar", .toggleSidebar))
         .accessibilityIdentifier("sidebar-toggle-button")
     }
 
@@ -708,7 +717,7 @@ private struct WindowContentView: View {
             // split (shown or hidden), matching the sidebar's split-session icon.
             Label("Split", systemImage: hasSplit ? "rectangle.split.2x1.fill" : "rectangle.split.2x1")
         }
-        .help(isSplit ? "Hide split" : (hasSplit ? "Show split" : "Split right"))
+        .help(helpHint(isSplit ? "Hide split" : (hasSplit ? "Show split" : "Split right"), .toggleSplit))
         .disabled(store.activeSession == nil)
         .accessibilityIdentifier("split-toggle")
     }
@@ -723,7 +732,7 @@ private struct WindowContentView: View {
         } label: {
             Label("Scratch", systemImage: active ? "rectangle.inset.filled" : "rectangle")
         }
-        .help(active ? "Hide scratch terminal" : "Show scratch terminal")
+        .help(helpHint(active ? "Hide scratch terminal" : "Show scratch terminal", .toggleScratch))
         .disabled(store.activeSession == nil)
         .accessibilityIdentifier("scratch-toggle")
     }
@@ -737,7 +746,7 @@ private struct WindowContentView: View {
         } label: {
             Label("Quick Terminal", systemImage: "terminal")
         }
-        .help("Quick Terminal")
+        .help(helpHint("Quick Terminal", .quickTerminal))
         .accessibilityIdentifier("quick-terminal-toggle")
     }
 
@@ -853,7 +862,7 @@ private struct WindowContentView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.borderless)
-            .help("New Workspace")
+            .help(helpHint("New Workspace", .newWorkspace))
             .accessibilityLabel("New Workspace")
 
             Menu {
@@ -869,7 +878,7 @@ private struct WindowContentView: View {
             .tint(chromeText)
             .menuIndicator(.hidden)
             .fixedSize()
-            .help("New Session")
+            .help(helpHint("New Session", .newSession))
             .accessibilityLabel("Add session")
             .accessibilityIdentifier("add-session")
 
@@ -914,7 +923,7 @@ private struct WindowContentView: View {
             // chromeText foregroundStyle defeats SwiftUI's default disabled dimming, so mute it by hand.
             .disabled(store.sidebarMode == .tree && store.flaggedSessions.isEmpty)
             .opacity(store.sidebarMode == .tree && store.flaggedSessions.isEmpty ? 0.35 : 1)
-            .help(store.sidebarMode == .flagged ? "Show all sessions" : "Show flagged sessions")
+            .help(helpHint(store.sidebarMode == .flagged ? "Show all sessions" : "Show flagged sessions", .toggleFlaggedView))
             .accessibilityLabel("Toggle Flagged View")
             .accessibilityIdentifier("flagged-view-toggle")
         }

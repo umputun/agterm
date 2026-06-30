@@ -62,4 +62,21 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
             return nil
         }
     }
+
+    /// The hardcoded macOS menu glyph for the six arrow-bound actions, whose default shortcut can't
+    /// round-trip through `Chord`/`keymap.conf` (so `defaultChord` is nil). `nil` for every other
+    /// action — a keyless action stays keyless until the user maps a chord. This is the display
+    /// counterpart of the menu's hardcoded arrow `.keyboardShortcut`, used by `Keymap.glyphHint(for:)`
+    /// to render an action's current shortcut in the action palette and the toolbar tooltips.
+    public var arrowGlyphFallback: String? {
+        switch self {
+        case .focusLeftPane: return "⌥⌘←"
+        case .focusRightPane: return "⌥⌘→"
+        case .previousSession: return "⌥⌘↑"
+        case .nextSession: return "⌥⌘↓"
+        case .previousAttentionSession: return "⌃⌥↑"
+        case .nextAttentionSession: return "⌃⌥↓"
+        default: return nil
+        }
+    }
 }

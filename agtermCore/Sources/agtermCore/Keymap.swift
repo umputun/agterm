@@ -20,6 +20,16 @@ public struct Keymap: Equatable, Sendable {
     public func equivalent(for action: BuiltinAction) -> Chord? {
         builtinOverrides[action] ?? action.defaultChord
     }
+
+    /// The action's current shortcut as a macOS menu glyph string (e.g. `⌘N`, `⌃⌘S`), or `nil` when
+    /// the action has no shortcut at all. Resolves the effective chord (`equivalent(for:)` — user
+    /// override else shipped default) and renders it via `Chord.glyphString`; for the arrow-bound
+    /// actions, which have no expressible default, it falls back to the hardcoded `arrowGlyphFallback`.
+    /// `nil` means "not configured" — the caller shows no shortcut. Drives both the action-palette
+    /// hints and the toolbar tooltips so the two surfaces can't drift.
+    public func glyphHint(for action: BuiltinAction) -> String? {
+        equivalent(for: action)?.glyphString ?? action.arrowGlyphFallback
+    }
 }
 
 /// A single problem found while parsing `keymap.conf`. `line` is 1-based; `0` is reserved for a

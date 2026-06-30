@@ -8,7 +8,7 @@ struct PaletteItem: Identifiable {
     let title: String
     let subtitle: String?
     /// The action's keyboard shortcut hint shown right-aligned, nil for items with no shortcut.
-    /// Rebindable built-ins read the live keymap (`AppActions.paletteHint`) so it tracks rebinds;
+    /// Rebindable built-ins read the live keymap (`AppActions.shortcutGlyph`) so it tracks rebinds;
     /// custom commands show their raw kitty shortcut string. Both render in kitty syntax (e.g.
     /// `cmd+shift+e`), except the four arrow-bound actions which keep their glyph fallback.
     let shortcut: String?

@@ -211,6 +211,15 @@ paths:
   The visible list is a `@State` array recomputed on query/mode change — NOT a computed property — so
   the rendered rows and the Enter target can't drift out of sync; results sort by score then title. ⌃P
   opens the session switcher, ⌃⇧P the action palette (the session/action shortcut split is deliberate).
+- **Built-in shortcut hints are one resolver, shared by the palette AND the toolbar/sidebar tooltips.**
+  `AppActions.shortcutGlyph(for:)` (formerly `paletteHint`) → the host-free `Keymap.glyphHint(for:)`
+  (`equivalent(for:)?.glyphString ?? BuiltinAction.arrowGlyphFallback`, nil = no shortcut) renders an
+  action's CURRENT chord as macOS glyphs (`⌃⌘S`), tracking a `keymap.conf` rebind live.
+  `paletteActions()` reads it for the right-aligned palette hint; `WindowContentView.helpHint(_:_:)`
+  appends `" (<glyph>)"` to the `.help(…)` tooltip of the 7 `BuiltinAction`-backed toolbar/sidebar buttons
+  (a button with no configured shortcut shows just its label). One resolver so the two surfaces can't
+  drift — the display analogue of the `defaultChord`-single-source-of-truth rule. Tooltip text is pure
+  visual chrome, so it is control-API keep-in-sync EXEMPT (no command, nothing to drive headless).
 - **Attention list (the `.attention` palette mode).**
   A fourth `PaletteMode` (`.attention`, placeholder "Go to a session that needs attention…") lists the
   window's NON-IDLE sessions — broader than the ⌃⌥↑/↓ attention-NAV, which steps only `needsAttention`

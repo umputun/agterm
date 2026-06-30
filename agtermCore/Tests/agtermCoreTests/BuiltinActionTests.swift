@@ -32,6 +32,24 @@ struct BuiltinActionTests {
         #expect(BuiltinAction(rawValue: "New_Window") == nil)
     }
 
+    @Test func arrowGlyphFallbackCoversTheSixArrowActions() {
+        // the six arrow-bound actions can't round-trip through Chord, so their menu glyph is hardcoded.
+        #expect(BuiltinAction.focusLeftPane.arrowGlyphFallback == "⌥⌘←")
+        #expect(BuiltinAction.focusRightPane.arrowGlyphFallback == "⌥⌘→")
+        #expect(BuiltinAction.previousSession.arrowGlyphFallback == "⌥⌘↑")
+        #expect(BuiltinAction.nextSession.arrowGlyphFallback == "⌥⌘↓")
+        #expect(BuiltinAction.previousAttentionSession.arrowGlyphFallback == "⌃⌥↑")
+        #expect(BuiltinAction.nextAttentionSession.arrowGlyphFallback == "⌃⌥↓")
+    }
+
+    @Test func nonArrowActionsHaveNoArrowGlyphFallback() {
+        // an action with an expressible default resolves through the keymap, not the fallback.
+        #expect(BuiltinAction.toggleSidebar.arrowGlyphFallback == nil)
+        #expect(BuiltinAction.newSession.arrowGlyphFallback == nil)
+        // a keyless, non-arrow action has nothing.
+        #expect(BuiltinAction.firstSession.arrowGlyphFallback == nil)
+    }
+
     @Test func defaultChordMatchesShippedTable() {
         let expected: [BuiltinAction: Chord?] = [
             .newWindow: Chord(mods: [.command, .option], key: "n"),
