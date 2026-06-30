@@ -1056,6 +1056,10 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // reload), so restore the pre-edit label before flipping the field back to a plain label.
             if cancelled, let original = renameOriginalValue { field.stringValue = original }
             restore(field: field, kind: node?.kind)
+            // a rename ends with focus on the field editor; hand it back to the active terminal so the
+            // sidebar never keeps keyboard focus (the design contract). deferred so the editor's resign
+            // settles first — focusActiveTerminal bails while an NSText field editor is first responder.
+            DispatchQueue.main.async { [weak self] in self?.focusActiveTerminal() }
             guard let node, !cancelled else { return }
 
             switch node.kind {
