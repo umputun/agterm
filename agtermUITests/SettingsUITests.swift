@@ -1,6 +1,6 @@
 import XCTest
 
-/// Drives the Settings window (Cmd+,): confirms the three tabs exist and that choosing a theme in
+/// Drives the Settings window (Cmd+,): confirms the five tabs exist and that choosing a theme in
 /// Appearance persists to the hermetic `settings.json` (file oracle, like the other UI tests).
 @MainActor
 final class SettingsUITests: XCTestCase {
@@ -22,11 +22,11 @@ final class SettingsUITests: XCTestCase {
         if let stateDir { try? FileManager.default.removeItem(at: stateDir) }
     }
 
-    func testSettingsWindowHasThreeTabsAndThemePersists() throws {
+    func testSettingsWindowHasFiveTabsAndThemePersists() throws {
         app.typeKey(",", modifierFlags: .command)
 
-        // the three tabs are reachable.
-        for tab in ["General", "Appearance", "Key Mapping"] {
+        // the five tabs are reachable.
+        for tab in ["General", "Appearance", "Notifications", "Agent Status", "Key Mapping"] {
             XCTAssertTrue(app.buttons[tab].firstMatch.waitForHittable(timeout: 12), "Settings should have a \(tab) tab")
         }
 
@@ -50,7 +50,7 @@ final class SettingsUITests: XCTestCase {
 
     func testNotificationsTogglePersists() throws {
         // type-agnostic match (a grouped-Form Toggle surfaces as a switch/checkbox depending on macOS)
-        let toggle = settingsControl(tab: "General", control: "settings-notifications")
+        let toggle = settingsControl(tab: "Notifications", control: "settings-notifications")
         toggle.click() // turn it off (default on)
 
         XCTAssertTrue(poll { self.settingsBool("notificationsEnabled") == false },
@@ -58,12 +58,14 @@ final class SettingsUITests: XCTestCase {
     }
 
     func testCompactToolbarTogglePersists() throws {
-        // type-agnostic match (a grouped-Form Toggle surfaces as a switch/checkbox depending on macOS)
+        // type-agnostic match (a grouped-Form Toggle surfaces as a switch/checkbox depending on macOS).
+        // compact is the default (on), so the binding writes nil for on and an explicit false for off;
+        // clicking once turns it off and persists compactToolbar=false.
         let toggle = settingsControl(tab: "Appearance", control: "settings-compact-toolbar")
-        toggle.click() // turn it on (default off)
+        toggle.click() // turn it off (default on)
 
-        XCTAssertTrue(poll { self.settingsBool("compactToolbar") == true },
-                      "turning compact toolbar on should persist compactToolbar=true")
+        XCTAssertTrue(poll { self.settingsBool("compactToolbar") == false },
+                      "turning compact toolbar off should persist compactToolbar=false")
     }
 
     func testRestoreRunningCommandTogglePersists() throws {

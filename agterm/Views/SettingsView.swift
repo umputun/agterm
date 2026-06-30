@@ -2,21 +2,38 @@ import agtermCore
 import AppKit
 import SwiftUI
 
-/// The Settings window (Cmd+,): three tabs — General (notifications), Appearance (font/theme +
-/// window translucency), and Key Mapping (the config directory + keymap diagnostics + Reload).
+/// The Settings window (Cmd+,): five tabs — General (scrolling, sessions, ghostty config),
+/// Appearance (font/theme + window translucency + pane dimming), Notifications (banner / badge /
+/// attention toggles), Agent Status (the sidebar glyph colors + blocked sound), and Key Mapping
+/// (the config directory + keymap diagnostics + Reload).
 struct SettingsView: View {
     let model: SettingsModel
 
+    /// Identifies each tab. An explicit selection binding is what keeps the window opening on General:
+    /// without it, SwiftUI's Settings scene auto-persists the last tab to `selectedTabIndex` in user
+    /// defaults and restores it next launch, which we don't want for a settings window.
+    private enum Tab: Hashable { case general, appearance, notifications, agentStatus, keyMapping }
+    @State private var selection: Tab = .general
+
     var body: some View {
-        TabView {
+        TabView(selection: $selection) {
             GeneralSettingsView(model: model)
                 .tabItem { Label("General", systemImage: "gearshape") }
+                .tag(Tab.general)
             AppearanceSettingsView(model: model)
                 .tabItem { Label("Appearance", systemImage: "paintbrush") }
+                .tag(Tab.appearance)
+            NotificationsSettingsView(model: model)
+                .tabItem { Label("Notifications", systemImage: "bell") }
+                .tag(Tab.notifications)
+            AgentStatusSettingsView(model: model)
+                .tabItem { Label("Agent Status", systemImage: "smallcircle.filled.circle") }
+                .tag(Tab.agentStatus)
             KeyMappingSettingsView(model: model)
                 .tabItem { Label("Key Mapping", systemImage: "keyboard") }
+                .tag(Tab.keyMapping)
         }
-        .frame(width: 480, height: 640)
+        .frame(width: 480, height: 600)
         // keep macOS from saving/restoring the Settings window across launches. Otherwise a
         // process-launch reopen (see agtermApp's FB11763863 workaround) resurrects a stale Settings
         // window on whatever tab it was last on, which steals key focus from the real launch window.
@@ -39,35 +56,25 @@ private struct NonRestorableWindow: NSViewRepresentable {
     }
 }
 
-/// General tab: the macOS notification-banner toggle and the sidebar unseen-count badge toggle (both
-/// default on). The two are independent — the count keeps tracking notifications whether or not
-/// banners are shown, and hiding the count badge is render-only (it reappears with the current count
-/// when re-enabled) and never affects the agent-status glyph.
+/// A terse one-line caption shown under a control. Kept short on purpose: only non-obvious controls
+/// carry one, so the tabs stay short enough to fit without scrolling.
+private struct SettingHint: View {
+    let text: String
+    init(_ text: String) { self.text = text }
+    var body: some View {
+        Text(text)
+            .font(.system(size: 11))
+            .foregroundStyle(.secondary)
+    }
+}
+
+/// General tab: scroll speed, the restore-running-commands toggle, and the inherit-global-ghostty-
+/// config toggle. The visual and notification settings live on their own tabs.
 private struct GeneralSettingsView: View {
     let model: SettingsModel
 
     var body: some View {
         Form {
-            Section("Notifications") {
-                Toggle("Show notification banners", isOn: notificationsEnabled)
-                    .accessibilityIdentifier("settings-notifications")
-                Text("Terminal desktop notifications (OSC 9 / 777) appear in macOS Notification Center. The sidebar badge tracks them either way.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-
-                Toggle("Show notification badges", isOn: notificationBadgeEnabled)
-                    .accessibilityIdentifier("settings-notification-badges")
-                Text("The red unseen-count pill on sidebar rows. The count keeps tracking either way, so it reappears with the current count when turned back on.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-
-                Toggle("Show attention indicator", isOn: attentionButtonEnabled)
-                    .accessibilityIdentifier("settings-attention-button")
-                Text("A bell icon in the title bar that highlights when a session needs attention, even with the sidebar hidden. Click it to jump to the session.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-
             Section("Scrolling") {
                 HStack {
                     Text("Scroll speed")
@@ -77,61 +84,22 @@ private struct GeneralSettingsView: View {
                         .monospacedDigit()
                         .frame(width: 42, alignment: .trailing)
                 }
-                Text("Mouse-wheel and trackpad scroll-speed multiplier. Higher is faster; the default is 3.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
-            }
-
-            Section("Panes") {
-                HStack {
-                    Text("Inactive pane mute")
-                    Slider(value: inactivePaneMuteStrength, in: 0 ... 10, step: 1)
-                        .accessibilityIdentifier("settings-inactive-pane-mute")
-                    Text("\(model.settings.inactivePaneMuteStrength ?? AppSettings.defaultInactivePaneMuteStrength)")
-                        .monospacedDigit()
-                        .frame(width: 42, alignment: .trailing)
-                }
-                Text("How much the inactive split pane's text is dimmed (0 = off, 10 = extreme). The background is left unchanged.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
             }
 
             Section("Sessions") {
                 Toggle("Restore running commands on restart", isOn: restoreRunningCommand)
                     .accessibilityIdentifier("settings-restore-running-command")
-                Text("Re-runs each pane's foreground command when the app relaunches. Only single-process "
-                    + "commands restore faithfully; programs listed in restore-denylist.conf (terminal "
-                    + "multiplexers by default) start fresh.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                SettingHint("Re-runs each pane's foreground command on relaunch; multiplexers start fresh.")
             }
 
             Section("Ghostty Config") {
                 Toggle("Use my global Ghostty config", isOn: inheritGlobalGhosttyConfig)
                     .accessibilityIdentifier("settings-inherit-global-ghostty")
-                Text("Also load ~/.config/ghostty/config on top of agterm's own config. Off by default so agterm stays "
-                    + "self-contained — a config written for Ghostty.app won't silently change agterm. To customize agterm, "
-                    + "edit ~/.config/agterm/ghostty.conf (File ▸ Edit ghostty.conf…); it is always loaded.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                SettingHint("Also loads ~/.config/ghostty/config on top of agterm's own. Edit ~/.config/agterm/ghostty.conf to customize.")
             }
         }
         .formStyle(.grouped)
         .padding()
-    }
-
-    /// 1:1 with the toggle; nil (the default) reads as on, so settings.json stays minimal until the
-    /// user turns banners off.
-    private var notificationsEnabled: Binding<Bool> {
-        Binding(get: { model.settings.notificationsEnabled ?? true },
-                set: { model.setNotificationsEnabled($0 ? nil : false) })
-    }
-
-    /// 1:1 with the toggle; nil (the default) reads as on, so settings.json stays minimal until the
-    /// user hides the count badges.
-    private var notificationBadgeEnabled: Binding<Bool> {
-        Binding(get: { model.settings.notificationBadgeEnabled ?? true },
-                set: { model.setNotificationBadgeEnabled($0 ? nil : false) })
     }
 
     /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json
@@ -139,13 +107,6 @@ private struct GeneralSettingsView: View {
     private var restoreRunningCommand: Binding<Bool> {
         Binding(get: { model.settings.restoreRunningCommand ?? false },
                 set: { model.setRestoreRunningCommand($0 ? true : nil) })
-    }
-
-    /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json
-    /// minimal until the user opts into the title-bar attention bell.
-    private var attentionButtonEnabled: Binding<Bool> {
-        Binding(get: { model.settings.attentionButtonEnabled ?? false },
-                set: { model.setAttentionButtonEnabled($0 ? true : nil) })
     }
 
     /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json
@@ -161,18 +122,11 @@ private struct GeneralSettingsView: View {
         Binding(get: { model.settings.mouseScrollMultiplier ?? 3 },
                 set: { model.setMouseScrollMultiplier($0 == 3 ? nil : $0) })
     }
-
-    /// nil (the default) reads as `defaultInactivePaneMuteStrength`; sliding back to it stores nil so
-    /// settings.json stays minimal. The slider is integer-stepped, so the Double is rounded to an Int.
-    private var inactivePaneMuteStrength: Binding<Double> {
-        Binding(get: { Double(model.settings.inactivePaneMuteStrength ?? AppSettings.defaultInactivePaneMuteStrength) },
-                set: { let v = Int($0.rounded()); model.setInactivePaneMuteStrength(v == AppSettings.defaultInactivePaneMuteStrength ? nil : v) })
-    }
 }
 
 /// Appearance tab: a Terminal section (font family, default font size, theme), a Window section
-/// (compact toolbar, background opacity + blur, sidebar tint), and an Agent Status section (the three
-/// sidebar glyph colors). Each control persists and live-applies through `SettingsModel`.
+/// (compact toolbar, background opacity + blur, sidebar tint), and a Panes section (inactive-pane
+/// dimming). Each control persists and live-applies through `SettingsModel`.
 private struct AppearanceSettingsView: View {
     let model: SettingsModel
     private let themes = SettingsCatalog.themeNames()
@@ -202,9 +156,7 @@ private struct AppearanceSettingsView: View {
             Section("Window") {
                 Toggle("Compact toolbar", isOn: compactToolbar)
                     .accessibilityIdentifier("settings-compact-toolbar")
-                Text("A shorter title bar with smaller icons; hides the working-directory subtitle.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                SettingHint("Shorter title bar with smaller icons; hides the working-directory subtitle.")
 
                 HStack {
                     Text("Background Opacity")
@@ -226,10 +178,7 @@ private struct AppearanceSettingsView: View {
                         .frame(width: 42, alignment: .trailing)
                 }
                 .disabled((model.settings.backgroundOpacity ?? 1) >= 1)
-
-                Text("Blur only takes effect when opacity is below 100%.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
+                SettingHint("Blur needs opacity below 100%.")
 
                 HStack {
                     Text("Sidebar Tint")
@@ -239,31 +188,17 @@ private struct AppearanceSettingsView: View {
                         .monospacedDigit()
                         .frame(width: 64, alignment: .trailing)
                 }
-
-                Text("Tints the sidebar background lighter or darker than the terminal. Center is no change.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
             }
 
-            Section("Agent Status") {
-                ColorPicker("Active", selection: activeStatusColor, supportsOpacity: false)
-                    .accessibilityIdentifier("settings-status-active")
-                ColorPicker("Blocked", selection: blockedStatusColor, supportsOpacity: false)
-                    .accessibilityIdentifier("settings-status-blocked")
-                ColorPicker("Completed", selection: completedStatusColor, supportsOpacity: false)
-                    .accessibilityIdentifier("settings-status-completed")
-                Picker("Blocked sound", selection: blockedStatusSound) {
-                    Text("None").tag("None")
-                    ForEach(StatusSoundPlayer.standardNames, id: \.self) { name in
-                        Text(name).tag(name)
-                    }
+            Section("Panes") {
+                HStack {
+                    Text("Inactive pane mute")
+                    Slider(value: inactivePaneMuteStrength, in: 0 ... 10, step: 1)
+                        .accessibilityIdentifier("settings-inactive-pane-mute")
+                    Text("\(model.settings.inactivePaneMuteStrength ?? AppSettings.defaultInactivePaneMuteStrength)")
+                        .monospacedDigit()
+                        .frame(width: 42, alignment: .trailing)
                 }
-                .accessibilityIdentifier("settings-status-blocked-sound")
-                Button("Reset to defaults") { model.resetAgentStatus() }
-                    .accessibilityIdentifier("settings-status-reset")
-                Text("Colors for the per-session agent-status glyph in the sidebar, and an optional sound played when a session becomes blocked.")
-                    .font(.system(size: 11))
-                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -322,6 +257,100 @@ private struct AppearanceSettingsView: View {
                 set: { model.setCompactToolbar($0 ? nil : false) })
     }
 
+    /// nil (the default) reads as `defaultInactivePaneMuteStrength`; sliding back to it stores nil so
+    /// settings.json stays minimal. The slider is integer-stepped, so the Double is rounded to an Int.
+    private var inactivePaneMuteStrength: Binding<Double> {
+        Binding(get: { Double(model.settings.inactivePaneMuteStrength ?? AppSettings.defaultInactivePaneMuteStrength) },
+                set: { let v = Int($0.rounded()); model.setInactivePaneMuteStrength(v == AppSettings.defaultInactivePaneMuteStrength ? nil : v) })
+    }
+}
+
+/// Notifications tab: the banner / badge / attention-indicator toggles, all default-driven through
+/// `SettingsModel`. The toggles are independent — the badge count keeps tracking whether or not
+/// banners are shown.
+private struct NotificationsSettingsView: View {
+    let model: SettingsModel
+
+    var body: some View {
+        Form {
+            Section("Notifications") {
+                Toggle("Show notification banners", isOn: notificationsEnabled)
+                    .accessibilityIdentifier("settings-notifications")
+                SettingHint("Terminal desktop notifications (OSC 9 / 777) in Notification Center.")
+
+                Toggle("Show notification badges", isOn: notificationBadgeEnabled)
+                    .accessibilityIdentifier("settings-notification-badges")
+                SettingHint("The red unseen-count pill on sidebar rows; the count keeps tracking either way.")
+
+                Toggle("Show attention indicator", isOn: attentionButtonEnabled)
+                    .accessibilityIdentifier("settings-attention-button")
+                SettingHint("A title-bar bell that highlights when a session needs attention. Click it to jump there.")
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+    }
+
+    /// 1:1 with the toggle; nil (the default) reads as on, so settings.json stays minimal until the
+    /// user turns banners off.
+    private var notificationsEnabled: Binding<Bool> {
+        Binding(get: { model.settings.notificationsEnabled ?? true },
+                set: { model.setNotificationsEnabled($0 ? nil : false) })
+    }
+
+    /// 1:1 with the toggle; nil (the default) reads as on, so settings.json stays minimal until the
+    /// user hides the count badges.
+    private var notificationBadgeEnabled: Binding<Bool> {
+        Binding(get: { model.settings.notificationBadgeEnabled ?? true },
+                set: { model.setNotificationBadgeEnabled($0 ? nil : false) })
+    }
+
+    /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json
+    /// minimal until the user opts into the title-bar attention bell.
+    private var attentionButtonEnabled: Binding<Bool> {
+        Binding(get: { model.settings.attentionButtonEnabled ?? false },
+                set: { model.setAttentionButtonEnabled($0 ? true : nil) })
+    }
+}
+
+/// Agent Status tab: a Colors section (the three sidebar glyph colors — active / blocked /
+/// completed), a Sound section (the blocked sound), and a trailing Reset that clears both back to
+/// their defaults.
+private struct AgentStatusSettingsView: View {
+    let model: SettingsModel
+
+    var body: some View {
+        Form {
+            Section("Colors") {
+                ColorPicker("Active", selection: activeStatusColor, supportsOpacity: false)
+                    .accessibilityIdentifier("settings-status-active")
+                ColorPicker("Blocked", selection: blockedStatusColor, supportsOpacity: false)
+                    .accessibilityIdentifier("settings-status-blocked")
+                ColorPicker("Completed", selection: completedStatusColor, supportsOpacity: false)
+                    .accessibilityIdentifier("settings-status-completed")
+                SettingHint("Colors for the per-session sidebar status glyph.")
+            }
+
+            Section("Sound") {
+                Picker("Blocked sound", selection: blockedStatusSound) {
+                    Text("None").tag("None")
+                    ForEach(StatusSoundPlayer.standardNames, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                }
+                .accessibilityIdentifier("settings-status-blocked-sound")
+                SettingHint("Played when a session becomes blocked.")
+            }
+
+            Section {
+                Button("Reset to defaults") { model.resetAgentStatus() }
+                    .accessibilityIdentifier("settings-status-reset")
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+    }
+
     // each ColorPicker binds to the resolved color (the user's hex or the system default); a pick
     // stores the sRGB hex, and "Reset to defaults" clears the hex back to nil (the system color).
     private var activeStatusColor: Binding<Color> {
@@ -334,6 +363,11 @@ private struct AppearanceSettingsView: View {
                 set: { model.setBlockedStatusColorHex(NSColor($0).agtermHexString) })
     }
 
+    private var completedStatusColor: Binding<Color> {
+        Binding(get: { Color(nsColor: NSColor(agtermHex: model.settings.completedStatusColorHex) ?? .systemGreen) },
+                set: { model.setCompletedStatusColorHex(NSColor($0).agtermHexString) })
+    }
+
     // the system sound played when a session enters `blocked`; "None" maps to nil. Selecting a sound
     // previews it so you hear the choice, the way macOS sound settings do.
     private var blockedStatusSound: Binding<String> {
@@ -343,10 +377,6 @@ private struct AppearanceSettingsView: View {
                     model.setBlockedStatusSoundName(value)
                     if let value { StatusSoundPlayer.shared.action(for: value)?() }
                 })
-    }
-    private var completedStatusColor: Binding<Color> {
-        Binding(get: { Color(nsColor: NSColor(agtermHex: model.settings.completedStatusColorHex) ?? .systemGreen) },
-                set: { model.setCompletedStatusColorHex(NSColor($0).agtermHexString) })
     }
 }
 

@@ -31,7 +31,7 @@ paths:
   `StatusIconView` reads it when drawing, and a change rides `.agtermAppearanceChanged` → the Coordinator's
   `reapplyStatusGlyphs()` sweep (the colors are global, not per-row, so `reconcile`'s diff can't see
   them).
-  Settings → Appearance → Agent Status drives them with a Reset-to-defaults button (clears all three
+  Settings → Agent Status drives them with a Reset-to-defaults button (clears all three
   to nil), plus a **Blocked sound** picker bound to `AppSettings.blockedStatusSoundName` (nil/"None"
   = no sound, the default; else a system sound name).
   `SettingsModel.setBlockedStatusSoundName` only SAVES (not a ghostty key,
@@ -58,7 +58,7 @@ paths:
   1) — a consequence is it overrides any `mouse-scroll-multiplier` in the user's own `~/.config/ghostty/config`.
   The General → Scrolling stepper (1...10, default 3) maps 3 back to nil so `settings.json` stays minimal;
   the emitted value is 3 either way.
-  The General → Panes slider (0...10, default 5) maps 5 back to nil the same way;
+  The Appearance → Panes slider (0...10, default 5) maps 5 back to nil the same way;
   it drives `GhosttyApp.inactivePaneMuteStrength` (mirrored into `WindowContentView` view state on `.agtermAppearanceChanged`,
   like `compactToolbar`/`notificationBadgeEnabled`), and `ContentView.paneDim` washes the inactive split
   pane with `terminalColor` at `AppSettings.muteOpacity(strength:)` (host-free,
@@ -113,12 +113,23 @@ paths:
   `ContentView` mirrors the color into `terminalColor` view state (the quick terminal's opaque backing
   re-renders with the new color) and `TitleProbeView` re-applies the window appearance.
   Without this the chrome only refreshed when the window next re-keyed.
-  UI is the standard SwiftUI `Settings` scene (Cmd+,) with a 3-tab `TabView`:
-  **General** (the notification-banner toggle + the notification-badge toggle + a **Scrolling** section
-  with the scroll-speed stepper), **Appearance** (a **Terminal** section — font/size/theme via `NSFontManager`
-  monospaced families + the bundled `ghostty/themes` dir, `SettingsCatalog` — and a **Window** section
-  with background opacity + blur sliders + the Sidebar Tint slider), and **Key Mapping** (the config
-  directory holding `keymap.conf` + a read-only diagnostics list + a Reload button — see the Keymap section).
+  UI is the standard SwiftUI `Settings` scene (Cmd+,) with a 5-tab `TabView` (frame 480×600).
+  An explicit `TabView(selection:)` binding (`@State` default `.general`) suppresses SwiftUI's
+  `com_apple_SwiftUI_Settings_selectedTabIndex` auto-persistence, so the window always opens on General
+  instead of restoring the last-used tab.
+  **General** (a **Scrolling** section with the scroll-speed slider, a **Sessions** section with the
+  restore-running-commands toggle, and a **Ghostty Config** section with the inherit-global-config toggle).
+  **Appearance** (a **Terminal** section — font/size/theme via `NSFontManager` monospaced families +
+  the bundled `ghostty/themes` dir, `SettingsCatalog` — a **Window** section with the compact-toolbar
+  toggle + background opacity/blur sliders + the Sidebar Tint slider, and a **Panes** section with the
+  inactive-pane-mute slider).
+  **Notifications** (a **Notifications** section with the banner / badge / attention-indicator toggles).
+  **Agent Status** (a **Colors** section with the three glyph color pickers, a **Sound** section with
+  the blocked-sound picker, and a trailing **Reset** that clears both back to defaults).
+  **Key Mapping** (the config directory holding `keymap.conf` + a read-only diagnostics list + a Reload
+  button — see the Keymap section).
+  Captions under controls are kept to a single terse line and dropped entirely from self-explanatory
+  controls (font/theme/opacity/sidebar-tint/colors), so each tab fits without scrolling.
   The notification toggle (`AppSettings.notificationsEnabled`, nil = on) is mirrored to `NotificationManager.bannersEnabled`
   by `SettingsModel`; it gates only the OS banner, never the badge, and is NOT a ghostty config key (no
   reload).
@@ -256,7 +267,7 @@ paths:
   `theme.set`/`config.reload` touch settings over the socket).
   Default-off + round-trip covered host-free in `AppSettingsTests`; the file-gating itself is app-target
   (manually/build verified, no app unit-test host).
-- **`attentionButtonEnabled` (titlebar attention bell, opt-in, General tab).**
+- **`attentionButtonEnabled` (titlebar attention bell, opt-in, Notifications tab).**
   `AppSettings.attentionButtonEnabled: Bool?` (nil = OFF, the default-off precedent like `restoreRunningCommand`/`inheritGlobalGhosttyConfig`,
   NOT `notificationBadgeEnabled`'s default-ON) gates the title-bar bell icon that reflects the window's
   `AppStore.attentionSessions` at a glance (empty → dimmed/disabled, non-empty → enabled,
@@ -266,7 +277,7 @@ paths:
   pushes `settings.attentionButtonEnabled ?? false` into the `GhosttyApp.attentionButtonEnabled` flag
   (alongside `applyCompactToolbar`/`applyNotificationBadgeEnabled`), so a flip rides `.agtermAppearanceChanged`
   and `WindowContentView` re-reads the mirror to re-render the titlebar live — exactly like `compactToolbar`/`notificationBadgeEnabled`.
-  The General ▸ Notifications `Toggle("Show attention indicator")` uses the default-OFF binding (get
+  The Notifications tab's Notifications-section `Toggle("Show attention indicator")` uses the default-OFF binding (get
   `?? false`, set `$0 ? true : nil`, mirroring `restoreRunningCommand`/`inheritGlobalGhosttyConfig`,
   NOT `notificationBadgeEnabled`).
   GUI-only and keep-in-sync EXEMPT (the bell just opens the already-controllable attention palette /
