@@ -1,0 +1,53 @@
+# swiftlint config for agterm — tailored, low-noise.
+# philosophy: disable only rules that fight deliberate project conventions; keep every
+# rule that surfaces a real, fixable finding on; grandfather size limits on big-by-design
+# files (refactoring them is out of scope) so only NEW growth warns.
+
+excluded:
+  - build                       # xcodebuild DerivedData
+  - .build                      # SwiftPM build (root)
+  - agtermCore/.build           # SwiftPM build + vendored checkouts
+  - GhosttyKit.xcframework
+  - agterm/Resources
+
+disabled_rules:
+  - identifier_name             # short local names (lmt, id, x, y) are deliberate — CLAUDE.md
+  - trailing_comma              # style preference, not a defect
+  - force_try                   # `try!` is idiomatic in tests; 0 in production code
+  - optional_data_string_conversion # we want lossy String(decoding:as:) for terminal/process bytes
+                                     # (best-effort, never nil), not the failable initializer
+
+type_name:
+  excluded:
+    - agtermApp                 # the @main App struct is deliberately brand-lowercase
+    - Go                        # the `session go` CLI subcommand type is short by design
+
+line_length:
+  warning: 200                  # code deliberately runs long; flag only genuinely long lines
+  error: 400
+  ignores_comments: true
+  ignores_urls: true
+
+# big-by-design: the 44-arm control dispatch, the eager-deck ContentView/surface views,
+# and the large XCUITest/unit suites. limits sit just above today's maxima so the repo is
+# clean now and only further growth warns.
+file_length:
+  warning: 2500
+  error: 3000
+type_body_length:
+  warning: 1800
+  error: 2500
+function_body_length:
+  warning: 250
+  error: 400
+cyclomatic_complexity:
+  warning: 25
+  error: 50
+  ignores_case_statements: true # a flat command-dispatch switch is not "complex"
+
+nesting:
+  type_level: 2                 # tightly-scoped private helper types nested 2 deep are idiomatic
+
+large_tuple:
+  warning: 3                    # 3-member named returns are fine; 4+ should become a struct
+  error: 5

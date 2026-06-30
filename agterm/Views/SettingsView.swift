@@ -99,7 +99,9 @@ private struct GeneralSettingsView: View {
             Section("Sessions") {
                 Toggle("Restore running commands on restart", isOn: restoreRunningCommand)
                     .accessibilityIdentifier("settings-restore-running-command")
-                Text("Re-runs each pane's foreground command when the app relaunches. Only single-process commands restore faithfully; programs listed in restore-denylist.conf (terminal multiplexers by default) start fresh.")
+                Text("Re-runs each pane's foreground command when the app relaunches. Only single-process "
+                    + "commands restore faithfully; programs listed in restore-denylist.conf (terminal "
+                    + "multiplexers by default) start fresh.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }
@@ -107,7 +109,9 @@ private struct GeneralSettingsView: View {
             Section("Ghostty Config") {
                 Toggle("Use my global Ghostty config", isOn: inheritGlobalGhosttyConfig)
                     .accessibilityIdentifier("settings-inherit-global-ghostty")
-                Text("Also load ~/.config/ghostty/config on top of agterm's own config. Off by default so agterm stays self-contained — a config written for Ghostty.app won't silently change agterm. To customize agterm, edit ~/.config/agterm/ghostty.conf (File ▸ Edit ghostty.conf…); it is always loaded.")
+                Text("Also load ~/.config/ghostty/config on top of agterm's own config. Off by default so agterm stays "
+                    + "self-contained — a config written for Ghostty.app won't silently change agterm. To customize agterm, "
+                    + "edit ~/.config/agterm/ghostty.conf (File ▸ Edit ghostty.conf…); it is always loaded.")
                     .font(.system(size: 11))
                     .foregroundStyle(.secondary)
             }

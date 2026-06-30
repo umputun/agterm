@@ -137,7 +137,7 @@ private final class StatusIconView: NSImageView {
         image = Self.icon(for: indicator.status)
         widthConstraint.constant = Self.glyphWidth
         setAccessibilityValue(indicator.status.rawValue)
-        indicator.blink ? startBlink() : stopBlink()
+        if indicator.blink { startBlink() } else { stopBlink() }
     }
 
     private func startBlink() {
@@ -180,6 +180,8 @@ private final class SidebarRowView: NSTableRowView {
 
     override var isEmphasized: Bool {
         get { window?.isKeyWindow ?? false }
+        // isEmphasized is derived from the window's key state; the setter only triggers a redraw.
+        // swiftlint:disable:next unused_setter_value
         set { needsDisplay = true }
     }
 
@@ -1293,14 +1295,21 @@ struct WorkspaceSidebar: NSViewRepresentable {
             return true
         }
 
+        /// The resolved session drop. `dropChildIndex` is the PRE-removal slot to highlight; `destination`
+        /// is the POST-removal index `moveSession` expects.
+        private struct SessionMove {
+            let sessionID: UUID
+            let workspace: UUID
+            let dropChildIndex: Int
+            let destination: Int
+        }
+
         /// Resolves a proposed session drop into the move it would perform, or nil when the drop is
         /// invalid or a no-op (so both `validateDrop` and `acceptDrop` agree exactly). Reads the pasteboard
         /// + store to map the dragged session and drop-target row to indices, then defers the index
         /// arithmetic (drop-on-row redirect, post-removal off-by-one, no-op detection) to the host-free
-        /// `SidebarDrop.resolveSession`. `dropChildIndex` is the PRE-removal slot to highlight; `destination`
-        /// is the POST-removal index `moveSession` expects.
-        private func resolveSessionMove(from info: NSDraggingInfo, item: Any?, childIndex index: Int)
-            -> (sessionID: UUID, workspace: UUID, dropChildIndex: Int, destination: Int)? {
+        /// `SidebarDrop.resolveSession`.
+        private func resolveSessionMove(from info: NSDraggingInfo, item: Any?, childIndex index: Int) -> SessionMove? {
             guard let sessionID = draggedSessionID(from: info), let node = item as? SidebarNode,
                   let source = store.sessionLocation(ofSession: sessionID) else { return nil }
 
@@ -1316,7 +1325,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
 
             guard let move = SidebarDrop.resolveSession(sourceWorkspace: source.workspace, sourceIndex: source.index,
                                                         target: target, childIndex: index) else { return nil }
-            return (sessionID, move.workspace, move.dropChildIndex, move.destination)
+            return SessionMove(sessionID: sessionID, workspace: move.workspace,
+                               dropChildIndex: move.dropChildIndex, destination: move.destination)
         }
 
         /// Resolves a workspace drop into the top-level reorder it would perform, or nil when it is a no-op

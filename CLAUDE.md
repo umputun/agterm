@@ -69,11 +69,21 @@ surface ownership, and the C-boundary concurrency contract before changing the b
 - `scripts/build.sh` — same but Release, no launch.
 - `cd agtermCore && swift test` — run the host-free unit tests (`scripts/test.sh` wraps this).
 - `Makefile` — a thin front door over the scripts: `make prep`/`build` (Debug,
-  no launch)/`run`/`release`/`deploy` (Release build + copy to `~/Applications`)/`test`/`dist VERSION=x.y.z [PUBLISH=1]`
+  no launch)/`run`/`release`/`deploy` (Release build + copy to `~/Applications`)/`test`/`lint`/`dist VERSION=x.y.z [PUBLISH=1]`
   (the `release.sh` DMG)/`clean`; a bare `make` lists them.
-  The scripts stay the source of truth — only `build` and `deploy` carry their own recipe.
+  The scripts stay the source of truth — only `build`, `deploy`, and `lint` carry their own recipe.
+- `make lint` runs `swiftlint lint --strict` over the tree, configured by `.swiftlint.yml` at the repo
+  root.
+  The config disables only rules that fight deliberate conventions (`identifier_name`,
+  `trailing_comma`, `force_try`, `optional_data_string_conversion` — the last keeps the lossy `String(decoding:as:)`
+  for terminal/process bytes), exempts the deliberately-named `agtermApp`/`Go` types,
+  tunes `line_length` (200) and `cyclomatic_complexity` (`ignores_case_statements`,
+  so the flat 44-arm command dispatch isn't "complex"), allows 2-deep type nesting,
+  and grandfathers the size limits on the big-by-design files (the control dispatch,
+  the eager-deck views, the large test suites) just above today's maxima — so only NEW growth warns.
+  `--strict` promotes warnings to failures, so the tree must stay swiftlint-clean (zero findings).
 
-The app must build and `swift test` must stay green after every change.
+The app must build, `swift test` must stay green, and `make lint` must pass after every change.
 
 - **Working in a git WORKTREE: SYMLINK the prebuilt artifacts, don't re-run setup.** A fresh `git worktree`
   does NOT contain the gitignored `GhosttyKit.xcframework`, `agterm/Resources/ghostty`,
@@ -157,17 +167,18 @@ The app must build and `swift test` must stay green after every change.
   verify the directory, don't trust a negative relative result.
 - **CI / release (`.github/workflows/`).**
   `ci.yml` runs on push/PR to `master`, gated by a `dorny/paths-filter` (`**/*.swift`,
-  `agtermCore/**`, `agterm/**`, `project.yml`, `scripts/**`, `ci.yml`): a `test` job (`swift test` in
-  `agtermCore`) and a `build` job (`brew install xcodegen` then `scripts/build.sh`,
+  `agtermCore/**`, `agterm/**`, `project.yml`, `scripts/**`, `.swiftlint.yml`, `ci.yml`): a `test` job
+  (`swift test` in `agtermCore`), a `lint` job (`brew install swiftlint` then `swiftlint lint --strict`
+  — no build, it only parses sources), and a `build` job (`brew install xcodegen` then `scripts/build.sh`,
   Release, with `GhosttyKit.xcframework` + ghostty/terminfo resources restored from an `actions/cache`
-  keyed on `scripts/setup.sh`), both on `macos-26`, concurrency cancel-in-progress.
+  keyed on `scripts/setup.sh`), all on `macos-26`, concurrency cancel-in-progress.
   **CI does NOT run the XCUITests** — it builds the app but never test-runs the app target;
   only the host-free `swift test` runs in CI.
+  The `lint` job is `--strict`, so any swiftlint warning fails the build (see the `make lint` note above).
   `release.yml` fires on `v*` tags: `scripts/release.sh <version> --publish` on `macos-26` builds an
   unsigned DMG (`AGTERM_ALLOW_UNSIGNED=1`), publishes the GitHub release,
   and bumps the Homebrew cask in `umputun/homebrew-apps` (needs the `HOMEBREW_TAP_PAT` secret,
   not the default token).
-  No swiftlint step yet.
 
 ## GhosttyKit.xcframework
 

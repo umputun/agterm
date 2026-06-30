@@ -451,8 +451,8 @@ final class ControlServer {
             return focusSessionPane(request.target, window: request.args?.window, pane: request.args?.pane)
         case .sessionStatus:
             return setSessionStatus(request.target, window: request.args?.window,
-                                    status: request.args?.status, blink: request.args?.blink,
-                                    autoReset: request.args?.autoReset, sound: request.args?.sound)
+                                    update: StatusUpdate(status: request.args?.status, blink: request.args?.blink,
+                                                         autoReset: request.args?.autoReset, sound: request.args?.sound))
         case .sessionFlag:
             return flagSession(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionCopy:
@@ -671,8 +671,16 @@ final class ControlServer {
     /// per-call `sound` is given and the session TRANSITIONS into `blocked`, the user's configured Settings
     /// "Blocked sound" (`blockedStatusSoundName`) plays as a best-effort default. The indicator is ephemeral
     /// and rendered on every non-idle session.
-    private func setSessionStatus(_ target: String?, window: String?, status: String?, blink: Bool?,
-                                  autoReset: Bool?, sound: String?) -> ControlResponse {
+    /// The per-call status payload for `setSessionStatus`; the addressing target/window stay separate.
+    private struct StatusUpdate {
+        let status: String?
+        let blink: Bool?
+        let autoReset: Bool?
+        let sound: String?
+    }
+
+    private func setSessionStatus(_ target: String?, window: String?, update: StatusUpdate) -> ControlResponse {
+        let status = update.status, blink = update.blink, autoReset = update.autoReset, sound = update.sound
         guard let parsed = AgentStatus(rawValue: status ?? "") else {
             return ControlResponse(ok: false, error: "invalid status")
         }

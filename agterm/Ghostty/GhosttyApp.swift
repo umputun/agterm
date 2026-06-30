@@ -315,7 +315,7 @@ final class GhosttyApp {
             }
         }
         // the theme file fills any selection color not set explicitly above.
-        if (selBg == nil || selFg == nil), let themeName, !themeName.isEmpty,
+        if selBg == nil || selFg == nil, let themeName, !themeName.isEmpty,
            let themesDir = Bundle.main.url(forResource: "ghostty", withExtension: nil)?
                .appendingPathComponent("themes", isDirectory: true) {
             for (key, value) in keyValues(ofFileAt: themesDir.appendingPathComponent(themeName).path) {

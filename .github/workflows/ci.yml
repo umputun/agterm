@@ -28,6 +28,7 @@ jobs:
               - "agterm/**"
               - "project.yml"
               - "scripts/**"
+              - ".swiftlint.yml"
               - ".github/workflows/ci.yml"
 
   test:
@@ -40,6 +41,18 @@ jobs:
       - name: swift test
         working-directory: agtermCore
         run: swift test
+
+  lint:
+    name: swiftlint
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - name: Install swiftlint
+        run: brew install swiftlint
+      - name: swiftlint (strict)
+        run: swiftlint lint --strict
 
   build:
     name: Build app

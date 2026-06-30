@@ -636,7 +636,7 @@ struct agtermApp: App {
     /// hides + tears it down so the next show spawns fresh. Seeds from the session's current dir + env ids.
     @MainActor
     private static func makeScratchSurface(for session: Session, store: AppStore, env: [String: String],
-                                          suppressAutoFocus: Bool, library: WindowLibrary) -> GhosttySurfaceView {
+                                           suppressAutoFocus: Bool, library: WindowLibrary) -> GhosttySurfaceView {
         // autoFocus on creation gives the first show reliable focus — but suppress it when another
         // surface already owns focus above the scratch (a full overlay, or the window-level quick
         // terminal), so a scratch created under one can't steal first responder. Re-shows are focused

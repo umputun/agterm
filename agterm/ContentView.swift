@@ -1156,7 +1156,6 @@ private struct WindowAccessor: NSViewRepresentable {
             }
         }
 
-
         /// Re-assert the window forward under XCUITest: the FB11763863 reopen can present it slightly
         /// after the view attaches, so keep ordering it front for a short schedule.
         private func scheduleUITestWindowForward(_ window: NSWindow) {

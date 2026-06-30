@@ -205,7 +205,9 @@ struct Workspace: ParsableCommand {
 struct Session: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Session commands.",
-        subcommands: [New.self, Close.self, Select.self, Go.self, Rename.self, Move.self, TypeText.self, Split.self, Scratch.self, Focus.self, Copy.self, Status.self, FlagCommand.self, Search.self, Overlay.self]
+        subcommands: [New.self, Close.self, Select.self, Go.self, Rename.self, Move.self, TypeText.self,
+                      Split.self, Scratch.self, Focus.self, Copy.self, Status.self, FlagCommand.self,
+                      Search.self, Overlay.self]
     )
 
     struct New: RequestCommand {
@@ -373,7 +375,12 @@ struct Session: ParsableCommand {
         @Argument(help: "State: idle, active, completed, or blocked.") var state: String
         @Flag(name: .long, help: "Pulse the indicator for attention.") var blink = false
         @Flag(name: .long, help: "Reset the indicator to idle once the session is visited.") var autoReset = false
-        @Option(name: .long, help: "Play a sound when set: 'default' (or 'beep') for the system alert sound, or a system sound name (Basso, Blow, Bottle, Frog, Funk, Glass, Hero, Morse, Ping, Pop, Purr, Sosumi, Submarine, Tink).") var sound: String?
+        @Option(name: .long, help: """
+            Play a sound when set: 'default' (or 'beep') for the system alert sound, or a system sound \
+            name (Basso, Blow, Bottle, Frog, Funk, Glass, Hero, Morse, Ping, Pop, Purr, Sosumi, \
+            Submarine, Tink).
+            """)
+        var sound: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 

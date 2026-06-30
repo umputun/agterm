@@ -613,10 +613,11 @@ final class AppActions {
         let current = settingsModel?.settings.theme
         func item(_ name: String?, title: String) -> PaletteItem {
             PaletteItem(id: themeID(name), title: title, badge: name == current ? "current" : nil,
-                        onSelect: { [weak self] in self?.previewTheme(name) }) { [weak self] in
-                self?.previewTheme(name)
-                self?.commitThemePreview()
-            }
+                        onSelect: { [weak self] in self?.previewTheme(name) },
+                        run: { [weak self] in
+                            self?.previewTheme(name)
+                            self?.commitThemePreview()
+                        })
         }
         // the nil row is ghostty's built-in default (no theme file); the app's own default is the
         // bundled "agterm" theme, which appears in the named list like any other.
