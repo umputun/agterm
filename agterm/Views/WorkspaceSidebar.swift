@@ -325,6 +325,13 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// from under the in-progress edit. `committing` covers only the end-editing
         /// instant; this covers the whole typing window.
         private var editing = false
+        /// Set by the Esc handler (`doCommandBy` cancelOperation) so the end-editing that the
+        /// manual resign triggers is treated as a cancel — the typed value is discarded.
+        private var cancellingRename = false
+        /// The row's pre-edit label, captured in `beginEditing` so an Esc-cancel can restore the
+        /// displayed text (a manual resign keeps the edited stringValue, and a cancel makes no model
+        /// change so no reload refreshes the row).
+        private var renameOriginalValue: String?
         /// Guards `syncSelection` against the selection-change delegate callback it
         /// itself triggers (which would otherwise re-enter the store).
         private var applyingSelection = false
@@ -1000,6 +1007,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
             let row = outline.row(forItem: node)
             guard row >= 0, let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView,
                   let field = cell.textField else { return }
+            renameOriginalValue = field.stringValue
             field.isEditable = true
             field.isBordered = true
             field.drawsBackground = true
@@ -1015,6 +1023,19 @@ struct WorkspaceSidebar: NSViewRepresentable {
             editing = true
         }
 
+        /// Intercepts Esc during an inline rename. The field is focused via `makeFirstResponder`
+        /// (not the outline's edit session), so AppKit never delivers the cancel text-movement for
+        /// Esc — `cancelOperation:` would otherwise do nothing and leave the field stuck in edit
+        /// mode. Flag the cancel, resign so `controlTextDidEndEditing` fires, and consume the
+        /// command so the default (no-op) handling doesn't run.
+        func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            guard editing, commandSelector == #selector(NSResponder.cancelOperation(_:)),
+                  let field = control as? NSTextField else { return false }
+            cancellingRename = true
+            field.window?.makeFirstResponder(outlineView)
+            return true
+        }
+
         func controlTextDidEndEditing(_ notification: Notification) {
             guard !committing, let field = notification.object as? NSTextField, let outline = outlineView else { return }
             committing = true
@@ -1024,11 +1045,16 @@ struct WorkspaceSidebar: NSViewRepresentable {
             let row = outline.row(for: field)
             let node = row >= 0 ? outline.item(atRow: row) as? SidebarNode : nil
 
-            // Escape cancels: AppKit reports it via the text-movement key in userInfo.
+            // Escape cancels: via AppKit's cancel text-movement, or via our Esc handler's flag (the
+            // manual-resign path the rename field needs, since it never gets the cancel movement).
             let movement = (notification.userInfo?["NSTextMovement"] as? Int) ?? 0
-            let cancelled = movement == NSTextMovement.cancel.rawValue
+            let cancelled = movement == NSTextMovement.cancel.rawValue || cancellingRename
+            cancellingRename = false
 
             let newValue = field.stringValue
+            // a manual-resign cancel keeps the edited stringValue and makes no model change (no row
+            // reload), so restore the pre-edit label before flipping the field back to a plain label.
+            if cancelled, let original = renameOriginalValue { field.stringValue = original }
             restore(field: field, kind: node?.kind)
             guard let node, !cancelled else { return }
 

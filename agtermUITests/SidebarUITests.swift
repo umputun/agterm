@@ -90,6 +90,26 @@ final class SidebarUITests: XCTestCase {
                       "workspace header should show the new name after rename")
     }
 
+    // issue #41: Esc must cancel the inline rename — close edit mode and discard the typed change.
+    func testRenameSessionEscCancels() throws {
+        let row = sessionRow()
+        XCTAssertTrue(row.waitForExistence(timeout: 20), "session row should exist")
+        let original = row.value as? String
+        row.rightClick()
+        let rename = app.menuItems["Rename"]
+        XCTAssertTrue(rename.waitForExistence(timeout: 5), "Rename menu item should appear")
+        rename.click()
+        let field = app.descendants(matching: .any).matching(identifier: "edit-field").firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "rename did not enter edit mode (field never appeared)")
+        app.typeKey("a", modifierFlags: .command)
+        app.typeText("should-be-discarded")
+        app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+        // edit mode closes: on restore the field's identifier reverts from edit-field to session-row.
+        XCTAssertTrue(field.waitForNonExistence(timeout: 5), "Esc should close rename edit mode")
+        // and the name is unchanged: the rename was discarded, not committed.
+        XCTAssertEqual(sessionRow().value as? String, original, "Esc should discard the rename")
+    }
+
     func testCloseSession() throws {
         let row = sessionRow()
         XCTAssertTrue(row.waitForExistence(timeout: 20))
