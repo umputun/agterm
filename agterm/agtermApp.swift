@@ -160,6 +160,10 @@ struct agtermApp: App {
                     NotificationManager.shared.actions = actions
                     NotificationManager.shared.library = library
                     NotificationManager.shared.start()
+                    // drive the Dock icon's count badge (via UNUserNotifications) from the app-wide unseen
+                    // total (the same Session.unseenCount the sidebar pills track, summed across windows).
+                    DockBadgeController.shared.library = library
+                    DockBadgeController.shared.start()
                     // surface keymap parse errors / conflicts loaded at SettingsModel init (too early to
                     // post then — before notification registration above). Only on the launch window:
                     // `hasReopened` is still false here for the first window's `.task` (reopenWindows()
@@ -722,7 +726,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // `AppIcon.icon`, which the system renders LIVE in the Dock with the current appearance
         // (light/dark/clear/tinted, Liquid Glass). applicationIconImage takes a STATIC NSImage, so
         // setting it (even from the compiled asset) freezes the Dock to one flat rendering and defeats
-        // the adaptive icon. Let LaunchServices render the bundle icon.
+        // the adaptive icon. Let LaunchServices render the bundle icon. (The Dock unseen-count badge is
+        // the modern `UNUserNotificationCenter.setBadgeCount` — see `DockBadgeController` — which renders
+        // over the live adaptive icon without touching `applicationIconImage`.)
         restoreObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didFinishRestoringWindowsNotification,
             object: NSApp,
@@ -862,6 +868,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationWillTerminate(_: Notification) {
         controlServer?.stop()
         customCommandRunner?.stop()
+        // clear the OS-level Dock badge — it outlives the process, and unseenCount is ephemeral, so a quit
+        // with unseen > 0 would leave a stale count pinned on the Dock icon (the willClose refresh() poke
+        // can't: isTerminating below makes closeWindow no-op, so the total recomputes unchanged).
+        DockBadgeController.shared.clear()
         // mark terminating so the per-window willClose close-reporting can't zero the open-set as each
         // window tears down during quit — the set must survive for the next launch's reopen-all.
         library?.isTerminating = true

@@ -57,6 +57,23 @@ final class WindowLibraryTests {
         #expect(library.allOpenSessions().count == 3)
     }
 
+    @Test func totalUnseenCountSumsEverySessionAcrossWindows() {
+        let library = WindowLibrary(directory: directory)
+        #expect(library.totalUnseenCount == 0) // a fresh tree has nothing unseen
+        let firstStore = try! #require(library.store(for: library.windows[0].id))
+        firstStore.workspaces[0].sessions[0].unseenCount = 2
+        let second = library.newWindow(name: "work")
+        let secondStore = try! #require(library.store(for: second.id))
+        secondStore.workspaces[0].sessions[0].unseenCount = 3
+        let extra = try! #require(secondStore.addSession(toWorkspace: secondStore.workspaces[0].id, cwd: "/tmp"))
+        extra.unseenCount = 5
+        // 2 (window 1) + 3 + 5 (work) = 10 across both open windows.
+        #expect(library.totalUnseenCount == 10)
+        // closing a window drops its sessions from the roll-up.
+        library.closeWindow(second.id)
+        #expect(library.totalUnseenCount == 2)
+    }
+
     @Test func defaultWindowNameCountsUp() {
         let library = WindowLibrary(directory: directory)
         #expect(library.defaultWindowName == "window 2")

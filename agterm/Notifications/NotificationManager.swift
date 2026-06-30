@@ -27,12 +27,14 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     /// suppressed but the sidebar badge still tracks unseen notifications. Set by `SettingsModel`.
     var bannersEnabled = true
 
-    /// Register as the notification delegate and request alert authorization. Idempotent; the
-    /// scene `.task` may re-run. Best-effort: a denial just means no banners.
+    /// Register as the notification delegate and request alert + badge authorization. Idempotent; the
+    /// scene `.task` may re-run. Best-effort: a denial just means no banners. The `.badge` option is what
+    /// lets `DockBadgeController` render the Dock count via `UNUserNotificationCenter.setBadgeCount` — the
+    /// legacy `NSApp.dockTile.badgeLabel` is silently suppressed for agterm without it.
     func start() {
         let center = UNUserNotificationCenter.current()
         center.delegate = self
-        center.requestAuthorization(options: [.alert]) { granted, error in
+        center.requestAuthorization(options: [.alert, .badge]) { granted, error in
             if !granted { logger.notice("notification authorization denied: \(String(describing: error), privacy: .public)") }
         }
     }

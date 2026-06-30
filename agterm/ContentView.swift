@@ -91,6 +91,9 @@ struct ContentView: View {
         }
         store = resolved
         resolvedID = id
+        // reopening a window loads an @ObservationIgnored store, which the Dock badge's observation can't
+        // see (symmetric to the willClose close poke) — recompute so a reopened window's unseen total counts.
+        DockBadgeController.shared.refresh()
     }
 
     /// The window id this view adopts: normally the next id in the library's claim queue. If the
@@ -1094,6 +1097,9 @@ private struct WindowAccessor: NSViewRepresentable {
                         session.scratchSurface?.teardown()
                     }
                     library.closeWindow(windowID)
+                    // closing a window drops its (unobserved) store, so the Dock badge's observation
+                    // tracking won't fire — refresh it explicitly so the unseen total drops this window's.
+                    DockBadgeController.shared.refresh()
                 }
             }
             titlebarObservers.append(closeToken)

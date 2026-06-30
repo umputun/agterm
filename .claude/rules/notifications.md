@@ -59,6 +59,30 @@ paths:
   reloads the rows).
   This gates ONLY the red count pill — the agent-status glyph (drawn just left of it by `StatusIconView`)
   is always on, never gated by this.
+- **Dock badge (`DockBadgeController`, app target).**
+  A `@MainActor` singleton (next to `NotificationManager`, wired in the scene `.task`) that shows the
+  app-wide unseen total on the Dock icon.
+  The total is the host-free `WindowLibrary.totalUnseenCount` (sum of every open window's sessions'
+  `unseenCount`, unit-tested); it's gated by the SAME `notificationBadgeEnabled` toggle as the sidebar
+  pill (badge count is 0 when off).
+  **Uses `UNUserNotificationCenter.setBadgeCount(_:)`, NOT `NSApp.dockTile.badgeLabel`.** For agterm the
+  legacy dock-tile label is silently suppressed — the value sets and persists on the tile but the Dock
+  never draws the pill — because it needs the `.badge` authorization option; `NotificationManager.start`
+  now requests `[.alert, .badge]`.
+  The modern UN badge renders correctly over the LIVE adaptive Icon Composer icon with no loss of
+  light/dark/tint/clear adaptivity, so there is NO `applicationIconImage` override.
+  Cleared to 0 on quit (`DockBadgeController.clear()` from `applicationWillTerminate`) — the OS badge
+  outlives the process and `unseenCount` is ephemeral, so without it a quit with unseen > 0 would leave a
+  stale count pinned on the Dock icon (the `willClose` poke can't do it: `isTerminating` makes `closeWindow`
+  no-op, so the total recomputes unchanged).
+  Reactivity is the Observation re-registration pattern (`apply()` reads `totalUnseenCount` inside
+  `withObservationTracking` and re-arms on change), with explicit `refresh()` pokes on the two
+  unobservable store mutations — a window CLOSE (`willClose` teardown in `ContentView`, `window.close` in
+  `ControlServer`) AND a window REOPEN (`ContentView.resolveStore` after `loadStore`, so a reopened
+  window's bumps aren't stale) — and an `.agtermAppearanceChanged` observer for the (non-`@Observable`)
+  toggle flip.
+  Keep-in-sync EXEMPT — pure derived chrome (`unseenCount` is already driven by `notify` / `session.select`),
+  nothing new to drive over the socket.
 - **Agent-status glyph.**
   Mirrors the `notify-badge` cell pattern (see the Control API `session.status`).
   `StatusIconView` (an `NSImageView` sibling of `BadgeView` in `WorkspaceSidebar`) draws the row's tinted

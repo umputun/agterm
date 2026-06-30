@@ -169,6 +169,17 @@ public final class WindowLibrary {
         openIDs().compactMap { stores[$0] }.flatMap { $0.workspaces.flatMap(\.sessions) }
     }
 
+    /// The total unseen-notification count across every session in every OPEN window — the number the
+    /// Dock tile badge shows (`DockBadgeController`), the app-wide roll-up of the same `Session.unseenCount`
+    /// the sidebar's red pills track. Reads the observable `windows` list, each open store's `workspaces`,
+    /// and each session's `unseenCount`, so a `withObservationTracking` observer over this re-fires on a
+    /// notification bump, a focus/select clear, and a session add/remove. A window CLOSE drops a store
+    /// (`@ObservationIgnored stores`), which is NOT observable — the app refreshes the badge explicitly on
+    /// the `willClose` teardown for that case.
+    public var totalUnseenCount: Int {
+        allOpenSessions().reduce(0) { $0 + $1.unseenCount }
+    }
+
     /// The number of currently-open windows and the total number of sessions across them — the
     /// counts the quit confirmation reports. A window is open iff its store is loaded.
     public func openCounts() -> (windows: Int, sessions: Int) {
