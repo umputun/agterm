@@ -13,6 +13,9 @@ public enum AgentHooksInstall {
     /// The shell integration script sourced from the user's rc files, relative to the script directory.
     public static let integrationRelativePath = "shell/integration.sh"
 
+    /// The fish shell integration script sourced from the user's config.fish, relative to the script directory.
+    public static let fishIntegrationRelativePath = "shell/integration.fish"
+
     /// Marker lines bracketing the agterm-managed block in a shell rc file. The opening marker is also
     /// the idempotency probe (present → already installed).
     public static let rcMarkerBegin = "# >>> agterm agent-status >>>"
@@ -73,11 +76,11 @@ public enum AgentHooksInstall {
     /// `existing` is the rc file's current contents; `scriptDir` is the installed script directory.
     /// Returns the new contents and whether anything was appended. Idempotent: if the begin marker is
     /// already present the input is returned unchanged with `changed == false`.
-    public static func appendShellRC(existing: String, scriptDir: String) -> (contents: String, changed: Bool) {
+    public static func appendShellRC(existing: String, scriptDir: String, scriptName: String = integrationRelativePath) -> (contents: String, changed: Bool) {
         if existing.contains(rcMarkerBegin) {
             return (existing, false) // already installed
         }
-        let source = "source \(shellQuote(scriptDir + "/" + integrationRelativePath))"
+        let source = "source \(shellQuote(scriptDir + "/" + scriptName))"
         var block = rcMarkerBegin + "\n" + source + "\n" + rcMarkerEnd + "\n"
         if existing.isEmpty {
             return (block, true)

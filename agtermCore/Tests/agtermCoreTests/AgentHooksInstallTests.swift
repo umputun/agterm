@@ -146,6 +146,12 @@ struct AgentHooksInstallTests {
         #expect(result.contents.hasPrefix(AgentHooksInstall.rcMarkerBegin))
     }
 
+    @Test func appendShellRCWithCustomScriptName() {
+        let result = AgentHooksInstall.appendShellRC(existing: "export FOO=1\n", scriptDir: scriptDir, scriptName: "shell/integration.fish")
+        #expect(result.changed)
+        #expect(result.contents.contains("source '\(scriptDir)/shell/integration.fish'"))
+    }
+
     @Test func backupPathAppendsBak() {
         #expect(AgentHooksInstall.backupPath(for: "/home/me/.claude/settings.json") == "/home/me/.claude/settings.json.bak")
     }

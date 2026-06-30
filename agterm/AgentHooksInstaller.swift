@@ -3,7 +3,7 @@ import agtermCore
 
 /// Installs the bundled agent-status hooks package into the user's home: copies the scripts from the
 /// app bundle into `~/.config/agterm/agent-status/`, bakes the bundled `agtermctl`'s absolute path
-/// into the wrapper, appends a marker-guarded `source` line to `~/.zshrc` + `~/.bashrc`, and merges
+/// into the wrapper, appends a marker-guarded `source` line to `~/.zshrc`, `~/.bashrc`, and `~/.config/fish/config.fish`, and merges
 /// the three Claude Code hooks into `~/.claude/settings.json` (writing a `.bak` first). The Codex
 /// `~/.codex/config.toml` line is printed for the user to add manually — never auto-edited. The
 /// host-free string/JSON transforms live in `agtermCore.AgentHooksInstall`; this type owns the
@@ -156,13 +156,18 @@ enum AgentHooksInstaller {
         return false
     }
 
-    // append the marker-guarded source line to both ~/.zshrc and ~/.bashrc (idempotent per file).
+    // append the marker-guarded source line to ~/.zshrc, ~/.bashrc, and ~/.config/fish/config.fish (idempotent per file).
     private static func appendShellRC() throws {
         let home = FileManager.default.homeDirectoryForCurrentUser
-        for name in [".zshrc", ".bashrc"] {
+        for name in [".zshrc", ".bashrc", ".config/fish/config.fish"] {
             let rc = home.appendingPathComponent(name)
+            if name.hasSuffix(".fish") {
+                // Only create/append to config.fish if the user already has a ~/.config/fish directory
+                guard FileManager.default.fileExists(atPath: rc.deletingLastPathComponent().path) else { continue }
+            }
             let existing = (try? String(contentsOf: rc, encoding: .utf8)) ?? ""
-            let result = AgentHooksInstall.appendShellRC(existing: existing, scriptDir: destinationFolder.path)
+            let scriptName = name.hasSuffix(".fish") ? AgentHooksInstall.fishIntegrationRelativePath : AgentHooksInstall.integrationRelativePath
+            let result = AgentHooksInstall.appendShellRC(existing: existing, scriptDir: destinationFolder.path, scriptName: scriptName)
             guard result.changed else { continue }
             try writePreservingSymlink(result.contents, to: rc)
         }
@@ -182,7 +187,7 @@ enum AgentHooksInstaller {
         return """
         Scripts installed to \(destinationFolder.path).
         \(claudeLine)
-        The source line was added to ~/.zshrc and ~/.bashrc.
+        The source line was added to ~/.zshrc, ~/.bashrc (and ~/.config/fish/config.fish if fish is installed).
 
         For Codex, add this line to ~/.codex/config.toml manually:
         \(codexNotifyLine)
