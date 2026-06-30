@@ -854,6 +854,40 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT, mods(event))
     }
 
+    // forward right- and middle-button press/release to libghostty so its mouse bindings fire (e.g.
+    // `right-click-action = paste`). mirrors the left handlers — `mouse_pos` before `mouse_button` — but
+    // does NOT grab focus (a right/middle click on macOS doesn't move first responder). agterm has no
+    // terminal context menu, so the return value is discarded like the left handler.
+    override func rightMouseDown(with event: NSEvent) {
+        guard let surface else { return }
+        let pt = mousePoint(from: event)
+        ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
+        _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_RIGHT, mods(event))
+    }
+
+    override func rightMouseUp(with event: NSEvent) {
+        guard let surface else { return }
+        let pt = mousePoint(from: event)
+        ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
+        _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_RIGHT, mods(event))
+    }
+
+    // only the middle button (buttonNumber 2) maps to GHOSTTY_MOUSE_MIDDLE; any other extra button
+    // (back/forward, etc.) falls through to the responder chain via super.
+    override func otherMouseDown(with event: NSEvent) {
+        guard event.buttonNumber == 2, let surface else { super.otherMouseDown(with: event); return }
+        let pt = mousePoint(from: event)
+        ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
+        _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_MIDDLE, mods(event))
+    }
+
+    override func otherMouseUp(with event: NSEvent) {
+        guard event.buttonNumber == 2, let surface else { super.otherMouseUp(with: event); return }
+        let pt = mousePoint(from: event)
+        ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
+        _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_MIDDLE, mods(event))
+    }
+
     override func mouseDragged(with event: NSEvent) { mouseMoved(with: event) }
     override func rightMouseDragged(with event: NSEvent) { mouseMoved(with: event) }
     override func otherMouseDragged(with event: NSEvent) { mouseMoved(with: event) }
