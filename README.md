@@ -185,6 +185,7 @@ agtermctl session move --to up                   # reorder the active session wi
 agtermctl session move "$ws"                      # relocate the active session to another workspace (appends)
 agtermctl workspace move --to top                # reorder a workspace among its siblings (up|down|top|bottom)
 agtermctl session split toggle                   # split the active session
+agtermctl session resize --split-ratio 0.7       # set the split divider (left-pane fraction); or --grow-left/--grow-right D
 agtermctl session scratch toggle                 # show/hide the active session's scratch terminal (on|off|toggle)
 agtermctl session flag on                        # flag the active session for the flagged working-set view (on|off|toggle|clear)
 agtermctl sidebar mode flagged                   # show only the flagged sessions as a flat list (tree|flagged|toggle)

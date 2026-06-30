@@ -1158,6 +1158,52 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertTrue((bad["error"] as? String ?? "").contains("invalid pane"), "should report invalid pane: \(bad)")
     }
 
+    // session.resize errors on a non-split session, sets an absolute fraction (clamped) and a relative
+    // nudge on a split, persists it to workspaces.json, and rejects a request carrying no fraction.
+    func testSessionResizeSplitDivider() throws {
+        let notSplit = try sendCommand(#"{"cmd":"session.resize","target":"active","args":{"ratio":0.7}}"#)
+        XCTAssertEqual(notSplit["ok"] as? Bool, false, "resize on a non-split session should fail: \(notSplit)")
+        XCTAssertTrue((notSplit["error"] as? String ?? "").contains("no split"), "should report no split: \(notSplit)")
+
+        let split = try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"on"}}"#)
+        XCTAssertEqual(split["ok"] as? Bool, true, "split on should succeed: \(split)")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the active session should report split:true")
+
+        // relative nudge from the nil base (0.5 default) before any absolute set: grow-left 0.1 -> 0.6.
+        let fromDefault = try sendCommand(#"{"cmd":"session.resize","target":"active","args":{"ratioDelta":0.1}}"#)
+        XCTAssertEqual(fromDefault["ok"] as? Bool, true, "nudge from default should succeed: \(fromDefault)")
+        XCTAssertEqual((fromDefault["result"] as? [String: Any])?["ratio"] as? Double ?? -1, 0.6, accuracy: 0.0001,
+                       "0.5 default + 0.1 = 0.6: \(fromDefault)")
+
+        // server rejects both fraction forms at once — the CLI's validate() blocks this, but a raw client can send it.
+        let both = try sendCommand(#"{"cmd":"session.resize","target":"active","args":{"ratio":0.7,"ratioDelta":0.1}}"#)
+        XCTAssertEqual(both["ok"] as? Bool, false, "both ratio and delta should fail: \(both)")
+        XCTAssertTrue((both["error"] as? String ?? "").contains("mutually exclusive"), "should report mutual exclusion: \(both)")
+
+        // absolute fraction: echoed in result.ratio and persisted to the snapshot.
+        let abs = try sendCommand(#"{"cmd":"session.resize","target":"active","args":{"ratio":0.7}}"#)
+        XCTAssertEqual(abs["ok"] as? Bool, true, "absolute resize should succeed: \(abs)")
+        XCTAssertEqual((abs["result"] as? [String: Any])?["ratio"] as? Double ?? -1, 0.7, accuracy: 0.0001,
+                       "should echo the applied ratio: \(abs)")
+        XCTAssertTrue(pollSplitRatio(0.7, timeout: 10), "0.7 should land in workspaces.json")
+
+        // out-of-range absolute clamps to the cap (0.95).
+        let clamped = try sendCommand(#"{"cmd":"session.resize","target":"active","args":{"ratio":2.0}}"#)
+        XCTAssertEqual(clamped["ok"] as? Bool, true, "clamped resize should succeed: \(clamped)")
+        XCTAssertEqual((clamped["result"] as? [String: Any])?["ratio"] as? Double ?? -1, 0.95, accuracy: 0.0001,
+                       "2.0 should clamp to 0.95: \(clamped)")
+
+        // relative nudge: grow-right 0.1 (a negative delta) from 0.95 lands at 0.85.
+        let nudged = try sendCommand(#"{"cmd":"session.resize","target":"active","args":{"ratioDelta":-0.1}}"#)
+        XCTAssertEqual(nudged["ok"] as? Bool, true, "relative resize should succeed: \(nudged)")
+        XCTAssertEqual((nudged["result"] as? [String: Any])?["ratio"] as? Double ?? -1, 0.85, accuracy: 0.0001,
+                       "0.95 - 0.1 = 0.85: \(nudged)")
+
+        // neither a ratio nor a delta is a usage error.
+        let empty = try sendCommand(#"{"cmd":"session.resize","target":"active","args":{}}"#)
+        XCTAssertEqual(empty["ok"] as? Bool, false, "resize with no fraction should fail: \(empty)")
+    }
+
     // session.status sets a session's agent indicator: a valid state returns ok + the resolved id, an
     // unknown state returns the literal `invalid status` error, and an unknown target is not-found.
     func testSessionStatusSetsIndicator() throws {
@@ -2274,6 +2320,16 @@ final class ControlAPIUITests: XCTestCase {
             guard let workspaces = obj["workspaces"] as? [[String: Any]],
                   let sessions = workspaces.first?["sessions"] as? [[String: Any]] else { return nil }
             return sessions.first?["customName"] as? String
+        }
+    }
+
+    /// Polls the hermetic snapshot file until the (single seeded workspace's) first session's `splitRatio`
+    /// equals `expected` — the persisted side effect of `session.resize`.
+    private func pollSplitRatio(_ expected: Double, timeout: TimeInterval) -> Bool {
+        stateDir.pollSnapshot(equals: expected, timeout: timeout) { obj in
+            guard let workspaces = obj["workspaces"] as? [[String: Any]],
+                  let sessions = workspaces.first?["sessions"] as? [[String: Any]] else { return nil }
+            return sessions.first?["splitRatio"] as? Double
         }
     }
 

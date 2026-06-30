@@ -14,7 +14,7 @@ description: >
   feature request / question as a GitHub Discussion.
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
-  session.split, session.scratch, session.focus, session.go, session.copy, session.search, session.status,
+  session.split, session.scratch, session.focus, session.resize, session.go, session.copy, session.search, session.status,
   session.flag, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
   window.select, window.resize, window.move, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
   theme.set, theme.list, select theme, edit keymap, show an image, display an image inline, show-image,
@@ -88,7 +88,7 @@ a global `--window <id|prefix|active>` to operate on a specific window's tree (d
 
 Scripts rarely type ids: create with `*.new` (capture the returned id), or act on `active`.
 
-## Command summary (46 commands)
+## Command summary (47 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -118,6 +118,10 @@ via `session status`: `active`|`completed`|`blocked`, omitted when idle).
   recreates). `--command` (when showing) runs a program instead of a shell, run-once like `session new
   --command` (respawns the scratch if one is open).
 - `focus [left|right|other]` — move focus between split panes.
+- `resize --split-ratio R | --grow-left D | --grow-right D` — move the split divider (no GUI/keymap
+  equivalent — bind it via a `command "agtermctl session resize …"` custom action). `--split-ratio` sets
+  the absolute left-pane fraction (0..1, clamped to 0.05..0.95); `--grow-left`/`--grow-right` nudge it by
+  a fraction. Prints the applied (clamped) fraction.
 - `status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME]` — set the sidebar agent glyph (`--sound default` or a system sound name plays a one-shot sound).
 - `flag [on|off|toggle|clear]` — flag a session for the flagged working-set view (`clear` unflags all).
 - `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N]` · `overlay close` ·

@@ -1411,4 +1411,9 @@ extension Notification.Name {
     /// `WorkspaceSidebar.Coordinator` observes them scoped to that one window's sidebar.
     static let agtermExpandWorkspaces = Notification.Name("agterm.expandWorkspaces")
     static let agtermCollapseWorkspaces = Notification.Name("agterm.collapseWorkspaces")
+    /// Posted by the `session.resize` control arm after it stores a new split-divider fraction, with the
+    /// target `Session` as the object so the matching `SplitProbeView` (in `ContentView`) moves the live
+    /// divider to `Session.splitRatio`. Object-scoped like the expand/collapse pokes, so only the one
+    /// session's pane view reacts.
+    static let agtermApplySplitRatio = Notification.Name("agterm.applySplitRatio")
 }

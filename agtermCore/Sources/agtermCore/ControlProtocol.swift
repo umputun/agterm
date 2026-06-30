@@ -23,6 +23,7 @@ public enum Command: String, Codable, Sendable {
     case sessionSplit = "session.split"
     case sessionScratch = "session.scratch"
     case sessionFocus = "session.focus"
+    case sessionResize = "session.resize"
     case sessionCopy = "session.copy"
     case sessionSearch = "session.search"
     case sessionOverlayOpen = "session.overlay.open"
@@ -81,6 +82,13 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var mode: String?
     /// Which split pane to focus for `session.focus` (`left`|`right`|`other`; `other` toggles).
     public var pane: String?
+    /// Absolute left-pane split fraction (0...1) for `session.resize`, clamped server-side to
+    /// `AppStore.splitRatioMin...splitRatioMax`. Mutually exclusive with `ratioDelta`.
+    public var ratio: Double?
+    /// Signed relative split-divider nudge for `session.resize`: a positive fraction grows the LEFT
+    /// pane, negative grows the right (the CLI's `--grow-left`/`--grow-right`). Applied to the session's
+    /// current fraction (0.5 when never moved). Mutually exclusive with `ratio`.
+    public var ratioDelta: Double?
     /// Direction for `session.go` (`next`|`prev`|`previous`|`first`|`last`), for the reorder form of
     /// `session.move` / `workspace.move` (`up`|`down`|`top`|`bottom`), and for `session.search`
     /// (`next`|`prev`|`close`).
@@ -126,7 +134,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, window: String? = nil,
                 pane: String? = nil, to: String? = nil, title: String? = nil, body: String? = nil,
                 width: Int? = nil, height: Int? = nil, x: Int? = nil, y: Int? = nil, display: Int? = nil,
-                status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil, sound: String? = nil) {
+                status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil, sound: String? = nil,
+                ratio: Double? = nil, ratioDelta: Double? = nil) {
         self.name = name
         self.cwd = cwd
         self.workspace = workspace
@@ -152,6 +161,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.blink = blink
         self.autoReset = autoReset
         self.sound = sound
+        self.ratio = ratio
+        self.ratioDelta = ratioDelta
     }
 }
 
@@ -272,10 +283,13 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var theme: String?
     /// The available bundled theme names for `theme.list`.
     public var themes: [String]?
+    /// The applied (clamped) left-pane split fraction echoed by `session.resize`, so a script can see
+    /// where the divider landed after clamping / a relative nudge.
+    public var ratio: Double?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
-                theme: String? = nil, themes: [String]? = nil) {
+                theme: String? = nil, themes: [String]? = nil, ratio: Double? = nil) {
         self.id = id
         self.tree = tree
         self.text = text
@@ -284,6 +298,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
         self.count = count
         self.theme = theme
         self.themes = themes
+        self.ratio = ratio
     }
 }
 

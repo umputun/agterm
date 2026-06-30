@@ -139,6 +139,10 @@ struct SocketClient {
             // keymap.reload reports its parse-diagnostic count; 0 reads as a clean reload.
             return count == 0 ? "ok" : "\(count) diagnostic(s)"
         }
+        if let ratio = response.result?.ratio {
+            // session.resize echoes the applied (clamped) left-pane fraction, scriptable as a bare number.
+            return String(format: "%.3f", ratio)
+        }
         if echoID, let id = response.result?.id {
             return id
         }

@@ -449,6 +449,9 @@ final class ControlServer {
                                   command: request.args?.command)
         case .sessionFocus:
             return focusSessionPane(request.target, window: request.args?.window, pane: request.args?.pane)
+        case .sessionResize:
+            return resizeSplit(request.target, window: request.args?.window,
+                               ratio: request.args?.ratio, delta: request.args?.ratioDelta)
         case .sessionStatus:
             return setSessionStatus(request.target, window: request.args?.window,
                                     update: StatusUpdate(status: request.args?.status, blink: request.args?.blink,
@@ -658,6 +661,38 @@ final class ControlServer {
             }
             actions.setSplitFocus(toSplit, of: session)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    /// Resize a split session's divider (control-native: no GUI/menu equivalent — the GUI resizes by
+    /// dragging the divider). `ratio` is an absolute left-pane fraction; `delta` is a signed relative nudge
+    /// (positive grows the left pane) applied to the session's current fraction (0.5 when never moved).
+    /// Exactly one must be set. The clamped fraction is stored + persisted via `AppStore.applySplitRatio`,
+    /// then `.agtermApplySplitRatio` pokes the session's `SplitProbeView` to move the live divider (a no-op
+    /// when the split is hidden — the stored value applies on next show). Errors when the session has no
+    /// split, mirroring `session.focus`. Echoes the applied (clamped) fraction in `result.ratio`.
+    private func resizeSplit(_ target: String?, window: String?, ratio: Double?, delta: Double?) -> ControlResponse {
+        switch (ratio, delta) {
+        case (nil, nil):
+            return ControlResponse(ok: false, error: "session.resize requires --split-ratio, --grow-left, or --grow-right")
+        case (.some, .some):
+            return ControlResponse(ok: false, error: "session.resize: --split-ratio is mutually exclusive with --grow-left/--grow-right")
+        default:
+            break
+        }
+        return resolveSession(target, window: window) { store, id in
+            guard let session = store.session(withID: id) else {
+                return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
+            }
+            guard session.hasSplit else {
+                return ControlResponse(ok: false, error: "session has no split")
+            }
+            let requested = ratio ?? ((session.splitRatio ?? AppStore.splitRatioDefault) + (delta ?? 0))
+            guard let applied = store.applySplitRatio(requested, forSession: id) else {
+                return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
+            }
+            NotificationCenter.default.post(name: .agtermApplySplitRatio, object: session)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, ratio: applied))
         }
     }
 

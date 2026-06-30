@@ -206,7 +206,7 @@ struct Session: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Session commands.",
         subcommands: [New.self, Close.self, Select.self, Go.self, Rename.self, Move.self, TypeText.self,
-                      Split.self, Scratch.self, Focus.self, Copy.self, Status.self, FlagCommand.self,
+                      Split.self, Scratch.self, Focus.self, Resize.self, Copy.self, Status.self, FlagCommand.self,
                       Search.self, Overlay.self]
     )
 
@@ -357,6 +357,43 @@ struct Session: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionFocus, target: target.target, args: options.withWindow(ControlArgs(pane: pane)))
+        }
+    }
+
+    struct Resize: RequestCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Resize a split session's divider (set or nudge the left-pane fraction).")
+        @Option(name: .customLong("split-ratio"), help: "Absolute left-pane fraction 0..1 (e.g. 0.7). Clamped to 0.05..0.95.") var splitRatio: Double?
+        @Option(name: .customLong("grow-left"), help: "Grow the left pane by this fraction (e.g. 0.05); shrinks the right.") var growLeft: Double?
+        @Option(name: .customLong("grow-right"), help: "Grow the right pane by this fraction (e.g. 0.05); shrinks the left.") var growRight: Double?
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        // exactly one of the three forms must be set; reject neither/multiple at parse time so it's a clean
+        // usage error, unit-testable without a socket. Prints the applied (clamped) fraction.
+        func validate() throws {
+            let values = [splitRatio, growLeft, growRight].compactMap { $0 }
+            guard values.count == 1 else {
+                throw ValidationError("provide exactly one of --split-ratio, --grow-left, or --grow-right")
+            }
+            // nan/inf parse as Double but fail to JSON-encode (a generic error after the socket opens), so
+            // reject non-finite input here with a clean usage error.
+            guard values[0].isFinite else {
+                throw ValidationError("the resize value must be a finite number")
+            }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            // grow-left/grow-right map to a signed wire delta (+ grows the left pane); split-ratio is absolute.
+            let args: ControlArgs
+            if let splitRatio {
+                args = ControlArgs(ratio: splitRatio)
+            } else if let growLeft {
+                args = ControlArgs(ratioDelta: growLeft)
+            } else {
+                args = ControlArgs(ratioDelta: -(growRight ?? 0))
+            }
+            return ControlRequest(cmd: .sessionResize, target: target.target, args: options.withWindow(args))
         }
     }
 

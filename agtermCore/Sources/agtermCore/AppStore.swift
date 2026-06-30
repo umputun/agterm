@@ -68,6 +68,14 @@ public final class AppStore {
     /// outside this range and `restore()` clamps to it, so the on-disk ratio is always within bounds.
     public static let splitRatioMin: Double = 0.05
     public static let splitRatioMax: Double = 0.95
+    /// The even split fraction a never-moved divider renders at (the `HSplitView` default); the base for a
+    /// relative `session.resize` when `Session.splitRatio` is still nil.
+    public static let splitRatioDefault: Double = 0.5
+
+    /// Clamp a left-pane split fraction to `splitRatioMin...splitRatioMax`.
+    public static func clampSplitRatio(_ ratio: Double) -> Double {
+        min(splitRatioMax, max(splitRatioMin, ratio))
+    }
 
     /// Most-recently-selected session ids, front = current. Drives the Ctrl-Tab switcher
     /// (`items[1]` is the previous session). `@ObservationIgnored`: read imperatively by the
@@ -302,6 +310,19 @@ public final class AppStore {
             session.splitFocused = true
         }
         save()
+    }
+
+    /// Sets a session's split-divider left-pane fraction to `ratio`, clamped to the bounds, and persists.
+    /// Returns the applied (clamped) fraction, or nil when the id is unknown. Moving the LIVE divider is
+    /// driven separately by the caller (`session.resize` posts `.agtermApplySplitRatio` to the pane view) —
+    /// this is control-native, so there is no GUI surface that goes through `AppActions`.
+    @discardableResult
+    public func applySplitRatio(_ ratio: Double, forSession id: UUID) -> Double? {
+        guard let session = session(withID: id) else { return nil }
+        let applied = AppStore.clampSplitRatio(ratio)
+        session.splitRatio = applied
+        save()
+        return applied
     }
 
     /// Closes the split pane: hides it AND tears down its surface, so a subsequent split

@@ -456,6 +456,30 @@ struct AppStoreTests {
         #expect(split.teardownCount == 1)
     }
 
+    @Test func clampSplitRatioBoundsValue() {
+        #expect(AppStore.clampSplitRatio(0.7) == 0.7)
+        #expect(AppStore.clampSplitRatio(2.0) == AppStore.splitRatioMax)   // above the cap
+        #expect(AppStore.clampSplitRatio(-1.0) == AppStore.splitRatioMin)  // below the floor
+        #expect(AppStore.clampSplitRatio(AppStore.splitRatioMin) == AppStore.splitRatioMin)
+        #expect(AppStore.clampSplitRatio(AppStore.splitRatioMax) == AppStore.splitRatioMax)
+    }
+
+    @Test func applySplitRatioClampsSetsAndReturns() {
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        #expect(store.applySplitRatio(0.7, forSession: session.id) == 0.7)
+        #expect(session.splitRatio == 0.7)
+        // out-of-range clamps to the cap, on both the return and the stored value.
+        #expect(store.applySplitRatio(2.0, forSession: session.id) == AppStore.splitRatioMax)
+        #expect(session.splitRatio == AppStore.splitRatioMax)
+    }
+
+    @Test func applySplitRatioUnknownSessionReturnsNil() {
+        let store = Self.makeStore()
+        #expect(store.applySplitRatio(0.5, forSession: UUID()) == nil)
+    }
+
     @Test func closePrimaryPaneWithSplitKeepsSessionAndPromotesSurvivor() {
         let store = Self.makeStore()
         let ws = store.addWorkspace(name: "work")

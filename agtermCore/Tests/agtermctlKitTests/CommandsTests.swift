@@ -180,6 +180,35 @@ struct CommandsTests {
         #expect(try request(["session", "focus", "right"]) == expected)
     }
 
+    @Test func sessionResizeAbsolute() throws {
+        let expected = ControlRequest(cmd: .sessionResize, target: "active", args: ControlArgs(ratio: 0.7))
+        #expect(try request(["session", "resize", "--split-ratio", "0.7"]) == expected)
+    }
+
+    @Test func sessionResizeGrowLeftIsPositiveDelta() throws {
+        let expected = ControlRequest(cmd: .sessionResize, target: "active", args: ControlArgs(ratioDelta: 0.05))
+        #expect(try request(["session", "resize", "--grow-left", "0.05"]) == expected)
+    }
+
+    @Test func sessionResizeGrowRightIsNegativeDelta() throws {
+        let expected = ControlRequest(cmd: .sessionResize, target: "active", args: ControlArgs(ratioDelta: -0.05))
+        #expect(try request(["session", "resize", "--grow-right", "0.05"]) == expected)
+    }
+
+    @Test func sessionResizeRequiresExactlyOneForm() {
+        // neither form set, and two forms set — validate() rejects both with the same usage message.
+        #expect(validationMessage(["session", "resize"])?.contains("exactly one") == true)
+        #expect(validationMessage(["session", "resize", "--split-ratio", "0.7", "--grow-left", "0.1"])?
+            .contains("exactly one") == true)
+    }
+
+    @Test func sessionResizeRejectsNonFinite() {
+        // nan/inf parse as Double but can't JSON-encode; validate() rejects them with a clean usage error.
+        #expect(validationMessage(["session", "resize", "--split-ratio", "nan"])?.contains("finite") == true)
+        #expect(validationMessage(["session", "resize", "--grow-left", "inf"])?.contains("finite") == true)
+        #expect(validationMessage(["session", "resize", "--split-ratio", "1e999"])?.contains("finite") == true)
+    }
+
     @Test func sessionGoNext() throws {
         let expected = ControlRequest(cmd: .sessionGo, args: ControlArgs(to: "next"))
         #expect(try request(["session", "go", "--to", "next"]) == expected)

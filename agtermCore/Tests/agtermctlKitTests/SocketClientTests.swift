@@ -169,6 +169,12 @@ struct SocketClientTests {
         #expect(SocketClient.formatResponse(ControlResponse(ok: false, error: "boom"), json: false) == "error: boom")
     }
 
+    @Test func formatResponseRatio() {
+        // session.resize echoes the applied (clamped) left-pane fraction as a bare 3-decimal number.
+        let response = ControlResponse(ok: true, result: ControlResult(id: "9f3c", ratio: 0.85))
+        #expect(SocketClient.formatResponse(response, json: false) == "0.850")
+    }
+
     @Test func formatResponseErrorFallback() {
         // an error response with no message falls back to a generic line.
         #expect(SocketClient.formatResponse(ControlResponse(ok: false), json: false) == "error: unknown error")

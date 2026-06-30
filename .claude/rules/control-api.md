@@ -86,7 +86,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 46-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 47-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -156,10 +156,10 @@ paths:
   exact `uuidString` (case-insensitive), or a git-style unique prefix.
   Zero prefix hits → `notFound` error, ≥2 → `ambiguous` error listing the candidates.
   `--target` defaults to `active`, so scripts rarely type an id and never for "the current one".
-- **Command catalog (46 commands):**
+- **Command catalog (47 commands):**
   - `tree`
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`
-  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.go`/`session.copy`/`session.search`/`session.status`/`session.flag`/`session.overlay.open`/`session.overlay.close`/`session.overlay.result`
+  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.search`/`session.status`/`session.flag`/`session.overlay.open`/`session.overlay.close`/`session.overlay.result`
   - `quick`
   - `sidebar`/`sidebar.mode`/`sidebar.expand`/`sidebar.collapse`
   - `notify`
@@ -221,6 +221,26 @@ paths:
   shown side-by-side or hidden — when hidden, focusing a pane swaps which one shows maximized),
   drives `AppActions.setSplitFocus(_:of:)`, and is the control half of the ⌘⌥←/→ keyboard nav + the "Focus
   Left/Right Pane" menu/palette items.
+  `session.resize` moves the split DIVIDER — it is control-NATIVE (the divider is otherwise mouse-drag
+  only; NO GUI/menu/keymap action, so a key is bound by mapping a `command "agtermctl session resize …"`
+  custom action).
+  `args.ratio` sets the absolute left-pane fraction; `args.ratioDelta` is a signed relative nudge (the
+  CLI's `--grow-left`/`--grow-right` map to ±`ratioDelta`, applied to the current fraction,
+  `AppStore.splitRatioDefault` = 0.5 when never moved); exactly one must be set (neither/both error).
+  It errors when the session has no split (mirroring `session.focus`), clamps + persists via the host-free
+  `AppStore.applySplitRatio` (→ `AppStore.clampSplitRatio`, `splitRatioMin...splitRatioMax`),
+  then posts the object-scoped `.agtermApplySplitRatio` (object = the `Session`) so the matching `SplitProbeView`
+  (`ContentView`) moves the LIVE divider via `setPosition` — a no-op when the split is hidden (no live
+  `NSSplitView`; the stored fraction applies on next show).
+  It echoes the applied (clamped) fraction in the new `ControlResult.ratio` (the CLI prints it as a bare
+  `%.3f` number, scriptable).
+  Four-point keep-in-sync audit for `session.resize`: (1) `case sessionResize = "session.resize"` +
+  `ControlArgs.ratio`/`ratioDelta` + `ControlResult.ratio` in `ControlProtocol.swift`,
+  (2) the `.sessionResize` dispatch arm (`resizeSplit`) in `ControlServer` (+ the `SplitProbeView` re-apply
+  observer in `ContentView`), (3) the `session resize --split-ratio|--grow-left|--grow-right` subcommand
+  (`Resize`, `validate()`-guarded exactly-one) in `agtermctlKit` + the `result.ratio` format arm in `SocketClient`,
+  (4) round-trip in `ControlProtocolTests` + `AppStoreTests` (clamp/apply) + `CommandsTests` (validate/mapping)
+  + `SocketClientTests` (format) + the e2e `testSessionResizeSplitDivider` in `ControlAPIUITests`.
   `session.go` navigates BETWEEN sessions — `args.to` is `next`|`prev`|`first`|`last`|`next-attention`|`prev-attention`
   and acts on the target store's CURRENT selection (it is RELATIVE, so it resolves the placement store
   via `resolvePlacementStore` rather than a session target — there is NO `--target`),
@@ -553,5 +573,5 @@ paths:
   `testRestoreClearSucceeds`) in `ControlAPIUITests`.
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
-  examples.md recipes) and the command count there is bumped to 46 to match.
+  examples.md recipes) and the command count there is bumped to 47 to match.
 

@@ -60,9 +60,25 @@ ws=$(agtermctl workspace new "build" --json | jq -r '.result.id')
 a=$(agtermctl session new --workspace "$ws" --cwd "$HOME/proj" --json | jq -r '.result.id')
 agtermctl session rename "server" --target "$a"
 agtermctl session split on --target "$a"          # second shell side by side
+agtermctl session resize --split-ratio 0.7 --target "$a"   # left pane gets 70% (prints 0.700)
 b=$(agtermctl session new --workspace "$ws" --json | jq -r '.result.id')
 agtermctl session rename "logs" --target "$b"
 ```
+
+## Resize the split divider from a keybinding
+
+The divider is otherwise mouse-drag only — there is no built-in resize action, so bind keys to the CLI
+with `command "<name>" <chord> <shell…>` custom actions in `keymap.conf` (then `agtermctl keymap reload`):
+
+```conf
+# grow/shrink the left pane by 5% per press; cmd+ctrl+0 resets to an even split
+command "grow left pane"  cmd+ctrl+l agtermctl session resize --grow-left 0.05
+command "grow right pane" cmd+ctrl+h agtermctl session resize --grow-right 0.05
+command "even split"      cmd+ctrl+0 agtermctl session resize --split-ratio 0.5
+```
+
+`--split-ratio` is absolute (0..1); `--grow-left`/`--grow-right` are relative nudges. All clamp to
+0.05..0.95 and print the applied fraction.
 
 ## Run a program in a blocking overlay and read its status
 

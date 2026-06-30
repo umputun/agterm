@@ -153,6 +153,32 @@ struct ControlProtocolTests {
         #expect(decoded.args?.command == "htop")
     }
 
+    @Test func sessionResizeRoundTrips() throws {
+        let cases: [ControlRequest] = [
+            ControlRequest(cmd: .sessionResize, target: "active", args: ControlArgs(ratio: 0.7)),
+            ControlRequest(cmd: .sessionResize, target: "9f3c", args: ControlArgs(ratioDelta: 0.05)),
+            ControlRequest(cmd: .sessionResize, args: ControlArgs(ratioDelta: -0.05)),
+        ]
+        for request in cases {
+            #expect(try roundTrip(request) == request)
+        }
+    }
+
+    @Test func sessionResizeRawStringMapsToCommandAndArgs() throws {
+        let raw = #"{"cmd":"session.resize","target":"active","args":{"ratio":0.7}}"#
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(raw.utf8))
+        #expect(decoded.cmd == .sessionResize)
+        #expect(decoded.args?.ratio == 0.7)
+        #expect(decoded.args?.ratioDelta == nil)
+    }
+
+    @Test func sessionResizeResultRoundTripsRatio() throws {
+        let response = ControlResponse(ok: true, result: ControlResult(id: "9f3c", ratio: 0.85))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.ratio == 0.85)
+    }
+
     @Test func sessionFlagRawStringMapsToCommandAndMode() throws {
         let raw = #"{"cmd":"session.flag","target":"active","args":{"mode":"on"}}"#
         let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(raw.utf8))

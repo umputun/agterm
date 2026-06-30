@@ -1410,6 +1410,7 @@ private struct SplitRatioAccessor: NSViewRepresentable {
         /// Top strip (in points) to clip the split's divider out of; updated on a compact-toolbar toggle.
         var titlebarHeight: CGFloat = 0 { didSet { if titlebarHeight != oldValue { updateDividerClip() } } }
         nonisolated(unsafe) private var resizeObserver: NSObjectProtocol?
+        nonisolated(unsafe) private var applyObserver: NSObjectProtocol?
         nonisolated(unsafe) private var saveWorkItem: DispatchWorkItem?
         private weak var splitView: NSSplitView?
         private var dividerClipMask: CALayer?
@@ -1446,6 +1447,25 @@ private struct SplitRatioAccessor: NSViewRepresentable {
                 // `capture()`, matching the codebase's notification-closure pattern (e.g. ControlServer).
                 MainActor.assumeIsolated { self?.capture() }
             }
+            // `session.resize` stores a new fraction on the session and posts this (object-scoped to the
+            // session) to move the LIVE divider — the programmatic analogue of a user drag. Unlike the
+            // one-shot restore in `layout()`, it fires on every resize command.
+            applyObserver = NotificationCenter.default.addObserver(
+                forName: .agtermApplySplitRatio, object: session, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.applyRatio() }
+            }
+        }
+
+        /// Move the live divider to the session's stored `splitRatio` (set by `session.resize` just before
+        /// it posts `.agtermApplySplitRatio`). The follow-on `didResizeSubviews` → `capture()` is a no-op:
+        /// the captured fraction equals the value we just set, so `capture()`'s near-equal guard skips it.
+        private func applyRatio() {
+            guard let split = splitView, let ratio = session.splitRatio else { return }
+            let total = split.bounds.width
+            // no real width yet (mid-relayout): re-arm the one-shot `layout()` restore so it applies the
+            // new fraction on the next pass instead of leaving the model ahead of the divider.
+            guard total > 1 else { restored = false; return }
+            split.setPosition(total * CGFloat(ratio), ofDividerAt: 0)
         }
 
         /// Mask the split's divider out of the titlebar zone — the strip ABOVE the window's titlebar boundary
@@ -1515,6 +1535,7 @@ private struct SplitRatioAccessor: NSViewRepresentable {
         deinit {
             saveWorkItem?.cancel()
             if let resizeObserver { NotificationCenter.default.removeObserver(resizeObserver) }
+            if let applyObserver { NotificationCenter.default.removeObserver(applyObserver) }
         }
     }
 }
