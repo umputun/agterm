@@ -691,7 +691,7 @@ final class ControlServer {
             // newly enters `blocked`, not on a repeated `blocked` set.
             let blockedDefault = wasBlocked ? nil : self.settingsModel.settings.blockedStatusSoundName
             if let name = parsed.effectiveSound(perCall: sound, blockedDefault: blockedDefault) {
-                StatusSoundPlayer.shared.action(for: name)?()
+                StatusSoundPlayer.shared.play(name)
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
