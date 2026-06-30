@@ -424,10 +424,13 @@ final class SettingsModel {
         #       name may contain spaces. An optional chord (single chord OR a leader like `ctrl+a>g`)
         #       binds it to a key; the chord MUST include a modifier (a bare key is rejected and the
         #       line becomes palette-only). Omit the chord for a palette-only command. The rest of the
-        #       line is run via `/bin/sh -c`. Examples:
+        #       line is run via `/bin/sh -c`, detached with no terminal — so it suits fire-and-forget
+        #       launches (GUI apps, scripts), NOT a bare interactive or full-screen TUI program, which
+        #       has no TTY and exits at once. Launch a TUI over a session through an overlay terminal,
+        #       as the Lazygit example does. Examples:
         #
         #           command "Open in Zed"  cmd+shift+e  open -a Zed "$AGT_SESSION_PWD"
-        #           command "Lazygit"      ctrl+a>g     lazygit
+        #           command "Lazygit"      ctrl+a>g     agtermctl session overlay open lazygit --socket "$AGT_SOCKET"
         #           command "Deploy"                    ./deploy.sh
         #
         # Built-in actions (raw name → shipped default chord):

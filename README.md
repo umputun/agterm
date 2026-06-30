@@ -145,7 +145,7 @@ xcodebuild test -project agterm.xcodeproj -scheme agterm -destination 'platform=
 - A live-preview theme picker (View ▸ Select Theme…, the action palette's "Select Theme…", or the `select_theme` keymap action): a fuzzy-search palette of the bundled themes that applies each one to the open terminals **as you navigate or filter** — Enter commits it (and syncs Settings), Esc reverts to the theme you started on. The full theme catalog stays out of the action palette; only the single "Select Theme…" launcher appears there. The app's default theme (a fresh install) is the bundled **agterm** theme; a "default ghostty" entry selects ghostty's own built-in colors.
 - A Settings window (Cmd+,) with **General**, **Appearance**, and **Key Mapping** tabs. **General** toggles macOS notification banners and the sidebar notification count badges, sets the mouse-wheel/trackpad scroll speed (a multiplier, default 3), sets how strongly the inactive split pane is muted (a 0–10 slider, default 5; 0 turns it off) — the inactive pane's text dims toward the background while the background stays unchanged — and has an opt-in **Restore running commands on restart** toggle (off by default; re-runs each pane's foreground command on relaunch, skipping the programs in `restore-denylist.conf`). **Appearance → Terminal** sets the terminal font family, default font size, and ghostty theme (any of the 512 bundled themes); **Appearance → Window** sets background opacity and blur (a translucent, optionally blurred window — the sidebar's Liquid Glass tints to match on macOS 26). A **Sidebar Tint** slider (0–10, default 5 = neutral) makes the sidebar background a touch lighter or darker than the terminal, staying translucent when the window is. **Key Mapping** points at the config directory holding `keymap.conf` (see Customizing keys), lists any parse diagnostics, and has a Reload button. Changes persist and apply live to open terminals. Applying a font/theme change resets per-session cmd-+/- zoom to the default.
 - Keyboard-driven and customizable: every action is reachable by a keyboard shortcut, not only from the menus, toolbar icons, and palettes, and every built-in shortcut can be rebound in a `keymap.conf` file (see Customizing keys).
-- Custom commands: bind any shell command to a key or list it in the action palette (and the dedicated custom-commands palette, ⌃⇧O) through `keymap.conf`. The focused session's directory and selection pass to the command as tokens, so you can drive your own user-defined workflows (open an editor, deploy, launch a TUI) without changing the app.
+- Custom commands: bind any shell command to a key or list it in the action palette (and the dedicated custom-commands palette, ⌃⇧O) through `keymap.conf`. The focused session's directory and selection pass to the command as tokens, so you can drive your own user-defined workflows (open an editor, deploy, run a script) without changing the app.
 
 ### Persistence
 
@@ -269,7 +269,7 @@ map ctrl+shift+k  command_palette
 
 # define custom commands ("name" shows in the palette; chord is optional)
 command "Open in Zed"  cmd+shift+e  open -a Zed {AGT_SESSION_PWD}
-command "Lazygit"      ctrl+a>g     lazygit
+command "Lazygit"      ctrl+a>g     agtermctl session overlay open lazygit --socket {AGT_SOCKET}
 command "Deploy"                    ./deploy.sh
 ```
 
@@ -303,6 +303,8 @@ The shell line of a `command` may use these `{AGT_X}` tokens, expanded at fire t
 ```
 
 The context is resolved from the focused pane's session, so a custom command runs in that session's working directory and can read its current selection. A custom command runs as a detached `/bin/sh -c`; a non-zero exit (or a spawn failure) posts a notification banner.
+
+Because it runs detached with no controlling terminal, a custom command suits fire-and-forget launches — GUI apps (`open -a …`), scripts, one-off shell lines — not interactive or full-screen programs: a TUI like `lazygit` run bare has no TTY to draw into and exits immediately. The `Lazygit` example above launches it the right way, in an overlay terminal that *does* have a TTY (`agtermctl session overlay open`, passing `{AGT_SOCKET}` so the CLI reaches this very app; add `--size-percent 80` for a floating panel instead of full-size). A per-session scratch terminal (`agtermctl session scratch on --command lazygit`) works too.
 
 A `{AGT_X}` token is substituted **raw** into the shell line — convenient, but unsafe for content you don't control. `{AGT_SELECTION}` is the obvious case, but a remote host can also set the session title (OSC) and report the working directory (OSC 7), so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are equally unsafe to interpolate raw. For any such content prefer the matching `$AGT_X` environment variable, quoted, e.g. `"$AGT_SELECTION"` — the shell quotes it for you so it can't inject syntax.
 
