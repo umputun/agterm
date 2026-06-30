@@ -316,6 +316,29 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         }
     }
 
+    // MARK: - Drag and drop (issue #51)
+
+    /// Accept the drag with a copy cursor when it carries something we can insert (a file/web URL or text),
+    /// reject it otherwise — so a session-row drag from the sidebar (a private pasteboard type) is ignored.
+    override func draggingEntered(_ sender: any NSDraggingInfo) -> NSDragOperation {
+        dropText(from: sender) != nil ? .copy : []
+    }
+
+    /// Insert the dropped file's path (shell-escaped, space-joined for multiple) or text at the cursor,
+    /// using the SAME pasteboard logic as paste so a drop and a paste behave identically. Deferred to the
+    /// next runloop tick so the drag session fully unwinds before the terminal buffer is mutated.
+    override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
+        guard let text = dropText(from: sender) else { return false }
+        DispatchQueue.main.async { [weak self] in self?.inject(text: text) }
+        return true
+    }
+
+    /// The text a drop would insert, via the shared `GhosttyCallbacks.pasteboardText` reader; nil when the
+    /// drag carries nothing usable (e.g. an internal sidebar row drag).
+    private func dropText(from sender: any NSDraggingInfo) -> String? {
+        GhosttyCallbacks.pasteboardText(sender.draggingPasteboard)
+    }
+
     /// Returns this surface's current selection text (the control channel's `session.copy`), or nil when
     /// there is no selection or the surface has not been created yet. The selection is a property of the
     /// surface's terminal state, independent of focus, so any realized session can be read. The libghostty
@@ -414,6 +437,9 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
     func createSurface() {
         guard !isDestroyed else { return }
+        // register as a file drop target (issue #51): dropping files inserts their paths. idempotent
+        // across re-entry (createSurface re-runs when a deferred surface finally gets a backing size).
+        registerForDraggedTypes([.fileURL, .string, .URL])
         guard surface == nil, let app = GhosttyApp.shared.app else { return }
         let backingSize = convertToBacking(bounds).size
         guard backingSize.width > 0, backingSize.height > 0 else {

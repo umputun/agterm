@@ -1,5 +1,6 @@
 // adapted from thdxg/macterm (MIT)
 
+import agtermCore
 import AppKit
 import GhosttyKit
 import os
@@ -122,18 +123,23 @@ final class GhosttyCallbacks: @unchecked Sendable {
         return true
     }
 
-    /// Returns pasted text from the pasteboard: file paths (Finder drag/copy)
-    /// fall back to plain string.
-    static func readPasteboardText() -> String? {
-        let pb = NSPasteboard.general
+    /// Returns the text for a pasteboard: file/web URLs (Finder copy, or a drag-drop) become shell-escaped
+    /// paths, space-joined for multiple, so a path with spaces lands as one argument; otherwise the plain
+    /// string verbatim (it may be a command the user means to run, so it is NOT escaped). Shared by the
+    /// clipboard paste path (`readPasteboardText`) and the drag-drop handler (`GhosttySurfaceView`), so a
+    /// dropped file inserts its path exactly like a pasted one.
+    static func pasteboardText(_ pb: NSPasteboard) -> String? {
         if let urls = pb.readObjects(forClasses: [NSURL.self]) as? [URL] {
-            let paths = urls
-                .map { url in url.isFileURL ? url.path(percentEncoded: false) : url.absoluteString }
+            let parts = urls
+                .map { ShellEscape.path($0.isFileURL ? $0.path(percentEncoded: false) : $0.absoluteString) }
                 .filter { !$0.isEmpty }
-            if !paths.isEmpty { return paths.joined(separator: " ") }
+            if !parts.isEmpty { return parts.joined(separator: " ") }
         }
         return pb.string(forType: .string).flatMap { !$0.isEmpty ? $0 : nil }
     }
+
+    /// Pasted text from the general clipboard (the libghostty paste callback).
+    static func readPasteboardText() -> String? { pasteboardText(.general) }
 
     func confirmReadClipboard(ud: UnsafeMutableRawPointer?, content: UnsafePointer<CChar>?, state: UnsafeMutableRawPointer?) {
         guard let content else { return }
