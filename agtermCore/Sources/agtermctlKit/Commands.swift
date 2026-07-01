@@ -590,7 +590,7 @@ struct Session: ParsableCommand {
         }
 
         struct Clear: RequestCommand {
-            static let configuration = CommandConfiguration(abstract: "Remove the session's background watermark.")
+            static let configuration = CommandConfiguration(abstract: "Remove the session's background (watermark or solid color).")
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 

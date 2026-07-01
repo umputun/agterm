@@ -351,13 +351,21 @@ struct ControlProtocolTests {
 
     @Test func backgroundWatermarkColorKindSerializes() throws {
         // the `.color` kind serializes as "color" and carries only the hex (no opacity — a solid color
-        // honors the Settings window translucency at render time).
+        // honors the Settings window translucency at render time). Round-trip through ControlSessionNode too,
+        // so the actual `tree` wire path (not just the struct in isolation) covers the color read-back.
         let watermark = BackgroundWatermark(kind: .color, colorHex: "#112233")
         let json = String(decoding: try JSONEncoder().encode(watermark), as: UTF8.self)
         #expect(json.contains("\"kind\":\"color\""))
-        let decoded = try JSONDecoder().decode(BackgroundWatermark.self, from: Data(json.utf8))
-        #expect(decoded == watermark)
-        #expect(decoded.colorHex == "#112233")
+        #expect(try JSONDecoder().decode(BackgroundWatermark.self, from: Data(json.utf8)) == watermark)
+
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         background: watermark)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let node = try roundTrip(response).result?.tree?.workspaces.first?.sessions.first
+        #expect(node?.background == watermark)
+        #expect(node?.background?.kind == .color)
+        #expect(node?.background?.colorHex == "#112233")
     }
 
     @Test func restoreClearRoundTrips() throws {

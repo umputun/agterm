@@ -81,6 +81,19 @@ struct WatermarkConfigTests {
         #expect(text.contains("font-size = 15\n"))
     }
 
+    @Test func colorOverlayClampsWindowOpacity() {
+        // windowOpacity traces back to a persisted, hand-editable AppSettings value, so a bad one must not
+        // emit nan/inf or an out-of-range opacity into the config: >1 clamps to 1, <0 to 0, non-finite to 1.
+        let watermark = BackgroundWatermark(kind: .color, colorHex: "#ff0000")
+        func overlay(_ windowOpacity: Double) -> String {
+            WatermarkConfig.overlayText(watermark: watermark, resolvedImagePath: nil, fontSize: nil, windowOpacity: windowOpacity)
+        }
+        #expect(overlay(1.5).contains("background-opacity = 1\n"))
+        #expect(overlay(-0.2).contains("background-opacity = 0\n"))
+        #expect(overlay(.nan).contains("background-opacity = 1\n"))
+        #expect(overlay(.infinity).contains("background-opacity = 1\n"))
+    }
+
     @Test func colorOverlayDropsMalformedHex() {
         // defense-in-depth on the restore path: a persisted `.color` spec with a malformed hex (only
         // reachable by hand-editing workspaces.json) must NOT emit a `background` line; font-size still emits.

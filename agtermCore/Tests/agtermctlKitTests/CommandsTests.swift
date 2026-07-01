@@ -749,8 +749,9 @@ struct CommandsTests {
     }
 
     @Test func sessionBackgroundColorRejectsBadColor() {
-        #expect(validationMessage(["session", "background", "color", "red"]) != nil)
-        #expect(validationMessage(["session", "background", "color", "#fff"]) != nil)
+        // assert the color validation (not some unrelated parse error) fired.
+        #expect(validationMessage(["session", "background", "color", "red"])?.contains("color") == true)
+        #expect(validationMessage(["session", "background", "color", "#fff"])?.contains("color") == true)
     }
 
     @Test func sessionBackgroundClear() throws {

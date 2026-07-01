@@ -65,8 +65,9 @@ public enum WatermarkConfig {
     /// - a `font-size` line preserving the session's cmd-+/- zoom (a per-surface `update_config` otherwise
     ///   resets font size to the config default).
     ///
-    /// A nil `watermark` (or a missing `resolvedImagePath`) yields ONLY the font-size line — clearing the
-    /// image while keeping zoom. Returns "" when there is nothing to override (no watermark, no zoom).
+    /// A nil `watermark` (or an `.image`/`.text` whose `resolvedImagePath` is missing) yields ONLY the
+    /// font-size line — clearing the image while keeping zoom; a `.color` still emits its `background`
+    /// lines (it needs no `resolvedImagePath`). Returns "" when there is nothing to override (no watermark, no zoom).
     /// Values are emitted RAW (no quotes): ghostty takes the whole line remainder as the value, so a path
     /// with spaces works unquoted — matching `AppSettings.ghosttyConfigLines()`.
     public static func overlayText(watermark: BackgroundWatermark?, resolvedImagePath: String?,

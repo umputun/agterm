@@ -205,6 +205,13 @@ final class ControlAPIUITests: XCTestCase {
         let badColor = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"color","color":"red"}}"#)
         XCTAssertEqual(badColor["ok"] as? Bool, false, "a malformed color should be rejected")
 
+        // color mode with no color hits the "requires a color" guard (unreachable from the CLI, whose
+        // argument is required, so the raw-JSON e2e is the only cover for this arm).
+        let emptyColor = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"color"}}"#)
+        XCTAssertEqual(emptyColor["ok"] as? Bool, false, "color mode with no color should be rejected")
+        XCTAssertEqual(emptyColor["error"] as? String, "session.background color requires a color",
+                       "the empty-color guard should reject it")
+
         let missing = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"image","path":"/no/such.png"}}"#)
         XCTAssertEqual(missing["ok"] as? Bool, false, "a missing image file should be rejected")
 

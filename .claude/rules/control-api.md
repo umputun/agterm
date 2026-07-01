@@ -644,8 +644,8 @@ paths:
   within-range drag doesn't reload at all, so neither path alone keeps a color session tracking the slider.
   `BackgroundWatermark.fit`/`position` are typed `Fit`/`Position` `CaseIterable` enums (like `Kind`), not
   raw `String` — the raw values match ghostty's keys so they serialize identically, and a bad value can't
-  reach a config line (only `imagePath` stays free text, re-validated on emit by `overlayText`, closing the
-  restore-path injection as defense-in-depth). The spec is READ back on each `tree` node's `background` field.
+  reach a config line (`imagePath`/`colorHex` stay free text, re-validated on emit by `overlayText`, closing
+  the restore-path injection as defense-in-depth). The spec is READ back on each `tree` node's `background` field.
   Four-point keep-in-sync audit for `session.background`: (1) `case sessionBackground = "session.background"`
   + `ControlArgs.path`/`color`/`opacity`/`fit`/`position`/`repeats` in `ControlProtocol.swift` (+ `background`
   on `ControlSessionNode` for the read-back),
