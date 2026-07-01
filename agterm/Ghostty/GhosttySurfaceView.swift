@@ -166,6 +166,30 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// for them; they take focus through `TerminalView.focusIfNeeded`, which is already active-gated.
     var deckActive = true
 
+    /// Whether this surface's deck slot is on-screen (its session is selected and not hidden by a full
+    /// overlay/scratch). UNLIKE `deckActive`, this is NOT focus-gated: both panes of a visible split are
+    /// `deckVisible`. `TerminalView` sets it from the deck. Load-bearing for drag-and-drop: every session's
+    /// surface is eagerly realized, and SwiftUI's `.opacity(0)`/`.allowsHitTesting(false)` on inactive deck
+    /// panes do NOT reach AppKit's drag machinery (the NSView keeps `alphaValue == 1`, and AppKit's
+    /// drag-destination resolution does NOT consult `hitTest`), so if every surface stayed a registered
+    /// drag target a file drop would land on whichever is topmost in z-order — an INVISIBLE background
+    /// session — instead of the one under the cursor. `didSet` (un)registers the drag types to fix that.
+    var deckVisible = true {
+        didSet { updateDropRegistration() }
+    }
+
+    /// Register the file/text drag types only while this surface is the on-screen deck pane; unregister
+    /// otherwise, so an eagerly-realized background surface is not a drag target and a drop can only reach
+    /// the visible pane. Called from `deckVisible`'s didSet and once from `createSurface` (didSet does not
+    /// fire for the initializer default).
+    private func updateDropRegistration() {
+        if deckVisible {
+            registerForDraggedTypes([.fileURL, .string, .URL])
+        } else {
+            unregisterDraggedTypes()
+        }
+    }
+
     private var _markedRange = NSRange(location: NSNotFound, length: 0)
     private var _selectedRange = NSRange(location: NSNotFound, length: 0)
     private var keyTextAccumulator: [String] = []
@@ -437,9 +461,10 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
     func createSurface() {
         guard !isDestroyed else { return }
-        // register as a file drop target (issue #51): dropping files inserts their paths. idempotent
-        // across re-entry (createSurface re-runs when a deferred surface finally gets a backing size).
-        registerForDraggedTypes([.fileURL, .string, .URL])
+        // register as a file drop target (issue #51) only while on-screen, so a background deck surface
+        // can't intercept the drop (see updateDropRegistration). idempotent across re-entry (createSurface
+        // re-runs when a deferred surface finally gets a backing size).
+        updateDropRegistration()
         guard surface == nil, let app = GhosttyApp.shared.app else { return }
         let backingSize = convertToBacking(bounds).size
         guard backingSize.width > 0, backingSize.height > 0 else {

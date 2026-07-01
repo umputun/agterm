@@ -391,6 +391,10 @@ private struct WindowContentView: View {
         // this subtree's shape/hit-testing must not change when a floating overlay opens (NSSplitView overrun).
         let hideForOverlay = fullOverlay || session.scratchActive
         let overlaid = session.overlayActive || session.scratchActive
+        // on-screen = selected session, not hidden by a full overlay/scratch. Shared by BOTH split panes
+        // (unlike the focus-gated `isActive`), it drives each surface's `hitTest` so a file drop lands on
+        // the visible pane instead of an invisible background deck surface (matches the panes' hit-testing).
+        let visible = isActive && !hideForOverlay
         ZStack {
             // the session's pane(s), kept MOUNTED while an overlay is up — shells stay alive, like the deck
             // does for inactive sessions. a FULL overlay hides them (opacity 0) so its translucency reveals the
@@ -399,7 +403,7 @@ private struct WindowContentView: View {
                 if session.isSplit {
                     HSplitView {
                         TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
-                                     isActive: isActive && !session.splitFocused && !overlaid)
+                                     isActive: isActive && !session.splitFocused && !overlaid, deckVisible: visible)
                             .overlay { paneDim(session.splitFocused) }
                             // introspects the AppKit NSSplitView to persist/restore the divider ratio AND to
                             // clip its divider out of the titlebar strip (see SplitRatioAccessor); a background
@@ -407,7 +411,7 @@ private struct WindowContentView: View {
                             .background { SplitRatioAccessor(session: session, titlebarHeight: titlebarHeight, onPersist: { store.save() }) }
                             .id(session.id)
                         TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
-                                     isActive: isActive && session.splitFocused && !overlaid)
+                                     isActive: isActive && session.splitFocused && !overlaid, deckVisible: visible)
                             .overlay { paneDim(!session.splitFocused) }
                             .id("\(session.id.uuidString)-split")
                     }
@@ -417,11 +421,11 @@ private struct WindowContentView: View {
                 } else if session.splitFocused, session.splitSurface != nil {
                     // split hidden while the right pane had focus: show that pane maximized.
                     TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
-                                 isActive: isActive && !overlaid)
+                                 isActive: isActive && !overlaid, deckVisible: visible)
                         .id("\(session.id.uuidString)-split")
                 } else {
                     TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
-                                 isActive: isActive && !overlaid)
+                                 isActive: isActive && !overlaid, deckVisible: visible)
                         .id(session.id)
                 }
             }

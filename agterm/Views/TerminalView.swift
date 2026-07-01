@@ -25,6 +25,10 @@ struct TerminalView: NSViewRepresentable {
     /// Whether this is the active (visible) pane in the deck. Every session's surface stays mounted, so
     /// a view only auto-grabs focus when active — otherwise every mounted pane would fight for it.
     var isActive = true
+    /// Whether this pane is on-screen (its session is selected and not hidden by a full overlay/scratch).
+    /// UNLIKE `isActive` this is NOT split-focus-gated: both panes of a visible split are `deckVisible`.
+    /// Drives `GhosttySurfaceView.hitTest` so a file drop can't land on an invisible background surface.
+    var deckVisible = true
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -34,6 +38,7 @@ struct TerminalView: NSViewRepresentable {
         // before the view attaches: gate the overlay/scratch auto-focus to the active slot so a background
         // session's overlay can't grab first responder during its initial createSurface.
         view.deckActive = isActive
+        view.deckVisible = deckVisible
         return view
     }
 
@@ -41,6 +46,7 @@ struct TerminalView: NSViewRepresentable {
         // keep the auto-focus gate in sync with selection, set BEFORE createSurface (which fires the overlay
         // auto-focus) so a background slot never starts the focus-grab retry.
         nsView.deckActive = isActive
+        nsView.deckVisible = deckVisible
         // makeNSView may have run before the view had a sized window; createSurface is idempotent
         // (guards surface == nil and a non-zero backing size), so calling it here is safe. Synchronous
         // on purpose: a deferred next-tick create races the layout and gives the surface a stale size.

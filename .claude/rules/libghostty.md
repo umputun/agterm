@@ -67,6 +67,21 @@ paths:
   four `onSearch*`) at its END — AFTER `onExitCodeCaptured` is read for the overlay exit status (niling
   it earlier would silently break `session.overlay.result`/`--block`) — to break the `store → session → surface → closure → store`
   retain cycle on every window/session close.
+- **Drag-and-drop targets only the ON-SCREEN deck pane (`deckVisible` gates `registerForDraggedTypes`).**
+  Every session's surface is eagerly realized, so every one is a candidate file-drop target.
+  SwiftUI's `.opacity(0)` + `.allowsHitTesting(false)` on the inactive deck panes do NOT stop AppKit's
+  drag machinery: the NSView keeps `alphaValue == 1`, AND AppKit's drag-destination resolution does NOT
+  consult `hitTest` (verified: an off-screen surface whose `hitTest` returns nil STILL gets `draggingEntered`/`performDragOperation`).
+  So if every surface stayed registered, a file drop would land on whichever surface is topmost in z-order
+  (the ForEach/array order, NOT the selection) — an INVISIBLE background session — and inject the path
+  there, so the visible terminal shows nothing (single-session works, which is why #52 shipped with this
+  latent).
+  The fix is `GhosttySurfaceView.deckVisible` (set by `TerminalView` from the deck, = session selected
+  AND not hidden by a full overlay/scratch; NOT focus-gated, so BOTH panes of a visible split qualify —
+  unlike `deckActive`): its `didSet` calls `updateDropRegistration()` which `registerForDraggedTypes`
+  when visible and `unregisterDraggedTypes` otherwise, so only the on-screen pane is ever a drop target.
+  Not `hitTest` (AppKit drag ignores it) and not a `draggingEntered` reject (AppKit does not fall through
+  to the sibling behind a rejecting target — the drop is simply lost).
 - **Search bar placement (NSSplitView-overrun rule).**
   `TerminalSearchBar` (`agterm/Views/`) is anchored on `detailPane` via `.overlay(alignment: .topTrailing) { searchBarLayer }`
   — the SAME level as `floatingOverlayLayer`, NEVER inside any session's `sessionDetail` HSplitView-hosting
