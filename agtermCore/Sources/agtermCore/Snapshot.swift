@@ -88,10 +88,16 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     public var foregroundCommand: [String]?
     /// The split (right) pane's foreground command (full argv), the split analogue of `foregroundCommand`.
     public var splitForegroundCommand: [String]?
+    /// The command the session was created with (`session.new --command`), which exec-replaces the login
+    /// shell and so is invisible to libghostty's foreground pid — persisted here so a command session
+    /// (e.g. an `ssh …` shortcut) re-runs its command on restore instead of coming back a plain shell. A
+    /// live `foregroundCommand` takes precedence at restore. Optional for forward-compat like the fields above.
+    public var initialCommand: String?
 
     public init(id: UUID, customName: String?, cwd: String, isSplit: Bool? = nil, fontSize: Double? = nil,
                 splitCwd: String? = nil, splitRatio: Double? = nil, flagged: Bool? = nil,
-                foregroundCommand: [String]? = nil, splitForegroundCommand: [String]? = nil) {
+                foregroundCommand: [String]? = nil, splitForegroundCommand: [String]? = nil,
+                initialCommand: String? = nil) {
         self.id = id
         self.customName = customName
         self.cwd = cwd
@@ -102,5 +108,6 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         self.flagged = flagged
         self.foregroundCommand = foregroundCommand
         self.splitForegroundCommand = splitForegroundCommand
+        self.initialCommand = initialCommand
     }
 }

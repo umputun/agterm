@@ -465,13 +465,21 @@ struct agtermApp: App {
         // `initialCommand` (from `session.new --command`) runs as the surface's process instead of the
         // login shell; on its exit the surface's onExit (below) closes the single session, like kitty.
         // restore-running-command: feed the captured foreground command as `initial_input` (re-run inside
-        // the login shell, exits to a prompt) — but only when there's no `initialCommand` (those are
-        // mutually exclusive ways to seed a surface). Consumed run-once, like `scratchCommand`.
+        // the login shell, exits to a prompt). A live captured foreground TAKES PRECEDENCE over a persisted
+        // `initialCommand`: a command session (e.g. `--command ssh …`) whose command exec-replaces the shell
+        // isn't visible to libghostty's foreground pid, so it restores from `initialCommand`; but if that
+        // session had dropped to a shell and the user ran something else, the captured child wins so we
+        // restore what was ACTUALLY running, not the stale creation command. `command`/`initial_input` are
+        // mutually exclusive ways to seed a surface; both are consumed run-once, like `scratchCommand`.
         let restoreInput = Self.restoreInitialInput(session.foregroundCommand)
         session.foregroundCommand = nil
+        // a FRESH command session always runs its command; a RESTORED one re-runs only when the
+        // restore-running-command opt-in is on (else it falls back to a plain shell, honoring the toggle).
+        let mayRunInitial = !session.wasRestored || GhosttyApp.shared.restoreRunningCommand
+        let command = (restoreInput == nil && mayRunInitial) ? session.initialCommand : nil
         let view = GhosttySurfaceView(workingDirectory: session.initialCwd, fontSize: session.fontSize.map(Float.init),
-                                      command: session.initialCommand,
-                                      initialInput: session.initialCommand == nil ? restoreInput : nil, env: env)
+                                      command: command,
+                                      initialInput: command == nil ? restoreInput : nil, env: env)
         view.session = session
         let sessionID = session.id
         view.onExit = {

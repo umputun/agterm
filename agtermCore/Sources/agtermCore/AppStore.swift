@@ -690,7 +690,8 @@ public final class AppStore {
                                 splitCwd: session.splitCwd ?? session.initialSplitCwd, splitRatio: session.splitRatio,
                                 flagged: session.flagged,
                                 foregroundCommand: session.foregroundCommand,
-                                splitForegroundCommand: session.splitForegroundCommand)
+                                splitForegroundCommand: session.splitForegroundCommand,
+                                initialCommand: session.initialCommand)
             })
         }
         return Snapshot(selectedSessionID: selectedSessionID, workspaces: workspaceSnapshots,
@@ -720,6 +721,8 @@ public final class AppStore {
                 session.flagged = sessionSnapshot.flagged ?? false
                 session.foregroundCommand = sessionSnapshot.foregroundCommand
                 session.splitForegroundCommand = sessionSnapshot.splitForegroundCommand
+                session.initialCommand = sessionSnapshot.initialCommand
+                session.wasRestored = true
                 return session
             }
             return Workspace(id: workspaceSnapshot.id, name: workspaceSnapshot.name, sessions: sessions)

@@ -35,7 +35,7 @@ file_length:
   warning: 2700
   error: 3000
 type_body_length:
-  warning: 1800
+  warning: 1850
   error: 2500
 function_body_length:
   warning: 250

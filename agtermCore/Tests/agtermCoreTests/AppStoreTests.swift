@@ -648,7 +648,25 @@ struct AppStoreTests {
         let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
         #expect(snap.foregroundCommand == nil)
         #expect(snap.splitForegroundCommand == nil)
+        #expect(snap.initialCommand == nil)
         #expect(snap.cwd == "/tmp")
+    }
+
+    @Test func initialCommandRoundTripsThroughSnapshot() {
+        // a command session (e.g. `--command ssh …`) persists its creation command so it re-runs on
+        // restore instead of coming back a plain shell.
+        let store = Self.makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.initialCommand = "ssh user@host -t 'ssh inner'"
+        #expect(session.wasRestored == false) // a freshly created session always runs its command
+        let snap = store.snapshot()
+        #expect(snap.workspaces[0].sessions[0].initialCommand == "ssh user@host -t 'ssh inner'")
+        let restored = Self.makeStore()
+        restored.restore(from: snap)
+        let r = restored.workspaces[0].sessions[0]
+        #expect(r.initialCommand == "ssh user@host -t 'ssh inner'")
+        #expect(r.wasRestored == true) // a restored session gates its re-run on restoreRunningCommand
     }
 
     @Test func sidebarWidthAndVisibilityRoundTripThroughSnapshot() {
