@@ -1238,9 +1238,16 @@ private struct WindowControlArea: NSViewRepresentable {
         /// Read live on each double-click so a setting change takes effect without an app relaunch.
         /// "Fill" maps to `zoom` (the closest standard NSWindow action; true Fill uses the newer
         /// window-tiling APIs). Zoom matches the green button and the `window.zoom` control command.
+        ///
+        /// A UITest env override (`AGTERM_UITEST_DOUBLECLICK_ACTION`) takes precedence so the gesture
+        /// tests are hermetic regardless of the host machine's setting; it rides the environment
+        /// because launch arguments trip the macOS 15+ no-window-at-launch bug (FB11763863, see
+        /// `ui-tests.md`). Production never sets it and falls through to the live system default.
         private func performTitlebarDoubleClickAction() {
             guard let window else { return }
-            switch UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick") {
+            let action = ProcessInfo.processInfo.environment["AGTERM_UITEST_DOUBLECLICK_ACTION"]
+                ?? UserDefaults.standard.string(forKey: "AppleActionOnDoubleClick")
+            switch action {
             case "Minimize":
                 window.performMiniaturize(nil)
             case "None":

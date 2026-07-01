@@ -28,6 +28,12 @@ final class ControlAPIUITests: XCTestCase {
         app = XCUIApplication()
         app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
         app.launchEnvironment["AGTERM_CONTROL_SOCKET"] = socketPath
+        // Pin the title-bar double-click action so the header gesture tests are hermetic regardless of
+        // the host's Desktop & Dock setting (the app honors this env override in
+        // performTitlebarDoubleClickAction; launch args can't carry it — FB11763863). Most tests never
+        // double-click, so the value is irrelevant to them; the no-op-case test opts into "None".
+        app.launchEnvironment["AGTERM_UITEST_DOUBLECLICK_ACTION"] =
+            name.contains("testDoubleClickHeaderHonorsNoneSetting") ? "None" : "Maximize"
         app.launchForUITest()
         // the seeded session row proves the window (and thus the control server's scene .task) is up.
         XCTAssertTrue(app.staticTexts["session-row"].waitForExistence(timeout: 30), "seeded session should exist")
@@ -1875,6 +1881,29 @@ final class ControlAPIUITests: XCTestCase {
         }
         XCTAssertEqual(window.frame.size.width, normal.width, accuracy: 40,
                        "a second header double-click should restore the window toward \(normal), got \(window.frame.size)")
+    }
+
+    // Locks in that the gesture HONORS the system setting rather than hardcoding zoom: pinned to "None"
+    // (Desktop & Dock ▸ "Do Nothing") via setUp's env override, a header double-click must be a no-op —
+    // the window's frame must not change. The complement of testDoubleClickHeaderZoomsAndRestores.
+    func testDoubleClickHeaderHonorsNoneSetting() throws {
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 5), "window should exist")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.resize","args":{"width":800,"height":600}}"#)["ok"] as? Bool, true)
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline, !(abs(window.frame.size.width - 800) < 8 && abs(window.frame.size.height - 600) < 8) {
+            usleep(150_000)
+        }
+        let normal = window.frame.size
+        XCTAssertEqual(normal.width, 800, accuracy: 8, "window should settle near 800 wide before the gesture, got \(normal)")
+
+        emptyHeaderPoint(window).doubleClick()
+        // give any (erroneous) zoom time to land, then assert the frame never changed.
+        RunLoop.current.run(until: Date().addingTimeInterval(2))
+        XCTAssertEqual(window.frame.size.width, normal.width, accuracy: 8,
+                       "with 'None' set, a header double-click must not zoom (width): normal=\(normal) now=\(window.frame.size)")
+        XCTAssertEqual(window.frame.size.height, normal.height, accuracy: 8,
+                       "with 'None' set, a header double-click must not zoom (height): normal=\(normal) now=\(window.frame.size)")
     }
 
     // The `WindowControlArea` drag/zoom layer sits BEHIND the header; the toolbar buttons render in front
