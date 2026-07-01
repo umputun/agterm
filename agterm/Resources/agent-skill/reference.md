@@ -35,8 +35,10 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 when none reported; distinct from `name`, the derived sidebar label), `active` (selected),
 `split` (split shown), `overlay` (overlay shown), `scratch` (scratch shown), `flagged` (in the
 flagged working-set), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
-idle), and `foreground`/`splitForeground` (the live argv of each pane's foreground
-process — what it is running — omitted when the pane sits at its shell prompt). Workspace nodes carry
+idle), `foreground`/`splitForeground` (the live argv of each pane's foreground
+process — what it is running — omitted when the pane sits at its shell prompt), and `background` (the
+watermark spec set via `session background` — a `{kind, text?, imagePath?, colorHex?, opacity?, fit?,
+position?, repeats?}` object — omitted when no watermark is set). Workspace nodes carry
 `id`, `name`, `active`, `sessions`.
 
 ## workspace
@@ -137,6 +139,22 @@ process — what it is running — omitted when the pane sits at its shell promp
   `active`) and are idempotent; `clear` ignores the target and unflags every session in the window.
   Pair with `sidebar mode flagged` to see just the flagged sessions as a flat `session : workspace`
   list. Unknown mode errors. The tree's `flagged` flag tracks membership.
+- `session background image <path> [--opacity F] [--fit contain|cover|stretch|none] [--position P] [--repeat] [--target] [--window W]`
+  — composite the image at `path` (PNG or JPEG only) behind the terminal as a watermark. libghostty
+  auto-fits it to the surface and re-fits on every window resize. `--opacity` is 0.0–1.0 (default 1.0);
+  `--fit` defaults to `contain`; `--position` is `center` (default) or an edge/corner anchor
+  (`top-left`, `top-center`, `top-right`, `center-left`, `center-right`, `bottom-left`, `bottom-center`,
+  `bottom-right`); `--repeat` tiles to fill blank space. Errors on a bad fit/position, an out-of-range
+  `--opacity` (must be 0.0–1.0), an unsupported format, a missing file, or a path containing control
+  characters (the path reaches a ghostty config line, so a newline could inject other keys).
+- `session background text <text> [--color #rrggbb] [--opacity F] [--fit ...] [--position ...] [--target] [--window W]`
+  — rasterize `text` to a watermark behind the terminal. `--color` defaults to the terminal foreground
+  (must be a `#rrggbb` hex value); `--opacity`/`--fit`/`--position` as above. `text` is capped at 256
+  characters (a watermark is a word or two).
+- `session background clear [--target] [--window W]` — remove the session's watermark.
+  Per session (applies to the session's pane(s)); persisted, so it survives a relaunch. A watermark makes
+  the pane render OPAQUE, overriding window translucency (an image is invisible at 0 background-opacity).
+  Read the current watermark back from a session's `background` field in `tree --json` (omitted when none).
 - `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--target] [--window W]`
   — run `command` in an ephemeral terminal on top of the session; it closes when the command exits.
   Full-size by default (hides the session); `--size-percent N` (1–100) makes it a floating framed panel
@@ -320,6 +338,8 @@ user-edited file read at launch — there is no control command for it.
 `notFound` / `ambiguous` (target resolution), `no such session`, `invalid split mode` /
 `invalid scratch mode`, `session has no split` (focus), `no selection` (copy), `overlay already open` /
 `no overlay` / `still running` / `no result` (overlay), `invalid flag mode` (session flag),
+`invalid fit` / `invalid position` / `invalid opacity` / `invalid color` / `text too long` /
+`unsupported image (PNG or JPEG only)` / `no such image file` / `image path must not contain control characters` / `invalid background mode` (session background),
 `invalid sidebar mode` (sidebar), `invalid focus mode` (workspace focus),
 `no open window` (quick/sidebar), `window not open`
 (resize/move/`--window`), `unknown theme: <name>` (theme set), `unknown sound: <name>` (session status --sound). Unknown commands fail to decode and return a structured error, never a crash.

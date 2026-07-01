@@ -20,6 +20,7 @@ public enum Command: String, Codable, Sendable {
     case sessionType = "session.type"
     case sessionStatus = "session.status"
     case sessionFlag = "session.flag"
+    case sessionBackground = "session.background"
     case sessionSplit = "session.split"
     case sessionScratch = "session.scratch"
     case sessionFocus = "session.focus"
@@ -78,9 +79,21 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// Whether `session.type` may select a never-shown session to realize its surface.
     public var select: Bool?
     /// Mode for `session.split` / `quick` (`on|off|toggle`, `show|hide|toggle` for quick),
-    /// `session.flag` (`on|off|toggle|clear`), `sidebar.mode` (`tree|flagged|toggle`), and
-    /// `workspace.focus` (`on|off|toggle`).
+    /// `session.flag` (`on|off|toggle|clear`), `sidebar.mode` (`tree|flagged|toggle`),
+    /// `workspace.focus` (`on|off|toggle`), and `session.background` (`image|text|clear`).
     public var mode: String?
+    /// The image file path for `session.background` mode `image` (PNG or JPEG).
+    public var path: String?
+    /// The text color (`#rrggbb`) for `session.background` mode `text`; nil = the terminal foreground.
+    public var color: String?
+    /// The `background-image-opacity` for `session.background` (image + text), 0...1; nil = ghostty's 1.0.
+    public var opacity: Double?
+    /// The `background-image-fit` for `session.background` (`contain|cover|stretch|none`); nil = `contain`.
+    public var fit: String?
+    /// The `background-image-position` for `session.background` (`center` + 8 anchors); nil = `center`.
+    public var position: String?
+    /// The `background-image-repeat` flag for `session.background`; nil = false.
+    public var repeats: Bool?
     /// Which split pane to focus for `session.focus` (`left`|`right`|`other`; `other` toggles).
     public var pane: String?
     /// Absolute left-pane split fraction (0...1) for `session.resize`, clamped server-side to
@@ -136,7 +149,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 pane: String? = nil, to: String? = nil, title: String? = nil, body: String? = nil,
                 width: Int? = nil, height: Int? = nil, x: Int? = nil, y: Int? = nil, display: Int? = nil,
                 status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil, sound: String? = nil,
-                ratio: Double? = nil, ratioDelta: Double? = nil) {
+                ratio: Double? = nil, ratioDelta: Double? = nil,
+                path: String? = nil, color: String? = nil, opacity: Double? = nil, fit: String? = nil,
+                position: String? = nil, repeats: Bool? = nil) {
         self.name = name
         self.cwd = cwd
         self.workspace = workspace
@@ -164,6 +179,12 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.sound = sound
         self.ratio = ratio
         self.ratioDelta = ratioDelta
+        self.path = path
+        self.color = color
+        self.opacity = opacity
+        self.fit = fit
+        self.position = position
+        self.repeats = repeats
     }
 }
 
@@ -205,10 +226,14 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// The session's agent status (`active`/`completed`/`blocked`) as the `AgentStatus` raw value, or nil
     /// when the session is idle (omitted from the JSON). The read side of `session.status`.
     public let status: String?
+    /// The session's background watermark spec, or nil when none is set (omitted from the JSON). The read
+    /// side of `session.background` — set/clear/query symmetry, so a script can inspect the current watermark.
+    public let background: BackgroundWatermark?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 overlay: Bool = false, scratch: Bool = false, flagged: Bool = false,
-                foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil) {
+                foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil,
+                background: BackgroundWatermark? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -221,6 +246,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.foreground = foreground
         self.splitForeground = splitForeground
         self.status = status
+        self.background = background
     }
 }
 

@@ -108,7 +108,7 @@ final class AttentionButtonUITests: XCTestCase {
         let bell = app.buttons["attention-button"]
         XCTAssertFalse(bell.exists, "the bell should be absent before the toggle is flipped on")
 
-        let toggle = settingsControl(tab: "General", control: "settings-attention-button")
+        let toggle = settingsControl(tab: "Notifications", control: "settings-attention-button")
         toggle.click() // turn it on (default off)
         XCTAssertTrue(bell.waitForExistence(timeout: 10), "flipping the toggle on should show the bell live")
 

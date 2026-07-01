@@ -255,6 +255,7 @@ public final class AppStore {
         removed.splitSurface?.teardown()
         removed.overlaySurface?.teardown()
         removed.scratchSurface?.teardown()
+        WatermarkStorage.removeRenderedText(sessionID: sessionID) // drop any rendered .text PNG; the session is gone
         sessionRecency.remove(sessionID)
         if wasActive {
             selectedSessionID = reselectionTarget(after: location)
@@ -282,6 +283,7 @@ public final class AppStore {
             session.splitSurface?.teardown()
             session.overlaySurface?.teardown()
             session.scratchSurface?.teardown()
+            WatermarkStorage.removeRenderedText(sessionID: session.id) // drop any rendered .text PNG; the session is gone
             sessionRecency.remove(session.id)
         }
         if focusedWorkspaceID == workspaceID { focusedWorkspaceID = nil } // the focused root is gone
@@ -628,6 +630,27 @@ public final class AppStore {
         save()
     }
 
+    /// Sets (or clears) a session's background watermark and persists it. Clean no-op (no write) for an
+    /// unknown id or when the spec is unchanged, so a repeated `session.background` set is idempotent.
+    /// Returns whether the spec actually CHANGED, so the app target can gate the (retained, teardown-only-
+    /// freed) per-surface config apply on a real change — without it, a scripted set-loop keeps appending
+    /// owned configs. The app target applies it to the session's surface(s) after this returns (the
+    /// host-free store owns only the spec; the C-boundary apply lives in `ControlServer`/`GhosttySurfaceView`).
+    @discardableResult
+    public func setBackgroundWatermark(_ watermark: BackgroundWatermark?, forSession id: UUID) -> Bool {
+        guard let session = session(withID: id), session.backgroundWatermark != watermark else { return false }
+        let previous = session.backgroundWatermark
+        session.backgroundWatermark = watermark
+        // a `.text` watermark owns a rendered `<id>.png`; switching to anything that isn't `.text` (an
+        // image, or nil) leaves it id-keyed but unreferenced, so drop it here. `clear`/teardown also sweep
+        // the same id-keyed file, so this is just the eager reclaim for the text→image/nil transition.
+        if previous?.kind == .text, watermark?.kind != .text {
+            WatermarkStorage.removeRenderedText(sessionID: id)
+        }
+        save()
+        return true
+    }
+
     /// Unflags every session across all workspaces in one `save()`. No-ops (no write) when nothing is
     /// flagged. Backs the Clear Flagged action and the `session.flag clear` control mode.
     public func clearFlags() {
@@ -694,7 +717,8 @@ public final class AppStore {
                                 flagged: session.flagged,
                                 foregroundCommand: session.foregroundCommand,
                                 splitForegroundCommand: session.splitForegroundCommand,
-                                initialCommand: session.initialCommand)
+                                initialCommand: session.initialCommand,
+                                backgroundWatermark: session.backgroundWatermark)
             })
         }
         return Snapshot(selectedSessionID: selectedSessionID, workspaces: workspaceSnapshots,
@@ -726,6 +750,7 @@ public final class AppStore {
                 session.splitForegroundCommand = sessionSnapshot.splitForegroundCommand
                 session.initialCommand = sessionSnapshot.initialCommand
                 session.wasRestored = true
+                session.backgroundWatermark = sessionSnapshot.backgroundWatermark
                 return session
             }
             return Workspace(id: workspaceSnapshot.id, name: workspaceSnapshot.name, sessions: sessions)

@@ -176,6 +176,54 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertEqual(resp["ok"] as? Bool, true, "restore.clear should succeed: \(resp)")
     }
 
+    // session.background sets a text watermark and clears it; bad input (missing image, invalid fit) is
+    // rejected and the server stays alive. The actual pixels are not AX-observable (Metal surface), so this
+    // covers the control round-trip + validation, like the other surface-state commands.
+    func testSessionBackgroundSetClearAndValidation() throws {
+        let sid = try activeSessionID()
+
+        let text = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"text","text":"STAGING","opacity":0.2}}"#)
+        XCTAssertEqual(text["ok"] as? Bool, true, "session.background text should succeed: \(text)")
+
+        // read-back: the watermark spec now rides the session's tree node (set/clear/query symmetry).
+        let afterSet = try sendCommand(#"{"cmd":"tree"}"#)
+        let setNode = try XCTUnwrap(sessionNode(afterSet, id: sid), "the session should appear in the tree")
+        let bg = try XCTUnwrap(setNode["background"] as? [String: Any], "tree should expose the set watermark")
+        XCTAssertEqual(bg["kind"] as? String, "text", "the watermark kind should read back")
+        XCTAssertEqual(bg["text"] as? String, "STAGING", "the watermark text should read back")
+
+        let missing = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"image","path":"/no/such.png"}}"#)
+        XCTAssertEqual(missing["ok"] as? Bool, false, "a missing image file should be rejected")
+
+        let badFit = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"image","path":"/no/such.png","fit":"fill"}}"#)
+        XCTAssertEqual(badFit["ok"] as? Bool, false, "an invalid fit should be rejected")
+
+        // config-injection vector: a newline in the image path would smuggle an extra ghostty key into the
+        // per-surface overlay. The control-char guard runs BEFORE the format/existence checks, so its own
+        // error proves it (not fileExists) did the rejecting.
+        let injection = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"image","path":"x.png\nclipboard-read = allow\ny.png"}}"#)
+        XCTAssertEqual(injection["ok"] as? Bool, false, "an image path with a control char must be rejected")
+        XCTAssertEqual(injection["error"] as? String, "image path must not contain control characters",
+                       "the control-char guard, not the fileExists check, should reject it")
+
+        let badOpacity = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"text","text":"X","opacity":5}}"#)
+        XCTAssertEqual(badOpacity["ok"] as? Bool, false, "an out-of-range opacity should be rejected")
+
+        // an over-long text must be rejected at the boundary so the renderer never attempts a huge bitmap.
+        let longText = String(repeating: "A", count: 5000)
+        let tooLong = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"text","text":"\#(longText)"}}"#)
+        XCTAssertEqual(tooLong["ok"] as? Bool, false, "an over-long watermark text should be rejected")
+
+        let cleared = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"clear"}}"#)
+        XCTAssertEqual(cleared["ok"] as? Bool, true, "session.background clear should succeed: \(cleared)")
+
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        XCTAssertEqual(tree["ok"] as? Bool, true, "the server should stay alive after background commands")
+        // read-back after clear: the background key is omitted from the node.
+        let clearedNode = try XCTUnwrap(sessionNode(tree, id: sid), "the session should still appear in the tree")
+        XCTAssertNil(clearedNode["background"], "a cleared watermark should be absent from the tree node")
+    }
+
     // a malformed JSON line returns ok:false with an error, and the server stays alive: a
     // subsequent valid `tree` still succeeds.
     func testMalformedRequestErrorsAndServerStaysAlive() throws {
@@ -2261,7 +2309,7 @@ final class ControlAPIUITests: XCTestCase {
     /// click), mirroring SettingsUITests' robust `settingsControl`.
     private func toggleNotificationBadges() {
         let toggle = app.descendants(matching: .any).matching(identifier: "settings-notification-badges").firstMatch
-        let tabButton = app.buttons["General"].firstMatch
+        let tabButton = app.buttons["Notifications"].firstMatch
         let deadline = Date().addingTimeInterval(12)
         while Date() < deadline {
             if toggle.exists, toggle.isHittable { toggle.click(); return }

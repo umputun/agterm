@@ -93,11 +93,16 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     /// (e.g. an `ssh …` shortcut) re-runs its command on restore instead of coming back a plain shell. A
     /// live `foregroundCommand` takes precedence at restore. Optional for forward-compat like the fields above.
     public var initialCommand: String?
+    /// The session's background watermark (image or rasterized text), or nil for none. Optional so a
+    /// snapshot already on disk before this field was added still decodes (as nil → no watermark) instead
+    /// of failing the load and wiping the saved tree, like the fields above. A `.text` watermark
+    /// re-renders its PNG on restore.
+    public var backgroundWatermark: BackgroundWatermark?
 
     public init(id: UUID, customName: String?, cwd: String, isSplit: Bool? = nil, fontSize: Double? = nil,
                 splitCwd: String? = nil, splitRatio: Double? = nil, flagged: Bool? = nil,
                 foregroundCommand: [String]? = nil, splitForegroundCommand: [String]? = nil,
-                initialCommand: String? = nil) {
+                initialCommand: String? = nil, backgroundWatermark: BackgroundWatermark? = nil) {
         self.id = id
         self.customName = customName
         self.cwd = cwd
@@ -109,5 +114,33 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         self.foregroundCommand = foregroundCommand
         self.splitForegroundCommand = splitForegroundCommand
         self.initialCommand = initialCommand
+        self.backgroundWatermark = backgroundWatermark
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, customName, cwd, isSplit, fontSize, splitCwd, splitRatio, flagged
+        case foregroundCommand, splitForegroundCommand, initialCommand, backgroundWatermark
+    }
+
+    /// Custom decode so `backgroundWatermark` is LOSSY: a present-but-invalid spec (an unknown
+    /// `kind`/`fit`/`position` — e.g. a DOWNGRADE after a newer release added a value the older build
+    /// can't decode, or a hand-edit typo) drops to nil instead of throwing `DataCorrupted`. Without this,
+    /// `Optional` tolerates only a MISSING key, so one bad watermark would fail the entire `SessionSnapshot`
+    /// and `PersistenceStore.load` would start fresh — wiping every workspace and session. Every other
+    /// field keeps `decodeIfPresent` (missing-key tolerant, the forward-compat the field docs describe).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        customName = try c.decodeIfPresent(String.self, forKey: .customName)
+        cwd = try c.decode(String.self, forKey: .cwd)
+        isSplit = try c.decodeIfPresent(Bool.self, forKey: .isSplit)
+        fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize)
+        splitCwd = try c.decodeIfPresent(String.self, forKey: .splitCwd)
+        splitRatio = try c.decodeIfPresent(Double.self, forKey: .splitRatio)
+        flagged = try c.decodeIfPresent(Bool.self, forKey: .flagged)
+        foregroundCommand = try c.decodeIfPresent([String].self, forKey: .foregroundCommand)
+        splitForegroundCommand = try c.decodeIfPresent([String].self, forKey: .splitForegroundCommand)
+        initialCommand = try c.decodeIfPresent(String.self, forKey: .initialCommand)
+        backgroundWatermark = (try? c.decodeIfPresent(BackgroundWatermark.self, forKey: .backgroundWatermark)) ?? nil
     }
 }

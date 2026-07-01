@@ -207,7 +207,7 @@ struct Session: ParsableCommand {
         abstract: "Session commands.",
         subcommands: [New.self, Close.self, Select.self, Go.self, Rename.self, Move.self, TypeText.self,
                       Split.self, Scratch.self, Focus.self, Resize.self, Copy.self, Status.self, FlagCommand.self,
-                      Search.self, Overlay.self]
+                      Search.self, Background.self, Overlay.self]
     )
 
     struct New: RequestCommand {
@@ -472,6 +472,91 @@ struct Session: ParsableCommand {
             let to = next ? "next" : prev ? "prev" : close ? "close" : nil
             return ControlRequest(cmd: .sessionSearch, target: target.target,
                                   args: options.withWindow(ControlArgs(text: needle, to: to)))
+        }
+    }
+
+    struct Background: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            commandName: "background",
+            abstract: "Set or clear a session's background watermark (image or rasterized text).",
+            subcommands: [Image.self, Text.self, Clear.self]
+        )
+
+        /// Shared input validation against the host-free `WatermarkConfig`, so a bad value is a clean
+        /// parse error before any socket round-trip, matching the server's rejection exactly. The enum
+        /// checks reject `""` too, so no separate empty-string special-case is needed.
+        static func validate(fit: String? = nil, position: String? = nil, opacity: Double? = nil,
+                             color: String? = nil, text: String? = nil, path: String? = nil) throws {
+            if let fit, !WatermarkConfig.isValidFit(fit) {
+                throw ValidationError("fit must be one of: \(WatermarkConfig.validFits.joined(separator: ", "))")
+            }
+            if let position, !WatermarkConfig.isValidPosition(position) {
+                throw ValidationError("position must be one of: \(WatermarkConfig.validPositions.joined(separator: ", "))")
+            }
+            if let opacity, !WatermarkConfig.isValidOpacity(opacity) {
+                throw ValidationError("opacity must be between 0.0 and 1.0")
+            }
+            if let color, !WatermarkConfig.isValidColorHex(color) {
+                throw ValidationError("color must be a #rrggbb hex value")
+            }
+            if let text, !WatermarkConfig.isValidText(text) {
+                throw ValidationError("text must be 1–\(WatermarkConfig.maxTextLength) characters")
+            }
+            if let path, !WatermarkConfig.isValidImagePath(path) {
+                throw ValidationError("image path must not contain control characters")
+            }
+        }
+
+        struct Image: RequestCommand {
+            static let configuration = CommandConfiguration(abstract: "Show a PNG or JPEG image behind the terminal (auto-fits the window).")
+            @Argument(help: "Path to a PNG or JPEG image file.") var path: String
+            @Option(name: .long, help: "Image opacity 0.0-1.0 (default 1.0).") var opacity: Double?
+            @Option(name: .long, help: "Fit: contain (default), cover, stretch, or none.") var fit: String?
+            @Option(name: .long, help: "Position: center (default) or an edge/corner anchor (top-left, bottom-right, …).") var position: String?
+            @Flag(name: .customLong("repeat"), help: "Tile the image to fill blank space.") var repeatImage = false
+            @OptionGroup var target: TargetOptions
+            @OptionGroup var options: ClientOptions
+
+            func validate() throws { try Background.validate(fit: fit, position: position, opacity: opacity, path: path) }
+
+            func makeRequest() throws -> ControlRequest {
+                ControlRequest(cmd: .sessionBackground, target: target.target,
+                               args: options.withWindow(ControlArgs(mode: "image", path: path, opacity: opacity,
+                                                                    fit: fit, position: position,
+                                                                    repeats: repeatImage ? true : nil)))
+            }
+        }
+
+        struct Text: RequestCommand {
+            static let configuration = CommandConfiguration(abstract: "Render TEXT as a watermark behind the terminal (auto-fits the window).")
+            @Argument(help: "Watermark text.") var text: String
+            @Option(name: .long, help: "Text color as #rrggbb (default: the terminal foreground color).") var color: String?
+            @Option(name: .long, help: "Opacity 0.0-1.0 (default 1.0).") var opacity: Double?
+            @Option(name: .long, help: "Fit: contain (default), cover, stretch, or none.") var fit: String?
+            @Option(name: .long, help: "Position: center (default) or an edge/corner anchor (top-left, bottom-right, …).") var position: String?
+            @OptionGroup var target: TargetOptions
+            @OptionGroup var options: ClientOptions
+
+            func validate() throws {
+                try Background.validate(fit: fit, position: position, opacity: opacity, color: color, text: text)
+            }
+
+            func makeRequest() throws -> ControlRequest {
+                ControlRequest(cmd: .sessionBackground, target: target.target,
+                               args: options.withWindow(ControlArgs(text: text, mode: "text", color: color,
+                                                                    opacity: opacity, fit: fit, position: position)))
+            }
+        }
+
+        struct Clear: RequestCommand {
+            static let configuration = CommandConfiguration(abstract: "Remove the session's background watermark.")
+            @OptionGroup var target: TargetOptions
+            @OptionGroup var options: ClientOptions
+
+            func makeRequest() throws -> ControlRequest {
+                ControlRequest(cmd: .sessionBackground, target: target.target,
+                               args: options.withWindow(ControlArgs(mode: "clear")))
+            }
         }
     }
 

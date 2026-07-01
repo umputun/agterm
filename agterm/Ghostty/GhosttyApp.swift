@@ -261,7 +261,14 @@ final class GhosttyApp {
         ghostty_app_update_config(app, newConfig)
         for surface in surfaces { surface.applyConfig(newConfig) }
         config = newConfig
+        // refresh the chrome colors from the NEW config BEFORE the watermark re-assert below: a default-tinted
+        // `.text` watermark re-renders its PNG reading `terminalForegroundColor`, so the foreground must already
+        // reflect the new theme — otherwise the text watermark's color lags one reload behind a theme change.
         resolveThemeColors(from: newConfig, inputs: inputs)
+        // the broadcast above pushes the shared config (no background image) to every surface, wiping any
+        // per-surface watermark — so re-assert each watermarked surface's overlay afterwards. No-op for the
+        // surfaces without one. (Mirrors how per-session font zoom is reconciled, but re-applied not reset.)
+        for surface in surfaces { surface.reapplyWatermarkIfNeeded() }
         return lastConfigDiagnosticsCount
     }
 
@@ -359,7 +366,32 @@ final class GhosttyApp {
         return luminance > 0.6 ? .black : .white
     }
 
-    private func loadConfig(_ inputs: ConfigInputs) -> ghostty_config_t? {
+    /// Build a per-surface config = the SAME base files as `loadConfig` plus a small overlay (a session's
+    /// `background-image*` + font-size lines, from `WatermarkConfig.overlayText`). The overlay is written
+    /// to a temp file, loaded LAST (so it wins over the settings conf), then deleted (`load_file` reads
+    /// synchronously). The caller (`GhosttySurfaceView`) owns the returned config and frees it on surface
+    /// teardown. An empty overlay yields the plain base config (used to CLEAR a watermark). The app-wide
+    /// `lastConfigDiagnosticsCount` is preserved (a per-surface build must not clobber what `config.reload`
+    /// reports). Returns nil on allocation failure.
+    func configWithOverlay(_ overlayText: String) -> ghostty_config_t? {
+        var overlayPath: String?
+        if !overlayText.isEmpty {
+            let tmp = (NSTemporaryDirectory() as NSString).appendingPathComponent("agterm-wm-\(UUID().uuidString).conf")
+            do {
+                try overlayText.write(toFile: tmp, atomically: true, encoding: .utf8)
+                overlayPath = tmp
+            } catch {
+                logger.warning("watermark overlay write failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+        let savedCount = lastConfigDiagnosticsCount
+        let cfg = loadConfig(Self.resolveConfigInputs(), extraOverlayPath: overlayPath)
+        lastConfigDiagnosticsCount = savedCount
+        if let overlayPath { try? FileManager.default.removeItem(atPath: overlayPath) }
+        return cfg
+    }
+
+    private func loadConfig(_ inputs: ConfigInputs, extraOverlayPath: String? = nil) -> ghostty_config_t? {
         guard let cfg = ghostty_config_new() else { return nil }
 
         // app's built-in defaults (terminal padding, etc.), loaded first so the
@@ -396,6 +428,12 @@ final class GhosttyApp {
         let settingsConf = Self.settingsConfigURL.path
         if FileManager.default.fileExists(atPath: settingsConf) {
             settingsConf.withCString { ghostty_config_load_file(cfg, $0) }
+        }
+
+        // a per-surface overlay (a session's background-image / font-size lines), loaded LAST so it wins
+        // over everything above. Only `configWithOverlay` passes this; the app/global build leaves it nil.
+        if let extraOverlayPath, FileManager.default.fileExists(atPath: extraOverlayPath) {
+            extraOverlayPath.withCString { ghostty_config_load_file(cfg, $0) }
         }
 
         ghostty_config_load_recursive_files(cfg)

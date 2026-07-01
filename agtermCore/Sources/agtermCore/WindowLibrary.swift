@@ -335,6 +335,19 @@ public final class WindowLibrary {
         // an un-cancelled pending save would fire after removeItem and re-create windows/<id>.json as an
         // orphan that a future index loss would resurrect via recoverOrphanedWindows().
         stores[id]?.cancelPendingSave()
+        // sweep each session's rendered `.text` watermark PNG before dropping the store: deleting a window
+        // permanently destroys its sessions (like closeSession/removeWorkspace), so their PNGs must go too —
+        // window-CLOSE keeps the sessions and is handled elsewhere, but window-DELETE has no later sweep.
+        // An OPEN window's session ids come from its live store; a CLOSED one has no store, so read them from
+        // the persisted snapshot — else deleting a closed window orphans its PNGs in <stateDir>/watermarks/.
+        // `directory` is the state-dir root WatermarkStorage resolves against (both default to
+        // AGTERM_STATE_DIR else PersistenceStore.defaultDirectory), so passing it is production-identical
+        // and lets a test sweep into an injected temp dir without touching process-global env.
+        let sessionIDsToSweep: [UUID] = stores[id].map { $0.workspaces.flatMap(\.sessions).map(\.id) }
+            ?? persistenceStore(for: id).load().workspaces.flatMap(\.sessions).map(\.id)
+        for sessionID in sessionIDsToSweep {
+            WatermarkStorage.removeRenderedText(sessionID: sessionID, stateDir: directory)
+        }
         stores[id] = nil
         windows.remove(at: index)
         if frontmostWindowID == id { frontmostWindowID = nil }
