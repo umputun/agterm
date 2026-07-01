@@ -388,6 +388,40 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         return String(decoding: UnsafeRawBufferPointer(start: ptr, count: Int(t.text_len)), as: UTF8.self)
     }
 
+    /// This surface's terminal buffer as plain text (the control channel's `session.text`). Returns nil only
+    /// on a FAILED read — the surface does not exist yet or `ghostty_surface_read_text` fails — so the caller
+    /// can distinguish that from a genuinely blank screen, which reads as an empty string. The region is the
+    /// visible screen by default, or the whole screen plus scrollback when `all` is true or `lines` is set;
+    /// `lines` keeps the last N CONTENT lines (trailing blank grid rows trimmed). Like `readSelection`, the
+    /// read ignores focus and the libghostty buffer is copied into a Swift `String` and freed before
+    /// returning. UTF-8 only: `ghostty_surface_read_text` carries no per-cell color or SGR. Covered by the
+    /// `session.text` XCUITest e2e rather than a unit test, since the call needs a live surface.
+    func readScreenText(all: Bool, lines: Int?) -> String? {
+        guard let surface else { return nil }
+        // A zero-init ghostty_point_s is GHOSTTY_POINT_ACTIVE / GHOSTTY_POINT_COORD_EXACT (both enum 0),
+        // not viewport/top-left, so set tag and coord on both endpoints.
+        let tag = (all || lines != nil) ? GHOSTTY_POINT_SCREEN : GHOSTTY_POINT_VIEWPORT
+        var sel = ghostty_selection_s()
+        sel.top_left = ghostty_point_s(tag: tag, coord: GHOSTTY_POINT_COORD_TOP_LEFT, x: 0, y: 0)
+        sel.bottom_right = ghostty_point_s(tag: tag, coord: GHOSTTY_POINT_COORD_BOTTOM_RIGHT, x: 0, y: 0)
+        sel.rectangle = false
+        var t = ghostty_text_s()
+        guard ghostty_surface_read_text(surface, sel, &t) else { return nil }
+        defer { ghostty_surface_free_text(surface, &t) }
+        // A successful read of a blank screen yields no bytes — that is an empty string, NOT a failure
+        // (nil is reserved for the guards above so `readText` can report a real read failure as an error).
+        guard let ptr = t.text, t.text_len > 0 else { return "" }
+        let full = String(decoding: UnsafeRawBufferPointer(start: ptr, count: Int(t.text_len)), as: UTF8.self)
+        guard let n = lines, n > 0 else { return full }
+        // Drop trailing blank/whitespace-only rows (the unused grid below a short screen) so `--lines N`
+        // returns the last N CONTENT lines instead of blank padding, then keep the last N.
+        var rows = full.components(separatedBy: "\n")
+        while let last = rows.last, last.trimmingCharacters(in: .whitespaces).isEmpty {
+            rows.removeLast()
+        }
+        return rows.suffix(n).joined(separator: "\n")
+    }
+
     /// This surface's foreground process pid (libghostty `ghostty_surface_foreground_pid`), or nil when
     /// the surface has not been created or the call returns 0. Read at quit by the restore-running-command
     /// capture (`ForegroundProcess.command(for:shellBasename:)`); not focus-dependent, like `readSelection`.

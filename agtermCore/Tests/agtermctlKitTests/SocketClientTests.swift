@@ -39,6 +39,21 @@ struct SocketClientTests {
         #expect(response.error == "cannot delete last workspace")
     }
 
+    /// A `session.text --all` response can exceed the old 1 MiB cap (full scrollback). A >1 MiB text
+    /// payload must round-trip intact, not fail with "no response".
+    @Test func roundTripLargeResponse() throws {
+        let big = String(repeating: "scrollback line\n", count: 200_000) // ~3 MiB, well over 1 MiB
+        let server = StubServer(response: ControlResponse(ok: true, result: ControlResult(text: big)))
+        try server.start()
+        defer { server.stop() }
+
+        let client = SocketClient(path: server.path)
+        let response = try client.send(ControlRequest(cmd: .sessionText, target: "active"))
+
+        #expect(response.ok)
+        #expect(response.result?.text == big)
+    }
+
     @Test func connectFailureToMissingSocketThrows() {
         let client = SocketClient(path: NSTemporaryDirectory() + "agterm-missing-\(UUID().uuidString.prefix(8)).sock")
         #expect(throws: SocketClientError.self) { try client.send(ControlRequest(cmd: .tree)) }

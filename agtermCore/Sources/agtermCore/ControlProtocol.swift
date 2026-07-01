@@ -26,6 +26,7 @@ public enum Command: String, Codable, Sendable {
     case sessionFocus = "session.focus"
     case sessionResize = "session.resize"
     case sessionCopy = "session.copy"
+    case sessionText = "session.text"
     case sessionSearch = "session.search"
     case sessionOverlayOpen = "session.overlay.open"
     case sessionOverlayClose = "session.overlay.close"
@@ -94,7 +95,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var position: String?
     /// The `background-image-repeat` flag for `session.background`; nil = false.
     public var repeats: Bool?
-    /// Which split pane to focus for `session.focus` (`left`|`right`|`other`; `other` toggles).
+    /// Which split pane to focus for `session.focus` (`left`|`right`|`other`; `other` toggles); also
+    /// which pane to read for `session.text` (`left`|`right`; omitted = the focused pane, no `other`).
     public var pane: String?
     /// Absolute left-pane split fraction (0...1) for `session.resize`, clamped server-side to
     /// `AppStore.splitRatioMin...splitRatioMax`. Mutually exclusive with `ratioDelta`.
@@ -103,6 +105,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// pane, negative grows the right (the CLI's `--grow-left`/`--grow-right`). Applied to the session's
     /// current fraction (0.5 when never moved). Mutually exclusive with `ratio`.
     public var ratioDelta: Double?
+    /// For `session.text`: read the full screen + scrollback instead of just the visible screen.
+    public var all: Bool?
+    /// For `session.text`: keep only the last N lines of the full buffer.
+    public var lines: Int?
     /// Direction for `session.go` (`next`|`prev`|`previous`|`first`|`last`), for the reorder form of
     /// `session.move` / `workspace.move` (`up`|`down`|`top`|`bottom`), and for `session.search`
     /// (`next`|`prev`|`close`).
@@ -151,7 +157,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil, sound: String? = nil,
                 ratio: Double? = nil, ratioDelta: Double? = nil,
                 path: String? = nil, color: String? = nil, opacity: Double? = nil, fit: String? = nil,
-                position: String? = nil, repeats: Bool? = nil) {
+                position: String? = nil, repeats: Bool? = nil, all: Bool? = nil, lines: Int? = nil) {
         self.name = name
         self.cwd = cwd
         self.workspace = workspace
@@ -185,6 +191,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.fit = fit
         self.position = position
         self.repeats = repeats
+        self.all = all
+        self.lines = lines
     }
 }
 

@@ -12,7 +12,7 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 - **`--json`**: prints the raw response object. Without it, mutations print `ok` and `tree`/`window
   list` print a human listing. Use `--json` when you need to read ids or values back.
 - **Response shape**: `{"ok": true, "result": {…}}` or `{"ok": false, "error": "<message>"}`.
-  `result` carries one of: `id` (affected/new session/workspace/window), `text` (session copy),
+  `result` carries one of: `id` (affected/new session/workspace/window), `text` (session copy/text),
   `exitCode` (overlay result), `count` (keymap diagnostics), `tree` (the tree), `windows` (window
   list). The process exit code is non-zero when `ok` is false.
 - **Options go after the subcommand**: `agtermctl session type "ls" --target active`, never before it.
@@ -95,6 +95,17 @@ position?, repeats?}` object — omitted when no watermark is set). Workspace no
 - `session copy [--target] [--window W]` — returns `result.text` with the session's current selection.
   Does NOT touch the system clipboard (pipe the returned text into another `session type`). No/empty
   selection → `no selection` error. Selection is readable on any realized session regardless of focus.
+- `session text [--all] [--lines N] [--pane left|right] [--target] [--window W]` — returns `result.text`
+  with the session's terminal buffer as PLAIN TEXT (no ANSI/color). By default it reads the VISIBLE
+  SCREEN of the on-screen pane. `--all` reads the whole buffer including scrollback; `--lines N` reads the
+  full buffer and keeps only the last N CONTENT lines (trailing blank rows trimmed; `--all` and `--lines`
+  are mutually exclusive and `--lines` must be > 0 — enforced server-side too). `--pane left` reads the
+  main pane, `--pane right` the split pane (errors if the session has no split); omit `--pane` for the
+  visible pane (the scratch terminal when it covers the session, else the focused pane). NOTE: unlike
+  `session focus`, `--pane` here has NO `other` value — only `left`/`right`. A genuinely BLANK screen is
+  NOT an error (returns `ok` with an empty string, unlike `session copy`'s `no selection`), but a failed
+  read IS an error (`failed to read surface buffer`). Pipe the text into `grep`/`fzf` to extract URLs,
+  paths, etc.
 - `session search [needle] [--next|--prev|--close] [--target] [--window W]` — search the target
   session's live terminal scrollback. Selects the target first (so the search bar and match highlights
   render). With a `needle` it sets the query (opening the bar if needed) and highlights matches; with no

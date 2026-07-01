@@ -93,6 +93,11 @@ final class ControlServer {
     /// stalled client can't park the serial accept loop forever.
     nonisolated private static let readTimeoutSeconds = 5
 
+    /// Seconds a blocking response `write()` may stall before it times out, so a client that stops reading
+    /// can't park the serial accept loop — `session.text --all` responses can be multi-MB and won't fit
+    /// the socket buffer in one write, so an unresponsive reader would otherwise block indefinitely.
+    nonisolated private static let writeTimeoutSeconds = 5
+
     /// Overall seconds a single connection's request read may take before it's abandoned. `readTimeoutSeconds`
     /// only bounds each `read()`, so a slow-loris client trickling one byte per interval (each under the
     /// per-read timeout) never sends a newline yet keeps the serial accept loop busy indefinitely. This caps
@@ -220,6 +225,11 @@ final class ControlServer {
         // timed-out read returns EAGAIN, which readLine treats as a read error and closes the connection.
         var readTimeout = timeval(tv_sec: readTimeoutSeconds, tv_usec: 0)
         setsockopt(conn, SOL_SOCKET, SO_RCVTIMEO, &readTimeout, socklen_t(MemoryLayout<timeval>.size))
+
+        // bound the blocking response write too — a large `session.text --all` reply may not fit the socket
+        // buffer in one write, so a client that stopped reading would otherwise wedge the accept loop.
+        var writeTimeout = timeval(tv_sec: writeTimeoutSeconds, tv_usec: 0)
+        setsockopt(conn, SOL_SOCKET, SO_SNDTIMEO, &writeTimeout, socklen_t(MemoryLayout<timeval>.size))
 
         guard let line = readLine(conn) else {
             writeResponse(conn, ControlResponse(ok: false, error: "request too large or read failed"))
@@ -462,6 +472,9 @@ final class ControlServer {
             return setBackground(request.target, request.args)
         case .sessionCopy:
             return copySelection(request.target, window: request.args?.window)
+        case .sessionText:
+            return readText(request.target, window: request.args?.window, pane: request.args?.pane,
+                            all: request.args?.all ?? false, lines: request.args?.lines)
         case .sessionSearch:
             // resolve first (cross-window when no `args.window`), then select + realize the surface; the
             // realize path is async (bounded poll), so this can't go through the synchronous
@@ -1061,6 +1074,53 @@ final class ControlServer {
         }
     }
 
+    /// Returns a pane's terminal buffer as plain text: the visible screen by default, the full screen plus
+    /// scrollback with `all`, or the last `lines` lines (reads the screen, then trims). `pane` picks the
+    /// surface (`left` main, `right` split, or the on-screen pane when omitted); `right` errors when the
+    /// session has no split. `all` and `lines` are mutually exclusive and `lines` must be > 0 — validated
+    /// here too, not only in the CLI `validate()`, so a raw socket client can't bypass it (an unchecked
+    /// `lines <= 0` would silently fall through to the full buffer). A genuinely blank screen reads ok with
+    /// an empty string; a failed surface read is an error, not a silent empty.
+    private func readText(_ target: String?, window: String?, pane: String?,
+                          all: Bool, lines: Int?) -> ControlResponse {
+        if all, lines != nil {
+            return ControlResponse(ok: false, error: "use either --all or --lines, not both")
+        }
+        if let lines, lines <= 0 {
+            return ControlResponse(ok: false, error: "--lines must be greater than 0")
+        }
+        return resolveSession(target, window: window) { store, id in
+            // resolveSession already resolved `id` from this store, so `session(withID:)` is non-nil.
+            guard let session = store.session(withID: id) else {
+                return ControlResponse(ok: false, error: "session not realized")
+            }
+            let chosen: (any TerminalSurface)?
+            switch pane {
+            case nil:
+                // omitted = the surface ON SCREEN (scratch-aware), the SAME `Session.onScreenSurface`
+                // resolution `session.search` uses, so a no-`--pane` read returns what's visible, not a
+                // pane hidden under the scratch.
+                chosen = session.onScreenSurface
+            case "left": chosen = session.surface
+            case "right":
+                guard let split = session.splitSurface else {
+                    return ControlResponse(ok: false, error: "session has no split pane")
+                }
+                chosen = split
+            // an unknown pane value errors here; `session.text` accepts left|right only, with no `other`
+            // toggle like `session.focus`.
+            case .some(let value): return ControlResponse(ok: false, error: "invalid pane: \(value)")
+            }
+            guard let surface = chosen as? GhosttySurfaceView else {
+                return ControlResponse(ok: false, error: "session not realized")
+            }
+            guard let text = surface.readScreenText(all: all, lines: lines) else {
+                return ControlResponse(ok: false, error: "failed to read surface buffer")
+            }
+            return ControlResponse(ok: true, result: ControlResult(text: text))
+        }
+    }
+
     /// Drive in-terminal search on the session `id`, mirroring the GUI bar and the
     /// `session.type`/floating-overlay arms. On the `close` path it drives the session's pinned
     /// `searchSurface` WITHOUT selecting (so closing a background session's bar never yanks the user's
@@ -1098,14 +1158,14 @@ final class ControlServer {
         // overlay) wins, mirroring AppActions.searchTarget(), else the focused pane; the factory pins it as
         // `searchSurface`, and once open needle/navigate target the pinned owner so they can't drift.
         store.selectSession(id)
-        // a covering scratch is searchable and sits above the pane, so drive it, not the hidden pane beneath.
-        let coverIsScratch = session.scratchActive && !session.overlayActive
-        var openSurface = (coverIsScratch ? session.topmostSurface : session.activeSurface) as? GhosttySurfaceView
+        // a covering scratch is searchable and sits above the pane, so drive it, not the hidden pane beneath
+        // (`onScreenSurface` is the shared pane-vs-scratch resolution, also used by `session.text`).
+        var openSurface = session.onScreenSurface as? GhosttySurfaceView
         if openSurface == nil {
             // a never-shown session realizes a beat after select — bounded poll like `injectText`.
             for _ in 0..<12 {
                 try? await Task.sleep(nanoseconds: 30_000_000)
-                if let realized = (coverIsScratch ? session.topmostSurface : session.activeSurface) as? GhosttySurfaceView {
+                if let realized = session.onScreenSurface as? GhosttySurfaceView {
                     openSurface = realized
                     break
                 }

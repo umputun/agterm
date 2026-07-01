@@ -14,7 +14,7 @@ description: >
   feature request / question as a GitHub Discussion.
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
-  session.split, session.scratch, session.focus, session.resize, session.go, session.copy, session.search, session.status,
+  session.split, session.scratch, session.focus, session.resize, session.go, session.copy, session.text, session.search, session.status,
   session.flag, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
   theme.set, theme.list, select theme, edit keymap, show an image, display an image inline, show-image,
@@ -88,7 +88,7 @@ a global `--window <id|prefix|active>` to operate on a specific window's tree (d
 
 Scripts rarely type ids: create with `*.new` (capture the returned id), or act on `active`.
 
-## Command summary (49 commands)
+## Command summary (50 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -113,6 +113,8 @@ spec set via `session background`, omitted when none — the read side of set/cl
 - `move <workspace>` (relocate) or `move --to up|down|top|bottom` (reorder within the workspace).
 - `type <text> [--stdin] [--select]` — inject keystrokes (real typing, Enter included).
 - `copy` — print the session's selected text (does NOT touch the system clipboard).
+- `text [--all] [--lines N] [--pane left|right]` — print the session buffer as plain text. Default is
+  the visible screen of the focused pane; `--all` adds scrollback; `--lines N` keeps the last N lines.
 - `search [needle] [--next|--prev|--close]` — search the terminal scrollback; prints the "N of M" counter.
 - `split [on|off|toggle]` — side-by-side second shell (hide keeps it alive).
 - `scratch [on|off|toggle] [--command CMD]` — full-coverage third shell (hide keeps it alive; `exit`

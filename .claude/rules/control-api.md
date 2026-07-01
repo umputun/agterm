@@ -86,7 +86,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 49-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 50-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -156,10 +156,10 @@ paths:
   exact `uuidString` (case-insensitive), or a git-style unique prefix.
   Zero prefix hits → `notFound` error, ≥2 → `ambiguous` error listing the candidates.
   `--target` defaults to `active`, so scripts rarely type an id and never for "the current one".
-- **Command catalog (49 commands):**
+- **Command catalog (50 commands):**
   - `tree`
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`
-  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.search`/`session.status`/`session.flag`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.result`
+  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.result`
   - `quick`
   - `sidebar`/`sidebar.mode`/`sidebar.expand`/`sidebar.collapse`
   - `notify`
@@ -305,6 +305,31 @@ paths:
   — it does NOT touch the system clipboard (automation pipes the returned text into another `session.type`);
   selection is surface state independent of focus, so any realized session can be read,
   and no/empty selection is a `no selection` error.
+  `session.text` reads the target surface's screen buffer as PLAIN TEXT (no ANSI) via `GhosttySurfaceView.readScreenText(all:lines:)`
+  (a `ghostty_selection_s` spanning VIEWPORT top-left→bottom-right by default,
+  SCREEN when `args.all || args.lines != nil`, `rectangle = false`;
+  `ghostty_surface_read_text` → copy out of `ghostty_text_s` → `ghostty_surface_free_text`) and returns it in `result.text`
+  — `args.all` adds scrollback, `args.lines N` keeps the last N CONTENT lines (trailing blank grid rows
+  trimmed so a non-scrolled screen returns content, not padding), and `args.pane` (`left`→main,
+  `right`→split-else-`session has no split` error, omitted→the ON-SCREEN surface via the shared
+  `Session.onScreenSurface` (scratch-when-covering else the focused pane, the SAME resolution `session.search`
+  uses), so a no-`pane` read returns what's visible, not a pane hidden under the scratch) picks the pane.
+  `args.all`+`args.lines` are mutually exclusive and `args.lines` must be > 0 — validated SERVER-SIDE in
+  `readText` (mirroring the CLI `validate()`), NOT only CLI-side, so a raw socket client can't bypass it
+  (an unchecked `lines ≤ 0` would otherwise fall through to the full buffer).
+  UNLIKE `session.focus`, the `pane` here is `left|right` ONLY (no `other`).
+  A genuinely BLANK screen reads `ok` with an empty string (NOT an error, on purpose — differs from `session.copy`'s
+  `no selection`), but a FAILED `ghostty_surface_read_text` is a `failed to read surface buffer` error:
+  `readScreenText` returns `""` for the empty read and nil ONLY for a real failure, which `readText` maps
+  to the error (so a caller can tell a blank terminal from a broken read).
+  Plain text only — the pinned libghostty exposes only `ghostty_surface_read_text` (no per-cell SGR),
+  so `--ansi` is out of scope until a styled surface read lands upstream and the pin is bumped.
+  Four-point keep-in-sync audit for `session.text`: (1) `case sessionText = "session.text"` + new `ControlArgs.all: Bool?`/`lines: Int?`
+  (reuses `pane` + `ControlResult.text`) in `ControlProtocol.swift`, (2) the `.sessionText` dispatch arm (`readText`)
+  in `ControlServer`, (3) the `session text [--all] [--lines N] [--pane left|right]` subcommand in `agtermctlKit`
+  (`validate()` guards the flag combos, re-enforced SERVER-SIDE in `readText`), (4) round-trip tests in
+  `ControlProtocolTests` + the e2e (`testSessionTextReturnsBuffer`, `testSessionTextSplitPaneWithoutSplitErrors`,
+  `testSessionTextRejectsInvalidArgsServerSide`) in `ControlAPIUITests`.
   `session.search` searches the target session's live scrollback (target = session) — it SELECTS the
   target (so the bar + match highlights render and the surface is realized,
   bounded-realize-polled like `session.type`), then drives the FOCUSED surface over `ghostty_surface_binding_action`:
@@ -616,5 +641,5 @@ paths:
   + the e2e `testSessionBackgroundSetClearAndValidation` in `ControlAPIUITests` (set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
-  examples.md recipes) and the command count there is bumped to 49 to match.
+  examples.md recipes) and the command count there is bumped to 50 to match.
 

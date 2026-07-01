@@ -216,6 +216,20 @@ sel=$(agtermctl session copy --json | jq -r '.result.text')
 agtermctl session type "$sel" --target "$other"
 ```
 
+## Read a session's buffer as text
+
+`session text` returns the terminal buffer as plain text in `result.text` — the visible screen by
+default, the whole scrollback with `--all`, or the last N lines with `--lines N`. Pipe it into
+`grep`/`fzf` to extract URLs, paths, etc.
+
+```bash
+agtermctl session text                         # the visible screen of the focused pane
+agtermctl session text --lines 50              # the last 50 lines of the buffer
+agtermctl session text --pane right            # the split pane (errors if there is no split)
+# extract every URL from the full scrollback:
+agtermctl session text --all --json | jq -r '.result.text' | grep -oE 'https?://[^ ]+'
+```
+
 ## Search the terminal scrollback
 
 `session search` opens a search bar over the focused terminal and highlights matches in the live

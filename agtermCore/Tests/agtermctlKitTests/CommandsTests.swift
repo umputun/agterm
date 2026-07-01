@@ -247,6 +247,40 @@ struct CommandsTests {
         #expect(try request(["session", "copy", "--target", "9f3c"]) == ControlRequest(cmd: .sessionCopy, target: "9f3c"))
     }
 
+    @Test func sessionTextDefaultsActive() throws {
+        // bare `session text` reads the visible screen of the focused pane (no args beyond the base bag).
+        #expect(try request(["session", "text"]) == ControlRequest(cmd: .sessionText, target: "active", args: ControlArgs()))
+    }
+
+    @Test func sessionTextWithAll() throws {
+        let expected = ControlRequest(cmd: .sessionText, target: "active", args: ControlArgs(all: true))
+        #expect(try request(["session", "text", "--all"]) == expected)
+    }
+
+    @Test func sessionTextWithLines() throws {
+        let expected = ControlRequest(cmd: .sessionText, target: "active", args: ControlArgs(lines: 50))
+        #expect(try request(["session", "text", "--lines", "50"]) == expected)
+    }
+
+    @Test func sessionTextWithPaneAndTarget() throws {
+        let expected = ControlRequest(cmd: .sessionText, target: "9f3c", args: ControlArgs(pane: "right"))
+        #expect(try request(["session", "text", "--pane", "right", "--target", "9f3c"]) == expected)
+    }
+
+    @Test func sessionTextRejectsAllWithLines() {
+        #expect(validationMessage(["session", "text", "--all", "--lines", "10"]) == "use either --all or --lines, not both")
+    }
+
+    @Test func sessionTextRejectsZeroLines() {
+        // a negative --lines (`-5`) is intercepted by ArgumentParser as a flag before validate() runs, so
+        // 0 is the CLI-reachable non-positive case the validation guards against.
+        #expect(validationMessage(["session", "text", "--lines", "0"]) == "--lines must be greater than 0")
+    }
+
+    @Test func sessionTextRejectsBadPane() {
+        #expect(validationMessage(["session", "text", "--pane", "other"]) == "--pane must be left or right")
+    }
+
     @Test func sessionStatusWithBlink() throws {
         let req = try request(["session", "status", "active", "--blink"])
         #expect(req.cmd == .sessionStatus)

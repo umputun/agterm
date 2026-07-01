@@ -288,6 +288,15 @@ public final class Session: Identifiable {
         return activeSurface
     }
 
+    /// The pane-or-scratch surface that is actually ON SCREEN: the scratch terminal when it covers the
+    /// panes (and no overlay is up), else the focused pane. The control arms that act on "what's visible"
+    /// — `session.text` with no `--pane` and `session.search` — resolve through this so they hit the
+    /// scratch rather than a pane hidden beneath it (an active overlay routes to its own surface via
+    /// `topmostSurface`; this stays the pane-vs-scratch choice those arms share, matching `searchTarget`).
+    public var onScreenSurface: (any TerminalSurface)? {
+        scratchActive && !overlayActive ? topmostSurface : activeSurface
+    }
+
     /// The match counter shown in the search bar and returned by `session.search`: empty before a
     /// query runs (`searchTotal` nil), `"no matches"` at zero, `"N matches"` while none is selected,
     /// and `"S of N"` once a match is selected. `selected` is clamped to `total` so a stale selected

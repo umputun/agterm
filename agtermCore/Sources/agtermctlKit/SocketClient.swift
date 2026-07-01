@@ -14,8 +14,10 @@ struct SocketClientError: Error, CustomStringConvertible {
 struct SocketClient {
     let path: String
 
-    /// 1 MiB cap on a response line, mirroring the server's request cap.
-    private static let maxLineBytes = 1 << 20
+    /// 64 MiB cap on a response line. Requests stay small; a `session.text --all` response carries the
+    /// whole scrollback and can reach several MiB. It comes from our own server, so the cap only guards
+    /// against a runaway read (ghostty scrollback tops out near 10 MiB).
+    private static let maxLineBytes = 64 << 20
 
     /// Connect, send `request` as one newline-terminated JSON line, read the response line, decode it.
     func send(_ request: ControlRequest) throws -> ControlResponse {
@@ -82,16 +84,20 @@ struct SocketClient {
     }
 
     /// Read up to (and excluding) the first newline, capping at `maxLineBytes`. Returns nil on
-    /// EOF-before-newline, error, or cap exceeded.
+    /// EOF-before-newline, error, or cap exceeded. Reads in 64 KiB chunks so a multi-MB
+    /// `session.text --all` response takes a handful of syscalls instead of one per byte.
     private static func readLine(_ fd: Int32) -> Data? {
         var buffer = Data()
-        var byte: UInt8 = 0
+        var chunk = [UInt8](repeating: 0, count: 64 * 1024)
         while true {
-            let n = read(fd, &byte, 1)
+            let n = chunk.withUnsafeMutableBytes { read(fd, $0.baseAddress, $0.count) }
             if n == 0 { return buffer.isEmpty ? nil : buffer }
             if n < 0 { return nil }
-            if byte == UInt8(ascii: "\n") { return buffer }
-            buffer.append(byte)
+            if let idx = chunk[0..<n].firstIndex(of: UInt8(ascii: "\n")) {
+                buffer.append(contentsOf: chunk[0..<idx])
+                return buffer
+            }
+            buffer.append(contentsOf: chunk[0..<n])
             if buffer.count > maxLineBytes { return nil }
         }
     }
