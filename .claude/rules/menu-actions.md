@@ -154,8 +154,11 @@ paths:
   The detail `HSplitView` carries `.id("<session>-hsplit")` so its `NSSplitView`/divider can't leak across
   session switches.
   A session with a split shows a split-rectangle icon in the sidebar (`WorkspaceSidebar`,
-  keyed on `hasSplit` via `RowContent`) and a filled split icon in the title bar — both persist while
-  the split is hidden.
+  keyed on `hasSplit` via `RowContent`), which persists while the split is hidden.
+  The title-bar split button is a 4-state glyph: an outline when there is no split, a filled
+  split-rectangle (`rectangle.split.2x1.fill`) while the split is shown side-by-side, and a half-filled
+  glyph naming the visible pane once the split is collapsed to one pane
+  (`rectangle.lefthalf.filled` = primary, `rectangle.righthalf.filled` = split pane, driven by `splitFocused`).
 - `Close Session` is ⌘W (terminal-style).
   `AppActions.closeActiveSession()` first dismisses a focus-stealing cover in z-order — the frontmost
   window's quick terminal (`hide`), else the active session's open overlay (`closeOverlay`,

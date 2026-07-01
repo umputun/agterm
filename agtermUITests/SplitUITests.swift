@@ -192,6 +192,53 @@ final class SplitUITests: XCTestCase {
                        "Ctrl-2 swaps the hidden split back to the right pane")
     }
 
+    // the split toolbar glyph encodes the split state via its accessibilityValue (the symbol name is not
+    // observable): none for a non-split session, both while shown side-by-side, and left/right when
+    // collapsed to a single pane — whichever pane is currently shown. Also pins the design choice that a
+    // SHOWN split stays "both" regardless of which pane holds focus (only a collapsed split distinguishes
+    // left vs right). Ctrl-1's effect is proven by the later "left" assertion: had it not registered,
+    // focus would still be on the right pane and the hide would collapse to "right", failing that check.
+    func testSplitButtonGlyphReflectsState() throws {
+        let row = app.staticTexts["session-row"]
+        XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
+        row.click()
+        usleep(800_000)
+
+        let splitButton = app.buttons["split-toggle"]
+        XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
+
+        // non-split session → outline glyph.
+        XCTAssertTrue(waitSplitValue(splitButton, "none"), "a non-split session shows the outline glyph")
+
+        // open the split (both panes shown) → both halves filled.
+        splitButton.click()
+        XCTAssertTrue(waitSplitValue(splitButton, "both"), "a shown split fills both panes")
+
+        // a shown split stays "both" regardless of focus: focusing the primary must NOT flip the glyph.
+        app.typeKey("1", modifierFlags: .control)
+        usleep(500_000)
+        XCTAssertTrue(waitSplitValue(splitButton, "both"), "a shown split ignores which pane is focused")
+
+        // hide the split while the primary (left) pane is focused → collapsed to the left pane.
+        splitButton.click()
+        XCTAssertTrue(waitSplitValue(splitButton, "left"), "collapsed to the primary pane fills the left half")
+
+        // Ctrl-2 swaps the shown pane to the right → right half filled.
+        app.typeKey("2", modifierFlags: .control)
+        XCTAssertTrue(waitSplitValue(splitButton, "right"), "collapsed to the split pane fills the right half")
+
+        // re-showing the collapsed split fills both panes again (isSplit true).
+        splitButton.click()
+        XCTAssertTrue(waitSplitValue(splitButton, "both"), "re-showing a collapsed split fills both panes again")
+
+        // closing the split (exit the right pane's shell) collapses to a single non-split session → outline.
+        app.typeKey(.rightArrow, modifierFlags: [.command, .option]) // put terminal focus on the right pane
+        usleep(500_000)
+        app.typeText("exit")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(waitSplitValue(splitButton, "none"), "closing the split returns the glyph to the no-split outline")
+    }
+
     // exiting one pane of a split must keep the session alive (collapsed to the survivor) AND focus
     // the surviving pane, so typing reaches it without a click. Verified by exiting the primary, then
     // typing WITHOUT focusing and checking the command landed in the surviving right shell.
@@ -285,5 +332,16 @@ final class SplitUITests: XCTestCase {
             usleep(150_000)
         }
         return nil
+    }
+
+    /// Polls the split button's accessibilityValue (none/both/left/right) until it equals `value`,
+    /// covering the observation lag between a state change and the title-bar re-render.
+    private func waitSplitValue(_ button: XCUIElement, _ value: String, timeout: TimeInterval = 8) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if (button.value as? String) == value { return true }
+            usleep(150_000)
+        }
+        return false
     }
 }
