@@ -1013,7 +1013,9 @@ final class ControlServer {
                 return ControlResponse(ok: false, error: "no such image file: \(path)")
             }
             watermark = BackgroundWatermark(kind: .image, imagePath: path, opacity: opacity,
-                                            fit: fit, position: position, repeats: repeats)
+                                            fit: fit.flatMap(BackgroundWatermark.Fit.init(rawValue:)),
+                                            position: position.flatMap(BackgroundWatermark.Position.init(rawValue:)),
+                                            repeats: repeats)
         case "text":
             guard let text, !text.isEmpty else {
                 return ControlResponse(ok: false, error: "session.background text requires text")
@@ -1026,7 +1028,9 @@ final class ControlServer {
                 return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
             }
             watermark = BackgroundWatermark(kind: .text, text: text, colorHex: color,
-                                            opacity: opacity, fit: fit, position: position)
+                                            opacity: opacity,
+                                            fit: fit.flatMap(BackgroundWatermark.Fit.init(rawValue:)),
+                                            position: position.flatMap(BackgroundWatermark.Position.init(rawValue:)))
         case "clear", .none:
             watermark = nil
         default:
@@ -1206,7 +1210,8 @@ final class ControlServer {
                                           active: session.id == activeID,
                                           split: session.isSplit, overlay: session.overlayActive,
                                           scratch: session.scratchActive, flagged: session.flagged,
-                                          foreground: fg, splitForeground: splitFg, status: status)
+                                          foreground: fg, splitForeground: splitFg, status: status,
+                                          background: session.backgroundWatermark)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID, sessions: sessions)

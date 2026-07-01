@@ -5,7 +5,7 @@ import Testing
 struct WatermarkConfigTests {
     @Test func imageOverlayEmitsAllKeys() {
         let watermark = BackgroundWatermark(kind: .image, imagePath: "/tmp/bg.png", opacity: 0.2,
-                                            fit: "cover", position: "top-left", repeats: true)
+                                            fit: .cover, position: .topLeft, repeats: true)
         let text = WatermarkConfig.overlayText(watermark: watermark, resolvedImagePath: "/tmp/bg.png", fontSize: nil)
         #expect(text.contains("background-opacity = 1\n"))
         #expect(text.contains("background-image = /tmp/bg.png\n"))
@@ -50,6 +50,19 @@ struct WatermarkConfigTests {
         #expect(text == "font-size = 14\n")
     }
 
+    @Test func overlayDropsImageForControlCharPath() {
+        // defense-in-depth on the restore path: a persisted spec whose path carries a control char (only
+        // reachable by hand-editing workspaces.json) must NOT inject a ghostty key. The image lines are
+        // dropped entirely; the font-size line still emits. fit/position are enums now, so only the path
+        // is free text and needs this guard.
+        let poisoned = "/tmp/x.png\nclipboard-read = allow"
+        let watermark = BackgroundWatermark(kind: .image, imagePath: poisoned)
+        let text = WatermarkConfig.overlayText(watermark: watermark, resolvedImagePath: poisoned, fontSize: 14)
+        #expect(!text.contains("background-image"))
+        #expect(!text.contains("clipboard-read"))
+        #expect(text == "font-size = 14\n")
+    }
+
     @Test func formattedDropsTrailingZeroForIntegralValues() {
         #expect(WatermarkConfig.formatted(14) == "14")
         #expect(WatermarkConfig.formatted(14.0) == "14")
@@ -85,7 +98,7 @@ struct WatermarkConfigTests {
 
     @Test func watermarkSurvivesSnapshotRoundTrip() throws {
         let watermark = BackgroundWatermark(kind: .text, text: "STAGING", colorHex: "#ffaa00", opacity: 0.18,
-                                            fit: "contain", position: "center")
+                                            fit: .contain, position: .center)
         let snapshot = SessionSnapshot(id: UUID(), customName: "s", cwd: "/tmp", backgroundWatermark: watermark)
         let decoded = try JSONDecoder().decode(SessionSnapshot.self, from: JSONEncoder().encode(snapshot))
         #expect(decoded == snapshot)

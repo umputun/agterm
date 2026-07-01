@@ -26,8 +26,10 @@ enum WatermarkRenderer {
         guard let watermark else { return nil }
         switch watermark.kind {
         case .image:
-            guard let path = watermark.imagePath, isSupportedImage(path),
-                  FileManager.default.fileExists(atPath: path) else { return nil }
+            // re-validate the path (control-char guard) here too, not only at the control boundary — a
+            // persisted spec restored from a hand-edited snapshot reaches this path without re-validation.
+            guard let path = watermark.imagePath, WatermarkConfig.isValidImagePath(path),
+                  isSupportedImage(path), FileManager.default.fileExists(atPath: path) else { return nil }
             return path
         case .text:
             guard let text = watermark.text, WatermarkConfig.isValidText(text) else { return nil }

@@ -185,6 +185,13 @@ final class ControlAPIUITests: XCTestCase {
         let text = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"text","text":"STAGING","opacity":0.2}}"#)
         XCTAssertEqual(text["ok"] as? Bool, true, "session.background text should succeed: \(text)")
 
+        // read-back: the watermark spec now rides the session's tree node (set/clear/query symmetry).
+        let afterSet = try sendCommand(#"{"cmd":"tree"}"#)
+        let setNode = try XCTUnwrap(sessionNode(afterSet, id: sid), "the session should appear in the tree")
+        let bg = try XCTUnwrap(setNode["background"] as? [String: Any], "tree should expose the set watermark")
+        XCTAssertEqual(bg["kind"] as? String, "text", "the watermark kind should read back")
+        XCTAssertEqual(bg["text"] as? String, "STAGING", "the watermark text should read back")
+
         let missing = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"image","path":"/no/such.png"}}"#)
         XCTAssertEqual(missing["ok"] as? Bool, false, "a missing image file should be rejected")
 
@@ -212,6 +219,9 @@ final class ControlAPIUITests: XCTestCase {
 
         let tree = try sendCommand(#"{"cmd":"tree"}"#)
         XCTAssertEqual(tree["ok"] as? Bool, true, "the server should stay alive after background commands")
+        // read-back after clear: the background key is omitted from the node.
+        let clearedNode = try XCTUnwrap(sessionNode(tree, id: sid), "the session should still appear in the tree")
+        XCTAssertNil(clearedNode["background"], "a cleared watermark should be absent from the tree node")
     }
 
     // a malformed JSON line returns ok:false with an error, and the server stays alive: a
@@ -2299,7 +2309,7 @@ final class ControlAPIUITests: XCTestCase {
     /// click), mirroring SettingsUITests' robust `settingsControl`.
     private func toggleNotificationBadges() {
         let toggle = app.descendants(matching: .any).matching(identifier: "settings-notification-badges").firstMatch
-        let tabButton = app.buttons["General"].firstMatch
+        let tabButton = app.buttons["Notifications"].firstMatch
         let deadline = Date().addingTimeInterval(12)
         while Date() < deadline {
             if toggle.exists, toggle.isHittable { toggle.click(); return }

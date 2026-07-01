@@ -5,14 +5,11 @@ import Foundation
 /// AppKit: the `.text` rasterization lives in the app target; this only formats the `background-image*`
 /// lines once a PNG path is known.
 public enum WatermarkConfig {
-    /// The libghostty `background-image-fit` values (Config.zig `BackgroundImageFit`).
-    public static let validFits = ["contain", "cover", "stretch", "none"]
-    /// The libghostty `background-image-position` values (Config.zig `BackgroundImagePosition`).
-    public static let validPositions = [
-        "top-left", "top-center", "top-right",
-        "center-left", "center", "center-right",
-        "bottom-left", "bottom-center", "bottom-right",
-    ]
+    /// The libghostty `background-image-fit` values, derived from the `BackgroundWatermark.Fit` enum
+    /// (single source of truth) — used for the CLI/server error messages.
+    public static var validFits: [String] { BackgroundWatermark.Fit.allCases.map(\.rawValue) }
+    /// The libghostty `background-image-position` values, derived from `BackgroundWatermark.Position`.
+    public static var validPositions: [String] { BackgroundWatermark.Position.allCases.map(\.rawValue) }
 
     /// Upper bound on watermark text length accepted at the control boundary. `WatermarkRenderer`
     /// rasterizes the string at a fixed 256pt font with a bitmap sized to the glyph run, so the canvas
@@ -20,8 +17,8 @@ public enum WatermarkConfig {
     /// A watermark is a word or two; 256 is far beyond any real use and keeps the bitmap small.
     public static let maxTextLength = 256
 
-    public static func isValidFit(_ fit: String) -> Bool { validFits.contains(fit) }
-    public static func isValidPosition(_ position: String) -> Bool { validPositions.contains(position) }
+    public static func isValidFit(_ fit: String) -> Bool { BackgroundWatermark.Fit(rawValue: fit) != nil }
+    public static func isValidPosition(_ position: String) -> Bool { BackgroundWatermark.Position(rawValue: position) != nil }
 
     /// Valid `background-image-opacity`: a finite value in `0...1` (the documented range). Rejects NaN/Inf
     /// (which `formatted` would otherwise emit as `nan`/`inf` into the config) and out-of-range values.
@@ -70,12 +67,16 @@ public enum WatermarkConfig {
     public static func overlayText(watermark: BackgroundWatermark?, resolvedImagePath: String?,
                                    fontSize: Double?) -> String {
         var lines: [String] = []
-        if let watermark, let path = resolvedImagePath {
+        // re-validate the path on EMIT, not just at the control boundary: `AppStore.restore` assigns a
+        // persisted spec raw, so a hand-edited `workspaces.json` could carry a control-char path that would
+        // inject a ghostty key here. A poisoned path drops the image entirely (font-size still emitted).
+        // `fit`/`position` are typed enums now, so they can't carry an injection — only `imagePath` is free text.
+        if let watermark, let path = resolvedImagePath, isValidImagePath(path) {
             lines.append("background-opacity = 1")
             lines.append("background-image = \(path)")
             if let opacity = watermark.opacity { lines.append("background-image-opacity = \(formatted(opacity))") }
-            lines.append("background-image-fit = \(watermark.fit ?? "contain")")
-            lines.append("background-image-position = \(watermark.position ?? "center")")
+            lines.append("background-image-fit = \((watermark.fit ?? .contain).rawValue)")
+            lines.append("background-image-position = \((watermark.position ?? .center).rawValue)")
             lines.append("background-image-repeat = \(watermark.repeats == true)")
         }
         if let fontSize { lines.append("font-size = \(formatted(fontSize))") }

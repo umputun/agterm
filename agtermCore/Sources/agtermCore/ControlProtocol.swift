@@ -226,10 +226,14 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// The session's agent status (`active`/`completed`/`blocked`) as the `AgentStatus` raw value, or nil
     /// when the session is idle (omitted from the JSON). The read side of `session.status`.
     public let status: String?
+    /// The session's background watermark spec, or nil when none is set (omitted from the JSON). The read
+    /// side of `session.background` — set/clear/query symmetry, so a script can inspect the current watermark.
+    public let background: BackgroundWatermark?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 overlay: Bool = false, scratch: Bool = false, flagged: Bool = false,
-                foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil) {
+                foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil,
+                background: BackgroundWatermark? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -242,6 +246,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.foreground = foreground
         self.splitForeground = splitForeground
         self.status = status
+        self.background = background
     }
 }
 

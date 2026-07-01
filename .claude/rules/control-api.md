@@ -562,6 +562,8 @@ paths:
   capture the restore-running-command feature uses (`ghostty_surface_foreground_pid` → `sysctl(KERN_PROCARGS2)`
   → host-free `CommandRestore`), populated in the tree builder per session so a script can read "what
   is each pane running".
+  It ALSO surfaces `background` on each node — the `BackgroundWatermark` spec set via `session.background`
+  (omitted when none), the read side of set/clear so a script can query the current watermark.
   `restore.clear` clears every open session's saved CAPTURED foreground command (`Session.foregroundCommand`/`splitForegroundCommand`)
   and persists via `library.saveAllOpen()`, so the next restart restores plain shells for those panes instead
   of re-running the captured commands (also closing the force-quit re-fire: the restored command is consumed
@@ -599,13 +601,19 @@ paths:
   `applyConfig`, WIPING any watermark — so `GhosttyApp.reloadConfig` re-resolves the theme colors and
   then calls `reapplyWatermarkIfNeeded` on each surface AFTER the broadcast to re-assert it (the theme
   colors first, so a default-tinted `.text` watermark re-renders with the new foreground, not the old).
+  `BackgroundWatermark.fit`/`position` are typed `Fit`/`Position` `CaseIterable` enums (like `Kind`), not
+  raw `String` — the raw values match ghostty's keys so they serialize identically, and a bad value can't
+  reach a config line (only `imagePath` stays free text, re-validated on emit by `overlayText`, closing the
+  restore-path injection as defense-in-depth). The spec is READ back on each `tree` node's `background` field.
   Four-point keep-in-sync audit for `session.background`: (1) `case sessionBackground = "session.background"`
-  + `ControlArgs.path`/`color`/`opacity`/`fit`/`position`/`repeats` in `ControlProtocol.swift`,
+  + `ControlArgs.path`/`color`/`opacity`/`fit`/`position`/`repeats` in `ControlProtocol.swift` (+ `background`
+  on `ControlSessionNode` for the read-back),
   (2) the `.sessionBackground` dispatch arm (`setBackground`, validating + building the spec, then `applyWatermark`
-  to the realized surfaces) in `ControlServer`, (3) the `session background image|text|clear` subcommands
-  in `agtermctlKit` (shared opacity/color/fit/position `validate()`), (4) round-trip in `ControlProtocolTests`
+  to the realized surfaces) in `ControlServer` (+ `background:` populated in the tree builder), (3) the
+  `session background image|text|clear` subcommands in `agtermctlKit` (shared opacity/color/fit/position
+  `validate()`), (4) round-trip in `ControlProtocolTests` (incl. `treeSessionNodeRoundTripsWithBackground`)
   + `WatermarkConfigTests` + `WatermarkStorageTests` + `CommandsTests` (CLI parse + bad-arg rejection)
-  + the e2e `testSessionBackgroundSetClearAndValidation` in `ControlAPIUITests`.
+  + the e2e `testSessionBackgroundSetClearAndValidation` in `ControlAPIUITests` (set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
   examples.md recipes) and the command count there is bumped to 48 to match.

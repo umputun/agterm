@@ -291,6 +291,43 @@ struct ControlProtocolTests {
         #expect(decoded.status == nil)
     }
 
+    @Test func treeSessionNodeRoundTripsWithBackground() throws {
+        // the read side of session.background: the watermark spec rides the tree node so a script can query it.
+        let watermark = BackgroundWatermark(kind: .text, text: "PROD", colorHex: "#ff0000",
+                                            opacity: 0.2, fit: .cover, position: .topRight)
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         background: watermark)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        let node = decoded.result?.tree?.workspaces.first?.sessions.first
+        #expect(node?.background == watermark)
+        #expect(node?.background?.fit == .cover)          // the typed enum survives the wire round-trip
+        #expect(node?.background?.position == .topRight)
+    }
+
+    @Test func treeSessionNodeOmitsBackgroundWhenNil() throws {
+        // a session with no watermark — the key must be omitted, not emitted as null.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("background"), "a nil background must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.background == nil)
+    }
+
+    @Test func backgroundWatermarkFitPositionSerializeAsRawStrings() throws {
+        // the Fit/Position enums must serialize to ghostty's exact key strings (identical to the former
+        // String), so the wire + persisted JSON are unchanged by the enum migration.
+        let watermark = BackgroundWatermark(kind: .image, imagePath: "/a.png", fit: .stretch, position: .bottomCenter)
+        let json = String(data: try JSONEncoder().encode(watermark), encoding: .utf8) ?? ""
+        #expect(json.contains("\"fit\":\"stretch\""))
+        #expect(json.contains("\"position\":\"bottom-center\""))
+        // a decoded-back value equals the original (rawValue mapping is lossless).
+        let decoded = try JSONDecoder().decode(BackgroundWatermark.self, from: Data(json.utf8))
+        #expect(decoded == watermark)
+    }
+
     @Test func restoreClearRoundTrips() throws {
         let request = ControlRequest(cmd: .restoreClear)
         #expect(try roundTrip(request) == request)
