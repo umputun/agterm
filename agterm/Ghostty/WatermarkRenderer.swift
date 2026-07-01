@@ -19,12 +19,15 @@ enum WatermarkRenderer {
     /// The resolved PNG/JPEG path for `watermark`, rendering the `.text` PNG as a side effect:
     /// - `.image` → the user's file path (nil if missing or an unsupported format);
     /// - `.text` → a per-session PNG in `WatermarkStorage.directoryURL()` rendered from the string + color
-    ///   (nil if the text is empty/over-length or rendering fails).
+    ///   (nil if the text is empty/over-length or rendering fails);
+    /// - `.color` → nil (a solid color needs no image; `WatermarkConfig.overlayText` emits `background`).
     /// Returns nil for a nil watermark. Re-rendered on every call so a `.text` PNG always reflects the
     /// current string/color (cheap; called only on set/clear/reload, not per frame).
     static func materialize(_ watermark: BackgroundWatermark?, sessionID: UUID) -> String? {
         guard let watermark else { return nil }
         switch watermark.kind {
+        case .color:
+            return nil
         case .image:
             // re-validate the path (control-char guard) here too, not only at the control boundary — a
             // persisted spec restored from a hand-edited snapshot reaches this path without re-validation.

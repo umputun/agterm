@@ -1055,10 +1055,20 @@ final class ControlServer {
                                             opacity: opacity,
                                             fit: fit.flatMap(BackgroundWatermark.Fit.init(rawValue:)),
                                             position: position.flatMap(BackgroundWatermark.Position.init(rawValue:)))
+        case "color":
+            // no per-call opacity: a solid color honors the window translucency set in Settings, applied at
+            // emit time via `WatermarkConfig.overlayText(windowOpacity:)` (see `GhosttySurfaceView`).
+            guard let color, !color.isEmpty else {
+                return ControlResponse(ok: false, error: "session.background color requires a color")
+            }
+            guard WatermarkConfig.isValidColorHex(color) else {
+                return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
+            }
+            watermark = BackgroundWatermark(kind: .color, colorHex: color)
         case "clear", .none:
             watermark = nil
         default:
-            return ControlResponse(ok: false, error: "invalid background mode: \(mode ?? "") (image|text|clear)")
+            return ControlResponse(ok: false, error: "invalid background mode: \(mode ?? "") (image|text|color|clear)")
         }
         return resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {

@@ -52,9 +52,14 @@ public enum WatermarkConfig {
     }
 
     /// The per-surface ghostty config overlay (loaded LAST, so it wins) for `watermark` pointed at
-    /// `resolvedImagePath` (the user's file for `.image`, the rendered PNG for `.text`):
+    /// `resolvedImagePath` (the user's file for `.image`, the rendered PNG for `.text`, nil for `.color`):
     ///
-    /// - the `background-image*` lines for the watermark, plus `background-opacity = 1` so the image is
+    /// - for `.color`: a `background = <hex>` line plus `background-opacity = <windowOpacity>` so the color
+    ///   honors the window translucency the user set in Settings (the base config pins the global
+    ///   `background-opacity` to 0 under translucency, which would otherwise make the color invisible;
+    ///   `windowOpacity` = 1 when translucency is off = a solid color) — no image keys, and the window
+    ///   blur is composited at the AppKit level, so it shows through a translucent color unchanged;
+    /// - for `.image`/`.text`: the `background-image*` lines, plus `background-opacity = 1` so the image is
     ///   visible even when window translucency pins the global `background-opacity` to 0 (image opacity is
     ///   RELATIVE to it, so `0 × anything = 0` = invisible) — the user-chosen "auto-raise" behavior;
     /// - a `font-size` line preserving the session's cmd-+/- zoom (a per-surface `update_config` otherwise
@@ -65,13 +70,17 @@ public enum WatermarkConfig {
     /// Values are emitted RAW (no quotes): ghostty takes the whole line remainder as the value, so a path
     /// with spaces works unquoted — matching `AppSettings.ghosttyConfigLines()`.
     public static func overlayText(watermark: BackgroundWatermark?, resolvedImagePath: String?,
-                                   fontSize: Double?) -> String {
+                                   fontSize: Double?, windowOpacity: Double = 1) -> String {
         var lines: [String] = []
-        // re-validate the path on EMIT, not just at the control boundary: `AppStore.restore` assigns a
-        // persisted spec raw, so a hand-edited `workspaces.json` could carry a control-char path that would
-        // inject a ghostty key here. A poisoned path drops the image entirely (font-size still emitted).
-        // `fit`/`position` are typed enums now, so they can't carry an injection — only `imagePath` is free text.
-        if let watermark, let path = resolvedImagePath, isValidImagePath(path) {
+        // re-validate the free-text fields on EMIT, not just at the control boundary: `AppStore.restore`
+        // assigns a persisted spec raw, so a hand-edited `workspaces.json` could carry a control-char path
+        // or a malformed color that would inject a ghostty key here. A poisoned value drops the background
+        // entirely (font-size still emitted). `fit`/`position` are typed enums, so they can't inject.
+        if let watermark, watermark.kind == .color, let hex = watermark.colorHex, isValidColorHex(hex) {
+            let opacity = windowOpacity.isFinite ? min(max(windowOpacity, 0), 1) : 1
+            lines.append("background = \(hex)")
+            lines.append("background-opacity = \(formatted(opacity))")
+        } else if let watermark, watermark.kind != .color, let path = resolvedImagePath, isValidImagePath(path) {
             lines.append("background-opacity = 1")
             lines.append("background-image = \(path)")
             if let opacity = watermark.opacity { lines.append("background-image-opacity = \(formatted(opacity))") }

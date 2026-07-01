@@ -37,8 +37,8 @@ when none reported; distinct from `name`, the derived sidebar label), `active` (
 flagged working-set), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
 idle), `foreground`/`splitForeground` (the live argv of each pane's foreground
 process — what it is running — omitted when the pane sits at its shell prompt), and `background` (the
-watermark spec set via `session background` — a `{kind, text?, imagePath?, colorHex?, opacity?, fit?,
-position?, repeats?}` object — omitted when no watermark is set). Workspace nodes carry
+background spec set via `session background` — a `{kind, text?, imagePath?, colorHex?, opacity?, fit?,
+position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set). Workspace nodes carry
 `id`, `name`, `active`, `sessions`.
 
 ## workspace
@@ -162,10 +162,17 @@ position?, repeats?}` object — omitted when no watermark is set). Workspace no
   — rasterize `text` to a watermark behind the terminal. `--color` defaults to the terminal foreground
   (must be a `#rrggbb` hex value); `--opacity`/`--fit`/`--position` as above. `text` is capped at 256
   characters (a watermark is a word or two).
-- `session background clear [--target] [--window W]` — remove the session's watermark.
-  Per session (applies to the session's pane(s)); persisted, so it survives a relaunch. A watermark makes
-  the pane render OPAQUE, overriding window translucency (an image is invisible at 0 background-opacity).
-  Read the current watermark back from a session's `background` field in `tree --json` (omitted when none).
+- `session background color <#rrggbb> [--target] [--window W]` — set a SOLID terminal background color
+  (the `background` key, not an image). Takes no opacity: the color is drawn at the Settings window
+  translucency (solid when translucency is off; blurred/translucent when on), so it honors your
+  opacity/blur instead of forcing the pane opaque like the image/text watermark. Errors on a malformed
+  color (must be a `#rrggbb` hex value).
+- `session background clear [--target] [--window W]` — remove the session's background.
+  Per session (applies to the session's pane(s)); persisted, so it survives a relaunch. An image/text
+  watermark makes the pane render OPAQUE, overriding window translucency (an image is invisible at 0
+  background-opacity); a `color` instead honors the Settings window translucency. Read the current
+  background back from a session's `background` field in `tree --json` (a `{kind, colorHex, …}` object,
+  omitted when none).
 - `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--target] [--window W]`
   — run `command` in an ephemeral terminal on top of the session; it closes when the command exits.
   Full-size by default (hides the session); `--size-percent N` (1–100) makes it a floating framed panel

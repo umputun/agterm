@@ -1,10 +1,11 @@
 import Foundation
 
-/// A per-session background watermark composited behind the terminal grid by libghostty's
-/// `background-image*` config keys: either a user-supplied image file (`.image`) or a string agterm
-/// rasterizes to a PNG (`.text`). Stored on `Session`, persisted in `SessionSnapshot`, and carried on
-/// the control wire. Host-free + `Codable`: the app target turns it into a per-surface ghostty config
-/// overlay (see `WatermarkConfig`) and, for `.text`, renders the PNG (the only step that needs AppKit).
+/// A per-session background composited behind the terminal grid: a user-supplied image file (`.image`)
+/// or a string agterm rasterizes to a PNG (`.text`), both via libghostty's `background-image*` keys, or
+/// a solid `#rrggbb` background color (`.color`) via the `background` key. Stored on `Session`, persisted
+/// in `SessionSnapshot`, and carried on the control wire. Host-free + `Codable`: the app target turns it
+/// into a per-surface ghostty config overlay (see `WatermarkConfig`) and, for `.text`, renders the PNG
+/// (the only step that needs AppKit).
 ///
 /// libghostty re-fits the image to the surface on every resize (`background-image-fit`), so the
 /// "auto-resize to the window" behavior needs no app-side resize handling.
@@ -14,6 +15,10 @@ public struct BackgroundWatermark: Codable, Sendable, Equatable {
         case image
         /// `text` is rasterized to a PNG by the app target; `colorHex` tints it.
         case text
+        /// `colorHex` is a solid `#rrggbb` terminal background color (no image). It is drawn at the window
+        /// translucency set in Settings (solid when translucency is off), applied at emit time by
+        /// `WatermarkConfig.overlayText(windowOpacity:)` — the spec carries no opacity of its own.
+        case color
     }
 
     /// libghostty `background-image-fit` (Config.zig `BackgroundImageFit`). A typed enum (like `Kind`)
@@ -37,6 +42,7 @@ public struct BackgroundWatermark: Codable, Sendable, Equatable {
     /// For `.text`: the watermark string.
     public var text: String?
     /// For `.text`: the text color as `#rrggbb`; nil = the terminal foreground color at render time.
+    /// For `.color`: the solid background color as `#rrggbb` (required).
     public var colorHex: String?
     /// `background-image-opacity` (relative to `background-opacity`); nil = ghostty's 1.0 default.
     public var opacity: Double?

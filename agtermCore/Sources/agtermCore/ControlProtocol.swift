@@ -81,11 +81,13 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var select: Bool?
     /// Mode for `session.split` / `quick` (`on|off|toggle`, `show|hide|toggle` for quick),
     /// `session.flag` (`on|off|toggle|clear`), `sidebar.mode` (`tree|flagged|toggle`),
-    /// `workspace.focus` (`on|off|toggle`), and `session.background` (`image|text|clear`).
+    /// `workspace.focus` (`on|off|toggle`), and `session.background` (`image|text|color|clear`).
     public var mode: String?
     /// The image file path for `session.background` mode `image` (PNG or JPEG).
     public var path: String?
-    /// The text color (`#rrggbb`) for `session.background` mode `text`; nil = the terminal foreground.
+    /// The color (`#rrggbb`) for `session.background`: the text tint for mode `text` (nil = the terminal
+    /// foreground), or the solid background color for mode `color` (required). Mode `color` takes no
+    /// opacity — it honors the Settings window translucency.
     public var color: String?
     /// The `background-image-opacity` for `session.background` (image + text), 0...1; nil = ghostty's 1.0.
     public var opacity: Double?

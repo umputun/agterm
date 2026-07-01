@@ -229,6 +229,7 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionBackground, target: "9f3c",
                            args: ControlArgs(text: "DRAFT", mode: "text", color: "#ff0000",
                                              opacity: 0.15, fit: "contain", position: "center")),
+            ControlRequest(cmd: .sessionBackground, target: "active", args: ControlArgs(mode: "color", color: "#112233")),
             ControlRequest(cmd: .sessionBackground, target: "active", args: ControlArgs(mode: "clear")),
         ]
         for request in cases {
@@ -346,6 +347,17 @@ struct ControlProtocolTests {
         // a decoded-back value equals the original (rawValue mapping is lossless).
         let decoded = try JSONDecoder().decode(BackgroundWatermark.self, from: Data(json.utf8))
         #expect(decoded == watermark)
+    }
+
+    @Test func backgroundWatermarkColorKindSerializes() throws {
+        // the `.color` kind serializes as "color" and carries only the hex (no opacity — a solid color
+        // honors the Settings window translucency at render time).
+        let watermark = BackgroundWatermark(kind: .color, colorHex: "#112233")
+        let json = String(decoding: try JSONEncoder().encode(watermark), as: UTF8.self)
+        #expect(json.contains("\"kind\":\"color\""))
+        let decoded = try JSONDecoder().decode(BackgroundWatermark.self, from: Data(json.utf8))
+        #expect(decoded == watermark)
+        #expect(decoded.colorHex == "#112233")
     }
 
     @Test func restoreClearRoundTrips() throws {

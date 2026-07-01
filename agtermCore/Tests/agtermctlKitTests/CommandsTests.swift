@@ -742,6 +742,17 @@ struct CommandsTests {
         #expect(try request(argv) == expected)
     }
 
+    @Test func sessionBackgroundColor() throws {
+        let expected = ControlRequest(cmd: .sessionBackground, target: "s1",
+                                      args: ControlArgs(mode: "color", color: "#112233"))
+        #expect(try request(["session", "background", "color", "#112233", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionBackgroundColorRejectsBadColor() {
+        #expect(validationMessage(["session", "background", "color", "red"]) != nil)
+        #expect(validationMessage(["session", "background", "color", "#fff"]) != nil)
+    }
+
     @Test func sessionBackgroundClear() throws {
         let expected = ControlRequest(cmd: .sessionBackground, target: "active", args: ControlArgs(mode: "clear"))
         #expect(try request(["session", "background", "clear"]) == expected)

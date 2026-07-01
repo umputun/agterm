@@ -503,10 +503,20 @@ final class SettingsModel {
         // font size) when the generated config TEXT actually changed. A window-opacity drag within
         // the translucent range, or a blur change, leaves the config identical — re-syncing the
         // window alone is enough and avoids hammering surface rebuilds on every slider tick.
+        let opacityBefore = GhosttyApp.shared.windowOpacity
         if writeGhosttyConfig() {
             reloadConfigClearingSessionZoom()
         }
         applyWindowTranslucency()
+        // a `.color` session background bakes the window opacity into its per-surface `background-opacity`
+        // at apply time, so re-assert those surfaces whenever the opacity changed — reloadConfig's own
+        // re-assert (when the config text changed) runs BEFORE `applyWindowTranslucency` updates the
+        // opacity, and a within-range slider drag doesn't reload at all, so neither path alone keeps a
+        // color session tracking the slider. Guarded to `.color` surfaces so a plain/image/text session
+        // isn't rebuilt on every opacity tick (blur composites at the AppKit level and needs no re-emit).
+        if GhosttyApp.shared.windowOpacity != opacityBefore {
+            for surface in liveSurfaces() { surface.reapplyColorBackgroundIfNeeded() }
+        }
         applyNotificationsEnabled()
         applyCompactToolbar()
         applyNotificationBadgeEnabled()

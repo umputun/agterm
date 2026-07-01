@@ -96,8 +96,8 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 **tree** — print the workspace/session tree (`--json` for structured). Each session node carries
 `foreground`/`splitForeground` (the live argv of each pane's foreground process, omitted when the pane
 is at its shell prompt) — i.e. what each pane is currently running — `status` (the agent-status set
-via `session status`: `active`|`completed`|`blocked`, omitted when idle), and `background` (the watermark
-spec set via `session background`, omitted when none — the read side of set/clear).
+via `session status`: `active`|`completed`|`blocked`, omitted when idle), and `background` (the background
+spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear).
 
 **workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom` ·
 `focus [on|off|toggle]` (collapse the sidebar tree to a single workspace).
@@ -129,9 +129,11 @@ spec set via `session background`, omitted when none — the read side of set/cl
 - `flag [on|off|toggle|clear]` — flag a session for the flagged working-set view (`clear` unflags all).
 - `background image <path> [--opacity F] [--fit contain|cover|stretch|none] [--position P] [--repeat]` ·
   `background text <text> [--color #rrggbb] [--opacity F] [--fit ...] [--position ...]` ·
-  `background clear` — composite an image (PNG/JPEG) or rasterized text behind the terminal as a
-  watermark, auto-fitting the window (re-fits on resize). Per session; survives restart. `--opacity`
-  0.0–1.0. (A watermark renders the pane opaque, overriding window translucency, so the image shows.)
+  `background color <#rrggbb>` · `background clear` — composite an image (PNG/JPEG) or rasterized text
+  behind the terminal as a watermark (auto-fitting the window, re-fits on resize), or set a solid
+  terminal background color. Per session; survives restart. `--opacity` 0.0–1.0. (An image/text watermark
+  renders the pane opaque, overriding window translucency, so it shows; a `color` takes no opacity and
+  honors the Settings window translucency instead.)
 - `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N]` · `overlay close` ·
   `overlay result` — run a program on top of a session; `--block` waits and exits with its status. An
   overlay is a real terminal (pty), which is also how you **display an image inline** — via the bundled

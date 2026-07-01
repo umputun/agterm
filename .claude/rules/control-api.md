@@ -605,18 +605,27 @@ paths:
   (4) round-trip (`restoreClearRoundTrips` + `treeSessionNodeRoundTripsWithForeground`/`…OmitsForegroundWhenNil`)
   in `ControlProtocolTests` + the e2e (`testTreeExposesForegroundProcess`,
   `testRestoreClearSucceeds`) in `ControlAPIUITests`.
-  `session.background` (target = session) sets or clears a per-session background watermark composited
-  behind the terminal grid by libghostty `background-image*` keys — `args.mode` is `image`/`text`/`clear`:
+  `session.background` (target = session) sets or clears a per-session background composited behind the
+  terminal grid — `args.mode` is `image`/`text`/`color`/`clear`.
+  `image`/`text` are watermarks driven by libghostty `background-image*` keys:
   `image` needs `args.path` (PNG/JPEG, validated for format + existence + no control chars in the path),
   `text` needs `args.text` (capped at 256 chars; + optional `args.color` #rrggbb, default the terminal
-  foreground), and both accept `args.opacity` (0...1)/`args.fit`/`args.position`/`args.repeats` — opacity/color/fit/position
-  validated against the shared host-free `WatermarkConfig`, used by BOTH the CLI `validate()` and the server.
+  foreground), and both accept `args.opacity` (0...1)/`args.fit`/`args.position`/`args.repeats`.
+  `color` is a SOLID terminal background color driven by the `background` key: it needs `args.color` (#rrggbb)
+  and takes NO per-call opacity — it is drawn at the Settings WINDOW translucency (solid when off),
+  emitted as `background-opacity = <windowOpacity>` at apply time so the color honors the user's opacity/blur
+  instead of forcing itself opaque (unlike the image/text watermark, which pins `background-opacity = 1`
+  so the image shows).
+  opacity/color/fit/position validated against the shared host-free `WatermarkConfig`,
+  used by BOTH the CLI `validate()` and the server.
   The `BackgroundWatermark` spec (host-free, `Codable`) is persisted in `SessionSnapshot` (survives restart)
   via `AppStore.setBackgroundWatermark`, then applied to the session main + split surfaces as a PER-SURFACE
   ghostty config overlay: `GhosttyApp.configWithOverlay` builds the same base files + an overlay file
-  (`WatermarkConfig.overlayText`: the `background-image*` lines + `background-opacity = 1` so the image
-  shows even under window translucency, which pins the global `background-opacity` to 0, + a `font-size`
-  line so the per-session cmd-+/- zoom is not reset by the push), and `GhosttySurfaceView.applyWatermarkFromSession`
+  (`WatermarkConfig.overlayText`: for image/text the `background-image*` lines + `background-opacity = 1`
+  so the image shows even under window translucency, which pins the global `background-opacity` to 0;
+  for `color` a `background = <hex>` line + `background-opacity = <windowOpacity>` (passed in from
+  `GhosttyApp.shared.windowOpacity`) so the color honors translucency instead of forcing itself opaque;
+  plus a `font-size` line so the per-session cmd-+/- zoom is not reset by the push), and `GhosttySurfaceView.applyWatermarkFromSession`
   calls `ghostty_surface_update_config`, RETAINING each per-surface config in `ownedConfigs` and freeing
   it only on surface teardown (safe — the consumer is gone — unlike the never-freed app-wide config).
   libghostty auto-fits the image to the surface and RE-FITS on resize (no app-side resize code);
@@ -627,6 +636,12 @@ paths:
   `applyConfig`, WIPING any watermark — so `GhosttyApp.reloadConfig` re-resolves the theme colors and
   then calls `reapplyWatermarkIfNeeded` on each surface AFTER the broadcast to re-assert it (the theme
   colors first, so a default-tinted `.text` watermark re-renders with the new foreground, not the old).
+  A `.color` background bakes the window opacity into its `background-opacity` at apply time, so it must
+  RE-TRACK the Settings translucency slider: `SettingsModel.apply` re-asserts every `.color` surface
+  (`GhosttySurfaceView.reapplyColorBackgroundIfNeeded`, guarded to `.color` so image/text aren't rebuilt
+  per tick) right AFTER `applyWindowTranslucency` updates `GhosttyApp.windowOpacity`, on any opacity
+  change — the `reloadConfig` re-assert alone reads a STALE opacity (it runs before the update) and a
+  within-range drag doesn't reload at all, so neither path alone keeps a color session tracking the slider.
   `BackgroundWatermark.fit`/`position` are typed `Fit`/`Position` `CaseIterable` enums (like `Kind`), not
   raw `String` — the raw values match ghostty's keys so they serialize identically, and a bad value can't
   reach a config line (only `imagePath` stays free text, re-validated on emit by `overlayText`, closing the
@@ -636,10 +651,12 @@ paths:
   on `ControlSessionNode` for the read-back),
   (2) the `.sessionBackground` dispatch arm (`setBackground`, validating + building the spec, then `applyWatermark`
   to the realized surfaces) in `ControlServer` (+ `background:` populated in the tree builder), (3) the
-  `session background image|text|clear` subcommands in `agtermctlKit` (shared opacity/color/fit/position
-  `validate()`), (4) round-trip in `ControlProtocolTests` (incl. `treeSessionNodeRoundTripsWithBackground`)
-  + `WatermarkConfigTests` + `WatermarkStorageTests` + `CommandsTests` (CLI parse + bad-arg rejection)
-  + the e2e `testSessionBackgroundSetClearAndValidation` in `ControlAPIUITests` (set/clear + tree read-back).
+  `session background image|text|color|clear` subcommands in `agtermctlKit` (shared opacity/color/fit/position
+  `validate()`; `color` takes color only, no opacity), (4) round-trip in `ControlProtocolTests` (incl.
+  `treeSessionNodeRoundTripsWithBackground` + `backgroundWatermarkColorKindSerializes`)
+  + `WatermarkConfigTests` (incl. the `color*` overlay cases) + `WatermarkStorageTests` + `CommandsTests`
+  (CLI parse + bad-arg rejection) + the e2e `testSessionBackgroundSetClearAndValidation` in `ControlAPIUITests`
+  (image/text/color set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
   examples.md recipes) and the command count there is bumped to 50 to match.

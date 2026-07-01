@@ -192,6 +192,19 @@ final class ControlAPIUITests: XCTestCase {
         XCTAssertEqual(bg["kind"] as? String, "text", "the watermark kind should read back")
         XCTAssertEqual(bg["text"] as? String, "STAGING", "the watermark text should read back")
 
+        // a solid background color reads back with kind "color" and the hex. The spec carries no opacity —
+        // a color honors the Settings window translucency at render time.
+        let colorSet = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"color","color":"#ff0000"}}"#)
+        XCTAssertEqual(colorSet["ok"] as? Bool, true, "session.background color should succeed: \(colorSet)")
+        let afterColor = try sendCommand(#"{"cmd":"tree"}"#)
+        let colorNode = try XCTUnwrap(sessionNode(afterColor, id: sid), "the session should appear in the tree")
+        let colorBg = try XCTUnwrap(colorNode["background"] as? [String: Any], "tree should expose the color background")
+        XCTAssertEqual(colorBg["kind"] as? String, "color", "the color kind should read back")
+        XCTAssertEqual(colorBg["colorHex"] as? String, "#ff0000", "the color hex should read back")
+
+        let badColor = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"color","color":"red"}}"#)
+        XCTAssertEqual(badColor["ok"] as? Bool, false, "a malformed color should be rejected")
+
         let missing = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"image","path":"/no/such.png"}}"#)
         XCTAssertEqual(missing["ok"] as? Bool, false, "a missing image file should be rejected")
 

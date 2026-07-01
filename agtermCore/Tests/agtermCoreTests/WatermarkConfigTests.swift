@@ -63,6 +63,33 @@ struct WatermarkConfigTests {
         #expect(text == "font-size = 14\n")
     }
 
+    @Test func colorOverlayEmitsBackgroundAtWindowOpacity() {
+        let watermark = BackgroundWatermark(kind: .color, colorHex: "#ff0000")
+        let text = WatermarkConfig.overlayText(watermark: watermark, resolvedImagePath: nil, fontSize: nil)
+        #expect(text.contains("background = #ff0000\n"))
+        #expect(text.contains("background-opacity = 1\n"))   // default windowOpacity = solid
+        #expect(!text.contains("background-image"))          // a solid color emits no image keys
+    }
+
+    @Test func colorOverlayHonorsWindowTranslucency() {
+        // a solid color is drawn at the window translucency (Settings), not a per-call opacity, so the
+        // window blur shows through when translucency is on. font zoom is preserved alongside.
+        let watermark = BackgroundWatermark(kind: .color, colorHex: "#00ff88")
+        let text = WatermarkConfig.overlayText(watermark: watermark, resolvedImagePath: nil, fontSize: 15, windowOpacity: 0.8)
+        #expect(text.contains("background = #00ff88\n"))
+        #expect(text.contains("background-opacity = 0.8\n"))
+        #expect(text.contains("font-size = 15\n"))
+    }
+
+    @Test func colorOverlayDropsMalformedHex() {
+        // defense-in-depth on the restore path: a persisted `.color` spec with a malformed hex (only
+        // reachable by hand-editing workspaces.json) must NOT emit a `background` line; font-size still emits.
+        let watermark = BackgroundWatermark(kind: .color, colorHex: "not-a-color")
+        let text = WatermarkConfig.overlayText(watermark: watermark, resolvedImagePath: nil, fontSize: 14)
+        #expect(!text.contains("background ="))
+        #expect(text == "font-size = 14\n")
+    }
+
     @Test func formattedDropsTrailingZeroForIntegralValues() {
         #expect(WatermarkConfig.formatted(14) == "14")
         #expect(WatermarkConfig.formatted(14.0) == "14")

@@ -497,7 +497,8 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         guard let surface, let session else { return }
         let resolvedImagePath = WatermarkRenderer.materialize(session.backgroundWatermark, sessionID: session.id)
         let overlay = WatermarkConfig.overlayText(watermark: session.backgroundWatermark,
-                                                  resolvedImagePath: resolvedImagePath, fontSize: session.fontSize)
+                                                  resolvedImagePath: resolvedImagePath, fontSize: session.fontSize,
+                                                  windowOpacity: GhosttyApp.shared.windowOpacity)
         guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
             NSLog("watermark: per-surface config build failed for session %@", session.id.uuidString)
             return
@@ -516,6 +517,16 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// a plain surface isn't needlessly rebuilt). Called from `GhosttyApp.reloadConfig`.
     func reapplyWatermarkIfNeeded() {
         guard session?.backgroundWatermark != nil else { return }
+        applyWatermarkFromSession()
+    }
+
+    /// Re-assert a SOLID-color session background after a window-opacity change. A `.color` background
+    /// bakes the current window opacity into its per-surface `background-opacity` at apply time (see
+    /// `WatermarkConfig.overlayText`), so a live opacity change must re-emit it to keep the color tracking
+    /// the slider. No-op unless the session carries a `.color` background — an image/text watermark has a
+    /// fixed opacity and must NOT re-render (a `.text` PNG rebuild) on every opacity tick.
+    func reapplyColorBackgroundIfNeeded() {
+        guard session?.backgroundWatermark?.kind == .color else { return }
         applyWatermarkFromSession()
     }
 
