@@ -69,7 +69,9 @@ process — what it is running — omitted when the pane sits at its shell promp
   process instead of the login shell (no echoed command line; the session closes when the command
   exits). It runs argv-style (tokenized, quotes respected, but NO shell), so shell operators (`;`,
   `&&`, `$VAR`, redirects, globs) are not interpreted — wrap them yourself: `--command "sh -c '…'"`.
-  The command is run-once and not persisted (a restored session is a plain shell). `--name`
+  The command is persisted (`SessionSnapshot.initialCommand`) and re-runs on restore when **Restore
+  running commands on restart** is on (default off → a restored session is a plain shell); a live
+  captured foreground takes precedence over it. `--name`
   seeds the session's custom name (the sidebar label; blank/omitted leaves the auto basename),
   equivalent to a `session rename` right after create.
 - `session close [--target] [--window W]`.
@@ -301,8 +303,10 @@ the commit, with no preview.
 
 ## restore
 
-`agtermctl restore clear` — clear every session's saved foreground command and persist, so the next
-restart restores plain shells (not whatever each pane was running). This is the counterpart to the
+`agtermctl restore clear` — clear every session's saved CAPTURED foreground command and persist, so the
+next restart restores plain shells for those panes (not whatever each pane was running). It does NOT clear
+a `session.new --command` session's own command (`initialCommand`, the durable creation identity), which
+still re-runs on restore when the setting is on. This is the counterpart to the
 opt-in **Restore running commands on restart** setting: that setting captures each pane's foreground
 command at a clean quit and re-runs it on relaunch; `restore clear` wipes those saved commands now
 (also closing the force-quit re-fire window). App-global (no `--window`), prints `ok`.

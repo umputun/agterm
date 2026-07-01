@@ -244,6 +244,15 @@ paths:
   the shell so exit returns to a prompt).
   The captured field is consumed run-once in the factory (read-then-nil,
   like `scratchCommand`) so a later structural save can't re-fire it.
+  The SAME toggle ALSO gates the OTHER restore path: a `session.new --command` session persists its command
+  (`SessionSnapshot.initialCommand`) and re-runs it on restore via `config.command` (the shell-replacing,
+  close-on-exit path — the opposite of the foreground path's `initial_input`), because a command that
+  exec-replaces the shell is invisible to the foreground-pid capture.
+  That path is gated by the transient `Session.wasRestored` (a fresh command session always runs; a restored
+  one honors the toggle), and a live captured foreground preempts the persisted `initialCommand`.
+  Unlike `foregroundCommand`, `initialCommand` is NOT consumed — it is the durable creation identity,
+  re-emitted by every `snapshot()`, so the opt-out is per-restart (re-enabling the toggle brings the command
+  session back); it is dropped only when the command pane exits into a promoted split (`closePrimaryPane`).
   All decision logic (parse/shell-detect/denylist/quote) is host-free in `CommandRestore` (unit-tested);
   the app target owns only the C-boundary + Darwin syscall.
   ONLY a single-process command restores faithfully — a typed pipeline/compound line captures one process.

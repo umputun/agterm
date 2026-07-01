@@ -46,6 +46,35 @@ public enum CommandRestore {
         return !denylist.contains(basename(first))
     }
 
+    /// The mutually-exclusive surface seed a pane restores/creates with. `command` != nil → the exec path
+    /// (replaces the shell, closes on exit); else `initialInput` is typed into a login shell, or both nil =
+    /// a plain shell.
+    public struct RestorePlan: Equatable, Sendable {
+        public let command: String?
+        public let initialInput: String?
+        public init(command: String?, initialInput: String?) {
+            self.command = command
+            self.initialInput = initialInput
+        }
+    }
+
+    /// Decide a pane's seed on create/restore. Pure so the gate + precedence is unit-tested off the C
+    /// boundary; the app target owns only the libghostty seeding.
+    /// - `wasRestored`: the session came from a restore (a FRESH command session always runs its command; a
+    ///   RESTORED one only when the opt-in is on).
+    /// - `restoreEnabled`: the `restoreRunningCommand` opt-in.
+    /// - `hadForeground`: a foreground command was CAPTURED at the last quit. A captured foreground PREEMPTS
+    ///   `initialCommand` even when suppressed (denylisted/off → `foregroundInput` nil), yielding a plain
+    ///   shell rather than the stale creation command — so gate on capture, not on whether the input survived.
+    /// - `foregroundInput`: the rendered foreground command line to type, or nil (none / suppressed).
+    /// - `initialCommand`: the session's persisted `--command`.
+    public static func restorePlan(wasRestored: Bool, restoreEnabled: Bool, hadForeground: Bool,
+                                   foregroundInput: String?, initialCommand: String?) -> RestorePlan {
+        let mayRunInitial = !wasRestored || restoreEnabled
+        let command = (!hadForeground && mayRunInitial) ? initialCommand : nil
+        return RestorePlan(command: command, initialInput: command == nil ? foregroundInput : nil)
+    }
+
     /// Parse `restore-denylist.conf` into a set of program basenames NOT to re-run on restore: one entry
     /// per line, trimmed; blank lines and `#` comments ignored. There is NO built-in list — the file is
     /// the whole source (seeded with the terminal multiplexers on first launch).

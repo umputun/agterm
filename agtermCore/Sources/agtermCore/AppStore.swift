@@ -362,6 +362,9 @@ public final class AppStore {
         session.hasSplit = false
         session.splitFocused = true
         session.splitRatio = nil // promoted to a single pane; a later split should open even, not stale
+        // the command pane is gone — the promoted survivor is a plain shell, so drop the creation command
+        // or a restart would resurrect the exited command instead of restoring the promoted shell.
+        session.initialCommand = nil
         if let cwd = session.splitCwd { session.currentCwd = cwd }
         // the primary surface (possibly the search owner) is torn down while the session survives as the
         // promoted split, so reset search rather than leave a stuck bar pinned to the gone primary.

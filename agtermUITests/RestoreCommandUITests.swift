@@ -1,3 +1,4 @@
+import Darwin
 import XCTest
 
 /// End-to-end for the restore-running-command feature: capture a pane's foreground command at quit and
@@ -9,6 +10,7 @@ final class RestoreCommandUITests: XCTestCase {
     private var app: XCUIApplication!
     private var stateDir: URL!
     private var marker: URL!
+    private var socketPath: String!
 
     override func setUp() async throws {
         continueAfterFailure = false
@@ -18,11 +20,18 @@ final class RestoreCommandUITests: XCTestCase {
         marker = stateDir.appendingPathComponent("restore-marker")
         app = XCUIApplication()
         app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
+        // short socket path in the runner's temp dir: under the ~104-byte sun_path limit AND inside the
+        // runner sandbox (the long per-test stateDir subdir + /tmp both fail); used to create a --command
+        // session over the control channel.
+        socketPath = (NSTemporaryDirectory() as NSString)
+            .appendingPathComponent("agtermr-\(UUID().uuidString.prefix(8)).sock")
+        app.launchEnvironment["AGTERM_CONTROL_SOCKET"] = socketPath
     }
 
     override func tearDown() async throws {
         app?.terminate()
         if let stateDir { try? FileManager.default.removeItem(at: stateDir) }
+        if let socketPath { try? FileManager.default.removeItem(atPath: socketPath) }
     }
 
     func testRestoreReRunsForegroundCommand() throws {
@@ -88,6 +97,44 @@ final class RestoreCommandUITests: XCTestCase {
                       "an idle login-shell pane must not be captured as a foreground command, got \(capturedForegroundCommands())")
     }
 
+    // A `session.new --command` session persists its command and re-runs it via the EXEC path on restore
+    // when the feature is on — the command-session analogue of the foreground path. `tee <marker>` as the
+    // command exec-replaces the shell (so libghostty reports no foreground and NOTHING is captured), which
+    // proves the restore comes from the persisted `initialCommand`, not a captured foreground.
+    func testRestoreReRunsCommandSession() throws {
+        seedRestoreFlag(true)
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 30), "control server up")
+        let created = try sendCommand(#"{"cmd":"session.new","args":{"command":"tee \#(marker.path)"}}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true, "session.new --command should succeed: \(created)")
+        XCTAssertTrue(poll { FileManager.default.fileExists(atPath: self.marker.path) },
+                      "the --command `tee` should create its marker on start")
+
+        try FileManager.default.removeItem(at: marker)
+        gracefulQuit()
+        app.launchForUITest()
+        XCTAssertTrue(poll { FileManager.default.fileExists(atPath: self.marker.path) },
+                      "restore should re-run the persisted --command (via the exec path) and recreate the marker")
+    }
+
+    func testRestoreOffLeavesCommandSessionAPlainShell() throws {
+        seedRestoreFlag(false)
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 30), "control server up")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.new","args":{"command":"tee \#(marker.path)"}}"#)["ok"] as? Bool,
+                       true, "session.new --command should succeed")
+        XCTAssertTrue(poll { FileManager.default.fileExists(atPath: self.marker.path) }, "marker created on start")
+
+        try FileManager.default.removeItem(at: marker)
+        gracefulQuit()
+        app.launchForUITest()
+        // flag off → a restored --command session comes back a plain shell → tee is not re-run → marker gone.
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "session restored")
+        RunLoop.current.run(until: Date().addingTimeInterval(2)) // give any (incorrect) re-run a chance to fire
+        XCTAssertFalse(FileManager.default.fileExists(atPath: marker.path),
+                       "with the flag off, a restored --command session must not re-run its command")
+    }
+
     // MARK: - Helpers
 
     /// Every persisted `foregroundCommand` across the window snapshots written at quit (the capture oracle).
@@ -140,5 +187,76 @@ final class RestoreCommandUITests: XCTestCase {
             usleep(200_000)
         }
         return condition()
+    }
+
+    /// Send one newline-delimited JSON request to the control socket and return the decoded response.
+    private func sendCommand(_ line: String) throws -> [String: Any] {
+        let fd = try connect(to: socketPath)
+        defer { close(fd) }
+        var payload = Data(line.utf8)
+        payload.append(UInt8(ascii: "\n"))
+        try writeAll(fd, payload)
+        let data = readResponseLine(fd)
+        let obj = try JSONSerialization.jsonObject(with: data) as? [String: Any]
+        return try XCTUnwrap(obj, "response should be a JSON object, got: \(String(data: data, encoding: .utf8) ?? "<binary>")")
+    }
+
+    private func connect(to path: String) throws -> Int32 {
+        let deadline = Date().addingTimeInterval(15)
+        var lastErrno: Int32 = 0
+        repeat {
+            let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+            guard fd >= 0 else { throw posixError("socket", errno) }
+            var addr = sockaddr_un()
+            addr.sun_family = sa_family_t(AF_UNIX)
+            let pathBytes = path.utf8CString
+            withUnsafeMutablePointer(to: &addr.sun_path) { dst in
+                dst.withMemoryRebound(to: CChar.self, capacity: pathBytes.count) { buf in
+                    pathBytes.withUnsafeBufferPointer { src in buf.update(from: src.baseAddress!, count: src.count) }
+                }
+            }
+            let result = withUnsafePointer(to: &addr) { ptr in
+                ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
+                    Darwin.connect(fd, sa, socklen_t(MemoryLayout<sockaddr_un>.size))
+                }
+            }
+            if result == 0 { return fd }
+            lastErrno = errno
+            close(fd)
+            usleep(200_000)
+        } while Date() < deadline
+        throw posixError("connect(\(path))", lastErrno)
+    }
+
+    private func writeAll(_ fd: Int32, _ data: Data) throws {
+        try data.withUnsafeBytes { raw in
+            var offset = 0
+            let base = raw.bindMemory(to: UInt8.self).baseAddress!
+            while offset < data.count {
+                let n = write(fd, base + offset, data.count - offset)
+                if n <= 0 { throw posixError("write", errno) }
+                offset += n
+            }
+        }
+    }
+
+    private func readResponseLine(_ fd: Int32) -> Data {
+        var buffer = Data()
+        var byte: UInt8 = 0
+        while true {
+            let n = read(fd, &byte, 1)
+            if n < 0 {
+                if errno == EINTR { continue } // a signal interrupted the blocking read; retry
+                return buffer
+            }
+            if n == 0 { return buffer } // EOF
+            if byte == UInt8(ascii: "\n") { return buffer }
+            buffer.append(byte)
+        }
+    }
+
+    private func posixError(_ op: String, _ code: Int32) -> NSError {
+        NSError(domain: "control-socket", code: Int(code),
+                userInfo: [NSLocalizedDescriptionKey: "\(op) failed: \(String(cString: strerror(code)))"])
     }
 }

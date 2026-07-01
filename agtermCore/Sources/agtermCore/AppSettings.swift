@@ -77,9 +77,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// SwiftUI wash behind the sidebar (see `sidebarShiftAmount`), NOT a ghostty key — it never appears
     /// in `ghosttyConfigLines()`.
     public var sidebarBackgroundShift: Int?
-    /// Whether, on app restart, each pane re-runs the command it had in the foreground at the last clean
-    /// quit (captured via `SessionSnapshot.foregroundCommand`). nil means the default (off). An app-level
-    /// behavior flag, NOT a ghostty key — it never appears in `ghosttyConfigLines()`.
+    /// Whether, on app restart, each pane re-runs the command it was running at the last clean quit: a
+    /// captured foreground command (`SessionSnapshot.foregroundCommand`) and a `session.new --command`
+    /// session's persisted `initialCommand`. nil means the default (off). An app-level behavior flag, NOT a
+    /// ghostty key — it never appears in `ghosttyConfigLines()`.
     public var restoreRunningCommand: Bool?
     /// Whether agterm also loads the user's GLOBAL ghostty config (`~/.config/ghostty/config`) on top of
     /// its bundled defaults. nil means the default (off): agterm is self-contained, so a config written

@@ -132,4 +132,45 @@ struct CommandRestoreTests {
         #expect(CommandRestore.basename("ssh") == "ssh")
         #expect(CommandRestore.basename("") == "")
     }
+
+    // MARK: - restorePlan (the surface-seed gate/precedence)
+
+    @Test func freshCommandSessionAlwaysRunsItsCommand() {
+        // a freshly created --command session runs its command via the exec path, toggle irrelevant
+        for enabled in [true, false] {
+            let plan = CommandRestore.restorePlan(wasRestored: false, restoreEnabled: enabled,
+                                                  hadForeground: false, foregroundInput: nil, initialCommand: "ssh host")
+            #expect(plan == CommandRestore.RestorePlan(command: "ssh host", initialInput: nil))
+        }
+    }
+
+    @Test func restoredCommandSessionRunsCommandOnlyWhenEnabled() {
+        let on = CommandRestore.restorePlan(wasRestored: true, restoreEnabled: true, hadForeground: false,
+                                            foregroundInput: nil, initialCommand: "ssh host")
+        #expect(on == CommandRestore.RestorePlan(command: "ssh host", initialInput: nil))
+        let off = CommandRestore.restorePlan(wasRestored: true, restoreEnabled: false, hadForeground: false,
+                                             foregroundInput: nil, initialCommand: "ssh host")
+        #expect(off == CommandRestore.RestorePlan(command: nil, initialInput: nil)) // opt-out → plain shell
+    }
+
+    @Test func capturedForegroundPreemptsInitialCommand() {
+        // a live child captured at quit wins over the persisted creation command (typed, not exec)
+        let plan = CommandRestore.restorePlan(wasRestored: true, restoreEnabled: true, hadForeground: true,
+                                              foregroundInput: "top\n", initialCommand: "ssh host")
+        #expect(plan == CommandRestore.RestorePlan(command: nil, initialInput: "top\n"))
+    }
+
+    @Test func suppressedForegroundYieldsPlainShellNotStaleCommand() {
+        // a foreground was captured but suppressed (denylisted/off → nil input): a plain shell, NOT a
+        // fall-through to the stale creation command
+        let plan = CommandRestore.restorePlan(wasRestored: true, restoreEnabled: true, hadForeground: true,
+                                              foregroundInput: nil, initialCommand: "ssh host")
+        #expect(plan == CommandRestore.RestorePlan(command: nil, initialInput: nil))
+    }
+
+    @Test func noCommandAndNoForegroundIsPlainShell() {
+        let plan = CommandRestore.restorePlan(wasRestored: true, restoreEnabled: true, hadForeground: false,
+                                              foregroundInput: nil, initialCommand: nil)
+        #expect(plan == CommandRestore.RestorePlan(command: nil, initialInput: nil))
+    }
 }

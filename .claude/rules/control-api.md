@@ -270,8 +270,11 @@ paths:
   `args.command` runs that command AS the session's process instead of the login shell (like kitty's
   `launch <cmd>` / ghostty's `command`) — NO echoed command line, and the session closes when the command
   exits (the normal single-pane `onExit` → `closePrimaryPane`).
-  It is transient + run-once: `Session.initialCommand` is `@ObservationIgnored` and absent from `SessionSnapshot`,
-  so a restored session is a plain shell.
+  `Session.initialCommand` is `@ObservationIgnored` but PERSISTED via `SessionSnapshot.initialCommand`, so it
+  re-runs on restore (through the same `config.command` exec path) when the **restore-running-command** opt-in
+  is on — gated via the transient `Session.wasRestored` so a fresh session always runs its command while a
+  restored one honors the toggle (default off → a restored session is a plain shell); a live captured
+  foreground preempts it, and `closePrimaryPane` clears it when a command pane exits into a promoted split.
   The arm threads `request.args?.command` into `AppStore.addSession(…, command:)`,
   which `makeSurface` passes to `GhosttySurfaceView(command:)` → `config.command` RAW (`strdup`,
   NO wrapper). libghostty tokenizes it into argv (shell-like word-splitting that RESPECTS quotes) and
@@ -559,10 +562,13 @@ paths:
   capture the restore-running-command feature uses (`ghostty_surface_foreground_pid` → `sysctl(KERN_PROCARGS2)`
   → host-free `CommandRestore`), populated in the tree builder per session so a script can read "what
   is each pane running".
-  `restore.clear` clears every open session's saved foreground command (`Session.foregroundCommand`/`splitForegroundCommand`)
-  and persists via `library.saveAllOpen()`, so the next restart restores plain shells instead of re-running
-  the captured commands (also closing the force-quit re-fire: the restored command is consumed in memory
-  but its on-disk copy lingers until the next save, which a force-quit skips).
+  `restore.clear` clears every open session's saved CAPTURED foreground command (`Session.foregroundCommand`/`splitForegroundCommand`)
+  and persists via `library.saveAllOpen()`, so the next restart restores plain shells for those panes instead
+  of re-running the captured commands (also closing the force-quit re-fire: the restored command is consumed
+  in memory but its on-disk copy lingers until the next save, which a force-quit skips).
+  It does NOT clear a `session.new --command` session's own `initialCommand` (the durable creation identity),
+  which still re-runs on restore when the setting is on — `restore.clear` is scoped to captured foreground
+  commands only.
   App-global like `keymap.reload` (clears all open windows, no `--window`).
   Four-point keep-in-sync audit for `restore.clear`: (1) `case restoreClear = "restore.clear"` in `ControlProtocol.swift`
   (no target/args; `foreground`/`splitForeground` added to `ControlSessionNode`),
