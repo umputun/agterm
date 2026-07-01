@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.2 - 2026-07-01
+
+### Bug Fixes
+
+- right-click paste works out of the box, with a General settings toggle to disable it #63 @umputun
+- file drops land on the visible session instead of an invisible background one #63 @umputun
+
 ## v0.4.1 - 2026-07-01
 
 ### Improvements
