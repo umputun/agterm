@@ -88,9 +88,9 @@ paths:
   non-empty (skipped under the XCUITest launch, like the quit-confirm).
 - **Tree-mode flagged indicator (filled-icon variant).**
   In `.tree` mode a flagged session's row swaps its leading icon to the FILLED SF Symbol variant of its
-  base glyph — `terminal.fill` for a single session, `rectangle.split.2x1.fill` for a split (the SAME
-  filled split symbol the titlebar split button uses; outline = unflagged,
-  filled = flagged, mirroring the titlebar split indicator) — via the cached `flaggedSessionIcon`/`flaggedSplitSessionIcon`
+  base glyph — `terminal.fill` for a single session, `rectangle.split.2x1.fill` for a split (the same
+  filled split symbol the titlebar shows for a SHOWN split; outline = unflagged,
+  filled = flagged) — via the cached `flaggedSessionIcon`/`flaggedSplitSessionIcon`
   template images, tinted with the chrome/theme color.
   It is a pure SF Symbol swap (`Self.rowIcon(...)`), NOT a composited corner badge — same-size,
   so it is inherently layout-shift-free.

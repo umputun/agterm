@@ -717,8 +717,8 @@ private struct WindowContentView: View {
         let isSplit = store.activeSession?.isSplit ?? false
         let hasSplit = store.activeSession?.hasSplit ?? false
         let splitFocused = store.activeSession?.splitFocused ?? false
-        // filled = pane visible, outline = hidden. No split: an empty two-pane outline. Split shown: both
-        // panes filled. Collapsed to a single pane (hasSplit but not shown): only the VISIBLE pane's half
+        // filled = pane visible, outline = hidden. no split: an empty two-pane outline. split shown: both
+        // panes filled. collapsed to a single pane (hasSplit but not shown): only the VISIBLE pane's half
         // is filled — left for the primary, right for the split pane (`splitFocused` is the shown one when
         // hidden) — so the glyph tells you which pane is up and that the other is parked. `a11y` mirrors the
         // four states for XCUITest, which can't read the symbol name (like the attention bell's value).

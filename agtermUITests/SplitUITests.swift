@@ -226,6 +226,17 @@ final class SplitUITests: XCTestCase {
         // Ctrl-2 swaps the shown pane to the right → right half filled.
         app.typeKey("2", modifierFlags: .control)
         XCTAssertTrue(waitSplitValue(splitButton, "right"), "collapsed to the split pane fills the right half")
+
+        // re-showing the collapsed split fills both panes again (isSplit true).
+        splitButton.click()
+        XCTAssertTrue(waitSplitValue(splitButton, "both"), "re-showing a collapsed split fills both panes again")
+
+        // closing the split (exit the right pane's shell) collapses to a single non-split session → outline.
+        app.typeKey(.rightArrow, modifierFlags: [.command, .option]) // put terminal focus on the right pane
+        usleep(500_000)
+        app.typeText("exit")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(waitSplitValue(splitButton, "none"), "closing the split returns the glyph to the no-split outline")
     }
 
     // exiting one pane of a split must keep the session alive (collapsed to the survivor) AND focus
