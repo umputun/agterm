@@ -202,6 +202,9 @@ final class RestoreCommandUITests: XCTestCase {
     }
 
     private func connect(to path: String) throws -> Int32 {
+        guard path.utf8.count < 104 else { // sun_path limit; guard before copying, like SocketClient.connect
+            throw posixError("socket path too long (\(path.utf8.count) bytes)", ENAMETOOLONG)
+        }
         let deadline = Date().addingTimeInterval(15)
         var lastErrno: Int32 = 0
         repeat {
