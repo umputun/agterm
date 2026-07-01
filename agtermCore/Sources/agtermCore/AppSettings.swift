@@ -176,7 +176,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         // always emitted (nil = on): agterm forwards right-/middle-click to libghostty, so a right-click
         // pastes by default. off emits `ignore` so the toggle hard-disables it (the settings conf loads
         // last, so the UI owns the key over any `right-click-action` in the user's own ghostty.conf).
-        lines.append("right-click-action = \(rightClickPaste ?? true ? "paste" : "ignore")")
+        lines.append("right-click-action = \((rightClickPaste ?? true) ? "paste" : "ignore")")
         return lines
     }
 

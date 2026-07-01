@@ -87,7 +87,7 @@ private struct GeneralSettingsView: View {
                 }
                 Toggle("Right-click pastes", isOn: rightClickPaste)
                     .accessibilityIdentifier("settings-right-click-paste")
-                SettingHint("Right-click (and middle-click) pastes the clipboard into the terminal.")
+                SettingHint("Right-click pastes the clipboard into the terminal.")
             }
 
             Section("Sessions") {

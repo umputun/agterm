@@ -392,8 +392,8 @@ private struct WindowContentView: View {
         let hideForOverlay = fullOverlay || session.scratchActive
         let overlaid = session.overlayActive || session.scratchActive
         // on-screen = selected session, not hidden by a full overlay/scratch. Shared by BOTH split panes
-        // (unlike the focus-gated `isActive`), it drives each surface's `hitTest` so a file drop lands on
-        // the visible pane instead of an invisible background deck surface (matches the panes' hit-testing).
+        // (unlike the focus-gated `isActive`), it gates each surface's drag-type (un)registration so a file
+        // drop lands on the visible pane, not an invisible background deck surface (matches the panes' hit-testing).
         let visible = isActive && !hideForOverlay
         ZStack {
             // the session's pane(s), kept MOUNTED while an overlay is up — shells stay alive, like the deck

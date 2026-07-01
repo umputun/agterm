@@ -27,7 +27,8 @@ struct TerminalView: NSViewRepresentable {
     var isActive = true
     /// Whether this pane is on-screen (its session is selected and not hidden by a full overlay/scratch).
     /// UNLIKE `isActive` this is NOT split-focus-gated: both panes of a visible split are `deckVisible`.
-    /// Drives `GhosttySurfaceView.hitTest` so a file drop can't land on an invisible background surface.
+    /// Drives `GhosttySurfaceView`'s drag-type (un)registration so a file drop can't land on an invisible
+    /// background surface.
     var deckVisible = true
 
     func makeCoordinator() -> Coordinator { Coordinator() }
