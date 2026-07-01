@@ -1099,7 +1099,10 @@ private struct WindowAccessor: NSViewRepresentable {
                     library.closeWindow(windowID)
                     // closing a window drops its (unobserved) store, so the Dock badge's observation
                     // tracking won't fire — refresh it explicitly so the unseen total drops this window's.
-                    DockBadgeController.shared.refresh()
+                    // guard on isTerminating: on quit the willClose fires after applicationWillTerminate's
+                    // clear(), and closeWindow no-ops (stores stay loaded), so an unguarded refresh would
+                    // recompute the still-positive total and re-pin the badge clear() just zeroed.
+                    if !library.isTerminating { DockBadgeController.shared.refresh() }
                 }
             }
             titlebarObservers.append(closeToken)
