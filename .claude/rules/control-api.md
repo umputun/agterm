@@ -329,7 +329,8 @@ paths:
   in `ControlServer`, (3) the `session text [--all] [--lines N] [--pane left|right]` subcommand in `agtermctlKit`
   (`validate()` guards the flag combos, re-enforced SERVER-SIDE in `readText`), (4) round-trip tests in
   `ControlProtocolTests` + the e2e (`testSessionTextReturnsBuffer`, `testSessionTextSplitPaneWithoutSplitErrors`,
-  `testSessionTextRejectsInvalidArgsServerSide`) in `ControlAPIUITests`.
+  `testSessionTextRejectsInvalidArgsServerSide`, `testSessionTextBlankScreenReturnsOkEmpty`) in `SessionTextUITests`
+  (a `ControlAPIUITests` extension split into its own file to keep that suite under the swiftlint file_length limit).
   `session.search` searches the target session's live scrollback (target = session) — it SELECTS the
   target (so the bar + match highlights render and the surface is realized,
   bounded-realize-polled like `session.type`), then drives the FOCUSED surface over `ghostty_surface_binding_action`:

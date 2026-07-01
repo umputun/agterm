@@ -354,6 +354,30 @@ struct SessionTests {
         session.scratchActive = false
         #expect(session.topmostSurface === primary)
     }
+
+    @Test func onScreenSurfaceIsCoveringScratchElseFocusedPane() {
+        // the "what's visible" surface for session.text (no --pane) / session.search: the scratch when it
+        // covers the panes (and no overlay is up), else the FOCUSED pane. An overlay falls back to the pane
+        // (search/text don't target the ephemeral overlay), matching AppActions.searchTarget.
+        let session = Session(initialCwd: "/repo")
+        let primary = FakeSurface(), split = FakeSurface(), scratch = FakeSurface(), overlay = FakeSurface()
+        session.surface = primary
+        session.splitSurface = split
+        session.scratchSurface = scratch
+        session.overlaySurface = overlay
+        // no cover, no split focus: the primary pane.
+        #expect(session.onScreenSurface === primary)
+        // split focused: the focused split pane, not the primary.
+        session.splitFocused = true
+        #expect(session.onScreenSurface === split)
+        session.splitFocused = false
+        // scratch shown (no overlay): the scratch is what's on screen.
+        session.scratchActive = true
+        #expect(session.onScreenSurface === scratch)
+        // an overlay over the scratch falls back to the pane beneath, not the scratch or the overlay.
+        session.overlayActive = true
+        #expect(session.onScreenSurface === primary)
+    }
 }
 
 private final class FakeSurface: TerminalSurface {

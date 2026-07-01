@@ -104,6 +104,13 @@ final class ControlServer {
     /// the total read time; a legit one-line request arrives in milliseconds, far under the cap.
     nonisolated private static let readDeadlineSeconds = 10
 
+    /// Overall seconds a single response write may take before it's abandoned. `SO_SNDTIMEO` only bounds
+    /// each `write()`, so a slow-drip reader draining a multi-MB `session.text --all` a few bytes per
+    /// interval keeps every write making progress and never trips the per-write timeout, parking the serial
+    /// accept loop. This caps the total write time, symmetric with `readDeadlineSeconds`; a normal reader
+    /// drains a response in milliseconds, far under the cap.
+    nonisolated private static let writeDeadlineSeconds = 10
+
     init(library: WindowLibrary, actions: AppActions, settingsModel: SettingsModel, socketPath: String? = nil) {
         self.library = library
         self.actions = actions
@@ -288,7 +295,11 @@ final class ControlServer {
         data.withUnsafeBytes { raw in
             var offset = 0
             let base = raw.bindMemory(to: UInt8.self).baseAddress!
+            // overall deadline: SO_SNDTIMEO bounds each write(), but a slow-drip reader making a few bytes
+            // of progress per interval never trips it, so cap the total write time like readLine's deadline.
+            let deadline = DispatchTime.now() + .seconds(writeDeadlineSeconds)
             while offset < data.count {
+                if DispatchTime.now() > deadline { return }
                 let n = write(conn, base + offset, data.count - offset)
                 if n < 0 {
                     if errno == EINTR { continue } // retry an interrupted write

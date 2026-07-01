@@ -32,10 +32,10 @@ line_length:
 # and the large XCUITest/unit suites. limits sit just above today's maxima so the repo is
 # clean now and only further growth warns.
 file_length:
-  warning: 2800
+  warning: 2700
   error: 3000
 type_body_length:
-  warning: 1950
+  warning: 1850
   error: 2500
 function_body_length:
   warning: 250
