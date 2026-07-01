@@ -119,7 +119,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case id, customName, cwd, isSplit, fontSize, splitCwd, splitRatio, flagged
-        case foregroundCommand, splitForegroundCommand, backgroundWatermark
+        case foregroundCommand, splitForegroundCommand, initialCommand, backgroundWatermark
     }
 
     /// Custom decode so `backgroundWatermark` is LOSSY: a present-but-invalid spec (an unknown
@@ -140,6 +140,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         flagged = try c.decodeIfPresent(Bool.self, forKey: .flagged)
         foregroundCommand = try c.decodeIfPresent([String].self, forKey: .foregroundCommand)
         splitForegroundCommand = try c.decodeIfPresent([String].self, forKey: .splitForegroundCommand)
+        initialCommand = try c.decodeIfPresent(String.self, forKey: .initialCommand)
         backgroundWatermark = (try? c.decodeIfPresent(BackgroundWatermark.self, forKey: .backgroundWatermark)) ?? nil
     }
 }
