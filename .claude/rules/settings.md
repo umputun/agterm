@@ -284,4 +284,7 @@ paths:
   `session.select`; only `theme.set`/`config.reload` touch settings over the socket).
   See the Notifications section for the bell's three states and the Menu/actions section for the `.attention`
   palette it opens.
+- **A Settings toggle's DESCRIPTION stays single-line short-form** — a terse hint, not a manual.
+  No detailed multi-line explanation of what the toggle does and no cross-refs to other toggles;
+  keep the minimal style (see also the flag-description convention).
 
