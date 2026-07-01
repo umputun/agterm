@@ -24,7 +24,8 @@ paths:
   system orange/green; NOT ghostty keys) + `mouseScrollMultiplier` (ghostty `mouse-scroll-multiplier`)
   + `inactivePaneMuteStrength` (0...10 inactive-split-pane text mute, nil = default 5,
   NOT a ghostty key) + `sidebarBackgroundShift` (0...10 sidebar lighter/darker tint relative to the terminal,
-  nil = default 5 = neutral, NOT a ghostty key).
+  nil = default 5 = neutral, NOT a ghostty key)
+  + `rightClickPaste` (ghostty `right-click-action`, nil = on).
   The three `*StatusColorHex` (`#RRGGBB`, nil = active `#DBD9E6` muted lavender-grey + system amber/green)
   color the sidebar agent-status glyph: `SettingsModel` passes the hex to `GhosttyApp.setAgentStatusColors`
   which resolves to `NSColor` (so `SettingsModel` stays AppKit-free, the `NSColor`↔hex helper is `NSColor+AgtermHex`),
@@ -52,12 +53,21 @@ paths:
   `AppSettings.ghosttyConfigLines()` (host-free, unit-tested) emits `key = value` lines RAW — no quotes,
   because ghostty takes the whole line remainder as the value (confirmed against the bundled conf + theme
   files), so names with spaces (`3024 Night`) must not be quoted.
-  `mouseScrollMultiplier` is the ONE field always emitted: nil emits the default `mouse-scroll-multiplier = 3`
-  (a bare value applied to both the notched wheel and the trackpad) rather than being omitted,
-  so the default speed is effective rather than ghostty's per-device defaults (discrete 3 / precision
-  1) — a consequence is it overrides any `mouse-scroll-multiplier` in the user's own `~/.config/ghostty/config`.
-  The General → Scrolling stepper (1...10, default 3) maps 3 back to nil so `settings.json` stays minimal;
-  the emitted value is 3 either way.
+  TWO fields are always emitted (every other key is omitted when unset): `mouseScrollMultiplier` — nil
+  emits the default `mouse-scroll-multiplier = 3` (a bare value applied to both the notched wheel and
+  the trackpad) rather than being omitted, so the default speed is effective rather than ghostty's per-device
+  defaults (discrete 3 / precision 1) — a consequence is it overrides any `mouse-scroll-multiplier` in
+  the user's own `~/.config/ghostty/config`; and `rightClickPaste` — nil/on emits `right-click-action = paste`,
+  off emits `right-click-action = ignore`, so the toggle OWNS the key (the settings conf loads last, so
+  it wins over a `right-click-action` in the user's own `ghostty.conf` — for agterm, which has no terminal
+  context menu, paste-or-off is the whole meaningful choice).
+  The General → Mouse scroll-speed slider (1...10, default 3) maps 3 back to nil so `settings.json` stays
+  minimal; the emitted value is 3 either way.
+  The General → Mouse right-click toggle (default-ON binding, get `?? true` / set `$0 ? nil : false`,
+  like the other default-on toggles) drives `rightClickPaste` and is a real ghostty-key setter (`SettingsModel.setRightClickPaste`
+  → `persistAndApply` rewrites the conf and reloads surfaces live); GUI-only and keep-in-sync EXEMPT (only
+  `theme.set`/`config.reload` touch settings over the socket — the right-click FORWARDING itself is unconditional
+  in `GhosttySurfaceView`, this key only decides libghostty's action).
   The Appearance → Panes slider (0...10, default 5) maps 5 back to nil the same way;
   it drives `GhosttyApp.inactivePaneMuteStrength` (mirrored into `WindowContentView` view state on `.agtermAppearanceChanged`,
   like `compactToolbar`/`notificationBadgeEnabled`), and `ContentView.paneDim` washes the inactive split
@@ -117,8 +127,9 @@ paths:
   An explicit `TabView(selection:)` binding (`@State` default `.general`) suppresses SwiftUI's
   `com_apple_SwiftUI_Settings_selectedTabIndex` auto-persistence, so the window always opens on General
   instead of restoring the last-used tab.
-  **General** (a **Scrolling** section with the scroll-speed slider, a **Sessions** section with the
-  restore-running-commands toggle, and a **Ghostty Config** section with the inherit-global-config toggle).
+  **General** (a **Mouse** section with the scroll-speed slider + the right-click-pastes toggle,
+  a **Sessions** section with the restore-running-commands toggle,
+  and a **Ghostty Config** section with the inherit-global-config toggle).
   **Appearance** (a **Terminal** section — font/size/theme via `NSFontManager` monospaced families +
   the bundled `ghostty/themes` dir, `SettingsCatalog` — a **Window** section with the compact-toolbar
   toggle + background opacity/blur sliders + the Sidebar Tint slider, and a **Panes** section with the

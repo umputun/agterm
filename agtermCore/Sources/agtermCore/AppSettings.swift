@@ -98,6 +98,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// overrides this. An app-level value played at the AppKit level, NOT a ghostty key — it never appears
     /// in `ghosttyConfigLines()`.
     public var blockedStatusSoundName: String?
+    /// Whether a right-click pastes the clipboard (ghostty `right-click-action`). nil means the default
+    /// (on): agterm forwards right-/middle-click to libghostty, so a right-click pastes out of the box.
+    /// UNLIKE most flags this IS a ghostty key — `ghosttyConfigLines()` emits `right-click-action = paste`
+    /// when on and `= ignore` when off, so the UI owns the key (the settings conf loads last and wins over
+    /// a `right-click-action` in the user's own `ghostty.conf`). agterm has no terminal context menu, so
+    /// paste-or-off is the whole meaningful choice.
+    public var rightClickPaste: Bool?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 backgroundOpacity: Double? = nil, backgroundBlur: Int? = nil, notificationsEnabled: Bool? = nil,
@@ -107,7 +114,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 mouseScrollMultiplier: Double? = nil, inactivePaneMuteStrength: Int? = nil,
                 sidebarBackgroundShift: Int? = nil, restoreRunningCommand: Bool? = nil,
                 inheritGlobalGhosttyConfig: Bool? = nil, attentionButtonEnabled: Bool? = nil,
-                blockedStatusSoundName: String? = nil) {
+                blockedStatusSoundName: String? = nil, rightClickPaste: Bool? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -127,6 +134,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.inheritGlobalGhosttyConfig = inheritGlobalGhosttyConfig
         self.attentionButtonEnabled = attentionButtonEnabled
         self.blockedStatusSoundName = blockedStatusSoundName
+        self.rightClickPaste = rightClickPaste
     }
 
     /// The SwiftUI overlay opacity for a given inactive-pane mute strength: the strength is clamped to
@@ -165,6 +173,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
         // always emitted (nil = agterm's default of 3), so the default speed is effective rather than
         // ghostty's per-device defaults. a bare value sets both the wheel and the trackpad.
         lines.append("mouse-scroll-multiplier = \(Self.format(mouseScrollMultiplier ?? 3))")
+        // always emitted (nil = on): agterm forwards right-/middle-click to libghostty, so a right-click
+        // pastes by default. off emits `ignore` so the toggle hard-disables it (the settings conf loads
+        // last, so the UI owns the key over any `right-click-action` in the user's own ghostty.conf).
+        lines.append("right-click-action = \(rightClickPaste ?? true ? "paste" : "ignore")")
         return lines
     }
 

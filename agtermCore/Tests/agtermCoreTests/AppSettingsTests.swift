@@ -19,10 +19,10 @@ struct AppSettingsTests {
         #expect(decoded.theme == nil)
     }
 
-    @Test func emptySettingsEmitOnlyScrollDefault() {
-        // every other field is unset (omitted); only mouse-scroll-multiplier is always emitted, at its
-        // default of 3.
-        #expect(AppSettings().ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
+    @Test func emptySettingsEmitOnlyAlwaysOnDefaults() {
+        // every other field is unset (omitted); only the two always-on keys emit — mouse-scroll-multiplier
+        // at its default of 3 and right-click-action at its default of paste.
+        #expect(AppSettings().ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func configLinesCoverSetFieldsRawNoQuoting() {
@@ -36,13 +36,13 @@ struct AppSettingsTests {
 
     @Test func configLinesOmitUnsetFields() {
         let lines = AppSettings(theme: "Alabaster").ghosttyConfigLines()
-        // theme is set; font lines omitted; the scroll default is always present.
-        #expect(lines == ["theme = Alabaster", "mouse-scroll-multiplier = 3"])
+        // theme is set; font lines omitted; the always-on defaults (scroll + right-click) trail.
+        #expect(lines == ["theme = Alabaster", "mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func fractionalFontSizeKeepsDecimal() {
         let lines = AppSettings(fontSize: 13.5).ghosttyConfigLines()
-        #expect(lines == ["font-size = 13.5", "mouse-scroll-multiplier = 3"])
+        #expect(lines == ["font-size = 13.5", "mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func backgroundFieldsRoundTrip() throws {
@@ -90,15 +90,15 @@ struct AppSettingsTests {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
         #expect(decoded == original)
         // the glyph colors are applied at the AppKit level, never as ghostty config keys — so the only
-        // line is the always-present scroll default.
-        #expect(decoded.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
+        // lines are the always-on defaults (scroll + right-click).
+        #expect(decoded.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func notificationsEnabledRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(notificationsEnabled: false)))
         #expect(decoded.notificationsEnabled == false)
-        // it's an app-level toggle, never a ghostty config key — only the scroll default is emitted.
-        #expect(AppSettings(notificationsEnabled: false).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
+        // it's an app-level toggle, never a ghostty config key — only the always-on defaults (scroll + right-click) are emitted.
+        #expect(AppSettings(notificationsEnabled: false).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func restoreRunningCommandRoundTripsAndIsNotAConfigLine() throws {
@@ -107,8 +107,8 @@ struct AppSettingsTests {
         // absent in a legacy file decodes to nil (off).
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
         #expect(legacy.restoreRunningCommand == nil)
-        // an app-level behavior flag, never a ghostty config key — only the scroll default is emitted.
-        #expect(AppSettings(restoreRunningCommand: true).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
+        // an app-level behavior flag, never a ghostty config key — only the always-on defaults (scroll + right-click) are emitted.
+        #expect(AppSettings(restoreRunningCommand: true).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func blockedStatusSoundNameRoundTripsAndIsNotAConfigLine() throws {
@@ -117,16 +117,16 @@ struct AppSettingsTests {
         // absent in a legacy file decodes to nil (no sound).
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
         #expect(legacy.blockedStatusSoundName == nil)
-        // an app-level value, never a ghostty config key — only the scroll default is emitted.
-        #expect(AppSettings(blockedStatusSoundName: "Glass").ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
+        // an app-level value, never a ghostty config key — only the always-on defaults (scroll + right-click) are emitted.
+        #expect(AppSettings(blockedStatusSoundName: "Glass").ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func compactToolbarRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(compactToolbar: true)))
         #expect(decoded.compactToolbar == true)
         // window-chrome toggle applied at the AppKit level, never a ghostty config key — only the
-        // scroll default is emitted.
-        #expect(AppSettings(compactToolbar: true).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
+        // always-on defaults (scroll + right-click) are emitted.
+        #expect(AppSettings(compactToolbar: true).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func notificationBadgeEnabledDefaultsNil() {
@@ -136,16 +136,16 @@ struct AppSettingsTests {
     @Test func notificationBadgeEnabledRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(notificationBadgeEnabled: false)))
         #expect(decoded.notificationBadgeEnabled == false)
-        // app-level sidebar render toggle, never a ghostty config key — only the scroll default is emitted.
-        #expect(AppSettings(notificationBadgeEnabled: false).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
+        // app-level sidebar render toggle, never a ghostty config key — only the always-on defaults (scroll + right-click) are emitted.
+        #expect(AppSettings(notificationBadgeEnabled: false).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func configDirectoryRoundTripsAndIsNotAConfigLine() throws {
         let original = AppSettings(configDirectory: "/tmp/agterm-config")
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
         #expect(decoded.configDirectory == "/tmp/agterm-config")
-        // app-level path, never a ghostty config key — only the always-emitted scroll default appears.
-        #expect(decoded.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
+        // app-level path, never a ghostty config key — only the always-on defaults (scroll + right-click) appear.
+        #expect(decoded.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func configDirectoryDecodesNilWhenAbsent() throws {
@@ -159,7 +159,7 @@ struct AppSettingsTests {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(inactivePaneMuteStrength: 7)))
         #expect(decoded.inactivePaneMuteStrength == 7)
         // SwiftUI overlay opacity applied in the app target, never a ghostty config key.
-        #expect(AppSettings(inactivePaneMuteStrength: 7).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
+        #expect(AppSettings(inactivePaneMuteStrength: 7).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func inactivePaneMuteStrengthDecodesNilWhenAbsent() throws {
@@ -181,7 +181,7 @@ struct AppSettingsTests {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(sidebarBackgroundShift: 8)))
         #expect(decoded.sidebarBackgroundShift == 8)
         // AppKit-level sidebar tint applied in the app target, never a ghostty config key.
-        #expect(AppSettings(sidebarBackgroundShift: 8).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3"])
+        #expect(AppSettings(sidebarBackgroundShift: 8).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func sidebarBackgroundShiftDecodesNilWhenAbsent() throws {
@@ -234,5 +234,21 @@ struct AppSettingsTests {
         }
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
         #expect(legacy.attentionButtonEnabled == nil)
+    }
+
+    @Test func rightClickPasteDefaultsOnAndIsAGhosttyKey() throws {
+        // default (nil) = on → emits `right-click-action = paste`; off → `ignore`. UNLIKE the app-level
+        // flags this IS a ghostty key (the toggle owns it, always emitted).
+        #expect(AppSettings().rightClickPaste == nil)
+        #expect(AppSettings().ghosttyConfigLines().contains("right-click-action = paste"))
+        #expect(AppSettings(rightClickPaste: true).ghosttyConfigLines().contains("right-click-action = paste"))
+        #expect(AppSettings(rightClickPaste: false).ghosttyConfigLines().contains("right-click-action = ignore"))
+        // round-trips each state; a legacy settings.json without the key decodes to nil (on).
+        for value: Bool? in [nil, true, false] {
+            let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(rightClickPaste: value)))
+            #expect(decoded.rightClickPaste == value)
+        }
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(legacy.rightClickPaste == nil)
     }
 }

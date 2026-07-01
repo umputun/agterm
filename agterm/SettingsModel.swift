@@ -86,6 +86,8 @@ final class SettingsModel {
     func setCompactToolbar(_ value: Bool?) { settings.compactToolbar = value; persistAndApply() }
     func setNotificationBadgeEnabled(_ value: Bool?) { settings.notificationBadgeEnabled = value; persistAndApply() }
     func setMouseScrollMultiplier(_ value: Double?) { settings.mouseScrollMultiplier = value; persistAndApply() }
+    // ghostty key (right-click-action): persistAndApply() rewrites the conf and reloads surfaces live.
+    func setRightClickPaste(_ value: Bool?) { settings.rightClickPaste = value; persistAndApply() }
     func setInactivePaneMuteStrength(_ value: Int?) { settings.inactivePaneMuteStrength = value; persistAndApply() }
     func setSidebarBackgroundShift(_ value: Int?) { settings.sidebarBackgroundShift = value; persistAndApply() }
     // not a ghostty key, so persistAndApply()'s writeGhosttyConfig() no-ops and no surface reload fires.

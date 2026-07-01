@@ -2,7 +2,7 @@ import agtermCore
 import AppKit
 import SwiftUI
 
-/// The Settings window (Cmd+,): five tabs — General (scrolling, sessions, ghostty config),
+/// The Settings window (Cmd+,): five tabs — General (mouse, sessions, ghostty config),
 /// Appearance (font/theme + window translucency + pane dimming), Notifications (banner / badge /
 /// attention toggles), Agent Status (the sidebar glyph colors + blocked sound), and Key Mapping
 /// (the config directory + keymap diagnostics + Reload).
@@ -68,14 +68,15 @@ private struct SettingHint: View {
     }
 }
 
-/// General tab: scroll speed, the restore-running-commands toggle, and the inherit-global-ghostty-
-/// config toggle. The visual and notification settings live on their own tabs.
+/// General tab: a Mouse section (scroll speed + right-click-pastes toggle), the restore-running-commands
+/// toggle, and the inherit-global-ghostty-config toggle. The visual and notification settings live on
+/// their own tabs.
 private struct GeneralSettingsView: View {
     let model: SettingsModel
 
     var body: some View {
         Form {
-            Section("Scrolling") {
+            Section("Mouse") {
                 HStack {
                     Text("Scroll speed")
                     Slider(value: mouseScrollMultiplier, in: 1 ... 10, step: 1)
@@ -84,6 +85,9 @@ private struct GeneralSettingsView: View {
                         .monospacedDigit()
                         .frame(width: 42, alignment: .trailing)
                 }
+                Toggle("Right-click pastes", isOn: rightClickPaste)
+                    .accessibilityIdentifier("settings-right-click-paste")
+                SettingHint("Right-click (and middle-click) pastes the clipboard into the terminal.")
             }
 
             Section("Sessions") {
@@ -114,6 +118,13 @@ private struct GeneralSettingsView: View {
     private var inheritGlobalGhosttyConfig: Binding<Bool> {
         Binding(get: { model.settings.inheritGlobalGhosttyConfig ?? false },
                 set: { model.setInheritGlobalGhosttyConfig($0 ? true : nil) })
+    }
+
+    /// 1:1 with the toggle; nil (the default) reads as ON, so off → false / on → nil keeps settings.json
+    /// minimal. Drives the ghostty `right-click-action` key (paste when on, ignore when off).
+    private var rightClickPaste: Binding<Bool> {
+        Binding(get: { model.settings.rightClickPaste ?? true },
+                set: { model.setRightClickPaste($0 ? nil : false) })
     }
 
     /// nil (the default) reads as 3; stepping back to 3 stores nil so settings.json stays minimal. The
