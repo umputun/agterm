@@ -116,4 +116,30 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         self.initialCommand = initialCommand
         self.backgroundWatermark = backgroundWatermark
     }
+
+    enum CodingKeys: String, CodingKey {
+        case id, customName, cwd, isSplit, fontSize, splitCwd, splitRatio, flagged
+        case foregroundCommand, splitForegroundCommand, backgroundWatermark
+    }
+
+    /// Custom decode so `backgroundWatermark` is LOSSY: a present-but-invalid spec (an unknown
+    /// `kind`/`fit`/`position` — e.g. a DOWNGRADE after a newer release added a value the older build
+    /// can't decode, or a hand-edit typo) drops to nil instead of throwing `DataCorrupted`. Without this,
+    /// `Optional` tolerates only a MISSING key, so one bad watermark would fail the entire `SessionSnapshot`
+    /// and `PersistenceStore.load` would start fresh — wiping every workspace and session. Every other
+    /// field keeps `decodeIfPresent` (missing-key tolerant, the forward-compat the field docs describe).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        customName = try c.decodeIfPresent(String.self, forKey: .customName)
+        cwd = try c.decode(String.self, forKey: .cwd)
+        isSplit = try c.decodeIfPresent(Bool.self, forKey: .isSplit)
+        fontSize = try c.decodeIfPresent(Double.self, forKey: .fontSize)
+        splitCwd = try c.decodeIfPresent(String.self, forKey: .splitCwd)
+        splitRatio = try c.decodeIfPresent(Double.self, forKey: .splitRatio)
+        flagged = try c.decodeIfPresent(Bool.self, forKey: .flagged)
+        foregroundCommand = try c.decodeIfPresent([String].self, forKey: .foregroundCommand)
+        splitForegroundCommand = try c.decodeIfPresent([String].self, forKey: .splitForegroundCommand)
+        backgroundWatermark = (try? c.decodeIfPresent(BackgroundWatermark.self, forKey: .backgroundWatermark)) ?? nil
+    }
 }

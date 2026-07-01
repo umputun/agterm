@@ -459,10 +459,7 @@ final class ControlServer {
         case .sessionFlag:
             return flagSession(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionBackground:
-            return setBackground(request.target, window: request.args?.window, mode: request.args?.mode,
-                                 path: request.args?.path, text: request.args?.text, color: request.args?.color,
-                                 opacity: request.args?.opacity, fit: request.args?.fit,
-                                 position: request.args?.position, repeats: request.args?.repeats)
+            return setBackground(request.target, request.args)
         case .sessionCopy:
             return copySelection(request.target, window: request.args?.window)
         case .sessionSearch:
@@ -985,9 +982,12 @@ final class ControlServer {
     /// `BackgroundWatermark` spec (nil for `clear`), persist it on the session (`AppStore`, so it rides
     /// `SessionSnapshot`), then apply it to the session's realized surface(s). A never-shown session keeps
     /// the spec and applies it itself when its surface is created. Returns the session id.
-    private func setBackground(_ target: String?, window: String?, mode: String?, path: String?, text: String?,
-                               color: String?, opacity: Double?, fit: String?, position: String?,
-                               repeats: Bool?) -> ControlResponse {
+    private func setBackground(_ target: String?, _ args: ControlArgs?) -> ControlResponse {
+        // the args bag IS the option struct — unpack the watermark fields once so the arm stays a small
+        // fixed-arity signature (swiftlint function_parameter_count) rather than a 10-parameter dispatch.
+        let window = args?.window, mode = args?.mode, path = args?.path, text = args?.text
+        let color = args?.color, opacity = args?.opacity, fit = args?.fit
+        let position = args?.position, repeats = args?.repeats
         if let fit, !WatermarkConfig.isValidFit(fit) {
             return ControlResponse(ok: false, error: "invalid fit: \(fit) (contain|cover|stretch|none)")
         }

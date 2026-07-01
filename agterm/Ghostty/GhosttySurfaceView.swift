@@ -136,10 +136,11 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     nonisolated(unsafe) private var envVars: [ghostty_env_var_s] = []
 
     /// Per-surface ghostty configs built for this surface's background watermark (`configWithOverlay`),
-    /// retained so they outlive their `ghostty_surface_update_config` and freed only in
-    /// `destroySurface`/`deinit` — when the surface (the only consumer) is already gone, so the free is
-    /// safe (unlike the app-wide config, which `GhosttyApp` can never free). Each watermark re-apply
-    /// (set/clear/reload) appends one; the count is tiny (a handful over a surface's life).
+    /// retained so they outlive their `ghostty_surface_update_config`. Capped at ONE: each re-apply
+    /// (`set`/`clear`/`config.reload`) frees the prior and keeps only the current, since after
+    /// `update_config` the surface no longer references the old config — so a scriptable `config.reload`
+    /// loop can't grow it. The remaining one is freed in `destroySurface`/`deinit`, when the surface (its
+    /// only consumer) is gone, so that free is safe too (unlike the app-wide config `GhosttyApp` never frees).
     /// `nonisolated(unsafe)`: mutated only on the main actor, like `configCStrings`.
     nonisolated(unsafe) private var ownedConfigs: [ghostty_config_t] = []
 
@@ -468,7 +469,12 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
             return
         }
         ghostty_surface_update_config(surface, config)
-        ownedConfigs.append(config)
+        // free the PRIOR per-surface config(s) and keep only this one: after `update_config` installs the
+        // new config the surface no longer references the old, so freeing it here is safe AND caps the
+        // retain at one per surface. Without this, `config.reload` (scriptable) re-applies each watermarked
+        // surface every reload and would grow `ownedConfigs` unbounded on a reload loop.
+        ownedConfigs.forEach { ghostty_config_free($0) }
+        ownedConfigs = [config]
     }
 
     /// Re-assert the session's watermark after a global config reload broadcast the shared config (no

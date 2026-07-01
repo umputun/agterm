@@ -112,6 +112,24 @@ struct WatermarkConfigTests {
         #expect(decoded.backgroundWatermark == nil)
     }
 
+    @Test(arguments: [
+        #"{"kind":"text","text":"X","fit":"bogus"}"#,      // unknown fit (e.g. a downgrade / hand-edit typo)
+        #"{"kind":"text","text":"X","position":"middle"}"#, // unknown position
+        #"{"kind":"hologram","text":"X"}"#,                 // unknown kind
+    ])
+    func invalidWatermarkDecodesLossilyWithoutWipingTheSession(_ badWatermark: String) throws {
+        // a present-but-invalid watermark must NOT throw DataCorrupted and fail the whole SessionSnapshot
+        // (which would make PersistenceStore.load start fresh and wipe every workspace/session). It drops
+        // to nil while the rest of the session decodes intact.
+        let id = UUID()
+        let raw = #"{"id":"\#(id.uuidString)","cwd":"/tmp","customName":"keep","backgroundWatermark":\#(badWatermark)}"#
+        let decoded = try JSONDecoder().decode(SessionSnapshot.self, from: Data(raw.utf8))
+        #expect(decoded.id == id)                    // the session survives the bad watermark
+        #expect(decoded.cwd == "/tmp")
+        #expect(decoded.customName == "keep")
+        #expect(decoded.backgroundWatermark == nil)  // the invalid spec dropped to nil, not a throw
+    }
+
     @Test(arguments: [0.0, 0.15, 0.5, 1.0])
     func opacityInRangeIsValid(_ opacity: Double) {
         #expect(WatermarkConfig.isValidOpacity(opacity))
