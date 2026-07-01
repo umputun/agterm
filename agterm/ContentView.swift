@@ -770,7 +770,7 @@ private struct WindowContentView: View {
         .foregroundStyle(blocked ? Color(nsColor: GhosttyApp.shared.blockedStatusColor) : chromeText)
         .opacity(empty ? 0.35 : 1)
         .disabled(empty)
-        .help(empty ? "No sessions need attention" : "Show sessions that need attention")
+        .help(helpHint(empty ? "No sessions need attention" : "Show sessions that need attention", .showAttention))
         .accessibilityIdentifier("attention-button")
         .accessibilityValue(empty ? "none" : (blocked ? "blocked" : "attention"))
     }
