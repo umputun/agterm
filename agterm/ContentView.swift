@@ -716,16 +716,33 @@ private struct WindowContentView: View {
     private var splitButton: some View {
         let isSplit = store.activeSession?.isSplit ?? false
         let hasSplit = store.activeSession?.hasSplit ?? false
+        let splitFocused = store.activeSession?.splitFocused ?? false
+        // filled = pane visible, outline = hidden. No split: an empty two-pane outline. Split shown: both
+        // panes filled. Collapsed to a single pane (hasSplit but not shown): only the VISIBLE pane's half
+        // is filled — left for the primary, right for the split pane (`splitFocused` is the shown one when
+        // hidden) — so the glyph tells you which pane is up and that the other is parked. `a11y` mirrors the
+        // four states for XCUITest, which can't read the symbol name (like the attention bell's value).
+        let symbol: String
+        let a11y: String
+        if !hasSplit {
+            symbol = "rectangle.split.2x1"; a11y = "none"
+        } else if isSplit {
+            symbol = "rectangle.split.2x1.fill"; a11y = "both"
+        } else if splitFocused {
+            symbol = "rectangle.righthalf.filled"; a11y = "right"
+        } else {
+            symbol = "rectangle.lefthalf.filled"; a11y = "left"
+        }
         return Button {
             actions.toggleSplit()
         } label: {
             // a Label (icon + title) so the toolbar's "Icon and Text" mode has text to show; the title
-            // is hidden in the default icon-only mode. The filled variant marks a session that has a
-            // split (shown or hidden), matching the sidebar's split-session icon.
-            Label("Split", systemImage: hasSplit ? "rectangle.split.2x1.fill" : "rectangle.split.2x1")
+            // is hidden in the default icon-only mode.
+            Label("Split", systemImage: symbol)
         }
         .help(helpHint(isSplit ? "Hide split" : (hasSplit ? "Show split" : "Split right"), .toggleSplit))
         .disabled(store.activeSession == nil)
+        .accessibilityValue(a11y)
         .accessibilityIdentifier("split-toggle")
     }
 
