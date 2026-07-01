@@ -7,6 +7,7 @@ excluded:
   - build                       # xcodebuild DerivedData
   - .build                      # SwiftPM build (root)
   - agtermCore/.build           # SwiftPM build + vendored checkouts
+  - .claude/worktrees           # concurrent git worktrees (gitignored) carry their own .build/checkouts
   - GhosttyKit.xcframework
   - agterm/Resources
 
