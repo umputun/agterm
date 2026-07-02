@@ -17,11 +17,7 @@ extension ControlServer {
     /// Project the window library into the `window.list` response: every window with its open flag and
     /// whether it is the frontmost (active) window.
     func buildWindowList() -> [ControlWindowNode] {
-        let active = library.activeWindowID
-        return library.windows.map {
-            ControlWindowNode(id: $0.id.uuidString, name: $0.name,
-                              open: library.isOpen($0.id), active: $0.id == active)
-        }
+        library.controlWindowNodes()
     }
 
     /// Resolve a window id and surface it: raise an already-open window, or open a closed one (the

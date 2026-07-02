@@ -117,6 +117,31 @@ final class WindowLibraryTests {
         #expect(library.activeWindowID == info.id)
     }
 
+    @Test func controlWindowNodesProjectListMetadata() {
+        let library = WindowLibrary(directory: directory)
+        let first = library.windows[0]
+        let second = library.newWindow(name: "work")
+
+        #expect(library.controlWindowNodes() == [
+            ControlWindowNode(id: first.id.uuidString, name: first.name, open: true, active: false),
+            ControlWindowNode(id: second.id.uuidString, name: "work", open: true, active: true),
+        ])
+    }
+
+    @Test func controlWindowNodesUseActiveWindowFallback() {
+        let library = WindowLibrary(directory: directory)
+        let first = library.windows[0]
+        let second = library.newWindow(name: "work")
+
+        library.closeWindow(second.id)
+        library.frontmostWindowID = second.id
+
+        #expect(library.controlWindowNodes() == [
+            ControlWindowNode(id: first.id.uuidString, name: first.name, open: true, active: true),
+            ControlWindowNode(id: second.id.uuidString, name: "work", open: false, active: false),
+        ])
+    }
+
     @Test func newWindowBlankNameFallsBackToDefault() {
         let library = WindowLibrary(directory: directory)
         let info = library.newWindow(name: "   ")

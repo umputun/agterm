@@ -157,6 +157,15 @@ public final class WindowLibrary {
         stores[id] != nil
     }
 
+    /// The window set projected into the `window.list` control payload (id/name + open/active flags),
+    /// in window order.
+    public func controlWindowNodes() -> [ControlWindowNode] {
+        let active = activeWindowID
+        return windows.map {
+            ControlWindowNode(id: $0.id.uuidString, name: $0.name, open: isOpen($0.id), active: $0.id == active)
+        }
+    }
+
     /// The persisted open-set in window order, for the launch reopen-all. A window is open iff
     /// its store is loaded.
     public func openIDs() -> [UUID] {
