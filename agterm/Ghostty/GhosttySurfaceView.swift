@@ -339,20 +339,16 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// created yet (a never-shown session); the caller realizes it first.
     func inject(text: String) {
         guard let surface else { return }
-        // normalize all line endings to \n so each becomes exactly one Return keypress.
-        let normalized = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
-        let segments = normalized.components(separatedBy: "\n")
-        for (index, segment) in segments.enumerated() {
-            if !segment.isEmpty {
+        for segment in KeystrokeSegments.split(text) {
+            switch segment {
+            case let .text(segment):
                 segment.withCString { ptr in
                     var ke = ghostty_input_key_s()
                     ke.action = GHOSTTY_ACTION_PRESS
                     ke.text = ptr
                     _ = ghostty_surface_key(surface, ke)
                 }
-            }
-            // a newline separated this segment from the next → press Enter.
-            if index < segments.count - 1 {
+            case .returnKey:
                 sendReturn(to: surface)
             }
         }
