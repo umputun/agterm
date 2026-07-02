@@ -28,6 +28,7 @@ paths:
   + `rightClickPaste` (ghostty `right-click-action`, nil = on)
   + `newSessionDirectory`/`newSessionCustomDirectory` (where a new ⌘T session opens: nil = home default,
   else the current session's cwd or a fixed custom dir; NOT ghostty keys).
+  `theme` may also hold ghostty's dual `light:NAME,dark:NAME` value — the macOS-appearance-sync state (see the Theme picker rule; `ThemeResolution` parses/composes it).
   The three `*StatusColorHex` (`#RRGGBB`, nil = active `#DBD9E6` muted lavender-grey + system amber/green)
   color the sidebar agent-status glyph: `SettingsModel` passes the hex to `GhosttyApp.setAgentStatusColors`
   which resolves to `NSColor` (so `SettingsModel` stays AppKit-free, the `NSColor`↔hex helper is `NSColor+AgtermHex`),

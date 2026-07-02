@@ -150,6 +150,12 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// (`NSSound(named:)`, e.g. `Glass`, also resolving custom sounds in `~/Library/Sounds`). nil/empty means
     /// no per-call sound — the app may still play the Settings "Blocked sound" default on a `blocked` status.
     public var sound: String?
+    /// The per-slot theme names for `theme.set`: `light` is the light/single slot (an alias for the
+    /// positional `name`, so passing both is an error); `dark` sets the dark slot — its presence makes
+    /// the app track the macOS appearance (the stored value becomes ghostty's dual `light:,dark:`
+    /// form), and the reserved value `none` clears it. Names must be bundled themes.
+    public var light: String?
+    public var dark: String?
 
     public init(name: String? = nil, cwd: String? = nil, workspace: String? = nil, workspaceName: String? = nil,
                 createWorkspace: Bool? = nil, text: String? = nil, select: Bool? = nil, mode: String? = nil,
@@ -159,7 +165,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil, sound: String? = nil,
                 ratio: Double? = nil, ratioDelta: Double? = nil,
                 path: String? = nil, color: String? = nil, opacity: Double? = nil, fit: String? = nil,
-                position: String? = nil, repeats: Bool? = nil, all: Bool? = nil, lines: Int? = nil) {
+                position: String? = nil, repeats: Bool? = nil, all: Bool? = nil, lines: Int? = nil,
+                light: String? = nil, dark: String? = nil) {
         self.name = name
         self.cwd = cwd
         self.workspace = workspace
@@ -195,6 +202,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.repeats = repeats
         self.all = all
         self.lines = lines
+        self.light = light
+        self.dark = dark
     }
 }
 
@@ -323,10 +332,18 @@ public struct ControlResult: Codable, Sendable, Equatable {
     /// The applied (clamped) left-pane split fraction echoed by `session.resize`, so a script can see
     /// where the divider landed after clamping / a relative nudge.
     public var ratio: Double?
+    /// The light/dark theme syncing state for `theme.set`/`theme.list`, derived from the stored theme
+    /// value: `sync` = whether it is ghostty's dual `light:,dark:` form (the terminal tracks the macOS
+    /// appearance), `light`/`dark` = its sides. While syncing, `theme` is absent — the state rides
+    /// these three; otherwise `theme` is the plain single theme and `light`/`dark` are absent.
+    public var sync: Bool?
+    public var light: String?
+    public var dark: String?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
-                theme: String? = nil, themes: [String]? = nil, ratio: Double? = nil) {
+                theme: String? = nil, themes: [String]? = nil, ratio: Double? = nil,
+                sync: Bool? = nil, light: String? = nil, dark: String? = nil) {
         self.id = id
         self.tree = tree
         self.text = text
@@ -336,6 +353,9 @@ public struct ControlResult: Codable, Sendable, Equatable {
         self.theme = theme
         self.themes = themes
         self.ratio = ratio
+        self.sync = sync
+        self.light = light
+        self.dark = dark
     }
 }
 

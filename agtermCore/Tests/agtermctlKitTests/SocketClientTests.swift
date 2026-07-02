@@ -280,6 +280,19 @@ struct SocketClientTests {
         let response = ControlResponse(ok: true, result: ControlResult(theme: "Dracula"))
         #expect(SocketClient.formatResponse(response, json: false) == "ok")
     }
+
+    @Test func formatResponseThemesMarksBothSyncedSides() {
+        // when syncing, both the light and dark themes are marked and a header notes the pair.
+        let response = ControlResponse(ok: true, result: ControlResult(
+            theme: nil, themes: ["agterm", "Builtin Light", "Nord"], sync: true, light: "Builtin Light", dark: "agterm"))
+        let out = SocketClient.formatResponse(response, json: false)
+        let lines = out.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
+        #expect(lines.first == "syncing with macOS appearance — light: Builtin Light, dark: agterm")
+        #expect(lines.contains("* agterm"))
+        #expect(lines.contains("* Builtin Light"))
+        #expect(lines.contains("  Nord"))
+        #expect(lines.contains("  default ghostty")) // unmarked while syncing
+    }
 }
 
 /// An in-process unix-socket server for the round-trip tests: binds a short temp path, accepts one

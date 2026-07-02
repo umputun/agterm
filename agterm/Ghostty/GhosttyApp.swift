@@ -272,18 +272,63 @@ final class GhosttyApp {
         return lastConfigDiagnosticsCount
     }
 
+    /// The inputs of the most recent config load, cached so `refreshSelectionColors` can re-resolve the
+    /// selection colors after a live color change without a full config reload.
+    private var lastConfigInputs: ConfigInputs?
+
     /// Re-read the chrome colors (background, foreground, selection background/foreground) from a
     /// resolved config. Called at init and on every settings reload. `background`/`foreground` come
     /// from the resolved config; the selection colors are resolved separately (see below) because
     /// `ghostty_config_get` does not expose the optional `selection-*` keys.
     private func resolveThemeColors(from config: ghostty_config_t, inputs: ConfigInputs) {
+        lastConfigInputs = inputs
         terminalBackgroundColor = Self.color(from: config, key: "background")
         terminalForegroundColor = Self.color(from: config, key: "foreground")
+        refreshSelectionColors()
+    }
+
+    /// Re-resolve the selection chrome colors for the current appearance. Used by the full config load
+    /// AND after a live `COLOR_CHANGE` (which doesn't carry selection colors), so the selected-row pill
+    /// follows a light/dark theme flip. No-op until a config has loaded.
+    func refreshSelectionColors() {
+        guard let inputs = lastConfigInputs else { return }
         let (selectionBackground, selectionForeground) = Self.resolveSelectionColors(
-            ghosttyConfigPath: inputs.scopedURL.path, inheritGlobalConfig: inputs.inheritGlobalConfig)
+            ghosttyConfigPath: inputs.scopedURL.path, inheritGlobalConfig: inputs.inheritGlobalConfig,
+            isDark: Self.currentIsDark())
         terminalSelectionBackgroundColor = selectionBackground
         terminalSelectionForegroundColor = selectionForeground
             ?? selectionBackground.map(Self.contrastingText(for:))
+    }
+
+    /// Apply a libghostty `COLOR_CHANGE`: the terminal foreground/background changed — a light/dark theme
+    /// switch ghostty resolved (driven by `ghostty_app_set_color_scheme` on an appearance flip), or an
+    /// OSC 10/11 from a program. Mirror the new color into the chrome properties, re-resolve the selection
+    /// colors (the action doesn't carry them), and post `.agtermAppearanceChanged` so the title bar +
+    /// sidebar re-tint. De-duped by value, so the per-surface storm on a flip collapses to one refresh.
+    func applyColorChange(kind: ghostty_action_color_kind_e, r: UInt8, g: UInt8, b: UInt8) {
+        let color = NSColor(srgbRed: CGFloat(r) / 255.0, green: CGFloat(g) / 255.0,
+                            blue: CGFloat(b) / 255.0, alpha: 1)
+        switch kind {
+        case GHOSTTY_ACTION_COLOR_KIND_BACKGROUND:
+            guard terminalBackgroundColor != color else { return }
+            terminalBackgroundColor = color
+        case GHOSTTY_ACTION_COLOR_KIND_FOREGROUND:
+            guard terminalForegroundColor != color else { return }
+            terminalForegroundColor = color
+        default:
+            return // cursor color isn't used by the chrome
+        }
+        refreshSelectionColors()
+        NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
+    }
+
+    /// Whether the app is currently in the dark appearance. `NSApp` is an implicitly-unwrapped global
+    /// that is still nil during the very early `GhosttyApp.shared` init (it boots from `SettingsModel.init`
+    /// before AppKit finishes wiring `NSApp`), so chain through it safely and default to light — the first
+    /// surface's `set_color_scheme` + `COLOR_CHANGE` corrects the colors once the app is up.
+    static func currentIsDark() -> Bool {
+        guard let appearance = NSApp?.effectiveAppearance else { return false }
+        return appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 
     /// The selection colors can't be read back through `ghostty_config_get` (it doesn't expose the
@@ -296,7 +341,8 @@ final class GhosttyApp {
     /// an include is missed and the sidebar pill falls back. A known edge case (it pre-dates the
     /// agterm-scoped `ghostty.conf`). The user's global `~/.config/ghostty/config` is a source ONLY when
     /// `inheritGlobalConfig` is on, matching `loadConfig`'s gate.
-    private static func resolveSelectionColors(ghosttyConfigPath: String, inheritGlobalConfig: Bool) -> (NSColor?, NSColor?) {
+    private static func resolveSelectionColors(ghosttyConfigPath: String, inheritGlobalConfig: Bool,
+                                               isDark: Bool) -> (NSColor?, NSColor?) {
         var sources: [String] = []
         if let defaults = Bundle.main.url(forResource: "ghostty-defaults", withExtension: "conf") {
             sources.append(defaults.path)
@@ -321,11 +367,13 @@ final class GhosttyApp {
                 }
             }
         }
-        // the theme file fills any selection color not set explicitly above.
+        // the theme file fills any selection color not set explicitly above. A dual `light:,dark:` theme
+        // value resolves to the side matching the current appearance, so the pill tracks the flip.
         if selBg == nil || selFg == nil, let themeName, !themeName.isEmpty,
            let themesDir = Bundle.main.url(forResource: "ghostty", withExtension: nil)?
                .appendingPathComponent("themes", isDirectory: true) {
-            for (key, value) in keyValues(ofFileAt: themesDir.appendingPathComponent(themeName).path) {
+            let activeTheme = ThemeResolution.activeThemeName(themeName, isDark: isDark)
+            for (key, value) in keyValues(ofFileAt: themesDir.appendingPathComponent(activeTheme).path) {
                 if key == "selection-background", selBg == nil { selBg = parseHexColor(value) }
                 if key == "selection-foreground", selFg == nil { selFg = parseHexColor(value) }
             }
@@ -509,6 +557,13 @@ extension Notification.Name {
     /// sidebar) re-read the new `GhosttyApp.terminalBackgroundColor` immediately instead of waiting
     /// for the window to re-key.
     static let agtermAppearanceChanged = Notification.Name("agterm.appearanceChanged")
+
+    /// Posted from a surface's `viewDidChangeEffectiveAppearance` when the macOS light/dark appearance
+    /// changes (and at first window attach), so `SettingsModel` re-resolves the active side of a
+    /// light/dark theme pair and rewrites+reloads the config. This pinned libghostty doesn't switch a
+    /// `theme = light:,dark:` conditional at runtime, so agterm drives the swap itself. Distinct from
+    /// `agtermAppearanceChanged` (the settings→chrome direction); this is the system→settings direction.
+    static let agtermSystemAppearanceChanged = Notification.Name("agterm.systemAppearanceChanged")
 
     /// Posted when a window becomes frontmost (the active-window change is async, via the window's
     /// didBecomeKey), so the control server can refresh its cached `window.list` — whose `active` flag
