@@ -184,24 +184,4 @@ final class SessionTextUITests: ControlAPITestCase {
         let text = try XCTUnwrap((response["result"] as? [String: Any])?["text"] as? String, "a blank read still carries a text field: \(response)")
         XCTAssertTrue(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "a blank screen should read as empty, got: \(text)")
     }
-
-    /// Polls `session.text --pane <pane>` of `target` until the returned buffer contains `contains`, re-running
-    /// `retype` (which re-injects the marker command — idempotent for an `echo` line) at the start of each
-    /// outer attempt to ride out shell/focus readiness. Returns the matching text, or nil on timeout.
-    @discardableResult
-    private func pollPaneText(target: String, pane: String, contains: String,
-                              attempts: Int = 8, perAttempt: Int = 8,
-                              retype: () throws -> Void) throws -> String? {
-        for _ in 0..<attempts {
-            try retype()
-            for _ in 0..<perAttempt {
-                let response = try sendCommand(#"{"cmd":"session.text","target":"\#(target)","args":{"pane":"\#(pane)"}}"#)
-                if let t = (response["result"] as? [String: Any])?["text"] as? String, t.contains(contains) {
-                    return t
-                }
-                RunLoop.current.run(until: Date().addingTimeInterval(0.4))
-            }
-        }
-        return nil
-    }
 }

@@ -281,8 +281,10 @@ extension ControlServer {
     }
 
     /// Inject `text` into the session `id`'s surface. A session's surface is created lazily (deferred until
-    /// it has a non-zero backing size — a never-shown session has `surface == nil`). `ghostty_surface_text`
-    /// writes to the child pty, which the kernel buffers, so text is never lost even before the first prompt.
+    /// it has a non-zero backing size — a never-shown session has `surface == nil`). `inject(text:)` sends
+    /// the text as `ghostty_surface_key` keystrokes (NOT `ghostty_surface_text` — see its doc for why),
+    /// which write to the child pty; the kernel buffers the pty, so text is never lost even before the
+    /// first prompt.
     /// `pane` picks the pane like `session.text` (`left`|`right` only, no `other`): omitted/`left` is the
     /// main pane (omitted keeps the pre-pane behavior — always the main pane, NOT the focused one, so
     /// existing automation is unaffected); `right` is the split pane, `session has no split pane` without

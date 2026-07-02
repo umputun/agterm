@@ -31,7 +31,8 @@ realized eagerly, so no `--select` is needed.
 sid=$(agtermctl session new --cwd "$HOME/project" --json | jq -r '.result.id')
 agtermctl session type "git status" --target "$sid"
 agtermctl session type $'\n' --target "$sid"     # send Return (or include it in the text)
-agtermctl session type $'ls\n' --target "$sid" --pane right   # type into the split pane instead
+agtermctl session split on --target "$sid"                    # open a split first
+agtermctl session type $'ls\n' --target "$sid" --pane right   # then type into the split pane
 ```
 
 Typing goes to the session's main (left) pane by default; `--pane right` targets the split pane and

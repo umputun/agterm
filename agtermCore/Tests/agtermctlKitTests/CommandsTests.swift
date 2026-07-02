@@ -161,6 +161,13 @@ struct CommandsTests {
         #expect(req.args?.pane == nil)
     }
 
+    @Test func sessionTypeWithPaneLeft() throws {
+        // explicit --pane left is forwarded as "left"; the server treats nil and "left" identically (both
+        // the main pane), but the CLI still passes the value through rather than dropping it.
+        let req = try request(["session", "type", "ls\n", "--pane", "left"])
+        #expect(req.args?.pane == "left")
+    }
+
     @Test func sessionTypeRejectsBadPane() {
         // `other` is a session.focus mode, not a typable pane — type accepts left|right only.
         #expect(validationMessage(["session", "type", "x", "--pane", "other"]) == "--pane must be left or right")

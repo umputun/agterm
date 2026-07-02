@@ -1,0 +1,115 @@
+import Foundation
+import XCTest
+
+// Verifies the `CustomCommandRunner` pane derivation that populates `{AGT_PANE}`/`$AGT_PANE`: a custom
+// command reports the pane it fired FROM — "left" (main) or "right" (split). This is the only test that
+// pins that logic. The keybind path derives the pane from the focused SURFACE's identity (NOT the
+// session's `splitFocused` flag), and the palette path from the flag. The probe command writes
+// `$AGT_PANE` to a marker file, which the test reads back. A `ControlAPITestCase` subclass so it can
+// split/focus panes over the control socket while firing real keystrokes for the keybind path.
+@MainActor
+final class CustomCommandPaneTokenUITests: ControlAPITestCase {
+    // keybind path: fire the SAME chord from the main pane and then from the split's right pane; $AGT_PANE
+    // must be "left" then "right", proving `runFromKeybind` keys off the focused surface's identity rather
+    // than a shared flag (a plain `splitFocused`-based derivation would report "right" for both once split).
+    func testAgtPaneKeybindReflectsFiredFromPane() throws {
+        let marker = markerDir.appendingPathComponent("agt-pane-keybind")
+        // ⌘⇧E → write $AGT_PANE to the marker. The runner already wraps the line in `/bin/sh -c`, so
+        // `$AGT_PANE` expands from the exported env; no inner `sh -c` is needed.
+        try relaunch(withKeymap: "command \"Pane Probe\" cmd+shift+e printf %s \"$AGT_PANE\" > \"\(marker.path)\"\n")
+
+        // MAIN pane (no split yet): focus the seeded terminal, fire the chord → "left".
+        focusMainTerminal()
+        XCTAssertEqual(firePaneProbe(marker) { self.app.typeKey("e", modifierFlags: [.command, .shift]) }, "left",
+                       "a chord fired from the main pane should report $AGT_PANE=left")
+
+        // SPLIT right pane: split on, move keyboard focus to the right pane, fire the SAME chord → "right".
+        let split = try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"on"}}"#)
+        XCTAssertEqual(split["ok"] as? Bool, true, "split on should succeed: \(split)")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the active session should report split:true")
+        let activeID = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(activeID)","args":{"pane":"right"}}"#)["ok"] as? Bool,
+                       true, "focus right should succeed")
+        app.activate()
+        XCTAssertEqual(firePaneProbe(marker) { self.app.typeKey("e", modifierFlags: [.command, .shift]) }, "right",
+                       "a chord fired from the split's right pane should report $AGT_PANE=right")
+    }
+
+    // palette path: the runner's `run(_:)` (no fired-from surface to key off) derives the pane from the
+    // active session's `splitFocused` flag. Split on + focus right, then run the command from the Custom
+    // Commands palette; opening the menu doesn't touch `splitFocused`, so the flag stays true → "right".
+    func testAgtPanePaletteUsesFocusedPane() throws {
+        let marker = markerDir.appendingPathComponent("agt-pane-palette")
+        // no chord → palette-only (the `printf` token is not a valid chord, so the whole remainder is the
+        // shell line).
+        try relaunch(withKeymap: "command \"Pane Probe\" printf %s \"$AGT_PANE\" > \"\(marker.path)\"\n")
+
+        let split = try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"on"}}"#)
+        XCTAssertEqual(split["ok"] as? Bool, true, "split on should succeed: \(split)")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the active session should report split:true")
+        let activeID = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(activeID)","args":{"pane":"right"}}"#)["ok"] as? Bool,
+                       true, "focus right should succeed")
+
+        try? FileManager.default.removeItem(at: marker)
+        runFromCustomCommandsPalette("Pane Probe")
+        XCTAssertEqual(pollMarker(marker, timeout: 5), "right",
+                       "a command run from the palette while the right pane is focused should report $AGT_PANE=right")
+    }
+
+    // palette path, default (no split): the seeded session has no split, so `run(_:)`'s
+    // `splitFocused ? .right : .left` takes the `.left` branch — the common case, and the half of that
+    // ternary the split+focus-right test above never exercises through the real runner. Pins that a
+    // swapped ternary or a hardcoded `.right` in the palette path would be caught.
+    func testAgtPanePaletteDefaultsToLeftWithoutSplit() throws {
+        let marker = markerDir.appendingPathComponent("agt-pane-palette-left")
+        try relaunch(withKeymap: "command \"Pane Probe\" printf %s \"$AGT_PANE\" > \"\(marker.path)\"\n")
+
+        // no split on the seeded session → the active pane is the main pane, so the palette path reports left.
+        try? FileManager.default.removeItem(at: marker)
+        runFromCustomCommandsPalette("Pane Probe")
+        XCTAssertEqual(pollMarker(marker, timeout: 5), "left",
+                       "a command run from the palette with no split should report $AGT_PANE=left")
+    }
+
+    // MARK: - Helpers
+
+    /// Click the seeded session row so the main terminal surface is first responder (the custom-command
+    /// monitor only fires when a `GhosttySurfaceView` holds first responder). Drains until the row reports
+    /// selected so the responder bounce settles before a chord is pressed.
+    private func focusMainTerminal() {
+        let row = app.staticTexts["session-row"].firstMatch
+        XCTAssertTrue(row.waitForHittable(timeout: 20), "seeded session should be hittable")
+        row.click()
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline, row.isSelected == false {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.05))
+        }
+    }
+
+    /// Fire `press` and read the marker back, retrying: a chord can land before the surface is genuinely
+    /// first responder (focus return is async) and be dropped. Clears the marker before each attempt so a
+    /// prior attempt's write can't be misread. Returns the trimmed value, or nil on timeout.
+    private func firePaneProbe(_ marker: URL, attempts: Int = 8, perAttempt: TimeInterval = 2,
+                               press: () -> Void) -> String? {
+        for _ in 0..<attempts {
+            try? FileManager.default.removeItem(at: marker)
+            press()
+            if let value = pollMarker(marker, timeout: perAttempt) { return value }
+        }
+        return nil
+    }
+
+    /// Open Navigate ▸ Custom Commands, filter to `name`, and run the top match (Return).
+    private func runFromCustomCommandsPalette(_ name: String) {
+        app.menuBars.menuBarItems["Navigate"].click()
+        let item = app.menuItems["Custom Commands"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "Navigate menu should offer Custom Commands")
+        item.click()
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "palette search field should appear")
+        field.click()
+        field.typeText(name)
+        app.typeKey(.return, modifierFlags: [])
+    }
+}

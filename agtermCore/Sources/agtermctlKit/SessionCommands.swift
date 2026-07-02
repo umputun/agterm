@@ -2,6 +2,15 @@ import ArgumentParser
 import Foundation
 import agtermCore
 
+/// Shared `--pane` validation for the session commands that accept `left|right` (type, text). Rejects any
+/// other value with a clean usage error before the socket round-trip, matching the server-side switch (so
+/// the CLI and server can't drift, and a raw socket client still hits the same check server-side).
+func validatePaneArgument(_ pane: String?) throws {
+    if let pane, !["left", "right"].contains(pane) {
+        throw ValidationError("--pane must be left or right")
+    }
+}
+
 // MARK: - session
 
 struct Session: ParsableCommand {
@@ -108,16 +117,12 @@ struct Session: ParsableCommand {
         static let configuration = CommandConfiguration(commandName: "type", abstract: "Inject text into a session.")
         @Argument(help: "Text to inject (omit with --stdin).") var text: String?
         @Flag(name: .long, help: "Read the text from stdin instead of an argument.") var stdin = false
-        @Flag(name: .long, help: "Select (and realize) a never-shown session before injecting.") var select = false
+        @Flag(name: .long, help: "Select (and realize) a never-shown session before injecting (main pane only; a split pane must already exist).") var select = false
         @Option(name: .long, help: "Which pane to type into: left (main) or right (split). Defaults to the left pane.") var pane: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
-        func validate() throws {
-            if let pane, !["left", "right"].contains(pane) {
-                throw ValidationError("--pane must be left or right")
-            }
-        }
+        func validate() throws { try validatePaneArgument(pane) }
 
         func makeRequest() throws -> ControlRequest {
             let payload: String
@@ -231,9 +236,7 @@ struct Session: ParsableCommand {
             if let lines, lines <= 0 {
                 throw ValidationError("--lines must be greater than 0")
             }
-            if let pane, !["left", "right"].contains(pane) {
-                throw ValidationError("--pane must be left or right")
-            }
+            try validatePaneArgument(pane)
         }
 
         func makeRequest() throws -> ControlRequest {

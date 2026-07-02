@@ -6,7 +6,7 @@ struct CustomCommandTests {
     private func sampleContext() -> CommandContext {
         CommandContext(sessionID: "sess-1", sessionName: "shell", sessionPWD: "/tmp/work",
                        workspaceID: "ws-1", workspaceName: "main", windowID: "win-1",
-                       windowName: "work", pane: "right", selection: "hello", socket: "/tmp/agt.sock")
+                       windowName: "work", pane: .right, selection: "hello", socket: "/tmp/agt.sock")
     }
 
     @Test func expandSubstitutesKnownTokens() {
@@ -69,10 +69,12 @@ struct CustomCommandTests {
 
     @Test func paneDefaultsToLeft() {
         // an unspecified pane is the main pane — always a valid `session.type --pane` argument, so a
-        // split-less session's context still round-trips into a pane-addressed control call.
-        #expect(CommandContext().pane == "left")
+        // split-less session's context still round-trips into a pane-addressed control call. The typed
+        // `Pane` enum guarantees the value is left/right by construction; its rawValue feeds the token.
+        #expect(CommandContext().pane == .left)
         #expect(CommandContext().environment()["AGT_PANE"] == "left")
         #expect(CommandContext().expand("{AGT_PANE}") == "left")
+        #expect(CommandContext(pane: .right).expand("{AGT_PANE}") == "right")
     }
 
     @Test func environmentKeySetMatchesTheTokensExpandSubstitutes() {

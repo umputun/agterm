@@ -60,25 +60,4 @@ final class SessionTypePaneUITests: ControlAPITestCase {
         XCTAssertEqual(response["ok"] as? Bool, false, "session.type pane:middle should fail server-side: \(response)")
         XCTAssertEqual(response["error"] as? String, "invalid pane: middle", "should report the invalid pane: \(response)")
     }
-
-    /// Polls `session.text --pane <pane>` of `target` until the returned buffer contains `contains`,
-    /// re-running `retype` at the start of each outer attempt (idempotent `echo` markers) to ride out
-    /// shell/pty readiness. Returns the matching text, or nil on timeout. (The same idiom as
-    /// `SessionTextUITests.pollPaneText`, private there.)
-    @discardableResult
-    private func pollPaneText(target: String, pane: String, contains: String,
-                              attempts: Int = 8, perAttempt: Int = 8,
-                              retype: () throws -> Void) throws -> String? {
-        for _ in 0..<attempts {
-            try retype()
-            for _ in 0..<perAttempt {
-                let response = try sendCommand(#"{"cmd":"session.text","target":"\#(target)","args":{"pane":"\#(pane)"}}"#)
-                if let t = (response["result"] as? [String: Any])?["text"] as? String, t.contains(contains) {
-                    return t
-                }
-                RunLoop.current.run(until: Date().addingTimeInterval(0.4))
-            }
-        }
-        return nil
-    }
 }

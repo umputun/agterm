@@ -176,10 +176,12 @@ final class CustomCommandRunner {
             logger.notice("custom command \"\(command.name, privacy: .public)\" fired with no active session; ignored")
             return
         }
-        // palette path: selection comes from the active session's focused pane (split if it holds focus).
-        let selectionSurface = (session.splitFocused ? session.splitSurface : session.surface) as? GhosttySurfaceView
+        // palette path: selection + pane both come from the active session's focused pane (split if it
+        // holds focus). the palette has no fired-from surface to key off, so the focus flag is the source.
+        let splitFocused = session.splitFocused
+        let selectionSurface = (splitFocused ? session.splitSurface : session.surface) as? GhosttySurfaceView
         let context = self.context(for: session, in: store, selectionSurface: selectionSurface,
-                                   pane: session.splitFocused ? "right" : "left")
+                                   pane: splitFocused ? .right : .left)
         spawn(command, context: context)
     }
 
@@ -199,7 +201,7 @@ final class CustomCommandRunner {
         }
         // the fired-from pane is the surface's identity, not the session's focus flag — a chord fired
         // from a pane the focus flag hasn't caught up to still reports the pane it was typed in.
-        let pane = (session.splitSurface as? GhosttySurfaceView) === focusedSurface ? "right" : "left"
+        let pane: CommandContext.Pane = (session.splitSurface as? GhosttySurfaceView) === focusedSurface ? .right : .left
         let context = self.context(for: session, in: store, selectionSurface: focusedSurface, pane: pane)
         spawn(command, context: context)
     }
@@ -208,7 +210,7 @@ final class CustomCommandRunner {
     /// the owning workspace/window, the selection from `selectionSurface` (the exact focused surface),
     /// the fired-from pane (`left`|`right`) from the caller, and the socket from the control server.
     private func context(for session: Session, in store: AppStore, selectionSurface: GhosttySurfaceView?,
-                         pane: String) -> CommandContext {
+                         pane: CommandContext.Pane) -> CommandContext {
         let workspace = store.workspace(forSession: session.id)
         let windowID = library.windowID(forSession: session.id)
         let windowName = windowID.flatMap { id in library.windows.first { $0.id == id }?.name } ?? ""
