@@ -474,12 +474,12 @@ final class AppActions {
     }
 
     /// Show/hide the frontmost window's sidebar. The custom split owns visibility (no system toggle), so
-    /// this flips the active store's `sidebarVisible`; the view animates the change. Shared by the toolbar
-    /// button, the View menu item, the palette, and the `sidebar` control command.
+    /// this flips the active store's per-window `sidebarVisible`; the view animates the change and
+    /// `AppStore` persists it. Shared by the toolbar button, the View menu item, the palette, and the
+    /// `sidebar` control command.
     func toggleSidebar() {
         guard let store else { return }
-        store.sidebarVisible.toggle()
-        store.save() // sidebarVisible is persisted per-window
+        store.toggleSidebarVisible()
     }
 
     /// Move keyboard focus to a pane of the active session's split: `.split` -> the right pane,

@@ -14,8 +14,12 @@ struct AppStoreTests {
     @Test func sidebarVisibleDefaultsTrueAndToggles() {
         let store = makeStore()
         #expect(store.sidebarVisible)
-        store.sidebarVisible.toggle()
+        store.toggleSidebarVisible()
         #expect(!store.sidebarVisible)
+        store.setSidebarVisible(true)
+        #expect(store.sidebarVisible)
+        store.setSidebarVisible(true) // unchanged: clean no-op
+        #expect(store.sidebarVisible)
     }
 
     @Test func defaultWorkspaceNameCountsUp() {

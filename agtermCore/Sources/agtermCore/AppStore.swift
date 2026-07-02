@@ -434,6 +434,21 @@ public final class AppStore {
         if changed { save() }
     }
 
+    /// Sets this window's sidebar visibility and persists it. Clean no-op (no write) when unchanged, so
+    /// menu, toolbar, palette, and control callers can delta-compute their desired state without
+    /// duplicating the persistence gate. `sidebarVisible` is per-window state saved in this store's
+    /// snapshot.
+    public func setSidebarVisible(_ visible: Bool) {
+        guard sidebarVisible != visible else { return }
+        sidebarVisible = visible
+        save()
+    }
+
+    /// Flips this window's sidebar visibility and persists the new state.
+    public func toggleSidebarVisible() {
+        setSidebarVisible(!sidebarVisible)
+    }
+
     /// Sets the sidebar mode and persists it. Clean no-op (no write) when the mode is unchanged, so the
     /// delta-computed control/menu callers stay idempotent.
     public func setSidebarMode(_ mode: SidebarMode) {
