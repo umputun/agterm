@@ -204,6 +204,23 @@ final class PersistenceTests {
         #expect(restoredTree.sidebarMode == .tree)
     }
 
+    @Test func sidebarVisibilityPersistsAndRestoresThroughHelper() {
+        let app = AppStore(persistence: store)
+        _ = app.addWorkspace(name: "work")
+        #expect(store.load().sidebarVisible == true)
+        app.setSidebarVisible(false)
+        #expect(store.load().sidebarVisible == false)
+
+        let restored = AppStore(persistence: store)
+        restored.restore(from: store.load())
+        #expect(restored.sidebarVisible == false)
+
+        app.toggleSidebarVisible()
+        let restoredShown = AppStore(persistence: store)
+        restoredShown.restore(from: store.load())
+        #expect(restoredShown.sidebarVisible == true)
+    }
+
     @Test func legacySnapshotWithoutSidebarModeDecodesTree() throws {
         // a workspaces.json written before `sidebarMode` existed has no key; it must decode (not throw
         // and wipe the tree) and restore to `.tree`.

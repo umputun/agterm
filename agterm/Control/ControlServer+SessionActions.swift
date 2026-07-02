@@ -301,10 +301,7 @@ extension ControlServer {
             return ControlResponse(ok: false, error: "invalid sidebar mode: \(mode ?? "toggle")")
         }
         let want = parsedMode.desiredValue(current: store.sidebarVisible)
-        if want != store.sidebarVisible {
-            store.sidebarVisible = want
-            store.save() // sidebarVisible is persisted per-window
-        }
+        store.setSidebarVisible(want) // no-op + no save when unchanged (idempotent)
         return ControlResponse(ok: true)
     }
 
