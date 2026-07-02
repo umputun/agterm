@@ -5,7 +5,7 @@ import os
 private let logger = Logger(subsystem: "com.umputun.agterm", category: "CustomCommandRunner")
 
 /// Drives user-defined custom commands: an app-wide `NSEvent` local key monitor turns key presses
-/// into chords, a `KeybindMatcher` resolves them to a command (firing simple chords and leader
+/// into chords, a `CustomCommandEngine` resolves them to a command (firing simple chords and leader
 /// sequences like `ctrl+a > g`), and a fired command is run as a detached `/bin/sh -c` with the
 /// active session's context available as both `{AGT_X}` template tokens and `$AGT_X` environment.
 ///
@@ -21,9 +21,7 @@ final class CustomCommandRunner {
     private let settings: SettingsModel
     private let socketProvider: () -> String
 
-    private var matcher = KeybindMatcher([])
-    /// The commands keyed by id, so a `.fired(id)` resolves back to the command to run.
-    private var commandsByID: [UUID: CustomCommand] = [:]
+    private var commandEngine = CustomCommandEngine(commands: [])
 
     private var keyMonitor: Any?
     private var leaderTimer: Timer?
@@ -70,17 +68,12 @@ final class CustomCommandRunner {
     /// so a conflicted bind arrives here with an empty shortcut and is dropped from the matcher.
     private func rebuild() {
         let commands = settings.keymap.commands
-        commandsByID = Dictionary(uniqueKeysWithValues: commands.map { ($0.id, $0) })
-
-        var binds: [(Keybind, UUID)] = []
         for command in commands where !command.shortcut.isEmpty {
-            guard let keybind = parseKeybind(command.shortcut) else {
+            if parseKeybind(command.shortcut) == nil {
                 logger.notice("custom command \"\(command.name, privacy: .public)\" has invalid shortcut \"\(command.shortcut, privacy: .public)\"; skipping keybind")
-                continue
             }
-            binds.append((keybind, command.id))
         }
-        matcher = KeybindMatcher(binds)
+        commandEngine = CustomCommandEngine(commands: commands)
         cancelLeaderTimer()
     }
 
@@ -99,8 +92,8 @@ final class CustomCommandRunner {
         guard !event.isARepeat else { return false }
         guard let focused = NSApp.keyWindow?.firstResponder as? GhosttySurfaceView else {
             // focus is on a text field / non-terminal; drop any half-typed leader and pass through.
-            if matcher.isArmed {
-                matcher.reset()
+            if commandEngine.isArmed {
+                commandEngine.reset()
                 cancelLeaderTimer()
             }
             return false
@@ -108,8 +101,8 @@ final class CustomCommandRunner {
         // Esc abandons a half-typed leader sequence (the same call the timeout makes); it never
         // advances the matcher (Esc is not a bindable base key), so handle it before deriving a chord.
         if event.keyCode == Self.escapeKeyCode {
-            guard matcher.isArmed else { return false }
-            matcher.reset()
+            guard commandEngine.isArmed else { return false }
+            commandEngine.reset()
             cancelLeaderTimer()
             return true
         }
@@ -117,13 +110,13 @@ final class CustomCommandRunner {
             // a key with no usable base (e.g. a bare modifier) can't advance; while armed, keep waiting.
             return false
         }
-        switch matcher.advance(chord) {
-        case .fired(let id):
+        switch commandEngine.advance(chord) {
+        case .fired(let command):
             cancelLeaderTimer()
             // resolve context from the surface that actually had focus at key-down time, NOT the
             // frontmost active session — firing from a split/overlay/quick terminal (or during a
             // window-switch race) must run against THAT surface's session/cwd/selection.
-            if let command = commandsByID[id] { runFromKeybind(command, focusedSurface: focused) }
+            runFromKeybind(command, focusedSurface: focused)
             return true
         case .armed:
             startLeaderTimer()
@@ -164,7 +157,7 @@ final class CustomCommandRunner {
         leaderTimer = Timer.scheduledTimer(withTimeInterval: Self.leaderTimeout, repeats: false) { [weak self] _ in
             MainActor.assumeIsolated {
                 guard let self else { return }
-                self.matcher.reset()
+                self.commandEngine.reset()
                 self.leaderTimer = nil
             }
         }
