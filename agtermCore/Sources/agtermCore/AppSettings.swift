@@ -7,6 +7,16 @@ import Foundation
 /// there is no version field (a version bump would only add a discard-on-mismatch path that wipes
 /// the user's settings).
 public struct AppSettings: Codable, Equatable, Sendable {
+    /// Where a new (⌘T) session opens. Stored as the `newSessionDirectory` raw string so an unknown
+    /// future value decodes tolerantly to `home` (the AppSettings forward-compat rule) instead of
+    /// failing the whole decode. `home` is also the nil case (the default), so picking it clears the
+    /// field and keeps `settings.json` minimal.
+    public enum NewSessionDirectory: String, CaseIterable, Sendable {
+        case home
+        case currentSession
+        case custom
+    }
+
     /// The app's out-of-the-box theme — a bundled theme applied on a fresh install (no saved
     /// settings), seeded by `SettingsStore.load()`. Distinct from `theme == nil`, which means
     /// ghostty's built-in default (the "default ghostty" entry in the theme picker).
@@ -105,6 +115,14 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// a `right-click-action` in the user's own `ghostty.conf`). agterm has no terminal context menu, so
     /// paste-or-off is the whole meaningful choice.
     public var rightClickPaste: Bool?
+    /// Which directory a new (⌘T) session opens in, as a `NewSessionDirectory` raw value; nil means the
+    /// default (`home`). `currentSession` inherits the active session's focused-pane cwd, `custom` uses
+    /// `newSessionCustomDirectory`. An app-level behavior value read by `AppActions.newSession()`, NOT a
+    /// ghostty key — it never appears in `ghosttyConfigLines()`. Resolved by `resolveNewSessionCwd(...)`.
+    public var newSessionDirectory: String?
+    /// The fixed directory a new session opens in when `newSessionDirectory` is `custom`; nil/empty falls
+    /// back to home. Ignored for the `home`/`currentSession` modes. Set by the Settings directory picker.
+    public var newSessionCustomDirectory: String?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 backgroundOpacity: Double? = nil, backgroundBlur: Int? = nil, notificationsEnabled: Bool? = nil,
@@ -114,7 +132,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 mouseScrollMultiplier: Double? = nil, inactivePaneMuteStrength: Int? = nil,
                 sidebarBackgroundShift: Int? = nil, restoreRunningCommand: Bool? = nil,
                 inheritGlobalGhosttyConfig: Bool? = nil, attentionButtonEnabled: Bool? = nil,
-                blockedStatusSoundName: String? = nil, rightClickPaste: Bool? = nil) {
+                blockedStatusSoundName: String? = nil, rightClickPaste: Bool? = nil,
+                newSessionDirectory: String? = nil, newSessionCustomDirectory: String? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -135,6 +154,26 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.attentionButtonEnabled = attentionButtonEnabled
         self.blockedStatusSoundName = blockedStatusSoundName
         self.rightClickPaste = rightClickPaste
+        self.newSessionDirectory = newSessionDirectory
+        self.newSessionCustomDirectory = newSessionCustomDirectory
+    }
+
+    /// The working directory a new session should open in, resolving the `newSessionDirectory` mode
+    /// against the active session's focused-pane cwd and the home directory. An unknown/nil mode, a
+    /// nil/blank `currentSessionCwd`, or a nil/blank custom path all fall back to `home`: `home` → home;
+    /// `currentSession` → `currentSessionCwd` (else home); `custom` → `newSessionCustomDirectory` (else
+    /// home). Host-free so `AppActions.newSession()` and the tests share one resolution.
+    public func resolveNewSessionCwd(currentSessionCwd: String?, home: String) -> String {
+        switch NewSessionDirectory(rawValue: newSessionDirectory ?? "") ?? .home {
+        case .home:
+            return home
+        case .currentSession:
+            guard let cwd = currentSessionCwd, !cwd.isEmpty else { return home }
+            return cwd
+        case .custom:
+            guard let dir = newSessionCustomDirectory, !dir.isEmpty else { return home }
+            return dir
+        }
     }
 
     /// The SwiftUI overlay opacity for a given inactive-pane mute strength: the strength is clamped to

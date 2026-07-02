@@ -70,11 +70,22 @@ final class AppActions {
 
     func newSession() {
         guard let store, let workspaceID = store.currentWorkspaceID,
-              let session = store.addSession(toWorkspace: workspaceID,
-                                             cwd: FileManager.default.homeDirectoryForCurrentUser.path)
+              let session = store.addSession(toWorkspace: workspaceID, cwd: resolvedNewSessionCwd())
         else { return }
         store.selectSession(session.id)
         focusActiveSession()
+    }
+
+    /// The working directory a new session should open in, resolved from the new-session-directory setting
+    /// (home / the current session's cwd / a fixed custom dir) against the active session's focused-pane
+    /// cwd. Shared by `newSession()` and the sidebar's workspace-row New Session so both entry points honor
+    /// the setting. Falls back to home when `settingsModel` isn't wired yet (before the scene `.task`) or
+    /// the setting resolves there. Read as the `addSession` argument, so it captures the active session's
+    /// cwd BEFORE the new session exists.
+    func resolvedNewSessionCwd() -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
+        return settingsModel?.settings.resolveNewSessionCwd(
+            currentSessionCwd: store?.activeSession?.focusedCwd, home: home) ?? home
     }
 
     func openDirectory() {

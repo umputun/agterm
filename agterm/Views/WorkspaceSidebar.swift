@@ -1215,7 +1215,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
 
         @objc private func menuNewSession(_ sender: NSMenuItem) {
             guard let node = sender.representedObject as? SidebarNode else { return }
-            addSession(toWorkspace: node.id, cwd: FileManager.default.homeDirectoryForCurrentUser.path)
+            // resolve the cwd via the same new-session-directory setting as AppActions.newSession(), so the
+            // workspace-row New Session honors it too (home / current session's cwd / a fixed custom dir).
+            addSession(toWorkspace: node.id, cwd: actions.resolvedNewSessionCwd())
         }
 
         @objc private func menuDeleteWorkspace(_ sender: NSMenuItem) {

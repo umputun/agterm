@@ -251,4 +251,42 @@ struct AppSettingsTests {
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
         #expect(legacy.rightClickPaste == nil)
     }
+
+    @Test func newSessionDirectoryRoundTripsAndIsNotAConfigLine() throws {
+        let original = AppSettings(newSessionDirectory: "custom", newSessionCustomDirectory: "/tmp/work")
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
+        #expect(decoded == original)
+        // absent in a legacy file decodes to nil (the home default).
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(legacy.newSessionDirectory == nil)
+        #expect(legacy.newSessionCustomDirectory == nil)
+        // an app-level behavior value, never a ghostty config key — only the always-on defaults are emitted.
+        #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
+
+    @Test func resolveNewSessionCwdHomeIsDefault() {
+        // nil mode (default) and an explicit "home" both resolve to home, ignoring the session cwd.
+        #expect(AppSettings().resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
+        #expect(AppSettings(newSessionDirectory: "home").resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
+        // an unknown future mode falls back to home rather than crashing.
+        #expect(AppSettings(newSessionDirectory: "future").resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
+    }
+
+    @Test func resolveNewSessionCwdCurrentSessionInheritsOrFallsBack() {
+        let settings = AppSettings(newSessionDirectory: "currentSession")
+        #expect(settings.resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/proj")
+        // no active session (nil cwd) or a blank cwd falls back to home.
+        #expect(settings.resolveNewSessionCwd(currentSessionCwd: nil, home: "/home") == "/home")
+        #expect(settings.resolveNewSessionCwd(currentSessionCwd: "", home: "/home") == "/home")
+    }
+
+    @Test func resolveNewSessionCwdCustomUsesPathElseHome() {
+        #expect(AppSettings(newSessionDirectory: "custom", newSessionCustomDirectory: "/fixed")
+            .resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/fixed")
+        // custom mode with an unset or blank path falls back to home.
+        #expect(AppSettings(newSessionDirectory: "custom")
+            .resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
+        #expect(AppSettings(newSessionDirectory: "custom", newSessionCustomDirectory: "")
+            .resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
+    }
 }

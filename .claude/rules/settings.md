@@ -25,7 +25,9 @@ paths:
   + `inactivePaneMuteStrength` (0...10 inactive-split-pane text mute, nil = default 5,
   NOT a ghostty key) + `sidebarBackgroundShift` (0...10 sidebar lighter/darker tint relative to the terminal,
   nil = default 5 = neutral, NOT a ghostty key)
-  + `rightClickPaste` (ghostty `right-click-action`, nil = on).
+  + `rightClickPaste` (ghostty `right-click-action`, nil = on)
+  + `newSessionDirectory`/`newSessionCustomDirectory` (where a new ⌘T session opens: nil = home default,
+  else the current session's cwd or a fixed custom dir; NOT ghostty keys).
   The three `*StatusColorHex` (`#RRGGBB`, nil = active `#DBD9E6` muted lavender-grey + system amber/green)
   color the sidebar agent-status glyph: `SettingsModel` passes the hex to `GhosttyApp.setAgentStatusColors`
   which resolves to `NSColor` (so `SettingsModel` stays AppKit-free, the `NSColor`↔hex helper is `NSColor+AgtermHex`),
@@ -128,7 +130,8 @@ paths:
   `com_apple_SwiftUI_Settings_selectedTabIndex` auto-persistence, so the window always opens on General
   instead of restoring the last-used tab.
   **General** (a **Mouse** section with the scroll-speed slider + the right-click-pastes toggle,
-  a **Sessions** section with the restore-running-commands toggle,
+  a **Sessions** section with the new-session-directory picker (home / current session's directory / a
+  fixed custom folder, the last with a `Choose…` panel) + the restore-running-commands toggle,
   and a **Ghostty Config** section with the inherit-global-config toggle).
   **Appearance** (a **Terminal** section — font/size/theme via `NSFontManager` monospaced families +
   the bundled `ghostty/themes` dir, `SettingsCatalog` — a **Window** section with the compact-toolbar
@@ -271,6 +274,28 @@ paths:
   touch settings), but the feature DOES have a control surface: `restore.clear` clears the saved commands
   and live `foreground`/`splitForeground` ride `tree`/`ControlSessionNode` (see the Control API catalog's
   `restore.clear` four-point audit) — the agent-skill was updated accordingly.
+- **`newSessionDirectory`/`newSessionCustomDirectory` (where a new ⌘T session opens, General tab).**
+  `AppSettings.newSessionDirectory: String?` (nil = the `home` default) holds a `NewSessionDirectory`
+  raw value (`home`/`currentSession`/`custom`); `newSessionCustomDirectory: String?` is the fixed dir for
+  the `custom` mode.
+  NOT ghostty keys (`ghosttyConfigLines()` never emits them).
+  The host-free `AppSettings.resolveNewSessionCwd(currentSessionCwd:home:)` maps the mode to a path: `home`
+  → home; `currentSession` → `currentSessionCwd` (else home); `custom` → `newSessionCustomDirectory` (else
+  home).
+  An unknown/nil mode, a nil/blank `currentSessionCwd`, and a nil/blank custom path all fall back to home
+  (both non-home arms guard emptiness symmetrically).
+  It is read ONCE at new-session creation via `AppActions.resolvedNewSessionCwd()` (which passes the active
+  session's `focusedCwd` as `currentSessionCwd`), so it only affects the NEXT session — no config rewrite
+  or surface reload.
+  `SettingsModel.setNewSessionDirectory`/`setNewSessionCustomDirectory` are save-only (like `setBlockedStatusSoundName`),
+  and the General → Sessions Picker maps `.home` back to nil to keep `settings.json` minimal.
+  ALL FOUR New Session entry points share `resolvedNewSessionCwd()` so none drift: the bottom-bar session
+  menu, the File menu, and the ⌃⇧P palette via `AppActions.newSession()`, and the sidebar workspace-row
+  right-click menu via `WorkspaceSidebar`'s `menuNewSession` (which calls `actions.resolvedNewSessionCwd()`
+  directly, since it places into the RIGHT-CLICKED workspace, not `currentWorkspaceID`).
+  GUI-only and keep-in-sync EXEMPT (only `theme.set`/`config.reload` touch settings over the socket); the
+  control-side `session.new --cwd` already covers "open a session in directory X" and keeps its explicit
+  `--cwd`-or-home default regardless of this setting.
 - **`inheritGlobalGhosttyConfig` (load the user's global `~/.config/ghostty/config`,
   opt-in, General tab).** `AppSettings.inheritGlobalGhosttyConfig: Bool?` (nil = OFF) gates whether `loadConfig`
   reads the user's GLOBAL ghostty config (see the `<configDir>/ghostty.conf` bullet for the layering).

@@ -111,6 +111,12 @@ final class SettingsModel {
     /// Persist the system sound played when a session enters `blocked` (nil/empty = none). Not a ghostty
     /// key and nothing renders it continuously, so it only saves — `ControlServer` reads it on demand.
     func setBlockedStatusSoundName(_ name: String?) { settings.blockedStatusSoundName = name; try? settingsStore.save(settings) }
+    /// Persist where a new (⌘T) session opens (nil = the home default). Not a ghostty key and nothing
+    /// renders it continuously — it only affects the NEXT new session, read then by `AppActions.newSession()`
+    /// — so it just saves (no config rewrite / surface reload).
+    func setNewSessionDirectory(_ value: String?) { settings.newSessionDirectory = value; try? settingsStore.save(settings) }
+    /// Persist the fixed directory used when `newSessionDirectory` is `custom` (nil/empty falls back to home).
+    func setNewSessionCustomDirectory(_ value: String?) { settings.newSessionCustomDirectory = value; try? settingsStore.save(settings) }
 
     /// Apply a new background opacity live WITHOUT an immediate save — the live-drag half of the opacity
     /// slider. Updates translucency on every drag tick (apply-without-save) and schedules a debounced

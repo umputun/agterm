@@ -68,9 +68,9 @@ private struct SettingHint: View {
     }
 }
 
-/// General tab: a Mouse section (scroll speed + right-click-pastes toggle), the restore-running-commands
-/// toggle, and the inherit-global-ghostty-config toggle. The visual and notification settings live on
-/// their own tabs.
+/// General tab: a Mouse section (scroll speed + right-click-pastes toggle), a Sessions section (the
+/// new-session directory picker + restore-running-commands toggle), and the inherit-global-ghostty-config
+/// toggle. The visual and notification settings live on their own tabs.
 private struct GeneralSettingsView: View {
     let model: SettingsModel
 
@@ -91,6 +91,26 @@ private struct GeneralSettingsView: View {
             }
 
             Section("Sessions") {
+                Picker("New sessions open in", selection: newSessionDirectory) {
+                    Text("Home directory").tag(AppSettings.NewSessionDirectory.home)
+                    Text("Current session's directory").tag(AppSettings.NewSessionDirectory.currentSession)
+                    Text("Custom directory").tag(AppSettings.NewSessionDirectory.custom)
+                }
+                .accessibilityIdentifier("settings-new-session-directory")
+                if newSessionDirectory.wrappedValue == .custom {
+                    HStack {
+                        Text(model.settings.newSessionCustomDirectory ?? "Not set")
+                            .font(.system(size: 12).monospaced())
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .textSelection(.enabled)
+                            .foregroundStyle(model.settings.newSessionCustomDirectory == nil ? .secondary : .primary)
+                            .accessibilityIdentifier("settings-new-session-custom-dir")
+                        Spacer()
+                        Button("Choose…") { chooseCustomDirectory() }
+                            .accessibilityIdentifier("settings-new-session-choose")
+                    }
+                }
                 Toggle("Restore running commands on restart", isOn: restoreRunningCommand)
                     .accessibilityIdentifier("settings-restore-running-command")
                 SettingHint("Re-runs each pane's foreground command on relaunch; multiplexers start fresh.")
@@ -132,6 +152,26 @@ private struct GeneralSettingsView: View {
     private var mouseScrollMultiplier: Binding<Double> {
         Binding(get: { model.settings.mouseScrollMultiplier ?? 3 },
                 set: { model.setMouseScrollMultiplier($0 == 3 ? nil : $0) })
+    }
+
+    /// The new-session directory mode; nil (the default) reads as `.home`, and picking `.home` stores nil
+    /// so settings.json stays minimal. An unknown stored value also resolves to `.home`.
+    private var newSessionDirectory: Binding<AppSettings.NewSessionDirectory> {
+        Binding(get: { AppSettings.NewSessionDirectory(rawValue: model.settings.newSessionDirectory ?? "") ?? .home },
+                set: { model.setNewSessionDirectory($0 == .home ? nil : $0.rawValue) })
+    }
+
+    /// Pick the fixed directory for the `custom` new-session mode with the standard open panel
+    /// (directories only), then persist it.
+    private func chooseCustomDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.prompt = "Choose"
+        panel.message = "Choose a directory for new sessions"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        model.setNewSessionCustomDirectory(url.path)
     }
 }
 

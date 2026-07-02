@@ -76,6 +76,17 @@ final class SettingsUITests: XCTestCase {
                       "turning restore-running-commands on should persist restoreRunningCommand=true")
     }
 
+    func testNewSessionDirectoryPickerPersists() throws {
+        let picker = settingsControl(tab: "General", control: "settings-new-session-directory")
+        picker.click()
+        let choice = app.menuItems["Current session's directory"]
+        XCTAssertTrue(choice.waitForExistence(timeout: 5), "the picker should list the new-session directory modes")
+        choice.click()
+
+        XCTAssertTrue(poll { self.settingsValue("newSessionDirectory") == "currentSession" },
+                      "choosing current-session should persist newSessionDirectory=currentSession to settings.json")
+    }
+
     func testScrollSpeedSliderPersists() throws {
         let slider = settingsControl(tab: "General", control: "settings-scroll-speed")
         slider.adjust(toNormalizedSliderPosition: 1.0) // drag to max (10), away from the default 3
