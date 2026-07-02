@@ -45,5 +45,10 @@ command -v agtermctl >/dev/null 2>&1 || { echo "show-image.sh: agtermctl not on 
 self=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
 abs=$(cd "$(dirname "$img")" && pwd)/$(basename "$img")
 
+# POSIX single-quote a string for safe embedding in the command below: wrap in '...' and replace each
+# embedded ' with the '\'' sequence, so a path containing a quote can't break out of the quoting. The
+# overlay command is run via `sh -c`, so an unescaped ' in the path would otherwise abort it.
+sq() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+
 # open an overlay that re-invokes this script in --emit mode inside the overlay's pty.
-agtermctl session overlay open "/bin/bash '$self' --emit '$abs'" --size-percent "$size"
+agtermctl session overlay open "/bin/bash $(sq "$self") --emit $(sq "$abs")" --size-percent "$size"
