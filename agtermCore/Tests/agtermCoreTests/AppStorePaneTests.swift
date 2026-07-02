@@ -214,6 +214,20 @@ struct AppStorePaneTests {
         #expect(session.overlayCommand == "revdiff")
     }
 
+    @Test func openOverlayCarriesBackgroundColorAndCloseClears() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        #expect(store.openOverlay(session.id, command: "revdiff", backgroundColor: "#2a1a3a") == true)
+        #expect(session.overlayBackgroundColor == "#2a1a3a")
+        // close clears the overlay's color back to nil, like the other ephemeral overlay fields.
+        store.closeOverlay(session.id)
+        #expect(session.overlayBackgroundColor == nil)
+        // omitting the color leaves it nil (default theme background, unchanged behavior).
+        #expect(store.openOverlay(session.id, command: "revdiff") == true)
+        #expect(session.overlayBackgroundColor == nil)
+    }
+
     @Test func overlayExitCodeRecordedAndSurvivesClose() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

@@ -191,6 +191,10 @@ The app must build, `swift test` must stay green, and `make lint` must pass afte
   unsigned DMG (`AGTERM_ALLOW_UNSIGNED=1`), publishes the GitHub release,
   and bumps the Homebrew cask in `umputun/homebrew-apps` (needs the `HOMEBREW_TAP_PAT` secret,
   not the default token).
+  **`CHANGELOG.md` is RELEASE-ONLY — never touch it in a feature PR.**
+  It is written only at release time (the `docs: update changelog for vX.Y.Z` commit / the release flow).
+  A feature's own doc updates go to `README.md`, the bundled `agterm/Resources/agent-skill/`,
+  and the relevant `.claude/rules/*.md` note — not the changelog.
 
 ## GhosttyKit.xcframework
 

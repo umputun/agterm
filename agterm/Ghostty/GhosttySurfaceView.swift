@@ -75,6 +75,12 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// nil for non-capturing surfaces.
     var overlayCodeFile: String?
 
+    /// For an OVERLAY surface: its own solid background color as `#rrggbb` (`session.overlay.open
+    /// --background-color`), or nil for the default theme background. Applied in `createSurface` once the
+    /// surface exists — the overlay carries no `session`, so the session-watermark path skips it. Set by
+    /// the overlay factory from `Session.overlayBackgroundColor`.
+    var overlayBackgroundColorHex: String?
+
     /// For a capturing overlay surface: receives the parsed exit status read from `overlayCodeFile` on
     /// teardown. Set by the overlay factory to record it onto the session for `session.overlay.result`.
     /// Called from `destroySurface` (main actor) on every in-process teardown, so the status is captured
@@ -507,6 +513,27 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         applyWatermarkFromSession()
     }
 
+    /// Applies a solid background color to a sessionless OVERLAY surface (`session.overlay.open
+    /// --background-color`). Mirrors `applyWatermarkFromSession`'s `.color` path but reads the overlay's
+    /// own `overlayBackgroundColorHex` + `initialFontSize` instead of a session — the overlay carries no
+    /// `session`, so that path skips it. Bakes the window translucency into `background-opacity` at open
+    /// time (the ephemeral overlay gets no live updates, so it does not re-track a later opacity change —
+    /// unlike a session `.color`). A no-op — or a malformed hex, rejected by the leading `isValidColorHex`
+    /// guard — leaves the plain base config. Retains the per-surface config in `ownedConfigs`, freed on teardown.
+    func applyOverlayBackgroundColor() {
+        guard let surface, let hex = overlayBackgroundColorHex, WatermarkConfig.isValidColorHex(hex) else { return }
+        let overlay = WatermarkConfig.overlayText(watermark: BackgroundWatermark(kind: .color, colorHex: hex),
+                                                  resolvedImagePath: nil, fontSize: initialFontSize.map(Double.init),
+                                                  windowOpacity: GhosttyApp.shared.windowOpacity)
+        guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
+            NSLog("overlay background: per-surface config build failed")
+            return
+        }
+        ghostty_surface_update_config(surface, config)
+        ownedConfigs.forEach { ghostty_config_free($0) }
+        ownedConfigs = [config]
+    }
+
     func reportFontSize() {
         // Already on the main actor (the CELL_SIZE callback hops via DispatchQueue.main.async).
         // inherited_config carries the surface's live font size (post cmd +/-); a zero means
@@ -616,6 +643,9 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         // a snapshot) applies it now that the surface exists — covering deferred-size creation, the eager
         // deck, and relaunch. No-op for the sessionless overlay/scratch/quick surfaces.
         if session?.backgroundWatermark != nil { applyWatermarkFromSession() }
+        // an overlay surface with its own background color (session.overlay.open --background-color) applies
+        // it here too — the overlay is sessionless, so the watermark path above skips it.
+        if overlayBackgroundColorHex != nil { applyOverlayBackgroundColor() }
 
         // the overlay grabs first responder itself (TerminalView's once-on-attach grab misses the
         // deferred overlay surface); a bounded run-loop retry beats the SwiftUI/AppKit responder race.

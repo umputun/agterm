@@ -173,10 +173,12 @@ position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when 
   background-opacity); a `color` instead honors the Settings window translucency. Read the current
   background back from a session's `background` field in `tree --json` (a `{kind, colorHex, …}` object,
   omitted when none).
-- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--target] [--window W]`
+- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--target] [--window W]`
   — run `command` in an ephemeral terminal on top of the session; it closes when the command exits.
   Full-size by default (hides the session); `--size-percent N` (1–100) makes it a floating framed panel
-  with the session visible behind. `--wait` keeps the overlay open after the command exits (press a key
+  with the session visible behind. `--background-color #rrggbb` gives the overlay pane its own solid
+  background color, independent of the session's own `session background color` (nil = the default theme
+  background); it honors the Settings window translucency, captured when the overlay opens. `--wait` keeps the overlay open after the command exits (press a key
   to close). `--block` waits for the command to exit and makes agtermctl exit with the command's status
   (cannot combine with `--wait`); the program renders normally — capture its OUTPUT via the program's
   own output file, not the control channel. Returns the overlay's session id. `--target` defaults to

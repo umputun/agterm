@@ -358,8 +358,16 @@ paths:
   one program (`args.command`, e.g. a TUI); by default it is full single-pane size,
   hiding the single/split underneath, but `args.sizePercent` (1–100, clamped in `openOverlay`) makes
   it a *floating* opaque framed panel at that percent of the pane with the session still visible.
+  `args.color` (`#rrggbb`, REUSING the `session.background` field — no new arg — validated by the shared
+  `WatermarkConfig.isValidColorHex` at BOTH the CLI `validate()` and the server arm) gives the overlay
+  pane its OWN solid background color, independent of the session's `session.background color`;
+  the overlay is sessionless, so it is applied to the overlay SURFACE (not via the session) as the SAME
+  `.color` per-surface config overlay (`WatermarkConfig.overlayText` → `configWithOverlay`,
+  honoring window translucency), built in `GhosttySurfaceView.applyOverlayBackgroundColor` from the
+  view's `overlayBackgroundColorHex` in `createSurface` — works identically for the full + floating variants.
   `AppStore.openOverlay`/`closeOverlay` set non-persisted `Session.overlay*` state (incl.
-  `overlaySizePercent`, nil = full / non-nil = floating), and the surface runs `config.command` with
+  `overlaySizePercent`, nil = full / non-nil = floating; and `overlayBackgroundColor`,
+  set at open / cleared at close), and the surface runs `config.command` with
   `onExit → closeOverlay`.
   The two variants render in DIFFERENT places.
   The FULL overlay is an in-deck ZStack sibling in `WindowContentView.sessionDetail` (`.zIndex(1)` above the

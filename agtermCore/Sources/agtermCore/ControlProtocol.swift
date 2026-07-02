@@ -87,7 +87,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var path: String?
     /// The color (`#rrggbb`) for `session.background`: the text tint for mode `text` (nil = the terminal
     /// foreground), or the solid background color for mode `color` (required). Mode `color` takes no
-    /// opacity — it honors the Settings window translucency.
+    /// opacity — it honors the Settings window translucency. Also the optional solid background color for
+    /// `session.overlay.open` (the overlay pane's own color, independent of the session's); nil = the
+    /// default theme background, honoring the same window translucency.
     public var color: String?
     /// The `background-image-opacity` for `session.background` (image + text), 0...1; nil = ghostty's 1.0.
     public var opacity: Double?

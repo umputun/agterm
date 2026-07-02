@@ -36,6 +36,30 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(closeAgain["error"] as? String, "no overlay", "\(closeAgain)")
     }
 
+    // session.overlay.open --background-color: a valid #rrggbb opens the overlay (the colored surface is
+    // a Metal layer, not in the AX tree, so the color is verified manually — this asserts the arm accepts
+    // and applies it via the lifecycle), and a malformed color is rejected before the overlay opens.
+    func testOverlayOpenWithBackgroundColorAndRejectsBadColor() throws {
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
+        let id = try XCTUnwrap(result["id"] as? String, "session.new should return the new id")
+
+        // a malformed color is rejected up front; no overlay opens.
+        let bad = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"command":"cat","color":"purple"}}"#)
+        XCTAssertEqual(bad["ok"] as? Bool, false, "a malformed color should be rejected: \(bad)")
+        XCTAssertEqual(bad["error"] as? String, "invalid color: purple (#rrggbb)", "\(bad)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: false, timeout: 5), "the rejected open must not open an overlay")
+
+        // a valid color opens the overlay (cat is long-lived so it stays up); close tears it down.
+        // ##"…"## delimiters so the "#2a1a3a" value's leading "# doesn't close a #"…"# raw string.
+        let open = try sendCommand(##"{"cmd":"session.overlay.open","target":"\##(id)","args":{"command":"cat","color":"#2a1a3a"}}"##)
+        XCTAssertEqual(open["ok"] as? Bool, true, "overlay open with a valid color should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the colored overlay should be up")
+
+        let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
+    }
+
     // the overlay auto-closes when its command exits (the SHOW_CHILD_EXITED path): open an overlay
     // running a command that writes a marker then exits — the marker proves the command ran inside the
     // overlay, and the tree's overlay flag clearing proves the overlay vanished with no key press.

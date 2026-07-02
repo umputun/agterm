@@ -148,6 +148,12 @@ public final class Session: Identifiable {
     /// creation. `@ObservationIgnored`.
     @ObservationIgnored public var overlayCwd: String?
 
+    /// The overlay's own solid background color as `#rrggbb`, or nil for the default theme background.
+    /// Independent of the session's `backgroundWatermark` — the overlay surface is not wired to the
+    /// session, so it carries its own color, set via `session.overlay.open --background-color`. Read by
+    /// the factory at creation; set at open, cleared on close. `@ObservationIgnored`, never persisted.
+    @ObservationIgnored public var overlayBackgroundColor: String?
+
     /// Whether the overlay keeps its surface open after the command exits, showing libghostty's
     /// "press any key to close" prompt (useful to read a command's final output) instead of closing
     /// immediately. Read by the factory at creation. `@ObservationIgnored`.

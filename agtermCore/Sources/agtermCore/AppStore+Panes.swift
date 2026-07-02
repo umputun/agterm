@@ -99,14 +99,19 @@ extension AppStore {
     /// `sizePercent` (clamped to 1...100) requests a *floating* overlay: an opaque, framed panel sized
     /// to that percent of the pane, with the session still visible behind it. nil gives the default
     /// full-pane overlay that hides the session.
+    ///
+    /// `backgroundColor` (`#rrggbb`) gives the overlay pane its own solid background, independent of the
+    /// session's; nil leaves the default theme background. Read by the overlay surface factory at creation.
     @discardableResult public func openOverlay(_ sessionID: UUID, command: String, cwd: String? = nil,
-                                               wait: Bool = false, sizePercent: Int? = nil) -> Bool {
+                                               wait: Bool = false, sizePercent: Int? = nil,
+                                               backgroundColor: String? = nil) -> Bool {
         guard let session = session(withID: sessionID), !session.overlayActive else { return false }
         session.overlayCommand = command
         session.overlayCwd = cwd
         session.overlayWait = wait
         session.overlayExitCode = nil
         session.overlaySizePercent = sizePercent.map { min(100, max(1, $0)) }
+        session.overlayBackgroundColor = backgroundColor
         session.overlayActive = true
         return true
     }
@@ -130,6 +135,7 @@ extension AppStore {
         session.overlayCwd = nil
         session.overlayWait = false
         session.overlaySizePercent = nil
+        session.overlayBackgroundColor = nil
         return true
     }
 

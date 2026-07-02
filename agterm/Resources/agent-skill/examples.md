@@ -100,6 +100,8 @@ Floating panel variant (session stays visible behind it):
 
 ```bash
 agtermctl session overlay open "htop" --target "$AGTERM_SESSION_ID" --size-percent 70   # this session
+# tint the overlay pane so it stands out from the session behind it:
+agtermctl session overlay open "revdiff HEAD~3" --target "$AGTERM_SESSION_ID" --size-percent 80 --background-color "#2a1a3a"
 # ... later
 agtermctl session overlay close
 ```

@@ -498,10 +498,14 @@ final class ControlServer {
             guard let command = request.args?.command, !command.isEmpty else {
                 return ControlResponse(ok: false, error: "session.overlay.open requires a command")
             }
+            if let color = request.args?.color, !WatermarkConfig.isValidColorHex(color) {
+                return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
+            }
             return resolver.resolveSession(request.target, window: request.args?.window) { store, id in
                 guard store.openOverlay(id, command: command, cwd: request.args?.cwd,
                                         wait: request.args?.wait ?? false,
-                                        sizePercent: request.args?.sizePercent) else {
+                                        sizePercent: request.args?.sizePercent,
+                                        backgroundColor: request.args?.color) else {
                     return ControlResponse(ok: false, error: "overlay already open")
                 }
                 // a FLOATING overlay (sizePercent set) renders only for the ACTIVE session, so on a non-active

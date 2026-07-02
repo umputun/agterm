@@ -416,19 +416,23 @@ struct Session: ParsableCommand {
             @Flag(name: .long, help: "Keep the overlay open after COMMAND exits (press any key to close).") var wait = false
             @Flag(name: .long, help: "Block until COMMAND exits and exit with its status (the program renders normally; capture its output via the program's own output file).") var block = false
             @Option(name: .long, help: "Render a floating, framed panel at PERCENT (1-100) of the pane instead of full-size.") var sizePercent: Int?
+            @Option(name: .long, help: "Solid background color (#rrggbb) for the overlay pane, independent of the session's own.") var backgroundColor: String?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
-            // reject the mutually-exclusive combo at parse time (before any connection), so it's a clean
-            // usage error and is unit-testable without a socket.
+            // reject the mutually-exclusive combo + a malformed color at parse time (before any connection),
+            // so it's a clean usage error and is unit-testable without a socket.
             func validate() throws {
                 if block && wait { throw ValidationError("--block cannot be combined with --wait") }
+                if let backgroundColor, !WatermarkConfig.isValidColorHex(backgroundColor) {
+                    throw ValidationError("background-color must be a #rrggbb hex value")
+                }
             }
 
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionOverlayOpen, target: target.target,
                                args: options.withWindow(ControlArgs(cwd: cwd, command: command, wait: wait ? true : nil,
-                                                                     sizePercent: sizePercent)))
+                                                                     sizePercent: sizePercent, color: backgroundColor)))
             }
 
             func run() throws {

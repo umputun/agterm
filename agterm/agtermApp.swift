@@ -340,6 +340,9 @@ struct agtermApp: App {
                                       fontSize: session.fontSize.map(Float.init), command: overlayExitWrapper,
                                       waitAfterCommand: session.overlayWait, autoFocus: true, env: overlayEnv)
         view.overlayCodeFile = codeFile
+        // the overlay's own background color (session.overlay.open --background-color), applied to the
+        // surface in createSurface — the overlay is sessionless, so it can't read it off the session there.
+        view.overlayBackgroundColorHex = session.overlayBackgroundColor
         // record the exit status on teardown (the surface always tears down through destroySurface), so
         // it survives an explicit session.overlay.close that bypasses onExit. a session/window force-close
         // removes the session first, so this no-ops there — but the result is unqueryable after that anyway.

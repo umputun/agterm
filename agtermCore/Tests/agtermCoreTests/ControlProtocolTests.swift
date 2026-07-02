@@ -44,6 +44,7 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionCopy, target: "9f3c"),
             ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c", args: ControlArgs(cwd: "/b", command: "revdiff")),
             ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c", args: ControlArgs(command: "htop", sizePercent: 70)),
+            ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c", args: ControlArgs(command: "revdiff", color: "#2a1a3a")),
             ControlRequest(cmd: .sessionOverlayClose, target: "9f3c"),
             ControlRequest(cmd: .sessionOverlayResult, target: "9f3c"),
         ]

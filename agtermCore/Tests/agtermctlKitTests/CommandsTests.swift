@@ -392,6 +392,20 @@ struct CommandsTests {
         #expect(try request(["session", "overlay", "open", "htop", "--size-percent", "70"]) == expected)
     }
 
+    @Test func sessionOverlayOpenWithBackgroundColor() throws {
+        // --background-color maps to ControlArgs.color (shared field, disambiguated by the command).
+        let expected = ControlRequest(cmd: .sessionOverlayOpen, target: "active",
+                                      args: ControlArgs(command: "revdiff", color: "#2a1a3a"))
+        #expect(try request(["session", "overlay", "open", "revdiff", "--background-color", "#2a1a3a"]) == expected)
+    }
+
+    @Test func sessionOverlayOpenRejectsBadBackgroundColor() {
+        // validate() rejects a malformed hex at parse time (before any connection).
+        #expect(throws: (any Error).self) {
+            try Agtermctl.parseAsRoot(["session", "overlay", "open", "cmd", "--background-color", "purple"])
+        }
+    }
+
     @Test func sessionOverlayClose() throws {
         #expect(try request(["session", "overlay", "close"]) == ControlRequest(cmd: .sessionOverlayClose, target: "active"))
     }
