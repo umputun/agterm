@@ -605,26 +605,19 @@ final class ControlServer {
     /// Project a window's workspace tree into the wire `ControlTree`, marking the active session and the
     /// active workspace (the one owning the selected session).
     private func buildTree(in store: AppStore) -> ControlTree {
-        let activeID = store.selectedSessionID
-        let activeWorkspaceID = activeID.flatMap { store.workspace(forSession: $0)?.id }
         let shellBasename = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
-        let workspaces = store.workspaces.map { workspace in
-            let sessions = workspace.sessions.map { session in
-                let fg = (session.surface as? GhosttySurfaceView).flatMap { ForegroundProcess.command(for: $0, shellBasename: shellBasename) }
-                let splitFg = (session.splitSurface as? GhosttySurfaceView).flatMap { ForegroundProcess.command(for: $0, shellBasename: shellBasename) }
-                let status = session.agentIndicator.status == .idle ? nil : session.agentIndicator.status.rawValue
-                return ControlSessionNode(id: session.id.uuidString, name: session.displayName,
-                                          cwd: session.effectiveCwd, title: session.oscTitle,
-                                          active: session.id == activeID,
-                                          split: session.isSplit, overlay: session.overlayActive,
-                                          scratch: session.scratchActive, flagged: session.flagged,
-                                          foreground: fg, splitForeground: splitFg, status: status,
-                                          background: session.backgroundWatermark)
+        return store.controlTree(
+            foreground: { session in
+                (session.surface as? GhosttySurfaceView).flatMap {
+                    ForegroundProcess.command(for: $0, shellBasename: shellBasename)
+                }
+            },
+            splitForeground: { session in
+                (session.splitSurface as? GhosttySurfaceView).flatMap {
+                    ForegroundProcess.command(for: $0, shellBasename: shellBasename)
+                }
             }
-            return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
-                                        active: workspace.id == activeWorkspaceID, sessions: sessions)
-        }
-        return ControlTree(workspaces: workspaces)
+        )
     }
 
     /// Creates a session in `workspaceID` of `store` with the `session.new` args (cwd default $HOME,
