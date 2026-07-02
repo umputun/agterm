@@ -13,18 +13,14 @@ extension ControlServer {
     /// never tears the hidden pane's surface down (`closeSplit` stays the shell-exit-only path).
     /// Focus follows via `AppActions.focusSplitPane`.
     func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse {
-        let mode = mode ?? "toggle"
         return resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
             }
-            let want: Bool
-            switch mode {
-            case "on": want = true
-            case "off": want = false
-            case "toggle": want = !session.isSplit
-            default: return ControlResponse(ok: false, error: "invalid split mode: \(mode)")
+            guard let parsedMode = ControlToggleMode.parse(mode) else {
+                return ControlResponse(ok: false, error: "invalid split mode: \(mode ?? "toggle")")
             }
+            let want = parsedMode.desiredValue(current: session.isSplit)
             if want != session.isSplit {
                 store.toggleSplit(id) // mirror ⌘D: keep-alive hide/show, never destroys the hidden pane
             }
@@ -41,18 +37,14 @@ extension ControlServer {
     /// --command`: a scratch is expendable, so if one is already alive it is torn down and respawned
     /// with the command (otherwise the flag would be silently inert).
     func scratchSession(_ target: String?, window: String?, mode: String?, command: String?) -> ControlResponse {
-        let mode = mode ?? "toggle"
         return resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
             }
-            let want: Bool
-            switch mode {
-            case "on": want = true
-            case "off": want = false
-            case "toggle": want = !session.scratchActive
-            default: return ControlResponse(ok: false, error: "invalid scratch mode: \(mode)")
+            guard let parsedMode = ControlToggleMode.parse(mode) else {
+                return ControlResponse(ok: false, error: "invalid scratch mode: \(mode ?? "toggle")")
             }
+            let want = parsedMode.desiredValue(current: session.scratchActive)
             if want, let command, !command.isEmpty {
                 // run the command as the scratch process: respawn if one is already alive (a scratch is
                 // expendable), so the command is never silently ignored. closeScratch clears scratchActive,
@@ -76,7 +68,6 @@ extension ControlServer {
     /// Move keyboard focus to a split session's left/right pane. `pane` is `left`|`right`|`other`
     /// (`other` toggles). Errors when the session isn't split or the pane value is unknown.
     func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse {
-        let pane = pane ?? "other"
         return resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
@@ -84,13 +75,10 @@ extension ControlServer {
             guard session.hasSplit else {
                 return ControlResponse(ok: false, error: "session has no split")
             }
-            let toSplit: Bool
-            switch pane {
-            case "left", "primary": toSplit = false
-            case "right", "split": toSplit = true
-            case "other", "toggle": toSplit = !session.splitFocused
-            default: return ControlResponse(ok: false, error: "invalid pane: \(pane)")
+            guard let parsedPane = ControlPaneFocusMode.parse(pane) else {
+                return ControlResponse(ok: false, error: "invalid pane: \(pane ?? "other")")
             }
+            let toSplit = parsedPane.wantsSplit(currentSplitFocused: session.splitFocused)
             actions.setSplitFocus(toSplit, of: session)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
@@ -289,17 +277,13 @@ extension ControlServer {
     /// flipping only when the requested state differs from the current `isVisible`. An unknown mode
     /// is an error, not a silent no-op; no open window is an error rather than a silent no-op.
     func setQuickTerminal(mode: String?) -> ControlResponse {
-        let mode = mode ?? "toggle"
         guard let controller = QuickTerminalRegistry.shared.controller(for: library.activeWindowID) else {
             return ControlResponse(ok: false, error: "no open window")
         }
-        let want: Bool
-        switch mode {
-        case "show": want = true
-        case "hide": want = false
-        case "toggle": want = !controller.isVisible
-        default: return ControlResponse(ok: false, error: "invalid quick mode: \(mode)")
+        guard let parsedMode = ControlToggleMode.parse(mode, on: "show", off: "hide") else {
+            return ControlResponse(ok: false, error: "invalid quick mode: \(mode ?? "toggle")")
         }
+        let want = parsedMode.desiredValue(current: controller.isVisible)
         if want != controller.isVisible {
             if want { controller.show() } else { controller.hide() }
         }
@@ -310,17 +294,13 @@ extension ControlServer {
     /// no system toggle). Flips only when the requested state differs; an unknown mode is an error, and no
     /// open window is an error rather than a silent no-op.
     func setSidebar(mode: String?) -> ControlResponse {
-        let mode = mode ?? "toggle"
         guard let store = library.activeStore else {
             return ControlResponse(ok: false, error: "no open window")
         }
-        let want: Bool
-        switch mode {
-        case "show": want = true
-        case "hide": want = false
-        case "toggle": want = !store.sidebarVisible
-        default: return ControlResponse(ok: false, error: "invalid sidebar mode: \(mode)")
+        guard let parsedMode = ControlToggleMode.parse(mode, on: "show", off: "hide") else {
+            return ControlResponse(ok: false, error: "invalid sidebar mode: \(mode ?? "toggle")")
         }
+        let want = parsedMode.desiredValue(current: store.sidebarVisible)
         if want != store.sidebarVisible {
             store.sidebarVisible = want
             store.save() // sidebarVisible is persisted per-window
