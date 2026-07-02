@@ -324,11 +324,19 @@ final class GhosttyApp {
 
     /// Whether the app is currently in the dark appearance. `NSApp` is an implicitly-unwrapped global
     /// that is still nil during the very early `GhosttyApp.shared` init (it boots from `SettingsModel.init`
-    /// before AppKit finishes wiring `NSApp`), so chain through it safely and default to light — the first
-    /// surface's `set_color_scheme` + `COLOR_CHANGE` corrects the colors once the app is up.
+    /// before AppKit finishes wiring `NSApp`), so chain through it safely and fall back to the global
+    /// macOS `AppleInterfaceStyle` setting for that pre-`NSApp` window — the launch theme config is
+    /// written there and must resolve the correct dual side up front, not default to light.
     static func currentIsDark() -> Bool {
-        guard let appearance = NSApp?.effectiveAppearance else { return false }
-        return appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        if let appearance = NSApp?.effectiveAppearance {
+            return appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        }
+        // NSApp isn't wired yet — SettingsModel.init writes the launch config during App.init, before
+        // applicationDidFinishLaunching, so effectiveAppearance is unavailable. Read the global macOS
+        // setting directly (AppleInterfaceStyle == "Dark" in dark mode, absent in light) so the initial
+        // theme config resolves the correct dual side instead of defaulting to light and never recovering
+        // (the surface's set_color_scheme corrects chrome colors, not the terminal theme config).
+        return UserDefaults.standard.string(forKey: "AppleInterfaceStyle") == "Dark"
     }
 
     /// The selection colors can't be read back through `ghostty_config_get` (it doesn't expose the
