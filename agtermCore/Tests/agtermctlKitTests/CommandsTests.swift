@@ -571,6 +571,29 @@ struct CommandsTests {
         #expect(try request(["theme", "set"]) == ControlRequest(cmd: .themeSet, args: ControlArgs(name: nil)))
     }
 
+    @Test func themeSetSyncWithBothSides() throws {
+        #expect(try request(["theme", "set", "--light", "Builtin Light", "--dark", "agterm"])
+            == ControlRequest(cmd: .themeSet, args: ControlArgs(light: "Builtin Light", dark: "agterm")))
+    }
+
+    @Test func themeSetOneSlotAlone() throws {
+        // theme.set is per-slot: either side alone is a valid request (the server keeps/seeds the other).
+        #expect(try request(["theme", "set", "--light", "Builtin Light"])
+            == ControlRequest(cmd: .themeSet, args: ControlArgs(light: "Builtin Light")))
+        #expect(try request(["theme", "set", "--dark", "Nord"])
+            == ControlRequest(cmd: .themeSet, args: ControlArgs(dark: "Nord")))
+        // the reserved 'none' keyword (clear the dark slot) travels as a plain value.
+        #expect(try request(["theme", "set", "--dark", "none"])
+            == ControlRequest(cmd: .themeSet, args: ControlArgs(dark: "none")))
+    }
+
+    @Test func themeSetRejectsNamePlusLight() {
+        // a positional NAME plus --light targets the same slot twice — validate() rejects it.
+        #expect(throws: (any Error).self) {
+            try Agtermctl.parseAsRoot(["theme", "set", "Dracula", "--light", "Builtin Light"])
+        }
+    }
+
     @Test func themeList() throws {
         #expect(try request(["theme", "list"]) == ControlRequest(cmd: .themeList))
     }

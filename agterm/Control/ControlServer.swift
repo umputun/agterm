@@ -517,10 +517,13 @@ final class ControlServer {
         case .configReload:
             return reloadGhosttyConfig()
         case .themeSet:
-            return setTheme(name: request.args?.name)
+            return setTheme(args: request.args)
         case .themeList:
             return ControlResponse(ok: true, result: ControlResult(theme: actions.currentTheme,
-                                                                    themes: actions.availableThemes()))
+                                                                    themes: actions.availableThemes(),
+                                                                    sync: actions.followsSystemAppearance,
+                                                                    light: actions.currentLightTheme,
+                                                                    dark: actions.currentDarkTheme))
         case .restoreClear:
             return clearSavedCommands()
         }
@@ -599,19 +602,56 @@ final class ControlServer {
 
     // MARK: - Theme
 
-    /// Set + persist a theme by name — the control half of the Settings picker / the `.themes` palette
-    /// commit (no live preview over the socket). A nil/empty name selects ghostty's built-in colors
-    /// ("default ghostty"), NOT the seeded `agterm` app default; any other name must be a bundled theme,
-    /// else an error (a typo silently doing nothing is worse than a fail). Returns the applied theme in
-    /// `result.theme` (nil = ghostty built-in). App-global: one `SettingsModel`, so no `--window` selector.
-    private func setTheme(name: String?) -> ControlResponse {
-        let resolved = ThemeCatalog.resolvedName(name)
-        let catalog = ThemeCatalog(names: actions.availableThemes())
-        if let resolved, !catalog.contains(name: resolved) {
-            return ControlResponse(ok: false, error: "unknown theme: \(resolved)")
+    /// Set + persist a theme — the control half of the Settings pickers / the `.themes` palette commit
+    /// (no live preview over the socket). Per-slot, mirroring the two Settings pickers:
+    ///   - `name` (or `--light <name>`): set the light/single slot; a dark slot, if set, is KEPT (the
+    ///     dual value recomposes). Omitting the name with no dark slot = ghostty's built-in colors
+    ///     ("default ghostty", NOT the seeded `agterm` app default); with a dark slot a bare `theme set`
+    ///     clears BOTH — a dual side can't be unnamed.
+    ///   - `--dark <name>`: set the dark slot alone — appearance syncing starts (the light side seeds
+    ///     from the current theme, else `Builtin Light`); the app applies the side matching the OS
+    ///     appearance and re-applies it on every flip.
+    ///   - `--dark none`: clear the dark slot — syncing off, the light side stays as the plain theme
+    ///     (`none` is a reserved keyword; no bundled theme carries that name).
+    ///   - `--light` + `--dark`: set both slots at once.
+    /// A positional name plus `--light` is contradictory. An unknown name is an error (a typo silently
+    /// doing nothing is worse than a fail). The response always echoes the full post-change state.
+    /// App-global: one `SettingsModel`, so no `--window` selector.
+    private func setTheme(args: ControlArgs?) -> ControlResponse {
+        let name = nonEmpty(args?.name)
+        let light = nonEmpty(args?.light)
+        let dark = nonEmpty(args?.dark)
+        if name != nil && light != nil {
+            return ControlResponse(ok: false, error: "theme.set takes either a name or --light, not both")
         }
-        actions.setTheme(resolved)
-        return ControlResponse(ok: true, result: ControlResult(theme: resolved))
+        let lightSlot = name ?? light
+        let clearDark = dark == "none"
+        let catalog = ThemeCatalog(names: actions.availableThemes())
+        for theme in [lightSlot, clearDark ? nil : dark].compactMap({ $0 })
+        where !catalog.contains(name: theme) {
+            return ControlResponse(ok: false, error: "unknown theme: \(theme)")
+        }
+        if clearDark {
+            actions.setDarkTheme(nil)
+            if lightSlot != nil { actions.setLightTheme(lightSlot) }
+        } else if let dark {
+            if let lightSlot {
+                actions.setSystemThemes(light: lightSlot, dark: dark)
+            } else {
+                actions.setDarkTheme(dark)
+            }
+        } else {
+            actions.setLightTheme(lightSlot) // nil = bare `theme set`: reset to ghostty built-in
+        }
+        return ControlResponse(ok: true, result: ControlResult(
+            theme: actions.currentTheme, sync: actions.followsSystemAppearance,
+            light: actions.currentLightTheme, dark: actions.currentDarkTheme))
+    }
+
+    /// Trim a control-arg string, mapping nil/blank to nil.
+    private func nonEmpty(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespaces)
+        return (trimmed?.isEmpty ?? true) ? nil : trimmed
     }
 
     /// `value` trimmed of surrounding whitespace, or nil if absent or blank after trimming.

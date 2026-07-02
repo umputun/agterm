@@ -61,13 +61,29 @@ struct Theme: ParsableCommand {
     )
 
     struct Set: RequestCommand {
-        static let configuration = CommandConfiguration(abstract: "Set + persist the terminal theme (omit NAME for ghostty's built-in default).")
-        @Argument(help: "Theme name (a bundled theme); omit for ghostty's built-in default.") var name: String?
+        static let configuration = CommandConfiguration(
+            abstract: "Set + persist the terminal theme, per slot.",
+            discussion: """
+            theme set NAME            set the light/single theme (a dark theme, if set, is kept)
+            theme set --dark NAME     set the dark theme — the terminal then tracks the macOS \
+            Light/Dark appearance (the light side seeds from the current theme)
+            theme set --dark none     clear the dark theme (stop tracking the appearance)
+            theme set                 ghostty's built-in default (clears everything)
+            """)
+        @Argument(help: "Light/single theme name (a bundled theme); omit for ghostty's built-in default.") var name: String?
+        @Option(help: "Light-appearance theme (same slot as NAME).") var light: String?
+        @Option(help: "Dark-appearance theme, or 'none' to clear it.") var dark: String?
         // theme is app-global (one settings model), so no `--window` selector.
         @OptionGroup var options: BasicOptions
 
+        func validate() throws {
+            if name != nil && light != nil {
+                throw ValidationError("Pass either a NAME or --light, not both.")
+            }
+        }
+
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .themeSet, args: ControlArgs(name: name))
+            ControlRequest(cmd: .themeSet, args: ControlArgs(name: name, light: light, dark: dark))
         }
     }
 

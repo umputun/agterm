@@ -324,6 +324,12 @@ agtermctl theme list --json | jq -r '.result.themes[]'   # just the names
 agtermctl theme set "Dracula"                # set + persist it app-wide (unknown name errors)
 agtermctl theme set "agterm"                 # back to the app default theme
 agtermctl theme set                          # ghostty's built-in default (no theme)
+
+# follow the macOS Light/Dark appearance automatically — setting a dark theme starts tracking:
+agtermctl theme set --dark "agterm"          # light side seeds from the current theme
+agtermctl theme set "Builtin Light"          # while tracking, a name replaces the LIGHT side (pair kept)
+agtermctl theme list --json | jq '.result | {sync, light, dark}'   # inspect the sync state
+agtermctl theme set --dark none              # stop tracking; the light theme stays as the single theme
 ```
 
 ## Targeting another window's tree

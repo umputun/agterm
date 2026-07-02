@@ -133,7 +133,8 @@ struct SocketClient {
             return formatWindows(windows)
         }
         if let themes = response.result?.themes {
-            return formatThemes(themes, current: response.result?.theme)
+            return formatThemes(themes, current: response.result?.theme, sync: response.result?.sync ?? false,
+                                light: response.result?.light, dark: response.result?.dark)
         }
         if let text = response.result?.text {
             return text
@@ -155,11 +156,18 @@ struct SocketClient {
         return "ok"
     }
 
-    /// Render the `theme.list` payload as one theme name per line, the current theme marked with `* `
+    /// Render the `theme.list` payload as one theme name per line, the active theme(s) marked with `* `
     /// and a leading "default ghostty" entry for the no-theme (ghostty built-in) case (no trailing newline).
-    static func formatThemes(_ themes: [String], current: String?) -> String {
-        func line(_ name: String?, _ label: String) -> String { (name == current ? "* " : "  ") + label }
-        return ([line(nil, "default ghostty")] + themes.map { line($0, $0) }).joined(separator: "\n")
+    /// When `sync` is on, both the light and dark themes are marked and a header notes the appearance pair;
+    /// otherwise the single `current` theme is marked.
+    static func formatThemes(_ themes: [String], current: String?, sync: Bool = false,
+                             light: String? = nil, dark: String? = nil) -> String {
+        let active: (String?) -> Bool = sync ? { $0 != nil && ($0 == light || $0 == dark) } : { $0 == current }
+        func line(_ name: String?, _ label: String) -> String { (active(name) ? "* " : "  ") + label }
+        let body = ([line(nil, "default ghostty")] + themes.map { line($0, $0) }).joined(separator: "\n")
+        guard sync else { return body }
+        let header = "syncing with macOS appearance — light: \(light ?? "default ghostty"), dark: \(dark ?? "default ghostty")"
+        return header + "\n" + body
     }
 
     /// Render the `window.list` payload as one `id  name  [open]  [active]` line per window (no trailing

@@ -215,11 +215,22 @@ private struct AppearanceSettingsView: View {
                 }
                 .accessibilityIdentifier("settings-font-size")
 
-                Picker("Theme", selection: theme) {
+                // no sync toggle — like ghostty itself, the presence of a dark theme IS the opt-in
+                // to tracking the macOS appearance (the stored value becomes ghostty's dual
+                // `light:,dark:` form). Picking nil here while a dark theme is set collapses both:
+                // ghostty's built-in can't be a dual side.
+                Picker(darkThemeSet ? "Light theme" : "Theme", selection: lightTheme) {
                     Text("default ghostty").tag(String?.none)
                     ForEach(themes, id: \.self) { Text($0).tag(String?.some($0)) }
                 }
                 .accessibilityIdentifier("settings-theme")
+
+                Picker("Dark theme", selection: darkTheme) {
+                    Text("none").tag(String?.none)
+                    ForEach(themes, id: \.self) { Text($0).tag(String?.some($0)) }
+                }
+                .accessibilityIdentifier("settings-theme-dark")
+                SettingHint("Used when macOS is in dark mode.")
             }
 
             Section("Window") {
@@ -282,8 +293,23 @@ private struct AppearanceSettingsView: View {
         Binding(get: { model.settings.fontSize ?? 13 }, set: { model.setFontSize($0) })
     }
 
-    private var theme: Binding<String?> {
-        Binding(get: { model.settings.theme }, set: { model.setTheme($0) })
+    /// Whether a dark theme is set (the value is dual-form) — relabels picker 1 to "Light theme".
+    private var darkThemeSet: Bool { ThemeResolution.components(model.settings.theme ?? "").dark != nil }
+
+    /// Picker 1: the plain theme, or the light side of a dual value. The setter recomposes/collapses
+    /// via `SettingsModel.setLightTheme`.
+    private var lightTheme: Binding<String?> {
+        Binding(get: {
+            let raw = model.settings.theme ?? ""
+            return ThemeResolution.isDual(raw) ? ThemeResolution.components(raw).light : model.settings.theme
+        }, set: { model.setLightTheme($0) })
+    }
+
+    /// Picker 2: the dark side of a dual value, nil ("none") when the theme is plain. Setting a name
+    /// composes the dual value (appearance syncing starts); "none" collapses back to the light side.
+    private var darkTheme: Binding<String?> {
+        Binding(get: { ThemeResolution.components(model.settings.theme ?? "").dark },
+                set: { model.setDarkTheme($0) })
     }
 
     /// 1.0 maps to nil (the opaque default) so settings.json stays minimal and the "unset = default"

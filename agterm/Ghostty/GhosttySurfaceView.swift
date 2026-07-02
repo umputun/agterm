@@ -655,6 +655,11 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
         let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         ghostty_surface_set_color_scheme(surface, isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT)
+        // the app-level scheme is what makes ghostty re-resolve a `theme = light:,dark:` config; set it
+        // too (idempotent) so a dual theme renders correctly from the first surface.
+        if let app = GhosttyApp.shared.app {
+            ghostty_app_set_color_scheme(app, isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT)
+        }
 
         if let screen = window?.screen ?? NSScreen.main,
            let displayID = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? UInt32 {
@@ -824,6 +829,16 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         guard let surface else { return }
         let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         ghostty_surface_set_color_scheme(surface, isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT)
+        if let app = GhosttyApp.shared.app {
+            ghostty_app_set_color_scheme(app, isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT)
+        }
+        // This pinned libghostty does NOT re-derive a `theme = light:,dark:` conditional on a runtime
+        // scheme change (verified: set_color_scheme fires no COLOR_CHANGE / RENDER), so the terminal
+        // theme can't follow the OS flip natively. Instead agterm resolves the active side itself and
+        // re-applies the config: post the appearance change so `SettingsModel` rewrites the single-theme
+        // config and reloads (the proven repaint path). Fires per surface + at first window attach, so it
+        // also corrects the initial side; `SettingsModel` debounces and no-ops when the theme is unchanged.
+        NotificationCenter.default.post(name: .agtermSystemAppearanceChanged, object: nil)
     }
 
     private func updateMetalLayerSize() {

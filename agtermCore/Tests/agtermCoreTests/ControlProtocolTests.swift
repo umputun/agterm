@@ -587,6 +587,25 @@ struct ControlProtocolTests {
         #expect(decoded.result?.themes == nil)
     }
 
+    @Test func themeSetSyncRequestRoundTrips() throws {
+        let request = ControlRequest(cmd: .themeSet, args: ControlArgs(light: "Builtin Light", dark: "agterm"))
+        let decoded = try roundTrip(request)
+        #expect(decoded.cmd == .themeSet)
+        #expect(decoded.args?.light == "Builtin Light")
+        #expect(decoded.args?.dark == "agterm")
+        #expect(decoded.args?.name == nil)
+    }
+
+    @Test func themeListResponseCarriesSyncState() throws {
+        let response = ControlResponse(ok: true, result: ControlResult(
+            theme: "agterm", themes: ["agterm", "Builtin Light"], sync: true, light: "Builtin Light", dark: "agterm"))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.sync == true)
+        #expect(decoded.result?.light == "Builtin Light")
+        #expect(decoded.result?.dark == "agterm")
+    }
+
     @Test func sessionCommandWithWindowArgRoundTrips() throws {
         let request = ControlRequest(cmd: .sessionSelect, target: "9f3c", args: ControlArgs(window: "main"))
         let decoded = try roundTrip(request)
