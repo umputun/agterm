@@ -123,6 +123,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// The fixed directory a new session opens in when `newSessionDirectory` is `custom`; nil/empty falls
     /// back to home. Ignored for the `home`/`currentSession` modes. Set by the Settings directory picker.
     public var newSessionCustomDirectory: String?
+    /// Whether closing a session from the GUI (⌘W, the File/palette Close Session, the sidebar row's Close)
+    /// first asks for confirmation. nil means the default (off — the session closes immediately). An
+    /// app-level behavior flag read on demand by `AppActions`, NOT a ghostty key — it never appears in
+    /// `ghosttyConfigLines()`; the control channel's `session.close` closes without a prompt.
+    public var confirmCloseSession: Bool?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 backgroundOpacity: Double? = nil, backgroundBlur: Int? = nil, notificationsEnabled: Bool? = nil,
@@ -133,7 +138,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 sidebarBackgroundShift: Int? = nil, restoreRunningCommand: Bool? = nil,
                 inheritGlobalGhosttyConfig: Bool? = nil, attentionButtonEnabled: Bool? = nil,
                 blockedStatusSoundName: String? = nil, rightClickPaste: Bool? = nil,
-                newSessionDirectory: String? = nil, newSessionCustomDirectory: String? = nil) {
+                newSessionDirectory: String? = nil, newSessionCustomDirectory: String? = nil,
+                confirmCloseSession: Bool? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -156,6 +162,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.rightClickPaste = rightClickPaste
         self.newSessionDirectory = newSessionDirectory
         self.newSessionCustomDirectory = newSessionCustomDirectory
+        self.confirmCloseSession = confirmCloseSession
     }
 
     /// The working directory a new session should open in, resolving the `newSessionDirectory` mode

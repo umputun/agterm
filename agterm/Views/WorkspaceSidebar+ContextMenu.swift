@@ -116,7 +116,7 @@ extension WorkspaceSidebar.Coordinator {
 
     @objc private func menuClose(_ sender: NSMenuItem) {
         guard let node = sender.representedObject as? SidebarNode else { return }
-        store.closeSession(node.id)
+        actions.closeSession(node.id)
     }
 
     @objc private func menuClearStatus(_ sender: NSMenuItem) {

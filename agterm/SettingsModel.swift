@@ -117,6 +117,9 @@ final class SettingsModel {
     func setNewSessionDirectory(_ value: String?) { settings.newSessionDirectory = value; try? settingsStore.save(settings) }
     /// Persist the fixed directory used when `newSessionDirectory` is `custom` (nil/empty falls back to home).
     func setNewSessionCustomDirectory(_ value: String?) { settings.newSessionCustomDirectory = value; try? settingsStore.save(settings) }
+    /// Persist whether closing a session from the GUI first asks for confirmation (nil = off). Not a ghostty
+    /// key and nothing renders it continuously — `AppActions` reads it on demand at close time — so it just saves.
+    func setConfirmCloseSession(_ value: Bool?) { settings.confirmCloseSession = value; try? settingsStore.save(settings) }
 
     /// Apply a new background opacity live WITHOUT an immediate save — the live-drag half of the opacity
     /// slider. Updates translucency on every drag tick (apply-without-save) and schedules a debounced

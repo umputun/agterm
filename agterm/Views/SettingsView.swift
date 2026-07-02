@@ -114,6 +114,9 @@ private struct GeneralSettingsView: View {
                 Toggle("Restore running commands on restart", isOn: restoreRunningCommand)
                     .accessibilityIdentifier("settings-restore-running-command")
                 SettingHint("Re-runs each pane's foreground command on relaunch; multiplexers start fresh.")
+                Toggle("Confirm before closing a session", isOn: confirmCloseSession)
+                    .accessibilityIdentifier("settings-confirm-close-session")
+                SettingHint("Asks before ⌘W closes a session and ends what's running in it.")
             }
 
             Section("Ghostty Config") {
@@ -131,6 +134,13 @@ private struct GeneralSettingsView: View {
     private var restoreRunningCommand: Binding<Bool> {
         Binding(get: { model.settings.restoreRunningCommand ?? false },
                 set: { model.setRestoreRunningCommand($0 ? true : nil) })
+    }
+
+    /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json
+    /// minimal until the user opts into the close confirmation.
+    private var confirmCloseSession: Binding<Bool> {
+        Binding(get: { model.settings.confirmCloseSession ?? false },
+                set: { model.setConfirmCloseSession($0 ? true : nil) })
     }
 
     /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json

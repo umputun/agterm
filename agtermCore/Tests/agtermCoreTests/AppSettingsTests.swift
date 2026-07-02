@@ -111,6 +111,16 @@ struct AppSettingsTests {
         #expect(AppSettings(restoreRunningCommand: true).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
+    @Test func confirmCloseSessionRoundTripsAndIsNotAConfigLine() throws {
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(confirmCloseSession: true)))
+        #expect(decoded.confirmCloseSession == true)
+        // absent in a legacy file decodes to nil (off — today's silent close).
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
+        #expect(legacy.confirmCloseSession == nil)
+        // an app-level behavior flag, never a ghostty config key — only the always-on defaults (scroll + right-click) are emitted.
+        #expect(AppSettings(confirmCloseSession: true).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
+
     @Test func blockedStatusSoundNameRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(blockedStatusSoundName: "Glass")))
         #expect(decoded.blockedStatusSoundName == "Glass")

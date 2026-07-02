@@ -116,9 +116,35 @@ final class AppActions {
         guard let store, let session = store.activeSession else { return false }
         if session.overlayActive { store.closeOverlay(session.id); return true }
         if session.scratchActive { store.toggleScratch(session.id); return true }
+        // ⌘W was handled either way — on cancel we return true so the File menu doesn't fall back to
+        // closing the whole window.
+        guard confirmCloseSession(session) else { return true }
         store.closeSession(session.id)
         focusActiveSession()
         return true
+    }
+
+    /// Close the session with `id` from a GUI surface (the sidebar row's Close), honoring the "Confirm
+    /// before closing a session" setting. The ⌘W/menu/palette path uses `closeActiveSession`; the control
+    /// channel's `session.close` closes directly, without a prompt.
+    func closeSession(_ id: UUID) {
+        guard let store, let session = store.session(withID: id) else { return }
+        guard confirmCloseSession(session) else { return }
+        store.closeSession(id)
+    }
+
+    /// A native warning confirm before closing `session`, gated by `AppSettings.confirmCloseSession`.
+    /// Returns whether to proceed with the close: true immediately (no prompt) when the setting is off, or
+    /// under an XCUITest launch (a modal would hang the test, like the clear-flagged/quit confirms).
+    private func confirmCloseSession(_ session: Session) -> Bool {
+        guard settingsModel?.settings.confirmCloseSession == true, !ContentView.isUITestLaunch else { return true }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Close “\(session.displayName)”?"
+        alert.informativeText = "The session and everything running in it will be closed."
+        alert.addButton(withTitle: "Close")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     /// Clear the active session's agent-status indicator back to idle (the same effect as `agtermctl

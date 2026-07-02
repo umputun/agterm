@@ -329,6 +329,22 @@ paths:
   `session.select`; only `theme.set`/`config.reload` touch settings over the socket).
   See the Notifications section for the bell's three states and the Menu/actions section for the `.attention`
   palette it opens.
+- **`confirmCloseSession` (confirm before closing a session, opt-in, General tab).**
+  `AppSettings.confirmCloseSession: Bool?` (nil = OFF, the default-off precedent like `restoreRunningCommand`)
+  gates a native `NSAlert` confirm before a GUI session close.
+  NOT a ghostty key (`SettingsModel.setConfirmCloseSession` is save-only, no config rewrite / surface reload).
+  Read ON DEMAND at close time by the private `AppActions.confirmCloseSession(_:)` — no `GhosttyApp` mirror
+  — which returns proceed-without-prompt when the setting is off OR under an XCUITest launch
+  (`ContentView.isUITestLaunch`, a modal would hang the test, like the clear-flagged / quit confirms).
+  It gates the two GUI close paths only: `AppActions.closeActiveSession()` (⌘W / File ▸ Close Session /
+  the ⌃⇧P palette) and the sidebar row's Close (routed through the new `AppActions.closeSession(_:)`);
+  the control channel's `session.close` calls `AppStore.closeSession` directly and stays silent.
+  The General → Sessions `Toggle("Confirm before closing a session")` uses the default-OFF binding (get
+  `?? false`, set `$0 ? true : nil`, like `restoreRunningCommand`).
+  GUI-only and keep-in-sync EXEMPT — a safety modal is meaningless to drive headless (`session.close`
+  must never prompt), like the quit-confirm.
+  Default-off + round-trip covered host-free in `AppSettingsTests`; the confirm itself is app-target
+  (manually/build verified, no app unit-test host, like `confirmDelete`/`confirmClearFlags`).
 - **A Settings toggle's DESCRIPTION stays single-line short-form** — a terse hint, not a manual.
   No detailed multi-line explanation of what the toggle does and no cross-refs to other toggles;
   keep the minimal style (see also the flag-description convention).
