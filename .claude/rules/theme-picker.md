@@ -64,6 +64,13 @@ paths:
   is never silently re-themed.
   `theme.set` with no name still sets nil (ghostty built-in / "default ghostty"),
   distinct from the seeded app default.
+- **Appearance sync = ghostty's dual theme value (ONE field, no toggle).**
+  `AppSettings.theme` holds either a plain name or ghostty's own dual form `light:NAME,dark:NAME` — the dual form IS the "track the macOS appearance" state (exactly ghostty's model; kitty's auto-theme files are the same presence-is-the-opt-in idea).
+  `ThemeResolution` (agtermCore, host-free) parses/composes it (`components`/`isDual`/`dualValue`/`activeThemeName`); `AppSettings.activeTheme(isDark:)` resolves the side that renders, and `writeGhosttyConfig` emits it as a plain single `theme` line — the pinned libghostty can't switch a dual value at runtime, so `SettingsModel.appearanceChanged` (guarded on `isDual`) rewrites + reloads on a flip.
+  Settings UI has NO toggle: picker 1 ("Theme", relabeled "Light theme" when a dark side is set, stable AX id `settings-theme`) drives `SettingsModel.setLightTheme`; picker 2 ("Dark theme", `settings-theme-dark`, leading "none" row) drives `setDarkTheme` — picking a dark theme composes the dual value (the light side seeds from the plain theme, else `defaultLightTheme` = Builtin Light, since ghostty's built-in can't be a dual side), "none" collapses to the light side, and picker 1's "default ghostty" while a dark side is set collapses BOTH.
+  A palette PREVIEW needs no special casing: the previewed plain name naturally overrides the dual value on screen, and Esc restores the captured original string.
+  COMMIT (`AppActions.commitThemePreview` → `SettingsModel.commitTheme(_:)`, save-only) replaces the CURRENT appearance's side of a dual original (sync stays on; a half-set original gets the committed name as its missing side); a plain/nil original commits the plain name; committing the "default ghostty" row over a dual original collapses to no theme — the one commit that drops the pair.
+  The picker badges/opens on the EFFECTIVE theme (`activeTheme(isDark:)` — the on-screen side when syncing), so the open-row preview is a config no-op instead of flashing the raw dual string.
 - **Control parity = the commit, not the preview**
   (preview is interactive-only): `theme.set`/`theme.list` (see the Control API catalog for the four-point
   audit).

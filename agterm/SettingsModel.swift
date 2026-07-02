@@ -39,6 +39,11 @@ final class SettingsModel {
     private let backgroundSaveDebouncer = Debouncer()
     private static let backgroundSaveInterval: TimeInterval = 0.3
 
+    /// Coalesces the `.agtermSystemAppearanceChanged` storm (posted once per deck surface, plus at first
+    /// window attach) into a single re-apply when the macOS light/dark appearance flips.
+    private let appearanceDebouncer = Debouncer()
+    private static let appearanceDebounceInterval: TimeInterval = 0.05
+
     /// The theme as of the last real persist (`persistAndApply`/`commitTheme`), NOT updated by the
     /// live theme preview. The opacity/blur background-save debounce persists a snapshot pinned to
     /// this value instead of the in-flight `settings.theme`, so a slider write firing mid-preview
@@ -77,11 +82,73 @@ final class SettingsModel {
         // seed the restore-denylist.conf (multiplexers) on first launch, then parse it into GhosttyApp.
         ensureStarterRestoreDenylist()
         loadRestoreDenylist()
+        // follow the macOS light/dark appearance: a surface's viewDidChangeEffectiveAppearance posts this
+        // (per surface + at first attach), and we re-resolve + reload the active theme side. The pinned
+        // libghostty won't switch a `theme = light:,dark:` conditional at runtime, so agterm drives it.
+        NotificationCenter.default.addObserver(forName: .agtermSystemAppearanceChanged, object: nil,
+                                               queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.appearanceChanged() }
+        }
+    }
+
+    /// Re-apply the config for the current macOS appearance — the system→settings half of light/dark
+    /// sync. A no-op unless syncing is on; `apply()` then rewrites the config with the newly-active side
+    /// and reloads ONLY if the resolved theme actually changed (so a same-appearance repost is free).
+    /// Debounced because the notification fires once per deck surface on a flip.
+    private func appearanceChanged() {
+        guard ThemeResolution.isDual(settings.theme ?? "") else { return }
+        appearanceDebouncer.schedule(after: Self.appearanceDebounceInterval) { [weak self] in self?.apply() }
     }
 
     func setFontFamily(_ value: String?) { settings.fontFamily = value; persistAndApply() }
     func setFontSize(_ value: Double?) { settings.fontSize = value; persistAndApply() }
-    func setTheme(_ value: String?) { settings.theme = value; persistAndApply() }
+
+    /// Set the light/single slot — Settings picker 1 and the control channel's `theme set <name>`.
+    /// With a dark side set, a non-nil name recomposes the dual value (the pair is KEPT — a plain set
+    /// no longer drops appearance syncing); without one it is a plain single set. Picking nil
+    /// ("default ghostty") collapses a pair entirely: the dual form cannot carry an unnamed side.
+    func setLightTheme(_ value: String?) {
+        let dark = ThemeResolution.components(settings.theme ?? "").dark
+        if let value, let dark {
+            settings.theme = ThemeResolution.dualValue(light: value, dark: dark)
+        } else {
+            settings.theme = value
+        }
+        persistAndApply()
+    }
+
+    /// Set the dark slot — Settings picker 2 and the control channel's `theme set --dark`. A non-nil
+    /// name composes the dual value (appearance syncing starts immediately); the light side keeps its
+    /// current value, falling back to the plain theme, then to `defaultLightTheme` (a nil/empty theme
+    /// — ghostty built-in — cannot be a dual side). nil ("none" / `--dark none`) collapses back to the
+    /// light side as the plain single theme.
+    func setDarkTheme(_ value: String?) {
+        let raw = settings.theme ?? ""
+        let comps = ThemeResolution.components(raw)
+        if let value {
+            // light side: keep the current one; a plain theme becomes it; a light-less state (nil/empty
+            // theme, or a hand-edited dual missing its light side) seeds the default — the raw value
+            // must never be reused as a side name once it is dual-form.
+            let light = comps.light
+                ?? (ThemeResolution.isDual(raw) || raw.isEmpty ? Self.defaultLightTheme : raw)
+            settings.theme = ThemeResolution.dualValue(light: light, dark: value)
+        } else {
+            settings.theme = comps.light ?? (ThemeResolution.isDual(raw) ? nil : settings.theme)
+        }
+        persistAndApply()
+    }
+
+    /// Set both sides at once, in a single apply — the control channel's `theme set --light --dark`.
+    func setSystemThemes(light: String, dark: String) {
+        settings.theme = ThemeResolution.dualValue(light: light, dark: dark)
+        persistAndApply()
+    }
+
+    /// The light side seeded when a dark theme is chosen while the theme is nil/empty (ghostty
+    /// built-in, which cannot be a dual side) — a bundled light theme so the pick composes a
+    /// well-formed dual value.
+    static let defaultLightTheme = "Builtin Light"
+
     func setNotificationsEnabled(_ value: Bool?) { settings.notificationsEnabled = value; persistAndApply() }
     func setCompactToolbar(_ value: Bool?) { settings.compactToolbar = value; persistAndApply() }
     func setNotificationBadgeEnabled(_ value: Bool?) { settings.notificationBadgeEnabled = value; persistAndApply() }
@@ -159,8 +226,10 @@ final class SettingsModel {
     /// even if the apply hasn't fired yet) but DEBOUNCES the expensive `apply()` (config rewrite +
     /// surface reload + chrome refresh), so a burst of arrow/typing previews coalesces to one reload
     /// once the quiet window elapses. Skips `settingsStore.save`, so navigating themes doesn't touch
-    /// `settings.json`; the picker commits with `commitTheme()` on Enter (which flushes the pending
-    /// apply) or reverts with `previewThemeImmediate(original)` on Esc.
+    /// `settings.json`; the picker commits with `commitTheme(_:)` on Enter (which flushes the pending
+    /// apply) or reverts with `previewThemeImmediate(original)` on Esc. A previewed PLAIN name
+    /// naturally overrides a dual `light:,dark:` value on screen (the resolver returns it unchanged),
+    /// so previewing needs no special casing while appearance syncing is on.
     func previewTheme(_ value: String?) {
         settings.theme = value
         previewThemeDebouncer.schedule(after: Self.previewThemeDebounceInterval) { [weak self] in self?.apply() }
@@ -175,13 +244,17 @@ final class SettingsModel {
         apply()
     }
 
-    /// Persist the current settings — the commit half of the theme picker, called on Enter after one
-    /// or more `previewTheme` applies. Flushes any pending debounced preview first, so the latest
-    /// previewed theme is live NOW, then writes `settings.json`.
-    func commitTheme() {
+    /// Persist the picker's final theme value — the commit half, called on Enter after one or more
+    /// `previewTheme` applies. `AppActions.commitThemePreview` computes `value` (the plain previewed
+    /// name, or a dual value recomposed with the current appearance's side replaced). Flushes any
+    /// pending debounced preview first, so the latest previewed theme is live NOW, then writes
+    /// `settings.json`. Save-only: the stored value's resolved side equals the already-rendering
+    /// previewed name, so no config reload (and no font-zoom reset) fires.
+    func commitTheme(_ value: String?) {
         previewThemeDebouncer.flush()
+        settings.theme = value
         try? settingsStore.save(settings)
-        committedTheme = settings.theme
+        committedTheme = value
     }
 
     /// Flush any pending debounced settings writes synchronously — the quit path. The opacity/blur
@@ -584,7 +657,9 @@ final class SettingsModel {
     /// skip the expensive reload when it didn't.
     private func writeGhosttyConfig() -> Bool {
         let url = GhosttyApp.settingsConfigURL
-        let text = settings.ghosttyConfigLines().joined(separator: "\n") + "\n"
+        // resolve the active side of a dual light/dark value for the CURRENT appearance; a plain theme
+        // ignores it. On a flip the resolved line changes, so the reload path repaints (see appearanceChanged).
+        let text = settings.ghosttyConfigLines(isDark: GhosttyApp.currentIsDark()).joined(separator: "\n") + "\n"
         if (try? String(contentsOf: url, encoding: .utf8)) == text { return false }
         try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
         try? text.write(to: url, atomically: true, encoding: .utf8)

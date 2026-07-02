@@ -160,8 +160,10 @@ Visibility/mode act on the frontmost window; `expand`/`collapse` default to the 
 **config** - `config reload` - re-read the agterm-scoped `ghostty.conf` (prints the diagnostic count).
 
 **theme** — `theme list` (bundled themes, current marked `*`) · `theme set [name]` — set + persist the
-terminal theme app-wide. The app default is the bundled **agterm** theme; omit the name for ghostty's
-built-in default ("default ghostty"); an unknown name errors.
+terminal theme app-wide, per slot: a NAME sets the light/single theme (a dark theme, if set, is kept);
+`theme set --dark <name>` sets the dark theme, which makes the terminal track the macOS Light/Dark
+appearance automatically; `theme set --dark none` stops tracking. The app default is the bundled
+**agterm** theme; omit the name for ghostty's built-in default ("default ghostty"); an unknown name errors.
 
 **restore** — `restore clear` — clear every session's saved foreground command (the
 restore-running-command capture) so the next restart restores plain shells.

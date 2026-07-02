@@ -105,6 +105,16 @@ final class GhosttyCallbacks: @unchecked Sendable {
             let value = raw < 0 ? nil : Int(raw)
             DispatchQueue.main.async { view.onSearchSelected?(value) }
             return true
+        case GHOSTTY_ACTION_COLOR_CHANGE:
+            // ghostty's terminal foreground/background changed — a light/dark theme switch it resolved
+            // (after ghostty_app_set_color_scheme), or an OSC 10/11 from a program. mirror it into the
+            // app chrome (title bar + sidebar) so they track the terminal. The payload is a value type;
+            // copy it before the main hop.
+            let change = action.action.color_change
+            DispatchQueue.main.async {
+                GhosttyApp.shared.applyColorChange(kind: change.kind, r: change.r, g: change.g, b: change.b)
+            }
+            return true
         case GHOSTTY_ACTION_MOUSE_VISIBILITY:
             // libghostty asks the host to hide/show the pointer — the mechanism behind
             // mouse-hide-while-typing (the core never touches the cursor itself). setHiddenUntilMouseMoves

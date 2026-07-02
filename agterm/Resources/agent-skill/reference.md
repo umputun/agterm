@@ -326,16 +326,28 @@ a terminal: open `ghostty.conf` in `$EDITOR`, then `agtermctl config reload`.
 The app's out-of-the-box default theme is the bundled **agterm** theme (a fresh install opens on it).
 A separate **default ghostty** entry means "no theme" — ghostty's own built-in colors (`theme` absent).
 
-`agtermctl theme list` — list the bundled theme names; returns `result.themes` (the names) and
-`result.theme` (the current one, absent = ghostty's built-in / "default ghostty"). Human output prints
-one name per line with a leading "default ghostty" row, the current one marked `* `.
+`agtermctl theme list` — list the bundled theme names; returns `result.themes` (the names),
+`result.theme` (the current plain theme, absent = ghostty's built-in / "default ghostty"), and
+`result.sync` with `result.light`/`result.dark` (the per-appearance themes). While syncing,
+`result.theme` is absent — the state rides the three sync fields. Human output prints one name per
+line with a leading "default ghostty" row, the active one(s) marked `* `; when syncing, a header notes
+the light/dark pair and both sides are marked.
 
 `agtermctl theme set [name]` — set and persist the terminal theme app-wide (the same change as Settings
-▸ Appearance ▸ Theme). Pass a bundled name (e.g. `agterm`); omit the name for ghostty's built-in
-default ("default ghostty"). An unknown name returns `unknown theme: <name>`. Returns `result.theme`
-= the applied name (absent = ghostty built-in); human output prints `ok`. App-global (no `--window`).
-The GUI's live-preview picker (View ▸ Select Theme…) is keyboard-only; over the socket `theme set` is
-the commit, with no preview.
+▸ Appearance), per slot:
+- `theme set <name>` sets the light/single theme; a dark theme, if set, is KEPT (syncing stays on).
+  Omit the name for ghostty's built-in default ("default ghostty") — with a dark theme set, that
+  clears BOTH (an unnamed side can't be part of a pair).
+- `theme set --dark <name>` sets the dark theme — the terminal then tracks the macOS Light/Dark
+  appearance, applying the matching side automatically as the OS switches (the light side seeds from
+  the current theme, else `Builtin Light`). `--light <name>` is an alias for the positional name.
+- `theme set --dark none` clears the dark theme — tracking stops, the light theme stays as the single
+  theme.
+The response always echoes the full state (`result.theme`/`sync`/`light`/`dark`). An unknown name
+returns `unknown theme: <name>`; a positional name combined with `--light` is a usage error. Human
+output prints `ok`. App-global (no `--window`). The GUI's live-preview picker (View ▸ Select Theme…)
+is keyboard-only — committing it replaces the CURRENT appearance's side when syncing (the pair is
+kept); over the socket `theme set` is the commit, with no preview.
 
 ## restore
 
