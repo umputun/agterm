@@ -76,6 +76,14 @@ final class SettingsUITests: XCTestCase {
                       "turning restore-running-commands on should persist restoreRunningCommand=true")
     }
 
+    func testConfirmCloseSessionTogglePersists() throws {
+        let toggle = settingsControl(tab: "General", control: "settings-confirm-close-session")
+        toggle.click() // turn it on (default off)
+
+        XCTAssertTrue(poll { self.settingsBool("confirmCloseSession") == true },
+                      "turning confirm-before-closing on should persist confirmCloseSession=true")
+    }
+
     func testNewSessionDirectoryPickerPersists() throws {
         let picker = settingsControl(tab: "General", control: "settings-new-session-directory")
         picker.click()

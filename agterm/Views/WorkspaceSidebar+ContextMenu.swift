@@ -116,7 +116,9 @@ extension WorkspaceSidebar.Coordinator {
 
     @objc private func menuClose(_ sender: NSMenuItem) {
         guard let node = sender.representedObject as? SidebarNode else { return }
-        actions.closeSession(node.id)
+        // pass THIS sidebar's window-local store — a background window's Close must target its own
+        // session, not the frontmost window's (which `AppActions.store` would resolve to).
+        actions.closeSession(node.id, in: store)
     }
 
     @objc private func menuClearStatus(_ sender: NSMenuItem) {

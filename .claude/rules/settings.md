@@ -131,7 +131,8 @@ paths:
   instead of restoring the last-used tab.
   **General** (a **Mouse** section with the scroll-speed slider + the right-click-pastes toggle,
   a **Sessions** section with the new-session-directory picker (home / current session's directory / a
-  fixed custom folder, the last with a `Choose…` panel) + the restore-running-commands toggle,
+  fixed custom folder, the last with a `Choose…` panel) + the restore-running-commands toggle + the
+  confirm-before-closing-a-session toggle,
   and a **Ghostty Config** section with the inherit-global-config toggle).
   **Appearance** (a **Terminal** section — font/size/theme via `NSFontManager` monospaced families +
   the bundled `ghostty/themes` dir, `SettingsCatalog` — a **Window** section with the compact-toolbar

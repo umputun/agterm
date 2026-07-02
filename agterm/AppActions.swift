@@ -124,11 +124,14 @@ final class AppActions {
         return true
     }
 
-    /// Close the session with `id` from a GUI surface (the sidebar row's Close), honoring the "Confirm
-    /// before closing a session" setting. The ⌘W/menu/palette path uses `closeActiveSession`; the control
-    /// channel's `session.close` closes directly, without a prompt.
-    func closeSession(_ id: UUID) {
-        guard let store, let session = store.session(withID: id) else { return }
+    /// Close the session with `id` in `store` from a GUI surface (the sidebar row's Close), honoring the
+    /// "Confirm before closing a session" setting. `store` is the caller's own window-local store — a
+    /// background window's sidebar must close ITS session, not the frontmost window's — so it is passed in
+    /// rather than resolved via the frontmost `activeStore`. The ⌘W/menu/palette path uses
+    /// `closeActiveSession` (which acts on the frontmost active session); the control channel's
+    /// `session.close` closes directly, without a prompt.
+    func closeSession(_ id: UUID, in store: AppStore) {
+        guard let session = store.session(withID: id) else { return }
         guard confirmCloseSession(session) else { return }
         store.closeSession(id)
     }
