@@ -84,6 +84,22 @@ paths:
   when visible and `unregisterDraggedTypes` otherwise, so only the on-screen pane is ever a drop target.
   Not `hitTest` (AppKit drag ignores it) and not a `draggingEntered` reject (AppKit does not fall through
   to the sibling behind a rejecting target — the drop is simply lost).
+- **A drop inserts as a bracketed paste, never typed keystrokes.**
+  `performDragOperation` routes the dropped text through `GhosttySurfaceView.insertPasted(text:)` (`ghostty_surface_text`),
+  whose bracketed-paste wrapping makes the running program treat the payload as literal text, so a multi-line
+  drop lands at the cursor without auto-submitting — the same behavior as ⌘V paste.
+  The no-submit guarantee tracks the program's bracketed-paste mode: a program with mode 2004 OFF (a raw
+  prompt, some TUIs) still submits a trailing newline, exactly the caveat ⌘V has — closing that residual is
+  the separate unsafe-paste-confirmation work, not this change.
+  This is deliberately NOT `inject(text:)`, which turns each `\n`/`\r` into a Return: a drop is a paste,
+  while `session.type` is automation that WANTS newline→Return.
+  Drop USED to reuse `inject(text:)`; this change splits it off so drop uses the bracketed-paste call and
+  `session.type` keeps `inject` — do not re-unify them (the control-api note "do not simplify inject back to
+  `ghostty_surface_text`" is about `session.type` only).
+  (`pasteboardText`, the pasteboard reader, is shared by the drop path and the ⌘V clipboard-paste path
+  `readPasteboardText`, NOT by `session.type`, which takes its text from the control request.)
+  `ShellEscape.path` still escapes file-URL paths so a path with spaces lands as one shell token on Enter;
+  the newline-escaping from #96 is now belt-and-suspenders under bracketed paste.
 - **Search bar placement (NSSplitView-overrun rule).**
   `TerminalSearchBar` (`agterm/Views/`) is anchored on `detailPane` via `.overlay(alignment: .topTrailing) { searchBarLayer }`
   — the SAME level as `floatingOverlayLayer`, NEVER inside any session's `sessionDetail` HSplitView-hosting

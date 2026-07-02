@@ -358,6 +358,19 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         }
     }
 
+    /// Inserts `text` into this surface as a bracketed paste — the drag-drop path. Unlike `inject(text:)`,
+    /// which types keystrokes and turns each `\n`/`\r` into a Return, this routes through `ghostty_surface_text`,
+    /// whose bracketed-paste wrapping makes the running program treat the whole payload as literal text, so a
+    /// dropped multi-line selection lands at the cursor without auto-submitting — exactly like ⌘V paste. The
+    /// guarantee tracks the program's bracketed-paste mode (a raw prompt with mode 2004 off still submits, the
+    /// same caveat as ⌘V). A drop must behave like a paste, not like typing; `session.type` keeps `inject`
+    /// because automation DOES want newline→Return. The bytes are copied synchronously, so nothing must
+    /// outlive the call. A no-op when the surface has not been created yet (a never-shown session).
+    func insertPasted(text: String) {
+        guard let surface, !text.isEmpty else { return }
+        text.withCString { ghostty_surface_text(surface, $0, UInt(text.utf8.count)) }
+    }
+
     /// Returns this surface's current selection text (the control channel's `session.copy`), or nil when
     /// there is no selection or the surface has not been created yet. The selection is a property of the
     /// surface's terminal state, independent of focus, so any realized session can be read. The libghostty

@@ -13,12 +13,13 @@ extension GhosttySurfaceView {
         dropText(from: sender) != nil ? .copy : []
     }
 
-    /// Insert the dropped file's path (shell-escaped, space-joined for multiple) or text at the cursor,
-    /// using the SAME pasteboard logic as paste so a drop and a paste behave identically. Deferred to the
-    /// next runloop tick so the drag session fully unwinds before the terminal buffer is mutated.
+    /// Insert the dropped file's path (shell-escaped, space-joined for multiple) or text at the cursor as a
+    /// bracketed paste — the same no-auto-submit behavior as ⌘V, so a multi-line drop lands as literal text
+    /// instead of executing each line. Deferred to the next runloop tick so the drag session fully unwinds
+    /// before the terminal buffer is mutated.
     override func performDragOperation(_ sender: any NSDraggingInfo) -> Bool {
         guard let text = dropText(from: sender) else { return false }
-        DispatchQueue.main.async { [weak self] in self?.inject(text: text) }
+        DispatchQueue.main.async { [weak self] in self?.insertPasted(text: text) }
         return true
     }
 
