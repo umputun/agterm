@@ -120,6 +120,30 @@ public final class AppStore {
         "workspace \(workspaces.count + 1)"
     }
 
+    /// Projects this store's workspace/session model into the control-channel `tree` payload. Foreground
+    /// command lookup is supplied by the host because live process inspection is platform-specific.
+    public func controlTree(foreground: (Session) -> [String]? = { _ in nil },
+                            splitForeground: (Session) -> [String]? = { _ in nil }) -> ControlTree {
+        let activeID = selectedSessionID
+        let activeWorkspaceID = activeID.flatMap { workspace(forSession: $0)?.id }
+        let nodes = workspaces.map { workspace in
+            let sessions = workspace.sessions.map { session in
+                let status = session.agentIndicator.status == .idle ? nil : session.agentIndicator.status.rawValue
+                return ControlSessionNode(id: session.id.uuidString, name: session.displayName,
+                                          cwd: session.effectiveCwd, title: session.oscTitle,
+                                          active: session.id == activeID,
+                                          split: session.isSplit, overlay: session.overlayActive,
+                                          scratch: session.scratchActive, flagged: session.flagged,
+                                          foreground: foreground(session),
+                                          splitForeground: splitForeground(session), status: status,
+                                          background: session.backgroundWatermark)
+            }
+            return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
+                                        active: workspace.id == activeWorkspaceID, sessions: sessions)
+        }
+        return ControlTree(workspaces: nodes)
+    }
+
     /// Creates a workspace and appends it. Clears any active focus so the new (empty)
     /// workspace is immediately visible — without this `visibleWorkspaces` would still
     /// return only the focused one and the new workspace would be silently hidden until

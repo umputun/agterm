@@ -738,4 +738,56 @@ struct AppStoreTests {
         #expect(!store.setBackgroundWatermark(nil, forSession: session.id))       // clear again: no change
         #expect(!store.setBackgroundWatermark(mark, forSession: UUID()))          // unknown id: no change
     }
+
+    @Test func controlTreeProjectsWorkspaceAndSessionShape() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        let a = try #require(store.addSession(toWorkspace: work.id, cwd: "/repo/a", name: "alpha"))
+        let b = try #require(store.addSession(toWorkspace: personal.id, cwd: "/repo/b"))
+        b.currentCwd = "/live/b"
+        b.oscTitle = "remote:~/b"
+        b.isSplit = true
+        b.overlayActive = true
+        b.scratchActive = true
+        b.flagged = true
+        b.backgroundWatermark = BackgroundWatermark(kind: .text, text: "PROD")
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: b.id)
+        store.selectSession(b.id)
+
+        let tree = store.controlTree()
+
+        #expect(tree.workspaces.map(\.id) == [work.id.uuidString, personal.id.uuidString])
+        #expect(tree.workspaces.map(\.name) == ["work", "personal"])
+        #expect(tree.workspaces.map(\.active) == [false, true])
+        #expect(tree.workspaces[0].sessions == [
+            ControlSessionNode(id: a.id.uuidString, name: "alpha", cwd: "/repo/a",
+                               active: false, split: false)
+        ])
+        #expect(tree.workspaces[1].sessions == [
+            ControlSessionNode(id: b.id.uuidString, name: "remote:~/b", cwd: "/live/b",
+                               title: "remote:~/b", active: true, split: true,
+                               overlay: true, scratch: true, flagged: true,
+                               status: "blocked",
+                               background: BackgroundWatermark(kind: .text, text: "PROD"))
+        ])
+    }
+
+    @Test func controlTreeUsesForegroundLookups() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let active = try #require(store.addSession(toWorkspace: ws.id, cwd: "/active"))
+        let other = try #require(store.addSession(toWorkspace: ws.id, cwd: "/other"))
+        store.selectSession(active.id)
+
+        let tree = store.controlTree(
+            foreground: { session in session.id == active.id ? ["ssh", "host"] : nil },
+            splitForeground: { session in session.id == other.id ? ["tail", "-f", "app.log"] : nil }
+        )
+
+        #expect(tree.workspaces[0].sessions[0].foreground == ["ssh", "host"])
+        #expect(tree.workspaces[0].sessions[0].splitForeground == nil)
+        #expect(tree.workspaces[0].sessions[1].foreground == nil)
+        #expect(tree.workspaces[0].sessions[1].splitForeground == ["tail", "-f", "app.log"])
+    }
 }
