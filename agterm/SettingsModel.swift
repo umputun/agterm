@@ -341,21 +341,9 @@ final class SettingsModel {
     /// file that EXISTS but can't be read (permissions, invalid UTF-8) is surfaced as a single line-0
     /// diagnostic so the warning banner fires, rather than being silently treated as missing.
     private func loadKeymap() {
-        let url = keymapURL()
-        do {
-            let text = try String(contentsOf: url, encoding: .utf8)
-            let parsed = parseKeymap(text)
-            keymap = parsed.keymap
-            keymapDiagnostics = parsed.diagnostics
-        } catch {
-            keymap = Keymap(builtinOverrides: [:], commands: [])
-            guard FileManager.default.fileExists(atPath: url.path) else {
-                // truly missing — not an error.
-                keymapDiagnostics = []
-                return
-            }
-            keymapDiagnostics = [KeymapDiagnostic(line: 0, message: "could not read keymap.conf: \(error.localizedDescription)")]
-        }
+        let loaded = KeymapStore(configDirectory: configDirectoryURL()).load()
+        keymap = loaded.keymap
+        keymapDiagnostics = loaded.diagnostics
     }
 
     /// On first launch, if `keymap.conf` does not exist, create the config directory and write a
@@ -367,7 +355,7 @@ final class SettingsModel {
         do {
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
                                                     withIntermediateDirectories: true)
-            try starterKeymapText().write(to: url, atomically: true, encoding: .utf8)
+            try ConfigPaths.starterKeymapConf().write(to: url, atomically: true, encoding: .utf8)
         } catch {
             logger.notice("could not write starter keymap at \(url.path, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
@@ -410,88 +398,6 @@ final class SettingsModel {
         # in Settings and always win over this file — set those in Settings, everything else here.
 
         """
-    }
-
-    /// The commented starter `keymap.conf`: the two-verb syntax, every `BuiltinAction` raw name with
-    /// its shipped default chord (or "no default"), and the `{AGT_X}` token list. Every line is a
-    /// comment so a fresh file rebinds nothing.
-    private func starterKeymapText() -> String {
-        // pad the action name column to the longest raw name (+ a 2-space gutter) so a future action
-        // longer than any current one can never silently truncate.
-        let nameColumnWidth = (BuiltinAction.allCases.map { $0.rawValue.count }.max() ?? 0) + 2
-        let actionLines = BuiltinAction.allCases.map { action -> String in
-            // a default whose key can't round-trip through the keymap grammar (e.g. increase_font_size's
-            // `+`, which clashes with the `+` separator) is documented as not file-expressible rather
-            // than printed as an unparseable token like `cmd++`.
-            let chord = action.defaultChord.map(chordSyntax) ?? "(no default)"
-            return "#   \(action.rawValue.padding(toLength: nameColumnWidth, withPad: " ", startingAt: 0))\(chord)"
-        }.joined(separator: "\n")
-        let tokenLines = CommandContext.tokenNames.map { "#   {\($0)}" }.joined(separator: "\n")
-
-        return """
-        # agterm keymap — a kitty-flavored config for rebinding built-in shortcuts and defining
-        # custom shell commands. Edit this file and run File ▸ Reload Keymap (or `agtermctl keymap
-        # reload`) to apply. Blank lines and lines starting with `#` are ignored.
-        #
-        # Two verbs:
-        #
-        #   map <chord> <action>
-        #       Rebind a built-in action to a single chord (no leader sequences for built-ins).
-        #       Chords use kitty syntax: mods joined by `+`, e.g. `cmd+shift+d`, `ctrl+\\``.
-        #       Mods: ctrl, cmd, opt, shift. Example:
-        #
-        #           map cmd+shift+d  toggle_split
-        #
-        #   command "<name>" [chord] <shell...>
-        #       Define a custom command, shown in the action palette marked `custom`. The quoted
-        #       name may contain spaces. An optional chord (single chord OR a leader like `ctrl+a>g`)
-        #       binds it to a key; the chord MUST include a modifier (a bare key is rejected and the
-        #       line becomes palette-only). Omit the chord for a palette-only command. The rest of the
-        #       line is run via `/bin/sh -c`, detached with no terminal — so it suits fire-and-forget
-        #       launches (GUI apps, scripts), NOT a bare interactive or full-screen TUI program, which
-        #       has no TTY and exits at once. Launch a TUI over a session through an overlay terminal,
-        #       as the Lazygit example does. Examples:
-        #
-        #           command "Open in Zed"  cmd+shift+e  open -a Zed "$AGT_SESSION_PWD"
-        #           command "Lazygit"      ctrl+a>g     agtermctl session overlay open lazygit --socket "$AGT_SOCKET"
-        #           command "Deploy"                    ./deploy.sh
-        #
-        # Built-in actions (raw name → shipped default chord):
-        #
-        \(actionLines)
-        #
-        # Custom-command tokens (expanded in the shell line and exported as $AGT_X env vars):
-        #
-        \(tokenLines)
-        #
-        # NOTE: a {AGT_X} token is substituted RAW into the /bin/sh line — convenient, but unsafe for
-        # content you don't control. {AGT_SELECTION} is the obvious case, but a remote host can also set
-        # the session title (OSC) and the working directory (OSC 7), so {AGT_SESSION_NAME} and
-        # {AGT_SESSION_PWD} are equally unsafe raw. For any such content prefer the matching $AGT_X
-        # environment variable, QUOTED, e.g. "$AGT_SELECTION".
-        #
-        # Uncomment and edit a line below to start.
-        # map cmd+shift+d toggle_split
-
-        """
-    }
-
-    /// Render a `Chord` back into the kitty syntax the user writes (`cmd+shift+d`), for the starter
-    /// file's documentation of the default shortcuts. Mods are ordered ctrl, cmd, opt, shift. Returns
-    /// `(not expressible)` when the chord's key is a grammar separator (`+`/`>`) that can't round-trip
-    /// through `parseKeybind` — e.g. increase_font_size's `+`, which would render as the unparseable
-    /// `cmd++`.
-    private func chordSyntax(_ chord: Chord) -> String {
-        var parts: [String] = []
-        if chord.mods.contains(.control) { parts.append("ctrl") }
-        if chord.mods.contains(.command) { parts.append("cmd") }
-        if chord.mods.contains(.option) { parts.append("opt") }
-        if chord.mods.contains(.shift) { parts.append("shift") }
-        parts.append(chord.key)
-        let rendered = parts.joined(separator: "+")
-        // verify the rendered string round-trips: a key like `+`/`>` produces an unparseable token.
-        guard parseKeybind(rendered) == [chord] else { return "(not expressible)" }
-        return rendered
     }
 
     private func persistAndApply() {

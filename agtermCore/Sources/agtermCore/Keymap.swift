@@ -44,6 +44,36 @@ public struct KeymapDiagnostic: Equatable, Sendable {
     }
 }
 
+/// Host-free loader for the user keymap file. Missing files recover as an empty keymap with no
+/// diagnostics; existing unreadable or invalid-UTF8 files recover with a single line-0 diagnostic.
+public struct KeymapStore: Sendable {
+    public let configDirectory: URL
+
+    public init(configDirectory: URL) {
+        self.configDirectory = configDirectory
+    }
+
+    public var path: URL {
+        ConfigPaths.keymapPath(configDirectory: configDirectory)
+    }
+
+    public func load() -> (keymap: Keymap, diagnostics: [KeymapDiagnostic]) {
+        do {
+            let text = try String(contentsOf: path, encoding: .utf8)
+            return parseKeymap(text)
+        } catch {
+            let empty = Keymap(builtinOverrides: [:], commands: [])
+            guard FileManager.default.fileExists(atPath: path.path) else {
+                return (empty, [])
+            }
+            let diagnostic = KeymapDiagnostic(
+                line: 0,
+                message: "could not read keymap.conf: \(error.localizedDescription)")
+            return (empty, [diagnostic])
+        }
+    }
+}
+
 /// Parse the text of a `keymap.conf` into a `Keymap` plus a list of diagnostics. Never throws: a bad
 /// line becomes a diagnostic and is skipped, so a single malformed line never discards the rest of
 /// the file.

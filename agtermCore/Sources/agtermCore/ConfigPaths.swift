@@ -21,6 +21,44 @@ public enum ConfigPaths {
         configDirectory.appendingPathComponent("keymap.conf")
     }
 
+    /// A fully-commented starter `keymap.conf`: documents the two-verb format, the `{AGT_*}` tokens,
+    /// and lists every rebindable built-in action with its shipped default chord. Fully commented, so
+    /// a fresh install rebinds nothing.
+    public static func starterKeymapConf() -> String {
+        let nameColumnWidth = (BuiltinAction.allCases.map { $0.rawValue.count }.max() ?? 0) + 2
+        let actions = BuiltinAction.allCases.map { action -> String in
+            let chord = action.defaultChord.map(starterChordSyntax) ?? "(no default)"
+            return "#   \(action.rawValue.padding(toLength: nameColumnWidth, withPad: " ", startingAt: 0))\(chord)"
+        }.joined(separator: "\n")
+        let tokenLines = CommandContext.tokenNames.map { "#   {\($0)}" }.joined(separator: "\n")
+        return """
+        # agterm keymap.conf - rebind built-in shortcuts and define custom shell commands.
+        #
+        # Fully commented: a fresh install rebinds NOTHING. Uncomment and edit a line to override,
+        # then reload via the command palette's "Reload Keymap" or Settings > Key Mapping > Reload.
+        #
+        # Override a built-in shortcut:
+        #   map <chord> <action>                  e.g.  map ctrl+shift+t new_session
+        #   chord = modifiers + key, e.g. cmd+shift+p (ctrl / control / cmd / command / opt / option / alt / shift)
+        #
+        # Define a custom command (also shown in the palette, marked "custom"):
+        #   command "<name>" [chord] <shell...>   e.g.  command "Git status" ctrl+shift+g git status
+        #   Tokens substituted into the shell line and exported as $AGT_* env vars:
+        \(tokenLines)
+        #   For untrusted content prefer the QUOTED env form, e.g. "$AGT_SELECTION".
+        #
+        # Rebindable built-in actions:
+        \(actions)
+
+        """
+    }
+
+    private static func starterChordSyntax(_ chord: Chord) -> String {
+        let rendered = chord.displayString
+        guard parseKeybind(rendered) == [chord] else { return "(not expressible)" }
+        return rendered
+    }
+
     /// The agterm-scoped ghostty config file path within a resolved config directory: `<dir>/ghostty.conf`.
     /// Co-located with `keymap.conf` so a user-set custom config dir holds both.
     public static func ghosttyConfigPath(configDirectory: URL) -> URL {

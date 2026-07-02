@@ -514,4 +514,49 @@ struct KeymapTests {
         #expect(diagnostics.contains { $0.message.contains("'Lead'") && $0.message.contains("'Leader'") })
         #expect(diagnostics.contains { $0.message.contains("'Leader'") && $0.message.contains("'Lead'") })
     }
+
+    @Test func keymapStoreLoadsFileAndRecoversWhenMissing() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-keymap-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = KeymapStore(configDirectory: dir)
+
+        #expect(store.path == ConfigPaths.keymapPath(configDirectory: dir))
+        #expect(store.load().keymap.commands.isEmpty)
+        #expect(store.load().diagnostics.isEmpty)
+
+        try "command \"Greet\" ctrl+shift+y echo hi\n".write(to: store.path, atomically: true, encoding: .utf8)
+        let loaded = store.load()
+        #expect(loaded.keymap.commands.contains { $0.name == "Greet" })
+        #expect(loaded.diagnostics.isEmpty)
+    }
+
+    @Test func keymapStoreReportsMalformedKeymapDiagnostics() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-keymap-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = KeymapStore(configDirectory: dir)
+
+        try "map cmd+d not_an_action\ncommand \"Good\" ctrl+shift+y echo ok\n"
+            .write(to: store.path, atomically: true, encoding: .utf8)
+        let loaded = store.load()
+
+        #expect(loaded.keymap.commands.contains { $0.name == "Good" })
+        #expect(loaded.diagnostics.contains { $0.line == 1 && $0.message.contains("unknown action") })
+    }
+
+    @Test func keymapStoreReportsUnreadableTextFile() throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-keymap-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let store = KeymapStore(configDirectory: dir)
+
+        try Data([0xff, 0xfe, 0xfd]).write(to: store.path)
+        let loaded = store.load()
+
+        #expect(loaded.keymap == Keymap(builtinOverrides: [:], commands: []))
+        #expect(loaded.diagnostics.count == 1)
+        #expect(loaded.diagnostics[0].line == 0)
+        #expect(loaded.diagnostics[0].message.contains("could not read keymap.conf"))
+    }
 }

@@ -31,6 +31,33 @@ struct ConfigPathsTests {
         #expect(ConfigPaths.keymapPath(configDirectory: dir).path == "/Users/test/.config/agterm/keymap.conf")
     }
 
+    @Test func starterKeymapConfIsCommentedAndListsActions() {
+        let starter = ConfigPaths.starterKeymapConf()
+        #expect(starter.contains("map <chord> <action>"))
+        #expect(starter.contains("command \"<name>\" [chord] <shell...>"))
+        #expect(starter.contains("cmd+shift+p"))
+        #expect(!starter.contains("super"))
+        for action in BuiltinAction.allCases {
+            #expect(starter.contains("#   \(action.rawValue)"))
+        }
+        #expect(starter.contains("#   new_session"))
+        #expect(starter.contains("cmd+n"))
+        #expect(starter.contains("#   increase_font_size"))
+        #expect(starter.contains("(not expressible)"))
+        #expect(starter.contains("#   rename_session"))
+        #expect(starter.contains("(no default)"))
+        for token in CommandContext.tokenNames {
+            #expect(starter.contains("#   {\(token)}"))
+        }
+        #expect(!starter.contains("{AGT_SESSION}"))
+        #expect(!starter.contains("{AGT_WINDOW}"))
+        #expect(!starter.contains("{AGT_CWD}"))
+        let parsed = parseKeymap(starter)
+        #expect(parsed.keymap.builtinOverrides.isEmpty)
+        #expect(parsed.keymap.commands.isEmpty)
+        #expect(parsed.diagnostics.isEmpty)
+    }
+
     @Test func ghosttyConfigPathIsGhosttyConfInDir() {
         let dir = URL(fileURLWithPath: "/Users/test/.config/agterm")
         #expect(ConfigPaths.ghosttyConfigPath(configDirectory: dir).path == "/Users/test/.config/agterm/ghostty.conf")
