@@ -283,12 +283,34 @@ extension ControlServer {
     /// Inject `text` into the session `id`'s surface. A session's surface is created lazily (deferred until
     /// it has a non-zero backing size — a never-shown session has `surface == nil`). `ghostty_surface_text`
     /// writes to the child pty, which the kernel buffers, so text is never lost even before the first prompt.
+    /// `pane` picks the pane like `session.text` (`left`|`right` only, no `other`): omitted/`left` is the
+    /// main pane (omitted keeps the pre-pane behavior — always the main pane, NOT the focused one, so
+    /// existing automation is unaffected); `right` is the split pane, `session has no split pane` without
+    /// one. The realize/select path below applies to the main pane only — a split pane is never created by
+    /// selecting, so `right` injects into the existing split surface or errors.
     /// - surface already realized → inject immediately, ok.
     /// - never realized, `select:true` → select it, then poll for the surface (bounded: 12 × 0.03 s, the
     ///   `focusSplitPane` idiom) and inject on the first realized attempt; never realized → error (never a
     ///   false ok).
     /// - never realized, no select → an immediate "use select" error.
-    func injectText(_ text: String, into id: UUID, store: AppStore, select: Bool) async -> ControlResponse {
+    func injectText(_ text: String, into id: UUID, store: AppStore, select: Bool, pane: String?) async -> ControlResponse {
+        switch pane {
+        case nil, "left":
+            break
+        case "right":
+            guard let split = store.session(withID: id)?.splitSurface else {
+                return ControlResponse(ok: false, error: "session has no split pane")
+            }
+            guard let surface = split as? GhosttySurfaceView else {
+                return ControlResponse(ok: false, error: "session not realized")
+            }
+            surface.inject(text: text)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        // an unknown pane value errors here; `session.type` accepts left|right only, with no `other`
+        // toggle like `session.focus` (mirroring `session.text`).
+        case .some(let value):
+            return ControlResponse(ok: false, error: "invalid pane: \(value)")
+        }
         if let surface = store.session(withID: id)?.surface as? GhosttySurfaceView {
             surface.inject(text: text)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))

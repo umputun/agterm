@@ -178,7 +178,8 @@ final class CustomCommandRunner {
         }
         // palette path: selection comes from the active session's focused pane (split if it holds focus).
         let selectionSurface = (session.splitFocused ? session.splitSurface : session.surface) as? GhosttySurfaceView
-        let context = self.context(for: session, in: store, selectionSurface: selectionSurface)
+        let context = self.context(for: session, in: store, selectionSurface: selectionSurface,
+                                   pane: session.splitFocused ? "right" : "left")
         spawn(command, context: context)
     }
 
@@ -196,14 +197,18 @@ final class CustomCommandRunner {
             run(command)
             return
         }
-        let context = self.context(for: session, in: store, selectionSurface: focusedSurface)
+        // the fired-from pane is the surface's identity, not the session's focus flag — a chord fired
+        // from a pane the focus flag hasn't caught up to still reports the pane it was typed in.
+        let pane = (session.splitSurface as? GhosttySurfaceView) === focusedSurface ? "right" : "left"
+        let context = self.context(for: session, in: store, selectionSurface: focusedSurface, pane: pane)
         spawn(command, context: context)
     }
 
     /// Resolve every `{AGT_X}` token for the given session: ids + cwd from the model, the names from
     /// the owning workspace/window, the selection from `selectionSurface` (the exact focused surface),
-    /// and the socket from the control server.
-    private func context(for session: Session, in store: AppStore, selectionSurface: GhosttySurfaceView?) -> CommandContext {
+    /// the fired-from pane (`left`|`right`) from the caller, and the socket from the control server.
+    private func context(for session: Session, in store: AppStore, selectionSurface: GhosttySurfaceView?,
+                         pane: String) -> CommandContext {
         let workspace = store.workspace(forSession: session.id)
         let windowID = library.windowID(forSession: session.id)
         let windowName = windowID.flatMap { id in library.windows.first { $0.id == id }?.name } ?? ""
@@ -215,6 +220,7 @@ final class CustomCommandRunner {
             workspaceName: workspace?.name ?? "",
             windowID: windowID?.uuidString ?? "",
             windowName: windowName,
+            pane: pane,
             selection: selectionSurface?.readSelection() ?? "",
             socket: socketProvider()
         )

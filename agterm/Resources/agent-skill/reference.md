@@ -88,10 +88,13 @@ position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when 
 - `session move <workspace> [--target] [--window W]` — relocate the session to another workspace
   (appends). OR `session move --to up|down|top|bottom [--target]` — reorder within its workspace.
   Exactly one of the positional workspace or `--to` is required.
-- `session type <text> [--stdin] [--select] [--target] [--window W]` — inject text as real keystrokes
-  (printable runs plus Return for each newline; no bracketed-paste markers). `--stdin` reads the text
-  from stdin instead of the argument. `--select` selects (and realizes) a never-shown session before
-  injecting. Any realized session is normally typable without `--select`.
+- `session type <text> [--stdin] [--select] [--pane left|right] [--target] [--window W]` — inject text
+  as real keystrokes (printable runs plus Return for each newline; no bracketed-paste markers).
+  `--stdin` reads the text from stdin instead of the argument. `--select` selects (and realizes) a
+  never-shown session before injecting. Any realized session is normally typable without `--select`.
+  `--pane left` types into the main pane (the default when omitted), `--pane right` into the split pane
+  (errors with `session has no split pane` when the session has no split); like `session text`, no
+  `other` value. `--select` realizes the MAIN pane only — a split pane must already exist.
 - `session copy [--target] [--window W]` — returns `result.text` with the session's current selection.
   Does NOT touch the system clipboard (pipe the returned text into another `session type`). No/empty
   selection → `no selection` error. Selection is readable on any realized session regardless of focus.
@@ -302,6 +305,9 @@ so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are as untrusted as `{AGT_SELECT
 - `{AGT_SESSION_NAME}` / `$AGT_SESSION_NAME` — the session's display name (the focused pane's terminal title, remote-settable via OSC).
 - `{AGT_SESSION_PWD}` / `$AGT_SESSION_PWD` — the focused pane's working directory.
 - `{AGT_SELECTION}` / `$AGT_SELECTION` — the current selection.
+- `{AGT_PANE}` / `$AGT_PANE` — the pane the command fired from: `left` (main) or `right` (split),
+  always `left` without a split. Feed it back as `session type --pane "$AGT_PANE"` to type into the
+  very pane the shortcut was pressed in.
 - Plus the other `$AGT_*` context vars the runner exports.
 
 Built-in action names for `map` include: `new_window`, `new_workspace`, `new_session`,

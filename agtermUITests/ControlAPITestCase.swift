@@ -110,9 +110,12 @@ class ControlAPITestCase: XCTestCase {
         XCTAssertTrue(app.staticTexts["session-row"].waitForExistence(timeout: 30), "seeded session should exist")
     }
 
-    /// Build a `session.type` request line with JSON-escaped `text` (covers the newline and the quoted path).
-    func typeRequest(text: String, target: String? = nil, select: Bool) -> String {
-        var obj: [String: Any] = ["cmd": "session.type", "args": ["text": text, "select": select]]
+    /// Build a `session.type` request line with JSON-escaped `text` (covers the newline and the quoted
+    /// path); `pane` addresses a split pane (`left`|`right`, nil = the main pane).
+    func typeRequest(text: String, target: String? = nil, select: Bool, pane: String? = nil) -> String {
+        var args: [String: Any] = ["text": text, "select": select]
+        if let pane { args["pane"] = pane }
+        var obj: [String: Any] = ["cmd": "session.type", "args": args]
         if let target { obj["target"] = target }
         let data = try! JSONSerialization.data(withJSONObject: obj)
         return String(data: data, encoding: .utf8)!

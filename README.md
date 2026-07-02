@@ -196,7 +196,7 @@ agtermctl quick toggle                           # toggle the quick terminal
 agtermctl font inc                               # increase the active surface's font size
 ```
 
-`session type` types the text as real keystrokes, and every newline is a real Return press — so a trailing newline submits the command, and a multi-line payload runs line by line (a multi-line shell construct like a `for` loop is entered across the shell's continuation prompts and runs as one command). Note the `$'…\n'` quoting: a literal `\n` inside plain single quotes reaches the CLI as two characters, not a newline; use `$'…\n'` or pipe a real newline via `--stdin`.
+`session type` types the text as real keystrokes, and every newline is a real Return press — so a trailing newline submits the command, and a multi-line payload runs line by line (a multi-line shell construct like a `for` loop is entered across the shell's continuation prompts and runs as one command). Note the `$'…\n'` quoting: a literal `\n` inside plain single quotes reaches the CLI as two characters, not a newline; use `$'…\n'` or pipe a real newline via `--stdin`. Typing goes to the session's left (main) pane by default; `--pane right` types into the split pane instead (an error when the session has no split).
 
 `session copy` returns the target session's selected text in the response (it does not touch the system clipboard), so a script can move a selection from one session to another:
 
@@ -301,10 +301,10 @@ The shell line of a `command` may use these `{AGT_X}` tokens, expanded at fire t
 {AGT_SESSION_ID}   {AGT_SESSION_NAME}   {AGT_SESSION_PWD}
 {AGT_WORKSPACE_ID} {AGT_WORKSPACE_NAME}
 {AGT_WINDOW_ID}    {AGT_WINDOW_NAME}
-{AGT_SELECTION}    {AGT_SOCKET}
+{AGT_PANE}         {AGT_SELECTION}      {AGT_SOCKET}
 ```
 
-The context is resolved from the focused pane's session, so a custom command runs in that session's working directory and can read its current selection. A custom command runs as a detached `/bin/sh -c`; a non-zero exit (or a spawn failure) posts a notification banner.
+The context is resolved from the focused pane's session, so a custom command runs in that session's working directory and can read its current selection. `{AGT_PANE}` is the pane the shortcut fired from — `left` (main) or `right` (split), always `left` without a split — so a script can route a follow-up `agtermctl session type --pane "$AGT_PANE"` back into the very pane it was invoked in. A custom command runs as a detached `/bin/sh -c`; a non-zero exit (or a spawn failure) posts a notification banner.
 
 Because it runs detached with no controlling terminal, a custom command suits fire-and-forget launches — GUI apps (`open -a …`), scripts, one-off shell lines — not interactive or full-screen programs: a TUI like `lazygit` run bare has no TTY to draw into and exits immediately. The `Lazygit` example above launches it the right way, in an overlay terminal that *does* have a TTY (`agtermctl session overlay open`, passing `{AGT_SOCKET}` so the CLI reaches this very app; add `--size-percent 80` for a floating panel instead of full-size). A per-session scratch terminal (`agtermctl session scratch on --command lazygit`) works too.
 

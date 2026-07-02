@@ -111,7 +111,8 @@ spec — image/text watermark or solid color — set via `session background`, o
 - `close` · `select` · `rename <name>`.
 - `go --to next|prev|first|last|next-attention|prev-attention` — move the selection between sessions.
 - `move <workspace>` (relocate) or `move --to up|down|top|bottom` (reorder within the workspace).
-- `type <text> [--stdin] [--select]` — inject keystrokes (real typing, Enter included).
+- `type <text> [--stdin] [--select] [--pane left|right]` — inject keystrokes (real typing, Enter
+  included) into the main pane, or the split pane with `--pane right`.
 - `copy` — print the session's selected text (does NOT touch the system clipboard).
 - `text [--all] [--lines N] [--pane left|right]` — print the session buffer as plain text. Default is
   the visible screen of the focused pane; `--all` adds scrollback; `--lines N` keeps the last N lines.

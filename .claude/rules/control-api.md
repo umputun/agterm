@@ -295,10 +295,25 @@ paths:
   (the last two also `validate()`-guarded); and round-trip + e2e (`testSessionNewWithCommandRunsAsProcess`,
   `testSessionNewWithName`, `testSessionNewWorkspaceNameCreatesThenReuses`) cover them.
   `session.type` injects into the target surface.
+  `args.pane` picks the pane like `session.text` (`left`|`right` only, no `other`):
+  omitted/`left` is the MAIN pane (omitted deliberately keeps the pre-pane behavior — always the main
+  pane, NOT the focused/on-screen one, so existing automation is unaffected);
+  `right` injects into the split surface, `session has no split pane` without one,
+  and an unknown value is an `invalid pane` error — all validated SERVER-SIDE in `injectText`
+  (mirroring the CLI `validate()`), so a raw socket client can't bypass it.
   Every session is realized eagerly (the deck mounts all at startup), so any session is normally typable
   WITHOUT `select`; `select:true` remains for the brief window before a just-created session is mounted
   (select, then a bounded poll, the `focusSplitPane` idiom), with `session not realized` the fallback
   if the surface still isn't up.
+  The realize/select path applies to the MAIN pane only — a split pane is never created by selecting,
+  so `pane:right` injects into the existing split surface or errors.
+  Four-point keep-in-sync audit for `session.type --pane`: (1) reuses `ControlArgs.pane` in
+  `ControlProtocol.swift` (no new field), (2) the pane switch in `injectText`
+  (`ControlServer+SurfaceIO.swift`), (3) the `session type --pane left|right` option
+  (`validate()`-guarded) in `agtermctlKit`, (4) round-trip in `ControlProtocolTests` + CLI mapping in
+  `CommandsTests` + the e2e (`testSessionTypePaneRightReachesSplitPane`,
+  `testSessionTypePaneRightWithoutSplitErrors`, `testSessionTypeRejectsInvalidPaneServerSide`) in
+  `SessionTypePaneUITests` (a `ControlAPITestCase` subclass like `SessionTextUITests`).
   `GhosttySurfaceView.inject(text:)` types via `ghostty_surface_key` keystrokes (printable runs as key-with-`text`,
   each `\n`/`\r`/`\r\n` as a Return keypress, keycode 36) — NOT `ghostty_surface_text`,
   whose bracketed-paste wrapping suppresses Enter and leaks `\e[200~`/`\e[201~` markers when fired rapidly.

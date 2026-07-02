@@ -150,6 +150,22 @@ struct CommandsTests {
         #expect(command.target.target == "s1")
     }
 
+    @Test func sessionTypeWithPane() throws {
+        let expected = ControlRequest(cmd: .sessionType, target: "s1",
+                                      args: ControlArgs(text: "ls\n", select: false, pane: "right"))
+        #expect(try request(["session", "type", "ls\n", "--pane", "right", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionTypeWithoutPaneOmitsIt() throws {
+        let req = try request(["session", "type", "ls\n"])
+        #expect(req.args?.pane == nil)
+    }
+
+    @Test func sessionTypeRejectsBadPane() {
+        // `other` is a session.focus mode, not a typable pane — type accepts left|right only.
+        #expect(validationMessage(["session", "type", "x", "--pane", "other"]) == "--pane must be left or right")
+    }
+
     @Test func sessionSplitDefaultsToggle() throws {
         let expected = ControlRequest(cmd: .sessionSplit, target: "active", args: ControlArgs(mode: "toggle"))
         #expect(try request(["session", "split"]) == expected)

@@ -98,25 +98,27 @@ final class SessionTextUITests: ControlAPITestCase {
         XCTAssertTrue(viewport.contains("\(tag)-400-X"), "the default (VIEWPORT) read should still show the most recent line")
     }
 
-    // session.text --pane left|right reads the matching pane of a split. session.type is main-only (it always
-    // injects into session.surface), so the LEFT marker goes in over the socket; the RIGHT pane is fed via
-    // the real keyboard after focusing it. Assert each pane read returns its OWN marker and NOT the other's —
-    // the --pane success mappings (left→surface, right→splitSurface) are otherwise only hit on the error path.
+    // session.text --pane left|right reads the matching pane of a split. The LEFT marker goes in over the
+    // socket (a no-pane session.type injects into the main pane); the RIGHT pane is fed via the real
+    // keyboard after focusing it — deliberately NOT via `session.type --pane right` (that route has its own
+    // e2e in SessionTypePaneUITests), so this test also proves the focus→keyboard first-responder routing.
+    // Assert each pane read returns its OWN marker and NOT the other's — the --pane success mappings
+    // (left→surface, right→splitSurface) are otherwise only hit on the error path.
     func testSessionTextPaneSelectsCorrectPane() throws {
         let split = try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"on"}}"#)
         XCTAssertEqual(split["ok"] as? Bool, true, "split on should succeed: \(split)")
         XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the active session should report split:true")
         let activeID = try activeSessionID()
 
-        // LEFT (main) pane: session.type injects into session.surface (main-only by design), so this marker
-        // lands in the left pane regardless of which pane holds focus.
+        // LEFT (main) pane: a no-pane session.type injects into session.surface (the main pane), so this
+        // marker lands in the left pane regardless of which pane holds focus.
         let leftMarker = "LEFT-\(UUID().uuidString.prefix(8))"
         XCTAssertNotNil(try pollPaneText(target: activeID, pane: "left", contains: leftMarker, retype: {
             _ = try self.sendCommand(self.typeRequest(text: "echo \(leftMarker)\n", target: activeID, select: false))
         }), "--pane left should read the marker typed into the main pane")
 
-        // RIGHT (split) pane: session.type can't reach it, so focus it and type via the real keyboard, which
-        // routes to the focused pane's first responder.
+        // RIGHT (split) pane: focus it and type via the real keyboard, which routes to the focused pane's
+        // first responder.
         let rightMarker = "RIGHT-\(UUID().uuidString.prefix(8))"
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(activeID)","args":{"pane":"right"}}"#)["ok"] as? Bool,
                        true, "focus right should succeed")

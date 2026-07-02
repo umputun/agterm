@@ -54,6 +54,11 @@ paths:
   in a text field) and rebuilds its matcher on `.agtermKeymapChanged`.
   The runner also exposes a public `run(_:)` for the palette items, which resolve context from the active
   session (no first responder to key off).
+  `CommandContext.pane` (the `{AGT_PANE}`/`$AGT_PANE` token, `left`|`right`, `left` without a split)
+  carries the fired-from pane: the keybind path derives it from the focused SURFACE's identity
+  (`splitSurface === focusedSurface`), the palette path from `session.splitFocused` —
+  so a script can feed it back as `agtermctl session type --pane "$AGT_PANE"` to type into the very
+  pane the shortcut was pressed in.
 - **Built-in override resolution is ORDER-INDEPENDENT, decided against the FINAL state (`resolveBuiltinOverrides`).**
   Overrides are NOT folded incrementally against a partially-built map (that was order-sensitive — it
   would reject `map cmd+d new_session` when toggle_split still owned cmd+d "so far",

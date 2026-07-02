@@ -109,8 +109,15 @@ struct Session: ParsableCommand {
         @Argument(help: "Text to inject (omit with --stdin).") var text: String?
         @Flag(name: .long, help: "Read the text from stdin instead of an argument.") var stdin = false
         @Flag(name: .long, help: "Select (and realize) a never-shown session before injecting.") var select = false
+        @Option(name: .long, help: "Which pane to type into: left (main) or right (split). Defaults to the left pane.") var pane: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+
+        func validate() throws {
+            if let pane, !["left", "right"].contains(pane) {
+                throw ValidationError("--pane must be left or right")
+            }
+        }
 
         func makeRequest() throws -> ControlRequest {
             let payload: String
@@ -124,7 +131,7 @@ struct Session: ParsableCommand {
                 throw ValidationError("provide TEXT or --stdin")
             }
             return ControlRequest(cmd: .sessionType, target: target.target,
-                                  args: options.withWindow(ControlArgs(text: payload, select: select)))
+                                  args: options.withWindow(ControlArgs(text: payload, select: select, pane: pane)))
         }
     }
 

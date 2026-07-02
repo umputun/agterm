@@ -36,12 +36,15 @@ public struct CommandContext: Equatable, Sendable {
     public var workspaceName: String
     public var windowID: String
     public var windowName: String
+    /// The pane that had focus at fire time: `left` (main) or `right` (split). `left` for a session
+    /// with no split, so the value is always a valid `--pane` argument for `session.type`/`session.text`.
+    public var pane: String
     public var selection: String
     public var socket: String
 
     public init(sessionID: String = "", sessionName: String = "", sessionPWD: String = "",
                 workspaceID: String = "", workspaceName: String = "", windowID: String = "",
-                windowName: String = "", selection: String = "", socket: String = "") {
+                windowName: String = "", pane: String = "left", selection: String = "", socket: String = "") {
         self.sessionID = sessionID
         self.sessionName = sessionName
         self.sessionPWD = sessionPWD
@@ -49,6 +52,7 @@ public struct CommandContext: Equatable, Sendable {
         self.workspaceName = workspaceName
         self.windowID = windowID
         self.windowName = windowName
+        self.pane = pane
         self.selection = selection
         self.socket = socket
     }
@@ -64,6 +68,7 @@ public struct CommandContext: Equatable, Sendable {
          ("AGT_WORKSPACE_NAME", workspaceName),
          ("AGT_WINDOW_ID", windowID),
          ("AGT_WINDOW_NAME", windowName),
+         ("AGT_PANE", pane),
          ("AGT_SELECTION", selection),
          ("AGT_SOCKET", socket)]
     }

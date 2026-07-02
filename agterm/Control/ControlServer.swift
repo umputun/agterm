@@ -459,7 +459,8 @@ final class ControlServer {
             case .failure(let response):
                 return response
             case .success(let (store, id)):
-                return await injectText(text, into: id, store: store, select: request.args?.select ?? false)
+                return await injectText(text, into: id, store: store, select: request.args?.select ?? false,
+                                        pane: request.args?.pane)
             }
         case .sessionSplit:
             return splitSession(request.target, window: request.args?.window, mode: request.args?.mode)

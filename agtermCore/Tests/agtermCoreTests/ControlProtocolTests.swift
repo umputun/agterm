@@ -85,6 +85,14 @@ struct ControlProtocolTests {
         #expect(decoded.args?.select == nil)
     }
 
+    @Test func sessionTypeWithPaneRoundTrips() throws {
+        let request = ControlRequest(cmd: .sessionType, target: "9f3c",
+                                     args: ControlArgs(text: "ls\n", pane: "right"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.pane == "right")
+    }
+
     @Test func sessionStatusRoundTripsWithStateAndBlink() throws {
         let request = ControlRequest(cmd: .sessionStatus, target: "9f3c",
                                      args: ControlArgs(status: "active", blink: true, autoReset: true))
