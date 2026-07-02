@@ -9,9 +9,18 @@ import XCTest
 // split/focus panes over the control socket while firing real keystrokes for the keybind path.
 @MainActor
 final class CustomCommandPaneTokenUITests: ControlAPITestCase {
-    // keybind path: fire the SAME chord from the main pane and then from the split's right pane; $AGT_PANE
-    // must be "left" then "right", proving `runFromKeybind` keys off the focused surface's identity rather
-    // than a shared flag (a plain `splitFocused`-based derivation would report "right" for both once split).
+    // keybind path: fire the SAME chord from the main pane (no split) and then from the split's focused
+    // right pane; $AGT_PANE must be "left" then "right", exercising both branches of `runFromKeybind`'s
+    // surface-identity derivation end-to-end through the real NSEvent monitor.
+    //
+    // NOTE: this does NOT isolate "surface identity" from "the splitFocused flag" — in both fired states
+    // the flag and the actual first responder AGREE (the surfaces' onFocusChange closures keep splitFocused
+    // synced to real focus), so a regression deriving the pane from splitFocused would pass here too. A
+    // flag-vs-focus divergence isn't deterministically reproducible: the only way to set the flag without a
+    // focus change is `session.split on` over the socket, after which the main surface is re-hosted into the
+    // HSplitView and holds no reliable first responder — so the chord's "a GhosttySurfaceView must hold
+    // first responder" gate can't be pinned. The surface-identity choice itself is covered by inspection
+    // (`CustomCommandRunner.runFromKeybind`) plus the promoted-survivor reasoning in keymap.md.
     func testAgtPaneKeybindReflectsFiredFromPane() throws {
         let marker = markerDir.appendingPathComponent("agt-pane-keybind")
         // ⌘⇧E → write $AGT_PANE to the marker. The runner already wraps the line in `/bin/sh -c`, so

@@ -47,8 +47,9 @@ public struct CommandContext: Equatable, Sendable {
     /// physical surface slot: a session that has only ever had a main pane reports `.left`, but a promoted
     /// split survivor (the primary pane exited and the split pane took over) reports `.right`, since that
     /// surface still lives in the `splitSurface` slot and is where `session.type --pane` reaches it. Typed
-    /// (not a raw `String`) so the "always a valid `--pane` value" invariant is guaranteed by construction,
-    /// not by call-site discipline.
+    /// (not a raw `String`) so `rawValue` can only be `left`/`right`; it is consumed as the `$AGT_PANE` env
+    /// var a script feeds back through `session type --pane` (re-validated CLI- AND server-side — the enum
+    /// pins the token this emits, not the shell round-trip).
     public var pane: Pane
     public var selection: String
     public var socket: String

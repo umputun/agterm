@@ -28,10 +28,13 @@ final class SessionTypePaneUITests: ControlAPITestCase {
         })
         XCTAssertNotNil(leftText, "the default (no pane) injection should land in the main pane")
 
+        // NB: no inner `ok == true` assert here (unlike a one-shot check) — the base class sets
+        // continueAfterFailure = false, so a transient ok:false on a not-yet-ready split would abort the
+        // whole test instead of letting the retry loop ride it out. Success is asserted once, below, via
+        // the marker actually landing (the left closure omits the inner assert for the same reason).
         let rightText = try pollPaneText(target: activeID, pane: "right", contains: "\(rightTag)-42", retype: {
-            let typed = try self.sendCommand(self.typeRequest(text: "echo \(rightTag)-$((6*7))\n",
-                                                              target: activeID, select: false, pane: "right"))
-            XCTAssertEqual(typed["ok"] as? Bool, true, "session.type --pane right should succeed: \(typed)")
+            _ = try self.sendCommand(self.typeRequest(text: "echo \(rightTag)-$((6*7))\n",
+                                                      target: activeID, select: false, pane: "right"))
         })
         XCTAssertNotNil(rightText, "--pane right should land in the split pane")
 
@@ -42,8 +45,9 @@ final class SessionTypePaneUITests: ControlAPITestCase {
                        "the split pane must NOT contain the main pane's marker: \(rightText ?? "")")
     }
 
-    // session.type --pane right on a non-split session errors. `right` passes the CLI validate(), so the
-    // request reaches the server, which rejects it (no split pane to type into) — mirroring session.text.
+    // session.type --pane right on a non-split session errors. The request is sent directly over the socket
+    // (sendCommand bypasses the CLI entirely), so the SERVER itself rejects it (no split pane to type into)
+    // — mirroring session.text.
     func testSessionTypePaneRightWithoutSplitErrors() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let newID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return the new id")
