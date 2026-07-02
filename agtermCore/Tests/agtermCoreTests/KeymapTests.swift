@@ -178,6 +178,30 @@ struct KeymapTests {
         #expect(keymap.commands[0].name == "name # not a comment")
     }
 
+    @Test func hashInsideSingleQuotedShellArgIsKept() {
+        // a `#` in a single-quoted arg (a commit message) must survive — it is not an inline comment.
+        let (keymap, diagnostics) = parseKeymap("command \"Commit\" cmd+shift+c git commit -m 'fix #42'")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.commands.count == 1)
+        #expect(keymap.commands[0].command == "git commit -m 'fix #42'")
+    }
+
+    @Test func trailingCommentAfterSingleQuotedArgIsStripped() {
+        // once the single quote closes, a whitespace-preceded `#` is still a real inline comment.
+        let (keymap, diagnostics) = parseKeymap("command \"X\" cmd+shift+x echo 'hi' # real comment")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.commands.count == 1)
+        #expect(keymap.commands[0].command == "echo 'hi'")
+    }
+
+    @Test func doubleQuoteInsideSingleQuotesDoesNotOpenAQuotedSpan() {
+        // a `"` inside `'...'` is literal, so the `#` after the single-quoted arg still starts a comment.
+        let (keymap, diagnostics) = parseKeymap("command \"Y\" cmd+shift+y echo 'a\"b' # c")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.commands.count == 1)
+        #expect(keymap.commands[0].command == "echo 'a\"b'")
+    }
+
     @Test func parseUnknownVerbDiagnostic() {
         let (keymap, diagnostics) = parseKeymap("bind cmd+d toggle_split")
         #expect(keymap.builtinOverrides.isEmpty)
