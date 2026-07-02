@@ -5,7 +5,29 @@ import agtermCore
 /// (splits, scratch, focus, status, flag, move, notify, quick terminal, sidebar). Each resolves its target
 /// through `resolver` and drives the `AppActions`/`AppStore` seam. Split out of `ControlServer.swift` to
 /// keep that file under the swiftlint size limit.
-extension ControlServer {
+extension ControlServer: ControlActions {
+    func controlTree(window: String?) -> ControlResponse {
+        resolver.resolvePlacementStore(window) { store in
+            ControlResponse(ok: true, result: ControlResult(tree: buildTree(in: store)))
+        }
+    }
+
+    func setSidebarVisibility(_ mode: ControlToggleMode) -> ControlResponse {
+        setSidebar(mode: mode)
+    }
+
+    func setSidebarViewMode(_ mode: ControlSidebarViewMode) -> ControlResponse {
+        setSidebarViewMode(mode: mode)
+    }
+
+    func expandSidebar(window: String?) -> ControlResponse {
+        expandWorkspaces(window: window)
+    }
+
+    func collapseSidebar(window: String?) -> ControlResponse {
+        collapseWorkspaces(window: window)
+    }
+
     /// Resolve the target session and drive the split directly on its owning store (NOT the
     /// argument-less `AppActions.toggleSplit()`, which only acts on the active session). `mode` is
     /// `on|off|toggle`, computed against the session's current `isSplit` so `on`/`off` are
@@ -293,14 +315,11 @@ extension ControlServer {
     /// Show / hide / toggle the frontmost window's sidebar (the custom split owns visibility, so there's
     /// no system toggle). Flips only when the requested state differs; an unknown mode is an error, and no
     /// open window is an error rather than a silent no-op.
-    func setSidebar(mode: String?) -> ControlResponse {
+    func setSidebar(mode: ControlToggleMode) -> ControlResponse {
         guard let store = library.activeStore else {
             return ControlResponse(ok: false, error: "no open window")
         }
-        guard let parsedMode = ControlToggleMode.parse(mode, on: "show", off: "hide") else {
-            return ControlResponse(ok: false, error: "invalid sidebar mode: \(mode ?? "toggle")")
-        }
-        let want = parsedMode.desiredValue(current: store.sidebarVisible)
+        let want = mode.desiredValue(current: store.sidebarVisible)
         store.setSidebarVisible(want) // no-op + no save when unchanged (idempotent)
         return ControlResponse(ok: true)
     }
@@ -308,17 +327,15 @@ extension ControlServer {
     /// Set the frontmost window's sidebar VIEW mode (the tree vs the flat flagged list) — distinct from
     /// `setSidebar` (visibility). `mode` is `tree|flagged|toggle`, delta-computed so a no-op mode skips
     /// the write (idempotent), via `AppStore.setSidebarMode`. An unknown mode + no-open-window are errors.
-    func setSidebarViewMode(mode: String?) -> ControlResponse {
-        let mode = mode ?? "toggle"
+    func setSidebarViewMode(mode: ControlSidebarViewMode) -> ControlResponse {
         guard let store = library.activeStore else {
             return ControlResponse(ok: false, error: "no open window")
         }
         let want: SidebarMode
         switch mode {
-        case "tree": want = .tree
-        case "flagged": want = .flagged
-        case "toggle": want = store.sidebarMode == .tree ? .flagged : .tree
-        default: return ControlResponse(ok: false, error: "invalid sidebar mode: \(mode)")
+        case .tree: want = .tree
+        case .flagged: want = .flagged
+        case .toggle: want = store.sidebarMode == .tree ? .flagged : .tree
         }
         store.setSidebarMode(want) // no-op + no save when unchanged (idempotent)
         return ControlResponse(ok: true)

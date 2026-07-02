@@ -48,3 +48,19 @@ public enum ControlPaneFocusMode: Equatable, Sendable {
         }
     }
 }
+
+/// Parsed view mode for `sidebar.mode`.
+public enum ControlSidebarViewMode: Equatable, Sendable {
+    case tree
+    case flagged
+    case toggle
+
+    public static func parse(_ mode: String?) -> ControlSidebarViewMode? {
+        switch mode ?? "toggle" {
+        case "tree": return .tree
+        case "flagged": return .flagged
+        case "toggle": return .toggle
+        default: return nil
+        }
+    }
+}

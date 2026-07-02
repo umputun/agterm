@@ -336,11 +336,12 @@ final class ControlServer {
         // refresh the read cache within this same main-actor execution (a window mutation just ran), so
         // the background fast path sees the new state without a separate hop that could stall.
         defer { refreshWindowCache() }
+        if let response = ControlDispatcher(actions: self).dispatch(request) {
+            return response
+        }
         switch request.cmd {
-        case .tree:
-            return resolver.resolvePlacementStore(request.args?.window) { store in
-                ControlResponse(ok: true, result: ControlResult(tree: buildTree(in: store)))
-            }
+        case .tree, .sidebar, .sidebarMode, .sidebarExpand, .sidebarCollapse:
+            return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         case .sessionSelect:
             return resolver.resolveSession(request.target, window: request.args?.window) { store, id in
                 store.selectSession(id)
@@ -539,14 +540,6 @@ final class ControlServer {
             }
         case .quick:
             return setQuickTerminal(mode: request.args?.mode)
-        case .sidebar:
-            return setSidebar(mode: request.args?.mode)
-        case .sidebarMode:
-            return setSidebarViewMode(mode: request.args?.mode)
-        case .sidebarExpand:
-            return expandWorkspaces(window: request.args?.window)
-        case .sidebarCollapse:
-            return collapseWorkspaces(window: request.args?.window)
         case .notify:
             return sendNotification(request.target, window: request.args?.window,
                                     title: request.args?.title, body: request.args?.body)
@@ -604,7 +597,7 @@ final class ControlServer {
 
     /// Project a window's workspace tree into the wire `ControlTree`, marking the active session and the
     /// active workspace (the one owning the selected session).
-    private func buildTree(in store: AppStore) -> ControlTree {
+    func buildTree(in store: AppStore) -> ControlTree {
         let shellBasename = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
         return store.controlTree(
             foreground: { session in

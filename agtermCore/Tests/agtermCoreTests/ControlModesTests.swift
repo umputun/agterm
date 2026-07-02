@@ -59,4 +59,12 @@ struct ControlModesTests {
         #expect(ControlPaneFocusMode.toggle.wantsSplit(currentSplitFocused: false))
         #expect(!ControlPaneFocusMode.toggle.wantsSplit(currentSplitFocused: true))
     }
+
+    @Test func sidebarViewModeParsesModes() {
+        #expect(ControlSidebarViewMode.parse(nil) == .toggle)
+        #expect(ControlSidebarViewMode.parse("tree") == .tree)
+        #expect(ControlSidebarViewMode.parse("flagged") == .flagged)
+        #expect(ControlSidebarViewMode.parse("toggle") == .toggle)
+        #expect(ControlSidebarViewMode.parse("wide") == nil)
+    }
 }
