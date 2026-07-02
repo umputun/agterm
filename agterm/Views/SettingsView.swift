@@ -99,12 +99,12 @@ private struct GeneralSettingsView: View {
                 .accessibilityIdentifier("settings-new-session-directory")
                 if newSessionDirectory.wrappedValue == .custom {
                     HStack {
-                        Text(model.settings.newSessionCustomDirectory ?? "Not set")
+                        Text(customDirectory ?? "Not set")
                             .font(.system(size: 12).monospaced())
                             .lineLimit(1)
                             .truncationMode(.middle)
                             .textSelection(.enabled)
-                            .foregroundStyle(model.settings.newSessionCustomDirectory == nil ? .secondary : .primary)
+                            .foregroundStyle(customDirectory == nil ? .secondary : .primary)
                             .accessibilityIdentifier("settings-new-session-custom-dir")
                         Spacer()
                         Button("Choose…") { chooseCustomDirectory() }
@@ -152,6 +152,14 @@ private struct GeneralSettingsView: View {
     private var mouseScrollMultiplier: Binding<Double> {
         Binding(get: { model.settings.mouseScrollMultiplier ?? 3 },
                 set: { model.setMouseScrollMultiplier($0 == 3 ? nil : $0) })
+    }
+
+    /// The custom directory to display, treating nil OR empty as "unset" (nil) to match
+    /// `resolveNewSessionCwd`, which falls back to home for both. So a blank value from a hand-edited
+    /// `settings.json` renders as "Not set" rather than a blank primary-styled path.
+    private var customDirectory: String? {
+        let dir = model.settings.newSessionCustomDirectory
+        return dir?.isEmpty == false ? dir : nil
     }
 
     /// The new-session directory mode; nil (the default) reads as `.home`, and picking `.home` stores nil
