@@ -727,7 +727,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         // tracks the surface. runs on every in-process teardown (natural exit, explicit close, force-close).
         if let f = overlayCodeFile {
             if let text = try? String(contentsOfFile: f, encoding: .utf8),
-               let code = Int(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+               let code = OverlayCapture.parseExitCode(text) {
                 onExitCodeCaptured?(code)
             } else {
                 NSLog("overlay exit-code file unreadable or empty: %@", f)

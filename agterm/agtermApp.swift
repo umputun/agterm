@@ -607,11 +607,8 @@ struct agtermApp: App {
     }
 
     /// The fixed wrapper that runs the overlay command and records its exit status to a temp file.
-    /// stdout/stderr are NOT redirected (so a TUI renders normally); only the status is captured —
-    /// libghostty's child-exited status reflects the login-shell wrapper, not the command. The real
-    /// command + the temp path ride in env (`AGTERM_OVL_CMD`/`AGTERM_OVL_CODE`), never interpolated, so
-    /// there is no shell-quoting of user data. The subshell makes an inline `exit N` propagate to `$?`.
-    private static let overlayExitWrapper = "sh -c '( eval \"$AGTERM_OVL_CMD\" ); echo $? > \"$AGTERM_OVL_CODE\"'"
+    /// stdout/stderr are NOT redirected (so a TUI renders normally); only the status is captured.
+    private static let overlayExitWrapper = "sh -c '\(OverlayCapture.shellLine)'"
 
     /// Overlay-terminal surface factory: an ephemeral surface running the session's `overlayCommand`
     /// as its process in `overlayCwd` (default the session's current dir). Like the split, it is NOT
@@ -625,8 +622,8 @@ struct agtermApp: App {
         // redirect — the program renders in the overlay as usual.
         let codeFile = (NSTemporaryDirectory() as NSString).appendingPathComponent("agterm-ovl-\(UUID().uuidString).code")
         var overlayEnv = env
-        overlayEnv["AGTERM_OVL_CMD"] = session.overlayCommand ?? ""
-        overlayEnv["AGTERM_OVL_CODE"] = codeFile
+        overlayEnv[OverlayCapture.cmdEnvKey] = session.overlayCommand ?? ""
+        overlayEnv[OverlayCapture.codeEnvKey] = codeFile
         let view = GhosttySurfaceView(workingDirectory: session.overlayCwd ?? session.effectiveCwd,
                                       fontSize: session.fontSize.map(Float.init), command: overlayExitWrapper,
                                       waitAfterCommand: session.overlayWait, autoFocus: true, env: overlayEnv)
