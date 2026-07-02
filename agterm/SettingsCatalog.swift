@@ -1,4 +1,5 @@
 import AppKit
+import agtermCore
 
 /// Read-only catalogs for the Appearance settings pickers: the bundled ghostty themes and the
 /// system's monospaced font families. Pure lookups against the bundle / font manager.
@@ -10,7 +11,7 @@ enum SettingsCatalog {
             .appendingPathComponent("themes", isDirectory: true),
             let names = try? FileManager.default.contentsOfDirectory(atPath: themesDir.path)
         else { return [] }
-        return names.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        return ThemeCatalog(names: names).names
     }
 
     /// Monospaced font family names available on the system, sorted. Filters to families whose

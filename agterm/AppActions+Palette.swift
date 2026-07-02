@@ -199,8 +199,9 @@ extension AppActions {
     /// the current one badged. Navigating a row previews it live (`onSelect`); Enter/click commits it.
     func paletteThemes() -> [PaletteItem] {
         let current = settingsModel?.settings.theme
-        func item(_ name: String?, title: String) -> PaletteItem {
-            PaletteItem(id: themeID(name), title: title, badge: name == current ? "current" : nil,
+        func item(_ entry: ThemeCatalog.Entry) -> PaletteItem {
+            let name = entry.name
+            return PaletteItem(id: entry.id, title: entry.title, badge: name == current ? "current" : nil,
                         onSelect: { [weak self] in self?.previewTheme(name) },
                         run: { [weak self] in
                             self?.previewTheme(name)
@@ -209,16 +210,12 @@ extension AppActions {
         }
         // the nil row is ghostty's built-in default (no theme file); the app's own default is the
         // bundled "agterm" theme, which appears in the named list like any other.
-        var items = [item(nil, title: "default ghostty")]
-        items.append(contentsOf: SettingsCatalog.themeNames().map { item($0, title: $0) })
-        return items
+        return ThemeCatalog(names: SettingsCatalog.themeNames()).entries.map(item)
     }
 
     /// The palette-item id of the currently-applied theme, so the picker opens with that row selected
     /// (and previews it — a no-op — rather than jumping to "Default").
-    var currentThemeID: String { themeID(settingsModel?.settings.theme) }
-
-    private func themeID(_ name: String?) -> String { name.map { "theme:\($0)" } ?? "theme:__default__" }
+    var currentThemeID: String { ThemeCatalog.id(for: settingsModel?.settings.theme) }
 
     /// Capture the live theme so Esc/cancel can restore it. Idempotent while a preview is active.
     func beginThemePreview() {

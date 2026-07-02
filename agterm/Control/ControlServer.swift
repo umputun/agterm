@@ -673,9 +673,9 @@ final class ControlServer {
     /// else an error (a typo silently doing nothing is worse than a fail). Returns the applied theme in
     /// `result.theme` (nil = ghostty built-in). App-global: one `SettingsModel`, so no `--window` selector.
     private func setTheme(name: String?) -> ControlResponse {
-        let trimmed = name?.trimmingCharacters(in: .whitespaces)
-        let resolved = (trimmed?.isEmpty ?? true) ? nil : trimmed
-        if let resolved, !actions.availableThemes().contains(resolved) {
+        let resolved = ThemeCatalog.resolvedName(name)
+        let catalog = ThemeCatalog(names: actions.availableThemes())
+        if let resolved, !catalog.contains(name: resolved) {
             return ControlResponse(ok: false, error: "unknown theme: \(resolved)")
         }
         actions.setTheme(resolved)
