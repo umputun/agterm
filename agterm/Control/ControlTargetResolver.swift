@@ -144,11 +144,8 @@ final class ControlTargetResolver {
     /// "no such <noun>: …" / "ambiguous <noun> prefix '…' → <prefix8 list>" strings, which tests pin).
     /// `.resolved` maps to the not-found string too, covering the across-windows owner-lookup miss.
     private func resolutionError(_ noun: String, target: String, _ resolution: TargetResolution) -> ControlResponse {
-        guard case .ambiguous(let hits) = resolution else {
-            return ControlResponse(ok: false, error: "no such \(noun): \(target)")
-        }
-        let listed = hits.map { String($0.uuidString.prefix(8)) }.joined(separator: ", ")
-        return ControlResponse(ok: false, error: "ambiguous \(noun) prefix '\(target)' → \(listed)")
+        let message = ControlResolve.errorMessage(noun: noun, target: target, resolution: resolution)
+        return ControlResponse(ok: false, error: message)
     }
 
     /// Resolve a window `target` (defaulting to `active` = frontmost) to a window id, or the structured

@@ -722,8 +722,8 @@ final class ControlAPIUITests: ControlAPITestCase {
     // an ambiguous-prefix request returns the `ambiguous` error listing the candidate ids and changes nothing:
     // seed two sessions whose ids share a prefix, then select by that shared prefix.
     func testSessionSelectAmbiguousPrefixErrors() throws {
-        let firstID = UUID(uuidString: "ABCD0000-0000-0000-0000-000000000001")!
-        let secondID = UUID(uuidString: "ABCD0000-0000-0000-0000-000000000002")!
+        let firstID = UUID(uuidString: "ABCD1111-0000-0000-0000-000000000001")!
+        let secondID = UUID(uuidString: "ABCD2222-0000-0000-0000-000000000002")!
         let snapshot = """
         {"version":1,"selectedSessionID":"\(firstID.uuidString)","workspaces":[\
         {"id":"\(UUID().uuidString)","name":"workspace 1","sessions":[\
@@ -736,12 +736,8 @@ final class ControlAPIUITests: ControlAPITestCase {
         let response = try sendCommand(#"{"cmd":"session.select","target":"abcd"}"#)
         XCTAssertEqual(response["ok"] as? Bool, false, "an ambiguous prefix should fail")
         let error = try XCTUnwrap(response["error"] as? String, "an ambiguous prefix should carry an error")
-        XCTAssertTrue(error.hasPrefix("ambiguous session prefix 'abcd'"), "should report the ambiguous prefix, got: \(error)")
-        // both 8-char candidate prefixes must be listed.
-        XCTAssertTrue(error.contains(String(firstID.uuidString.prefix(8)).lowercased())
-                      || error.contains(String(firstID.uuidString.prefix(8))), "should list the first candidate, got: \(error)")
-        XCTAssertTrue(error.contains(String(secondID.uuidString.prefix(8)).lowercased())
-                      || error.contains(String(secondID.uuidString.prefix(8))), "should list the second candidate, got: \(error)")
+        XCTAssertEqual(error, "ambiguous session prefix 'abcd' → ABCD1111, ABCD2222",
+                       "should report the exact ambiguous-prefix wire string")
         // selection must be unchanged (the originally-selected first session stays active).
         XCTAssertTrue(pollActiveSessionID(firstID, timeout: 5), "an ambiguous select must not change the active session")
     }

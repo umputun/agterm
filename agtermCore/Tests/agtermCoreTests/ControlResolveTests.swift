@@ -55,6 +55,26 @@ struct ControlResolveTests {
         #expect(ControlResolve.resolve("", candidates: [a], active: nil) == .notFound)
     }
 
+    @Test func notFoundMessageUsesControlWireString() {
+        let message = ControlResolve.notFoundMessage(noun: "session", target: "deadbeef")
+        #expect(message == "no such session: deadbeef")
+    }
+
+    @Test func ambiguousMessageUsesControlWireStringWithPrefix8List() {
+        let message = ControlResolve.ambiguousMessage(noun: "window", target: "9f", hits: [a, b])
+        #expect(message == "ambiguous window prefix '9f' → 9F3CAAAA, 9FABBBBB")
+    }
+
+    @Test func errorMessageUsesAmbiguousWireString() {
+        let message = ControlResolve.errorMessage(noun: "workspace", target: "9f", resolution: .ambiguous([a, b]))
+        #expect(message == "ambiguous workspace prefix '9f' → 9F3CAAAA, 9FABBBBB")
+    }
+
+    @Test func errorMessageMapsNonAmbiguousResultsToNotFoundWireString() {
+        #expect(ControlResolve.errorMessage(noun: "session", target: "active", resolution: .notFound) == "no such session: active")
+        #expect(ControlResolve.errorMessage(noun: "session", target: "active", resolution: .resolved(a)) == "no such session: active")
+    }
+
     // window-id targets reuse the same pure resolver: candidates are window ids, active is the
     // frontmost window. No window-specific resolver function exists — the cross-window
     // session->store mapping is app-side ControlServer logic (Task 7), not a resolve concern.

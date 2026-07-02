@@ -40,6 +40,26 @@ public enum ControlResolve {
         }
     }
 
+    /// The canonical not-found control error for a target resolution miss.
+    public static func notFoundMessage(noun: String, target: String) -> String {
+        "no such \(noun): \(target)"
+    }
+
+    /// The canonical ambiguous-prefix control error, listing matching ids by their first 8 characters.
+    public static func ambiguousMessage(noun: String, target: String, hits: [UUID]) -> String {
+        let listed = hits.map { String($0.uuidString.prefix(8)) }.joined(separator: ", ")
+        return "ambiguous \(noun) prefix '\(target)' → \(listed)"
+    }
+
+    /// The canonical control error for an unresolved target. `.resolved` maps to not-found so callers
+    /// that resolve an id but cannot find its owner keep the same wire contract as a normal miss.
+    public static func errorMessage(noun: String, target: String, resolution: TargetResolution) -> String {
+        guard case .ambiguous(let hits) = resolution else {
+            return notFoundMessage(noun: noun, target: target)
+        }
+        return ambiguousMessage(noun: noun, target: target, hits: hits)
+    }
+
     /// Derive the control socket path. With `stateDir` (the `AGTERM_STATE_DIR` value, if set) it is
     /// `<stateDir>/agterm.sock`; otherwise `<appSupport>/agterm.sock`. The app and the CLI both call this
     /// with the same inputs, so they always rendezvous on the same path.
