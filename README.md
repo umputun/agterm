@@ -153,7 +153,7 @@ For jumping back to sessions you have been working in, a Ctrl-Tab switcher walks
 
 ## Settings
 
-Settings (Cmd+,) has three tabs. **General** covers notification banners and badges, scroll speed, how much the inactive split pane dims, where a new session opens, an opt-in toggle to re-run each pane's foreground command on restart, and an opt-in confirmation before closing a session. **Appearance** sets the terminal font and theme (512 bundled themes), the window background opacity and blur, and the sidebar tint. **Key Mapping** points at the directory holding `keymap.conf`, lists any parse errors, and reloads it. Changes apply live to the open terminals.
+Settings (Cmd+,) has five tabs. **General** covers mouse scroll speed and right-click-to-paste, where a new session opens, an opt-in toggle to re-run each pane's foreground command on restart, an opt-in confirmation before closing a session, and whether to load your global Ghostty config. **Appearance** sets the terminal font and theme (512 bundled themes), the window background opacity and blur, the sidebar tint, and how much the inactive split pane dims. **Notifications** toggles the banner, the unseen-count badge, and the title-bar attention indicator. **Agent Status** sets the status-glyph colors and the blocked-session sound. **Key Mapping** points at the directory holding `keymap.conf`, lists any parse errors, and reloads it. Changes apply live to the open terminals.
 
 The theme picker (View ▸ Select Theme…, or the action palette) previews each bundled theme on the open terminals as you move through the list, so you see it before committing. Enter commits and syncs it to Settings; Esc reverts to the one you started on.
 

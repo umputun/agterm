@@ -338,7 +338,7 @@ paths:
   — which returns proceed-without-prompt when the setting is off OR under an XCUITest launch
   (`ContentView.isUITestLaunch`, a modal would hang the test, like the clear-flagged / quit confirms).
   It gates the two GUI close paths only: `AppActions.closeActiveSession()` (⌘W / File ▸ Close Session /
-  the ⌃⇧P palette) and the sidebar row's Close (routed through the new `AppActions.closeSession(_:)`);
+  the ⌃⇧P palette) and the sidebar row's Close (routed through the new `AppActions.closeSession(_:in:)`);
   the control channel's `session.close` calls `AppStore.closeSession` directly and stays silent.
   The General → Sessions `Toggle("Confirm before closing a session")` uses the default-OFF binding (get
   `?? false`, set `$0 ? true : nil`, like `restoreRunningCommand`).
