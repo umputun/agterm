@@ -33,9 +33,14 @@ struct ConfigPathsTests {
 
     @Test func starterKeymapConfIsCommentedAndListsActions() {
         let starter = ConfigPaths.starterKeymapConf()
+        #expect(starter.contains("agterm keymap — a kitty-flavored config"))
         #expect(starter.contains("map <chord> <action>"))
         #expect(starter.contains("command \"<name>\" [chord] <shell...>"))
-        #expect(starter.contains("cmd+shift+p"))
+        #expect(starter.contains("single chord OR a leader like `ctrl+a>g`"))
+        #expect(starter.contains("command \"Open in Zed\"  cmd+shift+e  open -a Zed \"$AGT_SESSION_PWD\""))
+        #expect(starter.contains("command \"Lazygit\"      ctrl+a>g     agtermctl session overlay open lazygit --socket \"$AGT_SOCKET\""))
+        #expect(starter.contains("command \"Deploy\"                    ./deploy.sh"))
+        #expect(starter.contains("ctrl+shift+p"))
         #expect(!starter.contains("super"))
         for action in BuiltinAction.allCases {
             #expect(starter.contains("#   \(action.rawValue)"))
@@ -52,6 +57,12 @@ struct ConfigPathsTests {
         #expect(!starter.contains("{AGT_SESSION}"))
         #expect(!starter.contains("{AGT_WINDOW}"))
         #expect(!starter.contains("{AGT_CWD}"))
+        #expect(starter.contains("a {AGT_X} token is substituted RAW into the /bin/sh line"))
+        #expect(starter.contains("a remote host can also set"))
+        #expect(starter.contains("the session title (OSC) and the working directory (OSC 7)"))
+        #expect(starter.contains("{AGT_SESSION_NAME} and"))
+        #expect(starter.contains("{AGT_SESSION_PWD} are equally unsafe raw"))
+        #expect(starter.contains("environment variable, QUOTED, e.g. \"$AGT_SELECTION\""))
         let parsed = parseKeymap(starter)
         #expect(parsed.keymap.builtinOverrides.isEmpty)
         #expect(parsed.keymap.commands.isEmpty)

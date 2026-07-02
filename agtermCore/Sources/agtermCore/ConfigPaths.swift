@@ -21,34 +21,66 @@ public enum ConfigPaths {
         configDirectory.appendingPathComponent("keymap.conf")
     }
 
-    /// A fully-commented starter `keymap.conf`: documents the two-verb format, the `{AGT_*}` tokens,
-    /// and lists every rebindable built-in action with its shipped default chord. Fully commented, so
-    /// a fresh install rebinds nothing.
+    /// The commented starter `keymap.conf`: the two-verb syntax, every `BuiltinAction` raw name with
+    /// its shipped default chord (or "no default"), and the `{AGT_X}` token list. Every line is a
+    /// comment so a fresh file rebinds nothing.
     public static func starterKeymapConf() -> String {
+        // pad the action name column to the longest raw name (+ a 2-space gutter) so a future action
+        // longer than any current one can never silently truncate.
         let nameColumnWidth = (BuiltinAction.allCases.map { $0.rawValue.count }.max() ?? 0) + 2
-        let actions = BuiltinAction.allCases.map { action -> String in
+        let actionLines = BuiltinAction.allCases.map { action -> String in
+            // a default whose key can't round-trip through the keymap grammar (e.g. increase_font_size's
+            // `+`, which clashes with the `+` separator) is documented as not file-expressible rather
+            // than printed as an unparseable token like `cmd++`.
             let chord = action.defaultChord.map(starterChordSyntax) ?? "(no default)"
             return "#   \(action.rawValue.padding(toLength: nameColumnWidth, withPad: " ", startingAt: 0))\(chord)"
         }.joined(separator: "\n")
         let tokenLines = CommandContext.tokenNames.map { "#   {\($0)}" }.joined(separator: "\n")
+
         return """
-        # agterm keymap.conf - rebind built-in shortcuts and define custom shell commands.
+        # agterm keymap — a kitty-flavored config for rebinding built-in shortcuts and defining
+        # custom shell commands. Edit this file and run File ▸ Reload Keymap (or `agtermctl keymap
+        # reload`) to apply. Blank lines and lines starting with `#` are ignored.
         #
-        # Fully commented: a fresh install rebinds NOTHING. Uncomment and edit a line to override,
-        # then reload via the command palette's "Reload Keymap" or Settings > Key Mapping > Reload.
+        # Two verbs:
         #
-        # Override a built-in shortcut:
-        #   map <chord> <action>                  e.g.  map ctrl+shift+t new_session
-        #   chord = modifiers + key, e.g. cmd+shift+p (ctrl / control / cmd / command / opt / option / alt / shift)
+        #   map <chord> <action>
+        #       Rebind a built-in action to a single chord (no leader sequences for built-ins).
+        #       Chords use kitty syntax: mods joined by `+`, e.g. `cmd+shift+d`, `ctrl+\\``.
+        #       Mods: ctrl, cmd, opt, shift. Example:
         #
-        # Define a custom command (also shown in the palette, marked "custom"):
-        #   command "<name>" [chord] <shell...>   e.g.  command "Git status" ctrl+shift+g git status
-        #   Tokens substituted into the shell line and exported as $AGT_* env vars:
+        #           map cmd+shift+d  toggle_split
+        #
+        #   command "<name>" [chord] <shell...>
+        #       Define a custom command, shown in the action palette marked `custom`. The quoted
+        #       name may contain spaces. An optional chord (single chord OR a leader like `ctrl+a>g`)
+        #       binds it to a key; the chord MUST include a modifier (a bare key is rejected and the
+        #       line becomes palette-only). Omit the chord for a palette-only command. The rest of the
+        #       line is run via `/bin/sh -c`, detached with no terminal — so it suits fire-and-forget
+        #       launches (GUI apps, scripts), NOT a bare interactive or full-screen TUI program, which
+        #       has no TTY and exits at once. Launch a TUI over a session through an overlay terminal,
+        #       as the Lazygit example does. Examples:
+        #
+        #           command "Open in Zed"  cmd+shift+e  open -a Zed "$AGT_SESSION_PWD"
+        #           command "Lazygit"      ctrl+a>g     agtermctl session overlay open lazygit --socket "$AGT_SOCKET"
+        #           command "Deploy"                    ./deploy.sh
+        #
+        # Built-in actions (raw name → shipped default chord):
+        #
+        \(actionLines)
+        #
+        # Custom-command tokens (expanded in the shell line and exported as $AGT_X env vars):
+        #
         \(tokenLines)
-        #   For untrusted content prefer the QUOTED env form, e.g. "$AGT_SELECTION".
         #
-        # Rebindable built-in actions:
-        \(actions)
+        # NOTE: a {AGT_X} token is substituted RAW into the /bin/sh line — convenient, but unsafe for
+        # content you don't control. {AGT_SELECTION} is the obvious case, but a remote host can also set
+        # the session title (OSC) and the working directory (OSC 7), so {AGT_SESSION_NAME} and
+        # {AGT_SESSION_PWD} are equally unsafe raw. For any such content prefer the matching $AGT_X
+        # environment variable, QUOTED, e.g. "$AGT_SELECTION".
+        #
+        # Uncomment and edit a line below to start.
+        # map cmd+shift+d toggle_split
 
         """
     }
