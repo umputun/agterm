@@ -19,71 +19,77 @@ extension AppActions {
         return keymap.glyphHint(for: action)
     }
 
+    private var paletteContext: PaletteContext {
+        let activeStore = store
+        return PaletteContext(
+            canRemoveWorkspace: activeStore?.canRemoveWorkspace == true,
+            hasFlaggedSessions: activeStore?.flaggedSessions.isEmpty == false,
+            sidebarShowsWorkspaceTree: activeStore?.sidebarMode == .tree,
+            sidebarShowsFlaggedOnly: activeStore?.sidebarMode == .flagged,
+            activeSessionFlagged: activeStore?.activeSession?.flagged == true,
+            hasFocusedWorkspace: activeStore?.focusedWorkspaceID != nil,
+            activeSessionHasSplit: activeStore?.activeSession?.hasSplit == true
+        )
+    }
+
+    private func paletteItem(for command: PaletteCommand, context: PaletteContext) -> PaletteItem {
+        PaletteItem(title: command.title(in: context),
+                    shortcut: command.builtinAction.flatMap { shortcutGlyph(for: $0) }) { [weak self] in
+            self?.runPaletteCommand(command)
+        }
+    }
+
+    private func runPaletteCommand(_ command: PaletteCommand) {
+        switch command {
+        case .newSession: newSession()
+        case .newWorkspace: newWorkspace()
+        case .openDirectory: openDirectory()
+        case .renameSession: renameActiveSession()
+        case .renameWorkspace: renameActiveWorkspace()
+        case .closeSession: closeActiveSession()
+        case .clearStatus: clearActiveSessionStatus()
+        case .previousSession: selectPreviousSession()
+        case .nextSession: selectNextSession()
+        case .previousAttentionSession: selectPreviousAttentionSession()
+        case .nextAttentionSession: selectNextAttentionSession()
+        case .firstSession: selectFirstSession()
+        case .lastSession: selectLastSession()
+        case .showAttention: openAttentionPalette()
+        case .toggleSplit: toggleSplit()
+        case .toggleScratch: toggleScratch()
+        case .toggleSidebar: toggleSidebar()
+        case .toggleFlag: toggleFlagActiveSession()
+        case .focusWorkspace: focusActiveWorkspace()
+        case .find: toggleSearch()
+        case .quickTerminal: toggleQuickTerminal()
+        case .increaseFontSize: increaseFontSize()
+        case .decreaseFontSize: decreaseFontSize()
+        case .resetFontSize: resetFontSize()
+        case .selectTheme: openThemePalette()
+        case .editKeymap: editKeymap()
+        case .reloadKeymap: reloadKeymap()
+        case .editGhosttyConfig: editGhosttyConfig()
+        case .reloadConfig: reloadGhosttyConfig()
+        case .deleteWorkspace: deleteActiveWorkspace()
+        case .toggleFlaggedView: toggleFlaggedView()
+        case .clearFlagged: clearFlags()
+        case .clearFocus: clearFocus()
+        case .expandWorkspaces: expandAllWorkspaces()
+        case .collapseWorkspaces: collapseOtherWorkspaces()
+        case .focusLeftPane: focusPane(.main)
+        case .focusRightPane: focusPane(.split)
+        }
+    }
+
     /// The app's commands as palette items, sharing the same logic as the menu/buttons. Includes a
     /// "Move Session to …" item per other workspace (when there's an active session to move).
     func paletteActions() -> [PaletteItem] {
         // built-in shortcut hints read the live keymap (`shortcutGlyph`) so a rebind updates them too,
         // matching the data-driven menu key-equivalents; custom commands show their raw shortcut below.
-        var items: [PaletteItem] = [
-            PaletteItem(title: "New Session", shortcut: shortcutGlyph(for: .newSession)) { [weak self] in self?.newSession() },
-            PaletteItem(title: "New Workspace", shortcut: shortcutGlyph(for: .newWorkspace)) { [weak self] in self?.newWorkspace() },
-            PaletteItem(title: "Open Directory…", shortcut: shortcutGlyph(for: .openDirectory)) { [weak self] in self?.openDirectory() },
-            PaletteItem(title: "Rename Session", shortcut: shortcutGlyph(for: .renameSession)) { [weak self] in self?.renameActiveSession() },
-            PaletteItem(title: "Rename Workspace", shortcut: shortcutGlyph(for: .renameWorkspace)) { [weak self] in self?.renameActiveWorkspace() },
-            PaletteItem(title: "Close Session", shortcut: shortcutGlyph(for: .closeSession)) { [weak self] in self?.closeActiveSession() },
-            PaletteItem(title: "Clear Status", shortcut: shortcutGlyph(for: .clearStatus)) { [weak self] in self?.clearActiveSessionStatus() },
-            PaletteItem(title: "Previous Session", shortcut: shortcutGlyph(for: .previousSession)) { [weak self] in self?.selectPreviousSession() },
-            PaletteItem(title: "Next Session", shortcut: shortcutGlyph(for: .nextSession)) { [weak self] in self?.selectNextSession() },
-            PaletteItem(title: "Previous Attention Session", shortcut: shortcutGlyph(for: .previousAttentionSession)) { [weak self] in self?.selectPreviousAttentionSession() },
-            PaletteItem(title: "Next Attention Session", shortcut: shortcutGlyph(for: .nextAttentionSession)) { [weak self] in self?.selectNextAttentionSession() },
-            PaletteItem(title: "First Session", shortcut: shortcutGlyph(for: .firstSession)) { [weak self] in self?.selectFirstSession() },
-            PaletteItem(title: "Last Session", shortcut: shortcutGlyph(for: .lastSession)) { [weak self] in self?.selectLastSession() },
-            PaletteItem(title: "Show Attention", shortcut: shortcutGlyph(for: .showAttention)) { [weak self] in self?.openAttentionPalette() },
-            PaletteItem(title: "Toggle Split", shortcut: shortcutGlyph(for: .toggleSplit)) { [weak self] in self?.toggleSplit() },
-            PaletteItem(title: "Toggle Scratch", shortcut: shortcutGlyph(for: .toggleScratch)) { [weak self] in self?.toggleScratch() },
-            PaletteItem(title: "Toggle Sidebar", shortcut: shortcutGlyph(for: .toggleSidebar)) { [weak self] in self?.toggleSidebar() },
-            PaletteItem(title: (store?.activeSession?.flagged == true) ? "Unflag Session" : "Flag Session",
-                        shortcut: shortcutGlyph(for: .toggleFlag)) { [weak self] in self?.toggleFlagActiveSession() },
-            PaletteItem(title: "Focus Workspace",
-                        shortcut: shortcutGlyph(for: .focusWorkspace)) { [weak self] in self?.focusActiveWorkspace() },
-            PaletteItem(title: "Find…", shortcut: shortcutGlyph(for: .toggleSearch)) { [weak self] in self?.toggleSearch() },
-            PaletteItem(title: "Quick Terminal", shortcut: shortcutGlyph(for: .quickTerminal)) { [weak self] in self?.toggleQuickTerminal() },
-            PaletteItem(title: "Increase Font Size", shortcut: shortcutGlyph(for: .increaseFontSize)) { [weak self] in self?.increaseFontSize() },
-            PaletteItem(title: "Decrease Font Size", shortcut: shortcutGlyph(for: .decreaseFontSize)) { [weak self] in self?.decreaseFontSize() },
-            PaletteItem(title: "Actual Font Size", shortcut: shortcutGlyph(for: .resetFontSize)) { [weak self] in self?.resetFontSize() },
-            PaletteItem(title: "Select Theme…", shortcut: shortcutGlyph(for: .selectTheme)) { [weak self] in self?.openThemePalette() },
-            PaletteItem(title: "Edit Keymap") { [weak self] in self?.editKeymap() },
-            PaletteItem(title: "Reload Keymap") { [weak self] in self?.reloadKeymap() },
-            PaletteItem(title: "Edit ghostty.conf") { [weak self] in self?.editGhosttyConfig() },
-            PaletteItem(title: "Reload Config") { [weak self] in self?.reloadGhosttyConfig() },
-        ]
-        if store?.canRemoveWorkspace == true {
-            items.append(PaletteItem(title: "Delete Workspace", shortcut: shortcutGlyph(for: .deleteWorkspace)) { [weak self] in self?.deleteActiveWorkspace() })
-        }
-        // the flagged-view toggle: omitted when there's nothing to show (tree mode + no flags); always
-        // present in flagged mode so the palette can switch back to the tree.
-        if store?.sidebarMode == .flagged || store?.flaggedSessions.isEmpty == false {
-            items.append(PaletteItem(title: store?.sidebarMode == .flagged ? "Show All Sessions" : "Show Flagged Sessions",
-                                     shortcut: shortcutGlyph(for: .toggleFlaggedView)) { [weak self] in self?.toggleFlaggedView() })
-        }
-        // plain (non-BuiltinAction) clear, shown only while the working-set is non-empty.
-        if store?.flaggedSessions.isEmpty == false {
-            items.append(PaletteItem(title: "Clear Flagged") { [weak self] in self?.clearFlags() })
-        }
-        // plain (non-BuiltinAction) unfocus, shown only while a workspace is focused.
-        if store?.focusedWorkspaceID != nil {
-            items.append(PaletteItem(title: "Clear Focus") { [weak self] in self?.clearFocus() })
-        }
-        // plain (non-BuiltinAction) sidebar tree expand/collapse, tree mode only (no workspace rows in
-        // flagged mode), like the disabled-in-flagged menu items.
-        if store?.sidebarMode == .tree {
-            items.append(PaletteItem(title: "Expand Workspaces") { [weak self] in self?.expandAllWorkspaces() })
-            items.append(PaletteItem(title: "Collapse Workspaces") { [weak self] in self?.collapseOtherWorkspaces() })
-        }
-        if store?.activeSession?.hasSplit == true {
-            items.append(PaletteItem(title: "Focus Left Pane", shortcut: shortcutGlyph(for: .focusLeftPane)) { [weak self] in self?.focusPane(.main) })
-            items.append(PaletteItem(title: "Focus Right Pane", shortcut: shortcutGlyph(for: .focusRightPane)) { [weak self] in self?.focusPane(.split) })
-        }
+        let context = paletteContext
+        var items = PaletteCommand.allCases
+            .filter { $0.isVisible(in: context) }
+            .map { paletteItem(for: $0, context: context) }
         items.append(PaletteItem(title: "New Window", shortcut: shortcutGlyph(for: .newWindow)) { [weak self] in self?.newWindow() })
         items.append(PaletteItem(title: "Rename Window", shortcut: shortcutGlyph(for: .renameWindow)) { [weak self] in self?.renameActiveWindow() })
         if library.canRemoveWindow {

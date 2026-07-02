@@ -123,6 +123,42 @@ final class PaletteUITests: XCTestCase {
         app.typeKey(.escape, modifierFlags: []) // revert the preview
     }
 
+    func testActionPaletteClearFlaggedVisibilityTracksFlagState() throws {
+        openPalette("Command Palette")
+        typeIntoPalette("Clear Flagged")
+        XCTAssertFalse(app.staticTexts["Clear Flagged"].waitForExistence(timeout: 1),
+                       "Clear Flagged should be omitted while no session is flagged")
+        app.typeKey(.escape, modifierFlags: [])
+
+        invokeViewMenuItem("Flag Session")
+        openPalette("Command Palette")
+        typeIntoPalette("Clear Flagged")
+        XCTAssertTrue(app.staticTexts["Clear Flagged"].waitForExistence(timeout: 5),
+                      "Clear Flagged should appear once a session is flagged")
+    }
+
+    func testActionPaletteHidesExpandCollapseInFlaggedView() throws {
+        invokeViewMenuItem("Flag Session")
+
+        openPalette("Command Palette")
+        typeIntoPalette("Expand Workspaces")
+        XCTAssertTrue(app.staticTexts["Expand Workspaces"].waitForExistence(timeout: 5),
+                      "Expand Workspaces should appear in the normal workspace tree")
+        app.typeKey(.escape, modifierFlags: [])
+
+        invokeViewMenuItem("Show Flagged Sessions")
+        openPalette("Command Palette")
+        typeIntoPalette("Expand Workspaces")
+        XCTAssertFalse(app.staticTexts["Expand Workspaces"].waitForExistence(timeout: 1),
+                       "Expand Workspaces should be omitted in the flat flagged view")
+        app.typeKey(.escape, modifierFlags: [])
+
+        openPalette("Command Palette")
+        typeIntoPalette("Collapse Workspaces")
+        XCTAssertFalse(app.staticTexts["Collapse Workspaces"].waitForExistence(timeout: 1),
+                       "Collapse Workspaces should be omitted in the flat flagged view")
+    }
+
     // MARK: - Helpers
 
     /// The theme line the live config currently applies, read from <stateDir>/ghostty-settings.conf
@@ -154,6 +190,13 @@ final class PaletteUITests: XCTestCase {
         app.menuBars.menuBarItems["Navigate"].click()
         let item = app.menuItems[menuTitle]
         XCTAssertTrue(item.waitForExistence(timeout: 5), "Navigate menu should offer \(menuTitle)")
+        item.click()
+    }
+
+    private func invokeViewMenuItem(_ title: String) {
+        app.menuBars.menuBarItems["View"].click()
+        let item = app.menuItems[title].firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "View menu should offer \(title)")
         item.click()
     }
 
