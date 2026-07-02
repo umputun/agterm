@@ -10,8 +10,9 @@ import Foundation
 /// wrap even a clean `/path/image.png` in quotes.
 public enum ShellEscape {
     /// The shell-significant characters that get a backslash prefix. Backslash is FIRST so the pass that
-    /// escapes it does not double-escape the backslashes added for the rest.
-    private static let significant: [Character] = Array("\\ ()[]{}<>\"'`!#$&;|*?\t")
+    /// escapes it does not double-escape the backslashes added for the rest. `\n`/`\r` are escaped so a
+    /// dropped filename with a newline can't inject a command via `inject(text:)` (bare newline → Return).
+    private static let significant: [Character] = Array("\\ ()[]{}<>\"'`!#$&;|*?\t\n\r")
 
     /// Backslash-escape every shell-significant character in `path`; a path with none is returned unchanged.
     public static func path(_ path: String) -> String {

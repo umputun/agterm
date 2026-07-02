@@ -19,6 +19,14 @@ struct ShellEscapeTests {
         #expect(ShellEscape.path("a&b;c|d$e") == "a\\&b\\;c\\|d\\$e")
     }
 
+    @Test func escapesNewlinesSoADroppedNameCannotInjectACommand() {
+        // a filename may contain a newline; unescaped it would submit the rest as a shell command via
+        // inject(text:). Backslash-escaped, the line terminator can't terminate a command.
+        #expect(ShellEscape.path("report.txt\ndate") == "report.txt\\\ndate")
+        #expect(ShellEscape.path("a\rb") == "a\\\rb")
+        #expect(ShellEscape.path("a\r\nb") == "a\\\r\\\nb")
+    }
+
     @Test func emptyStaysEmpty() {
         #expect(ShellEscape.path("") == "")
     }
