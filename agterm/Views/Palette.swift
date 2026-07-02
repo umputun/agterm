@@ -109,17 +109,9 @@ struct CommandPalette: View {
             selection = filtered.isEmpty ? 0 : min(selection, filtered.count - 1)
             return
         }
-        let scored: [(item: PaletteItem, score: Int)] = allItems.compactMap { item in
-            let scores = [fuzzyScore(query: q, target: item.title),
-                          item.subtitle.flatMap { fuzzyScore(query: q, target: $0) }].compactMap { $0 }
-            guard let best = scores.min() else { return nil }
-            return (item, best)
+        filtered = fuzzyRank(query: q, items: allItems) { item in
+            item.subtitle.map { [item.title, $0] } ?? [item.title]
         }
-        filtered = scored.sorted {
-            $0.score != $1.score
-                ? $0.score < $1.score
-                : $0.item.title.localizedCaseInsensitiveCompare($1.item.title) == .orderedAscending
-        }.map(\.item)
         selection = filtered.isEmpty ? 0 : min(selection, filtered.count - 1)
     }
 

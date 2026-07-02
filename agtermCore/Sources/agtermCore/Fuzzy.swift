@@ -21,6 +21,26 @@ public func fuzzyScore(query: String, target: String) -> Int? {
     return total
 }
 
+/// Ranks `items` against `query` for the command palettes: an item matches when any of its `keys`
+/// (for example, a title and optional subtitle) matches, scored by the best/lower score of those keys.
+/// Matches are sorted best-first with ties broken by the first key, case-insensitively.
+///
+/// Empty queries score every item at `0`, which makes this an alphabetical sort by first key. Callers
+/// that need an empty query to preserve natural input order should skip ranking for that case.
+public func fuzzyRank<Item>(query: String, items: [Item], keys: (Item) -> [String]) -> [Item] {
+    items.compactMap { item -> (item: Item, score: Int, label: String)? in
+        let itemKeys = keys(item)
+        guard let best = itemKeys.compactMap({ fuzzyScore(query: query, target: $0) }).min() else { return nil }
+        return (item, best, itemKeys.first ?? "")
+    }
+    .sorted {
+        $0.score != $1.score
+            ? $0.score < $1.score
+            : $0.label.localizedCaseInsensitiveCompare($1.label) == .orderedAscending
+    }
+    .map(\.item)
+}
+
 /// Scores a single whitespace-free `term` against the already-lowercased `target`: an exact prefix
 /// is `0`, a substring is `5 +` its start offset, a scattered subsequence is `40 +` the length gap,
 /// and `nil` when the term doesn't appear at all.

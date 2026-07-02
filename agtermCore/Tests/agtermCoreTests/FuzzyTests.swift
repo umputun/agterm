@@ -61,4 +61,47 @@ struct FuzzyTests {
     @Test func whitespaceOnlyQueryMatchesEverything() {
         #expect(fuzzyScore(query: "  \t ", target: "anything") == 0)
     }
+
+    @Test func fuzzyRankSortsBestMatchFirstAndDropsNonMatches() {
+        let items = ["New Workspace", "New Session", "Close Session"]
+        let ranked = fuzzyRank(query: "new", items: items, keys: { [$0] })
+
+        #expect(ranked == ["New Session", "New Workspace"])
+    }
+
+    @Test func fuzzyRankPrefersLowerScore() {
+        let items = ["New Session", "Session List"]
+
+        #expect(fuzzyRank(query: "sess", items: items, keys: { [$0] }) == ["Session List", "New Session"])
+    }
+
+    @Test func fuzzyRankMatchesAnyKeyUsingTheBestScore() {
+        struct Command: Equatable {
+            let title: String
+            let subtitle: String
+        }
+        let items = [
+            Command(title: "Toggle Split", subtitle: "panes"),
+            Command(title: "Reload", subtitle: "split config")
+        ]
+
+        let ranked = fuzzyRank(query: "split", items: items, keys: { [$0.title, $0.subtitle] })
+
+        #expect(ranked == [
+            Command(title: "Reload", subtitle: "split config"),
+            Command(title: "Toggle Split", subtitle: "panes")
+        ])
+    }
+
+    @Test func fuzzyRankEmptyQueryAlphabetizesByFirstKey() {
+        let items = ["beta", "Alpha", "gamma"]
+
+        #expect(fuzzyRank(query: "", items: items, keys: { [$0] }) == ["Alpha", "beta", "gamma"])
+    }
+
+    @Test func fuzzyRankTermCharactersMustMatchInOrder() {
+        let items = ["Split Pane", "Panel Split"]
+
+        #expect(fuzzyRank(query: "ps", items: items, keys: { [$0] }) == ["Panel Split"])
+    }
 }
