@@ -194,7 +194,7 @@ final class ControlAPIUITests: XCTestCase {
 
         // a solid background color reads back with kind "color" and the hex. The spec carries no opacity —
         // a color honors the Settings window translucency at render time.
-        let colorSet = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"color","color":"#ff0000"}}"#)
+        let colorSet = try sendCommand(##"{"cmd":"session.background","target":"\##(sid)","args":{"mode":"color","color":"#ff0000"}}"##)
         XCTAssertEqual(colorSet["ok"] as? Bool, true, "session.background color should succeed: \(colorSet)")
         let afterColor = try sendCommand(#"{"cmd":"tree"}"#)
         let colorNode = try XCTUnwrap(sessionNode(afterColor, id: sid), "the session should appear in the tree")
