@@ -25,7 +25,7 @@ The app target adds the SwiftUI shell (`ContentView`, `TerminalView`), the AppKi
 
 Selection is a single `Session.ID?`. Workspace rows are non-selectable headers; only sessions are detail targets, so one id suffices and the owning workspace is derived.
 
-Two app-side `@MainActor` registries bridge the host-free `WindowLibrary` (which carries no AppKit/SwiftUI handles) to the live UI, keyed by `WindowInfo.ID`. `WindowRegistry` (in `ContentView.swift`) maps each open window's id to its `NSWindow` — `TitleProbeView` registers/unregisters on window attach/close, and `raise(_:)`/`close(_:)` back the dedup-by-id raise and the `window.close` teardown. `QuickTerminalRegistry` (in `Views/QuickTerminal.swift`) maps each open window's id to its per-window `QuickTerminalController` (owned by `WindowContentView`, no longer a singleton), so the frontmost-window call sites resolve the right controller and the settings broadcast reaches every window's quick terminal.
+Two app-side `@MainActor` registries bridge the host-free `WindowLibrary` (which carries no AppKit/SwiftUI handles) to the live UI, keyed by `WindowInfo.ID`. `WindowRegistry` (in `agterm/WindowRegistry.swift`) maps each open window's id to its `NSWindow` — `TitleProbeView` registers/unregisters on window attach/close, and `raise(_:)`/`close(_:)` back the dedup-by-id raise and the `window.close` teardown. `QuickTerminalRegistry` (in `Views/QuickTerminal.swift`) maps each open window's id to its per-window `QuickTerminalController` (owned by `WindowContentView`, no longer a singleton), so the frontmost-window call sites resolve the right controller and the settings broadcast reaches every window's quick terminal.
 
 ### Control API (split across both modules)
 

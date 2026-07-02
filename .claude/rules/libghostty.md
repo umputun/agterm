@@ -5,6 +5,8 @@ paths:
   - "agterm/Ghostty/GhosttyCallbacks.swift"
   - "agterm/Ghostty/GhosttyResources.swift"
   - "agterm/ContentView.swift"
+  - "agterm/Views/WindowContentView.swift"
+  - "agterm/Views/SplitRatioAccessor.swift"
   - "agterm/Views/TerminalView.swift"
   - "agterm/Views/TerminalSearchBar.swift"
 ---
