@@ -1,10 +1,12 @@
 import AppKit
 import agtermCore
 
-/// ClipboardPromptController gates OSC 52 clipboard access a terminal program requests. It owns the
-/// per-session `ClipboardPromptPolicy`: a remembered choice resolves immediately, otherwise it shows a
-/// warning sheet and coalesces a flood of same-direction requests behind that one prompt so a program
-/// looping OSC 52 can't stack a wall of sheets.
+/// ClipboardPromptController gates OSC 52 clipboard access a terminal program requests. One shared
+/// instance holds an app-session-scoped `ClipboardPromptPolicy` (the remembered allow/deny spans every
+/// window and terminal session until agterm quits): a remembered choice resolves immediately, otherwise
+/// it shows a warning sheet. Requests from the SAME (surface, direction) coalesce behind that one prompt
+/// so a program looping OSC 52 can't stack a wall of sheets, while a request from a DIFFERENT surface
+/// always gets its own prompt, so one Allow never authorizes another surface's read.
 ///
 /// `@MainActor`: it touches AppKit and the non-Sendable policy. The C clipboard callbacks reach it by
 /// hopping through `DispatchQueue.main.async`, which also defers the sheet past the current libghostty
@@ -13,30 +15,39 @@ import agtermCore
 final class ClipboardPromptController {
     static let shared = ClipboardPromptController()
 
+    /// One in-flight sheet per (requesting surface, direction). A nil requester (writes carry no surface)
+    /// coalesces by direction alone.
+    private struct PromptKey: Hashable {
+        let access: ClipboardAccess
+        let requester: ObjectIdentifier?
+    }
+
     private var policy = ClipboardPromptPolicy()
-    private var pending: [ClipboardAccess: [(Bool) -> Void]] = [:]
+    private var pending: [PromptKey: [(Bool) -> Void]] = [:]
 
     /// Resolve a clipboard access, prompting the user when there is no remembered session choice.
-    /// `completion` runs on the main actor with the final allow/deny.
-    func request(_ access: ClipboardAccess, completion: @escaping (Bool) -> Void) {
+    /// `requester` scopes coalescing to a single surface. `completion` runs on the main actor with the
+    /// final allow/deny.
+    func request(_ access: ClipboardAccess, requester: AnyObject? = nil, completion: @escaping (Bool) -> Void) {
         switch policy.decision(for: access) {
         case .allow: completion(true)
         case .deny: completion(false)
-        case .prompt: enqueue(access, completion: completion)
+        case .prompt: enqueue(PromptKey(access: access, requester: requester.map(ObjectIdentifier.init)), completion: completion)
         }
     }
 
-    private func enqueue(_ access: ClipboardAccess, completion: @escaping (Bool) -> Void) {
-        if pending[access] != nil {
-            // a sheet for this direction is already up — ride its decision instead of stacking another.
-            pending[access]?.append(completion)
+    private func enqueue(_ key: PromptKey, completion: @escaping (Bool) -> Void) {
+        if pending[key] != nil {
+            // a sheet for this (surface, direction) is already up — ride its decision instead of stacking.
+            pending[key]?.append(completion)
             return
         }
-        pending[access] = [completion]
-        presentPrompt(access)
+        pending[key] = [completion]
+        presentPrompt(key)
     }
 
-    private func presentPrompt(_ access: ClipboardAccess) {
+    private func presentPrompt(_ key: PromptKey) {
+        let access = key.access
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = access == .read ? "Allow a program to read the clipboard?" : "Allow a program to set the clipboard?"
@@ -52,7 +63,7 @@ final class ClipboardPromptController {
             guard let self else { return }
             let allowed = response == .alertFirstButtonReturn
             if alert.suppressionButton?.state == .on { self.policy.remember(access, allow: allowed) }
-            let waiters = self.pending.removeValue(forKey: access) ?? []
+            let waiters = self.pending.removeValue(forKey: key) ?? []
             for waiter in waiters { waiter(allowed) }
         }
 

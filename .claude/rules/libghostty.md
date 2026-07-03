@@ -200,9 +200,12 @@ paths:
   when `clipboard-write = ask`), and the read confirm callback carries a `ghostty_clipboard_request_e`
   (`GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ` for a program read, `..._PASTE` for ⌘V) — only `OSC_52_READ`
   is gated, so pastes never prompt.
-  `ClipboardPromptController` (`@MainActor`) owns the per-session host-free `ClipboardPromptPolicy`
-  (`ask`/`allow`/`deny` remembered per direction for the "don't ask again this session" choice) and shows
-  an `NSAlert` sheet, coalescing an OSC 52 flood behind one in-flight prompt.
+  `ClipboardPromptController` (`@MainActor`) owns an app-session-scoped host-free `ClipboardPromptPolicy`
+  (`ask`/`allow`/`deny` remembered per direction until agterm quits, shared across every window and
+  terminal session: the "don't ask again this session" choice) and shows an `NSAlert` sheet.
+  Coalescing is keyed by (requesting surface, direction), so a program looping OSC 52 collapses to one
+  prompt while a DIFFERENT surface's concurrent request gets its OWN prompt, so one Allow never authorizes
+  another surface's read.
   Two rules the build proved the hard way: the callback fires INSIDE a libghostty tick, so the sheet is
   deferred via `DispatchQueue.main.async` (a modal run loop opened inside the tick re-enters it); and a
   DENIED read must complete with an EMPTY string and `confirmed = true`, because completing with
@@ -210,8 +213,13 @@ paths:
   Read gating rides ghostty's own `clipboard-read = ask` default (verified: the confirm callback fires
   with no explicit config); write stays `allow` by default (matches mainstream terminals, so a legit
   remote yank isn't interrupted) and opts into `ask`/`deny` via the agterm-scoped `ghostty.conf`.
-  The surface + ghostty request `state` captured for the deferred read completion are `nonisolated(unsafe)`
-  (valid until we complete; touched only on the main actor).
+  The deferred read completion captures the `GhosttySurfaceView` (NOT the raw surface pointer) and
+  re-reads `view.surface` on the main actor before completing, skipping the call when it is nil: a
+  session/window/pane close (or `session.close` over the control socket) can `ghostty_surface_free` the
+  surface WHILE the sheet is open, and completing on the freed pointer is a use-after-free.
+  Freeing the surface already discards its pending clipboard request, so skipping is safe and loop-free.
+  The ghostty request `state` is `nonisolated(unsafe)` (same lifetime as the surface, guarded by that same
+  `view.surface` check).
   The dialog is AppKit and not unit-tested (only `ClipboardPromptPolicy` is); the gating was verified with
   an isolated dev instance driving OSC 52 read/write by hand.
 

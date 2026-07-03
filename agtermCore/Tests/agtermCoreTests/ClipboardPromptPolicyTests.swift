@@ -27,6 +27,13 @@ struct ClipboardPromptPolicyTests {
         #expect(policy.decision(for: .write) == .prompt)
     }
 
+    @Test func remembingWriteLeavesReadPrompting() {
+        var policy = ClipboardPromptPolicy()
+        policy.remember(.write, allow: false)
+        #expect(policy.decision(for: .write) == .deny)
+        #expect(policy.decision(for: .read) == .prompt)
+    }
+
     @Test func laterRememberOverridesEarlier() {
         var policy = ClipboardPromptPolicy()
         policy.remember(.read, allow: true)
