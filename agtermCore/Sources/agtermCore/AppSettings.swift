@@ -221,9 +221,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     }
 
     /// Splits ghostty's dual `light:NAME,dark:NAME` theme value into its two sides, or nil for a plain
-    /// value. Emission never calls this (it composes from the two fields); it exists only to migrate a
-    /// legacy stored dual `theme` and to pick the active side for the sidebar selection colors, which
-    /// read the resolved `theme` line back out of the generated config.
+    /// value. Emission never calls this (it composes from the two fields); it exists only to pick the
+    /// active side for the sidebar selection colors, which read the raw `theme` line back out of the
+    /// generated config.
     public static func dualThemeSides(_ raw: String) -> (light: String, dark: String)? {
         let parts = raw.split(separator: ",")
         guard parts.count == 2 else { return nil }
@@ -239,18 +239,6 @@ public struct AppSettings: Codable, Equatable, Sendable {
         }
         guard let light, let dark, !light.isEmpty, !dark.isEmpty else { return nil }
         return (light, dark)
-    }
-
-    /// Back-compat: an early build stored the pair as a single dual `theme = light:X,dark:Y` string.
-    /// Split it into `theme`/`darkTheme` and turn syncing on, so the pickers and emission see the new
-    /// two-field model. A plain `theme` (or an already-migrated value) is returned unchanged.
-    public func migratingLegacyDualTheme() -> AppSettings {
-        guard darkTheme == nil, let raw = theme, let sides = Self.dualThemeSides(raw) else { return self }
-        var copy = self
-        copy.theme = sides.light
-        copy.darkTheme = sides.dark
-        copy.followSystemAppearance = true
-        return copy
     }
 
     /// The ghostty config lines for the set fields, one `key = value` per line, suitable for a

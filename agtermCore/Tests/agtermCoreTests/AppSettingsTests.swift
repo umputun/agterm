@@ -83,19 +83,6 @@ struct AppSettingsTests {
         #expect(decoded.followSystemAppearance == true)
     }
 
-    @Test func legacyDualThemeMigrates() {
-        // an early build stored the pair as a single dual `theme = light:X,dark:Y` string; migration
-        // splits it into the two fields and turns following on.
-        let migrated = AppSettings(theme: "light:Builtin Light,dark:Nord").migratingLegacyDualTheme()
-        #expect(migrated.theme == "Builtin Light")
-        #expect(migrated.darkTheme == "Nord")
-        #expect(migrated.followSystemAppearance == true)
-        // a plain theme is untouched.
-        let plain = AppSettings(theme: "agterm").migratingLegacyDualTheme()
-        #expect(plain.theme == "agterm")
-        #expect(plain.followSystemAppearance == nil)
-    }
-
     @Test func fractionalFontSizeKeepsDecimal() {
         let lines = AppSettings(fontSize: 13.5).ghosttyConfigLines()
         #expect(lines == ["font-size = 13.5", "mouse-scroll-multiplier = 3", "right-click-action = paste"])

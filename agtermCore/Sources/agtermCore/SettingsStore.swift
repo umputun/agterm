@@ -26,7 +26,7 @@ public struct SettingsStore {
     public func load() -> AppSettings {
         guard let data = try? Data(contentsOf: fileURL) else { return Self.seededDefault }
         guard let settings = try? JSONDecoder().decode(AppSettings.self, from: data) else { return Self.seededDefault }
-        return settings.migratingLegacyDualTheme()
+        return settings
     }
 
     /// The defaults a fresh install starts from: `AppSettings()` with the app's default theme seeded.

@@ -639,9 +639,9 @@ final class ControlServer {
     /// doing nothing is worse than a fail). The response always echoes the full post-change state.
     /// App-global: one `SettingsModel`, so no `--window` selector.
     private func setTheme(args: ControlArgs?) -> ControlResponse {
-        let name = nonEmpty(args?.name)
-        let light = nonEmpty(args?.light)
-        let dark = nonEmpty(args?.dark)
+        let name = ThemeCatalog.resolvedName(args?.name)
+        let light = ThemeCatalog.resolvedName(args?.light)
+        let dark = ThemeCatalog.resolvedName(args?.dark)
         if name != nil && light != nil {
             return ControlResponse(ok: false, error: "theme.set takes either a name or --light, not both")
         }
@@ -667,12 +667,6 @@ final class ControlServer {
         return ControlResponse(ok: true, result: ControlResult(
             theme: actions.currentTheme, sync: actions.followsSystemAppearance,
             light: actions.currentLightTheme, dark: actions.currentDarkTheme))
-    }
-
-    /// Trim a control-arg string, mapping nil/blank to nil.
-    private func nonEmpty(_ value: String?) -> String? {
-        let trimmed = value?.trimmingCharacters(in: .whitespaces)
-        return (trimmed?.isEmpty ?? true) ? nil : trimmed
     }
 
     /// `value` trimmed of surrounding whitespace, or nil if absent or blank after trimming.

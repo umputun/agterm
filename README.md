@@ -147,9 +147,9 @@ For jumping back to sessions you have been working in, a Ctrl-Tab switcher walks
 
 ## Settings
 
-Settings (Cmd+,) has five tabs. **General** covers mouse scroll speed and right-click-to-paste, where a new session opens, an opt-in toggle to re-run each pane's foreground command on restart, an opt-in confirmation before closing a session, and whether to load your global Ghostty config. **Appearance** sets the terminal font and theme (512 bundled themes), the window background opacity and blur, the sidebar tint, and how much the inactive split pane dims. **Notifications** toggles the banner, the unseen-count badge, and the title-bar attention indicator. **Agent Status** sets the status-glyph colors and the blocked-session sound. **Key Mapping** points at the directory holding `keymap.conf`, lists any parse errors, and reloads it. Changes apply live to the open terminals.
+Settings (Cmd+,) has five tabs. **General** covers mouse scroll speed and right-click-to-paste, where a new session opens, an opt-in toggle to re-run each pane's foreground command on restart, an opt-in confirmation before closing a session, and whether to load your global Ghostty config. **Appearance** sets the terminal font and theme (512 bundled themes), the window background opacity and blur, the sidebar tint, and how much the inactive split pane dims; a "Follow system appearance" toggle (off by default) reveals a second picker for the other appearance, so the theme tracks macOS light/dark mode live. **Notifications** toggles the banner, the unseen-count badge, and the title-bar attention indicator. **Agent Status** sets the status-glyph colors and the blocked-session sound. **Key Mapping** points at the directory holding `keymap.conf`, lists any parse errors, and reloads it. Changes apply live to the open terminals.
 
-The theme picker (View ▸ Select Theme…, or the action palette) previews each bundled theme on the open terminals as you move through the list, so you see it before committing. Enter commits and syncs it to Settings; Esc reverts to the one you started on.
+The theme picker (View ▸ Select Theme…, or the action palette) previews each bundled theme on the open terminals as you move through the list, so you see it before committing. Enter commits and syncs it to Settings; Esc reverts to the one you started on. While following the system appearance, the picker edits the theme for the appearance you are in; the control channel drives both slots with `agtermctl theme set --light NAME --dark NAME` (or either flag alone).
 
 ## Scripting agterm
 
@@ -194,6 +194,7 @@ agtermctl session search "error"                 # open the search bar and highl
 agtermctl session search --next                  # step to the next match (--prev steps back, --close hides the bar)
 agtermctl quick toggle                           # toggle the quick terminal
 agtermctl font inc                               # increase the active surface's font size
+agtermctl theme set --light "Builtin Light" --dark Dracula  # set the light/dark theme slots (--dark none turns following off)
 ```
 
 `session type` types the text as real keystrokes, and every newline is a real Return press — so a trailing newline submits the command, and a multi-line payload runs line by line (a multi-line shell construct like a `for` loop is entered across the shell's continuation prompts and runs as one command). Note the `$'…\n'` quoting: a literal `\n` inside plain single quotes reaches the CLI as two characters, not a newline; use `$'…\n'` or pipe a real newline via `--stdin`. Typing goes to the session's left (main) pane by default; `--pane right` types into the split pane instead (an error when the session has no split), and `--pane scratch` reaches the session's scratch terminal even while it is hidden. `session text` takes the same `--pane`, so an agent can read a hidden scratch's output (e.g. a deploy you ran there) without leaving it open.
