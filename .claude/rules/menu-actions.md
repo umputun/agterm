@@ -182,7 +182,7 @@ paths:
   They are real menu items (the Navigate menu — see the menu-split note below),
   so AppKit menu dispatch swallows the shortcut before libghostty and nothing leaks to the shell.
   The pure logic is `AppStore.navigateSession(_:)` (host-free, unit-tested):
-  it flattens the tree (`workspaces.flatMap(\.sessions)`), stops at the ends on next/prev (no wrap),
+  it flattens the tree (`workspaces.flatMap(\.sessions)`), WRAPS around on next/prev (an end lands on the opposite end),
   jumps to the ends for first/last, falls to first on no/invalid selection,
   no-ops on an empty tree, and routes through `selectSession` (recency + badge + persist + workspace-derivation).
   It is shared by the menu, the action palette, and the control channel (`session.go`) so the three can't

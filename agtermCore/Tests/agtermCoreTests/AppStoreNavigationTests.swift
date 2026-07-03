@@ -12,8 +12,8 @@ struct AppStoreNavigationTests {
         _ = store.addSession(toWorkspace: personal.id, cwd: "/b")!
         store.selectSession(a.id)
         store.setFocusedWorkspace(work.id)
-        store.navigateSession(.next) // nav is scoped to the focused workspace (only a), so no in-set next
-        #expect(store.selectedSessionID == a.id) // stays put — the off-focus session is never revealed
+        store.navigateSession(.next) // nav is scoped to the focused workspace (only a); wrap cycles to itself
+        #expect(store.selectedSessionID == a.id) // stays on a — the off-focus session is never revealed
         #expect(store.focusedWorkspaceID == work.id) // nav never crosses the focus boundary, so focus stands
     }
 
@@ -51,18 +51,18 @@ struct AppStoreNavigationTests {
         #expect(store.selectedSessionID == ids[0])
     }
 
-    @Test func navigateNextAtLastStaysPut() {
+    @Test func navigateNextAtLastWrapsToFirst() {
         let (store, ids) = Self.makeNavTree()
         store.selectSession(ids.last!)
-        store.navigateSession(.next) // already at the end: no wrap, stays put
-        #expect(store.selectedSessionID == ids.last!)
+        store.navigateSession(.next) // at the end: wraps around to the first
+        #expect(store.selectedSessionID == ids.first!)
     }
 
-    @Test func navigatePreviousAtFirstStaysPut() {
+    @Test func navigatePreviousAtFirstWrapsToLast() {
         let (store, ids) = Self.makeNavTree()
         store.selectSession(ids.first!)
-        store.navigateSession(.previous) // already at the start: no wrap, stays put
-        #expect(store.selectedSessionID == ids.first!)
+        store.navigateSession(.previous) // at the start: wraps around to the last
+        #expect(store.selectedSessionID == ids.last!)
     }
 
     @Test func navigateFirstAndLastJumpToEnds() {
@@ -222,7 +222,7 @@ struct AppStoreNavigationTests {
         store.navigateSession(.next)
         #expect(store.selectedSessionID == ids[1]) // a -> b within the focused workspace
         store.navigateSession(.next)
-        #expect(store.selectedSessionID == ids[1]) // b is the in-set last: stays put, never crosses to c
+        #expect(store.selectedSessionID == ids[0]) // b is the in-set last: wraps within {a,b} to a, never crosses to c
         store.navigateSession(.last)
         #expect(store.selectedSessionID == ids[1]) // .last is the focused workspace's last, not the tree's
         store.navigateSession(.first)
@@ -239,7 +239,7 @@ struct AppStoreNavigationTests {
         store.navigateSession(.next)
         #expect(store.selectedSessionID == ids[2]) // a -> c, skipping the unflagged b
         store.navigateSession(.next)
-        #expect(store.selectedSessionID == ids[2]) // c is the flagged-set last: stays put
+        #expect(store.selectedSessionID == ids[0]) // c is the flagged-set last: wraps to a, the flagged-set first
         store.navigateSession(.first)
         #expect(store.selectedSessionID == ids[0]) // .first is the flagged set's first
     }
@@ -261,10 +261,11 @@ struct AppStoreNavigationTests {
         let (store, ids) = Self.makeNavTree()
         let work = store.workspace(forSession: ids[0])!
         store.setFocusedWorkspace(work.id)
-        store.selectSession(ids[1])
+        store.selectSession(ids[1]) // b, the in-set last of {a,b}
         store.navigateSession(.next)
-        #expect(store.selectedSessionID == ids[1]) // scoped: no in-set next past b
+        #expect(store.selectedSessionID == ids[0]) // scoped: wraps within {a,b} back to a, never crosses to c
         store.setFocusedWorkspace(nil) // clearing focus restores the full navigable set
+        store.selectSession(ids[1]) // b again, now in the full set [a,b,c,d]
         store.navigateSession(.next)
         #expect(store.selectedSessionID == ids[2]) // now crosses into the personal workspace
     }

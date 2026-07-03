@@ -247,7 +247,7 @@ paths:
   `session.go` navigates BETWEEN sessions — `args.to` is `next`|`prev`|`first`|`last`|`next-attention`|`prev-attention`
   and acts on the target store's CURRENT selection (it is RELATIVE, so it resolves the placement store
   via `resolvePlacementStore` rather than a session target — there is NO `--target`),
-  stops at the ends on next/prev (no wrap), jumps to the ends for first/last,
+  WRAPS around on next/prev (an end lands on the opposite end, within the filtered set), jumps to the ends for first/last,
   and for `next-attention`/`prev-attention` steps through ONLY the sessions needing attention (`AgentStatus.needsAttention`
   = `blocked`/`completed`) WRAPPING around (skipping idle/active), drives `AppStore.navigateSession`,
   and returns the newly-selected id in `result.id`.

@@ -2,7 +2,7 @@ import Foundation
 import Observation
 
 /// A relative step through the flattened session list for keyboard navigation.
-/// `next`/`previous` step one and stop at the ends (no wrap), `first`/`last` jump to a tree end.
+/// `next`/`previous` step one and wrap around at the ends, `first`/`last` jump to a tree end.
 /// `nextAttention`/`previousAttention` step through only the sessions needing attention
 /// (status `blocked` or `completed`), wrapping around.
 public enum SessionNavigation: Sendable { case next, previous, first, last, nextAttention, previousAttention }
@@ -360,12 +360,14 @@ public final class AppStore {
 
     /// Steps the selection through the flattened VISIBLE/FILTERED session list (`navigableSessions`:
     /// the flagged set in `.flagged` mode, the focused workspace's sessions when focused, else all),
-    /// in the sidebar's visual order. `next`/`previous` move one and stop at the ends (no wrap — `next`
-    /// on the last session and `previous` on the first are no-ops); `first`/`last` jump to the ends of
-    /// the filtered list. With no/invalid current selection, `next`/`previous` land on its first session.
-    /// No-op when the filtered list is empty. Routes through `selectSession`, inheriting recency, badge
-    /// clearing, persistence, and workspace derivation. Because the targets are always in-set, nav never
-    /// triggers `autoUnfocusIfOutsideFocus` — that stays the safety net for an explicit cross-set select.
+    /// in the sidebar's visual order. `next`/`previous` move one and WRAP at the ends WITHIN the filtered
+    /// set (`next` on the last lands on the first, `previous` on the first lands on the last, never
+    /// leaking across the filter — matching the cyclic attention-nav below); `first`/`last` jump to the
+    /// ends of the filtered list. With no/invalid current selection, `next`/`previous` land on its first
+    /// session. No-op when the filtered list is empty. Routes through `selectSession`, inheriting recency,
+    /// badge clearing, persistence, and workspace derivation. Because the targets are always in-set, nav
+    /// never triggers `autoUnfocusIfOutsideFocus` — that stays the safety net for an explicit cross-set
+    /// select.
     public func navigateSession(_ direction: SessionNavigation) {
         let sessions = navigableSessions
         let ids = sessions.map(\.id)
@@ -377,9 +379,7 @@ public final class AppStore {
         case .next, .previous:
             if let current = selectedSessionID, let i = ids.firstIndex(of: current) {
                 let step = direction == .next ? 1 : -1
-                let next = i + step
-                guard next >= 0, next < ids.count else { return } // at an end -> stay put (no wrap)
-                target = ids[next]
+                target = ids[((i + step) % ids.count + ids.count) % ids.count] // cycle within the filtered set
             } else {
                 target = first // no/invalid selection -> first
             }
@@ -519,9 +519,10 @@ public final class AppStore {
     /// flagged sessions in `.flagged` sidebar mode, the focused workspace's sessions when a workspace
     /// is focused, else all sessions. Computed live (`visibleWorkspaces` already collapses to the
     /// focused workspace, or the full tree when unfocused / the focus id is stale), so clearing the
-    /// flag/focus naturally restores the full set. Backs `navigateSession` (and via it `session.go`,
-    /// attention-nav), the Ctrl-Tab MRU candidate set, AND the ⌃P session palette (`AppActions.
-    /// paletteSessions`), so all follow the same filter as the visible sidebar.
+    /// flag/focus naturally restores the full set. `navigateSession` next/prev WRAP within this set (an
+    /// end lands on the opposite end, never leaking across the filter). Backs `navigateSession` (and via
+    /// it `session.go`, attention-nav), the Ctrl-Tab MRU candidate set, AND the ⌃P session palette
+    /// (`AppActions.paletteSessions`), so all follow the same filter as the visible sidebar.
     public var navigableSessions: [Session] {
         sidebarMode == .flagged ? flaggedSessions : visibleWorkspaces.flatMap(\.sessions)
     }

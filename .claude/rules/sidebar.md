@@ -124,8 +124,8 @@ paths:
   including the stale-focus-id fallback), so clearing the flag/focus naturally restores the full set.
   `navigateSession(_:)` flattens `navigableSessions` for EVERY direction — next/prev/first/last AND attention-nav
   (next-attention/prev-attention scope to the filtered set too) — keeping the same "no/invalid selection
-  → first of the filtered list", "stop at ends, no wrap (attention wraps)" semantics over the filtered
-  list.
+  → first of the filtered list", "next/prev WRAP within the filtered set (like attention-nav)" semantics
+  over the filtered list.
   This is shared by `session.go` (control, no ControlServer change — it already routes through `navigateSession`),
   the ⌥⌘↑/↓ + ⌃⌥↑/↓ menu/palette nav, the Ctrl-Tab MRU switcher (`SessionSwitcher.begin()` scopes its
   candidate set to `store.navigableSessions.map(\.id)`; the MRU ORDER still comes from `sessionRecency`),

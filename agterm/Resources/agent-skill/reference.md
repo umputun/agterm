@@ -82,8 +82,8 @@ position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when 
 - `session go --to next|prev|first|last|next-attention|prev-attention [--window W]` — move the
   selection relative to the CURRENT one (no `--target`). Operates over the VISIBLE/FILTERED set: the
   flagged sessions in flagged mode, the focused workspace's sessions when a workspace is focused, else
-  all sessions (clearing the flag/focus restores the full set). next/prev stop at the ends (no wrap);
-  first/last jump to the ends of that set; next-attention/prev-attention step only through the filtered
+  all sessions (clearing the flag/focus restores the full set). next/prev wrap around at the ends (last→first,
+  first→last); first/last jump to the ends of that set; next-attention/prev-attention step only through the filtered
   sessions needing attention (status blocked/completed), wrapping. Returns the newly selected id.
 - `session move <workspace> [--target] [--window W]` — relocate the session to another workspace
   (appends). OR `session move --to up|down|top|bottom [--target]` — reorder within its workspace.
