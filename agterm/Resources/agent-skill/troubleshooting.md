@@ -94,7 +94,7 @@ anthropics/claude-code#72188 (mouse-click variant #72273). Workaround: answer be
    hostnames/IPs, usernames embedded in absolute paths (replace with `~` or `<user>`), private repo
    names, and the contents of a selection / `session.copy` / clipboard. When unsure, ask.
 5. **Gather the repro facts yourself** where you can: agterm version (the user reads it from
-   agterm ▸ About agterm), `agtermctl tree --json` shape, a scrubbed `keymap.conf` excerpt, a scrubbed
+   Agterm ▸ About Agterm), `agtermctl tree --json` shape, a scrubbed `keymap.conf` excerpt, a scrubbed
    `log show` excerpt.
 
 ## Issue template (bug)

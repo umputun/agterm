@@ -136,7 +136,7 @@ Workaround until the upstream fix: answer the prompt before switching away, or i
 
 Collect this before filing:
 
-- agterm version (agterm ▸ About agterm).
+- agterm version (Agterm ▸ About Agterm).
 - macOS version.
 - The exact steps, what you expected, and what happened instead.
 - A log excerpt from the `log show` command above, covering the moment you reproduced it.
