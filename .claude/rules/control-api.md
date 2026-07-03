@@ -419,7 +419,8 @@ paths:
   re-runs on restore (through the same `config.command` exec path) when the **restore-running-command** opt-in
   is on — gated via the transient `Session.wasRestored` so a fresh session always runs its command while a
   restored one honors the toggle (default off → a restored session is a plain shell); a live captured
-  foreground preempts it, and `closePrimaryPane` clears it when a command pane exits into a promoted split.
+  foreground preempts it, and `closePrimaryPane` clears it when a command pane exits and its split
+  survivor is promoted to the session's single pane.
   The arm threads `request.args?.command` into `AppStore.addSession(…, command:)`,
   which `makeSurface` passes to `GhosttySurfaceView(command:)` → `config.command` RAW (`strdup`,
   NO wrapper). libghostty tokenizes it into argv (shell-like word-splitting that RESPECTS quotes) and

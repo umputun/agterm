@@ -259,15 +259,18 @@ public final class Session: Identifiable {
     /// the split is shown side-by-side OR hidden and maximized), otherwise the primary's; falls back
     /// to the primary cwd then `initialCwd`. The sidebar and title bar use this so they track whichever
     /// pane has focus, while `effectiveCwd` (below) stays the primary's for seeding new panes and the
-    /// `AGTERM_SESSION_PWD` token. Guarded on `splitFocused` alone (not `isSplit`): `closeSplit` resets
-    /// the flag, so `splitFocused` is true only while the split pane actually exists.
+    /// `AGTERM_SESSION_PWD` token. Guarded on `splitFocused && splitSurface != nil` — the same idiom as
+    /// `activeSurface`: the split fields describe the split pane only while it exists, so a promoted
+    /// survivor that momentarily re-raised `splitFocused` after moving into the main slot can't mask the
+    /// migrated main-pane cwd/title.
     public var focusedCwd: String {
-        if splitFocused, let cwd = splitCwd { return cwd }
+        if splitFocused, splitSurface != nil, let cwd = splitCwd { return cwd }
         return currentCwd ?? initialCwd
     }
 
-    /// The terminal title of the focused pane: the split pane's while it has focus, else the primary's.
-    private var focusedOscTitle: String? { splitFocused ? splitTitle : oscTitle }
+    /// The terminal title of the focused pane: the split pane's while it has focus AND exists, else the
+    /// primary's (see `focusedCwd` for why the split-existence guard).
+    private var focusedOscTitle: String? { splitFocused && splitSurface != nil ? splitTitle : oscTitle }
 
     /// The detail shown after the workspace name on the second line of the session palette, the Ctrl-Tab
     /// switcher, and the title bar: the focused pane's terminal title when it isn't already the

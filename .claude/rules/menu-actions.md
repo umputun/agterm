@@ -112,9 +112,10 @@ paths:
   else `\.surface` — so reopening restores the two panes in place; nothing is destroyed (`closeSplit`
   only runs when the split shell exits).
   **Exiting a pane's shell keeps the session, collapsed to the survivor:** the primary's `onExit` is
-  `AppStore.closePrimaryPane` (promotes the split pane to a single non-split session,
-  its cwd promoted to the session's) and the split's is `closeSplitPane` (collapses to the primary,
-  or closes the session if the primary already exited).
+  `AppStore.closePrimaryPane` (promotes the surviving split pane INTO the main slot as a single non-split
+  session — its cwd/title/foreground command migrate up) and the split's is `closeSplitPane` (collapses
+  to the primary only for a genuine two-pane split, else closes the session — the primary already exited,
+  or the promoted survivor's own exit, `splitSurface == nil`).
   Only a single (non-split) session's exit closes it.
   The collapse re-hosts the survivor (HSplitView → standalone), which drops focus,
   so `GhosttySurfaceView.focusAfterReparent` re-grabs first responder until it sticks past the re-host.

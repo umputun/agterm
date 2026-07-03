@@ -214,6 +214,12 @@ struct agtermApp: App {
         let sessionID = session.id
         view.onExit = {
             store.closePrimaryPane(sessionID)
+            // a promoted survivor was built by makeSplitSurface (which omits onFontSizeChange); as the
+            // session's now-sole pane it should persist its own cmd +/- like a real primary, so adopt that
+            // wiring. no-op when the session closed instead (single pane) — `surface` is then nil.
+            if let promoted = store.session(withID: sessionID)?.surface as? GhosttySurfaceView {
+                promoted.onFontSizeChange = { store.setFontSize(sessionID, $0) }
+            }
             // focus the surviving (now maximized) pane; if the whole (single) session closed instead,
             // focus the session it reselected to. the collapse/switch re-hosts the target, so use the retry.
             // resolve through `topmostSurface`, so a pane exiting under an overlay or scratch hands focus to
@@ -352,9 +358,12 @@ struct agtermApp: App {
             let target = store.session(withID: sessionID)?.topmostSurface ?? store.activeSession?.topmostSurface
             (target as? GhosttySurfaceView)?.focusAfterReparent()
         }
-        view.onFocusChange = { focused in
+        view.onFocusChange = { [weak view] focused in
             guard focused else { return }
-            store.session(withID: sessionID)?.splitFocused = true
+            // a promoted survivor keeps this split-factory closure but has had `isSplitPane` cleared, so
+            // honor the view's CURRENT role: once it is the main pane it must NOT re-raise `splitFocused`
+            // (which would mask its migrated title and mis-route focus after a later re-split).
+            store.session(withID: sessionID)?.splitFocused = view?.isSplitPane ?? false
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }

@@ -93,24 +93,35 @@ struct AppStorePaneTests {
         let split = SpySurface(); session.splitSurface = split
         session.isSplit = true
         session.hasSplit = true
+        session.splitFocused = true
         session.splitCwd = "/var/log"
+        session.splitTitle = "remote-host"
+        session.splitForegroundCommand = ["ssh", "host"]
         session.splitRatio = 0.3
         session.initialCommand = "ssh host" // a --command primary whose command has now exited
         store.closePrimaryPane(session.id)
         #expect(store.session(withID: session.id) != nil) // session survives
         #expect(primary.teardownCount == 1)               // the dead primary is torn down
         #expect(split.teardownCount == 0)                 // the survivor is kept
-        #expect(session.surface == nil)
-        #expect(session.splitSurface != nil)
+        #expect(split.promotedCount == 1)                 // the survivor is promoted to the primary role
+        // the survivor MOVES into the primary slot — the session is now a plain single pane
+        #expect(session.surface === split)
+        #expect(session.splitSurface == nil)
         #expect(session.isSplit == false)
         #expect(session.hasSplit == false)
-        #expect(session.splitFocused == true)             // the maximized survivor is shown
+        #expect(session.splitFocused == false)            // no split anymore; the survivor is the main pane
         #expect(session.splitRatio == nil)                // promoted to single, so a later split opens even
-        #expect(session.currentCwd == "/var/log")         // the survivor's cwd is promoted
         #expect(session.initialCommand == nil)            // the command pane is gone; a restart must NOT resurrect it
+        // the survivor's metadata migrates up to the session (main) fields, and the split fields clear
+        #expect(session.currentCwd == "/var/log")
+        #expect(session.oscTitle == "remote-host")
+        #expect(session.foregroundCommand == ["ssh", "host"])
+        #expect(session.splitCwd == nil)
+        #expect(session.splitTitle == nil)
+        #expect(session.splitForegroundCommand == nil)
         // the session-scoped control arms (session.copy/paste/selectall, font.*) must still reach the live
-        // shell: `surface` is nil here, so resolving through it alone would report "session not realized"
-        // for a session the user is actively typing in.
+        // shell: the survivor now sits IN `surface`, so `addressableSurface` resolves it through the primary
+        // slot (the `?? splitSurface` fallback is for a shown split pre-collapse, not for promotion).
         #expect(session.addressableSurface === split)
     }
 
@@ -135,6 +146,57 @@ struct AppStorePaneTests {
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         #expect(session.addressableSurface == nil)        // never-shown session still errors "session not realized"
+    }
+
+    @Test func closePrimaryPaneKeepsSearchOwnedBySurvivor() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let primary = SpySurface(); session.surface = primary
+        let split = SpySurface(); session.splitSurface = split
+        session.isSplit = true
+        session.hasSplit = true
+        session.searchActive = true       // the SURVIVING (split) pane owns an open search bar
+        session.searchSurface = split
+        store.closePrimaryPane(session.id)
+        #expect(session.searchActive)              // the survivor's search stays valid across promotion
+        #expect(session.searchSurface === split)
+    }
+
+    @Test func closePrimaryPaneClearsSearchOwnedByExitingPrimary() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let primary = SpySurface(); session.surface = primary
+        let split = SpySurface(); session.splitSurface = split
+        session.isSplit = true
+        session.hasSplit = true
+        session.searchActive = true       // the EXITING primary owns the bar → reset it (no stuck bar)
+        session.searchSurface = primary
+        store.closePrimaryPane(session.id)
+        #expect(session.searchActive == false)
+        #expect(session.searchSurface == nil)
+    }
+
+    // Regression: after the primary exits and the split is promoted into the main slot, the promoted
+    // surface still carries the split pane's `onExit` (→ `closeSplitPane`). Since it is now the session's
+    // sole pane, that exit must CLOSE the session — not collapse a split that no longer exists, which left
+    // a zombie session with a torn-down surface before `closeSplitPane`'s guard was tightened.
+    @Test func closeSplitPaneAfterPromotionClosesSession() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let primary = SpySurface(); session.surface = primary
+        let split = SpySurface(); session.splitSurface = split
+        session.isSplit = true
+        session.hasSplit = true
+        session.splitFocused = true
+        store.closePrimaryPane(session.id)                 // primary exits → split promoted into the main slot
+        #expect(session.surface === split)                 // precondition: the survivor is now the sole pane
+        #expect(session.splitSurface == nil)
+        store.closeSplitPane(session.id)                   // the survivor's stale split `onExit` fires
+        #expect(store.session(withID: session.id) == nil)  // last pane → session closed, no zombie
+        #expect(split.teardownCount == 1)                  // the promoted surface is torn down exactly once
     }
 
     @Test func closePrimaryPaneWithoutSplitClosesSession() {

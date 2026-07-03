@@ -82,12 +82,11 @@ final class CustomCommandPaneTokenUITests: ControlAPITestCase {
     }
 
     // promoted single-pane: split on, then exit the PRIMARY (main/left) shell so `closePrimaryPane`
-    // promotes the survivor into the `splitSurface` slot (hasSplit=false, splitFocused=true, surface=nil).
-    // {AGT_PANE} must report "right": the survivor physically lives in splitSurface, so that's the pane
-    // `session.type --pane` reaches — a "left" here would name the torn-down main surface. Then prove the
-    // round-trip the token exists for: `session.type --pane <reported>` lands in the survivor's own buffer.
-    // This is the edge the review went back and forth on (reword-not-gate).
-    func testAgtPanePromotedSurvivorReportsRight() throws {
+    // promotes the survivor INTO the main slot (surface=survivor, splitSurface=nil, hasSplit=false,
+    // splitFocused=false — a plain single pane). {AGT_PANE} must report "left": the survivor is now the
+    // main pane, and `session.type --pane left` reaches it. Then prove the round-trip the token exists
+    // for: `session.type --pane <reported>` lands in the promoted pane's own buffer.
+    func testAgtPanePromotedSurvivorReportsLeft() throws {
         let marker = markerDir.appendingPathComponent("agt-pane-promoted")
         try relaunch(withKeymap: "command \"Pane Probe\" printf %s \"$AGT_PANE\" > \"\(marker.path)\"\n")
 
@@ -107,11 +106,12 @@ final class CustomCommandPaneTokenUITests: ControlAPITestCase {
         }
         XCTAssertTrue(promoted, "exiting the primary pane should promote the survivor to a single (non-split) pane")
 
-        // palette path: the promoted survivor has splitFocused=true AND splitSurface != nil, so run() reports right.
+        // palette path: the promoted survivor is now the main pane (splitSurface == nil, splitFocused ==
+        // false), so run() reports left.
         try? FileManager.default.removeItem(at: marker)
         runFromCustomCommandsPalette("Pane Probe")
         let reported = pollMarker(marker, timeout: 5)
-        XCTAssertEqual(reported, "right", "a promoted split survivor should report $AGT_PANE=right")
+        XCTAssertEqual(reported, "left", "a promoted split survivor is the main pane, so $AGT_PANE=left")
 
         // round-trip: session.type --pane <reported> must reach THAT pane's buffer (the survivor). Typed as
         // `$((6*7))` arithmetic so a match proves the survivor's shell RAN the line, not merely echoed it.
