@@ -6,6 +6,16 @@ import Foundation
 @MainActor
 public protocol ControlActions {
     func controlTree(window: String?) -> ControlResponse
+    func createSession(_ options: ControlSessionCreateOptions) -> ControlResponse
+    func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse
+    func moveWorkspace(_ target: String?, window: String?, direction: ReorderDirection) -> ControlResponse
+    func focusWorkspace(_ target: String?, window: String?, mode: String?) -> ControlResponse
+    func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse
+    func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) -> ControlResponse
+    func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse
+    func scratchSession(_ target: String?, window: String?, mode: String?, command: String?) -> ControlResponse
+    func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse
+    func resizeSplit(_ target: String?, window: String?, resize: ControlSplitResize) -> ControlResponse
     func setSidebarVisibility(_ mode: ControlToggleMode) -> ControlResponse
     func setSidebarViewMode(_ mode: ControlSidebarViewMode) -> ControlResponse
     func expandSidebar(window: String?) -> ControlResponse
@@ -26,6 +36,75 @@ public struct ControlDispatcher {
         switch request.cmd {
         case .tree:
             return actions.controlTree(window: request.args?.window)
+        case .sessionNew:
+            let args = request.args
+            if args?.workspace != nil, args?.workspaceName != nil {
+                return ControlResponse(ok: false, error: "use either --workspace or --workspace-name, not both")
+            }
+            if args?.createWorkspace == true, args?.workspaceName == nil {
+                return ControlResponse(ok: false, error: "--create-workspace requires --workspace-name")
+            }
+            return actions.createSession(ControlSessionCreateOptions(
+                window: args?.window,
+                cwd: args?.cwd,
+                workspace: args?.workspace,
+                workspaceName: args?.workspaceName,
+                createWorkspace: args?.createWorkspace,
+                command: args?.command,
+                name: args?.name
+            ))
+        case .sessionMove:
+            if request.args?.to != nil && request.args?.workspace != nil {
+                return ControlResponse(ok: false, error: "session.move takes either --to or a workspace, not both")
+            }
+            if let to = request.args?.to {
+                guard let direction = ReorderDirection(rawValue: to) else {
+                    return ControlResponse(ok: false, error: "session.move --to must be up|down|top|bottom")
+                }
+                return actions.moveSession(request.target, window: request.args?.window, move: .reorder(direction))
+            }
+            guard let workspace = request.args?.workspace else {
+                return ControlResponse(ok: false, error: "session.move requires --to or a workspace")
+            }
+            return actions.moveSession(request.target, window: request.args?.window, move: .workspace(workspace))
+        case .workspaceMove:
+            guard let to = request.args?.to else {
+                return ControlResponse(ok: false, error: "workspace.move requires --to")
+            }
+            guard let direction = ReorderDirection(rawValue: to) else {
+                return ControlResponse(ok: false, error: "workspace.move --to must be up|down|top|bottom")
+            }
+            return actions.moveWorkspace(request.target, window: request.args?.window, direction: direction)
+        case .workspaceFocus:
+            return actions.focusWorkspace(request.target, window: request.args?.window, mode: request.args?.mode)
+        case .sessionFlag:
+            return actions.setSessionFlag(request.target, window: request.args?.window, mode: request.args?.mode)
+        case .sessionStatus:
+            guard let status = AgentStatus(rawValue: request.args?.status ?? "") else {
+                return ControlResponse(ok: false, error: "invalid status")
+            }
+            let update = ControlSessionStatusUpdate(status: status, blink: request.args?.blink,
+                                                    autoReset: request.args?.autoReset,
+                                                    sound: request.args?.sound)
+            return actions.setSessionStatus(request.target, window: request.args?.window, update: update)
+        case .sessionSplit:
+            return actions.splitSession(request.target, window: request.args?.window, mode: request.args?.mode)
+        case .sessionScratch:
+            return actions.scratchSession(request.target, window: request.args?.window, mode: request.args?.mode,
+                                          command: request.args?.command)
+        case .sessionFocus:
+            return actions.focusSessionPane(request.target, window: request.args?.window, pane: request.args?.pane)
+        case .sessionResize:
+            switch (request.args?.ratio, request.args?.ratioDelta) {
+            case (nil, nil):
+                return ControlResponse(ok: false, error: "session.resize requires --split-ratio, --grow-left, or --grow-right")
+            case (.some, .some):
+                return ControlResponse(ok: false, error: "session.resize: --split-ratio is mutually exclusive with --grow-left/--grow-right")
+            case (.some(let ratio), nil):
+                return actions.resizeSplit(request.target, window: request.args?.window, resize: .ratio(ratio))
+            case (nil, .some(let delta)):
+                return actions.resizeSplit(request.target, window: request.args?.window, resize: .delta(delta))
+            }
         case .sidebar:
             guard let mode = ControlToggleMode.parse(request.args?.mode, on: "show", off: "hide") else {
                 return ControlResponse(ok: false, error: "invalid sidebar mode: \(request.args?.mode ?? "toggle")")

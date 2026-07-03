@@ -340,7 +340,9 @@ final class ControlServer {
             return response
         }
         switch request.cmd {
-        case .tree, .sidebar, .sidebarMode, .sidebarExpand, .sidebarCollapse:
+        case .tree, .sessionNew, .sessionMove, .workspaceMove, .workspaceFocus, .sessionSplit,
+                .sessionScratch, .sessionFocus, .sessionResize, .sessionStatus, .sessionFlag,
+                .sidebar, .sidebarMode, .sidebarExpand, .sidebarCollapse:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         case .sessionSelect:
             return resolver.resolveSession(request.target, window: request.args?.window) { store, id in
@@ -394,41 +396,6 @@ final class ControlServer {
                 store.removeWorkspace(id)
                 return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
             }
-        case .sessionNew:
-            // the destination workspace is addressed one of two mutually-exclusive ways: `workspace`
-            // (id / unique prefix / `active`, the default) or `workspaceName` (the sidebar label),
-            // the latter optionally with `createWorkspace` to add it when absent. create needs a name —
-            // there is nothing to create by id. cwd/command/name are applied in makeSessionResponse.
-            let args = request.args
-            if args?.workspace != nil, args?.workspaceName != nil {
-                return ControlResponse(ok: false, error: "use either --workspace or --workspace-name, not both")
-            }
-            if args?.createWorkspace == true, args?.workspaceName == nil {
-                return ControlResponse(ok: false, error: "--create-workspace requires --workspace-name")
-            }
-            return resolver.resolvePlacementStore(args?.window) { store in
-                // name addressing: reuse-or-create with `createWorkspace`, else require an existing match.
-                if let name = args?.workspaceName {
-                    // a blank name can neither be found NOR created — report that directly rather than
-                    // suggesting --create-workspace (which would also reject a blank name).
-                    guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
-                        return ControlResponse(ok: false, error: "workspace name must not be blank")
-                    }
-                    let workspace = args?.createWorkspace == true
-                        ? store.ensureWorkspace(named: name)
-                        : store.workspace(named: name)
-                    guard let workspace else {
-                        return ControlResponse(ok: false, error: "no workspace named \"\(name)\" (pass --create-workspace to add it)")
-                    }
-                    return makeSessionResponse(in: store, workspaceID: workspace.id, args: args)
-                }
-                // id addressing (default `active`): the canonical prefix/active resolver.
-                let target = args?.workspace ?? "active"
-                return resolver.resolve(target, candidates: store.workspaces.map(\.id),
-                               active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
-                    makeSessionResponse(in: store, workspaceID: workspaceID, args: args)
-                }
-            }
         case .sessionClose:
             return resolver.resolveSession(request.target, window: request.args?.window) { store, id in
                 store.closeSession(id)
@@ -442,13 +409,6 @@ final class ControlServer {
                 store.renameSession(id, to: name)
                 return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
             }
-        case .sessionMove:
-            return moveSession(request.target, window: request.args?.window,
-                               to: request.args?.to, workspace: request.args?.workspace)
-        case .workspaceMove:
-            return moveWorkspace(request.target, window: request.args?.window, to: request.args?.to)
-        case .workspaceFocus:
-            return focusWorkspace(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionType:
             guard let text = request.args?.text else {
                 return ControlResponse(ok: false, error: "session.type requires text")
@@ -463,22 +423,6 @@ final class ControlServer {
                 return await injectText(text, into: id, store: store, select: request.args?.select ?? false,
                                         pane: request.args?.pane)
             }
-        case .sessionSplit:
-            return splitSession(request.target, window: request.args?.window, mode: request.args?.mode)
-        case .sessionScratch:
-            return scratchSession(request.target, window: request.args?.window, mode: request.args?.mode,
-                                  command: request.args?.command)
-        case .sessionFocus:
-            return focusSessionPane(request.target, window: request.args?.window, pane: request.args?.pane)
-        case .sessionResize:
-            return resizeSplit(request.target, window: request.args?.window,
-                               ratio: request.args?.ratio, delta: request.args?.ratioDelta)
-        case .sessionStatus:
-            return setSessionStatus(request.target, window: request.args?.window,
-                                    update: StatusUpdate(status: request.args?.status, blink: request.args?.blink,
-                                                         autoReset: request.args?.autoReset, sound: request.args?.sound))
-        case .sessionFlag:
-            return flagSession(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionBackground:
             return setBackground(request.target, request.args)
         case .sessionCopy:
@@ -618,10 +562,11 @@ final class ControlServer {
     /// optional command/name), focuses it when it lands in the frontmost window (so a keymap `session new`
     /// opens focused like the GUI New Session; a background `--window` target keeps focus), and returns the
     /// new id. Shared by the id- and name-addressed paths of the `.sessionNew` arm.
-    private func makeSessionResponse(in store: AppStore, workspaceID: UUID, args: ControlArgs?) -> ControlResponse {
-        let cwd = args?.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path
+    func makeSessionResponse(in store: AppStore, workspaceID: UUID,
+                             options: ControlSessionCreateOptions) -> ControlResponse {
+        let cwd = options.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path
         guard let session = store.addSession(toWorkspace: workspaceID, cwd: cwd,
-                                             command: args?.command, name: args?.name) else {
+                                             command: options.command, name: options.name) else {
             return ControlResponse(ok: false, error: "could not create session")
         }
         if store === library.activeStore { actions.focusActiveSession() }

@@ -556,7 +556,7 @@ paths:
   Pair with `sidebar.mode flagged` to view just the flagged sessions.
   Four-point keep-in-sync audit for `session.flag`: (1) `case sessionFlag = "session.flag"` in `ControlProtocol.swift`
   (reuses `ControlArgs.mode`; adds `flagged` to `ControlSessionNode`), (2) the `.sessionFlag` dispatch
-  arm (`flagSession`) in `ControlServer`, (3) the `session flag on|off|toggle|clear` subcommand (`FlagCommand`)
+  arm (`setSessionFlag`) in `ControlServer`, (3) the `session flag on|off|toggle|clear` subcommand (`FlagCommand`)
   in `agtermctlKit`, (4) round-trip in `ControlProtocolTests` + the e2e `testSessionFlagAndSidebarModeFlagged`
   in `ControlSidebarStatusUITests`.
   `sidebar.mode` (frontmost window) flips the sidebar VIEW between the workspace tree and the flat flagged
