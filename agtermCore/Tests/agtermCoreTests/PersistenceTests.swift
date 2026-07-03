@@ -268,6 +268,67 @@ final class PersistenceTests {
         #expect(app.focusedWorkspaceID == nil)
     }
 
+    @Test func sessionRecencyPersistsAndRestores() {
+        let app = AppStore(persistence: store)
+        let work = app.addWorkspace(name: "work")
+        let a = try! #require(app.addSession(toWorkspace: work.id, cwd: "/a"))
+        let b = try! #require(app.addSession(toWorkspace: work.id, cwd: "/b"))
+        let c = try! #require(app.addSession(toWorkspace: work.id, cwd: "/c"))
+        app.selectSession(a.id)
+        app.selectSession(b.id)
+        app.save() // selection saves are debounced; flush so the write lands before reading back
+        #expect(store.load().sessionRecency == [b.id, a.id, c.id])
+
+        let restored = AppStore(persistence: store)
+        restored.restore(from: store.load())
+        #expect(restored.sessionRecency.items == [b.id, a.id, c.id])
+    }
+
+    @Test func restoreDropsStaleRecencyIds() {
+        let id = UUID()
+        let stale = UUID()
+        let snapshot = Snapshot(selectedSessionID: id, workspaces: [
+            WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
+                SessionSnapshot(id: id, customName: nil, cwd: "/a"),
+            ]),
+        ], sessionRecency: [stale, id])
+        let app = AppStore(persistence: store)
+        app.restore(from: snapshot)
+        // the stale id points at no restored session; it must never reach the switcher.
+        #expect(app.sessionRecency.items == [id])
+    }
+
+    @Test func restoreFloatsSelectionToRecencyFront() {
+        let a = UUID()
+        let b = UUID()
+        let snapshot = Snapshot(selectedSessionID: b, workspaces: [
+            WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
+                SessionSnapshot(id: a, customName: nil, cwd: "/a"),
+                SessionSnapshot(id: b, customName: nil, cwd: "/b"),
+            ]),
+        ], sessionRecency: [a, b])
+        let app = AppStore(persistence: store)
+        app.restore(from: snapshot)
+        // a hand-edited/out-of-sync order still puts the restored selection first.
+        #expect(app.sessionRecency.items == [b, a])
+    }
+
+    @Test func legacySnapshotWithoutRecencyDecodesSelectionOnly() throws {
+        // a workspaces.json written before `sessionRecency` existed has no key; it must decode (not
+        // throw and wipe the tree) and restore with just the selection in the Ctrl-Tab order.
+        let ws = UUID()
+        let session = UUID()
+        let json = #"{ "version": 1, "selectedSessionID": "\#(session.uuidString)", "workspaces": "# +
+            #"[ { "id": "\#(ws.uuidString)", "name": "work", "sessions": [ { "id": "\#(session.uuidString)", "cwd": "/a" } ] } ] }"#
+        try Data(json.utf8).write(to: fileURL)
+        let loaded = store.load()
+        #expect(loaded.sessionRecency == nil)
+
+        let app = AppStore(persistence: store)
+        app.restore(from: loaded)
+        #expect(app.sessionRecency.items == [session])
+    }
+
     @Test func sessionFontSizePersistsAndRestores() {
         let app = AppStore(persistence: store)
         let work = app.addWorkspace(name: "work")

@@ -26,10 +26,14 @@ public struct Snapshot: Codable, Equatable, Sendable {
     /// snapshot already on disk before this field was added decodes (as nil → unfocused) instead of
     /// failing the load and wiping the saved tree.
     public var focusedWorkspaceID: UUID?
+    /// Most-recently-selected session ids, front = current, so the Ctrl-Tab switcher's order survives
+    /// a relaunch. Restore drops ids no longer in the tree. Optional so a snapshot already on disk
+    /// before this field was added still decodes (as nil → selection only), like the fields above.
+    public var sessionRecency: [UUID]?
 
     public init(version: Int = Snapshot.currentVersion, selectedSessionID: UUID? = nil,
                 workspaces: [WorkspaceSnapshot] = [], sidebarWidth: Double? = nil, sidebarVisible: Bool? = nil,
-                sidebarMode: SidebarMode? = nil, focusedWorkspaceID: UUID? = nil) {
+                sidebarMode: SidebarMode? = nil, focusedWorkspaceID: UUID? = nil, sessionRecency: [UUID]? = nil) {
         self.version = version
         self.selectedSessionID = selectedSessionID
         self.workspaces = workspaces
@@ -37,6 +41,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
         self.sidebarVisible = sidebarVisible
         self.sidebarMode = sidebarMode
         self.focusedWorkspaceID = focusedWorkspaceID
+        self.sessionRecency = sessionRecency
     }
 }
 

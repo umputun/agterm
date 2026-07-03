@@ -143,7 +143,7 @@ agterm is built to run from the keyboard. Every action has a shortcut and appear
 - the **action palette** (Ctrl-Shift-P) runs any command by name (new, rename, close, split, toggle scratch, move a session, change font size, and so on);
 - the **custom-commands palette** (Ctrl-Shift-O) lists the shell commands you define in `keymap.conf`.
 
-For jumping back to sessions you have been working in, a Ctrl-Tab switcher walks a most-recently-used list across every workspace, macOS app-switcher style: hold Ctrl and tap Tab to move through it, release to switch, and a single tap flips straight back to the session you were just in. Shortcuts also step between adjacent sessions, panes, and windows.
+For jumping back to sessions you have been working in, a Ctrl-Tab switcher walks a most-recently-used list across every workspace, macOS app-switcher style: hold Ctrl and tap Tab to move through it, release to switch, and a single tap flips straight back to the session you were just in. The list survives a relaunch, so the switcher works right after your sessions restore. Shortcuts also step between adjacent sessions, panes, and windows.
 
 ## Settings
 

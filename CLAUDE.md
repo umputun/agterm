@@ -168,6 +168,10 @@ The app must build, `swift test` must stay green, and `make lint` must pass afte
   so the `AGTERM_STATE_DIR`/`AGTERM_CONTROL_SOCKET` env overrides are STILL required for a manual dev
   launch even with the distinct id — otherwise the dev instance reads/writes the user's real `workspaces.json`
   AND steals the deployed app's socket (its `start()` unlinks-then-binds the default path).
+  **The socket override must be a SHORT path** (unix sockets cap the path at ~104 bytes):
+  a long temp dir (e.g. a Claude session scratchpad) fails with `socket path too long` and the control
+  server never binds, while the app itself launches fine — so keep the state dir wherever,
+  but point the socket at something like `/tmp/<name>.sock`.
 - **Anchor path/existence checks at an ABSOLUTE repo-root path — the Bash cwd DRIFTS.** The shell working
   directory persists across tool calls and silently drifts (e.g. a `cd agtermCore` for `swift test` leaves
   you there), so a later relative `find .github`/`ls`/`cd` runs from the WRONG place and returns a FALSE

@@ -256,9 +256,14 @@ paths:
 - The Ctrl-Tab session switcher (`SessionSwitcher` + `SessionSwitcherOverlay`) cycles a most-recently-used
   list.
   `AppStore.sessionRecency` (`RecencyStack<UUID>` in agtermCore — host-free,
-  unit-tested, NOT persisted) is pushed on every selection and pruned on close;
+  unit-tested) is pushed on every selection and pruned on close;
   the switcher snapshots it on `begin()` so cycling never reorders it (only the commit does,
   via `selectSession`).
+  The order is persisted (`Snapshot.sessionRecency`, an optional field like the other post-v1 additions)
+  and re-seeded on restore — stale ids dropped, the restored selection floated to the front — so the
+  switcher works right after a relaunch instead of starting empty (#110).
+  Persistence is pure model/restore behavior with no new user action,
+  so it is control-API keep-in-sync EXEMPT.
   Keys come from app-wide `NSEvent` local monitors (`.keyDown` for Ctrl+Tab / Ctrl+Shift+Tab / Esc,
   `.flagsChanged` to detect the Ctrl release = commit), NOT SwiftUI shortcuts — the interaction needs
   Tab-while-Ctrl-held plus the modifier-release signal.

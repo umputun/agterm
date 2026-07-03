@@ -7,9 +7,12 @@ public struct RecencyStack<ID: Hashable>: Equatable {
     public private(set) var items: [ID] = []
     public let limit: Int
 
+    /// Seeds the list from `items`, keeping the first occurrence of each id (the list is unique by
+    /// contract, but a persisted/hand-edited seed may not be) and truncating to `limit`.
     public init(limit: Int = 100, items: [ID] = []) {
         self.limit = limit
-        self.items = Array(items.prefix(limit))
+        var seen = Set<ID>()
+        self.items = Array(items.filter { seen.insert($0).inserted }.prefix(limit))
     }
 
     /// Move `id` to the front. No-op if it's already there.

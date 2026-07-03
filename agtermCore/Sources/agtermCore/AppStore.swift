@@ -79,7 +79,8 @@ public final class AppStore {
 
     /// Most-recently-selected session ids, front = current. Drives the Ctrl-Tab switcher
     /// (`items[1]` is the previous session). `@ObservationIgnored`: read imperatively by the
-    /// switcher, not by any SwiftUI view, and not persisted.
+    /// switcher, not by any SwiftUI view. Persisted in the snapshot so the switcher's order
+    /// survives a relaunch.
     @ObservationIgnored public private(set) var sessionRecency = RecencyStack<UUID>()
 
     @ObservationIgnored private let persistence: PersistenceStore
@@ -607,7 +608,7 @@ public final class AppStore {
         }
         return Snapshot(selectedSessionID: selectedSessionID, workspaces: workspaceSnapshots,
                         sidebarWidth: sidebarWidth, sidebarVisible: sidebarVisible, sidebarMode: sidebarMode,
-                        focusedWorkspaceID: focusedWorkspaceID)
+                        focusedWorkspaceID: focusedWorkspaceID, sessionRecency: sessionRecency.items)
     }
 
     /// Rebuilds the tree from a snapshot: fresh `Session`s (surfaces and shells
@@ -652,7 +653,11 @@ public final class AppStore {
         } else {
             selectedSessionID = snapshot.selectedSessionID
         }
-        sessionRecency = RecencyStack<UUID>()
+        // re-seed the Ctrl-Tab order from the persisted list (dropping ids not in the restored
+        // tree) so the switcher works right after relaunch; the restored selection floats to the
+        // front, keeping the "previous session" slot truthful.
+        let restoredIDs = Set(workspaces.flatMap(\.sessions).map(\.id))
+        sessionRecency = RecencyStack(items: (snapshot.sessionRecency ?? []).filter { restoredIDs.contains($0) })
         recordRecency()
     }
 
