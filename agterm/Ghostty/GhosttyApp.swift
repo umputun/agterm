@@ -104,8 +104,8 @@ final class GhosttyApp {
         rt.confirm_read_clipboard_cb = { ud, content, state, request in
             GhosttyApp.shared.callbacks.confirmReadClipboard(ud: ud, content: content, state: state, request: request)
         }
-        rt.write_clipboard_cb = { _, _, content, len, confirm in
-            GhosttyApp.shared.callbacks.writeClipboard(content: content, len: UInt(len), confirm: confirm)
+        rt.write_clipboard_cb = { ud, _, content, len, confirm in
+            GhosttyApp.shared.callbacks.writeClipboard(ud: ud, content: content, len: UInt(len), confirm: confirm)
         }
         rt.close_surface_cb = { ud, _ in GhosttyApp.shared.callbacks.closeSurface(ud: ud) }
 

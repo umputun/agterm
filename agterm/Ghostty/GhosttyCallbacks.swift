@@ -170,7 +170,7 @@ final class GhosttyCallbacks: @unchecked Sendable {
         }
     }
 
-    func writeClipboard(content: UnsafePointer<ghostty_clipboard_content_s>?, len: UInt, confirm: Bool) {
+    func writeClipboard(ud: UnsafeMutableRawPointer?, content: UnsafePointer<ghostty_clipboard_content_s>?, len: UInt, confirm: Bool) {
         guard let content, len > 0 else { return }
         var text: String?
         for item in UnsafeBufferPointer(start: content, count: Int(len)) {
@@ -179,15 +179,20 @@ final class GhosttyCallbacks: @unchecked Sendable {
             break
         }
         guard let text else { return }
-        // hop to the main actor for the NSPasteboard write (this callback runs off libghostty's thread).
-        // confirm == false: ghostty's clipboard-write policy already allowed it (the `allow` default).
-        // confirm == true: clipboard-write = ask, so gate the write behind the user.
+        // confirm == false: ghostty's clipboard-write policy already allowed it (the `allow` default). This
+        // callback runs on the main actor (verified), so write SYNCHRONOUSLY — deferring it lets a following
+        // OSC 52 read in the same tick observe the stale clipboard.
+        guard confirm else {
+            Self.setClipboard(text)
+            return
+        }
+        // confirm == true: clipboard-write = ask. Gate behind the user, scoping coalescing to this surface
+        // (the write callback's userdata is the surface, same pointer as the read confirm) so one Allow
+        // can't authorize a different surface's queued write.
+        guard let ud else { return }
+        let view = Unmanaged<GhosttySurfaceView>.fromOpaque(ud).takeUnretainedValue()
         DispatchQueue.main.async {
-            guard confirm else {
-                Self.setClipboard(text)
-                return
-            }
-            ClipboardPromptController.shared.request(.write) { allowed in
+            ClipboardPromptController.shared.request(.write, requester: view) { allowed in
                 if allowed { Self.setClipboard(text) }
             }
         }

@@ -205,11 +205,15 @@ paths:
   terminal session: the "don't ask again this session" choice) and shows an `NSAlert` sheet.
   Coalescing is keyed by (requesting surface, direction), so a program looping OSC 52 collapses to one
   prompt while a DIFFERENT surface's concurrent request gets its OWN prompt, so one Allow never authorizes
-  another surface's read.
+  another surface's read (or, under `clipboard-write = ask`, its write: the write callback's userdata is
+  the surface too, recovered the same way as the read confirm's).
   Two rules the build proved the hard way: the callback fires INSIDE a libghostty tick, so the sheet is
   deferred via `DispatchQueue.main.async` (a modal run loop opened inside the tick re-enters it); and a
   DENIED read must complete with an EMPTY string and `confirmed = true`, because completing with
   `confirmed = false` leaves the request unconfirmed and libghostty just re-asks, LOOPING the dialog.
+  The clipboard callbacks run on the main actor inside the tick (verified), so the UNGATED write
+  (`clipboard-write = allow`, the default) sets the pasteboard SYNCHRONOUSLY: deferring it would let a
+  same-tick OSC 52 read observe the stale clipboard.
   Read gating rides ghostty's own `clipboard-read = ask` default (verified: the confirm callback fires
   with no explicit config); write stays `allow` by default (matches mainstream terminals, so a legit
   remote yank isn't interrupted) and opts into `ask`/`deny` via the agterm-scoped `ghostty.conf`.
