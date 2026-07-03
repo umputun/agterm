@@ -274,17 +274,15 @@ class ControlAPITestCase: XCTestCase {
         return sessions.first?["fontSize"] as? Double
     }
 
-    /// Polls the hermetic snapshot file until the first session's `fontSize` override satisfies
-    /// `predicate` (nil = no override). A predicate rather than an equality oracle because the zoom
-    /// tests need both "an override appeared" and "the override was cleared".
-    @discardableResult
-    func pollFirstSessionFontSize(until predicate: (Double?) -> Bool, timeout: TimeInterval) -> Bool {
+    /// Polls the hermetic snapshot file until the first session has a persisted `fontSize` override,
+    /// returning it, or nil on timeout (the `FontSizeUITests.pollFontSize` shape).
+    func pollFirstSessionFontSize(timeout: TimeInterval) -> Double? {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if predicate(firstSessionFontSize()) { return true }
+            if let size = firstSessionFontSize() { return size }
             usleep(200_000)
         }
-        return predicate(firstSessionFontSize())
+        return firstSessionFontSize()
     }
 
     // MARK: - Socket client

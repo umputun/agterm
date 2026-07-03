@@ -116,7 +116,9 @@ final class GhosttyApp {
         }
         app = createdApp
         config = cfg
-        resolveThemeColors(from: cfg, inputs: configInputs)
+        // boot-time: no surface exists yet, so the NSApp read is the only side source (and nothing has
+        // rendered, so it cannot disagree with a surface).
+        resolveThemeColors(from: cfg, inputs: configInputs, isDark: Self.currentIsDark())
         // demand-driven: no poll timer. ticks come from libghostty wakeups (coalesced in
         // GhosttyCallbacks.wakeup) and surfaces draw on GHOSTTY_ACTION_RENDER, matching Ghostty.app/conterm
         // — an idle terminal does no work, where a 120Hz poll ticked continuously.
@@ -277,8 +279,8 @@ final class GhosttyApp {
         // refresh the chrome colors from the NEW config BEFORE the watermark re-assert below: a default-tinted
         // `.text` watermark re-renders its PNG reading `terminalForegroundColor`, so the foreground must already
         // reflect the new theme — otherwise the text watermark's color lags one reload behind a theme change.
-        // the selection colors re-side from the SURFACES' appearance — the same side syncColorScheme just
-        // recorded — not a separate NSApp read that can lag the views around sleep/wake.
+        // the selection colors re-side from the SURFACES' appearance — the side syncColorScheme just
+        // recorded (see GhosttySurfaceView.isDarkAppearance).
         resolveThemeColors(from: derivedConfig ?? newConfig, inputs: inputs,
                            isDark: surfaces.first?.isDarkAppearance ?? Self.currentIsDark())
         if let derivedConfig { ghostty_config_free(derivedConfig) }
@@ -298,8 +300,7 @@ final class GhosttyApp {
     /// resolved config. Called at init and on every settings reload. `background`/`foreground` come
     /// from the resolved config; the selection colors are resolved separately (see below) because
     /// `ghostty_config_get` does not expose the optional `selection-*` keys.
-    private func resolveThemeColors(from config: ghostty_config_t, inputs: ConfigInputs,
-                                    isDark: Bool = currentIsDark()) {
+    private func resolveThemeColors(from config: ghostty_config_t, inputs: ConfigInputs, isDark: Bool) {
         lastConfigInputs = inputs
         terminalBackgroundColor = Self.color(from: config, key: "background")
         terminalForegroundColor = Self.color(from: config, key: "foreground")
@@ -308,10 +309,10 @@ final class GhosttyApp {
 
     /// Re-resolve the selection chrome colors for the given appearance side. Used by the full config
     /// load AND by the appearance-flip reload (which re-resolves the theme's colors), so the
-    /// selected-row pill follows a light/dark theme flip. The reload path passes the SURFACE-derived
-    /// side (`NSApp.effectiveAppearance` can lag the views around sleep/wake); the default suffices for
-    /// the no-surface callers. No-op until a config has loaded.
-    func refreshSelectionColors(isDark: Bool = currentIsDark()) {
+    /// selected-row pill follows a light/dark theme flip. `isDark` is explicit at every call site — no
+    /// defaulted `NSApp` read a future caller could silently pick up (see
+    /// `GhosttySurfaceView.isDarkAppearance`). No-op until a config has loaded.
+    func refreshSelectionColors(isDark: Bool) {
         guard let inputs = lastConfigInputs else { return }
         let (selectionBackground, selectionForeground) = Self.resolveSelectionColors(
             ghosttyConfigPath: inputs.scopedURL.path, inheritGlobalConfig: inputs.inheritGlobalConfig,

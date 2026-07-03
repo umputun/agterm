@@ -49,7 +49,9 @@ paths:
   `viewDidChangeEffectiveAppearance` on every view, i.e. the REAL flip path end to end.
   The arm is refused outside an XCUITest launch and is keep-in-sync EXEMPT (see [[control-api]]).
   Set an explicit STARTING side first so the test is independent of the machine's appearance,
-  and assert the response's echoed side to prove the flip reached the app (de-vacuousing).
+  assert the response's echoed side to prove the flip reached the app,
+  and poll the seam's BARE (read) form — it reports the last-applied side — to prove the flip actually
+  drove the reload (a suppressed flip leaves it on the old side).
   Gotcha: on the current libghostty pin `update_config` does NOT reset the runtime font zoom,
   so a wrongly-routed zoom-clearing flip only BLIPS the persisted `fontSize` nil for ~0.4 s before the
   surface's CELL_SIZE report re-persists it — assert zoom preservation by SAMPLING the snapshot

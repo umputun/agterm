@@ -90,7 +90,7 @@ final class SettingsModel {
         // notification (the POSTING view's) — see `appearanceChanged` for why it is never re-read here.
         NotificationCenter.default.addObserver(forName: .agtermSystemAppearanceChanged, object: nil,
                                                queue: .main) { [weak self] note in
-            let isDark = note.userInfo?["isDark"] as? Bool
+            guard let isDark = note.userInfo?["isDark"] as? Bool else { return }
             MainActor.assumeIsolated { self?.appearanceChanged(isDark: isDark) }
         }
     }
@@ -100,8 +100,9 @@ final class SettingsModel {
     /// OS flips — a new session/split would otherwise trigger a full reload + zoom wipe). Starts `false`
     /// because a host-loaded config is always resolved to the LIGHT side: a light launch then skips the
     /// first-attach reload entirely, while a dark launch takes exactly one (which is also what re-sides
-    /// the chrome colors via the CONFIG_CHANGE clone).
-    private var lastAppliedIsDark = false
+    /// the chrome colors via the CONFIG_CHANGE clone). Read-only outside: the UI-test-only
+    /// `debug.appearance` probe (bare form) reports it so a test can assert a flip drove the reload.
+    private(set) var lastAppliedIsDark = false
 
     /// Re-feed the config on a macOS appearance flip so libghostty re-resolves the dual theme to the new
     /// side — the system→settings half of light/dark sync. A no-op unless following with both slots set,
@@ -114,26 +115,23 @@ final class SettingsModel {
     /// automatic flip PRESERVES each session's ⌘+/⌘− zoom — silently wiping it on an OS schedule would
     /// be a surprise.
     ///
-    /// `isDark` is the POSTING view's side, never re-read from `NSApp.effectiveAppearance` here: around
-    /// sleep/wake NSApp can lag the views, so a receive-time re-read would compare a STALE side against
-    /// the latch, wrongly suppress the reload (terminal stuck on the old theme), and leave the latch
-    /// inverted relative to what is rendered — making the next real flip misbehave too.
-    private func appearanceChanged(isDark posterIsDark: Bool?) {
+    /// `isDark` is the POSTING view's side, never re-read from `NSApp.effectiveAppearance` at receive
+    /// time — NSApp can lag the views around sleep/wake (see `GhosttySurfaceView.isDarkAppearance`).
+    private func appearanceChanged(isDark: Bool) {
         guard settings.followSystemAppearance == true, settings.theme != nil, settings.darkTheme != nil else { return }
-        let isDark = posterIsDark ?? renderedIsDark()
         appearanceDebouncer.schedule(after: Self.appearanceDebounceInterval) { [weak self] in
             guard let self else { return }
             guard isDark != lastAppliedIsDark else { return }
-            _ = reloadConfigPreservingSessionZoom(isDark: isDark)
+            reloadConfigPreservingSessionZoom(isDark: isDark)
             NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
         }
     }
 
     /// The appearance side the terminals actually render with: the first live surface's own resolved
-    /// appearance (the value `syncColorScheme` records into libghostty), falling back to
-    /// `NSApp.effectiveAppearance` when no surface exists. Recording `lastAppliedIsDark` from this —
-    /// rather than a separate `NSApp` read — keeps the suppression latch equal to the rendered side by
-    /// construction, even when NSApp lags the views around sleep/wake.
+    /// appearance (the value `syncColorScheme` records into libghostty; see
+    /// `GhosttySurfaceView.isDarkAppearance`), falling back to `NSApp.effectiveAppearance` when no
+    /// surface exists. Recording `lastAppliedIsDark` from this keeps the latch equal to the rendered
+    /// side by construction.
     private func renderedIsDark() -> Bool {
         liveSurfaces().first?.isDarkAppearance ?? GhosttyApp.currentIsDark()
     }
@@ -486,10 +484,9 @@ final class SettingsModel {
     /// round-trip that re-asserts watermarks). An automatic OS flip (or the first-attach reload of a
     /// dark launch) must not silently wipe zoom; only the explicit reloads carry the documented
     /// zoom-clearing contract. `isDark` is the flip's poster-derived side (see `appearanceChanged`).
-    @discardableResult
-    private func reloadConfigPreservingSessionZoom(isDark: Bool) -> Int {
+    private func reloadConfigPreservingSessionZoom(isDark: Bool) {
         lastAppliedIsDark = isDark
-        return GhosttyApp.shared.reloadConfig(surfaces: liveSurfaces())
+        GhosttyApp.shared.reloadConfig(surfaces: liveSurfaces())
     }
 
     /// Read `keymap.conf` and parse it into `keymap` + `keymapDiagnostics`. A MISSING file is not an

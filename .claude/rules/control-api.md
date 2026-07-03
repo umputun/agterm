@@ -179,8 +179,10 @@ paths:
   an XCUITest launch (`ContentView.isUITestLaunch`), it gets NO `agtermctl` subcommand,
   and it stays out of the agent skill — a documented keep-in-sync EXEMPTION (test scaffolding,
   not a control surface).
-  It echoes the resulting effective side in `result.text`; `AppearanceFlipUITests` is its consumer.
-  The public command count stays 50.
+  Setting echoes the resulting effective side in `result.text`; the BARE form (no name) reads the side
+  the last config feed applied (`SettingsModel.lastAppliedIsDark`), which the test polls to prove the
+  flip actually drove the reload.
+  `AppearanceFlipUITests` is its only consumer; the public command count stays 50.
 
   `workspace.delete` honors keep-at-least-one and returns an error instead of the GUI confirm alert (nothing
   blocks on a modal).

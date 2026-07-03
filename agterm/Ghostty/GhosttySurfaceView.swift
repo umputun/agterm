@@ -838,18 +838,19 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         // when the host re-feeds the config via update_config, so post the appearance change and let
         // `SettingsModel` trigger that reload (the raw dual file text is stable across flips, so its
         // write-diff would otherwise skip it). Fires per surface + at first attach; `SettingsModel` debounces
-        // and no-ops unless following with both slots set. The userInfo carries THIS view's side —
-        // `NSApp.effectiveAppearance` can lag the views around sleep/wake, and a receiver re-reading it
-        // would compare a stale side, wrongly suppress the reload, and leave the terminal stuck on the
-        // old theme (with the suppression latch inverted, so the NEXT flip misbehaves too).
+        // and no-ops unless following with both slots set. The userInfo carries THIS view's side (see
+        // `isDarkAppearance` for why the side must never be re-read at receive time).
         NotificationCenter.default.post(name: .agtermSystemAppearanceChanged, object: nil,
                                         userInfo: ["isDark": isDarkAppearance])
     }
 
     /// Whether this view currently resolves to the dark appearance — the side libghostty renders with,
-    /// since `syncColorScheme` records exactly this value. The appearance-flip plumbing reads the VIEW's
-    /// side (not `NSApp.effectiveAppearance`, which can lag the views around sleep/wake) so the trigger,
-    /// the suppression latch, and the render can never disagree.
+    /// since `syncColorScheme` records exactly this value. CANONICAL single source for the appearance
+    /// side: the flip plumbing reads the VIEW's side everywhere (the notification userInfo, the
+    /// `lastAppliedIsDark` latch, the selection-color re-side) because `NSApp.effectiveAppearance` can
+    /// LAG the views around sleep/wake — a receive-time NSApp re-read compared a stale side, wrongly
+    /// suppressed the flip reload, left the terminal stuck on the old theme, and inverted the latch so
+    /// the next toggle misbehaved too (the wake-from-sleep bug).
     var isDarkAppearance: Bool {
         effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }

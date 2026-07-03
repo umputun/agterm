@@ -537,11 +537,17 @@ final class ControlServer {
     /// `NSApp.appearance` fires `viewDidChangeEffectiveAppearance` on every view, so the REAL flip path
     /// (scheme sync → notification → debounced zoom-preserving reload) is exercised end to end. Refused
     /// outside an XCUITest launch, and deliberately EXEMPT from the four-point keep-in-sync (no agtermctl
-    /// subcommand, absent from the catalog/skill) — test scaffolding, not a control surface. Echoes the
-    /// resulting effective side in `result.text` so a test can assert the flip actually applied.
+    /// subcommand, absent from the catalog/skill) — test scaffolding, not a control surface. Setting
+    /// echoes the resulting effective side in `result.text`; the BARE form (no name) reads the side the
+    /// last config feed applied (`SettingsModel.lastAppliedIsDark`), which a test polls to assert the
+    /// flip actually drove the reload — a suppressed flip leaves it on the old side.
     private func setDebugAppearance(args: ControlArgs?) -> ControlResponse {
         guard ContentView.isUITestLaunch else {
             return ControlResponse(ok: false, error: "debug.appearance is a UI-test-only seam")
+        }
+        guard args?.name != nil else {
+            return ControlResponse(ok: true, result: ControlResult(
+                text: settingsModel.lastAppliedIsDark ? "dark" : "light"))
         }
         guard let side = trimmed(args?.name), side == "light" || side == "dark" else {
             return ControlResponse(ok: false, error: "debug.appearance requires light|dark")
