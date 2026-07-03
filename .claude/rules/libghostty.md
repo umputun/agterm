@@ -135,7 +135,7 @@ paths:
   surface visible beneath the FULL overlay.**
   The translucency setting pins `background-opacity = 0` for every ghostty surface (the window's AppKit
   backing supplies the tint), and the FULL overlay deliberately has no opaque SwiftUI backing.
-  Any surface left mounted at opacity 1 below it shows straight through — an "the overlay opened under
+  Any surface left mounted at opacity 1 below it shows straight through — a "the overlay opened under
   the scratch" report is SEE-THROUGH, not a z-order inversion (the layer compositing order was verified
   correct in every open sequence: the overlay's layer sits above the scratch's).
   `sessionDetail` therefore hides EVERY covered surface when `session.fullOverlayActive`:
