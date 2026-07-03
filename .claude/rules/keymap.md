@@ -119,6 +119,12 @@ paths:
 - **`{AGT_X}` tokens are substituted RAW into the `/bin/sh -c` line (`CommandContext.expand`).** This
   is the intended raw interpolation (convenient), NOT shell-quoted — so dynamic content like `{AGT_SELECTION}`
   can inject shell syntax.
+  `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are equally unsafe, and worse than `{AGT_SELECTION}`
+  because they need no local interaction: a remote host sets the session title (OSC 0/1/2) and the
+  working directory (OSC 7), so either can carry attacker content silently.
+  OSC-reported title and pwd are stripped of control characters at ingestion (`TerminalText.sanitized`
+  in `GhosttySurfaceView.applyTitle`/`applyPwd`), so a newline can no longer split the `sh -c` line,
+  but visible metacharacters (`;`, `$()`, backticks) still pass through raw.
   The safe alternative is already provided: the same values are exported as `$AGT_X` env vars (`CommandContext.environment()`),
   naturally shell-quoted as `"$AGT_SELECTION"`.
   The starter `keymap.conf` comments + README recommend `$AGT_X` (quoted) for untrusted content.
