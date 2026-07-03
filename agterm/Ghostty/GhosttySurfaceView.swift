@@ -345,10 +345,13 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// command execution and leak `\e[200~`/`\e[201~` markers when fired rapidly. Printable runs are sent as
     /// key-with-text events; every line ending (`\n`, `\r`, or `\r\n`) is a real Return keypress, so a
     /// trailing newline submits the command and a multi-line payload runs line by line. The bytes are
-    /// copied via `withCString`, so no buffer must outlive the call. A no-op when the surface has not been
-    /// created yet (a never-shown session); the caller realizes it first.
-    func inject(text: String) {
-        guard let surface else { return }
+    /// copied via `withCString`, so no buffer must outlive the call. Returns `false` (a no-op) when the
+    /// surface has not been created yet (a never-shown / just-shown session), so a caller injecting into a
+    /// pane with no realize/select path (`right`/`scratch`) can report `session not realized` instead of a
+    /// false ok; the main-pane path realizes it first via select+poll.
+    @discardableResult
+    func inject(text: String) -> Bool {
+        guard let surface else { return false }
         for segment in KeystrokeSegments.split(text) {
             switch segment {
             case let .text(segment):
@@ -362,6 +365,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
                 sendReturn(to: surface)
             }
         }
+        return true
     }
 
     /// Inserts `text` into this surface as a bracketed paste — the drag-drop path. Unlike `inject(text:)`,

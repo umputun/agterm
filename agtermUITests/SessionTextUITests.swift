@@ -184,4 +184,50 @@ final class SessionTextUITests: ControlAPITestCase {
         let text = try XCTUnwrap((response["result"] as? [String: Any])?["text"] as? String, "a blank read still carries a text field: \(response)")
         XCTAssertTrue(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "a blank screen should read as empty, got: \(text)")
     }
+
+    // `--pane scratch` reads (and `session.type --pane scratch` writes) the scratch terminal whether or not
+    // it is on screen, since its surface is kept alive when hidden. Open the scratch, echo a marker into it,
+    // read it back, then HIDE it and prove the buffer is still readable AND still writable via --pane scratch.
+    // The arithmetic ($((6*7)) -> 42) proves the scratch's own shell RAN the line, not merely echoed it.
+    func testSessionScratchPaneReadsAndWritesEvenWhenHidden() throws {
+        let activeID = try activeSessionID()
+
+        let on = try sendCommand(#"{"cmd":"session.scratch","target":"\#(activeID)","args":{"mode":"on"}}"#)
+        XCTAssertEqual(on["ok"] as? Bool, true, "session.scratch on should succeed: \(on)")
+
+        let tag = "SCRATCH-\(UUID().uuidString.prefix(8))"
+        let shown = try pollPaneText(target: activeID, pane: "scratch", contains: "\(tag)-42", retype: {
+            _ = try self.sendCommand(self.typeRequest(text: "echo \(tag)-$((6*7))\n", target: activeID,
+                                                      select: false, pane: "scratch"))
+        })
+        XCTAssertNotNil(shown, "session.text --pane scratch should read the scratch's own buffer while it is shown")
+
+        // hide the scratch (keep-alive) and confirm its buffer is STILL readable via --pane scratch.
+        let off = try sendCommand(#"{"cmd":"session.scratch","target":"\#(activeID)","args":{"mode":"off"}}"#)
+        XCTAssertEqual(off["ok"] as? Bool, true, "session.scratch off should succeed: \(off)")
+        let hidden = try XCTUnwrap((try sendCommand(#"{"cmd":"session.text","target":"\#(activeID)","args":{"pane":"scratch","all":true}}"#)["result"] as? [String: Any])?["text"] as? String)
+        XCTAssertTrue(hidden.contains("\(tag)-42"), "a hidden scratch's buffer must still be readable via --pane scratch, got: \(hidden)")
+
+        // and it must still be WRITABLE while hidden: type a fresh marker via --pane scratch and read it back.
+        let tag2 = "HIDDEN-\(UUID().uuidString.prefix(8))"
+        let afterHiddenWrite = try pollPaneText(target: activeID, pane: "scratch", contains: "\(tag2)-42", retype: {
+            _ = try self.sendCommand(self.typeRequest(text: "echo \(tag2)-$((6*7))\n", target: activeID,
+                                                      select: false, pane: "scratch"))
+        })
+        XCTAssertNotNil(afterHiddenWrite, "session.type --pane scratch must reach the scratch even while it is hidden")
+    }
+
+    // --pane scratch on a session that never opened a scratch errors on both read and write, server-side.
+    func testSessionScratchPaneWithoutScratchErrors() throws {
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let newID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return the new id")
+
+        let read = try sendCommand(#"{"cmd":"session.text","target":"\#(newID)","args":{"pane":"scratch"}}"#)
+        XCTAssertEqual(read["ok"] as? Bool, false, "reading a nonexistent scratch should fail: \(read)")
+        XCTAssertEqual(read["error"] as? String, "session has no scratch terminal")
+
+        let write = try sendCommand(#"{"cmd":"session.type","target":"\#(newID)","args":{"text":"x","select":false,"pane":"scratch"}}"#)
+        XCTAssertEqual(write["ok"] as? Bool, false, "typing into a nonexistent scratch should fail: \(write)")
+        XCTAssertEqual(write["error"] as? String, "session has no scratch terminal")
+    }
 }

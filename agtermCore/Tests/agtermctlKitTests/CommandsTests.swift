@@ -168,9 +168,14 @@ struct CommandsTests {
         #expect(req.args?.pane == "left")
     }
 
+    @Test func sessionTypeWithPaneScratch() throws {
+        let req = try request(["session", "type", "ls\n", "--pane", "scratch"])
+        #expect(req.args?.pane == "scratch")
+    }
+
     @Test func sessionTypeRejectsBadPane() {
-        // `other` is a session.focus mode, not a typable pane — type accepts left|right only.
-        #expect(validationMessage(["session", "type", "x", "--pane", "other"]) == "--pane must be left or right")
+        // `other` is a session.focus mode, not a typable pane — type accepts left|right|scratch only.
+        #expect(validationMessage(["session", "type", "x", "--pane", "other"]) == "--pane must be left, right, or scratch")
     }
 
     @Test func sessionSplitDefaultsToggle() throws {
@@ -290,6 +295,11 @@ struct CommandsTests {
         #expect(try request(["session", "text", "--pane", "right", "--target", "9f3c"]) == expected)
     }
 
+    @Test func sessionTextWithPaneScratch() throws {
+        let expected = ControlRequest(cmd: .sessionText, target: "active", args: ControlArgs(pane: "scratch"))
+        #expect(try request(["session", "text", "--pane", "scratch"]) == expected)
+    }
+
     @Test func sessionTextRejectsAllWithLines() {
         #expect(validationMessage(["session", "text", "--all", "--lines", "10"]) == "use either --all or --lines, not both")
     }
@@ -301,7 +311,7 @@ struct CommandsTests {
     }
 
     @Test func sessionTextRejectsBadPane() {
-        #expect(validationMessage(["session", "text", "--pane", "other"]) == "--pane must be left or right")
+        #expect(validationMessage(["session", "text", "--pane", "other"]) == "--pane must be left, right, or scratch")
     }
 
     @Test func sessionStatusWithBlink() throws {

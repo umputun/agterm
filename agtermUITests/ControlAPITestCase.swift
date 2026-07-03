@@ -111,7 +111,7 @@ class ControlAPITestCase: XCTestCase {
     }
 
     /// Build a `session.type` request line with JSON-escaped `text` (covers the newline and the quoted
-    /// path); `pane` addresses a split pane (`left`|`right`, nil = the main pane).
+    /// path); `pane` addresses a pane (`left`|`right`|`scratch`, nil = the main pane).
     func typeRequest(text: String, target: String? = nil, select: Bool, pane: String? = nil) -> String {
         var args: [String: Any] = ["text": text, "select": select]
         if let pane { args["pane"] = pane }

@@ -129,8 +129,10 @@ extension ControlServer {
 
     /// Returns a pane's terminal buffer as plain text: the visible screen by default, the full screen plus
     /// scrollback with `all`, or the last `lines` lines (reads the screen, then trims). `pane` picks the
-    /// surface (`left` main, `right` split, or the on-screen pane when omitted); `right` errors when the
-    /// session has no split. `all` and `lines` are mutually exclusive and `lines` must be > 0 — validated
+    /// surface (`left` main, `right` split, `scratch` the session's scratch terminal — readable even while
+    /// hidden, since its surface is kept alive — or the on-screen pane when omitted); `right` errors when
+    /// the session has no split, `scratch` errors `session has no scratch terminal` when none has been
+    /// opened. `all` and `lines` are mutually exclusive and `lines` must be > 0 — validated
     /// here too, not only in the CLI `validate()`, so a raw socket client can't bypass it (an unchecked
     /// `lines <= 0` would silently fall through to the full buffer). A genuinely blank screen reads ok with
     /// an empty string; a failed surface read is an error, not a silent empty.
@@ -160,7 +162,14 @@ extension ControlServer {
                     return ControlResponse(ok: false, error: "session has no split pane")
                 }
                 chosen = split
-            // an unknown pane value errors here; `session.text` accepts left|right only, with no `other`
+            case "scratch":
+                // the scratch terminal's surface is kept alive while hidden, so this reads it whether or not
+                // it's on screen (unlike the no-`--pane` on-screen resolution above).
+                guard let scratch = session.scratchSurface else {
+                    return ControlResponse(ok: false, error: "session has no scratch terminal")
+                }
+                chosen = scratch
+            // an unknown pane value errors here; `session.text` accepts left|right|scratch, with no `other`
             // toggle like `session.focus`.
             case .some(let value): return ControlResponse(ok: false, error: "invalid pane: \(value)")
             }
@@ -285,11 +294,13 @@ extension ControlServer {
     /// the text as `ghostty_surface_key` keystrokes (NOT `ghostty_surface_text` — see its doc for why),
     /// which write to the child pty; the kernel buffers the pty, so text is never lost even before the
     /// first prompt.
-    /// `pane` picks the pane like `session.text` (`left`|`right` only, no `other`): omitted/`left` is the
-    /// main pane (omitted keeps the pre-pane behavior — always the main pane, NOT the focused one, so
+    /// `pane` picks the pane like `session.text` (`left`|`right`|`scratch`, no `other`): omitted/`left` is
+    /// the main pane (omitted keeps the pre-pane behavior — always the main pane, NOT the focused one, so
     /// existing automation is unaffected); `right` is the split pane, `session has no split pane` without
-    /// one. The realize/select path below applies to the main pane only — a split pane is never created by
-    /// selecting, so `right` injects into the existing split surface or errors.
+    /// one; `scratch` is the session's scratch terminal, typable even while hidden (its surface is kept
+    /// alive), `session has no scratch terminal` when none has been opened. The realize/select path below
+    /// applies to the main pane only — a split pane is never created by selecting, so `right`/`scratch`
+    /// inject into the existing surface or error.
     /// - surface already realized → inject immediately, ok.
     /// - never realized, `select:true` → select it, then poll for the surface (bounded: 12 × 0.03 s, the
     ///   `focusSplitPane` idiom) and inject on the first realized attempt; never realized → error (never a
@@ -303,18 +314,32 @@ extension ControlServer {
             guard let split = store.session(withID: id)?.splitSurface else {
                 return ControlResponse(ok: false, error: "session has no split pane")
             }
-            guard let surface = split as? GhosttySurfaceView else {
+            // inject returns false when the view exists but its libghostty surface isn't realized yet
+            // (there is no realize/select path for the split pane) — report that instead of a false ok.
+            guard let surface = split as? GhosttySurfaceView, surface.inject(text: text) else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
-            surface.inject(text: text)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
-        // an unknown pane value errors here; `session.type` accepts left|right only, with no `other`
+        case "scratch":
+            // the scratch terminal's surface is kept alive while hidden, so this types into it whether or
+            // not it's on screen; `session has no scratch terminal` when none has been opened. As with
+            // `right`, a false `inject` (surface not yet realized in the ms after `session.scratch on`,
+            // before layout) reports `session not realized` rather than silently dropping the keystrokes.
+            guard let scratch = store.session(withID: id)?.scratchSurface else {
+                return ControlResponse(ok: false, error: "session has no scratch terminal")
+            }
+            guard let surface = scratch as? GhosttySurfaceView, surface.inject(text: text) else {
+                return ControlResponse(ok: false, error: "session not realized")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        // an unknown pane value errors here; `session.type` accepts left|right|scratch, with no `other`
         // toggle like `session.focus` (mirroring `session.text`).
         case .some(let value):
             return ControlResponse(ok: false, error: "invalid pane: \(value)")
         }
-        if let surface = store.session(withID: id)?.surface as? GhosttySurfaceView {
-            surface.inject(text: text)
+        // main pane: inject if realized; a false return (the view exists but its libghostty surface isn't
+        // up yet) falls through to the select/poll path rather than returning a silent-drop false ok.
+        if let surface = store.session(withID: id)?.surface as? GhosttySurfaceView, surface.inject(text: text) {
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
         guard select else {
@@ -323,8 +348,9 @@ extension ControlServer {
         store.selectSession(id)
         for _ in 0..<12 {
             try? await Task.sleep(nanoseconds: 30_000_000)
-            if let surface = store.session(withID: id)?.surface as? GhosttySurfaceView {
-                surface.inject(text: text)
+            // poll for the surface AND its realization (a false inject keeps polling), so a just-selected
+            // never-shown session isn't reported ok before its libghostty surface is actually up.
+            if let surface = store.session(withID: id)?.surface as? GhosttySurfaceView, surface.inject(text: text) {
                 return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
             }
         }

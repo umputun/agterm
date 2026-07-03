@@ -238,8 +238,19 @@ default, the whole scrollback with `--all`, or the last N lines with `--lines N`
 agtermctl session text                         # the visible screen of the focused pane
 agtermctl session text --lines 50              # the last 50 lines of the buffer
 agtermctl session text --pane right            # the split pane (errors if there is no split)
+agtermctl session text --pane scratch --all    # the scratch terminal's full buffer, even while it's hidden
 # extract every URL from the full scrollback:
 agtermctl session text --all --json | jq -r '.result.text' | grep -oE 'https?://[^ ]+'
+```
+
+`--pane scratch` reads (and `session type --pane scratch` writes) the session's scratch terminal whether
+or not it is on screen, since its shell is kept alive when hidden. Handy for "I ran a deploy in the
+scratch, read its output and tell me what broke" without leaving the scratch open:
+
+```bash
+agtermctl session scratch on                             # open the scratch once so it exists
+agtermctl session type $'./deploy.sh\n' --pane scratch   # run it in the scratch (even after you hide it)
+agtermctl session text --pane scratch --all              # read the result back
 ```
 
 ## Search the terminal scrollback

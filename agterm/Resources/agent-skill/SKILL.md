@@ -111,11 +111,13 @@ spec — image/text watermark or solid color — set via `session background`, o
 - `close` · `select` · `rename <name>`.
 - `go --to next|prev|first|last|next-attention|prev-attention` — move the selection between sessions.
 - `move <workspace>` (relocate) or `move --to up|down|top|bottom` (reorder within the workspace).
-- `type <text> [--stdin] [--select] [--pane left|right]` — inject keystrokes (real typing, Enter
-  included) into the main pane, or the split pane with `--pane right`.
+- `type <text> [--stdin] [--select] [--pane left|right|scratch]` — inject keystrokes (real typing, Enter
+  included) into the main pane, the split pane with `--pane right`, or the scratch terminal (even hidden)
+  with `--pane scratch`.
 - `copy` — print the session's selected text (does NOT touch the system clipboard).
-- `text [--all] [--lines N] [--pane left|right]` — print the session buffer as plain text. Default is
-  the visible screen of the focused pane; `--all` adds scrollback; `--lines N` keeps the last N lines.
+- `text [--all] [--lines N] [--pane left|right|scratch]` — print the session buffer as plain text. Default
+  is the visible screen of the focused pane; `--pane scratch` reads the scratch terminal even while hidden;
+  `--all` adds scrollback; `--lines N` keeps the last N lines.
 - `search [needle] [--next|--prev|--close]` — search the terminal scrollback; prints the "N of M" counter.
 - `split [on|off|toggle]` — side-by-side second shell (hide keeps it alive).
 - `scratch [on|off|toggle] [--command CMD]` — full-coverage third shell (hide keeps it alive; `exit`

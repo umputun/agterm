@@ -2,12 +2,12 @@ import ArgumentParser
 import Foundation
 import agtermCore
 
-/// Shared `--pane` validation for the session commands that accept `left|right` (type, text). Rejects any
-/// other value with a clean usage error before the socket round-trip, matching the server-side switch (so
-/// the CLI and server can't drift, and a raw socket client still hits the same check server-side).
+/// Shared `--pane` validation for the session commands that accept `left|right|scratch` (type, text).
+/// Rejects any other value with a clean usage error before the socket round-trip, matching the server-side
+/// switch (so the CLI and server can't drift, and a raw socket client still hits the same check server-side).
 func validatePaneArgument(_ pane: String?) throws {
-    if let pane, !["left", "right"].contains(pane) {
-        throw ValidationError("--pane must be left or right")
+    if let pane, !["left", "right", "scratch"].contains(pane) {
+        throw ValidationError("--pane must be left, right, or scratch")
     }
 }
 
@@ -118,7 +118,7 @@ struct Session: ParsableCommand {
         @Argument(help: "Text to inject (omit with --stdin).") var text: String?
         @Flag(name: .long, help: "Read the text from stdin instead of an argument.") var stdin = false
         @Flag(name: .long, help: "Select (and realize) a never-shown session before injecting (main pane only; a split pane must already exist).") var select = false
-        @Option(name: .long, help: "Which pane to type into: left (main) or right (split). Defaults to the left pane.") var pane: String?
+        @Option(name: .long, help: "Which pane to type into: left (main), right (split), or scratch (the session's scratch terminal, even when hidden). Defaults to the left pane.") var pane: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
@@ -225,7 +225,7 @@ struct Session: ParsableCommand {
         static let configuration = CommandConfiguration(abstract: "Print a session's terminal buffer as plain text (does not touch the system clipboard).")
         @Flag(name: .long, help: "Read the full screen + scrollback instead of just the visible screen.") var all = false
         @Option(name: .long, help: "Keep only the last N lines of the full buffer.") var lines: Int?
-        @Option(name: .long, help: "Which pane to read: left (main) or right (split). Defaults to the focused pane.") var pane: String?
+        @Option(name: .long, help: "Which pane to read: left (main), right (split), or scratch (the session's scratch terminal, even when hidden). Defaults to the on-screen pane.") var pane: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
