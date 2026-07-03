@@ -281,10 +281,15 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
     // MARK: - Callback entry points
 
-    func applyPwd(_ pwd: String) {
+    func applyPwd(_ rawPwd: String) {
         // Already on the main actor (the callback hops via DispatchQueue.main.async).
         // `currentCwd` is observed, so the sidebar row refreshes live.
         //
+        // Strip control characters from the OSC 7 value first: it flows unquoted into a /bin/sh -c
+        // line via {AGT_SESSION_PWD} and into every cwd-inheriting spawn (split/overlay/restore), so a
+        // newline (an sh -c command separator) must never survive; a real path has no control chars.
+        let pwd = TerminalText.sanitized(rawPwd)
+
         // This deliberately does NOT save(): OSC 7 fires on every cd/prompt redraw,
         // so persisting here would thrash the disk. Live cwd is persisted on quit
         // and on structural mutations (add/close/move/rename/select), not on every
@@ -300,11 +305,16 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         }
     }
 
-    func applyTitle(_ title: String) {
+    func applyTitle(_ rawTitle: String) {
         // Already on the main actor (the callback hops via DispatchQueue.main.async).
         // `oscTitle`/`splitTitle` are observed, so the sidebar row and window title refresh live. Like
         // applyPwd, this deliberately does NOT save(): OSC set-title re-fires on every prompt redraw.
         //
+        // Strip control characters from the OSC 0/1/2 title first: it flows unquoted into a /bin/sh -c
+        // line via {AGT_SESSION_NAME}, so a newline (an sh -c command separator) must never survive; a
+        // real title has no control chars.
+        let title = TerminalText.sanitized(rawTitle)
+
         // Guard on a real value change so an equal re-emit doesn't notify observers and churn the sidebar.
         if isSplitPane {
             if session?.splitTitle != title { session?.splitTitle = title }
