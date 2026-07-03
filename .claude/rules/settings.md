@@ -15,7 +15,7 @@ paths:
 - Settings persist in agtermCore: `AppSettings` (Codable value type, optional fields,
   NO version field — optionality is the forward-compat) + `SettingsStore` (JSON at `<stateDir>/settings.json`,
   `AGTERM_STATE_DIR`-isolated, mirrors `PersistenceStore`).
-  Fields: `fontFamily`/`fontSize`/`theme` + `backgroundOpacity` (0...1) / `backgroundBlur` (CGS radius)
+  Fields: `fontFamily`/`fontSize`/`theme`/`darkTheme`/`followSystemAppearance` + `backgroundOpacity` (0...1) / `backgroundBlur` (CGS radius)
   + `notificationsEnabled` / `compactToolbar` / `notificationBadgeEnabled` / `attentionButtonEnabled`
   + the agent-status glyph colors `activeStatusColorHex`/`blockedStatusColorHex`/`completedStatusColorHex`
   (nil defaults: `notificationsEnabled`/`notificationBadgeEnabled` = on,
@@ -28,7 +28,7 @@ paths:
   + `rightClickPaste` (ghostty `right-click-action`, nil = on)
   + `newSessionDirectory`/`newSessionCustomDirectory` (where a new ⌘T session opens: nil = home default,
   else the current session's cwd or a fixed custom dir; NOT ghostty keys).
-  `theme` may also hold ghostty's dual `light:NAME,dark:NAME` value — the macOS-appearance-sync state (see the Theme picker rule; `ThemeResolution` parses/composes it).
+  `theme`/`darkTheme`/`followSystemAppearance` are the macOS light/dark appearance-sync state: `theme` is the single/light-slot theme, `darkTheme` the dark slot, `followSystemAppearance` (nil = off) the toggle; when following, `ghosttyConfigLines()` emits ghostty's raw dual `theme = light:NAME,dark:NAME` conditional and libghostty resolves the side at runtime — `ghosttyConfigLines()` takes NO `isDark` arg (see the Theme picker rule; `ThemeResolution` is gone, only `AppSettings.dualThemeSides` survives for migration + selection colors).
   The three `*StatusColorHex` (`#RRGGBB`, nil = active `#DBD9E6` muted lavender-grey + system amber/green)
   color the sidebar agent-status glyph: `SettingsModel` passes the hex to `GhosttyApp.setAgentStatusColors`
   which resolves to `NSColor` (so `SettingsModel` stays AppKit-free, the `NSColor`↔hex helper is `NSColor+AgtermHex`),

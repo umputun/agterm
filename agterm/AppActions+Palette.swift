@@ -217,17 +217,18 @@ extension AppActions {
     /// (and previews it — a no-op — rather than jumping to "Default").
     var currentThemeID: String { ThemeCatalog.id(for: effectiveTheme) }
 
-    /// The theme currently ON SCREEN: the appearance-matching side of a dual `light:,dark:` value,
-    /// else the plain `theme`. The palette badges/opens on this, so the open-row preview matches what
-    /// is rendering (previewing it is a config no-op) instead of the raw dual string.
+    /// The theme currently ON SCREEN: the dark slot while following in dark mode, else `theme`. The
+    /// palette badges/opens on this and previews/commits target the same slot, so the open-row preview
+    /// matches what is rendering.
     private var effectiveTheme: String? {
         settingsModel?.settings.activeTheme(isDark: GhosttyApp.currentIsDark())
     }
 
-    /// Capture the live theme so Esc/cancel can restore it. Idempotent while a preview is active.
+    /// Capture the on-screen theme (the current-appearance slot) so Esc/cancel can restore it. Idempotent
+    /// while a preview is active.
     func beginThemePreview() {
-        guard let settingsModel, !themePreviewActive else { return }
-        themePreviewOriginal = settingsModel.settings.theme
+        guard settingsModel != nil, !themePreviewActive else { return }
+        themePreviewOriginal = effectiveTheme
         themePreviewActive = true
     }
 
@@ -237,26 +238,13 @@ extension AppActions {
         settingsModel?.previewTheme(name)
     }
 
-    /// Persist the previewed theme (Enter/click). Ends the preview so the subsequent palette close
-    /// can't revert it. When the value captured at open is a dual `light:,dark:` value, the commit
-    /// recomposes it with the CURRENT appearance's side replaced by the committed name — the palette
-    /// edits what is on screen and appearance syncing stays on (a half-set original gets the committed
-    /// name as its missing side, matching what is rendering). A plain/nil original commits the plain
-    /// name; committing the nil row ("default ghostty") over a dual original collapses to no theme —
-    /// the one commit that drops the pair, since a dual side cannot be unnamed.
+    /// Persist the previewed theme (Enter/click). Ends the preview so the subsequent palette close can't
+    /// revert it. The preview already wrote the current-appearance slot (dark slot while following in
+    /// dark mode, else `theme`), so the commit just persists that slot — no dual recompose needed, since
+    /// the two slots are separate fields and syncing rides `followSystemAppearance`.
     func commitThemePreview() {
         guard themePreviewActive else { return }
-        let previewed = settingsModel?.settings.theme
-        let final: String?
-        if let original = themePreviewOriginal, ThemeResolution.isDual(original), let previewed {
-            let comps = ThemeResolution.components(original)
-            final = GhosttyApp.currentIsDark()
-                ? ThemeResolution.dualValue(light: comps.light ?? previewed, dark: previewed)
-                : ThemeResolution.dualValue(light: previewed, dark: comps.dark ?? previewed)
-        } else {
-            final = previewed
-        }
-        settingsModel?.commitTheme(final)
+        settingsModel?.commitTheme(effectiveTheme)
         themePreviewActive = false
         themePreviewOriginal = nil
     }
@@ -277,17 +265,16 @@ extension AppActions {
     func availableThemes() -> [String] { SettingsCatalog.themeNames() }
 
     /// The plain single theme (nil = ghostty default), for `theme.set`/`theme.list`'s `result.theme`.
-    /// nil while a dual value is set — the sync state rides `sync`/`light`/`dark` instead of leaking
-    /// the raw dual string onto the wire.
+    /// nil while following — the sync state rides `sync`/`light`/`dark` instead of the single theme.
     var currentTheme: String? {
-        guard let theme = settingsModel?.settings.theme else { return nil }
-        return ThemeResolution.isDual(theme) ? nil : theme
+        guard settingsModel?.settings.followSystemAppearance != true else { return nil }
+        return settingsModel?.settings.theme
     }
 
-    /// macOS light/dark appearance-sync state, derived from the dual theme value, for `theme.set`/`theme.list`.
-    var followsSystemAppearance: Bool { ThemeResolution.isDual(settingsModel?.settings.theme ?? "") }
-    var currentLightTheme: String? { settingsModel.flatMap { ThemeResolution.components($0.settings.theme ?? "").light } }
-    var currentDarkTheme: String? { settingsModel.flatMap { ThemeResolution.components($0.settings.theme ?? "").dark } }
+    /// macOS light/dark appearance-sync state, for `theme.set`/`theme.list`.
+    var followsSystemAppearance: Bool { settingsModel?.settings.followSystemAppearance == true }
+    var currentLightTheme: String? { followsSystemAppearance ? settingsModel?.settings.theme : nil }
+    var currentDarkTheme: String? { followsSystemAppearance ? settingsModel?.settings.darkTheme : nil }
 
     /// Set the light/single slot, keeping a dark side if present — the control channel's
     /// `theme.set <name>` (the persist+apply path, no live preview). nil clears everything.

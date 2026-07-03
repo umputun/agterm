@@ -35,13 +35,17 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var fontFamily: String?
     /// Default terminal font size in points, or nil for the ghostty default.
     public var fontSize: Double?
-    /// The ghostty `theme` value: a plain bundled name (e.g. `Adwaita Dark`), nil for the ghostty
-    /// default, or ghostty's dual `light:NAME,dark:NAME` form — the dual form means the terminal
-    /// tracks the macOS Light/Dark appearance (`ghosttyConfigLines(isDark:)` emits the side matching
-    /// the current appearance as a plain single theme, and agterm rewrites and reloads the config on
-    /// an appearance flip — the pinned libghostty doesn't switch a dual value at runtime, so the app
-    /// drives the swap itself).
+    /// The ghostty `theme` value: a plain bundled name (e.g. `Adwaita Dark`), or nil for the ghostty
+    /// default. When `followSystemAppearance` is on this is the LIGHT-appearance slot; otherwise it is
+    /// the single theme, applied in both appearances.
     public var theme: String?
+    /// The DARK-appearance theme, used only when `followSystemAppearance` is on. nil = unset. Together
+    /// with `theme` it is emitted as ghostty's dual `theme = light:NAME,dark:NAME` conditional, which
+    /// libghostty resolves at runtime on a color-scheme change (agterm no longer picks the side).
+    public var darkTheme: String?
+    /// Whether the terminal follows the macOS Light/Dark appearance. nil/false = off (the default): a
+    /// single `theme` is emitted. On: `theme`/`darkTheme` are emitted as the raw dual conditional.
+    public var followSystemAppearance: Bool?
     /// Window background opacity in 0...1 (1 = fully opaque), or nil for opaque. Composited at the
     /// AppKit window level, NOT by the ghostty renderer: when < 1, `ghosttyConfigLines()` pins the
     /// renderer fully transparent so the window's tinted background is the single translucent layer
@@ -135,6 +139,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var confirmCloseSession: Bool?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
+                darkTheme: String? = nil, followSystemAppearance: Bool? = nil,
                 backgroundOpacity: Double? = nil, backgroundBlur: Int? = nil, notificationsEnabled: Bool? = nil,
                 compactToolbar: Bool? = nil, notificationBadgeEnabled: Bool? = nil,
                 activeStatusColorHex: String? = nil, blockedStatusColorHex: String? = nil,
@@ -148,6 +153,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
+        self.darkTheme = darkTheme
+        self.followSystemAppearance = followSystemAppearance
         self.backgroundOpacity = backgroundOpacity
         self.backgroundBlur = backgroundBlur
         self.notificationsEnabled = notificationsEnabled
@@ -205,28 +212,65 @@ public struct AppSettings: Codable, Equatable, Sendable {
         Double(min(10, max(0, strength)) - 5) * 0.06
     }
 
-    /// The theme name that renders for the given appearance: the matching side of a dual
-    /// `light:,dark:` value, else the plain `theme`. Shared by `ghosttyConfigLines(isDark:)` and the
-    /// theme-palette badge/selection, so the two can't disagree about what is on screen.
+    /// The theme name that renders for the given appearance: when following, the dark slot in dark mode
+    /// (falling back to `theme`) and `theme` in light mode; otherwise the plain `theme`. Used only by the
+    /// theme-palette badge/selection (emission composes the raw dual and lets ghostty pick the side).
     public func activeTheme(isDark: Bool) -> String? {
-        theme.map { ThemeResolution.activeThemeName($0, isDark: isDark) }
+        guard followSystemAppearance == true else { return theme }
+        return isDark ? (darkTheme ?? theme) : theme
+    }
+
+    /// Splits ghostty's dual `light:NAME,dark:NAME` theme value into its two sides, or nil for a plain
+    /// value. Emission never calls this (it composes from the two fields); it exists only to migrate a
+    /// legacy stored dual `theme` and to pick the active side for the sidebar selection colors, which
+    /// read the resolved `theme` line back out of the generated config.
+    public static func dualThemeSides(_ raw: String) -> (light: String, dark: String)? {
+        let parts = raw.split(separator: ",")
+        guard parts.count == 2 else { return nil }
+        var light: String?
+        var dark: String?
+        for part in parts {
+            let token = part.trimmingCharacters(in: .whitespaces)
+            if token.hasPrefix("light:") {
+                light = String(token.dropFirst(6)).trimmingCharacters(in: .whitespaces)
+            } else if token.hasPrefix("dark:") {
+                dark = String(token.dropFirst(5)).trimmingCharacters(in: .whitespaces)
+            }
+        }
+        guard let light, let dark, !light.isEmpty, !dark.isEmpty else { return nil }
+        return (light, dark)
+    }
+
+    /// Back-compat: an early build stored the pair as a single dual `theme = light:X,dark:Y` string.
+    /// Split it into `theme`/`darkTheme` and turn syncing on, so the pickers and emission see the new
+    /// two-field model. A plain `theme` (or an already-migrated value) is returned unchanged.
+    public func migratingLegacyDualTheme() -> AppSettings {
+        guard darkTheme == nil, let raw = theme, let sides = Self.dualThemeSides(raw) else { return self }
+        var copy = self
+        copy.theme = sides.light
+        copy.darkTheme = sides.dark
+        copy.followSystemAppearance = true
+        return copy
     }
 
     /// The ghostty config lines for the set fields, one `key = value` per line, suitable for a
     /// file loaded via `ghostty_config_load_file`. Unset (or blank) fields are omitted. Values are
     /// written raw — ghostty takes the whole line remainder as the value, so names with spaces
     /// (`3024 Night`, `SF Mono`) are NOT quoted (quoting would become part of the value).
-    /// `isDark` is deliberately NOT defaulted: the emitted theme line depends on the appearance, and a
-    /// silent light-side default would let a caller forget it and emit the wrong side.
-    public func ghosttyConfigLines(isDark: Bool) -> [String] {
+    public func ghosttyConfigLines() -> [String] {
         var lines: [String] = []
         if let fontFamily, !fontFamily.isEmpty { lines.append("font-family = \(fontFamily)") }
         if let fontSize { lines.append("font-size = \(Self.format(fontSize))") }
-        // the ACTIVE theme for the given appearance: the matching side of a dual value, else the plain
-        // theme (agterm resolves the side and rewrites+reloads on a flip — the pinned libghostty
-        // doesn't switch a `theme = light:,dark:` conditional at runtime).
-        if let active = activeTheme(isDark: isDark), !active.isEmpty {
-            lines.append("theme = \(active)")
+        // theme: when following the macOS appearance, emit ghostty's dual conditional RAW and let
+        // libghostty resolve the active side on a color-scheme change (it records the new state and asks
+        // the host to re-feed the config, which the reload path does). Otherwise emit the single theme.
+        // No appearance input here — ghostty owns the switch.
+        let light = theme.flatMap { $0.isEmpty ? nil : $0 }
+        let dark = darkTheme.flatMap { $0.isEmpty ? nil : $0 }
+        if followSystemAppearance == true, let light, let dark {
+            lines.append("theme = light:\(light),dark:\(dark)")
+        } else if let single = light ?? dark {
+            lines.append("theme = \(single)")
         }
         // a translucent window composites its tint at the AppKit level, so the renderer must draw a
         // fully transparent terminal — else the surface and the window stack two tints. At full

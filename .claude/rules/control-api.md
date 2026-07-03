@@ -533,12 +533,12 @@ paths:
   `agtermctlKit`, (4) round-trip in `ControlProtocolTests` + the e2e `testSidebarShowHideToggle` (sidebar
   hide removes the `session-row`s from the AX tree) in `ControlSidebarStatusUITests`.
   `theme.set` sets + persists a theme (see the Theme picker section) PER SLOT, mirroring the two Settings pickers over the shared `SettingsModel.setLightTheme`/`setDarkTheme`/`setSystemThemes`.
-  `args.name` (alias `args.light`; both together is an error) sets the light/single slot,
-  KEEPING a dark slot if one is set (the dual `light:,dark:` theme value recomposes);
-  nil/empty with no dark slot = ghostty's built-in / "default ghostty" (NOT the seeded `agterm` app default),
-  and a bare `theme set` with a dark slot set clears BOTH (a dual side can't be unnamed).
-  `args.dark` sets the dark slot alone — the stored value becomes ghostty's dual form,
-  i.e. appearance syncing starts (the light side seeds from the current theme, else `Builtin Light`);
+  `args.name` (alias `args.light`; both together is an error) sets the light/single `theme` slot,
+  KEEPING the `darkTheme` slot if one is set (they are separate fields, no recompose);
+  nil/empty = ghostty's built-in / "default ghostty" (NOT the seeded `agterm` app default),
+  and a bare `theme set` clears BOTH slots + turns syncing off.
+  `args.dark` sets the `darkTheme` slot alone and turns appearance syncing ON (`followSystemAppearance`,
+  the light side seeds from the current theme, else `Builtin Light`);
   the reserved value `none` clears the dark slot (syncing off, the light side survives as the plain theme).
   The `.themes` palette commit maps to the CURRENT appearance's slot (NO live preview over the socket — preview is interactive-only).
   An unknown name (not in `SettingsCatalog.themeNames()`) is an `unknown theme: X` error (a typo silently

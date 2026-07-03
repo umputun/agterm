@@ -105,15 +105,18 @@ final class GhosttyCallbacks: @unchecked Sendable {
             let value = raw < 0 ? nil : Int(raw)
             DispatchQueue.main.async { view.onSearchSelected?(value) }
             return true
-        case GHOSTTY_ACTION_COLOR_CHANGE:
-            // ghostty's terminal foreground/background changed — a light/dark theme switch it resolved
-            // (after ghostty_app_set_color_scheme), or an OSC 10/11 from a program. mirror it into the
-            // app chrome (title bar + sidebar) so they track the terminal. The payload is a value type;
-            // copy it before the main hop.
-            let change = action.action.color_change
-            DispatchQueue.main.async {
-                GhosttyApp.shared.applyColorChange(kind: change.kind, r: change.r, g: change.g, b: change.b)
-            }
+        case GHOSTTY_ACTION_CONFIG_CHANGE:
+            // ghostty replies to `ghostty_app_update_config` with the config it actually APPLIED — for
+            // the app target that is the dual `theme = light:,dark:` conditional resolved to the current
+            // appearance side, which the host-loaded config can never show (`ghostty_config_get` on it
+            // always reads the default = light side). Clone it synchronously (the core frees its derived
+            // copy right after this callback returns) and stash it for `GhosttyApp.reloadConfig` to read
+            // the chrome colors from. Surface-targeted changes (per-surface watermark overlays) must not
+            // repaint app-level chrome, so only the app target is stashed.
+            guard target.tag == GHOSTTY_TARGET_APP,
+                  let cfg = action.action.config_change.config,
+                  let clone = ghostty_config_clone(cfg) else { return true }
+            stashDerivedAppConfig(clone)
             return true
         case GHOSTTY_ACTION_MOUSE_VISIBILITY:
             // libghostty asks the host to hide/show the pointer — the mechanism behind
@@ -125,6 +128,33 @@ final class GhosttyCallbacks: @unchecked Sendable {
         default:
             return false
         }
+    }
+
+    /// The app-target CONFIG_CHANGE clone awaiting pickup, as a bit pattern (raw pointers aren't
+    /// Sendable, so the lock holds `UInt`; 0 = none). Written synchronously by the CONFIG_CHANGE arm
+    /// during `ghostty_app_update_config`, taken right after by `GhosttyApp.reloadConfig`.
+    private let pendingAppConfig = OSAllocatedUnfairLock<UInt>(initialState: 0)
+
+    /// Stash the cloned app-level derived config, freeing any stale one left from a take-less update
+    /// (e.g. an update_config outside `reloadConfig`) so the box never leaks more than one clone.
+    private func stashDerivedAppConfig(_ config: ghostty_config_t) {
+        let raw = UInt(bitPattern: config)
+        let stale = pendingAppConfig.withLock { pending -> UInt in
+            let previous = pending
+            pending = raw
+            return previous
+        }
+        if let staleConfig = ghostty_config_t(bitPattern: stale) { ghostty_config_free(staleConfig) }
+    }
+
+    /// Hand the pending derived config (if any) to the caller, which owns freeing it.
+    func takeDerivedAppConfig() -> ghostty_config_t? {
+        let raw = pendingAppConfig.withLock { pending -> UInt in
+            let current = pending
+            pending = 0
+            return current
+        }
+        return ghostty_config_t(bitPattern: raw)
     }
 
     func readClipboard(ud: UnsafeMutableRawPointer?, location _: ghostty_clipboard_e, state: UnsafeMutableRawPointer?) -> Bool {

@@ -29,6 +29,27 @@ paths:
   text (a luminance-contrast black/white fallback when only the background is set).
   The borderless New-Session `Menu` glyph ignores `foregroundStyle` on its label,
   so it's tinted via `.tint(chromeText)`.
+- **Light/dark theme following is NATIVE — feed the raw dual value, don't pre-resolve.**
+  `theme = light:X,dark:Y` is a first-class runtime conditional in the pinned libghostty (verified on
+  `4dcb09ada`: `Config.zig` has `_conditional_state` + `changeConditionalState` and a light→dark test).
+  So `ghosttyConfigLines()` emits the dual value RAW while following (no `isDark` param, no side-pick) and
+  ghostty resolves the active side.
+  The switch is NOT fully autonomous on `set_color_scheme`: `ghostty_surface/app_set_color_scheme` only
+  RECORD the new conditional state and emit a SOFT `reload_config` action (which agterm does not handle,
+  so it is dropped); libghostty re-resolves only when the host re-feeds the config via `update_config`.
+  agterm therefore triggers the reload ITSELF on a flip: `viewDidChangeEffectiveAppearance` sets both
+  schemes + posts `.agtermSystemAppearanceChanged`, and `SettingsModel.appearanceChanged` calls
+  `reloadConfigClearingSessionZoom` DIRECTLY (NOT through `apply()`/`writeGhosttyConfig`, whose text-diff
+  would skip the reload — the raw dual file is byte-identical across flips).
+  The chrome retints on the same reload, but NOT from the host-loaded config: `ghostty_config_get` on
+  a config the host built always reads the DEFAULT (light) conditional side — there is no C API to
+  re-side a host config.
+  Instead ghostty replies to `ghostty_app_update_config` with a synchronous app-target `CONFIG_CHANGE`
+  action carrying the config it actually APPLIED (the dual resolved to the current side via
+  `changeConditionalState`) — the same channel Ghostty.app reads its chrome colors from.
+  `GhosttyCallbacks` clones that config into a lock-protected box (surface-target `CONFIG_CHANGE`s —
+  watermark overlays — are ignored), and `reloadConfig` takes it for `resolveThemeColors` and frees it;
+  so no `COLOR_CHANGE` callback is needed for this feature.
 - **Sidebar selection is drawn entirely by `SidebarRowView`, not AppKit.**
   `outline.selectionHighlightStyle = .none` (set right after `style = .sourceList`,
   which would otherwise reset it) so AppKit draws no selection of its own — otherwise it paints a gray
