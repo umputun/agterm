@@ -86,10 +86,12 @@ final class SettingsModel {
         loadRestoreDenylist()
         // follow the macOS light/dark appearance: a surface's viewDidChangeEffectiveAppearance sets the
         // color scheme and posts this (per surface + at first attach); we re-feed the config so libghostty
-        // re-resolves the dual `theme = light:,dark:` conditional to the new side.
+        // re-resolves the dual `theme = light:,dark:` conditional to the new side. The side rides the
+        // notification (the POSTING view's) — see `appearanceChanged` for why it is never re-read here.
         NotificationCenter.default.addObserver(forName: .agtermSystemAppearanceChanged, object: nil,
-                                               queue: .main) { [weak self] _ in
-            MainActor.assumeIsolated { self?.appearanceChanged() }
+                                               queue: .main) { [weak self] note in
+            let isDark = note.userInfo?["isDark"] as? Bool
+            MainActor.assumeIsolated { self?.appearanceChanged(isDark: isDark) }
         }
     }
 
@@ -108,16 +110,32 @@ final class SettingsModel {
     /// across flips, so `writeGhosttyConfig()` would no-op and `apply()` would skip the reload; reload
     /// DIRECTLY instead. ghostty already recorded the new scheme (`set_color_scheme`) and re-resolves
     /// when we re-feed the config via `update_config`. Debounced because the notification fires once per
-    /// deck surface. Unlike an explicit File ▸ Reload / `config.reload`, an automatic flip PRESERVES
-    /// each session's ⌘+/⌘− zoom — silently wiping it on an OS schedule would be a surprise.
-    private func appearanceChanged() {
+    /// deck surface (latest posted side wins). Unlike an explicit File ▸ Reload / `config.reload`, an
+    /// automatic flip PRESERVES each session's ⌘+/⌘− zoom — silently wiping it on an OS schedule would
+    /// be a surprise.
+    ///
+    /// `isDark` is the POSTING view's side, never re-read from `NSApp.effectiveAppearance` here: around
+    /// sleep/wake NSApp can lag the views, so a receive-time re-read would compare a STALE side against
+    /// the latch, wrongly suppress the reload (terminal stuck on the old theme), and leave the latch
+    /// inverted relative to what is rendered — making the next real flip misbehave too.
+    private func appearanceChanged(isDark posterIsDark: Bool?) {
         guard settings.followSystemAppearance == true, settings.theme != nil, settings.darkTheme != nil else { return }
+        let isDark = posterIsDark ?? renderedIsDark()
         appearanceDebouncer.schedule(after: Self.appearanceDebounceInterval) { [weak self] in
             guard let self else { return }
-            guard GhosttyApp.currentIsDark() != lastAppliedIsDark else { return }
-            _ = reloadConfigPreservingSessionZoom()  // also records the newly applied side
+            guard isDark != lastAppliedIsDark else { return }
+            _ = reloadConfigPreservingSessionZoom(isDark: isDark)
             NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
         }
+    }
+
+    /// The appearance side the terminals actually render with: the first live surface's own resolved
+    /// appearance (the value `syncColorScheme` records into libghostty), falling back to
+    /// `NSApp.effectiveAppearance` when no surface exists. Recording `lastAppliedIsDark` from this —
+    /// rather than a separate `NSApp` read — keeps the suppression latch equal to the rendered side by
+    /// construction, even when NSApp lags the views around sleep/wake.
+    private func renderedIsDark() -> Bool {
+        liveSurfaces().first?.isDarkAppearance ?? GhosttyApp.currentIsDark()
     }
 
     func setFontFamily(_ value: String?) { settings.fontFamily = value; persistAndApply() }
@@ -451,10 +469,11 @@ final class SettingsModel {
     /// appearance flip is the one deliberate exception (`reloadConfigPreservingSessionZoom`).
     @discardableResult
     private func reloadConfigClearingSessionZoom() -> Int {
-        // every reload re-sides the config to the CURRENT appearance (surface schemes + the CONFIG_CHANGE
-        // chrome clone), so record the side here — for ALL reload paths, not just the appearance flip —
-        // to keep `appearanceChanged()`'s same-side suppression from firing one spurious reload later.
-        lastAppliedIsDark = GhosttyApp.currentIsDark()
+        // every reload re-sides the config to the surfaces' CURRENT appearance (surface schemes + the
+        // CONFIG_CHANGE chrome clone), so record the side here — for ALL reload paths, not just the
+        // appearance flip — to keep `appearanceChanged()`'s same-side suppression from firing one
+        // spurious reload later. The surface-derived side, not NSApp's (see `renderedIsDark`).
+        lastAppliedIsDark = renderedIsDark()
         // open windows reset live, closed ones by rewriting their snapshot file (the shared config reset
         // every surface to the default size, so a closed window mustn't reopen later overriding the new default).
         library.resetSessionFontSizesAllWindows()
@@ -462,14 +481,14 @@ final class SettingsModel {
     }
 
     /// The appearance-flip variant of the reload above: re-feeds the config so libghostty re-resolves
-    /// the dual theme, but KEEPS every session's ⌘+/⌘− zoom — the reload's shared-config broadcast still
-    /// resets each surface to the default size, and `reapplySessionConfigIfNeeded` then re-emits the
-    /// session's `fontSize` per surface (the same round-trip that re-asserts watermarks). An automatic
-    /// OS flip (or the first-attach reload of a dark launch) must not silently wipe zoom; only the
-    /// explicit reloads carry the documented zoom-clearing contract.
+    /// the dual theme, but KEEPS every session's ⌘+/⌘− zoom — after the shared-config broadcast,
+    /// `reapplySessionConfigIfNeeded` re-emits the session's `fontSize` per surface (the same
+    /// round-trip that re-asserts watermarks). An automatic OS flip (or the first-attach reload of a
+    /// dark launch) must not silently wipe zoom; only the explicit reloads carry the documented
+    /// zoom-clearing contract. `isDark` is the flip's poster-derived side (see `appearanceChanged`).
     @discardableResult
-    private func reloadConfigPreservingSessionZoom() -> Int {
-        lastAppliedIsDark = GhosttyApp.currentIsDark()
+    private func reloadConfigPreservingSessionZoom(isDark: Bool) -> Int {
+        lastAppliedIsDark = isDark
         return GhosttyApp.shared.reloadConfig(surfaces: liveSurfaces())
     }
 

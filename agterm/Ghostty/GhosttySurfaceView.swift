@@ -838,8 +838,20 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         // when the host re-feeds the config via update_config, so post the appearance change and let
         // `SettingsModel` trigger that reload (the raw dual file text is stable across flips, so its
         // write-diff would otherwise skip it). Fires per surface + at first attach; `SettingsModel` debounces
-        // and no-ops unless following with both slots set.
-        NotificationCenter.default.post(name: .agtermSystemAppearanceChanged, object: nil)
+        // and no-ops unless following with both slots set. The userInfo carries THIS view's side —
+        // `NSApp.effectiveAppearance` can lag the views around sleep/wake, and a receiver re-reading it
+        // would compare a stale side, wrongly suppress the reload, and leave the terminal stuck on the
+        // old theme (with the suppression latch inverted, so the NEXT flip misbehaves too).
+        NotificationCenter.default.post(name: .agtermSystemAppearanceChanged, object: nil,
+                                        userInfo: ["isDark": isDarkAppearance])
+    }
+
+    /// Whether this view currently resolves to the dark appearance — the side libghostty renders with,
+    /// since `syncColorScheme` records exactly this value. The appearance-flip plumbing reads the VIEW's
+    /// side (not `NSApp.effectiveAppearance`, which can lag the views around sleep/wake) so the trigger,
+    /// the suppression latch, and the render can never disagree.
+    var isDarkAppearance: Bool {
+        effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 
     /// Record this surface's (and the app's) light/dark scheme from its live `effectiveAppearance`, so the
@@ -851,7 +863,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// reload keeps the terminal in sync. `set_color_scheme` early-returns when unchanged, so it is cheap.
     func syncColorScheme() {
         guard let surface else { return }
-        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        let isDark = isDarkAppearance
         ghostty_surface_set_color_scheme(surface, isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT)
         if let app = GhosttyApp.shared.app {
             ghostty_app_set_color_scheme(app, isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT)

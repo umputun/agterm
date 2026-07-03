@@ -277,7 +277,10 @@ final class GhosttyApp {
         // refresh the chrome colors from the NEW config BEFORE the watermark re-assert below: a default-tinted
         // `.text` watermark re-renders its PNG reading `terminalForegroundColor`, so the foreground must already
         // reflect the new theme — otherwise the text watermark's color lags one reload behind a theme change.
-        resolveThemeColors(from: derivedConfig ?? newConfig, inputs: inputs)
+        // the selection colors re-side from the SURFACES' appearance — the same side syncColorScheme just
+        // recorded — not a separate NSApp read that can lag the views around sleep/wake.
+        resolveThemeColors(from: derivedConfig ?? newConfig, inputs: inputs,
+                           isDark: surfaces.first?.isDarkAppearance ?? Self.currentIsDark())
         if let derivedConfig { ghostty_config_free(derivedConfig) }
         // the broadcast above pushes the shared config (no background image, default font size) to every
         // surface, wiping any per-surface watermark and zoom — so re-assert each affected surface's
@@ -295,21 +298,24 @@ final class GhosttyApp {
     /// resolved config. Called at init and on every settings reload. `background`/`foreground` come
     /// from the resolved config; the selection colors are resolved separately (see below) because
     /// `ghostty_config_get` does not expose the optional `selection-*` keys.
-    private func resolveThemeColors(from config: ghostty_config_t, inputs: ConfigInputs) {
+    private func resolveThemeColors(from config: ghostty_config_t, inputs: ConfigInputs,
+                                    isDark: Bool = currentIsDark()) {
         lastConfigInputs = inputs
         terminalBackgroundColor = Self.color(from: config, key: "background")
         terminalForegroundColor = Self.color(from: config, key: "foreground")
-        refreshSelectionColors()
+        refreshSelectionColors(isDark: isDark)
     }
 
-    /// Re-resolve the selection chrome colors for the current appearance. Used by the full config load
-    /// AND by the appearance-flip reload (which re-resolves the theme's colors), so the selected-row pill
-    /// follows a light/dark theme flip. No-op until a config has loaded.
-    func refreshSelectionColors() {
+    /// Re-resolve the selection chrome colors for the given appearance side. Used by the full config
+    /// load AND by the appearance-flip reload (which re-resolves the theme's colors), so the
+    /// selected-row pill follows a light/dark theme flip. The reload path passes the SURFACE-derived
+    /// side (`NSApp.effectiveAppearance` can lag the views around sleep/wake); the default suffices for
+    /// the no-surface callers. No-op until a config has loaded.
+    func refreshSelectionColors(isDark: Bool = currentIsDark()) {
         guard let inputs = lastConfigInputs else { return }
         let (selectionBackground, selectionForeground) = Self.resolveSelectionColors(
             ghosttyConfigPath: inputs.scopedURL.path, inheritGlobalConfig: inputs.inheritGlobalConfig,
-            isDark: Self.currentIsDark())
+            isDark: isDark)
         terminalSelectionBackgroundColor = selectionBackground
         terminalSelectionForegroundColor = selectionForeground
             ?? selectionBackground.map(Self.contrastingText(for:))
