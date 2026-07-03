@@ -287,6 +287,31 @@ always in context:
   they are install OUTPUTS that Help ▸ Install Agent Skill (`SkillInstaller`) regenerates from the bundle,
   so a manual edit there is wrong and must never even be offered (`~/.claude/skills/agterm/` is snapshotted
   in the dot-files repo, but that does not make it a source).
+- **The website (`site/`) is the fifth keep-in-sync surface.**
+  `site/docs.html` is a hand-authored mirror of `README.md` — when you add features, flags,
+  keybindings, or modes, update both.
+  `site/index.html` (the features grid and install copy) and the `softwareVersion` in its
+  `SoftwareApplication` JSON-LD must reflect major features and the latest release.
+  See the `## Website` section below for the deploy model.
+
+## Website
+
+`agterm.com` is a hand-authored static site in `site/`, deployed via Cloudflare Pages with no build step
+(the revdiff pattern).
+Cloudflare's Git integration auto-deploys `site/` on every push to `master`; there is no wrangler config
+and no deploy workflow in the repo.
+All Cloudflare wiring — the Pages project, the `agterm.com` custom domain, and the output directory (`site`)
+— lives in the Cloudflare dashboard, not in git, so it is not reproducible from the repo.
+Cloudflare Pages strips `.html` and 308-redirects `/docs.html` to `/docs`, so every canonical link,
+`og:url`, and `sitemap.xml` entry uses the extensionless `https://agterm.com/docs`.
+
+The site is lean and self-contained — nothing is embedded.
+`site/style.css` holds the reset, keyframes, `@font-face`, and the hover classes;
+the two pages keep the design's inline styles.
+Assets are self-hosted under `site/assets/`: latin `woff2` fonts in `site/assets/fonts/`,
+screenshots as `webp`, plus a generated 1200×630 `agterm-og.png` social card and favicons.
+The pages were converted from a design-tool bundle export whose source zip lives on the maintainer's
+Desktop, not in the repo, so a visual redesign means re-exporting the design and re-running that conversion.
 
 ## Subsystem notes (path-scoped rules)
 
