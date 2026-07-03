@@ -14,7 +14,15 @@ import Foundation
 public enum TerminalText {
     /// Strip the C0 control range (U+0000–U+001F, including tab/newline/carriage-return) and DEL
     /// (U+007F) from an OSC-reported title or working directory; every other scalar is preserved.
+    /// The common case (no control characters, which is every real title/path) returns the input
+    /// unchanged with no allocation, since these callbacks run on every OSC redraw.
     public static func sanitized(_ value: String) -> String {
-        String(String.UnicodeScalarView(value.unicodeScalars.filter { $0.value >= 0x20 && $0.value != 0x7F }))
+        guard value.unicodeScalars.contains(where: { $0.value < 0x20 || $0.value == 0x7F })
+        else { return value }
+        var scalars = String.UnicodeScalarView()
+        for scalar in value.unicodeScalars where scalar.value >= 0x20 && scalar.value != 0x7F {
+            scalars.append(scalar)
+        }
+        return String(scalars)
     }
 }

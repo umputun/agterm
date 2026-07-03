@@ -299,6 +299,7 @@ for untrusted content). A remote host can set the session title (OSC) and workin
 so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are as untrusted as `{AGT_SELECTION}`; use the quoted
 `$AGT_*` form for any of them:
 
+- `{AGT_SESSION_NAME}` / `$AGT_SESSION_NAME` — the session's display name (the focused pane's terminal title, remote-settable via OSC).
 - `{AGT_SESSION_PWD}` / `$AGT_SESSION_PWD` — the focused pane's working directory.
 - `{AGT_SELECTION}` / `$AGT_SELECTION` — the current selection.
 - Plus the other `$AGT_*` context vars the runner exports.
