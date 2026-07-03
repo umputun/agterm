@@ -193,4 +193,25 @@ paths:
   Cursor solid/hollow is not accessibility-observable, so it is NOT unit/UI-testable — verified by instrumenting
   `set_focus` and reading `log show` across split-open + multi-window key switches (exactly one focused
   surface app-wide in every case).
+- **OSC 52 clipboard access is gated in OUR callbacks, not by a ghostty-internal dialog.**
+  A program reading (`\e]52;c;?\a`) or writing (`\e]52;c;<base64>\a`) the system clipboard reaches agterm
+  through `read_clipboard_cb`/`confirm_read_clipboard_cb` and `write_clipboard_cb` (`GhosttyCallbacks`).
+  libghostty delegates the `ask` policy to the host: the write callback carries a `confirm` bool (true
+  when `clipboard-write = ask`), and the read confirm callback carries a `ghostty_clipboard_request_e`
+  (`GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ` for a program read, `..._PASTE` for ⌘V) — only `OSC_52_READ`
+  is gated, so pastes never prompt.
+  `ClipboardPromptController` (`@MainActor`) owns the per-session host-free `ClipboardPromptPolicy`
+  (`ask`/`allow`/`deny` remembered per direction for the "don't ask again this session" choice) and shows
+  an `NSAlert` sheet, coalescing an OSC 52 flood behind one in-flight prompt.
+  Two rules the build proved the hard way: the callback fires INSIDE a libghostty tick, so the sheet is
+  deferred via `DispatchQueue.main.async` (a modal run loop opened inside the tick re-enters it); and a
+  DENIED read must complete with an EMPTY string and `confirmed = true`, because completing with
+  `confirmed = false` leaves the request unconfirmed and libghostty just re-asks, LOOPING the dialog.
+  Read gating rides ghostty's own `clipboard-read = ask` default (verified: the confirm callback fires
+  with no explicit config); write stays `allow` by default (matches mainstream terminals, so a legit
+  remote yank isn't interrupted) and opts into `ask`/`deny` via the agterm-scoped `ghostty.conf`.
+  The surface + ghostty request `state` captured for the deferred read completion are `nonisolated(unsafe)`
+  (valid until we complete; touched only on the main actor).
+  The dialog is AppKit and not unit-tested (only `ClipboardPromptPolicy` is); the gating was verified with
+  an isolated dev instance driving OSC 52 read/write by hand.
 

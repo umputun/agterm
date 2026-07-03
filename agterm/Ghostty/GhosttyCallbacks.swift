@@ -141,19 +141,57 @@ final class GhosttyCallbacks: @unchecked Sendable {
     /// Pasted text from the general clipboard (the libghostty paste callback).
     static func readPasteboardText() -> String? { pasteboardText(.general) }
 
-    func confirmReadClipboard(ud: UnsafeMutableRawPointer?, content: UnsafePointer<CChar>?, state: UnsafeMutableRawPointer?) {
+    func confirmReadClipboard(ud: UnsafeMutableRawPointer?, content: UnsafePointer<CChar>?, state: UnsafeMutableRawPointer?,
+                              request: ghostty_clipboard_request_e) {
         guard let content else { return }
-        ghostty_surface_complete_clipboard_request(surface(from: ud), content, state, true)
-    }
-
-    func writeClipboard(content: UnsafePointer<ghostty_clipboard_content_s>?, len: UInt) {
-        guard let content, len > 0 else { return }
-        for item in UnsafeBufferPointer(start: content, count: Int(len)) {
-            guard let data = item.data, let mime = item.mime, String(cString: mime).hasPrefix("text/plain") else { continue }
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(String(cString: data), forType: .string)
+        // only a real OSC 52 read (a program reading the system clipboard into the terminal stream) is
+        // gated; a paste keeps auto-approving so ⌘V never prompts.
+        guard request == GHOSTTY_CLIPBOARD_REQUEST_OSC_52_READ else {
+            ghostty_surface_complete_clipboard_request(surface(from: ud), content, state, true)
             return
         }
+        let text = String(cString: content) // copy: content may not outlive this callback
+        // ghostty holds the read request open via `state` until we complete it, and the surface outlives
+        // that pending request in the eager deck; both are touched only on the main actor below, so the
+        // unchecked capture is race-free.
+        nonisolated(unsafe) let surface = surface(from: ud)
+        nonisolated(unsafe) let requestState = state
+        DispatchQueue.main.async {
+            ClipboardPromptController.shared.request(.read) { allowed in
+                // deny by delivering an EMPTY clipboard with confirmed = true. completing with confirmed =
+                // false leaves the request unconfirmed and libghostty just re-asks, looping the dialog; an
+                // empty confirmed response completes it and hands the program nothing.
+                let delivered = allowed ? text : ""
+                delivered.withCString { ghostty_surface_complete_clipboard_request(surface, $0, requestState, true) }
+            }
+        }
+    }
+
+    func writeClipboard(content: UnsafePointer<ghostty_clipboard_content_s>?, len: UInt, confirm: Bool) {
+        guard let content, len > 0 else { return }
+        var text: String?
+        for item in UnsafeBufferPointer(start: content, count: Int(len)) {
+            guard let data = item.data, let mime = item.mime, String(cString: mime).hasPrefix("text/plain") else { continue }
+            text = String(cString: data)
+            break
+        }
+        guard let text else { return }
+        // confirm == false: ghostty's clipboard-write policy already allowed it (the `allow` default), so
+        // write directly. confirm == true: clipboard-write = ask, so gate the write behind the user.
+        guard confirm else {
+            Self.setClipboard(text)
+            return
+        }
+        DispatchQueue.main.async {
+            ClipboardPromptController.shared.request(.write) { allowed in
+                if allowed { Self.setClipboard(text) }
+            }
+        }
+    }
+
+    private static func setClipboard(_ text: String) {
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(text, forType: .string)
     }
 
     func closeSurface(ud: UnsafeMutableRawPointer?) {
