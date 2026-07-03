@@ -176,12 +176,17 @@ final class CustomCommandRunner {
             logger.notice("custom command \"\(command.name, privacy: .public)\" fired with no active session; ignored")
             return
         }
-        // palette path: selection + pane both come from the active session's focused pane (split if it
-        // holds focus). the palette has no fired-from surface to key off, so the focus flag is the source.
-        let splitFocused = session.splitFocused
-        let selectionSurface = (splitFocused ? session.splitSurface : session.surface) as? GhosttySurfaceView
+        // palette path: selection + pane both come from the active session's focused pane. the palette has
+        // no fired-from surface to key off, so the focus flag is the source — but gated on the split surface
+        // EXISTING (the `Session.onScreenSurface` idiom, `splitFocused && splitSurface != nil`): in the
+        // window right after `session split on`, `splitFocused` is already true while `splitSurface` is
+        // still nil, so a bare flag would report `.right` (and read the selection from the nil split
+        // surface) when `session.type --pane right` still errors "no split pane". A promoted survivor keeps
+        // `splitSurface` non-nil, so it still reports `.right` — the pane `--pane right` reaches.
+        let onSplit = session.splitFocused && session.splitSurface != nil
+        let selectionSurface = (onSplit ? session.splitSurface : session.surface) as? GhosttySurfaceView
         let context = self.context(for: session, in: store, selectionSurface: selectionSurface,
-                                   pane: splitFocused ? .right : .left)
+                                   pane: onSplit ? .right : .left)
         spawn(command, context: context)
     }
 

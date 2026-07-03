@@ -81,6 +81,49 @@ final class CustomCommandPaneTokenUITests: ControlAPITestCase {
                        "a command run from the palette with no split should report $AGT_PANE=left")
     }
 
+    // promoted single-pane: split on, then exit the PRIMARY (main/left) shell so `closePrimaryPane`
+    // promotes the survivor into the `splitSurface` slot (hasSplit=false, splitFocused=true, surface=nil).
+    // {AGT_PANE} must report "right": the survivor physically lives in splitSurface, so that's the pane
+    // `session.type --pane` reaches — a "left" here would name the torn-down main surface. Then prove the
+    // round-trip the token exists for: `session.type --pane <reported>` lands in the survivor's own buffer.
+    // This is the edge the review went back and forth on (reword-not-gate).
+    func testAgtPanePromotedSurvivorReportsRight() throws {
+        let marker = markerDir.appendingPathComponent("agt-pane-promoted")
+        try relaunch(withKeymap: "command \"Pane Probe\" printf %s \"$AGT_PANE\" > \"\(marker.path)\"\n")
+
+        let split = try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"on"}}"#)
+        XCTAssertEqual(split["ok"] as? Bool, true, "split on should succeed: \(split)")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the active session should report split:true")
+        let activeID = try activeSessionID()
+
+        // a no-pane session.type injects into the main (left) surface regardless of focus, so `exit` closes
+        // the primary pane; with a live split pane, `closePrimaryPane` promotes the survivor rather than
+        // closing the session. Retry the exit until the split flag drops (the shell may not be at a prompt
+        // for the first keystrokes — the same readiness idiom the pane-text polls use).
+        var promoted = false
+        for _ in 0..<5 {
+            _ = try sendCommand(typeRequest(text: "exit\n", target: activeID, select: false))
+            if pollActiveSessionSplit(false, timeout: 4) { promoted = true; break }
+        }
+        XCTAssertTrue(promoted, "exiting the primary pane should promote the survivor to a single (non-split) pane")
+
+        // palette path: the promoted survivor has splitFocused=true AND splitSurface != nil, so run() reports right.
+        try? FileManager.default.removeItem(at: marker)
+        runFromCustomCommandsPalette("Pane Probe")
+        let reported = pollMarker(marker, timeout: 5)
+        XCTAssertEqual(reported, "right", "a promoted split survivor should report $AGT_PANE=right")
+
+        // round-trip: session.type --pane <reported> must reach THAT pane's buffer (the survivor). Typed as
+        // `$((6*7))` arithmetic so a match proves the survivor's shell RAN the line, not merely echoed it.
+        let pane = try XCTUnwrap(reported)
+        let tag = "PROMO-\(UUID().uuidString.prefix(8))"
+        let text = try pollPaneText(target: activeID, pane: pane, contains: "\(tag)-42", retype: {
+            _ = try self.sendCommand(self.typeRequest(text: "echo \(tag)-$((6*7))\n", target: activeID,
+                                                      select: false, pane: pane))
+        })
+        XCTAssertNotNil(text, "session.type --pane \(pane) should reach the promoted survivor")
+    }
+
     // MARK: - Helpers
 
     /// Click the seeded session row so the main terminal surface is first responder (the custom-command
