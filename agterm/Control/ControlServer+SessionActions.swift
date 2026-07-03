@@ -167,6 +167,52 @@ extension ControlServer: ControlActions {
         }
     }
 
+    // MARK: - Keymap
+
+    /// Re-read and re-parse `keymap.conf`, returning the count of parse diagnostics. The SAME
+    /// `reloadKeymap()` path the GUI's File ▸ Reload Keymap menu/palette item drives, so the menu/palette
+    /// and `keymap.reload` never diverge — control-native here only in the count it reports back.
+    func reloadKeymap() -> ControlResponse {
+        settingsModel.reloadKeymap()
+        return ControlResponse(ok: true, result: ControlResult(count: settingsModel.keymapDiagnostics.count))
+    }
+
+    // MARK: - Config
+
+    /// Re-read and apply the ghostty config, returning the config-diagnostic count (0 = clean), counted
+    /// across ALL config sources (bundled defaults, the global `~/.config/ghostty/config`, the agterm-scoped
+    /// `ghostty.conf`, and the UI settings conf) — libghostty diagnostics carry no source-file attribution.
+    /// The SAME `AppActions.reloadGhosttyConfig()` path the GUI's File ▸ Reload Config menu/palette item
+    /// drives (which posts the warning banner on diagnostics), so the GUI and `config.reload` never diverge
+    /// — control-native here only in the count it reports back. The count is the value the reload actually
+    /// produced (threaded back from the reload), not a separate re-read. App-global (one settings model +
+    /// one GhosttyApp), so no `--window` selector, like `keymap.reload`.
+    func reloadGhosttyConfig() -> ControlResponse {
+        ControlResponse(ok: true, result: ControlResult(count: actions.reloadGhosttyConfig()))
+    }
+
+    // MARK: - Theme
+
+    /// Set + persist a theme by name — the control half of the Settings picker / the `.themes` palette
+    /// commit (no live preview over the socket). A nil/empty name selects ghostty's built-in colors
+    /// ("default ghostty"), NOT the seeded `agterm` app default; any other name must be a bundled theme,
+    /// else an error (a typo silently doing nothing is worse than a fail). Returns the applied theme in
+    /// `result.theme` (nil = ghostty built-in). App-global: one `SettingsModel`, so no `--window` selector.
+    func setTheme(name: String?) -> ControlResponse {
+        let resolved = ThemeCatalog.resolvedName(name)
+        let catalog = ThemeCatalog(names: actions.availableThemes())
+        if let resolved, !catalog.contains(name: resolved) {
+            return ControlResponse(ok: false, error: "unknown theme: \(resolved)")
+        }
+        actions.setTheme(resolved)
+        return ControlResponse(ok: true, result: ControlResult(theme: resolved))
+    }
+
+    func listThemes() -> ControlResponse {
+        ControlResponse(ok: true, result: ControlResult(theme: actions.currentTheme,
+                                                        themes: actions.availableThemes()))
+    }
+
     /// Set the target session's agent-status indicator (control-native: no GUI/menu equivalent, like
     /// `notify`/`session.type`/`session.copy`). `status` is `idle|active|completed|blocked`; an unknown
     /// value is the structured `invalid status` error. `blink` (default false) pulses the glyph;
@@ -284,10 +330,7 @@ extension ControlServer: ControlActions {
     /// Post a desktop notification attributed to a session (default: the active session of the
     /// frontmost window, via `resolveSession`). `title` defaults to the session name; `body` is
     /// required. Errors when no open window owns the resolved session.
-    func sendNotification(_ target: String?, window: String?, title: String?, body: String?) -> ControlResponse {
-        guard let body, !body.isEmpty else {
-            return ControlResponse(ok: false, error: "notify requires a body")
-        }
+    func sendNotification(_ target: String?, window: String?, title: String?, body: String) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")

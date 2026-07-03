@@ -342,7 +342,8 @@ final class ControlServer {
         switch request.cmd {
         case .tree, .sessionNew, .sessionMove, .workspaceMove, .workspaceFocus, .sessionSplit,
                 .sessionScratch, .sessionFocus, .sessionResize, .sessionStatus, .sessionFlag,
-                .sidebar, .sidebarMode, .sidebarExpand, .sidebarCollapse:
+                .notify, .fontInc, .fontDec, .fontReset, .keymapReload, .configReload,
+                .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarExpand, .sidebarCollapse:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         case .sessionSelect:
             return resolver.resolveSession(request.target, window: request.args?.window) { store, id in
@@ -485,15 +486,6 @@ final class ControlServer {
             }
         case .quick:
             return setQuickTerminal(mode: request.args?.mode)
-        case .notify:
-            return sendNotification(request.target, window: request.args?.window,
-                                    title: request.args?.title, body: request.args?.body)
-        case .fontInc:
-            return font(request.target, window: request.args?.window, action: "increase_font_size:1")
-        case .fontDec:
-            return font(request.target, window: request.args?.window, action: "decrease_font_size:1")
-        case .fontReset:
-            return font(request.target, window: request.args?.window, action: "reset_font_size")
         case .windowNew:
             return windowNew(name: request.args?.name)
         case .windowList:
@@ -512,15 +504,6 @@ final class ControlServer {
             return windowMove(request.target, x: request.args?.x, y: request.args?.y, display: request.args?.display)
         case .windowZoom:
             return windowZoom(request.target)
-        case .keymapReload:
-            return reloadKeymap()
-        case .configReload:
-            return reloadGhosttyConfig()
-        case .themeSet:
-            return setTheme(name: request.args?.name)
-        case .themeList:
-            return ControlResponse(ok: true, result: ControlResult(theme: actions.currentTheme,
-                                                                    themes: actions.availableThemes()))
         case .restoreClear:
             return clearSavedCommands()
         }
@@ -571,47 +554,6 @@ final class ControlServer {
         }
         if store === library.activeStore { actions.focusActiveSession() }
         return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
-    }
-
-    // MARK: - Keymap
-
-    /// Re-read and re-parse `keymap.conf`, returning the count of parse diagnostics. The SAME
-    /// `reloadKeymap()` path the GUI's File ▸ Reload Keymap menu/palette item drives, so the menu/palette
-    /// and `keymap.reload` never diverge — control-native here only in the count it reports back.
-    private func reloadKeymap() -> ControlResponse {
-        settingsModel.reloadKeymap()
-        return ControlResponse(ok: true, result: ControlResult(count: settingsModel.keymapDiagnostics.count))
-    }
-
-    // MARK: - Config
-
-    /// Re-read and apply the ghostty config, returning the config-diagnostic count (0 = clean), counted
-    /// across ALL config sources (bundled defaults, the global `~/.config/ghostty/config`, the agterm-scoped
-    /// `ghostty.conf`, and the UI settings conf) — libghostty diagnostics carry no source-file attribution.
-    /// The SAME `AppActions.reloadGhosttyConfig()` path the GUI's File ▸ Reload Config menu/palette item
-    /// drives (which posts the warning banner on diagnostics), so the GUI and `config.reload` never diverge
-    /// — control-native here only in the count it reports back. The count is the value the reload actually
-    /// produced (threaded back from the reload), not a separate re-read. App-global (one settings model +
-    /// one GhosttyApp), so no `--window` selector, like `keymap.reload`.
-    private func reloadGhosttyConfig() -> ControlResponse {
-        ControlResponse(ok: true, result: ControlResult(count: actions.reloadGhosttyConfig()))
-    }
-
-    // MARK: - Theme
-
-    /// Set + persist a theme by name — the control half of the Settings picker / the `.themes` palette
-    /// commit (no live preview over the socket). A nil/empty name selects ghostty's built-in colors
-    /// ("default ghostty"), NOT the seeded `agterm` app default; any other name must be a bundled theme,
-    /// else an error (a typo silently doing nothing is worse than a fail). Returns the applied theme in
-    /// `result.theme` (nil = ghostty built-in). App-global: one `SettingsModel`, so no `--window` selector.
-    private func setTheme(name: String?) -> ControlResponse {
-        let resolved = ThemeCatalog.resolvedName(name)
-        let catalog = ThemeCatalog(names: actions.availableThemes())
-        if let resolved, !catalog.contains(name: resolved) {
-            return ControlResponse(ok: false, error: "unknown theme: \(resolved)")
-        }
-        actions.setTheme(resolved)
-        return ControlResponse(ok: true, result: ControlResult(theme: resolved))
     }
 
     /// `value` trimmed of surrounding whitespace, or nil if absent or blank after trimming.

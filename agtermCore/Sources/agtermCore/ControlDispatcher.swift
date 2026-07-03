@@ -16,6 +16,12 @@ public protocol ControlActions {
     func scratchSession(_ target: String?, window: String?, mode: String?, command: String?) -> ControlResponse
     func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse
     func resizeSplit(_ target: String?, window: String?, resize: ControlSplitResize) -> ControlResponse
+    func font(_ target: String?, window: String?, action: String) -> ControlResponse
+    func reloadKeymap() -> ControlResponse
+    func reloadGhosttyConfig() -> ControlResponse
+    func sendNotification(_ target: String?, window: String?, title: String?, body: String) -> ControlResponse
+    func setTheme(name: String?) -> ControlResponse
+    func listThemes() -> ControlResponse
     func setSidebarVisibility(_ mode: ControlToggleMode) -> ControlResponse
     func setSidebarViewMode(_ mode: ControlSidebarViewMode) -> ControlResponse
     func expandSidebar(window: String?) -> ControlResponse
@@ -105,6 +111,26 @@ public struct ControlDispatcher {
             case (nil, .some(let delta)):
                 return actions.resizeSplit(request.target, window: request.args?.window, resize: .delta(delta))
             }
+        case .fontInc:
+            return actions.font(request.target, window: request.args?.window, action: "increase_font_size:1")
+        case .fontDec:
+            return actions.font(request.target, window: request.args?.window, action: "decrease_font_size:1")
+        case .fontReset:
+            return actions.font(request.target, window: request.args?.window, action: "reset_font_size")
+        case .keymapReload:
+            return actions.reloadKeymap()
+        case .configReload:
+            return actions.reloadGhosttyConfig()
+        case .notify:
+            guard let body = request.args?.body, !body.isEmpty else {
+                return ControlResponse(ok: false, error: "notify requires a body")
+            }
+            return actions.sendNotification(request.target, window: request.args?.window,
+                                            title: request.args?.title, body: body)
+        case .themeSet:
+            return actions.setTheme(name: request.args?.name)
+        case .themeList:
+            return actions.listThemes()
         case .sidebar:
             guard let mode = ControlToggleMode.parse(request.args?.mode, on: "show", off: "hide") else {
                 return ControlResponse(ok: false, error: "invalid sidebar mode: \(request.args?.mode ?? "toggle")")

@@ -319,11 +319,126 @@ struct ControlDispatcherTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func fontCommandsRouteActionsWithTargetAndWindow() {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextFontResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
+
+        let inc = dispatcher.dispatch(ControlRequest(
+            cmd: .fontInc,
+            target: "session",
+            args: ControlArgs(window: "win")
+        ))
+        let dec = dispatcher.dispatch(ControlRequest(cmd: .fontDec, target: "session"))
+        let reset = dispatcher.dispatch(ControlRequest(cmd: .fontReset, target: "session"))
+
+        #expect(inc == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(dec == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(reset == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(actions.calls == [
+            .font(target: "session", window: "win", "increase_font_size:1"),
+            .font(target: "session", window: nil, "decrease_font_size:1"),
+            .font(target: "session", window: nil, "reset_font_size")
+        ])
+    }
+
+    @Test func keymapAndConfigReloadWrapDiagnosticCounts() {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextKeymapResponse = ControlResponse(ok: true, result: ControlResult(count: 2))
+        actions.nextConfigResponse = ControlResponse(ok: true, result: ControlResult(count: 3))
+
+        let keymap = dispatcher.dispatch(ControlRequest(cmd: .keymapReload))
+        let config = dispatcher.dispatch(ControlRequest(cmd: .configReload))
+
+        #expect(keymap == ControlResponse(ok: true, result: ControlResult(count: 2)))
+        #expect(config == ControlResponse(ok: true, result: ControlResult(count: 3)))
+        #expect(actions.calls == [.keymapReload, .configReload])
+    }
+
+    @Test func notifyRequiresBodyBeforeCallingActions() {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let missing = dispatcher.dispatch(ControlRequest(cmd: .notify, target: "session"))
+        let empty = dispatcher.dispatch(ControlRequest(
+            cmd: .notify,
+            target: "session",
+            args: ControlArgs(body: "")
+        ))
+
+        #expect(missing == ControlResponse(ok: false, error: "notify requires a body"))
+        #expect(empty == ControlResponse(ok: false, error: "notify requires a body"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func notifyRoutesBodyTitleTargetAndWindow() {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextNotifyResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
+
+        let response = dispatcher.dispatch(ControlRequest(
+            cmd: .notify,
+            target: "session",
+            args: ControlArgs(window: "win", title: "Build", body: "done")
+        ))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(actions.calls == [
+            .notify(target: "session", window: "win", title: "Build", body: "done")
+        ])
+    }
+
+    @Test func themeSetRoutesAndEchoesActionResponse() {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextThemeSetResponse = ControlResponse(ok: true, result: ControlResult(theme: "Dracula"))
+
+        let set = dispatcher.dispatch(ControlRequest(
+            cmd: .themeSet,
+            args: ControlArgs(name: "Dracula")
+        ))
+
+        #expect(set == ControlResponse(ok: true, result: ControlResult(theme: "Dracula")))
+        #expect(actions.calls == [.themeSet("Dracula")])
+    }
+
+    @Test func themeSetKeepsExactActionErrorResponse() {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextThemeSetResponse = ControlResponse(ok: false, error: "unknown theme: NotARealTheme")
+
+        let response = dispatcher.dispatch(ControlRequest(
+            cmd: .themeSet,
+            args: ControlArgs(name: "NotARealTheme")
+        ))
+
+        #expect(response == ControlResponse(ok: false, error: "unknown theme: NotARealTheme"))
+        #expect(actions.calls == [.themeSet("NotARealTheme")])
+    }
+
+    @Test func themeListReturnsCurrentThemeAndAvailableThemes() {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextThemeListResponse = ControlResponse(
+            ok: true,
+            result: ControlResult(theme: "Dracula", themes: ["Dracula", "Nord"])
+        )
+
+        let response = dispatcher.dispatch(ControlRequest(cmd: .themeList))
+
+        #expect(response == ControlResponse(
+            ok: true,
+            result: ControlResult(theme: "Dracula", themes: ["Dracula", "Nord"])
+        ))
+        #expect(actions.calls == [.themeList])
+    }
+
     @Test func nonMigratedCommandFallsThrough() {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
 
-        let response = dispatcher.dispatch(ControlRequest(cmd: .sessionSelect))
+        let response = dispatcher.dispatch(ControlRequest(cmd: .sessionType))
 
         #expect(response == nil)
         #expect(actions.calls.isEmpty)
@@ -344,6 +459,12 @@ private final class MockControlActions: ControlActions {
         case sessionScratch(target: String?, window: String?, String?, command: String?)
         case sessionFocus(target: String?, window: String?, String?)
         case sessionResize(target: String?, window: String?, ControlSplitResize)
+        case font(target: String?, window: String?, String)
+        case keymapReload
+        case configReload
+        case notify(target: String?, window: String?, title: String?, body: String)
+        case themeSet(String?)
+        case themeList
         case sidebarVisibility(ControlToggleMode)
         case sidebarViewMode(ControlSidebarViewMode)
         case expand(window: String?)
@@ -357,6 +478,12 @@ private final class MockControlActions: ControlActions {
     var nextSidebarViewModeResponse = ControlResponse(ok: true)
     var nextExpandResponse = ControlResponse(ok: true)
     var nextCollapseResponse = ControlResponse(ok: true)
+    var nextFontResponse = ControlResponse(ok: true)
+    var nextNotifyResponse = ControlResponse(ok: true)
+    var nextKeymapResponse = ControlResponse(ok: true)
+    var nextConfigResponse = ControlResponse(ok: true)
+    var nextThemeSetResponse = ControlResponse(ok: true)
+    var nextThemeListResponse = ControlResponse(ok: true)
 
     func controlTree(window: String?) -> ControlResponse {
         calls.append(.tree(window: window))
@@ -413,6 +540,37 @@ private final class MockControlActions: ControlActions {
     func resizeSplit(_ target: String?, window: String?, resize: ControlSplitResize) -> ControlResponse {
         calls.append(.sessionResize(target: target, window: window, resize))
         return ControlResponse(ok: true)
+    }
+
+    func font(_ target: String?, window: String?, action: String) -> ControlResponse {
+        calls.append(.font(target: target, window: window, action))
+        return nextFontResponse
+    }
+
+    func reloadKeymap() -> ControlResponse {
+        calls.append(.keymapReload)
+        return nextKeymapResponse
+    }
+
+    func reloadGhosttyConfig() -> ControlResponse {
+        calls.append(.configReload)
+        return nextConfigResponse
+    }
+
+    func sendNotification(_ target: String?, window: String?,
+                          title: String?, body: String) -> ControlResponse {
+        calls.append(.notify(target: target, window: window, title: title, body: body))
+        return nextNotifyResponse
+    }
+
+    func setTheme(name: String?) -> ControlResponse {
+        calls.append(.themeSet(name))
+        return nextThemeSetResponse
+    }
+
+    func listThemes() -> ControlResponse {
+        calls.append(.themeList)
+        return nextThemeListResponse
     }
 
     func setSidebarVisibility(_ mode: ControlToggleMode) -> ControlResponse {
