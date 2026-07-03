@@ -313,6 +313,39 @@ final class PersistenceTests {
         #expect(app.sessionRecency.items == [b, a])
     }
 
+    @Test func malformedRecencyDropsToNilKeepingTree() throws {
+        // a present-but-invalid sessionRecency (hand-edit typo, wrong type) must drop to nil
+        // lossily — never fail the whole Snapshot decode and wipe the tree on the next save.
+        let ws = UUID()
+        let session = UUID()
+        let tree = #""selectedSessionID": "\#(session.uuidString)", "workspaces": "# +
+            #"[ { "id": "\#(ws.uuidString)", "name": "work", "sessions": [ { "id": "\#(session.uuidString)", "cwd": "/a" } ] } ]"#
+        for bad in [#""sessionRecency": ["not-a-uuid"]"#, #""sessionRecency": 42"#] {
+            try Data(#"{ "version": 1, \#(bad), \#(tree) }"#.utf8).write(to: fileURL)
+            let loaded = store.load()
+            #expect(loaded.workspaces.map(\.id) == [ws])
+            #expect(loaded.selectedSessionID == session)
+            #expect(loaded.sessionRecency == nil)
+        }
+    }
+
+    @Test func restoreInsertsAbsentSelectionAtFront() {
+        let a = UUID()
+        let b = UUID()
+        let c = UUID()
+        let snapshot = Snapshot(selectedSessionID: c, workspaces: [
+            WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
+                SessionSnapshot(id: a, customName: nil, cwd: "/a"),
+                SessionSnapshot(id: b, customName: nil, cwd: "/b"),
+                SessionSnapshot(id: c, customName: nil, cwd: "/c"),
+            ]),
+        ], sessionRecency: [a, b])
+        let app = AppStore(persistence: store)
+        app.restore(from: snapshot)
+        // a selection missing from the persisted seed is inserted at the FRONT, not appended.
+        #expect(app.sessionRecency.items == [c, a, b])
+    }
+
     @Test func legacySnapshotWithoutRecencyDecodesSelectionOnly() throws {
         // a workspaces.json written before `sessionRecency` existed has no key; it must decode (not
         // throw and wipe the tree) and restore with just the selection in the Ctrl-Tab order.

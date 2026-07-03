@@ -29,6 +29,12 @@ struct RecencyStackTests {
         #expect(stack.items == [1, 2, 3])
     }
 
+    @Test func initDedupsBeforeTruncatingToLimit() {
+        // dedup must run before the limit cut: prefix-then-dedup would yield [1] here.
+        let stack = RecencyStack<Int>(limit: 2, items: [1, 1, 2, 3])
+        #expect(stack.items == [1, 2])
+    }
+
     @Test func limitBoundsTheList() {
         var stack = RecencyStack<Int>(limit: 2)
         stack.push(1); stack.push(2); stack.push(3)
