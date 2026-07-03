@@ -6,7 +6,7 @@ import agtermCore
 /// window and terminal session until agterm quits): a remembered choice resolves immediately, otherwise
 /// it shows a warning sheet. Requests from the SAME (surface, direction) coalesce behind that one prompt
 /// so a program looping OSC 52 can't stack a wall of sheets, while a request from a DIFFERENT surface
-/// always gets its own prompt, so one Allow never authorizes another surface's read.
+/// always gets its own prompt, so one Allow never authorizes another surface's read or write.
 ///
 /// `@MainActor`: it touches AppKit and the non-Sendable policy. The C clipboard callbacks reach it by
 /// hopping through `DispatchQueue.main.async`, which also defers the sheet past the current libghostty
@@ -15,34 +15,45 @@ import agtermCore
 final class ClipboardPromptController {
     static let shared = ClipboardPromptController()
 
-    /// One in-flight sheet per (requesting surface, direction). A nil requester (writes carry no surface)
-    /// coalesces by direction alone.
+    /// One in-flight sheet per (requesting surface, direction). Reads and gated writes both pass their
+    /// surface as the requester; a nil requester (no surface available) coalesces by direction alone.
     private struct PromptKey: Hashable {
         let access: ClipboardAccess
         let requester: ObjectIdentifier?
     }
 
+    /// A pending prompt: the waiters plus a STRONG reference to the requester, held until the sheet
+    /// resolves. Retaining the requester stops its `ObjectIdentifier` from being reused by a newly
+    /// allocated surface while the prompt is open, which would otherwise let that new surface's request
+    /// hash to the same `PromptKey` and ride this prompt's decision.
+    private struct Pending {
+        let requester: AnyObject?
+        var waiters: [(Bool) -> Void]
+    }
+
     private var policy = ClipboardPromptPolicy()
-    private var pending: [PromptKey: [(Bool) -> Void]] = [:]
+    private var pending: [PromptKey: Pending] = [:]
 
     /// Resolve a clipboard access, prompting the user when there is no remembered session choice.
-    /// `requester` scopes coalescing to a single surface. `completion` runs on the main actor with the
-    /// final allow/deny.
+    /// `requester` scopes coalescing to a single surface and is retained while the prompt is open.
+    /// `completion` runs on the main actor with the final allow/deny.
     func request(_ access: ClipboardAccess, requester: AnyObject? = nil, completion: @escaping (Bool) -> Void) {
         switch policy.decision(for: access) {
         case .allow: completion(true)
         case .deny: completion(false)
-        case .prompt: enqueue(PromptKey(access: access, requester: requester.map(ObjectIdentifier.init)), completion: completion)
+        case .prompt:
+            let key = PromptKey(access: access, requester: requester.map(ObjectIdentifier.init))
+            enqueue(key, requester: requester, completion: completion)
         }
     }
 
-    private func enqueue(_ key: PromptKey, completion: @escaping (Bool) -> Void) {
+    private func enqueue(_ key: PromptKey, requester: AnyObject?, completion: @escaping (Bool) -> Void) {
         if pending[key] != nil {
             // a sheet for this (surface, direction) is already up — ride its decision instead of stacking.
-            pending[key]?.append(completion)
+            pending[key]?.waiters.append(completion)
             return
         }
-        pending[key] = [completion]
+        pending[key] = Pending(requester: requester, waiters: [completion])
         presentPrompt(key)
     }
 
@@ -63,8 +74,8 @@ final class ClipboardPromptController {
             guard let self else { return }
             let allowed = response == .alertFirstButtonReturn
             if alert.suppressionButton?.state == .on { self.policy.remember(access, allow: allowed) }
-            let waiters = self.pending.removeValue(forKey: key) ?? []
-            for waiter in waiters { waiter(allowed) }
+            let entry = self.pending.removeValue(forKey: key)
+            for waiter in entry?.waiters ?? [] { waiter(allowed) }
         }
 
         if let window = NSApp.keyWindow ?? NSApp.mainWindow {
