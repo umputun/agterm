@@ -39,12 +39,23 @@ paths:
   so it is dropped); libghostty re-resolves only when the host re-feeds the config via `update_config`.
   agterm therefore triggers the reload ITSELF on a flip: `viewDidChangeEffectiveAppearance` sets both
   schemes + posts `.agtermSystemAppearanceChanged`, and `SettingsModel.appearanceChanged` calls
-  `reloadConfigClearingSessionZoom` DIRECTLY (NOT through `apply()`/`writeGhosttyConfig`, whose text-diff
+  `reloadConfigPreservingSessionZoom` DIRECTLY (NOT through `apply()`/`writeGhosttyConfig`, whose text-diff
   would skip the reload — the raw dual file is byte-identical across flips).
+  The flip reload PRESERVES each session's ⌘+/⌘− zoom (an automatic OS flip must not wipe it silently):
+  it skips `resetSessionFontSizesAllWindows`, and `reapplySessionConfigIfNeeded` (the widened watermark
+  re-assert) re-emits each zoomed session's `font-size` per surface after the shared-config broadcast.
+  Only the explicit reloads (File ▸ Reload / `config.reload` / a settings change) keep the documented
+  zoom-clearing contract via `reloadConfigClearingSessionZoom`.
+  The appearance SIDE is single-sourced from the VIEWS, never re-read from `NSApp.effectiveAppearance`
+  at receive time: the notification's userInfo carries the posting view's `isDark`,
+  and every reload records `lastAppliedIsDark` from the first live surface's appearance — the exact
+  value `syncColorScheme` feeds ghostty (`GhosttySurfaceView.isDarkAppearance`).
+  `NSApp.effectiveAppearance` can LAG the views around sleep/wake, so the old receive-time re-read
+  compared a stale side, wrongly suppressed the reload, and left the terminal stuck on the old theme
+  with the latch inverted — the wake-from-sleep "appearance toggle stopped working" bug.
   The notification ALSO fires per surface at ATTACH (not only on real OS flips), so `appearanceChanged`
-  suppresses same-side re-posts via `lastAppliedIsDark` (recorded by every config feed,
-  seeded `false` because a host-loaded config starts light-sided) — otherwise opening a session would
-  reload the config and wipe every per-session font zoom.
+  suppresses same-side re-posts via `lastAppliedIsDark` (seeded `false` because a host-loaded config
+  starts light-sided) — otherwise opening a session would reload the config on every attach.
   The chrome retints on the same reload, but NOT from the host-loaded config: `ghostty_config_get` on
   a config the host built always reads the DEFAULT (light) conditional side — there is no C API to
   re-side a host config.

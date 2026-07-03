@@ -173,6 +173,15 @@ paths:
   - `theme.set`/`theme.list` (see the Theme picker section)
   - `restore.clear` (see the Settings section)
 
+  One extra `Command` case is deliberately NOT part of the catalog: `debug.appearance` (`light`|`dark`
+  via `args.name`) is a UI-TEST-ONLY seam that sets `NSApp.appearance` so an XCUITest can simulate a
+  macOS light/dark flip (macOS XCUITest has no API for it); the `ControlServer` arm refuses it outside
+  an XCUITest launch (`ContentView.isUITestLaunch`), it gets NO `agtermctl` subcommand,
+  and it stays out of the agent skill — a documented keep-in-sync EXEMPTION (test scaffolding,
+  not a control surface).
+  It echoes the resulting effective side in `result.text`; `AppearanceFlipUITests` is its consumer.
+  The public command count stays 50.
+
   `workspace.delete` honors keep-at-least-one and returns an error instead of the GUI confirm alert (nothing
   blocks on a modal).
   `session.move` is MODE-BEARING: `args.to` (`up`|`down`|`top`|`bottom`) REORDERS the session within

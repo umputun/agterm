@@ -43,6 +43,17 @@ paths:
   transient non-persisted state), drive it through an observable side effect:
   e.g. the split test types `tty > <file>` into the focused pane and compares the written tty to verify
   which shell received the keystrokes and that focus follows.
+- **Simulating a macOS light/dark flip: the `debug.appearance` control seam.**
+  macOS XCUITest has no API to change the system appearance, so `AppearanceFlipUITests` drives the
+  UI-test-only `debug.appearance` command (`light`|`dark`), which sets `NSApp.appearance` — firing
+  `viewDidChangeEffectiveAppearance` on every view, i.e. the REAL flip path end to end.
+  The arm is refused outside an XCUITest launch and is keep-in-sync EXEMPT (see [[control-api]]).
+  Set an explicit STARTING side first so the test is independent of the machine's appearance,
+  and assert the response's echoed side to prove the flip reached the app (de-vacuousing).
+  Gotcha: on the current libghostty pin `update_config` does NOT reset the runtime font zoom,
+  so a wrongly-routed zoom-clearing flip only BLIPS the persisted `fontSize` nil for ~0.4 s before the
+  surface's CELL_SIZE report re-persists it — assert zoom preservation by SAMPLING the snapshot
+  continuously, never by one settled read (it would pass on the broken path).
 - **Driving an OSC terminal title in a test (and reading it back).**
   `Session.oscTitle`/`subtitleDetail` are ephemeral (never persisted) and the second line renders as
   a SwiftUI `Text`, so test through observable side effects, not the snapshot.
