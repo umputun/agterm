@@ -131,6 +131,18 @@ paths:
   outside `detailPane`/`sessionDetail`/`HSplitView` (no split perturbation).
   Do NOT "fix" this with a permanent `.background(terminalColor)` on `customTitlebar` — it masks the
   symptom but breaks the opacity/blur chrome.
+- **Under window translucency every surface renders a fully transparent background — never leave a
+  surface visible beneath the FULL overlay.**
+  The translucency setting pins `background-opacity = 0` for every ghostty surface (the window's AppKit
+  backing supplies the tint), and the FULL overlay deliberately has no opaque SwiftUI backing.
+  Any surface left mounted at opacity 1 below it shows straight through — an "the overlay opened under
+  the scratch" report is SEE-THROUGH, not a z-order inversion (the layer compositing order was verified
+  correct in every open sequence: the overlay's layer sits above the scratch's).
+  `sessionDetail` therefore hides EVERY covered surface when `session.fullOverlayActive`:
+  the pane(s) via `hideForOverlay`, the scratch via its own `opacity(0)` + `allowsHitTesting(false)` +
+  a `deckVisible` gate (so a covered scratch is also not a file-drop target).
+  The FLOATING (sized) overlay and the quick terminal need none of this — both draw an opaque
+  `terminalColor`-backed panel, so nothing shows through them.
 - **Non-zero backing size.**
   Create the surface only when the view has a non-zero backing size, else the Metal layer renders blank.
   `pendingSurfaceCreation` defers creation until `setFrameSize` reports a real size.

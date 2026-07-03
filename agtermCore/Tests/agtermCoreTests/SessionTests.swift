@@ -378,6 +378,24 @@ struct SessionTests {
         session.overlayActive = true
         #expect(session.onScreenSurface === primary)
     }
+
+    @Test func fullOverlayActiveOnlyForFullCoverageOverlay() {
+        // the full-coverage overlay (no size) hides the session content beneath it — panes AND scratch —
+        // so its translucent background reveals the window backing, never the covered surfaces.
+        let session = Session(initialCwd: "/repo")
+        // no overlay: nothing to hide behind.
+        #expect(session.fullOverlayActive == false)
+        // full-coverage overlay (no size percent): active.
+        session.overlayActive = true
+        #expect(session.fullOverlayActive == true)
+        // floating (sized) overlay: draws an opaque panel over visible content, not a full cover.
+        session.overlaySizePercent = 80
+        #expect(session.fullOverlayActive == false)
+        // no overlay at all: a stale size percent alone is not a cover.
+        session.overlayActive = false
+        session.overlaySizePercent = nil
+        #expect(session.fullOverlayActive == false)
+    }
 }
 
 private final class FakeSurface: TerminalSurface {

@@ -244,7 +244,7 @@ struct WindowContentView: View {
         // a FULL overlay (no size) hides the session beneath it (opacity 0) and draws translucent; a
         // FLOATING overlay (overlaySizePercent set) leaves the session VISIBLE and draws a smaller
         // opaque framed panel on top. Either way the pane(s) stay non-interactive while an overlay is up.
-        let fullOverlay = session.overlayActive && session.overlaySizePercent == nil
+        let fullOverlay = session.fullOverlayActive
         // the scratch terminal is a full-coverage overlay too, so it hides the pane(s) exactly like a
         // FULL overlay; `hideForOverlay` drives opacity + hit-testing. `overlaid` (any overlay OR scratch)
         // is what owns focus, so it gates the pane(s)' `isActive` (focus goes to the overlay/scratch, not
@@ -299,16 +299,23 @@ struct WindowContentView: View {
             .allowsHitTesting(!hideForOverlay)
             // the scratch terminal renders here, in-deck, above the (hidden) pane(s) — like the FULL overlay,
             // a full-coverage sibling is safe (the panes go opacity 0, the split's frame is hidden). It sits
-            // BELOW the ephemeral overlay (zIndex 1 vs 2) so a normal overlay launched over the scratch is on
-            // top. The FLOATING overlay is deliberately NOT a sibling here (it renders as a `detailPane`
-            // `.overlay`), since adding a child while the panes stay VISIBLE overruns the NSSplitView.
+            // BELOW the ephemeral overlay (zIndex 1 vs 2) AND goes hidden while a full overlay is up, exactly
+            // like the pane(s): under window translucency every surface's background renders fully transparent,
+            // so a scratch left visible below would show through the overlay (reading as "the overlay opened
+            // under the scratch"). The FLOATING overlay is deliberately NOT a sibling here (it renders as a
+            // `detailPane` `.overlay`), since adding a child while the panes stay VISIBLE overruns the
+            // NSSplitView — and its opaque panel needs no hiding of the scratch behind it.
             if session.scratchActive {
                 // gate focus on every surface that covers the scratch — a full overlay (renders above it,
                 // zIndex 2) AND the window-level quick terminal — so the deck's focusIfNeeded can't grab the
                 // scratch behind them. When the cover goes away, isActive flips true and the deck re-grabs it.
-                // (matches the autoFocus suppression in makeScratchSurface.)
+                // (matches the autoFocus suppression in makeScratchSurface.) `deckVisible` mirrors the panes'
+                // rule so only an on-screen scratch is a file-drop target.
                 TerminalView(session: session, surfaceKeyPath: \.scratchSurface, makeSurface: makeScratchSurface,
-                             isActive: isActive && !session.overlayActive && !quickTerminal.isVisible)
+                             isActive: isActive && !session.overlayActive && !quickTerminal.isVisible,
+                             deckVisible: isActive && !fullOverlay)
+                    .opacity(fullOverlay ? 0 : 1)
+                    .allowsHitTesting(!fullOverlay)
                     .id("\(session.id.uuidString)-scratch")
                     .zIndex(1)
             }
