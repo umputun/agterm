@@ -1,5 +1,18 @@
 # Changelog
 
+## v0.6.1 - 2026-07-03
+
+### Improvements
+
+- releases are now Developer ID signed and Apple-notarized, so they open with no Gatekeeper workaround @umputun
+- gate OSC 52 clipboard access (prompt reads, ask/deny writes) #112 @umputun
+- persist Ctrl-Tab MRU order across relaunch #111 @umputun
+
+### Bug Fixes
+
+- sanitize OSC title and pwd control characters to close a shell-injection sub-case #109 @umputun
+- hide the scratch terminal under a full-screen overlay so it can't show through #113 @umputun
+
 ## v0.6.0 - 2026-07-02
 
 ### New Features
