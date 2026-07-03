@@ -108,13 +108,14 @@ final class SettingsModel {
     /// across flips, so `writeGhosttyConfig()` would no-op and `apply()` would skip the reload; reload
     /// DIRECTLY instead. ghostty already recorded the new scheme (`set_color_scheme`) and re-resolves
     /// when we re-feed the config via `update_config`. Debounced because the notification fires once per
-    /// deck surface.
+    /// deck surface. Unlike an explicit File ▸ Reload / `config.reload`, an automatic flip PRESERVES
+    /// each session's ⌘+/⌘− zoom — silently wiping it on an OS schedule would be a surprise.
     private func appearanceChanged() {
         guard settings.followSystemAppearance == true, settings.theme != nil, settings.darkTheme != nil else { return }
         appearanceDebouncer.schedule(after: Self.appearanceDebounceInterval) { [weak self] in
             guard let self else { return }
             guard GhosttyApp.currentIsDark() != lastAppliedIsDark else { return }
-            _ = reloadConfigClearingSessionZoom()  // also records the newly applied side
+            _ = reloadConfigPreservingSessionZoom()  // also records the newly applied side
             NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
         }
     }
@@ -441,12 +442,13 @@ final class SettingsModel {
 
     /// Clears every session's per-session ⌘+/⌘− zoom BEFORE rebuilding + rebroadcasting the ghostty
     /// config to the live surfaces, returning the rebuilt config's diagnostic count. The ORDER is
-    /// load-bearing: `reloadConfig` re-asserts each watermarked surface's overlay (`reapplyWatermarkIfNeeded`),
+    /// load-bearing: `reloadConfig` re-asserts each surface's per-session overlay (`reapplySessionConfigIfNeeded`),
     /// which re-emits `font-size` from `session.fontSize`. Clearing the override FIRST makes that re-emit
     /// read nil — so a watermarked pane drops its zoom on screen and the snapshot persists `fontSize == nil`
     /// in agreement, matching the documented "reload clears per-session zoom" contract (resetting AFTER would
-    /// leave the surface zoomed while the model said nil). BOTH reload callers — `reloadGhosttyConfig` and
-    /// `apply()` — funnel through here so neither can drift back to reload-then-reset.
+    /// leave the surface zoomed while the model said nil). The EXPLICIT reload callers — `reloadGhosttyConfig`
+    /// and `apply()` — funnel through here so neither can drift back to reload-then-reset; the automatic
+    /// appearance flip is the one deliberate exception (`reloadConfigPreservingSessionZoom`).
     @discardableResult
     private func reloadConfigClearingSessionZoom() -> Int {
         // every reload re-sides the config to the CURRENT appearance (surface schemes + the CONFIG_CHANGE
@@ -456,6 +458,18 @@ final class SettingsModel {
         // open windows reset live, closed ones by rewriting their snapshot file (the shared config reset
         // every surface to the default size, so a closed window mustn't reopen later overriding the new default).
         library.resetSessionFontSizesAllWindows()
+        return GhosttyApp.shared.reloadConfig(surfaces: liveSurfaces())
+    }
+
+    /// The appearance-flip variant of the reload above: re-feeds the config so libghostty re-resolves
+    /// the dual theme, but KEEPS every session's ⌘+/⌘− zoom — the reload's shared-config broadcast still
+    /// resets each surface to the default size, and `reapplySessionConfigIfNeeded` then re-emits the
+    /// session's `fontSize` per surface (the same round-trip that re-asserts watermarks). An automatic
+    /// OS flip (or the first-attach reload of a dark launch) must not silently wipe zoom; only the
+    /// explicit reloads carry the documented zoom-clearing contract.
+    @discardableResult
+    private func reloadConfigPreservingSessionZoom() -> Int {
+        lastAppliedIsDark = GhosttyApp.currentIsDark()
         return GhosttyApp.shared.reloadConfig(surfaces: liveSurfaces())
     }
 

@@ -518,11 +518,14 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         ownedConfigs = [config]
     }
 
-    /// Re-assert the session's watermark after a global config reload broadcast the shared config (no
-    /// background image) to this surface via `applyConfig`. No-op when the session has no watermark (so
-    /// a plain surface isn't needlessly rebuilt). Called from `GhosttyApp.reloadConfig`.
-    func reapplyWatermarkIfNeeded() {
-        guard session?.backgroundWatermark != nil else { return }
+    /// Re-assert the session's per-surface config (watermark and/or font zoom) after a global config
+    /// reload broadcast the shared config to this surface via `applyConfig`, wiping both. No-op when the
+    /// session carries neither (so a plain surface isn't needlessly rebuilt). Called from
+    /// `GhosttyApp.reloadConfig`; on the zoom-CLEARING reload paths `session.fontSize` was already nil'd
+    /// before the broadcast, so only a watermark re-applies there — the appearance-flip reload skips the
+    /// reset, and this is what carries each session's zoom across the flip.
+    func reapplySessionConfigIfNeeded() {
+        guard session?.backgroundWatermark != nil || session?.fontSize != nil else { return }
         applyWatermarkFromSession()
     }
 

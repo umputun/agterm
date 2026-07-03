@@ -54,6 +54,10 @@ public enum Command: String, Codable, Sendable {
     case themeSet = "theme.set"
     case themeList = "theme.list"
     case restoreClear = "restore.clear"
+    /// UI-TEST-ONLY: force the app-level appearance (`light`|`dark` via `args.name`) so an XCUITest can
+    /// simulate a macOS light/dark flip. The server refuses it outside an XCUITest launch; deliberately
+    /// EXEMPT from the four-point keep-in-sync (no CLI subcommand, absent from the catalog/skill).
+    case debugAppearance = "debug.appearance"
 }
 
 /// A bag of optional command parameters. Each command reads only the fields it needs; the rest stay

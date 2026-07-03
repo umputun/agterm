@@ -279,10 +279,11 @@ final class GhosttyApp {
         // reflect the new theme — otherwise the text watermark's color lags one reload behind a theme change.
         resolveThemeColors(from: derivedConfig ?? newConfig, inputs: inputs)
         if let derivedConfig { ghostty_config_free(derivedConfig) }
-        // the broadcast above pushes the shared config (no background image) to every surface, wiping any
-        // per-surface watermark — so re-assert each watermarked surface's overlay afterwards. No-op for the
-        // surfaces without one. (Mirrors how per-session font zoom is reconciled, but re-applied not reset.)
-        for surface in surfaces { surface.reapplyWatermarkIfNeeded() }
+        // the broadcast above pushes the shared config (no background image, default font size) to every
+        // surface, wiping any per-surface watermark and zoom — so re-assert each affected surface's
+        // overlay afterwards. No-op for the surfaces without either; on the zoom-clearing reload paths
+        // the per-session fontSize was already nil'd, so only watermarks re-apply there.
+        for surface in surfaces { surface.reapplySessionConfigIfNeeded() }
         return lastConfigDiagnosticsCount
     }
 

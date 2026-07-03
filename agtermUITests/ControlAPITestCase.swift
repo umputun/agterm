@@ -263,6 +263,30 @@ class ControlAPITestCase: XCTestCase {
         }
     }
 
+    /// The (single seeded workspace's) first session's persisted `fontSize` override, or nil when the
+    /// session has none (or the snapshot isn't readable yet).
+    func firstSessionFontSize() -> Double? {
+        guard let data = try? Data(contentsOf: stateDir.windowSnapshotFile()),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let workspaces = obj["workspaces"] as? [[String: Any]],
+              let sessions = workspaces.first?["sessions"] as? [[String: Any]]
+        else { return nil }
+        return sessions.first?["fontSize"] as? Double
+    }
+
+    /// Polls the hermetic snapshot file until the first session's `fontSize` override satisfies
+    /// `predicate` (nil = no override). A predicate rather than an equality oracle because the zoom
+    /// tests need both "an override appeared" and "the override was cleared".
+    @discardableResult
+    func pollFirstSessionFontSize(until predicate: (Double?) -> Bool, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if predicate(firstSessionFontSize()) { return true }
+            usleep(200_000)
+        }
+        return predicate(firstSessionFontSize())
+    }
+
     // MARK: - Socket client
 
     /// Connect to the app's control socket, send `line` (newline-terminated), read the single response

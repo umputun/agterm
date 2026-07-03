@@ -1,4 +1,5 @@
 import agtermCore
+import AppKit
 import Darwin
 import Foundation
 
@@ -526,7 +527,27 @@ final class ControlServer {
                                                                     dark: actions.currentDarkTheme))
         case .restoreClear:
             return clearSavedCommands()
+        case .debugAppearance:
+            return setDebugAppearance(args: request.args)
         }
+    }
+
+    /// UI-TEST-ONLY seam: force the app-level appearance so an XCUITest can simulate a macOS light/dark
+    /// flip deterministically (macOS XCUITest has no API to change the system appearance). Setting
+    /// `NSApp.appearance` fires `viewDidChangeEffectiveAppearance` on every view, so the REAL flip path
+    /// (scheme sync → notification → debounced zoom-preserving reload) is exercised end to end. Refused
+    /// outside an XCUITest launch, and deliberately EXEMPT from the four-point keep-in-sync (no agtermctl
+    /// subcommand, absent from the catalog/skill) — test scaffolding, not a control surface. Echoes the
+    /// resulting effective side in `result.text` so a test can assert the flip actually applied.
+    private func setDebugAppearance(args: ControlArgs?) -> ControlResponse {
+        guard ContentView.isUITestLaunch else {
+            return ControlResponse(ok: false, error: "debug.appearance is a UI-test-only seam")
+        }
+        guard let side = trimmed(args?.name), side == "light" || side == "dark" else {
+            return ControlResponse(ok: false, error: "debug.appearance requires light|dark")
+        }
+        NSApp.appearance = NSAppearance(named: side == "dark" ? .darkAqua : .aqua)
+        return ControlResponse(ok: true, result: ControlResult(text: GhosttyApp.currentIsDark() ? "dark" : "light"))
     }
 
     /// Clear every open session's saved foreground command (the restore-running-command capture) and
