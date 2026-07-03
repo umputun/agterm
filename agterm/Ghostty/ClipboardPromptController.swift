@@ -8,7 +8,7 @@ import agtermCore
 /// so a program looping OSC 52 can't stack a wall of sheets, while a request from a DIFFERENT surface
 /// always gets its own prompt, so one Allow never authorizes another surface's read or write.
 ///
-/// `@MainActor`: it touches AppKit and the non-Sendable policy. The C clipboard callbacks reach it by
+/// `@MainActor`: it touches AppKit and the controller's shared mutable state. The C clipboard callbacks reach it by
 /// hopping through `DispatchQueue.main.async`, which also defers the sheet past the current libghostty
 /// tick so the modal run loop never re-enters it.
 @MainActor
@@ -78,7 +78,10 @@ final class ClipboardPromptController {
             for waiter in entry?.waiters ?? [] { waiter(allowed) }
         }
 
-        if let window = NSApp.keyWindow ?? NSApp.mainWindow {
+        // attach to the REQUESTING surface's own window when we can, so the prompt lands on the terminal
+        // whose program triggered it (not some other key window); fall back to key/main.
+        let requesterWindow = (pending[key]?.requester as? NSView)?.window
+        if let window = requesterWindow ?? NSApp.keyWindow ?? NSApp.mainWindow {
             alert.beginSheetModal(for: window) { resolve($0) }
         } else {
             resolve(alert.runModal())

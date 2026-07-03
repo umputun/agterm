@@ -13,7 +13,8 @@ final class ClipboardPromptUITests: ControlAPITestCase {
     private var savedClipboard: String?
 
     override func setUp() async throws {
-        // preserve and restore the developer's real clipboard: these tests read and write it.
+        // best-effort save/restore of the developer's clipboard STRING around these tests (which read and
+        // write it). Non-string clipboard content (images, rich text) is not preserved.
         savedClipboard = NSPasteboard.general.string(forType: .string)
         try await super.setUp()
     }
