@@ -391,9 +391,8 @@ struct SessionTests {
         // floating (sized) overlay: draws an opaque panel over visible content, not a full cover.
         session.overlaySizePercent = 80
         #expect(session.fullOverlayActive == false)
-        // no overlay at all: a stale size percent alone is not a cover.
+        // overlay closed with a stale size percent lingering: still not a cover.
         session.overlayActive = false
-        session.overlaySizePercent = nil
         #expect(session.fullOverlayActive == false)
     }
 }

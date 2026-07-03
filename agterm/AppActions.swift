@@ -537,9 +537,8 @@ final class AppActions {
     private var coverHidesActiveSession: Bool {
         if frontmostQuickTerminal?.isVisible == true { return true }
         guard let session = store?.activeSession else { return false }
-        // a FLOATING overlay (overlaySizePercent != nil) leaves the session visible, so only a FULL
-        // overlay hides it (and is not searchable).
-        return session.overlayActive && session.overlaySizePercent == nil
+        // a FLOATING overlay leaves the session visible, so only a FULL overlay hides it (and is not searchable).
+        return session.fullOverlayActive
     }
 
     /// Toggle the search bar for the active session. CLOSE branch (search already active): send
