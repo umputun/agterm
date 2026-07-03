@@ -41,6 +41,10 @@ paths:
   schemes + posts `.agtermSystemAppearanceChanged`, and `SettingsModel.appearanceChanged` calls
   `reloadConfigClearingSessionZoom` DIRECTLY (NOT through `apply()`/`writeGhosttyConfig`, whose text-diff
   would skip the reload — the raw dual file is byte-identical across flips).
+  The notification ALSO fires per surface at ATTACH (not only on real OS flips), so `appearanceChanged`
+  suppresses same-side re-posts via `lastAppliedIsDark` (recorded by every config feed,
+  seeded `false` because a host-loaded config starts light-sided) — otherwise opening a session would
+  reload the config and wipe every per-session font zoom.
   The chrome retints on the same reload, but NOT from the host-loaded config: `ghostty_config_get` on
   a config the host built always reads the DEFAULT (light) conditional side — there is no C API to
   re-side a host config.

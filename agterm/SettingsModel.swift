@@ -93,17 +93,28 @@ final class SettingsModel {
         }
     }
 
+    /// The appearance side the last config feed applied, used to suppress same-appearance re-posts of
+    /// `.agtermSystemAppearanceChanged` (the notification fires per surface at ATTACH, not only on real
+    /// OS flips — a new session/split would otherwise trigger a full reload + zoom wipe). Starts `false`
+    /// because a host-loaded config is always resolved to the LIGHT side: a light launch then skips the
+    /// first-attach reload entirely, while a dark launch takes exactly one (which is also what re-sides
+    /// the chrome colors via the CONFIG_CHANGE clone).
+    private var lastAppliedIsDark = false
+
     /// Re-feed the config on a macOS appearance flip so libghostty re-resolves the dual theme to the new
-    /// side — the system→settings half of light/dark sync. A no-op unless following with both slots set.
-    /// The config file holds the RAW `theme = light:,dark:` value and is IDENTICAL across flips, so
-    /// `writeGhosttyConfig()` would no-op and `apply()` would skip the reload; reload DIRECTLY instead.
-    /// ghostty already recorded the new scheme (`set_color_scheme`) and re-resolves when we re-feed the
-    /// config via `update_config`. Debounced because the notification fires once per deck surface.
+    /// side — the system→settings half of light/dark sync. A no-op unless following with both slots set,
+    /// and a no-op when the appearance side hasn't actually changed since the last feed (see
+    /// `lastAppliedIsDark`). The config file holds the RAW `theme = light:,dark:` value and is IDENTICAL
+    /// across flips, so `writeGhosttyConfig()` would no-op and `apply()` would skip the reload; reload
+    /// DIRECTLY instead. ghostty already recorded the new scheme (`set_color_scheme`) and re-resolves
+    /// when we re-feed the config via `update_config`. Debounced because the notification fires once per
+    /// deck surface.
     private func appearanceChanged() {
         guard settings.followSystemAppearance == true, settings.theme != nil, settings.darkTheme != nil else { return }
         appearanceDebouncer.schedule(after: Self.appearanceDebounceInterval) { [weak self] in
             guard let self else { return }
-            _ = reloadConfigClearingSessionZoom()
+            guard GhosttyApp.currentIsDark() != lastAppliedIsDark else { return }
+            _ = reloadConfigClearingSessionZoom()  // also records the newly applied side
             NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
         }
     }
@@ -262,7 +273,7 @@ final class SettingsModel {
     /// even if the apply hasn't fired yet) but DEBOUNCES the expensive `apply()` (config rewrite +
     /// surface reload + chrome refresh), so a burst of arrow/typing previews coalesces to one reload
     /// once the quiet window elapses. Skips `settingsStore.save`, so navigating themes doesn't touch
-    /// `settings.json`; the picker commits with `commitTheme(_:)` on Enter (which flushes the pending
+    /// `settings.json`; the picker commits with `commitTheme()` on Enter (which flushes the pending
     /// apply) or reverts with `previewThemeImmediate(original)` on Esc. Writes the CURRENT-appearance
     /// slot (the dark slot while following in dark mode, else `theme`) so the preview renders on screen.
     func previewTheme(_ value: String?) {
@@ -280,13 +291,13 @@ final class SettingsModel {
     }
 
     /// Persist the picker's final theme value — the commit half, called on Enter after one or more
-    /// `previewTheme` applies. Writes the CURRENT-appearance slot (the same one the preview wrote).
-    /// Flushes any pending debounced preview first, so the latest previewed theme is live NOW, then
-    /// writes `settings.json`. Save-only: the previewed side is already rendering, so no config reload
-    /// (and no font-zoom reset) fires.
-    func commitTheme(_ value: String?) {
+    /// `previewTheme` applies. The preview already wrote the CURRENT-appearance slot eagerly, so the
+    /// in-memory settings hold the final value and there is nothing to write back. Flushes any pending
+    /// debounced preview first, so the latest previewed theme is live NOW, then writes `settings.json`.
+    /// Save-only: the previewed side is already rendering, so no config reload (and no font-zoom reset)
+    /// fires.
+    func commitTheme() {
         previewThemeDebouncer.flush()
-        if rendersDarkSlot { settings.darkTheme = value } else { settings.theme = value }
         try? settingsStore.save(settings)
         committedTheme = settings.theme
         committedDarkTheme = settings.darkTheme
@@ -438,6 +449,10 @@ final class SettingsModel {
     /// `apply()` — funnel through here so neither can drift back to reload-then-reset.
     @discardableResult
     private func reloadConfigClearingSessionZoom() -> Int {
+        // every reload re-sides the config to the CURRENT appearance (surface schemes + the CONFIG_CHANGE
+        // chrome clone), so record the side here — for ALL reload paths, not just the appearance flip —
+        // to keep `appearanceChanged()`'s same-side suppression from firing one spurious reload later.
+        lastAppliedIsDark = GhosttyApp.currentIsDark()
         // open windows reset live, closed ones by rewriting their snapshot file (the shared config reset
         // every surface to the default size, so a closed window mustn't reopen later overriding the new default).
         library.resetSessionFontSizesAllWindows()

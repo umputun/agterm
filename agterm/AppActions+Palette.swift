@@ -209,8 +209,11 @@ extension AppActions {
                         })
         }
         // the nil row is ghostty's built-in default (no theme file); the app's own default is the
-        // bundled "agterm" theme, which appears in the named list like any other.
-        return ThemeCatalog(names: SettingsCatalog.themeNames()).entries.map(item)
+        // bundled "agterm" theme, which appears in the named list like any other. While following the
+        // system appearance the nil row is OMITTED (mirroring the Settings picker): a dual conditional
+        // needs two NAMED themes, so previewing nil would blank a slot and wedge the following state.
+        let entries = ThemeCatalog(names: SettingsCatalog.themeNames()).entries
+        return (followsSystemAppearance ? entries.filter { !$0.isDefault } : entries).map(item)
     }
 
     /// The palette-item id of the currently-applied theme, so the picker opens with that row selected
@@ -240,11 +243,11 @@ extension AppActions {
 
     /// Persist the previewed theme (Enter/click). Ends the preview so the subsequent palette close can't
     /// revert it. The preview already wrote the current-appearance slot (dark slot while following in
-    /// dark mode, else `theme`), so the commit just persists that slot — no dual recompose needed, since
-    /// the two slots are separate fields and syncing rides `followSystemAppearance`.
+    /// dark mode, else `theme`), so the commit is save-only — no value to pass back and no dual
+    /// recompose, since the two slots are separate fields and syncing rides `followSystemAppearance`.
     func commitThemePreview() {
         guard themePreviewActive else { return }
-        settingsModel?.commitTheme(effectiveTheme)
+        settingsModel?.commitTheme()
         themePreviewActive = false
         themePreviewOriginal = nil
     }
