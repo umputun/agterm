@@ -476,9 +476,9 @@ struct WindowContentView: View {
 
     /// The titlebar title (first line): the active session's display name, suffixed with the window
     /// name as "session — window" when the window has a custom (user-set) name, so a renamed window
-    /// is identifiable at a glance. Auto "window N" names are omitted. "agterm" when nothing is selected.
+    /// is identifiable at a glance. Auto "window N" names are omitted. "Agterm" when nothing is selected.
     private var windowTitle: String {
-        let session = store.activeSession?.displayName ?? "agterm"
+        let session = store.activeSession?.displayName ?? "Agterm"
         guard let info = library.windows.first(where: { $0.id == windowID }), info.hasCustomName else {
             return session
         }

@@ -52,10 +52,10 @@ extension agtermApp {
 
     @CommandsBuilder
     var appCommands: some Commands {
-            // App menu: replace the default "About agterm" with one that opens the standard
+            // App menu: replace the default "About Agterm" with one that opens the standard
             // panel enriched with a clickable repo link and, on release builds, the build commit.
             CommandGroup(replacing: .appInfo) {
-                Button("About agterm") { showAboutPanel() }
+                Button("About Agterm") { showAboutPanel() }
             }
             // File: replace the default "New" group with all of agterm's creation/management actions,
             // grouped by entity into three sections — Window, then Workspace, then Session. The

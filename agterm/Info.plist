@@ -7,9 +7,9 @@
 	<key>CFBundleExecutable</key>
 	<string>agterm</string>
 	<key>CFBundleName</key>
-	<string>agterm</string>
+	<string>Agterm</string>
 	<key>CFBundleDisplayName</key>
-	<string>agterm</string>
+	<string>Agterm</string>
 	<key>CFBundleIconName</key>
 	<string>AppIcon</string>
 	<key>CFBundlePackageType</key>
