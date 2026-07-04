@@ -195,6 +195,15 @@ extension GhosttySurfaceView {
         ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
     }
 
+    /// The pointer left the surface. Report negative coordinates so libghostty clears any hovered-link
+    /// state — it drops `over_link`, reverts the mouse shape, and re-renders without the underline (see its
+    /// `cursorPosCallback`). Without this a ⌘-hovered link stays highlighted after the mouse leaves the
+    /// terminal (into the sidebar, another window, or off the edge) until ⌘ is released.
+    override func mouseExited(with event: NSEvent) {
+        guard let surface else { return }
+        ghostty_surface_mouse_pos(surface, -1, -1, mods(event))
+    }
+
     override func scrollWheel(with event: NSEvent) {
         guard let surface else { return }
         var scrollMods: ghostty_input_scroll_mods_t = 0
@@ -358,5 +367,53 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
         let viewPt = NSPoint(x: x, y: bounds.height - y)
         let screenPt = window?.convertPoint(toScreen: convert(viewPt, to: nil)) ?? viewPt
         return NSRect(x: screenPt.x, y: screenPt.y - h, width: w, height: h)
+    }
+
+    // MARK: - Mouse cursor shape + link opening
+
+    /// Applies the cursor shape libghostty requested (`GHOSTTY_ACTION_MOUSE_SHAPE`) — the pointing hand
+    /// over a link, the I-beam over the grid, resize/crosshair/grab in the matching modes. No-ops when
+    /// unchanged; otherwise invalidates the cursor rects so AppKit re-queries `resetCursorRects` and
+    /// re-applies the cursor under the current pointer position (libghostty sends this as the mouse moves).
+    func applyMouseShape(_ shape: ghostty_action_mouse_shape_e) {
+        guard shape != mouseShape else { return }
+        mouseShape = shape
+        window?.invalidateCursorRects(for: self)
+    }
+
+    /// AppKit cursor-rectangle hook: paint the whole surface with the libghostty-requested cursor.
+    override func resetCursorRects() {
+        addCursorRect(bounds, cursor: Self.nsCursor(for: mouseShape))
+    }
+
+    /// Maps a libghostty mouse-shape to the closest AppKit `NSCursor`. Shapes without a system cursor
+    /// (the zoom / diagonal-resize variants) fall back to the arrow.
+    private static func nsCursor(for shape: ghostty_action_mouse_shape_e) -> NSCursor {
+        switch shape {
+        case GHOSTTY_MOUSE_SHAPE_TEXT: return .iBeam
+        case GHOSTTY_MOUSE_SHAPE_POINTER: return .pointingHand
+        case GHOSTTY_MOUSE_SHAPE_CROSSHAIR: return .crosshair
+        case GHOSTTY_MOUSE_SHAPE_GRAB: return .openHand
+        case GHOSTTY_MOUSE_SHAPE_GRABBING: return .closedHand
+        case GHOSTTY_MOUSE_SHAPE_NOT_ALLOWED, GHOSTTY_MOUSE_SHAPE_NO_DROP: return .operationNotAllowed
+        case GHOSTTY_MOUSE_SHAPE_CONTEXT_MENU: return .contextualMenu
+        case GHOSTTY_MOUSE_SHAPE_VERTICAL_TEXT: return .iBeamCursorForVerticalLayout
+        case GHOSTTY_MOUSE_SHAPE_COL_RESIZE, GHOSTTY_MOUSE_SHAPE_E_RESIZE, GHOSTTY_MOUSE_SHAPE_W_RESIZE,
+             GHOSTTY_MOUSE_SHAPE_EW_RESIZE:
+            return .resizeLeftRight
+        case GHOSTTY_MOUSE_SHAPE_ROW_RESIZE, GHOSTTY_MOUSE_SHAPE_N_RESIZE, GHOSTTY_MOUSE_SHAPE_S_RESIZE,
+             GHOSTTY_MOUSE_SHAPE_NS_RESIZE:
+            return .resizeUpDown
+        default: return .arrow
+        }
+    }
+
+    /// Opens a URL from a link click (`GHOSTTY_ACTION_OPEN_URL`). Scheme-validated first: a terminal
+    /// renders untrusted program output, so only web/mail/file links are followed — never an arbitrary
+    /// custom scheme that could hand off to another app. Silently ignores anything else.
+    func openLink(_ raw: String) {
+        guard let url = URL(string: raw), let scheme = url.scheme?.lowercased(),
+              ["http", "https", "mailto", "ftp", "file"].contains(scheme) else { return }
+        NSWorkspace.shared.open(url)
     }
 }

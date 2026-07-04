@@ -218,6 +218,13 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     var currentKeyEvent: NSEvent?
     private var currentTrackingArea: NSTrackingArea?
 
+    /// The mouse-cursor shape libghostty last requested for this surface (`GHOSTTY_ACTION_MOUSE_SHAPE`):
+    /// the I-beam over the grid, the pointing hand over a detected link / OSC-8 hyperlink, resize/crosshair
+    /// in the matching modes. `resetCursorRects` maps it to an `NSCursor`. Defaults to the terminal I-beam
+    /// so the resting cursor is right before the first event. Not `private` so the `+Input` extension (which
+    /// owns the cursor-rect override and `applyMouseShape`) can read it.
+    var mouseShape: ghostty_action_mouse_shape_e = GHOSTTY_MOUSE_SHAPE_TEXT
+
     init(workingDirectory: String, fontSize: Float? = nil, command: String? = nil, initialInput: String? = nil,
          waitAfterCommand: Bool = false, autoFocus: Bool = false, env: [String: String] = [:]) {
         self.workingDirectory = workingDirectory
@@ -886,7 +893,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         if let existing = currentTrackingArea { removeTrackingArea(existing) }
         let area = NSTrackingArea(
             rect: bounds,
-            options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect],
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
             owner: self
         )
         addTrackingArea(area)

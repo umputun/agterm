@@ -112,6 +112,21 @@ final class GhosttyCallbacks: @unchecked Sendable {
             let hidden = action.action.mouse_visibility == GHOSTTY_MOUSE_HIDDEN
             DispatchQueue.main.async { NSCursor.setHiddenUntilMouseMoves(hidden) }
             return true
+        case GHOSTTY_ACTION_MOUSE_SHAPE:
+            // libghostty requests a mouse cursor shape for this surface — the pointing hand over a detected
+            // link / OSC-8 hyperlink, the I-beam over the grid, resize/crosshair in the matching modes.
+            // Recover the surface and apply the mapped NSCursor via its cursor rects.
+            guard let view = surfaceView(from: target) else { return true }
+            let shape = action.action.mouse_shape
+            DispatchQueue.main.async { view.applyMouseShape(shape) }
+            return true
+        case GHOSTTY_ACTION_OPEN_URL:
+            // a click opened a detected link / OSC-8 hyperlink. Copy the URL out of the C string
+            // synchronously (only valid for this call), then open it scheme-validated on the main actor.
+            guard let view = surfaceView(from: target), let ptr = action.action.open_url.url else { return true }
+            let link = String(cString: ptr)
+            DispatchQueue.main.async { view.openLink(link) }
+            return true
         default:
             return false
         }
