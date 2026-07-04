@@ -636,24 +636,29 @@ final class AppActions {
 
     /// Reveal and focus the active session's blocked pane, reading its agent-status pane tag so navigation
     /// lands on the pane actually waiting for input rather than the session's plain focused pane. Shared by
-    /// the auto-follow jump and attention navigation. `.right` flips `splitFocused` so `focusActiveSession`'s
-    /// `topmostSurface` → `activeSurface` follows to `splitSurface` — WITHOUT gating on `hasSplit`, so a
-    /// promoted split survivor (primary exited, survivor in `splitSurface`, `hasSplit` false) is still
-    /// focused. `.scratch` shows the scratch only when hidden (a show-if-hidden guard, never a bare toggle
-    /// that could HIDE a shown one) so `topmostSurface` resolves to the scratch. `.left`/nil keep the plain
-    /// main-pane focus. `focusActiveSession`'s retry loop covers a split/scratch surface that materializes a
-    /// beat after the reveal.
+    /// the auto-follow jump and attention navigation. `.right` flips `splitFocused` then focuses the split
+    /// surface via `focusSplitPane(wantSplit: true)` — a FIXED target, NOT the `splitFocused`-following
+    /// `focusActiveSession`: a SHOWN (side-by-side) split's deck re-render churns first responder onto the
+    /// main pane, whose `onFocusChange` writes `splitFocused = false`, and a follow-the-flag focus target
+    /// then chases the wrong pane; re-asserting the split surface directly wins the race (its `onFocusChange`
+    /// re-sets `splitFocused = true`). `wantSplit: true` is UNGATED on `hasSplit`, so a promoted split
+    /// survivor (primary exited, survivor in `splitSurface`, `hasSplit` false) is still focused (the gating
+    /// the plan warned against was `right && hasSplit`, not `focusSplitPane` itself). `.scratch` shows the
+    /// scratch only when hidden (a show-if-hidden guard, never a bare toggle that could HIDE a shown one) so
+    /// `topmostSurface` resolves to the scratch; `.left`/nil keep the plain main-pane focus. The retry loops
+    /// cover a split/scratch surface that materializes a beat after the reveal.
     private func revealActiveBlockedPane() {
         guard let session = store?.activeSession else { focusActiveSession(); return }
         switch session.agentIndicator.statusPane {
         case .right:
             session.splitFocused = true
+            focusSplitPane(session, wantSplit: true)
         case .scratch:
             if !session.scratchActive { store?.toggleScratch(session.id) }
+            focusActiveSession()
         case .left, .none:
-            break
+            focusActiveSession()
         }
-        focusActiveSession()
     }
 
     /// Move first responder back to the active session's topmost surface (used after the quick terminal
