@@ -226,9 +226,9 @@ overlay surfaces inject no `AGTERM_PANE` (single-command runners; harmless nil�
 - Modify: `agterm/Resources/agent-status/agterm-agent-status.sh`
 - Modify: `agtermCore/Tests/agtermCoreTests/AgentStatusWrapperTests.swift`
 
-- [ ] in the wrapper, when `$AGTERM_PANE` is set, splice `--pane "$AGTERM_PANE"` into the forwarded args (before `"$@"`); absent → unchanged
-- [ ] write tests (`runWrapper`): `AGTERM_PANE=right` forwards `--pane right` in the recorded argv; unset omits `--pane`; still exits 0 and is a no-op without `AGTERM_SESSION_ID`
-- [ ] run `cd agtermCore && swift test`, `make lint` — must pass before next task
+- [x] in the wrapper, when `$AGTERM_PANE` is set, splice `--pane "$AGTERM_PANE"` into the forwarded args (before `"$@"`); absent → unchanged
+- [x] write tests (`runWrapper`): `AGTERM_PANE=right` forwards `--pane right` in the recorded argv; unset omits `--pane`; still exits 0 and is a no-op without `AGTERM_SESSION_ID`
+- [x] run `cd agtermCore && swift test`, `make lint` — must pass before next task
 
 ### Task 7: App — stamp statusPane in setSessionStatus
 

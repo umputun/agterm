@@ -29,11 +29,20 @@ set -u
 # it. Pass it only when AGTERM_SOCKET is set (the app injects it alongside the id).
 state=$1
 shift
+
+# forward the pane discriminator when the app injected it: each session surface
+# (main/split/scratch) sets its own AGTERM_PANE so a status set from a background pane
+# lands on that pane. it is validated agtermctl-side, so pass it through verbatim. the
+# ${arr[@]+..} guard keeps the empty-array expansion safe under `set -u` on bash 3.2.
+pane_args=()
+[ -n "${AGTERM_PANE:-}" ] && pane_args=(--pane "$AGTERM_PANE")
+
 if [ -n "${AGTERM_SOCKET:-}" ]; then
   "${AGTERMCTL:-agtermctl}" session status "$state" \
-    --target "$AGTERM_SESSION_ID" --socket "$AGTERM_SOCKET" "$@" >/dev/null 2>&1 || true
+    --target "$AGTERM_SESSION_ID" --socket "$AGTERM_SOCKET" \
+    "${pane_args[@]+"${pane_args[@]}"}" "$@" >/dev/null 2>&1 || true
 else
   "${AGTERMCTL:-agtermctl}" session status "$state" \
-    --target "$AGTERM_SESSION_ID" "$@" >/dev/null 2>&1 || true
+    --target "$AGTERM_SESSION_ID" "${pane_args[@]+"${pane_args[@]}"}" "$@" >/dev/null 2>&1 || true
 fi
 exit 0
