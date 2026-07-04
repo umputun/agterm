@@ -214,14 +214,7 @@ struct agtermApp: App {
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
-        // pane-scoped keystroke-clear: only a keystroke in the pane that OWNS the current status clears it
-        // (via AgentIndicator.clearedBy), so foreground typing in this main pane never wipes a block set by
-        // the split/scratch. This closure captures its own pane (.left); keyDown fires it on every keystroke.
-        view.onUserInputClearsStatus = { isEscape in
-            if store.session(withID: sessionID)?.agentIndicator.clearedBy(pane: .left, isEscape: isEscape) == true {
-                store.setAgentIndicator(AgentIndicator(), forSession: sessionID)
-            }
-        }
+        Self.wireStatusClear(view, store: store, sessionID: sessionID, pane: .left)
         view.onUserInput = { store.noteUserActivity() }
         view.onFontSizeChange = { store.setFontSize(sessionID, $0) }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
@@ -290,6 +283,21 @@ struct agtermApp: App {
         view.onSearchSelected = { selected in store.session(withID: sessionID)?.searchSelected = selected }
     }
 
+    /// Wire the pane-scoped keystroke-clear: `keyDown` fires `onUserInputClearsStatus` unconditionally, and
+    /// this closure clears the status back to idle ONLY when the host-free `AgentIndicator.clearedBy(pane:isEscape:)`
+    /// says the keystroke's OWN pane owns the current status — so a block set from a background pane survives
+    /// foreground typing in another pane. Wired by all three surface factories with only the pane differing
+    /// (main=`.left`, split=`.right`, scratch=`.scratch`), like `wireSearchCallbacks`; the scratch has no
+    /// `view.session`, so the decision must live in this closure rather than `keyDown`.
+    @MainActor
+    private static func wireStatusClear(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID, pane: StatusPane) {
+        view.onUserInputClearsStatus = { isEscape in
+            if store.session(withID: sessionID)?.agentIndicator.clearedBy(pane: pane, isEscape: isEscape) == true {
+                store.setAgentIndicator(AgentIndicator(), forSession: sessionID)
+            }
+        }
+    }
+
     /// Split-pane surface factory: a second independent login shell in the session's current
     /// directory. Wired to the session as `isSplitPane`, so its PWD/title reports go to
     /// `session.splitCwd`/`splitTitle` (never clobbering the primary's), and on shell exit it closes
@@ -323,13 +331,7 @@ struct agtermApp: App {
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
-        // pane-scoped keystroke-clear for the split (right) pane: only a keystroke in the pane that OWNS the
-        // status clears it (via AgentIndicator.clearedBy), so typing here can't wipe a main/scratch block.
-        view.onUserInputClearsStatus = { isEscape in
-            if store.session(withID: sessionID)?.agentIndicator.clearedBy(pane: .right, isEscape: isEscape) == true {
-                store.setAgentIndicator(AgentIndicator(), forSession: sessionID)
-            }
-        }
+        Self.wireStatusClear(view, store: store, sessionID: sessionID, pane: .right)
         view.onUserInput = { store.noteUserActivity() }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
         return view
@@ -395,15 +397,7 @@ struct agtermApp: App {
                                       autoFocus: !suppressAutoFocus, env: env)
         let sessionID = session.id
         view.onExit = { store.closeScratch(sessionID) }
-        // pane-scoped keystroke-clear for the scratch: the scratch surface has no `view.session`, so the
-        // decision can't live in keyDown — this closure owns it, clearing only when the scratch pane owns
-        // the status (via AgentIndicator.clearedBy). This is what lets a scratch-tagged block self-clear
-        // when you type in the scratch, while surviving foreground typing in the main/split pane.
-        view.onUserInputClearsStatus = { isEscape in
-            if store.session(withID: sessionID)?.agentIndicator.clearedBy(pane: .scratch, isEscape: isEscape) == true {
-                store.setAgentIndicator(AgentIndicator(), forSession: sessionID)
-            }
-        }
+        Self.wireStatusClear(view, store: store, sessionID: sessionID, pane: .scratch)
         // typing in the scratch counts as user activity: reset the window's auto-follow idle timer so an
         // idle fire can't change the underlying selection (hiding the per-session scratch) while you type
         // in it. destroySurface nils this, breaking the store -> surface -> closure retain cycle.

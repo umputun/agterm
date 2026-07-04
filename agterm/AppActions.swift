@@ -636,14 +636,18 @@ final class AppActions {
 
     /// Reveal and focus the active session's blocked pane, reading its agent-status pane tag so navigation
     /// lands on the pane actually waiting for input rather than the session's plain focused pane. Shared by
-    /// the auto-follow jump and attention navigation. `.right` flips `splitFocused` then focuses the split
-    /// surface via `focusSplitPane(wantSplit: true)` — a FIXED target, NOT the `splitFocused`-following
+    /// the auto-follow jump and attention navigation. `.right` — only WHEN the split surface exists
+    /// (`splitSurface != nil`) — flips `splitFocused` then focuses the split surface via
+    /// `focusSplitPane(wantSplit: true)` — a FIXED target, NOT the `splitFocused`-following
     /// `focusActiveSession`: a SHOWN (side-by-side) split's deck re-render churns first responder onto the
     /// main pane, whose `onFocusChange` writes `splitFocused = false`, and a follow-the-flag focus target
     /// then chases the wrong pane; re-asserting the split surface directly wins the race (its `onFocusChange`
-    /// re-sets `splitFocused = true`). `wantSplit: true` is UNGATED on `hasSplit`, so a promoted split
-    /// survivor (primary exited, survivor in `splitSurface`, `hasSplit` false) is still focused (the gating
-    /// the plan warned against was `right && hasSplit`, not `focusSplitPane` itself). `.scratch` shows the
+    /// re-sets `splitFocused = true`). The gate is `splitSurface != nil` (NOT `hasSplit`), so it still covers
+    /// a promoted split survivor (primary exited, survivor in `splitSurface`, `hasSplit` false — still
+    /// focused), while a STALE `right` tag on a genuinely single-pane session (a manual `session.status
+    /// --pane right`, or after the split collapsed) falls through to `focusActiveSession` instead of setting
+    /// `splitFocused = true` with no split surface (the `splitFocused` invariant is "true only while the
+    /// split pane exists"). `.scratch` shows the
     /// scratch only when hidden (a show-if-hidden guard, never a bare toggle that could HIDE a shown one) so
     /// `topmostSurface` resolves to the scratch; `.left`/nil focus the session's current active surface via
     /// `focusActiveSession` (the main pane unless a split is focused — no forced flip). The retry loops
@@ -651,13 +655,13 @@ final class AppActions {
     private func revealActiveBlockedPane() {
         guard let session = store?.activeSession else { focusActiveSession(); return }
         switch session.agentIndicator.statusPane {
-        case .right:
+        case .right where session.splitSurface != nil:
             session.splitFocused = true
             focusSplitPane(session, wantSplit: true)
         case .scratch:
             if !session.scratchActive { store?.toggleScratch(session.id) }
             focusActiveSession()
-        case .left, .none:
+        case .left, .right, .none:
             focusActiveSession()
         }
     }

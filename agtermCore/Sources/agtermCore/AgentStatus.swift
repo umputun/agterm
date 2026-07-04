@@ -17,7 +17,7 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
     /// the quick-Esc case: a pending question can still read `active` when you cancel it (Claude Code's
     /// `blocked` notification lands seconds later), and the Esc-interrupt itself fires no hook, so this
     /// keystroke clear is the only signal that drops the stale `active`. `idle` has no glyph to clear.
-    public func clearedByKeystroke(isEscape: Bool) -> Bool {
+    func clearedByKeystroke(isEscape: Bool) -> Bool {
         switch self {
         case .blocked, .completed: return true
         case .active: return isEscape
