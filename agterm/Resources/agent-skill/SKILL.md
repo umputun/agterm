@@ -72,8 +72,11 @@ of the tree).
 Inspect the live tree any time with `agtermctl tree --json` (workspaces → sessions, each with
 `id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `scratch`, `status`, `background`). `title` is the raw OSC
 terminal title (e.g. a remote host over SSH), omitted when none was reported — read it when a
-session's local `cwd` is stale because it's connected to a remote. List windows with
-`agtermctl window list --json`.
+session's local `cwd` is stale because it's connected to a remote. The tree object also carries two
+read-only top-level fields: `idleMs` (ms since the last user input in the window) and `autoFollowMs`
+(the Auto-follow timeout in ms, omitted when Disabled). List windows with
+`agtermctl window list --json`; each window also reports `autoFollowMs` (but not the live `idleMs`,
+which is `tree`-only).
 
 ## Addressing
 

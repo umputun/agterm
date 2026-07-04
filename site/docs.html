@@ -902,7 +902,8 @@
                 <span
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
-                ><strong style="color: #e6e1d7">Agent Status</strong> — the status-glyph colors and the blocked-session sound.
+                ><strong style="color: #e6e1d7">Agent Status</strong> — the status-glyph colors, the blocked-session sound, and an
+                idle timeout to auto-follow blocked sessions.
               </div>
               <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
@@ -1647,7 +1648,7 @@
                 >Ping</span
               >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">Tink</span>). To make every blocked
               prompt sound without touching the hooks, set
-              <strong style="color: #e6e1d7">Settings ▸ Appearance ▸ Agent Status ▸ Blocked sound</strong>. Typing into a
+              <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Blocked sound</strong>. Typing into a
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">blocked</span>/<span
                 style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
                 >completed</span
@@ -1664,6 +1665,27 @@
               window's non-idle sessions, sorted blocked → active → completed. Over the control channel,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports
               each session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">status</span>.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              <strong style="color: #e6e1d7">Auto-follow blocked sessions.</strong> When several agents run at once, a session
+              that blocks is easy to miss. Turn on
+              <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Auto-follow blocked sessions</strong>
+              (Disabled by default, or a 5s/10s/30s/60s/5m idle timeout) and, after you have been idle from input for that long,
+              the window selects and focuses the oldest blocked session, so you are pulled to whatever agent is waiting. It is
+              per-window and window-wide (crossing workspaces within the window), and always picks the oldest blocked session
+              first. Being parked on a blocked session suppresses further jumps until you type a reply, which clears its glyph
+              and re-arms the timer for the next one. The opt-in <strong style="color: #e6e1d7">Don't auto-follow away from a
+              running session</strong> (off by default) holds the selection put while the current session is
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span>. Over the control
+              channel, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span>
+              reports the window's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">idleMs</span>
+              (ms since your last input, live) and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">autoFollowMs</span> (the configured
+              timeout in ms, omitted when Disabled);
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl window list --json</span>
+              reports <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">autoFollowMs</span> per
+              window (as of the last refresh), but not the live
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">idleMs</span>.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               To wire it up automatically, <strong style="color: #e6e1d7">Help ▸ Install Agent Status Hooks…</strong> installs a

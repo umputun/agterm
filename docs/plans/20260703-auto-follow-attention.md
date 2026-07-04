@@ -142,15 +142,15 @@ the timer, and the next idle fire picks the next blocked session. The "queue" is
 - Modify: `agtermCore/Sources/agtermCore/AppSettings.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppSettingsTests.swift`
 
-- [ ] add nested `enum AutoFollowAttention: String, CaseIterable, Sendable { case off, s5, s10, s30, s60, m5 }`
+- [x] add nested `enum AutoFollowAttention: String, CaseIterable, Sendable { case off, s5, s10, s30, s60, m5 }`
       with `var timeout: TimeInterval?` computed mapping (off->nil, s5->5, s10->10, s30->30, s60->60, m5->300)
-- [ ] add optional field `autoFollowAttention: String?` and `autoFollowStayOnActive: Bool?` to `AppSettings`
+- [x] add optional field `autoFollowAttention: String?` and `autoFollowStayOnActive: Bool?` to `AppSettings`
       and to the memberwise `init` (default nil), mirroring the `NewSessionDirectory` pattern
-- [ ] write tests: `AutoFollowAttention(rawValue:)` tolerant decode of an unknown string falls back to off;
+- [x] write tests: `AutoFollowAttention(rawValue:)` tolerant decode of an unknown string falls back to off;
       each case maps to the correct `timeout`; `s5`/`m5` boundaries
-- [ ] write tests: encoding an `AppSettings` with both fields nil omits them from JSON (default minimal);
+- [x] write tests: encoding an `AppSettings` with both fields nil omits them from JSON (default minimal);
       round-trip with each field set decodes back equal
-- [ ] run `cd agtermCore && swift test` — must pass before Task 2
+- [x] run `cd agtermCore && swift test` — must pass before Task 2
 
 ### Task 2: AppStore — idle controller state, activity stamping, pure target function
 
@@ -161,27 +161,27 @@ the timer, and the next idle fire picks the next blocked session. The "queue" is
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTests.swift` OR add `AppStoreAutoFollowTests.swift`
   (follow the existing concern-split, not a one-file rule)
 
-- [ ] add stored state on `AppStore`: `autoFollowTimeout: TimeInterval?`, `autoFollowStayOnActive: Bool`
+- [x] add stored state on `AppStore`: `autoFollowTimeout: TimeInterval?`, `autoFollowStayOnActive: Bool`
       (default false), `lastActivityAt: Date?`, `let autoFollowDebouncer = Debouncer()` — the debouncer is
       `internal` (NOT `private`) so `@testable` tests can drive its `flush()` seam
-- [ ] add `noteUserActivity()`: stamp `lastActivityAt = Date()` unconditionally; if `autoFollowTimeout` is
+- [x] add `noteUserActivity()`: stamp `lastActivityAt = Date()` unconditionally; if `autoFollowTimeout` is
       non-nil, `autoFollowDebouncer.schedule(after: timeout) { [weak self] in self?.autoFollowFire() }`
       (match `scheduleSave`'s `[weak self]`, AppStore.swift:683), else `autoFollowDebouncer.cancel()`
-- [ ] add pure `autoFollowTarget(current: Session?, blocked: [Session], stayOnActive: Bool) -> UUID?`
+- [x] add pure `autoFollowTarget(current: Session?, blocked: [Session], stayOnActive: Bool) -> UUID?`
       implementing the three suppress/pick rules (blocked-suppress, active-suppress-if-opt-in, else FIFO
       oldest by `statusChangedAt` ascending)
-- [ ] add `autoFollowFire()` (at least `internal`, so tests can call it directly): compute the window-wide
+- [x] add `autoFollowFire()` (at least `internal`, so tests can call it directly): compute the window-wide
       blocked set (filter `attentionSessions` to `.blocked`), call `autoFollowTarget`, and if non-nil
       `selectSession(id)` (without noting activity); no reschedule on no-op
-- [ ] add `idleMs(asOf: Date = Date()) -> Int?` computing ms since `lastActivityAt` (nil when never active,
+- [x] add `idleMs(asOf: Date = Date()) -> Int?` computing ms since `lastActivityAt` (nil when never active,
       clamped >= 0)
-- [ ] write tests for `autoFollowTarget`: current blocked -> nil; stayOnActive+current active -> nil;
+- [x] write tests for `autoFollowTarget`: current blocked -> nil; stayOnActive+current active -> nil;
       !stayOnActive+current active -> picks; two blocks at different `statusChangedAt` -> oldest; blocked in
       another workspace -> picked (window-wide); empty blocked -> nil; advance (current cleared to idle ->
       next oldest)
-- [ ] write tests: `noteUserActivity()` stamps `lastActivityAt`; `idleMs(asOf:)` with injected now returns
+- [x] write tests: `noteUserActivity()` stamps `lastActivityAt`; `idleMs(asOf:)` with injected now returns
       expected ms; nil before any activity
-- [ ] run `cd agtermCore && swift test` — must pass before Task 3
+- [x] run `cd agtermCore && swift test` — must pass before Task 3
 
 ### Task 3: AppStore — status-change arming + enable/disable lifecycle
 
@@ -189,22 +189,22 @@ the timer, and the next idle fire picks the next blocked session. The "queue" is
 - Modify: `agtermCore/Sources/agtermCore/AppStore.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTests.swift`
 
-- [ ] add a `withObservationTracking` re-arm observer (mirror `DockBadgeController.apply`) that arms the
+- [x] add a `withObservationTracking` re-arm observer (mirror `DockBadgeController.apply`) that arms the
       debouncer on ANY `agentIndicator`/`attentionSessions` change in the window while a timeout is set, and
       re-registers itself on each change; tear it down when disabled
-- [ ] add `setAutoFollow(timeout:stayOnActive:)` (or two setters) that update the stored state, and on
+- [x] add `setAutoFollow(timeout:stayOnActive:)` (or two setters) that update the stored state, and on
       disable (`timeout == nil`) cancel the debouncer and stop observing; on enable arm from the current state
-- [ ] guard against self-trigger: `autoFollowFire()`'s own `selectSession` must not count as activity.
+- [x] guard against self-trigger: `autoFollowFire()`'s own `selectSession` must not count as activity.
       NOTE the one self-trigger path that DOES exist: `selectSession` clears an `autoReset` `completed` glyph
       on the session it moves AWAY from (`clearAutoResetIndicator(previous)`, AppStore.swift:209), which is
       an `agentIndicator` change the observer sees and re-arms on. This self-corrects and is NOT a loop — the
       next fire's `current` is the just-selected blocked session, so `autoFollowTarget` returns nil (blocked
       suppress) and the no-op guard holds. Verify this terminates rather than assuming "observer arms only on
       status change"
-- [ ] write tests: enabling arms/observing; disabling cancels; a status change while enabled schedules a
+- [x] write tests: enabling arms/observing; disabling cancels; a status change while enabled schedules a
       fire (assert via a seam that does not require real-time sleep — e.g. flush the debouncer or call the
       fire path directly). Keep timing deterministic; no `Task.sleep`-based flakiness
-- [ ] run `cd agtermCore && swift test` — must pass before Task 4
+- [x] run `cd agtermCore && swift test` — must pass before Task 4
 
 ### Task 4: User-initiated selection counts as activity
 
@@ -214,14 +214,14 @@ the timer, and the next idle fire picks the next blocked session. The "queue" is
 - Modify: relevant app-target test if one exists; otherwise assert the non-note behavior via the Task 2/3
   host-free tests (auto-follow's own select does not stamp `lastActivityAt`)
 
-- [ ] call `store.noteUserActivity()` from user-initiated selection entry points (the `AppActions`
+- [x] call `store.noteUserActivity()` from user-initiated selection entry points (the `AppActions`
       session-nav wrappers and the sidebar row-selection handler) so manual navigation buys the full idle
       grace before any pull-back
-- [ ] confirm `autoFollowFire()`'s `selectSession` path does NOT call `noteUserActivity()` (keep the note at
+- [x] confirm `autoFollowFire()`'s `selectSession` path does NOT call `noteUserActivity()` (keep the note at
       user entry points only, not inside `selectSession`)
-- [ ] write/extend tests: a simulated user selection stamps `lastActivityAt`; the auto-follow fire path does
+- [x] write/extend tests: a simulated user selection stamps `lastActivityAt`; the auto-follow fire path does
       not (already covered by Task 2 — assert explicitly here)
-- [ ] run tests — must pass before Task 5
+- [x] run tests — must pass before Task 5
 
 ### Task 5: App-target wiring — keystroke hook + focus-on-follow bridge
 
@@ -230,27 +230,33 @@ the timer, and the next idle fire picks the next blocked session. The "queue" is
 - Modify: `agterm/Ghostty/GhosttySurfaceView+Input.swift` (fire the callback in `keyDown`)
 - Modify: `agterm/agtermApp.swift` (wire the callback at BOTH surface factory sites; observe the focus bridge)
 
-- [ ] add `var onUserInput: (() -> Void)?` to `GhosttySurfaceView` (sibling of `onUserInputClearsStatus`,
+- [x] add `var onUserInput: (() -> Void)?` to `GhosttySurfaceView` (sibling of `onUserInputClearsStatus`,
       :102) and nil it in `destroySurface()` alongside `onUserInputClearsStatus = nil` / `onFocusChange = nil`
       (:774) — REQUIRED to break the `store -> session -> surface -> closure -> store` retain cycle
-- [ ] wire `onUserInput` at BOTH factory sites in `agtermApp.swift` (:205-212 and :307-313, next to the
+- [x] wire `onUserInput` at BOTH factory sites in `agtermApp.swift` (:205-212 and :307-313, next to the
       existing `onUserInputClearsStatus`), each capturing `store` + `sessionID` and calling
       `store.noteUserActivity()`. Do NOT reach into `WindowLibrary` from the view (it holds no library ref)
-- [ ] call `onUserInput?()` on EVERY `keyDown`, UNCONDITIONALLY (right after `guard let surface`), OUTSIDE
+- [x] call `onUserInput?()` on EVERY `keyDown`, UNCONDITIONALLY (right after `guard let surface`), OUTSIDE
       the `if ... clearedByKeystroke { }` branch at :47-50 — otherwise ordinary typing in an idle session
       wouldn't reset the idle timer and the user gets yanked mid-typing
-- [ ] focus bridge (agtermCore cannot call the app-target `focusActiveSession`): `autoFollowFire()` posts a
+- [x] focus bridge (agtermCore cannot call the app-target `focusActiveSession`): `autoFollowFire()` posts a
       `Notification.Name` (e.g. `.agtermAutoFollowed`) carrying the window id + session id; an app-side
       observer, only when that window is key, calls `focusActiveSession()` (AppActions.swift:600). Selection
       alone does NOT move first responder (eager deck keeps the old surface as responder), so this bridge is
       load-bearing. Non-key windows only change selection; they focus normally on becoming key. Session
       granularity — no split-pane logic
-- [ ] verify no double-clear regression: a keystroke still clears the focused session's blocked glyph
+- [x] verify no double-clear regression: a keystroke still clears the focused session's blocked glyph
       (existing `onUserInputClearsStatus`) and now also stamps activity via `onUserInput` (new)
-- [ ] write/extend an XCUITest (optional, non-gating): set a session `blocked` via control, wait past a
+- [x] XCUITest (skipped — optional/non-gating; heavy isolated-instance + socket + timing setup, flaky;
+      feature gated by host-free Task 2/3 tests + the app build): set a session `blocked` via control, wait past a
       short timeout, assert the window's selection moved to it (isolated state dir + socket). NOTE: Tasks 4/5
       have NO host-free gating test — the gate is the Task 2/3 host-free assertions plus this optional e2e
-- [ ] build the app (Debug) and run `cd agtermCore && swift test` + `make lint` — must pass before Task 6
+  - ➕ Task 7b: added `agtermUITests/AutoFollowUITests.swift` (idle-jump + suppress-when-parked), runs
+        locally, reliably green — the earlier optional XCUITest, now implemented at maintainer request. Seeds
+        `settings.json` with `autoFollowAttention: s5` and relaunches (new `ControlAPITestCase.relaunch(withSettings:)`
+        helper), drives the session set/statuses over the socket (none count as activity), and asserts
+        selection via the live `tree` `active` flag.
+- [x] build the app (Debug) and run `cd agtermCore && swift test` + `make lint` — must pass before Task 6
 
 ### Task 6: Settings model + Agent Status tab UI + fan-out
 
@@ -259,18 +265,18 @@ the timer, and the next idle fire picks the next blocked session. The "queue" is
 - Modify: `agterm/Views/SettingsView.swift`
 - Modify: app-target settings test if present
 
-- [ ] add `SettingsModel.setAutoFollowAttention(_:)` and `setAutoFollowStayOnActive(_:)` — save-only
+- [x] add `SettingsModel.setAutoFollowAttention(_:)` and `setAutoFollowStayOnActive(_:)` — save-only
       (non-ghostty, no surface reload; mirror `setNewSessionDirectory`)
-- [ ] on change, push the resolved `timeout` + `stayOnActive` into every open window's `AppStore` (reuse the
+- [x] on change, push the resolved `timeout` + `stayOnActive` into every open window's `AppStore` (reuse the
       appearance-flag fan-out style / `.agtermAppearanceChanged`); ensure a newly created window reads the
       current values at init
-- [ ] in `AgentStatusSettingsView` add a `Picker` "Auto-follow blocked sessions"
+- [x] in `AgentStatusSettingsView` add a `Picker` "Auto-follow blocked sessions"
       (Disabled/5s/10s/30s/60s/5m, default Disabled) with a binding mapping `.off -> nil` on set (mirror
       `newSessionDirectory` binding), and a `Toggle` "Don't auto-follow away from a running session"
       (default off)
-- [ ] write/extend tests for the setters (persist + fan-out effect where the layer is testable); assert the
+- [x] write/extend tests for the setters (persist + fan-out effect where the layer is testable); assert the
       `.off -> nil` binding keeps the default absent from JSON
-- [ ] build the app + `make lint` — must pass before Task 7
+- [x] build the app + `make lint` — must pass before Task 7
 
 ### Task 7: Control API — idleMs on tree (live), autoFollowMs on tree + window.list
 
@@ -283,23 +289,23 @@ the timer, and the next idle fire picks the next blocked session. The "queue" is
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlProtocolTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/WindowLibraryTests.swift` (extend `controlWindowNodesProjectListMetadata`)
 
-- [ ] add `idleMs: Int?` + `autoFollowMs: Int?` to `ControlTree`; add ONLY `autoFollowMs: Int?` to
+- [x] add `idleMs: Int?` + `autoFollowMs: Int?` to `ControlTree`; add ONLY `autoFollowMs: Int?` to
       `ControlWindowNode` (NOT `idleMs` — see below), threaded through their `init`s as additive optionals so
       existing call sites keep compiling
-- [ ] populate `ControlTree` (built live on the main actor) from the projected window's `idleMs()` +
+- [x] populate `ControlTree` (built live on the main actor) from the projected window's `idleMs()` +
       `autoFollowTimeout`; populate `ControlWindowNode.autoFollowMs` in `controlWindowNodes()` by reaching each
       open store via `stores[id]` (already in scope, host-free)
-- [ ] do NOT put `idleMs` on `window.list`: it is answered from the nonisolated `cachedWindowNodes` fast path
+- [x] do NOT put `idleMs` on `window.list`: it is answered from the nonisolated `cachedWindowNodes` fast path
       (ControlServer.swift:70) with no timer refresh, so a live/growing `idleMs` would be frozen and
       misleading. `autoFollowMs` is config that changes rarely, so its mild cache-staleness is acceptable
       (documented as "as of last refresh")
-- [ ] write round-trip tests: encode/decode `ControlTree` (both fields) and `ControlWindowNode`
+- [x] write round-trip tests: encode/decode `ControlTree` (both fields) and `ControlWindowNode`
       (`autoFollowMs`) with fields set and nil; assert JSON omits them when nil and preserves them when set;
       extend the `WindowLibraryTests` metadata test to assert `autoFollowMs` per open window
-- [ ] confirm NO new `Command` case, NO CLI mutation of the setting (settings stay GUI-only — documented as
+- [x] confirm NO new `Command` case, NO CLI mutation of the setting (settings stay GUI-only — documented as
       an explicit keep-in-sync exemption; consistent with `newSessionDirectory` / `attentionButtonEnabled` /
       `confirmCloseSession` etc.); command count unchanged
-- [ ] run `cd agtermCore && swift test` + `make lint` — must pass before Task 8
+- [x] run `cd agtermCore && swift test` + `make lint` — must pass before Task 8
 
 ### Task 8: Documentation and keep-in-sync surfaces
 
@@ -308,31 +314,32 @@ the timer, and the next idle fire picks the next blocked session. The "queue" is
 - Modify: `README.md`
 - Modify: `site/docs.html`
 
-- [ ] agent-skill `reference.md`: document `idleMs`/`autoFollowMs` in the `tree` and `window.list` response
+- [x] agent-skill `reference.md`: document `idleMs`/`autoFollowMs` in the `tree` and `window.list` response
       schemas; verify the command count is unchanged (no new command). Edit ONLY the app-repo bundle, never
       the installed copies
-- [ ] README.md: add the "Auto-follow blocked sessions" setting (values, per-window, blocked-only, FIFO,
+- [x] README.md: add the "Auto-follow blocked sessions" setting (values, per-window, blocked-only, FIFO,
       stay-on-active toggle) and the new read-only idle fields
-- [ ] site/docs.html: mirror the README additions (hand-authored keep-in-sync)
-- [ ] do NOT touch `CHANGELOG.md` (release-only)
-- [ ] run `make lint` — must pass before Task 9
+- [x] site/docs.html: mirror the README additions (hand-authored keep-in-sync)
+- [x] do NOT touch `CHANGELOG.md` (release-only)
+- [x] run `make lint` — must pass before Task 9
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] verify all Overview requirements: idle-triggered per-window auto-follow to oldest blocked, blocked-only,
+- [x] verify all Overview requirements: idle-triggered per-window auto-follow to oldest blocked, blocked-only,
       window-wide, FIFO, stay-on-active opt-in (default off), disabled by default
-- [ ] verify edge cases: parked-on-blocked suppresses; active suppress only when opted in; advance after
+- [x] verify edge cases: parked-on-blocked suppresses; active suppress only when opted in; advance after
       typing clears; empty blocked no-ops; multi-window independence
-- [ ] run full suite: `cd agtermCore && swift test`
-- [ ] `make lint` (swiftlint `--strict`) clean; app builds (Debug)
-- [ ] optional: run the XCUITest e2e locally if wired in Task 5
+- [x] run full suite: `cd agtermCore && swift test`
+- [x] `make lint` (swiftlint `--strict`) clean; app builds (Debug)
+- [x] optional: run the XCUITest e2e locally if wired in Task 5
 
 ### Task 10: Final documentation pass and archive plan
 
-- [ ] re-read README / site / agent-skill diffs for accuracy against the shipped behavior
-- [ ] update CLAUDE.md / `.claude/rules/*.md` only if a new reusable pattern emerged (e.g. the idle-activity
+- [x] re-read README / site / agent-skill diffs for accuracy against the shipped behavior
+- [x] update CLAUDE.md / `.claude/rules/*.md` only if a new reusable pattern emerged (e.g. the idle-activity
       seam) — otherwise skip
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/` (deferred to exec finalization — orchestrator moves it after
+      the review phases)
 
 ## Post-Completion
 

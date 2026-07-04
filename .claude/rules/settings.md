@@ -27,7 +27,11 @@ paths:
   nil = default 5 = neutral, NOT a ghostty key)
   + `rightClickPaste` (ghostty `right-click-action`, nil = on)
   + `newSessionDirectory`/`newSessionCustomDirectory` (where a new ⌘T session opens: nil = home default,
-  else the current session's cwd or a fixed custom dir; NOT ghostty keys).
+  else the current session's cwd or a fixed custom dir; NOT ghostty keys)
+  + `autoFollowAttention`/`autoFollowStayOnActive` (the per-window idle auto-follow-to-oldest-blocked policy:
+  `autoFollowAttention` an `AutoFollowAttention` raw string [nil = off/disabled], `autoFollowStayOnActive`
+  [nil/false = off] the "don't leave a running session" opt-in; NOT ghostty keys, save-only + fanned out into
+  every open window's `AppStore` via `SettingsModel.applyAutoFollow` → `AppStore.setAutoFollow`).
   The three `*StatusColorHex` (`#RRGGBB`, nil = active `#DBD9E6` muted lavender-grey + system amber/green)
   color the sidebar agent-status glyph: `SettingsModel` passes the hex to `GhosttyApp.setAgentStatusColors`
   which resolves to `NSColor` (so `SettingsModel` stays AppKit-free, the `NSColor`↔hex helper is `NSColor+AgtermHex`),
@@ -140,7 +144,9 @@ paths:
   inactive-pane-mute slider).
   **Notifications** (a **Notifications** section with the banner / badge / attention-indicator toggles).
   **Agent Status** (a **Colors** section with the three glyph color pickers, a **Sound** section with
-  the blocked-sound picker, and a trailing **Reset** that clears both back to defaults).
+  the blocked-sound picker, an **Auto-follow** section with the idle-timeout Picker
+  (Disabled/5s/10s/30s/60s/5m) + the "Don't auto-follow away from a running session" Toggle, and a trailing
+  **Reset** that clears the colors and sound back to defaults — not the auto-follow settings).
   **Key Mapping** (the config directory holding `keymap.conf` + a read-only diagnostics list + a Reload
   button — see the Keymap section).
   Captions under controls are kept to a single terse line and dropped entirely from self-explanatory
