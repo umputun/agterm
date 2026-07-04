@@ -129,7 +129,7 @@ paths:
   `ContentView` mirrors the color into `terminalColor` view state (the quick terminal's opaque backing
   re-renders with the new color) and `TitleProbeView` re-applies the window appearance.
   Without this the chrome only refreshed when the window next re-keyed.
-  UI is the standard SwiftUI `Settings` scene (Cmd+,) with a 5-tab `TabView` (frame 480×600).
+  UI is the standard SwiftUI `Settings` scene (Cmd+,) with a 5-tab `TabView` (frame 480×550).
   An explicit `TabView(selection:)` binding (`@State` default `.general`) suppresses SwiftUI's
   `com_apple_SwiftUI_Settings_selectedTabIndex` auto-persistence, so the window always opens on General
   instead of restoring the last-used tab.
@@ -149,8 +149,10 @@ paths:
   **Reset** that clears the colors and sound back to defaults — not the auto-follow settings).
   **Key Mapping** (the config directory holding `keymap.conf` + a read-only diagnostics list + a Reload
   button — see the Keymap section).
-  Captions under controls are kept to a single terse line and dropped entirely from self-explanatory
-  controls (font/theme/opacity/sidebar-tint/colors), so each tab fits without scrolling.
+  Captions under controls are dropped for self-explanatory controls, which is nearly all of them.
+  A caption is kept ONLY when it carries information the label can't — currently just two:
+  `Blur needs opacity below 100%` (a functional dependency) and the Ghostty-config edit-path hint.
+  This keeps the busiest tab short enough that the 550-tall window fits every tab without scrolling.
   The notification toggle (`AppSettings.notificationsEnabled`, nil = on) is mirrored to `NotificationManager.bannersEnabled`
   by `SettingsModel`; it gates only the OS banner, never the badge, and is NOT a ghostty config key (no
   reload).

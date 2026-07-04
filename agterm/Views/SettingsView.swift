@@ -33,7 +33,7 @@ struct SettingsView: View {
                 .tabItem { Label("Key Mapping", systemImage: "keyboard") }
                 .tag(Tab.keyMapping)
         }
-        .frame(width: 480, height: 600)
+        .frame(width: 480, height: 550)
         // keep macOS from saving/restoring the Settings window across launches. Otherwise a
         // process-launch reopen (see agtermApp's FB11763863 workaround) resurrects a stale Settings
         // window on whatever tab it was last on, which steals key focus from the real launch window.
@@ -87,7 +87,6 @@ private struct GeneralSettingsView: View {
                 }
                 Toggle("Right-click pastes", isOn: rightClickPaste)
                     .accessibilityIdentifier("settings-right-click-paste")
-                SettingHint("Right-click pastes the clipboard into the terminal.")
             }
 
             Section("Sessions") {
@@ -113,10 +112,8 @@ private struct GeneralSettingsView: View {
                 }
                 Toggle("Restore running commands on restart", isOn: restoreRunningCommand)
                     .accessibilityIdentifier("settings-restore-running-command")
-                SettingHint("Re-runs each pane's foreground command on relaunch; multiplexers start fresh.")
                 Toggle("Confirm before closing a session", isOn: confirmCloseSession)
                     .accessibilityIdentifier("settings-confirm-close-session")
-                SettingHint("Asks before ⌘W closes a session and ends what's running in it.")
             }
 
             Section("Ghostty Config") {
@@ -225,7 +222,6 @@ private struct AppearanceSettingsView: View {
             Section("Window") {
                 Toggle("Compact toolbar", isOn: compactToolbar)
                     .accessibilityIdentifier("settings-compact-toolbar")
-                SettingHint("Shorter title bar with smaller icons; hides the working-directory subtitle.")
 
                 HStack {
                     Text("Background Opacity")
@@ -345,15 +341,12 @@ private struct NotificationsSettingsView: View {
             Section("Notifications") {
                 Toggle("Show notification banners", isOn: notificationsEnabled)
                     .accessibilityIdentifier("settings-notifications")
-                SettingHint("Terminal desktop notifications (OSC 9 / 777) in Notification Center.")
 
                 Toggle("Show notification badges", isOn: notificationBadgeEnabled)
                     .accessibilityIdentifier("settings-notification-badges")
-                SettingHint("The red unseen-count pill on sidebar rows; the count keeps tracking either way.")
 
                 Toggle("Show attention indicator", isOn: attentionButtonEnabled)
                     .accessibilityIdentifier("settings-attention-button")
-                SettingHint("A title-bar bell that highlights when a session needs attention. Click it to jump there.")
             }
         }
         .formStyle(.grouped)
@@ -397,7 +390,6 @@ private struct AgentStatusSettingsView: View {
                     .accessibilityIdentifier("settings-status-blocked")
                 ColorPicker("Completed", selection: completedStatusColor, supportsOpacity: false)
                     .accessibilityIdentifier("settings-status-completed")
-                SettingHint("Colors for the per-session sidebar status glyph.")
             }
 
             Section("Sound") {
@@ -408,7 +400,6 @@ private struct AgentStatusSettingsView: View {
                     }
                 }
                 .accessibilityIdentifier("settings-status-blocked-sound")
-                SettingHint("Played when a session becomes blocked.")
             }
 
             Section("Auto-follow") {
@@ -421,7 +412,6 @@ private struct AgentStatusSettingsView: View {
                     Text("5m").tag(AppSettings.AutoFollowAttention.m5)
                 }
                 .accessibilityIdentifier("settings-auto-follow")
-                SettingHint("Jumps to the oldest blocked session once you've been idle this long.")
                 Toggle("Don't auto-follow away from a running session", isOn: autoFollowStayOnActive)
                     .accessibilityIdentifier("settings-auto-follow-stay-active")
             }
