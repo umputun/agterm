@@ -65,8 +65,14 @@ final class AutoFollowUITests: ControlAPITestCase {
     /// The id (lowercased) of the session marked `active` (= selected) in the live control `tree`, or nil if
     /// none resolves. `ControlSessionNode.active` is `id == selectedSessionID`, so exactly one node is active.
     private func activeNodeID() -> String? {
-        guard let resp = try? sendCommand(#"{"cmd":"tree"}"#),
-              let result = resp["result"] as? [String: Any],
+        let resp: [String: Any]
+        do {
+            resp = try sendCommand(#"{"cmd":"tree"}"#)
+        } catch {
+            XCTFail("control tree query failed: \(error)")
+            return nil
+        }
+        guard let result = resp["result"] as? [String: Any],
               let tree = result["tree"] as? [String: Any],
               let workspaces = tree["workspaces"] as? [[String: Any]] else { return nil }
         let sessions = workspaces.flatMap { ($0["sessions"] as? [[String: Any]]) ?? [] }
