@@ -179,7 +179,7 @@ public final class AppStore {
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID, sessions: sessions)
         }
-        return ControlTree(workspaces: nodes)
+        return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs)
     }
 
     /// Creates a workspace and appends it. Clears any active focus so the new (empty)

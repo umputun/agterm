@@ -162,7 +162,10 @@ public final class WindowLibrary {
     public func controlWindowNodes() -> [ControlWindowNode] {
         let active = activeWindowID
         return windows.map {
-            ControlWindowNode(id: $0.id.uuidString, name: $0.name, open: isOpen($0.id), active: $0.id == active)
+            // reach each open store for its auto-follow timeout (config, rarely changes — safe on the cached
+            // fast path); a closed window has no store and reports nil.
+            ControlWindowNode(id: $0.id.uuidString, name: $0.name, open: isOpen($0.id), active: $0.id == active,
+                              autoFollowMs: stores[$0.id]?.autoFollowMs)
         }
     }
 

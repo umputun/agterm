@@ -122,9 +122,13 @@ final class WindowLibraryTests {
         let first = library.windows[0]
         let second = library.newWindow(name: "work")
 
+        // the second window has auto-follow enabled (30s); the first leaves it off (nil autoFollowMs).
+        library.store(for: second.id)?.autoFollowTimeout = 30
+
         #expect(library.controlWindowNodes() == [
             ControlWindowNode(id: first.id.uuidString, name: first.name, open: true, active: false),
-            ControlWindowNode(id: second.id.uuidString, name: "work", open: true, active: true),
+            ControlWindowNode(id: second.id.uuidString, name: "work", open: true, active: true,
+                              autoFollowMs: 30_000),
         ])
     }
 
