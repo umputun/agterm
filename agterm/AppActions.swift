@@ -255,10 +255,10 @@ final class AppActions {
     /// then moves first responder into the moved-to session's focused pane. Each also notes the manual
     /// navigation as user activity so it buys the full idle grace before auto-follow can pull the
     /// selection back (the control `session.go` drives `navigateSession` directly, so it stays silent).
-    func selectNextSession() { store?.noteUserActivity(); store?.navigateSession(.next); focusActiveSession() }
-    func selectPreviousSession() { store?.noteUserActivity(); store?.navigateSession(.previous); focusActiveSession() }
-    func selectFirstSession() { store?.noteUserActivity(); store?.navigateSession(.first); focusActiveSession() }
-    func selectLastSession() { store?.noteUserActivity(); store?.navigateSession(.last); focusActiveSession() }
+    func selectNextSession() { store?.noteUserActivity(); store?.navigateSession(.next); revealActiveBlockedPane() }
+    func selectPreviousSession() { store?.noteUserActivity(); store?.navigateSession(.previous); revealActiveBlockedPane() }
+    func selectFirstSession() { store?.noteUserActivity(); store?.navigateSession(.first); revealActiveBlockedPane() }
+    func selectLastSession() { store?.noteUserActivity(); store?.navigateSession(.last); revealActiveBlockedPane() }
 
     /// Step to the next/previous session needing attention (status `blocked` or `completed`), wrapping
     /// around and skipping idle/active sessions. Shares `navigateSession` with the GUI, palette, and the
@@ -635,8 +635,12 @@ final class AppActions {
     }
 
     /// Reveal and focus the active session's blocked pane, reading its agent-status pane tag so navigation
-    /// lands on the pane actually waiting for input rather than the session's plain focused pane. Shared by
-    /// the auto-follow jump and attention navigation. `.right` — only WHEN the split surface exists
+    /// lands on the pane actually waiting for input rather than the session's plain focused pane. Called on
+    /// every user-initiated selection — the auto-follow jump, attention navigation (⌃⌥↑/↓), plain session
+    /// nav (⌥⌘↑/↓/first/last), the ⌃P / attention command palette, and a sidebar row click — so however you
+    /// reach a blocked session you land on its waiting pane; it is a no-op (plain `focusActiveSession`) for a
+    /// session with no pane-tagged block, so ordinary selections are unaffected. `.right` — only WHEN the
+    /// split surface exists
     /// (`splitSurface != nil`) — flips `splitFocused` then focuses the split surface via
     /// `focusSplitPane(wantSplit: true)` — a FIXED target, NOT the `splitFocused`-following
     /// `focusActiveSession`: a SHOWN (side-by-side) split's deck re-render churns first responder onto the
@@ -658,7 +662,7 @@ final class AppActions {
     /// both resolve to the covering scratch (`topmostSurface`) and nav never reaches the blocked pane. Only
     /// the scratch cover is dismissed; an active overlay is left alone (closing a running overlay would kill
     /// its program).
-    private func revealActiveBlockedPane() {
+    func revealActiveBlockedPane() {
         guard let session = store?.activeSession else { focusActiveSession(); return }
         let pane = session.agentIndicator.statusPane
         // a shown scratch covers the panes and masks a non-scratch block; hide it first so the requested

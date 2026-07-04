@@ -166,8 +166,9 @@ state; there is no control command to set them.
   which pane set the status. It has two effects: (1) keystroke-clear becomes pane-scoped — a status set
   from a background pane survives typing in a DIFFERENT pane (so a `right`- or `scratch`-tagged block is
   no longer wiped by foreground typing in the main pane, and only a keystroke in the OWNING pane clears
-  it), and (2) the user's attention navigation lands on the tagged pane — auto-follow and the GUI
-  attention-nav (⌃⌥↑/⌃⌥↓, the Navigate menu, the palette) reveal and focus it, flipping to the split or
+  it), and (2) any user-initiated GUI selection of the session lands on the tagged pane — auto-follow,
+  the attention-nav (⌃⌥↑/⌃⌥↓, the Navigate menu), plain session nav (⌥⌘↑/↓/first/last),
+  the command palettes, and a sidebar row click all reveal and focus it, flipping to the split or
   showing a hidden scratch instead of the main pane. (The socket `session go next-attention|prev-attention`
   only STEPS the selection to attention sessions; it does not itself move focus into the tagged pane — the
   reveal is a GUI/auto-follow concern.) An agent that runs in a split or scratch should set its own pane so

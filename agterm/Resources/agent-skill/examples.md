@@ -289,8 +289,9 @@ agtermctl session status idle --target "$AGTERM_SESSION_ID"             # clear
 
 An agent running in a split or scratch pane sets `--pane` so its block survives foreground typing in
 another pane and the user's attention navigation lands on the RIGHT pane — the split, or a hidden scratch,
-not the main pane. Auto-follow and the GUI attention-nav (⌃⌥↑/⌃⌥↓) reveal and focus the tagged pane; the
-socket `session go --to next-attention` only steps the selection, it does not move focus into the pane.
+not the main pane. Auto-follow and any GUI selection — the attention-nav (⌃⌥↑/⌃⌥↓), plain session nav,
+the command palettes, and a sidebar row click — reveal and focus the tagged pane; the socket
+`session go --to next-attention` only steps the selection, it does not move focus into the pane.
 Without `--pane` the status is treated as coming from the main (`left`) pane, so a block set from the split
 can be wiped by typing in the main pane and the reveal lands on the wrong surface.
 

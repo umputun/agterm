@@ -557,6 +557,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // before auto-follow can pull the selection back.
             store.noteUserActivity()
             store.selectSession(node.id)
+            // land on the selected session's blocked pane when it carries a pane-tagged block (a no-op
+            // otherwise), async so it runs after the selection + the sidebar's own focus-restore settle.
+            DispatchQueue.main.async { [weak self] in self?.actions.revealActiveBlockedPane() }
         }
 
         /// Returns keyboard focus to the active session's terminal after a sidebar

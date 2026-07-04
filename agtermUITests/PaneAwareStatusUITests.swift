@@ -3,8 +3,9 @@ import XCTest
 
 /// Control-channel e2e for pane-aware agent status: a `blocked` status tagged with the pane that set it
 /// (`session.status --pane left|right|scratch`) must (1) survive foreground typing in a DIFFERENT pane and
-/// (2) make attention navigation reveal and land on the pane that actually blocked — a split (right) pane,
-/// a hidden split, or a scratch terminal — instead of the session's plain focused pane. Subclass of
+/// (2) make every user-initiated GUI selection (attention navigation, a sidebar row click, the attention
+/// command palette) reveal and land on the pane that actually blocked — a split (right) pane, a hidden
+/// split, or a scratch terminal — instead of the session's plain focused pane. Subclass of
 /// `ControlAPITestCase` for the socket harness (isolated `AGTERM_STATE_DIR` + short socket path).
 ///
 /// Reveal oracle (deterministic, race-free): the reveal step (`AppActions.revealActiveBlockedPane`) sets the
@@ -12,10 +13,13 @@ import XCTest
 /// flags — so `session.text` with NO `--pane` (the on-screen surface) reflects the reveal immediately,
 /// independent of the best-effort AppKit `makeFirstResponder` retry the reveal also fires. Each pane is
 /// pre-seeded with a distinct echo marker; after nav, the no-pane read returns the REVEALED pane's marker
-/// and not the other's. The trigger is the GUI attention-nav shortcut ⌃⌥↓ (Navigate ▸ Next Attention
-/// Session → `AppActions.selectNextAttentionSession` → `revealActiveBlockedPane`); the control
-/// `session.go next-attention` deliberately drives `AppStore.navigateSession` directly and does NOT run
-/// the reveal, so a menu key-equivalent is the way to exercise it (as `SessionNavUITests` drives ⌥⌘↓).
+/// and not the other's. The primary trigger is the GUI attention-nav shortcut ⌃⌥↓ (Navigate ▸ Next
+/// Attention Session → `AppActions.selectNextAttentionSession` → `revealActiveBlockedPane`); the SAME reveal
+/// also fires on a plain GUI selection — a sidebar row click (`outlineViewSelectionDidChange`) and the
+/// ⌃P/attention command palette's run closure, each covered below — since the reveal now runs on every
+/// user-initiated selection. Only the control `session.go next-attention` stays reveal-free (it drives
+/// `AppStore.navigateSession` directly), so a menu key-equivalent / click / palette pick is the way to
+/// exercise it (as `SessionNavUITests` drives ⌥⌘↓).
 ///
 /// Clear oracle (survival / self-clear): the pane-scoped keystroke-clear is wired off the real `keyDown`
 /// (each surface factory owns the decision for its own pane), so it MUST be driven by the synthesized
@@ -214,6 +218,84 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
         XCTAssertTrue(typeUntilGlyphCleared(), "typing in the scratch SHOULD clear its own scratch-tagged block")
     }
 
+    // a `right`-tagged block revealed by a SIDEBAR ROW CLICK: with the selection parked on another session,
+    // clicking the blocked session's row selects it AND flips the on-screen pane from the main (left) pane —
+    // where focus was parked — to the split (right) pane that set the status. The reveal now fires on a plain
+    // GUI selection, not only attention-nav; without the pane tag the click would keep focus on the main pane.
+    func testSidebarClickRevealsBlockedSplitPane() throws {
+        let sessionA = try activeSessionID()
+        // rename the blocked session so its sidebar row is matchable by value, distinct from the parked one.
+        let rowName = "PAWCLICK-\(UUID().uuidString.prefix(8))"
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.rename","target":"\#(sessionA)","args":{"name":"\#(rowName)"}}"#)["ok"] as? Bool,
+                       true, "renaming the blocked session should succeed")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sessionA)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "split on should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the session should report split:true")
+
+        let leftTag = "PAWKL-\(UUID().uuidString.prefix(8))"
+        let rightTag = "PAWKR-\(UUID().uuidString.prefix(8))"
+        try seedPaneMarker(target: sessionA, pane: "left", tag: leftTag)
+        try seedPaneMarker(target: sessionA, pane: "right", tag: rightTag)
+
+        // focus the main (left) pane so the split (right) pane is NOT the on-screen one.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(sessionA)","args":{"pane":"left"}}"#)["ok"] as? Bool,
+                       true, "focusing the left pane should succeed")
+        XCTAssertTrue(try pollOnScreen(target: sessionA, contains: "\(leftTag)-42"),
+                      "with the left pane focused, the on-screen surface should be the main pane")
+
+        // the split (right) pane's agent blocks; park the selection on a fresh session so A is NOT selected.
+        try blockPane("right", target: sessionA)
+        XCTAssertEqual(try statusPane(of: sessionA), "right", "the block should be tagged right")
+        _ = try parkOnNewSession()
+
+        // click the blocked session's row: selecting it should reveal its blocked (right) pane.
+        clickSessionRow(named: rowName)
+
+        XCTAssertTrue(try pollActiveNode(equals: sessionA, timeout: 12), "clicking the row should select the blocked session")
+        XCTAssertTrue(try pollOnScreen(target: sessionA, contains: "\(rightTag)-42"),
+                      "the reveal should make the split (right) pane the on-screen surface")
+        let onScreen = try XCTUnwrap(onScreenText(sessionA), "the on-screen read should return text")
+        XCTAssertFalse(onScreen.contains("\(leftTag)-42"), "the revealed right pane must not carry the main pane's marker")
+    }
+
+    // a `right`-tagged block revealed by the ATTENTION COMMAND PALETTE: opening Navigate ▸ Go to Attention…
+    // and choosing the blocked session selects it AND flips the on-screen pane to the split (right) pane that
+    // set the status. The palette-run reveal is dispatched async (after the palette closes and its own
+    // focus-restore), so it lands on the waiting pane, mirroring attention-nav and the sidebar click.
+    func testAttentionPaletteRevealsBlockedSplitPane() throws {
+        let sessionA = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sessionA)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "split on should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the session should report split:true")
+
+        let leftTag = "PAWPL-\(UUID().uuidString.prefix(8))"
+        let rightTag = "PAWPR-\(UUID().uuidString.prefix(8))"
+        try seedPaneMarker(target: sessionA, pane: "left", tag: leftTag)
+        try seedPaneMarker(target: sessionA, pane: "right", tag: rightTag)
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(sessionA)","args":{"pane":"left"}}"#)["ok"] as? Bool,
+                       true, "focusing the left pane should succeed")
+        XCTAssertTrue(try pollOnScreen(target: sessionA, contains: "\(leftTag)-42"),
+                      "with the left pane focused, the on-screen surface should be the main pane")
+
+        // block the right pane, then park on a fresh IDLE session so the blocked A is the ONLY attention row.
+        try blockPane("right", target: sessionA)
+        XCTAssertEqual(try statusPane(of: sessionA), "right", "the block should be tagged right")
+        _ = try parkOnNewSession()
+
+        openAttentionPalette()
+        // A is the only non-idle session, so Return on the top match selects it; re-send Return each tick
+        // since a menu-opened palette can settle field focus a beat after it mounts (the pollReturnSelects
+        // idiom from AttentionButtonUITests).
+        XCTAssertTrue(try pollReturnSelects(sessionA, timeout: 12), "choosing the attention row should select the blocked session")
+
+        XCTAssertTrue(try pollOnScreen(target: sessionA, contains: "\(rightTag)-42"),
+                      "the palette reveal should make the split (right) pane the on-screen surface")
+        let onScreen = try XCTUnwrap(onScreenText(sessionA), "the on-screen read should return text")
+        XCTAssertFalse(onScreen.contains("\(leftTag)-42"), "the revealed right pane must not carry the main pane's marker")
+    }
+
     // MARK: - Helpers
 
     /// Type Escape into the focused surface until the agent-status glyph clears (retrying rides out a
@@ -264,6 +346,39 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
     /// so it dispatches regardless of which surface holds first responder (as `SessionNavUITests` drives ⌥⌘↓).
     private func attentionNavDown() {
         app.typeKey(.downArrow, modifierFlags: [.control, .option])
+    }
+
+    /// Click the `session-row` whose displayed name (its accessibility VALUE) equals `name`. A renamed
+    /// session's row is matched unambiguously by value (mirrors `FlaggedViewUITests`/`FocusWorkspaceUITests`).
+    private func clickSessionRow(named name: String) {
+        let row = app.staticTexts
+            .matching(NSPredicate(format: "identifier == %@ AND value == %@", "session-row", name))
+            .firstMatch
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "the '\(name)' session row should exist in the sidebar")
+        row.click()
+    }
+
+    /// Open the attention command palette via Navigate ▸ Go to Attention… (a menu key-equivalent is the
+    /// deterministic opener — mirrors `PaletteUITests.openPalette`), waiting for its field to appear.
+    private func openAttentionPalette() {
+        app.menuBars.menuBarItems["Navigate"].click()
+        let item = app.menuItems["Go to Attention…"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "Navigate menu should offer Go to Attention…")
+        item.click()
+        XCTAssertTrue(app.textFields.firstMatch.waitForExistence(timeout: 5), "the attention palette field should appear")
+    }
+
+    /// Re-send Return each tick (the blocked session is the only attention row, so Return on the top match
+    /// selects it) until the tree's active session equals `expected`, or the timeout elapses. A just-opened
+    /// palette can settle field focus a beat after it mounts, so a single Return can race the focus and
+    /// no-op; re-sending makes the selection deterministic (the `AttentionButtonUITests` idiom).
+    private func pollReturnSelects(_ expected: String, timeout: TimeInterval) throws -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            app.typeKey(.return, modifierFlags: [])
+            if try pollActiveNode(equals: expected, timeout: 0.4) { return true }
+        }
+        return try activeNodeID() == expected.lowercased()
     }
 
     /// The on-screen surface's full buffer (`session.text` with NO `--pane`, `all:true`) for `target`, or nil.

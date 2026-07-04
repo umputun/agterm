@@ -146,11 +146,13 @@ paths:
   Peer terminals get the decline case for free by different means agterm avoids:
   cmux owns the permission decision UI (a blocking hook round-trip captures accept/deny),
   herdr scrapes the PTY (the prompt chrome leaving the screen clears it).
-- **Pane-aware attention navigation.**
+- **Pane-aware selection reveal.**
   The same `AgentIndicator.statusPane` tag (set via `session.status --pane`, see the Control API rule) also
-  decides WHERE attention navigation lands: auto-follow and the GUI attention-nav (⌃⌥↑/⌃⌥↓, menu, palette)
-  reveal and focus the pane that set the block — flipping `splitFocused` to the split, or showing a hidden
-  scratch via `AppStore.toggleScratch` — instead of always the main pane (the shared `AppActions.revealActiveBlockedPane`;
+  decides WHERE a GUI selection lands: EVERY user-initiated selection — attention-nav (⌃⌥↑/⌃⌥↓),
+  plain session nav (⌥⌘↑/↓/first/last), the ⌃P/attention command palette, a sidebar row click,
+  and idle auto-follow — reveals and focuses the pane that set the block — flipping `splitFocused` to the
+  split, or showing a hidden scratch via `AppStore.toggleScratch` — instead of always the main pane (the
+  shared `AppActions.revealActiveBlockedPane`, a no-op for a session with no pane-tagged block;
   see the Menu/actions rule).
   The `session.go next-attention|prev-attention` control arm only steps the selection (`navigateSession`),
   it does NOT itself run the reveal — the pane focus is a GUI/auto-follow concern.

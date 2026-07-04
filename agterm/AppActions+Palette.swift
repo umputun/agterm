@@ -166,11 +166,14 @@ extension AppActions {
         let workspaceName = store.workspace(forSession: id)?.name ?? ""
         let subtitle = "\(workspaceName) · \(session.subtitleDetail)"
         return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: subtitle,
-                           status: status, statusColor: statusColor) {
+                           status: status, statusColor: statusColor) { [weak self] in
             // picking a session from the ⌃P / attention palette is a user-initiated selection: note activity
             // so it buys the full idle grace before auto-follow can pull the selection back.
             store.noteUserActivity()
             store.selectSession(id)
+            // reveal the picked session's blocked pane (a no-op unless it carries a pane-tagged block),
+            // async so it runs AFTER the palette closes and its focus-restore, winning the focus race.
+            DispatchQueue.main.async { self?.revealActiveBlockedPane() }
         }
     }
 

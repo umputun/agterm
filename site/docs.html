@@ -1664,8 +1664,10 @@
                 >right</span
               >|<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">scratch</span>, defaulting to the
               main pane) records which pane set the status: a block set from a background pane survives typing in another pane, and
-              attention navigation (auto-follow and ⌃⌥↑/↓) reveals and focuses that pane — the split, or a hidden scratch —
-              instead of the main pane, so an agent in a split or scratch tags its own pane to be found. It reads back on
+              any GUI selection of the session (auto-follow, attention nav ⌃⌥↑/↓, plain session nav, the command palettes, and
+              a sidebar click) reveals and focuses that pane — the split, or a hidden scratch — instead of the main pane, so an
+              agent in a split or scratch tags its own pane to be found (the control <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session go next-attention</span>
+              only steps the selection, it does not itself move focus into the pane). It reads back on
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusPane</span>. Typing into a
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">blocked</span>/<span

@@ -68,6 +68,16 @@ paths:
   under the control keep-in-sync rule), so it adds NO control command — the ALL-workspaces
   `sidebar.expand`/`sidebar.collapse` stay the control surface.
   Covered by `SidebarUITests.testClickWorkspaceRowTogglesExpansion`.
+- **A session ROW click reveals a blocked session's pane-tagged pane.**
+  `Coordinator.outlineViewSelectionDidChange` selects the clicked session (`selectSession`) then — async,
+  after the selection + the sidebar's own focus-restore settle — calls `AppActions.revealActiveBlockedPane()`,
+  so clicking a session whose agent blocked in its split (right) or scratch pane lands you on THAT pane,
+  not the plain focused pane.
+  It is a no-op (plain `focusActiveSession`) for a session with no pane-tagged block,
+  so ordinary clicks are unaffected.
+  This matches attention-nav, plain session nav, the command palettes, and idle auto-follow,
+  which all route through the same helper (see the Menu/actions + Notifications rules).
+  Covered by `PaneAwareStatusUITests.testSidebarClickRevealsBlockedSplitPane`.
 - Accessibility identifiers `session-row`, `workspace-row`, `edit-field`,
   and `add-session` back the XCUITests.
   Note the rename field surfaces as a `TextField` for sessions and a `StaticText` for workspaces,
