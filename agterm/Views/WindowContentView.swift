@@ -83,9 +83,16 @@ struct WindowContentView: View {
         .onChange(of: quickTerminal.isVisible) { _, visible in
             if !visible { actions.focusActiveSession() }
         }
-        // when a palette closes, return focus to the active session's terminal.
+        // a palette is a transient overlay that owns the keyboard: suppress this window's auto-follow while
+        // it is open so an armed idle jump can't reshuffle the selection under it (an action-palette run
+        // would then hit the wrong session), and resume + return focus to the terminal when it closes.
         .onChange(of: palette.mode == nil) { _, closed in
-            if closed { actions.focusActiveSession() }
+            if closed {
+                store.resumeAutoFollow()
+                actions.focusActiveSession()
+            } else {
+                store.suppressAutoFollow()
+            }
         }
         // a settings appearance change isn't observable through GhosttyApp, so re-render on the
         // notification to pick up the new terminal color in the quick terminal backing.
@@ -109,6 +116,9 @@ struct WindowContentView: View {
             }
             // the quick terminal's shell sees this window's AGTERM_* env (scratch: ENABLED + WINDOW_ID + SOCKET).
             quickTerminal.envProvider = { [quickTerminalEnv, windowID] in quickTerminalEnv(windowID) }
+            // typing in the quick terminal counts as activity, so an idle auto-follow fire can't change this
+            // window's selected session behind the overlay while the user types (mirrors the overlay/scratch).
+            quickTerminal.onUserInput = { [store] in store.noteUserActivity() }
             QuickTerminalRegistry.shared.register(windowID, controller: quickTerminal)
         }
         .onDisappear { QuickTerminalRegistry.shared.unregister(windowID) }

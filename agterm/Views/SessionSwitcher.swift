@@ -83,6 +83,9 @@ final class SessionSwitcher {
     private func commit() {
         defer { reset() }
         guard candidates.indices.contains(index), let store else { return }
+        // a Ctrl-Tab commit is a user-initiated selection: note activity so it buys the full idle grace
+        // before auto-follow can pull the selection back.
+        store.noteUserActivity()
         store.selectSession(candidates[index])
     }
 

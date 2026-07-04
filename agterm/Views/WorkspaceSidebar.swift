@@ -547,6 +547,10 @@ struct WorkspaceSidebar: NSViewRepresentable {
             guard row >= 0, let node = outline.item(atRow: row) as? SidebarNode, node.kind == .session else {
                 return
             }
+            // a genuine user row click (the applyingSelection guard above skips programmatic sync, so
+            // auto-follow's own jump never reaches here) counts as activity: it buys the full idle grace
+            // before auto-follow can pull the selection back.
+            store.noteUserActivity()
             store.selectSession(node.id)
         }
 

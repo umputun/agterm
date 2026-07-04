@@ -38,6 +38,10 @@ extension GhosttySurfaceView {
             super.keyDown(with: event)
             return
         }
+        // every keystroke is user activity: reset the window's auto-follow idle timer UNCONDITIONALLY (not
+        // gated on the status-clear below), else ordinary typing in an idle session wouldn't keep the idle
+        // timer alive and the user would be yanked to a blocked session mid-type.
+        onUserInput?()
         // a keystroke in a session flagged for your attention clears the glyph to idle: blocked/completed
         // on ANY key (you've engaged with the prompt / finished result), active ONLY on Escape — the
         // interrupt key — so ordinary typing while the agent works doesn't wipe the "working" glyph, but

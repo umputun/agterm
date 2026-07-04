@@ -31,6 +31,13 @@ final class QuickTerminalController {
     /// created. Set by the owning `WindowContentView` so the var carries this window's id.
     @ObservationIgnored var envProvider: () -> [String: String] = { [:] }
 
+    /// Notes a keystroke in the quick terminal as user activity on the owning window's `AppStore`, so
+    /// typing here resets that window's auto-follow idle timer (an idle fire must NOT change the selection
+    /// behind the overlay while the user types). The controller is store-less, so `WindowContentView`
+    /// supplies this; `surface()` forwards it to the surface's `onUserInput` (mirroring the overlay/scratch
+    /// factories), which `destroySurface` nils on teardown.
+    @ObservationIgnored var onUserInput: (() -> Void)?
+
     /// Toolbar-button action: show if hidden, hide if visible.
     func toggle() { isVisible.toggle() }
 
@@ -48,6 +55,7 @@ final class QuickTerminalController {
         if let surfaceView { return surfaceView }
         let view = GhosttySurfaceView(workingDirectory: cwdProvider(), env: envProvider())
         view.onExit = { [weak self] in self?.handleShellExit() }
+        view.onUserInput = onUserInput // note activity so typing here resets the window's auto-follow timer
         surfaceView = view
         return view
     }

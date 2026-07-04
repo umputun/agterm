@@ -21,6 +21,11 @@ final class WindowRegistry {
     /// Whether an on-screen window is registered for `id` (i.e. its NSWindow has attached).
     func isRegistered(_ id: WindowInfo.ID) -> Bool { windows[id] != nil }
 
+    /// Whether the on-screen window for `id` is currently the key window. False when none is registered.
+    /// The auto-follow focus bridge gates on this so only a key window pulls first responder into the
+    /// auto-followed session; a background window changes only its selection.
+    func isKeyWindow(_ id: WindowInfo.ID) -> Bool { windows[id]?.isKeyWindow ?? false }
+
     func unregister(_ id: WindowInfo.ID) {
         windows[id] = nil
     }

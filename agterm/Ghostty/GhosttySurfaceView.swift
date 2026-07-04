@@ -101,6 +101,13 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// input-driven clear, covering the decline case Claude Code fires no hook for.
     var onUserInputClearsStatus: (() -> Void)?
 
+    /// Called on the main actor on EVERY keystroke into this surface, so the app can stamp user activity
+    /// and reset the window's auto-follow idle timer. Unlike `onUserInputClearsStatus` (which fires only on
+    /// a status-clearing key), this fires unconditionally — ordinary typing in an idle session must count as
+    /// activity or the user would be yanked to a blocked session mid-type. Set by the factory to call the
+    /// owning window's `AppStore.noteUserActivity()`.
+    var onUserInput: (() -> Void)?
+
     /// Called on the main actor with the surface's current font size (points) when it
     /// changes (cmd +/-), so the app can persist it. Set by the factory on the primary
     /// surface only. libghostty has no font-size getter or change event, so this is driven
@@ -772,6 +779,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         onExitCodeCaptured = nil
         onFocusChange = nil
         onUserInputClearsStatus = nil
+        onUserInput = nil
         onFontSizeChange = nil
         onSearchStart = nil
         onSearchEnd = nil
