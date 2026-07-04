@@ -335,6 +335,26 @@ struct ControlProtocolTests {
         #expect(decoded.status == nil)
     }
 
+    @Test func treeSessionNodeRoundTripsWithStatusPane() throws {
+        // the read side of session.status --pane: which pane set the status rides the tree node.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true,
+                                         status: "blocked", statusPane: "right")
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.statusPane == "right")
+    }
+
+    @Test func treeSessionNodeOmitsStatusPaneWhenNil() throws {
+        // a session with no pane tag — the key must be omitted, not emitted as null.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("statusPane"), "a nil statusPane must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.statusPane == nil)
+    }
+
     @Test func treeSessionNodeRoundTripsWithBackground() throws {
         // the read side of session.background: the watermark spec rides the tree node so a script can query it.
         let watermark = BackgroundWatermark(kind: .text, text: "PROD", colorHex: "#ff0000",

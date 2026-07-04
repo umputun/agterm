@@ -108,12 +108,17 @@ public struct ControlSessionStatusUpdate: Equatable, Sendable {
     public let autoReset: Bool?
     public let sound: String?
     public let color: String?
+    /// Which pane set the status (`left`=main, `right`=split, `scratch`), or nil when unspecified. Stamped
+    /// onto the indicator so pane-scoped keystroke-clear and pane-aware navigation know which surface blocked.
+    public let pane: StatusPane?
 
-    public init(status: AgentStatus, blink: Bool?, autoReset: Bool?, sound: String?, color: String? = nil) {
+    public init(status: AgentStatus, blink: Bool?, autoReset: Bool?, sound: String?,
+                color: String? = nil, pane: StatusPane? = nil) {
         self.status = status
         self.blink = blink
         self.autoReset = autoReset
         self.sound = sound
         self.color = color
+        self.pane = pane
     }
 }
