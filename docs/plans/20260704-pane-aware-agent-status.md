@@ -165,12 +165,12 @@ overlay surfaces inject no `AGTERM_PANE` (single-command runners; harmless nil�
 - Modify: `agtermCore/Sources/agtermCore/AgentStatus.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AgentStatusTests.swift`
 
-- [ ] add `enum StatusPane: String, Codable, Sendable, CaseIterable { case left, right, scratch }` to `AgentStatus.swift`
-- [ ] add `var statusPane: StatusPane?` (default nil) to `AgentIndicator` + its memberwise init param (keep `Equatable`)
-- [ ] add `func clearedBy(pane: StatusPane, isEscape: Bool) -> Bool` to `AgentIndicator` (`(statusPane ?? .left) == pane && status.clearedByKeystroke(isEscape:)`)
-- [ ] write tests: `clearedBy` truth table — matching pane clears iff `clearedByKeystroke` allows; non-matching pane never clears; nil statusPane treated as `.left`; active clears only on Escape and only for its own pane
-- [ ] write tests: `AgentIndicator` statusPane defaults nil and preserves existing init behavior
-- [ ] run `cd agtermCore && swift test`, `make lint` — must pass before next task
+- [x] add `enum StatusPane: String, Codable, Sendable, CaseIterable { case left, right, scratch }` to `AgentStatus.swift`
+- [x] add `var statusPane: StatusPane?` (default nil) to `AgentIndicator` + its memberwise init param (keep `Equatable`)
+- [x] add `func clearedBy(pane: StatusPane, isEscape: Bool) -> Bool` to `AgentIndicator` (`(statusPane ?? .left) == pane && status.clearedByKeystroke(isEscape:)`)
+- [x] write tests: `clearedBy` truth table — matching pane clears iff `clearedByKeystroke` allows; non-matching pane never clears; nil statusPane treated as `.left`; active clears only on Escape and only for its own pane
+- [x] write tests: `AgentIndicator` statusPane defaults nil and preserves existing init behavior
+- [x] run `cd agtermCore && swift test`, `make lint` — must pass before next task
 
 ### Task 2: SurfaceEnvironment injects AGTERM_PANE
 
