@@ -195,12 +195,23 @@ extension GhosttySurfaceView {
         ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
     }
 
+    /// The pointer entered the surface: restore libghostty's mouse position from the current point. Paired
+    /// with `mouseExited`'s `-1, -1` reset — without it, `scrollWheel` (which never sets `mouse_pos`) would
+    /// report a scroll at the stale `-1, -1` if you scroll right after re-entering, before any move, inside
+    /// a mouse-reporting TUI (vim/less/htop).
+    override func mouseEntered(with event: NSEvent) {
+        guard let surface else { return }
+        let pt = mousePoint(from: event)
+        ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
+    }
+
     /// The pointer left the surface. Report negative coordinates so libghostty clears any hovered-link
     /// state — it drops `over_link`, reverts the mouse shape, and re-renders without the underline (see its
     /// `cursorPosCallback`). Without this a ⌘-hovered link stays highlighted after the mouse leaves the
-    /// terminal (into the sidebar, another window, or off the edge) until ⌘ is released.
+    /// terminal (into the sidebar, another window, or off the edge) until ⌘ is released. Skipped mid-drag
+    /// (a button is down) so a selection/drag that crosses the edge isn't reported at `-1, -1`.
     override func mouseExited(with event: NSEvent) {
-        guard let surface else { return }
+        guard let surface, NSEvent.pressedMouseButtons == 0 else { return }
         ghostty_surface_mouse_pos(surface, -1, -1, mods(event))
     }
 
@@ -408,12 +419,11 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
         }
     }
 
-    /// Opens a URL from a link click (`GHOSTTY_ACTION_OPEN_URL`). Scheme-validated first: a terminal
-    /// renders untrusted program output, so only web/mail/file links are followed — never an arbitrary
-    /// custom scheme that could hand off to another app. Silently ignores anything else.
+    /// Opens a URL from a link click (`GHOSTTY_ACTION_OPEN_URL`). The scheme allowlist lives in the
+    /// host-free `LinkPolicy` (unit-tested); this is just the AppKit glue. Silently ignores a disallowed
+    /// or unparseable link.
     func openLink(_ raw: String) {
-        guard let url = URL(string: raw), let scheme = url.scheme?.lowercased(),
-              ["http", "https", "mailto", "ftp", "file"].contains(scheme) else { return }
+        guard let url = LinkPolicy.permittedURL(from: raw) else { return }
         NSWorkspace.shared.open(url)
     }
 }
