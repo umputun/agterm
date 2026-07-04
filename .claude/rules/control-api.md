@@ -528,9 +528,13 @@ paths:
   to a closure that clears only when the host-free `AgentIndicator.clearedBy(pane:isEscape:)` says the keystroke's
   OWN pane owns the current status, so a `right`- or `scratch`-tagged block SURVIVES foreground typing in the
   main pane (see the Notifications rule).
-  (2) Pane-aware attention navigation: auto-follow and `session.go next-attention|prev-attention` reveal and
-  focus the tagged pane — flip `splitFocused` to the split, or show a hidden scratch via `AppStore.toggleScratch`
-  — instead of always the main pane (the shared `AppActions.revealActiveBlockedPane`; see the Menu/actions rule).
+  (2) Pane-aware attention navigation: auto-follow and the GUI attention-nav (⌃⌥↑/⌃⌥↓, menu, palette) reveal
+  and focus the tagged pane — flip `splitFocused` to the split, or show a hidden scratch via `AppStore.toggleScratch`
+  — instead of always the main pane (the shared `AppActions.revealActiveBlockedPane`, wired into
+  `selectNext/PreviousAttentionSession` + `autoFollowed`).
+  The `session.go next-attention|prev-attention` control arm (`goSession`) only drives `AppStore.navigateSession`
+  and does NOT call the reveal, so the socket steps the selection but does not itself move focus into the pane
+  (see the Menu/actions rule).
   It reads back on each `tree` node as `ControlSessionNode.statusPane` (omitted when nil, gated on the SAME
   non-idle condition as `status` so an idle node reports neither).
   Four-point keep-in-sync audit for `session.status --pane`: (1) the `StatusPane` enum + `AgentIndicator.statusPane`

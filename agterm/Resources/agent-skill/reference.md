@@ -166,11 +166,13 @@ state; there is no control command to set them.
   which pane set the status. It has two effects: (1) keystroke-clear becomes pane-scoped — a status set
   from a background pane survives typing in a DIFFERENT pane (so a `right`- or `scratch`-tagged block is
   no longer wiped by foreground typing in the main pane, and only a keystroke in the OWNING pane clears
-  it), and (2) attention navigation (auto-follow and `session go next-attention|prev-attention`) reveals
-  and focuses the tagged pane — flipping to the split, or showing a hidden scratch — instead of the main
-  pane. An agent that runs in a split or scratch should set its own pane so the user lands on it. The
-  value is read back on `tree` as the session node's `statusPane`. An invalid value errors
-  (`--pane must be left, right, or scratch`).
+  it), and (2) the user's attention navigation lands on the tagged pane — auto-follow and the GUI
+  attention-nav (⌃⌥↑/⌃⌥↓, the Navigate menu, the palette) reveal and focus it, flipping to the split or
+  showing a hidden scratch instead of the main pane. (The socket `session go next-attention|prev-attention`
+  only STEPS the selection to attention sessions; it does not itself move focus into the tagged pane — the
+  reveal is a GUI/auto-follow concern.) An agent that runs in a split or scratch should set its own pane so
+  the user lands on it. The value is read back on `tree` as the session node's `statusPane`. An invalid
+  value errors (`--pane must be left, right, or scratch`).
   An unknown state errors. Setting non-idle is for agents/hooks; `idle` clears it (also available in the GUI).
 - `session flag [on|off|toggle|clear] [--target] [--window W]` — flag/unflag a session for the flagged
   working-set view (a durable, persisted membership). `on`/`off`/`toggle` act on `--target` (default
@@ -407,4 +409,6 @@ user-edited file read at launch — there is no control command for it.
 `no open window` (quick/sidebar), `window not open`
 (resize/move/`--window`), `unknown theme: <name>` (theme set), `unknown sound: <name>` (session status --sound),
 `invalid color (expected #rrggbb)` (session status --color),
-`--pane must be left, right, or scratch` (session status/type/text --pane). Unknown commands fail to decode and return a structured error, never a crash.
+`--pane must be left, right, or scratch` (the `--pane` value check — the `agtermctl` CLI rejects a bad pane
+with this for session status/type/text, and over the raw socket `session.status` returns this same string;
+`session.type`/`session.text` over the raw socket instead return `invalid pane: <value>`). Unknown commands fail to decode and return a structured error, never a crash.

@@ -148,10 +148,12 @@ paths:
   herdr scrapes the PTY (the prompt chrome leaving the screen clears it).
 - **Pane-aware attention navigation.**
   The same `AgentIndicator.statusPane` tag (set via `session.status --pane`, see the Control API rule) also
-  decides WHERE attention navigation lands: auto-follow and `session.go next-attention|prev-attention` reveal
-  and focus the pane that set the block — flipping `splitFocused` to the split, or showing a hidden scratch
-  via `AppStore.toggleScratch` — instead of always the main pane (the shared `AppActions.revealActiveBlockedPane`;
+  decides WHERE attention navigation lands: auto-follow and the GUI attention-nav (⌃⌥↑/⌃⌥↓, menu, palette)
+  reveal and focus the pane that set the block — flipping `splitFocused` to the split, or showing a hidden
+  scratch via `AppStore.toggleScratch` — instead of always the main pane (the shared `AppActions.revealActiveBlockedPane`;
   see the Menu/actions rule).
+  The `session.go next-attention|prev-attention` control arm only steps the selection (`navigateSession`),
+  it does NOT itself run the reveal — the pane focus is a GUI/auto-follow concern.
   So a `right`- or `scratch`-tagged block both survives foreground typing in another pane AND pulls you to
   the waiting pane, not just the session.
 - **Titlebar attention bell (opt-in, window-wide aggregate of the glyph).**

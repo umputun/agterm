@@ -288,18 +288,19 @@ agtermctl session status idle --target "$AGTERM_SESSION_ID"             # clear
 ## Tag the blocking pane so navigation lands on it
 
 An agent running in a split or scratch pane sets `--pane` so its block survives foreground typing in
-another pane and attention navigation (auto-follow + `session go --to next-attention`) reveals and
-focuses the RIGHT pane — the split, or a hidden scratch — not the main pane. Without `--pane` the status
-is treated as coming from the main (`left`) pane, so a block set from the split can be wiped by typing
-in the main pane and nav lands on the wrong surface.
+another pane and the user's attention navigation lands on the RIGHT pane — the split, or a hidden scratch,
+not the main pane. Auto-follow and the GUI attention-nav (⌃⌥↑/⌃⌥↓) reveal and focus the tagged pane; the
+socket `session go --to next-attention` only steps the selection, it does not move focus into the pane.
+Without `--pane` the status is treated as coming from the main (`left`) pane, so a block set from the split
+can be wiped by typing in the main pane and the reveal lands on the wrong surface.
 
 ```bash
 # an agent working in the split pane; $AGT_PANE is set in a custom keymap command, else name it
 agtermctl session status active --pane right --target "$AGTERM_SESSION_ID"   # working, in the split
-agtermctl session status blocked --pane right --target "$AGTERM_SESSION_ID"  # needs input; nav focuses the split
+agtermctl session status blocked --pane right --target "$AGTERM_SESSION_ID"  # needs input; the user's attention nav focuses the split
 
 # an agent working in the scratch terminal (even while it is hidden)
-agtermctl session status blocked --pane scratch --target "$AGTERM_SESSION_ID" # nav SHOWS + focuses the scratch
+agtermctl session status blocked --pane scratch --target "$AGTERM_SESSION_ID" # the user's attention nav SHOWS + focuses the scratch
 
 # read back which pane blocked
 agtermctl tree --json | jq -r '.result.tree.workspaces[].sessions[] | select(.status) | "\(.name): \(.status) in \(.statusPane // "left")"'

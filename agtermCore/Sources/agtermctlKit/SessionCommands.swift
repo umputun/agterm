@@ -6,7 +6,7 @@ import agtermCore
 /// Rejects any other value with a clean usage error before the socket round-trip, matching the server-side
 /// switch (so the CLI and server can't drift, and a raw socket client still hits the same check server-side).
 func validatePaneArgument(_ pane: String?) throws {
-    if let pane, !["left", "right", "scratch"].contains(pane) {
+    if let pane, StatusPane(rawValue: pane) == nil {
         throw ValidationError("--pane must be left, right, or scratch")
     }
 }

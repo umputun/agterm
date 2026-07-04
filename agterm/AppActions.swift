@@ -645,7 +645,8 @@ final class AppActions {
     /// survivor (primary exited, survivor in `splitSurface`, `hasSplit` false) is still focused (the gating
     /// the plan warned against was `right && hasSplit`, not `focusSplitPane` itself). `.scratch` shows the
     /// scratch only when hidden (a show-if-hidden guard, never a bare toggle that could HIDE a shown one) so
-    /// `topmostSurface` resolves to the scratch; `.left`/nil keep the plain main-pane focus. The retry loops
+    /// `topmostSurface` resolves to the scratch; `.left`/nil focus the session's current active surface via
+    /// `focusActiveSession` (the main pane unless a split is focused — no forced flip). The retry loops
     /// cover a split/scratch surface that materializes a beat after the reveal.
     private func revealActiveBlockedPane() {
         guard let session = store?.activeSession else { focusActiveSession(); return }

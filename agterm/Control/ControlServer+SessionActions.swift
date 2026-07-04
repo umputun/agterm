@@ -355,8 +355,10 @@ extension ControlServer: ControlActions {
     /// per-call `sound` is given and the session TRANSITIONS into `blocked`, the user's configured Settings
     /// "Blocked sound" (`blockedStatusSoundName`) plays as a best-effort default. `update.color`, when set,
     /// is a `#rrggbb` glyph-tint override (hex-validated in the dispatcher) that rides the ephemeral
-    /// indicator, so it lasts only until the next `session.status` without a color. The indicator is
-    /// ephemeral and rendered on every non-idle session.
+    /// indicator, so it lasts only until the next `session.status` without a color. `update.pane`
+    /// (`StatusPane`, validated in the dispatcher) is threaded onto the indicator's `statusPane` — the pane
+    /// that set the status — driving the pane-scoped keystroke-clear and the pane-aware attention reveal;
+    /// nil is treated as `left`/main. The indicator is ephemeral and rendered on every non-idle session.
     func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) -> ControlResponse {
         // an explicit per-call sound is validated up-front: an unknown name errors without changing status.
         // an empty value is treated as no per-call sound, matching `AgentStatus.effectiveSound`.

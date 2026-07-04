@@ -103,8 +103,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var repeats: Bool?
     /// Which split pane to focus for `session.focus` (`left`|`right`|`other`; `other` toggles); also
     /// which pane to read for `session.text` (`left`|`right`; omitted = the focused pane, no `other`),
-    /// and which pane `session.type` injects into (`left`|`right`; omitted = the left/main pane, the
-    /// pre-pane behavior).
+    /// which pane `session.type` injects into (`left`|`right`; omitted = the left/main pane, the
+    /// pre-pane behavior), and which pane set `session.status` (`left`|`right`|`scratch`; omitted =
+    /// `left`/main, parsed to `StatusPane`).
     public var pane: String?
     /// Absolute left-pane split fraction (0...1) for `session.resize`, clamped server-side to
     /// `AppStore.splitRatioMin...splitRatioMax`. Mutually exclusive with `ratioDelta`.
