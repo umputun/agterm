@@ -149,7 +149,7 @@ state; there is no control command to set them.
   `0.05..0.95` and persisted, and the applied (clamped) fraction is printed (and returned as `result.ratio`
   under `--json`). Errors when the session has no split. Resizing a hidden split updates the stored
   fraction; it takes effect when the split is next shown.
-- `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--target] [--window W]` —
+- `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb] [--target] [--window W]` —
   set the sidebar agent-status glyph. `--blink` pulses it (for attention). `--auto-reset` clears it
   back to idle once the session is visited (use for a one-shot completion flash). `--sound` plays a
   one-shot sound when the status is set: `default` (the system alert sound) or a system sound name
@@ -157,6 +157,9 @@ state; there is no control command to set them.
   `Sosumi`, `Submarine`, `Tink`; also any custom sound in `~/Library/Sounds`) — an unknown name errors.
   Without `--sound`, a `blocked` status plays the user's Settings "Blocked sound" if they configured one
   (Appearance ▸ Agent Status; off by default); an explicit `--sound` always overrides it.
+  `--color` (`#rrggbb`) overrides the glyph tint for THIS call only — it rides the status, so the next
+  `session status` without `--color` reverts to the Settings-configured color (a malformed hex errors).
+  Use it to distinguish states beyond the fixed palette (e.g. a caller-specific blocked color).
   An unknown state errors. Setting non-idle is for agents/hooks; `idle` clears it (also available in the GUI).
 - `session flag [on|off|toggle|clear] [--target] [--window W]` — flag/unflag a session for the flagged
   working-set view (a durable, persisted membership). `on`/`off`/`toggle` act on `--target` (default
@@ -391,4 +394,5 @@ user-edited file read at launch — there is no control command for it.
 `unsupported image (PNG or JPEG only)` / `no such image file` / `image path must not contain control characters` / `invalid background mode` (session background),
 `invalid sidebar mode` (sidebar), `invalid focus mode` (workspace focus),
 `no open window` (quick/sidebar), `window not open`
-(resize/move/`--window`), `unknown theme: <name>` (theme set), `unknown sound: <name>` (session status --sound). Unknown commands fail to decode and return a structured error, never a crash.
+(resize/move/`--window`), `unknown theme: <name>` (theme set), `unknown sound: <name>` (session status --sound),
+`invalid color (expected #rrggbb)` (session status --color). Unknown commands fail to decode and return a structured error, never a crash.

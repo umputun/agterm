@@ -354,6 +354,25 @@ struct CommandsTests {
         #expect(req.args?.sound == nil)
     }
 
+    @Test func sessionStatusWithColor() throws {
+        let req = try request(["session", "status", "blocked", "--color", "#ff0000"])
+        #expect(req.cmd == .sessionStatus)
+        #expect(req.args?.status == "blocked")
+        #expect(req.args?.color == "#ff0000")
+        #expect(req == ControlRequest(cmd: .sessionStatus, target: "active",
+                                      args: ControlArgs(status: "blocked", color: "#ff0000")))
+    }
+
+    @Test func sessionStatusWithoutColor() throws {
+        let req = try request(["session", "status", "active"])
+        #expect(req.args?.color == nil)
+    }
+
+    @Test func sessionStatusRejectsBadColor() throws {
+        // a non-#rrggbb color is rejected by validate() before any request is built.
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "status", "blocked", "--color", "nope"]) }
+    }
+
     @Test func sessionSearchWithNeedle() throws {
         let expected = ControlRequest(cmd: .sessionSearch, target: "active", args: ControlArgs(text: "error"))
         #expect(try request(["session", "search", "error"]) == expected)

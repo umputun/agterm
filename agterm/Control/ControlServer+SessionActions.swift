@@ -353,8 +353,10 @@ extension ControlServer: ControlActions {
     /// other value = named system sound); it is validated up-front so an unknown name is an `unknown sound`
     /// error that leaves the status unchanged (an empty value is treated as no per-call sound). When no
     /// per-call `sound` is given and the session TRANSITIONS into `blocked`, the user's configured Settings
-    /// "Blocked sound" (`blockedStatusSoundName`) plays as a best-effort default. The indicator is ephemeral
-    /// and rendered on every non-idle session.
+    /// "Blocked sound" (`blockedStatusSoundName`) plays as a best-effort default. `update.color`, when set,
+    /// is a `#rrggbb` glyph-tint override (hex-validated in the dispatcher) that rides the ephemeral
+    /// indicator, so it lasts only until the next `session.status` without a color. The indicator is
+    /// ephemeral and rendered on every non-idle session.
     func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) -> ControlResponse {
         // an explicit per-call sound is validated up-front: an unknown name errors without changing status.
         // an empty value is treated as no per-call sound, matching `AgentStatus.effectiveSound`.
@@ -366,7 +368,8 @@ extension ControlServer: ControlActions {
             // capture the status BEFORE mutating so the Settings default plays only on a real transition.
             let wasBlocked = store.session(withID: id)?.agentIndicator.status == .blocked
             store.setAgentIndicator(AgentIndicator(status: update.status, blink: update.blink ?? false,
-                                                   autoReset: update.autoReset ?? false), forSession: id)
+                                                   autoReset: update.autoReset ?? false, color: update.color),
+                                    forSession: id)
             // explicit per-call sound wins on any status; the Settings default plays only when a session
             // newly enters `blocked`, not on a repeated `blocked` set.
             let blockedDefault = wasBlocked ? nil : self.settingsModel.settings.blockedStatusSoundName

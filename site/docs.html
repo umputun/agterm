@@ -1634,6 +1634,7 @@
               active --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session status blocked
               --sound default --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session status
               completed --auto-reset --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session
+              status blocked --color <span style="color: #5ea1f2">'#ff0000'</span> --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session
               status idle --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span>
               <span style="color: #6b727a">&nbsp;# clear it</span>
             </div>
@@ -1648,7 +1649,10 @@
                 >Ping</span
               >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">Tink</span>). To make every blocked
               prompt sound without touching the hooks, set
-              <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Blocked sound</strong>. Typing into a
+              <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Blocked sound</strong>.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--color</span>
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#rrggbb</span>) overrides the glyph
+              tint for that one call — it rides the status, so the next status set without it reverts to the configured color. Typing into a
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">blocked</span>/<span
                 style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
                 >completed</span

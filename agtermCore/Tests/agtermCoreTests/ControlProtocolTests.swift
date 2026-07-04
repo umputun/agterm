@@ -118,6 +118,20 @@ struct ControlProtocolTests {
         #expect(decoded.args?.sound == nil)
     }
 
+    @Test func sessionStatusRoundTripsWithColor() throws {
+        let request = ControlRequest(cmd: .sessionStatus, target: "9f3c",
+                                     args: ControlArgs(status: "blocked", color: "#ff0000"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.color == "#ff0000")
+    }
+
+    @Test func sessionStatusOmitsColorWhenNil() throws {
+        let request = ControlRequest(cmd: .sessionStatus, target: "9f3c", args: ControlArgs(status: "active"))
+        let decoded = try roundTrip(request)
+        #expect(decoded.args?.color == nil)
+    }
+
     @Test func sessionStatusDecodesSound() throws {
         let json = #"{"cmd":"session.status","args":{"status":"blocked","sound":"default"}}"#
         let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8))

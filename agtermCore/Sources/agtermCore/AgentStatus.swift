@@ -61,8 +61,9 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
 }
 
 /// AgentIndicator is the per-session agent status value: the state plus an optional blink flag (pulse
-/// the glyph for attention) and an optional autoReset flag (clear back to idle once the session is
-/// visited). It is ephemeral (never persisted) and set only via the control API.
+/// the glyph for attention), an optional autoReset flag (clear back to idle once the session is
+/// visited), and an optional per-call color override for the glyph tint. It is ephemeral (never
+/// persisted) and set only via the control API.
 public struct AgentIndicator: Equatable, Sendable {
     /// status is the current agent state; `.idle` renders no glyph.
     public var status: AgentStatus = .idle
@@ -71,10 +72,15 @@ public struct AgentIndicator: Equatable, Sendable {
     /// autoReset, when true, the indicator resets to idle once the session is visited (selected) — a
     /// caller-set, status-agnostic flag, like blink.
     public var autoReset: Bool = false
+    /// color, when set, is a `#rrggbb` hex that overrides the Settings-configured glyph tint for this
+    /// glyph only — a caller-set, per-call value that rides the ephemeral indicator, so the next
+    /// `session.status` call without a color naturally discards it. nil renders the default status color.
+    public var color: String?
 
-    public init(status: AgentStatus = .idle, blink: Bool = false, autoReset: Bool = false) {
+    public init(status: AgentStatus = .idle, blink: Bool = false, autoReset: Bool = false, color: String? = nil) {
         self.status = status
         self.blink = blink
         self.autoReset = autoReset
+        self.color = color
     }
 }

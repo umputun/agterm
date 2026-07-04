@@ -347,20 +347,27 @@ struct ControlDispatcherTests {
             cmd: .sessionStatus,
             target: "session",
             args: ControlArgs(window: "win", status: "blocked", blink: true,
-                              autoReset: true, sound: "default")
+                              autoReset: true, sound: "default", color: "#ff0000")
         ))
         let bad = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionStatus,
             target: "session",
             args: ControlArgs(status: "bogus")
         ))
+        let badColor = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionStatus,
+            target: "session",
+            args: ControlArgs(status: "blocked", color: "nope")
+        ))
 
         #expect(status == ControlResponse(ok: true))
         #expect(bad == ControlResponse(ok: false, error: "invalid status"))
+        #expect(badColor == ControlResponse(ok: false, error: "invalid color (expected #rrggbb)"))
+        // the bad-color request errors before reaching the actions, so only the good one is recorded.
         #expect(actions.calls == [
             .sessionStatus(target: "session", window: "win",
                            ControlSessionStatusUpdate(status: .blocked, blink: true,
-                                                      autoReset: true, sound: "default"))
+                                                      autoReset: true, sound: "default", color: "#ff0000"))
         ])
     }
 

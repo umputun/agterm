@@ -197,6 +197,14 @@ final class GhosttyApp {
         }
     }
 
+    /// The tint for a status glyph, honoring an optional per-call `#rrggbb` OVERRIDE from
+    /// `session.status --color` (set on the ephemeral `AgentIndicator`). A valid override wins; nil or
+    /// malformed falls back to the Settings-configured `statusColor(for:)`. Shared by the AppKit sidebar
+    /// `StatusIconView` and the SwiftUI `StatusGlyph` so the two can't drift.
+    func statusColor(for status: AgentStatus, override hex: String?) -> NSColor {
+        NSColor(agtermHex: hex) ?? statusColor(for: status)
+    }
+
     // MARK: - Config
 
     /// Path to agterm's generated ghostty config (font/size/theme from the Settings window), in the

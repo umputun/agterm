@@ -88,9 +88,13 @@ paths:
   `StatusIconView` (an `NSImageView` sibling of `BadgeView` in `WorkspaceSidebar`) draws the row's tinted
   SF Symbol just LEFT of the count badge — `active`=`ellipsis.circle.fill`,
   `blocked`=`exclamationmark.circle.fill`, `completed`=`checkmark.circle.fill`,
-  `.idle`=hidden, each tinted with its configurable Settings color (`GhosttyApp.{active,blocked,completed}StatusColor`,
-  default `#DBD9E6` muted lavender-grey / system amber / system green; see the Settings section) — with
-  accessibility role `.staticText`, id `agent-status`, value = the state name (so XCUITest matches `app.staticTexts["agent-status"]`),
+  `.idle`=hidden, each tinted via the shared `GhosttyApp.statusColor(for:override:)`: the ephemeral
+  `AgentIndicator.color` per-call OVERRIDE (`session.status --color`, a valid `#rrggbb` wins) else its
+  configurable Settings color (`GhosttyApp.{active,blocked,completed}StatusColor`,
+  default `#DBD9E6` muted lavender-grey / system amber / system green; see the Settings + Control API sections)
+  — the SwiftUI attention-list `StatusGlyph` resolves through the SAME override helper so the two can't drift —
+  with accessibility role `.staticText`, id `agent-status`, value = the state name (so XCUITest matches `app.staticTexts["agent-status"]`;
+  the glyph TINT, per-call or not, is NOT accessibility-observable),
   and a `CABasicAnimation` `opacity` pulse added only while visible AND `blink` (the install's `UserPromptSubmit→active --blink`
   hook pulses the in-progress glyph).
   The glyph shows on EVERY non-idle session, the selected one INCLUDED — there is NO visibility gate.
