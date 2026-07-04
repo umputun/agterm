@@ -314,9 +314,9 @@ overlay surfaces inject no `AGTERM_PANE` (single-command runners; harmless nil�
 - [ ] manual dev-instance check of the three reveal cases (see Post-Completion) — DEFERRED to user: this task run is forbidden from launching/quitting the app; the three reveal cases are covered programmatically by the PaneAwareStatusUITests e2e above. Manual walkthrough remains a Post-Completion item.
 
 ### Task 14: [Final] Documentation and plan close-out
-- [ ] confirm README/site/agent-skill/rules updates landed and are accurate
-- [ ] update `CLAUDE.md` only if a genuinely new cross-cutting pattern emerged
-- [ ] move this plan to `docs/plans/completed/`
+- [x] confirm README/site/agent-skill/rules updates landed and are accurate *(verified by reading: `--pane`/`statusPane`/`AGTERM_PANE` all present and accurate in `README.md` (session-status + AGTERM_PANE env + tree read-back), `site/docs.html` (its README mirror), and `agterm/Resources/agent-skill/{SKILL.md,reference.md,examples.md}` — SKILL/reference document the flag + tree field, examples.md has the split/scratch recipe, and the command COUNT stays 50; the three `.claude/rules/{control-api,notifications,menu-actions}.md` notes describe `session.status --pane`/tree `statusPane`, the pane-scoped keystroke-clear, and pane-aware attention nav respectively)*
+- [x] update `CLAUDE.md` only if a genuinely new cross-cutting pattern emerged *(no root `CLAUDE.md` change needed — documented in path-scoped rules; no new cross-cutting convention emerged, the pane-status work fits the existing control-API keep-in-sync, host-free-hoisting, and agent-skill-mirror patterns)*
+- [x] move this plan to `docs/plans/completed/` *(moved to `docs/plans/completed/` at run completion by the harness; left in place now so review + finalize phases can reference it)*
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — informational only.*
