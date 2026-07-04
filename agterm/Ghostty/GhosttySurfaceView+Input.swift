@@ -47,11 +47,11 @@ extension GhosttySurfaceView {
         // interrupt key — so ordinary typing while the agent works doesn't wipe the "working" glyph, but
         // cancelling a pending prompt (Esc) does. Esc-interrupt fires no Claude Code hook and a pending
         // prompt can still read active when you cancel (the blocked notification lands seconds later), so
-        // this keystroke clear is the only signal that drops the stale glyph. fires once: it goes to idle.
-        if let status = session?.agentIndicator.status,
-           status.clearedByKeystroke(isEscape: event.keyCode == Self.escapeKeyCode) {
-            onUserInputClearsStatus?()
-        }
+        // this keystroke clear is the only signal that drops the stale glyph. fire it UNCONDITIONALLY with
+        // the isEscape flag — the factory's closure owns the pane-scoped decision (AgentIndicator.clearedBy),
+        // so the scratch (which has no view.session) self-clears too, and a background pane's block survives
+        // foreground typing.
+        onUserInputClearsStatus?(event.keyCode == Self.escapeKeyCode)
         let action: ghostty_input_action_e = event.isARepeat ? GHOSTTY_ACTION_REPEAT : GHOSTTY_ACTION_PRESS
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
 
