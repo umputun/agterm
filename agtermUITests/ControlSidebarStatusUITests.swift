@@ -319,9 +319,10 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertEqual(try currentStatus(), "blocked", "an invalid color must leave the status unchanged")
     }
 
-    // the agent-status icon is gated by the visibility rule: it shows only on a session that is NOT the
-    // frontmost window's selected one. Set status on a non-selected session → the icon appears; select that
-    // session → it hides; select a different session → it reappears (mirrors the notify-badge test).
+    // the agent-status icon shows on every non-idle session, the selected one INCLUDED — there is no
+    // visibility gate. Set active on a non-selected session → the icon appears; select that session → it
+    // STAYS (active is keep-state); set completed --auto-reset on a non-selected session → it shows, then
+    // VISITING (selecting) it clears the auto-reset flash.
     func testAgentStatusIconShowsRegardlessOfSelectionAndAutoResetClears() throws {
         let tree = try sendCommand(#"{"cmd":"tree"}"#)
         let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
