@@ -136,6 +136,109 @@ struct ControlDispatcherTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func sessionSelectGoCloseAndRenameRouteThroughActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let selected = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionSelect,
+            target: "session",
+            args: ControlArgs(window: "win")
+        ))
+        let navigated = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionGo,
+            args: ControlArgs(window: "win", to: "next-attention")
+        ))
+        let closed = await dispatcher.dispatch(ControlRequest(cmd: .sessionClose, target: "session"))
+        let renamed = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionRename,
+            target: "session",
+            args: ControlArgs(name: "api")
+        ))
+
+        #expect(selected == ControlResponse(ok: true))
+        #expect(navigated == ControlResponse(ok: true))
+        #expect(closed == ControlResponse(ok: true))
+        #expect(renamed == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .sessionSelect(target: "session", window: "win"),
+            .sessionGo(window: "win", .nextAttention),
+            .sessionClose(target: "session", window: nil),
+            .sessionRename(target: "session", window: nil, "api")
+        ])
+    }
+
+    @Test func sessionGoAndRenameRejectInvalidInputsWithoutCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let missingDirection = await dispatcher.dispatch(ControlRequest(cmd: .sessionGo))
+        let badDirection = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionGo,
+            args: ControlArgs(to: "sideways")
+        ))
+        let missingName = await dispatcher.dispatch(ControlRequest(cmd: .sessionRename, target: "session"))
+
+        #expect(missingDirection == ControlResponse(
+            ok: false,
+            error: "session.go requires --to next|prev|first|last|next-attention|prev-attention"
+        ))
+        #expect(badDirection == ControlResponse(
+            ok: false,
+            error: "session.go requires --to next|prev|first|last|next-attention|prev-attention"
+        ))
+        #expect(missingName == ControlResponse(ok: false, error: "session.rename requires a name"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func workspaceCommandsRouteThroughActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let created = await dispatcher.dispatch(ControlRequest(
+            cmd: .workspaceNew,
+            args: ControlArgs(name: "api", window: "win")
+        ))
+        let selected = await dispatcher.dispatch(ControlRequest(
+            cmd: .workspaceSelect,
+            target: "workspace",
+            args: ControlArgs(window: "win")
+        ))
+        let renamed = await dispatcher.dispatch(ControlRequest(
+            cmd: .workspaceRename,
+            target: "workspace",
+            args: ControlArgs(name: "  renamed  ")
+        ))
+        let deleted = await dispatcher.dispatch(ControlRequest(cmd: .workspaceDelete, target: "workspace"))
+
+        #expect(created == ControlResponse(ok: true))
+        #expect(selected == ControlResponse(ok: true))
+        #expect(renamed == ControlResponse(ok: true))
+        #expect(deleted == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .workspaceNew(window: "win", "api"),
+            .workspaceSelect(target: "workspace", window: "win"),
+            .workspaceRename(target: "workspace", window: nil, "renamed"),
+            .workspaceDelete(target: "workspace", window: nil)
+        ])
+    }
+
+    @Test func workspaceRenameRejectsMissingOrBlankNameWithoutCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let missing = await dispatcher.dispatch(ControlRequest(cmd: .workspaceRename, target: "workspace"))
+        let blank = await dispatcher.dispatch(ControlRequest(
+            cmd: .workspaceRename,
+            target: "workspace",
+            args: ControlArgs(name: "   ")
+        ))
+
+        #expect(missing == ControlResponse(ok: false, error: "workspace.rename requires a name"))
+        #expect(blank == ControlResponse(ok: false, error: "workspace.rename requires a name"))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func sessionMoveRoutesReorderAndWorkspaceForms() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -570,7 +673,7 @@ struct ControlDispatcherTests {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
 
-        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionSelect))
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionText))
 
         #expect(response == nil)
         #expect(actions.calls.isEmpty)
@@ -582,6 +685,14 @@ private final class MockControlActions: ControlActions {
     enum Call: Equatable {
         case tree(window: String?)
         case sessionNew(ControlSessionCreateOptions)
+        case sessionSelect(target: String?, window: String?)
+        case sessionGo(window: String?, SessionNavigation)
+        case sessionClose(target: String?, window: String?)
+        case sessionRename(target: String?, window: String?, String)
+        case workspaceNew(window: String?, String?)
+        case workspaceSelect(target: String?, window: String?)
+        case workspaceRename(target: String?, window: String?, String)
+        case workspaceDelete(target: String?, window: String?)
         case sessionMove(target: String?, window: String?, ControlSessionMove)
         case workspaceMove(target: String?, window: String?, ReorderDirection)
         case workspaceFocus(target: String?, window: String?, String?)
@@ -635,6 +746,46 @@ private final class MockControlActions: ControlActions {
     func createSession(_ options: ControlSessionCreateOptions) -> ControlResponse {
         calls.append(.sessionNew(options))
         return nextSessionNewResponse
+    }
+
+    func selectSession(_ target: String?, window: String?) -> ControlResponse {
+        calls.append(.sessionSelect(target: target, window: window))
+        return ControlResponse(ok: true)
+    }
+
+    func goSession(window: String?, direction: SessionNavigation) -> ControlResponse {
+        calls.append(.sessionGo(window: window, direction))
+        return ControlResponse(ok: true)
+    }
+
+    func closeSession(_ target: String?, window: String?) -> ControlResponse {
+        calls.append(.sessionClose(target: target, window: window))
+        return ControlResponse(ok: true)
+    }
+
+    func renameSession(_ target: String?, window: String?, name: String) -> ControlResponse {
+        calls.append(.sessionRename(target: target, window: window, name))
+        return ControlResponse(ok: true)
+    }
+
+    func createWorkspace(window: String?, name: String?) -> ControlResponse {
+        calls.append(.workspaceNew(window: window, name))
+        return ControlResponse(ok: true)
+    }
+
+    func selectWorkspace(_ target: String?, window: String?) -> ControlResponse {
+        calls.append(.workspaceSelect(target: target, window: window))
+        return ControlResponse(ok: true)
+    }
+
+    func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse {
+        calls.append(.workspaceRename(target: target, window: window, name))
+        return ControlResponse(ok: true)
+    }
+
+    func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse {
+        calls.append(.workspaceDelete(target: target, window: window))
+        return ControlResponse(ok: true)
     }
 
     func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse {

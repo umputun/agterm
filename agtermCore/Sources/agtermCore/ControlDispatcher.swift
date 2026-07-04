@@ -7,6 +7,14 @@ import Foundation
 public protocol ControlActions {
     func controlTree(window: String?) -> ControlResponse
     func createSession(_ options: ControlSessionCreateOptions) -> ControlResponse
+    func selectSession(_ target: String?, window: String?) -> ControlResponse
+    func goSession(window: String?, direction: SessionNavigation) -> ControlResponse
+    func closeSession(_ target: String?, window: String?) -> ControlResponse
+    func renameSession(_ target: String?, window: String?, name: String) -> ControlResponse
+    func createWorkspace(window: String?, name: String?) -> ControlResponse
+    func selectWorkspace(_ target: String?, window: String?) -> ControlResponse
+    func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse
+    func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse
     func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse
     func moveWorkspace(_ target: String?, window: String?, direction: ReorderDirection) -> ControlResponse
     func focusWorkspace(_ target: String?, window: String?, mode: String?) -> ControlResponse
@@ -93,6 +101,33 @@ public struct ControlDispatcher {
                 command: args?.command,
                 name: args?.name
             ))
+        case .sessionSelect:
+            return actions.selectSession(request.target, window: request.args?.window)
+        case .sessionGo:
+            // unknown/missing `to` is a structured error.
+            guard let dir = (request.args?.to).flatMap(SessionNavigation.init(wire:)) else {
+                return ControlResponse(ok: false, error: "session.go requires --to next|prev|first|last|next-attention|prev-attention")
+            }
+            return actions.goSession(window: request.args?.window, direction: dir)
+        case .sessionClose:
+            return actions.closeSession(request.target, window: request.args?.window)
+        case .sessionRename:
+            guard let name = request.args?.name else {
+                return ControlResponse(ok: false, error: "session.rename requires a name")
+            }
+            return actions.renameSession(request.target, window: request.args?.window, name: name)
+        case .workspaceNew:
+            return actions.createWorkspace(window: request.args?.window, name: request.args?.name)
+        case .workspaceSelect:
+            return actions.selectWorkspace(request.target, window: request.args?.window)
+        case .workspaceRename:
+            guard let name = request.args?.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !name.isEmpty else {
+                return ControlResponse(ok: false, error: "workspace.rename requires a name")
+            }
+            return actions.renameWorkspace(request.target, window: request.args?.window, name: name)
+        case .workspaceDelete:
+            return actions.deleteWorkspace(request.target, window: request.args?.window)
         case .sessionMove:
             if request.args?.to != nil && request.args?.workspace != nil {
                 return ControlResponse(ok: false, error: "session.move takes either --to or a workspace, not both")

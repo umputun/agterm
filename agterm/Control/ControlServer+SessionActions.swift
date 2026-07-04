@@ -118,6 +118,78 @@ extension ControlServer: ControlActions {
         }
     }
 
+    func selectSession(_ target: String?, window: String?) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            store.selectSession(id)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    func goSession(window: String?, direction: SessionNavigation) -> ControlResponse {
+        // relative navigation acts on the store's current selection, so no session target -- just
+        // the frontmost-or-`--window` store.
+        resolver.resolvePlacementStore(window) { store in
+            store.navigateSession(direction)
+            guard let id = store.selectedSessionID else {
+                return ControlResponse(ok: false, error: "no session to navigate")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    func closeSession(_ target: String?, window: String?) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            store.closeSession(id)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    func renameSession(_ target: String?, window: String?, name: String) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            store.renameSession(id, to: name)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    func createWorkspace(window: String?, name: String?) -> ControlResponse {
+        // placement target: the window's frontmost store (or `args.window`'s). name defaults to
+        // the auto-generated workspace name when none is given.
+        resolver.resolvePlacementStore(window) { store in
+            let name = trimmed(name) ?? store.defaultWorkspaceName
+            let workspace = store.addWorkspace(name: name)
+            return ControlResponse(ok: true, result: ControlResult(id: workspace.id.uuidString))
+        }
+    }
+
+    func selectWorkspace(_ target: String?, window: String?) -> ControlResponse {
+        // selecting a workspace selects its first session (workspace rows are not selectable on
+        // their own); an empty workspace just clears nothing and reports the workspace id.
+        resolver.resolveWorkspace(target, window: window) { store, id in
+            if let first = store.workspaces.first(where: { $0.id == id })?.sessions.first {
+                store.selectSession(first.id)
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse {
+        resolver.resolveWorkspace(target, window: window) { store, id in
+            store.renameWorkspace(id, to: name)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse {
+        // honors keep-at-least-one; returns an error rather than the GUI confirm alert.
+        resolver.resolveWorkspace(target, window: window) { store, id in
+            guard store.canRemoveWorkspace else {
+                return ControlResponse(ok: false, error: "cannot delete last workspace")
+            }
+            store.removeWorkspace(id)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
     /// Resolve the target session and drive the split directly on its owning store (NOT the
     /// argument-less `AppActions.toggleSplit()`, which only acts on the active session). `mode` is
     /// `on|off|toggle`, computed against the session's current `isSplit` so `on`/`off` are
