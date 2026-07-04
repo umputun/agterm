@@ -371,6 +371,28 @@ struct ControlDispatcherTests {
         ])
     }
 
+    @Test func sessionStatusRevertsColorWhenOmitted() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        // set a per-call color, then set again with NO color: the second update must carry color nil,
+        // proving the "next call without --color discards it" contract at the dispatch/update layer (the
+        // app arm builds a fresh AgentIndicator from update.color, so a nil update.color clears the tint).
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionStatus, target: "session",
+                                                     args: ControlArgs(status: "blocked", color: "#ff0000")))
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionStatus, target: "session",
+                                                     args: ControlArgs(status: "blocked")))
+
+        #expect(actions.calls == [
+            .sessionStatus(target: "session", window: nil,
+                           ControlSessionStatusUpdate(status: .blocked, blink: nil, autoReset: nil,
+                                                      sound: nil, color: "#ff0000")),
+            .sessionStatus(target: "session", window: nil,
+                           ControlSessionStatusUpdate(status: .blocked, blink: nil, autoReset: nil,
+                                                      sound: nil, color: nil))
+        ])
+    }
+
     @Test func splitScratchFocusAndResizeRouteParsedInputs() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

@@ -368,9 +368,11 @@ struct CommandsTests {
         #expect(req.args?.color == nil)
     }
 
-    @Test func sessionStatusRejectsBadColor() throws {
-        // a non-#rrggbb color is rejected by validate() before any request is built.
-        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "status", "blocked", "--color", "nope"]) }
+    @Test func sessionStatusRejectsBadColor() {
+        // a non-#rrggbb color is rejected by validate() before any request is built; pin the exact message
+        // so an unrelated parse failure can't masquerade as color validation (matches the sibling
+        // `session background color` rejection tests).
+        #expect(validationMessage(["session", "status", "blocked", "--color", "nope"]) == "color must be a #rrggbb hex value")
     }
 
     @Test func sessionSearchWithNeedle() throws {

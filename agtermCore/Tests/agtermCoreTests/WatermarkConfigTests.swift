@@ -185,7 +185,9 @@ struct WatermarkConfigTests {
         #expect(WatermarkConfig.isValidColorHex(hex))
     }
 
-    @Test(arguments: ["#fff", "fff", "#zzzzzz", "red", "#ff00", "#ff0000ff", "", "#"])
+    // the last two are fullwidth Unicode hex forms: `Character.isHexDigit` accepts them but
+    // `NSColor(agtermHex:)`'s `UInt32(radix:)` cannot parse them, so validation must reject them (ASCII-only).
+    @Test(arguments: ["#fff", "fff", "#zzzzzz", "red", "#ff00", "#ff0000ff", "", "#", "#ＦＦ００００", "ＦＦ００００"])
     func malformedColorHexRejected(_ hex: String) {
         #expect(!WatermarkConfig.isValidColorHex(hex))
     }
