@@ -17,6 +17,40 @@ public struct AppSettings: Codable, Equatable, Sendable {
         case custom
     }
 
+    /// The user-idle timeout after which the window's selection auto-follows to the oldest blocked
+    /// session, stored as the `autoFollowAttention` raw string so an unknown future value decodes
+    /// tolerantly to `off` (the AppSettings forward-compat rule) instead of failing the whole decode.
+    /// `off` is also the nil case (the default), so picking it clears the field and keeps
+    /// `settings.json` minimal. Each case's `timeout` is the idle grace in seconds (`off` = nil = the
+    /// feature is disabled).
+    public enum AutoFollowAttention: String, CaseIterable, Sendable {
+        case off
+        case s5
+        case s10
+        case s30
+        case s60
+        case m5
+
+        /// Tolerant lookup shared by the Settings binding and the store fan-out: an unknown or nil raw
+        /// value resolves to `off` (the AppSettings forward-compat default) instead of failing, so a
+        /// future-written value never breaks the read.
+        public init(tolerant raw: String?) {
+            self = AutoFollowAttention(rawValue: raw ?? "") ?? .off
+        }
+
+        /// The idle grace in seconds before the auto-follow fires, or nil when `off` (disabled).
+        public var timeout: TimeInterval? {
+            switch self {
+            case .off: return nil
+            case .s5: return 5
+            case .s10: return 10
+            case .s30: return 30
+            case .s60: return 60
+            case .m5: return 300
+            }
+        }
+    }
+
     /// The app's out-of-the-box theme — a bundled theme applied on a fresh install (no saved
     /// settings), seeded by `SettingsStore.load()`. Distinct from `theme == nil`, which means
     /// ghostty's built-in default (the "default ghostty" entry in the theme picker).
@@ -128,6 +162,15 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// app-level behavior flag read on demand by `AppActions`, NOT a ghostty key — it never appears in
     /// `ghosttyConfigLines()`; the control channel's `session.close` closes without a prompt.
     public var confirmCloseSession: Bool?
+    /// The user-idle timeout that auto-follows the window's selection to the oldest blocked session, as an
+    /// `AutoFollowAttention` raw value; nil means the default (`off` — disabled). An app-level per-window
+    /// behavior value driving `AppStore`'s idle controller, NOT a ghostty key — it never appears in
+    /// `ghosttyConfigLines()`.
+    public var autoFollowAttention: String?
+    /// Whether the auto-follow stays put on a currently running (`active`) session instead of pulling to a
+    /// blocked one. nil/false means the default (off — auto-follow always pulls to blocked). Only meaningful
+    /// when `autoFollowAttention` is set. An app-level flag, NOT a ghostty key.
+    public var autoFollowStayOnActive: Bool?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 backgroundOpacity: Double? = nil, backgroundBlur: Int? = nil, notificationsEnabled: Bool? = nil,
@@ -139,7 +182,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 inheritGlobalGhosttyConfig: Bool? = nil, attentionButtonEnabled: Bool? = nil,
                 blockedStatusSoundName: String? = nil, rightClickPaste: Bool? = nil,
                 newSessionDirectory: String? = nil, newSessionCustomDirectory: String? = nil,
-                confirmCloseSession: Bool? = nil) {
+                confirmCloseSession: Bool? = nil, autoFollowAttention: String? = nil,
+                autoFollowStayOnActive: Bool? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -163,6 +207,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.newSessionDirectory = newSessionDirectory
         self.newSessionCustomDirectory = newSessionCustomDirectory
         self.confirmCloseSession = confirmCloseSession
+        self.autoFollowAttention = autoFollowAttention
+        self.autoFollowStayOnActive = autoFollowStayOnActive
     }
 
     /// The working directory a new session should open in, resolving the `newSessionDirectory` mode

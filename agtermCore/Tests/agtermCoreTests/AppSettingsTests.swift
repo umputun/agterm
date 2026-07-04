@@ -299,4 +299,55 @@ struct AppSettingsTests {
         #expect(AppSettings(newSessionDirectory: "custom", newSessionCustomDirectory: "")
             .resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
     }
+
+    @Test func autoFollowAttentionUnknownDecodesToOff() {
+        // an unknown future raw value decodes tolerantly to off (the forward-compat rule), not a crash.
+        #expect(AppSettings.AutoFollowAttention(rawValue: "s5") == .s5)
+        #expect(AppSettings.AutoFollowAttention(rawValue: "future") == nil)
+        // a nil/unknown stored string maps to the disabled default via the ?? off fallback.
+        #expect((AppSettings.AutoFollowAttention(rawValue: "future") ?? .off) == .off)
+    }
+
+    @Test func autoFollowAttentionTolerantInit() {
+        // the shared tolerant lookup: a known raw resolves, nil and an unknown string both fall back to off.
+        #expect(AppSettings.AutoFollowAttention(tolerant: "s30") == .s30)
+        #expect(AppSettings.AutoFollowAttention(tolerant: nil) == .off)
+        #expect(AppSettings.AutoFollowAttention(tolerant: "") == .off)
+        #expect(AppSettings.AutoFollowAttention(tolerant: "future") == .off)
+    }
+
+    @Test func autoFollowAttentionTimeoutMapping() {
+        #expect(AppSettings.AutoFollowAttention.off.timeout == nil)
+        #expect(AppSettings.AutoFollowAttention.s5.timeout == 5)
+        #expect(AppSettings.AutoFollowAttention.s10.timeout == 10)
+        #expect(AppSettings.AutoFollowAttention.s30.timeout == 30)
+        #expect(AppSettings.AutoFollowAttention.s60.timeout == 60)
+        // m5 is the largest boundary (5 minutes = 300s); s5 the smallest non-off.
+        #expect(AppSettings.AutoFollowAttention.m5.timeout == 300)
+        // every case is enumerable and only off has a nil timeout.
+        #expect(AppSettings.AutoFollowAttention.allCases.filter { $0.timeout == nil } == [.off])
+    }
+
+    @Test func autoFollowFieldsDefaultNilAndOmitFromJSON() throws {
+        // both default nil (feature off) and neither serializes when unset, keeping settings.json minimal.
+        #expect(AppSettings().autoFollowAttention == nil)
+        #expect(AppSettings().autoFollowStayOnActive == nil)
+        let json = String(decoding: try JSONEncoder().encode(AppSettings()), as: UTF8.self)
+        #expect(!json.contains("autoFollowAttention"))
+        #expect(!json.contains("autoFollowStayOnActive"))
+    }
+
+    @Test func autoFollowFieldsRoundTripAndAreNotConfigLines() throws {
+        let original = AppSettings(autoFollowAttention: "s30", autoFollowStayOnActive: true)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
+        #expect(decoded == original)
+        #expect(decoded.autoFollowAttention == "s30")
+        #expect(decoded.autoFollowStayOnActive == true)
+        // absent in a legacy file decodes to nil (off).
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
+        #expect(legacy.autoFollowAttention == nil)
+        #expect(legacy.autoFollowStayOnActive == nil)
+        // app-level per-window behavior values, never ghostty config keys — only the always-on defaults emit.
+        #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
 }
