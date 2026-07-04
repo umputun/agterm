@@ -4,8 +4,8 @@ import SwiftUI
 
 /// The Settings window (Cmd+,): five tabs — General (mouse, sessions, ghostty config),
 /// Appearance (font/theme + window translucency + pane dimming), Notifications (banner / badge /
-/// attention toggles), Agent Status (the sidebar glyph colors + blocked sound), and Key Mapping
-/// (the config directory + keymap diagnostics + Reload).
+/// attention toggles), Agent Status (the sidebar glyph colors + blocked sound + auto-follow), and Key
+/// Mapping (the config directory + keymap diagnostics + Reload).
 struct SettingsView: View {
     let model: SettingsModel
 
@@ -383,8 +383,8 @@ private struct NotificationsSettingsView: View {
 }
 
 /// Agent Status tab: a Colors section (the three sidebar glyph colors — active / blocked /
-/// completed), a Sound section (the blocked sound), and a trailing Reset that clears both back to
-/// their defaults.
+/// completed), a Sound section (the blocked sound), an Auto-follow section (the idle-timeout picker +
+/// stay-on-active toggle), and a trailing Reset that clears the colors and sound back to their defaults.
 private struct AgentStatusSettingsView: View {
     let model: SettingsModel
 
@@ -409,6 +409,21 @@ private struct AgentStatusSettingsView: View {
                 }
                 .accessibilityIdentifier("settings-status-blocked-sound")
                 SettingHint("Played when a session becomes blocked.")
+            }
+
+            Section("Auto-follow") {
+                Picker("Auto-follow blocked sessions", selection: autoFollowAttention) {
+                    Text("Disabled").tag(AppSettings.AutoFollowAttention.off)
+                    Text("5s").tag(AppSettings.AutoFollowAttention.s5)
+                    Text("10s").tag(AppSettings.AutoFollowAttention.s10)
+                    Text("30s").tag(AppSettings.AutoFollowAttention.s30)
+                    Text("60s").tag(AppSettings.AutoFollowAttention.s60)
+                    Text("5m").tag(AppSettings.AutoFollowAttention.m5)
+                }
+                .accessibilityIdentifier("settings-auto-follow")
+                SettingHint("Jumps to the oldest blocked session once you've been idle this long.")
+                Toggle("Don't auto-follow away from a running session", isOn: autoFollowStayOnActive)
+                    .accessibilityIdentifier("settings-auto-follow-stay-active")
             }
 
             Section {
@@ -446,6 +461,20 @@ private struct AgentStatusSettingsView: View {
                     model.setBlockedStatusSoundName(value)
                     if let value { StatusSoundPlayer.shared.action(for: value)?() }
                 })
+    }
+
+    /// The auto-follow idle timeout; nil (the default) reads as `.off`, and picking `.off` stores nil so
+    /// settings.json stays minimal. An unknown stored value also resolves to `.off`.
+    private var autoFollowAttention: Binding<AppSettings.AutoFollowAttention> {
+        Binding(get: { AppSettings.AutoFollowAttention(tolerant: model.settings.autoFollowAttention) },
+                set: { model.setAutoFollowAttention($0 == .off ? nil : $0.rawValue) })
+    }
+
+    /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json
+    /// minimal until the user opts into staying put on a running session.
+    private var autoFollowStayOnActive: Binding<Bool> {
+        Binding(get: { model.settings.autoFollowStayOnActive ?? false },
+                set: { model.setAutoFollowStayOnActive($0 ? true : nil) })
     }
 }
 

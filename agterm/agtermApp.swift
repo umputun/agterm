@@ -104,6 +104,10 @@ struct agtermApp: App {
                     // custom commands and run them (both are built after `actions`, so they're set here
                     // rather than in the init, mirroring the NotificationManager wiring below).
                     actions.settingsModel = settingsModel
+                    // seed the auto-follow setting into every open window's store now that the model is
+                    // wired — deterministic regardless of the per-window resolveStore/onAppear ordering
+                    // (the resolveStore seed handles windows opened later). Idempotent.
+                    settingsModel.applyAutoFollowToAllWindows()
                     actions.customCommandRunner = customCommandRunner
                     // the action hub opens the .themes palette for the "Select Theme…" launcher + menu.
                     actions.palette = palette

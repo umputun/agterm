@@ -120,6 +120,20 @@ final class SettingsModel {
     /// Persist whether closing a session from the GUI first asks for confirmation (nil = off). Not a ghostty
     /// key and nothing renders it continuously — `AppActions` reads it on demand at close time — so it just saves.
     func setConfirmCloseSession(_ value: Bool?) { settings.confirmCloseSession = value; try? settingsStore.save(settings) }
+    /// Persist the user-idle auto-follow timeout (nil = off) and fan it out to every open window's store.
+    /// Not a ghostty key — a per-window `AppStore` behavior — so it just saves, then pushes the resolved
+    /// timeout into the live stores (a newly opened window seeds itself via `applyAutoFollow(to:)`).
+    func setAutoFollowAttention(_ value: String?) {
+        settings.autoFollowAttention = value
+        try? settingsStore.save(settings)
+        applyAutoFollowToAllWindows()
+    }
+    /// Persist whether auto-follow stays put on a running (`active`) session (nil/false = off) and fan it out.
+    func setAutoFollowStayOnActive(_ value: Bool?) {
+        settings.autoFollowStayOnActive = value
+        try? settingsStore.save(settings)
+        applyAutoFollowToAllWindows()
+    }
 
     /// Apply a new background opacity live WITHOUT an immediate save — the live-drag half of the opacity
     /// slider. Updates translucency on every drag tick (apply-without-save) and schedules a debounced
@@ -470,6 +484,25 @@ final class SettingsModel {
 
     private func applyAttentionButtonEnabled() {
         GhosttyApp.shared.setAttentionButtonEnabled(settings.attentionButtonEnabled ?? false)
+    }
+
+    /// Push the current auto-follow configuration into a single window's store. Called when a window's
+    /// store is first resolved (`ContentView.resolveStore`) so a newly opened window honors the setting:
+    /// the store is built host-free in `WindowLibrary` and can't read these settings itself, so — unlike
+    /// the chrome flags that ride a `GhosttyApp` mirror — the value is pushed straight into the store.
+    func applyAutoFollow(to store: AppStore) {
+        let timeout = AppSettings.AutoFollowAttention(tolerant: settings.autoFollowAttention).timeout
+        store.setAutoFollow(timeout: timeout, stayOnActive: settings.autoFollowStayOnActive ?? false)
+    }
+
+    /// Fan the current auto-follow configuration out to every open window's store — the settings-change
+    /// broadcast (and the launch seed, called from the scene `.task` once the model is wired). Idempotent:
+    /// re-pushing the same values is a no-op in `AppStore.setAutoFollow`. Distinct name from the single-window
+    /// `applyAutoFollow(to:)` so the fan-out and the one-store push don't read as arity-overloaded twins.
+    func applyAutoFollowToAllWindows() {
+        for store in library.openIDs().compactMap({ library.store(for: $0) }) {
+            applyAutoFollow(to: store)
+        }
     }
 
     private func applyInactivePaneMute() {
