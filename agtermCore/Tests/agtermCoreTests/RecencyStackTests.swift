@@ -47,4 +47,14 @@ struct RecencyStackTests {
         #expect(stack.top(2, in: [1, 2, 4]) == [4, 2])
         #expect(stack.top(10, in: [1, 2, 4]) == [4, 2, 1])
     }
+
+    @Test func topCapsResultAtRequestedCount() {
+        // the Ctrl-Tab switcher feeds top() its 10-item display cap; with more valid ids than the cap,
+        // top returns exactly n, most-recent-first, and drops the oldest beyond it.
+        var stack = RecencyStack<Int>()
+        for i in 1...12 { stack.push(i) }
+        let capped = stack.top(10, in: Set(1...12))
+        #expect(capped.count == 10)
+        #expect(capped == [12, 11, 10, 9, 8, 7, 6, 5, 4, 3])
+    }
 }
