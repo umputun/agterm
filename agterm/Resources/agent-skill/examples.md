@@ -280,6 +280,7 @@ agtermctl session status active --blink --target "$AGTERM_SESSION_ID"   # workin
 agtermctl session status completed --auto-reset --target "$AGTERM_SESSION_ID"  # one-shot done flash
 agtermctl session status blocked --sound default --target "$AGTERM_SESSION_ID" # needs input, with a beep
 agtermctl session status completed --sound Glass --target "$AGTERM_SESSION_ID" # done, with a named sound
+agtermctl session status blocked --color '#ff0000' --target "$AGTERM_SESSION_ID" # per-call red tint (reverts on next status)
 agtermctl session status idle --target "$AGTERM_SESSION_ID"             # clear
 ```
 

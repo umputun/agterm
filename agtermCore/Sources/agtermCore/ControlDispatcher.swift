@@ -158,9 +158,12 @@ public struct ControlDispatcher {
             guard let status = AgentStatus(rawValue: request.args?.status ?? "") else {
                 return ControlResponse(ok: false, error: "invalid status")
             }
+            if let color = request.args?.color, !WatermarkConfig.isValidColorHex(color) {
+                return ControlResponse(ok: false, error: "invalid color (expected #rrggbb)")
+            }
             let update = ControlSessionStatusUpdate(status: status, blink: request.args?.blink,
                                                     autoReset: request.args?.autoReset,
-                                                    sound: request.args?.sound)
+                                                    sound: request.args?.sound, color: request.args?.color)
             return actions.setSessionStatus(request.target, window: request.args?.window, update: update)
         case .sessionSplit:
             return actions.splitSession(request.target, window: request.args?.window, mode: request.args?.mode)

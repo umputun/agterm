@@ -347,20 +347,49 @@ struct ControlDispatcherTests {
             cmd: .sessionStatus,
             target: "session",
             args: ControlArgs(window: "win", status: "blocked", blink: true,
-                              autoReset: true, sound: "default")
+                              autoReset: true, sound: "default", color: "#ff0000")
         ))
         let bad = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionStatus,
             target: "session",
             args: ControlArgs(status: "bogus")
         ))
+        let badColor = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionStatus,
+            target: "session",
+            args: ControlArgs(status: "blocked", color: "nope")
+        ))
 
         #expect(status == ControlResponse(ok: true))
         #expect(bad == ControlResponse(ok: false, error: "invalid status"))
+        #expect(badColor == ControlResponse(ok: false, error: "invalid color (expected #rrggbb)"))
+        // the bad-color request errors before reaching the actions, so only the good one is recorded.
         #expect(actions.calls == [
             .sessionStatus(target: "session", window: "win",
                            ControlSessionStatusUpdate(status: .blocked, blink: true,
-                                                      autoReset: true, sound: "default"))
+                                                      autoReset: true, sound: "default", color: "#ff0000"))
+        ])
+    }
+
+    @Test func sessionStatusRevertsColorWhenOmitted() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        // set a per-call color, then set again with NO color: the second update must carry color nil,
+        // proving the "next call without --color discards it" contract at the dispatch/update layer (the
+        // app arm builds a fresh AgentIndicator from update.color, so a nil update.color clears the tint).
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionStatus, target: "session",
+                                                     args: ControlArgs(status: "blocked", color: "#ff0000")))
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionStatus, target: "session",
+                                                     args: ControlArgs(status: "blocked")))
+
+        #expect(actions.calls == [
+            .sessionStatus(target: "session", window: nil,
+                           ControlSessionStatusUpdate(status: .blocked, blink: nil, autoReset: nil,
+                                                      sound: nil, color: "#ff0000")),
+            .sessionStatus(target: "session", window: nil,
+                           ControlSessionStatusUpdate(status: .blocked, blink: nil, autoReset: nil,
+                                                      sound: nil, color: nil))
         ])
     }
 

@@ -45,13 +45,15 @@ struct AgentStatusTests {
         #expect(indicator.status == .idle)
         #expect(indicator.blink == false)
         #expect(indicator.autoReset == false)
+        #expect(indicator.color == nil)
     }
 
     @Test func indicatorCustomInit() {
-        let indicator = AgentIndicator(status: .active, blink: true, autoReset: true)
+        let indicator = AgentIndicator(status: .active, blink: true, autoReset: true, color: "#ff0000")
         #expect(indicator.status == .active)
         #expect(indicator.blink == true)
         #expect(indicator.autoReset == true)
+        #expect(indicator.color == "#ff0000")
     }
 
     @Test func indicatorEquatableEqual() {
@@ -84,6 +86,9 @@ struct AgentStatusTests {
         #expect(AgentIndicator(status: .active) != AgentIndicator(status: .completed))
         #expect(AgentIndicator(status: .active, blink: true) != AgentIndicator(status: .active, blink: false))
         #expect(AgentIndicator(status: .completed, autoReset: true) != AgentIndicator(status: .completed, autoReset: false))
+        // a color-only difference is distinguished, so a color change reloads the sidebar row (RowContent).
+        #expect(AgentIndicator(status: .blocked, color: "#ff0000") != AgentIndicator(status: .blocked))
+        #expect(AgentIndicator(status: .blocked, color: "#ff0000") != AgentIndicator(status: .blocked, color: "#00ff00"))
     }
 
     @Test func attentionRankOrdersBlockedActiveCompleted() {

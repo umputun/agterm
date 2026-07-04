@@ -492,14 +492,33 @@ paths:
   per-call wins; the default is blocked-only), with the transition gate itself in the server.
   That setting is keep-in-sync EXEMPT like the status colors, since the per-status sound already has
   full control coverage via `--sound`.
+  `args.color` (`#rrggbb`, REUSING the `session.background`/`session.overlay.open` field — no new arg —
+  validated by the shared `WatermarkConfig.isValidColorHex` in the dispatcher, an `invalid color (expected #rrggbb)`
+  error that leaves the status UNCHANGED) is a per-call glyph-tint OVERRIDE.
+  It rides the ephemeral `AgentIndicator` (`AgentIndicator.color`), so — because `setSessionStatus` builds
+  a fresh indicator every call — the next `session.status` without a color naturally DISCARDS it (no explicit
+  clear); nil renders the Settings-configured status color.
+  Both glyph render sites resolve it through the SHARED `GhosttyApp.statusColor(for:override:)` (a valid
+  hex wins, nil/malformed falls back to `statusColor(for:)`): the AppKit sidebar `StatusIconView` and the
+  SwiftUI attention-list `StatusGlyph` (`PaletteItem.statusColor`), so they can't drift.
+  It is keep-in-sync EXEMPT like the status colors/sound — the per-call color has full control coverage
+  via `--color` and no GUI setter (the Settings colors are the app-wide default, not a per-session tint).
   Setting a non-idle status is control-driven (the hooks/agents call it;
   no GUI sets active/completed/blocked), but clearing to idle ALSO has a GUI — the **Clear Status** action
   (see the Agent-status glyph note) — so the idle case is keep-in-sync covered by `session.status idle`.
   Cross-window via the shared `resolveSession` (the install's Stop hook targets its own `$AGTERM_SESSION_ID`,
   which may live in a non-frontmost window).
-  The arm (`setSessionStatus`) builds an `AgentIndicator{status, blink, autoReset}` (host-free,
+  The arm (`setSessionStatus`) builds an `AgentIndicator{status, blink, autoReset, color}` (host-free,
   ephemeral — never in `SessionSnapshot`) and drives the single `AppStore.setAgentIndicator(_:forSession:)`
   mutation point (unknown id = clean no-op), returning the id.
+  Four-point keep-in-sync audit for `session.status --color`: (1) `ControlArgs.color` (reused) +
+  `AgentIndicator.color` + `ControlSessionStatusUpdate.color` in `agtermCore`, the dispatcher hex-validation,
+  (2) the `.sessionStatus` arm threading `update.color` into the indicator + the two render sites via
+  `GhosttyApp.statusColor(for:override:)`, (3) the `session status --color` option (`validate()`-guarded)
+  in `agtermctlKit`, (4) round-trip in `ControlProtocolTests` + dispatcher validation in `ControlDispatcherTests`
+  + `AgentStatusTests` (indicator color + Equatable) + CLI mapping in `CommandsTests` + the e2e
+  `testSessionStatusColorValidatesHex` in `ControlSidebarStatusUITests` (asserts the command path — the
+  glyph TINT itself is not accessibility-observable).
   Visibility is keep-state vs one-time, decided by `autoReset` alone: `AppStore.selectSession` resets
   an `autoReset` indicator (the `completed` flash) to idle on BOTH the session visited AND the one left
   (right after `clearUnseen`), so it never lingers on a row you switch away from,

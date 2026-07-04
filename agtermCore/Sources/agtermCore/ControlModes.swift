@@ -99,17 +99,21 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
     }
 }
 
-/// Parsed `session.status` payload. Sound validation and playback stay host-side.
+/// Parsed `session.status` payload. Sound validation and playback stay host-side; `color` is the
+/// per-call `#rrggbb` glyph-tint override (validated for hex in the dispatcher), threaded onto the
+/// ephemeral `AgentIndicator`.
 public struct ControlSessionStatusUpdate: Equatable, Sendable {
     public let status: AgentStatus
     public let blink: Bool?
     public let autoReset: Bool?
     public let sound: String?
+    public let color: String?
 
-    public init(status: AgentStatus, blink: Bool?, autoReset: Bool?, sound: String?) {
+    public init(status: AgentStatus, blink: Bool?, autoReset: Bool?, sound: String?, color: String? = nil) {
         self.status = status
         self.blink = blink
         self.autoReset = autoReset
         self.sound = sound
+        self.color = color
     }
 }

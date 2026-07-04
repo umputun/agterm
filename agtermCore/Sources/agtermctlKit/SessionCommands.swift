@@ -256,13 +256,22 @@ struct Session: ParsableCommand {
             Submarine, Tink).
             """)
         var sound: String?
+        @Option(name: .long, help: "Override the glyph tint for this call only (#rrggbb); reverts on the next status set without it.")
+        var color: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
+
+        func validate() throws {
+            if let color, !WatermarkConfig.isValidColorHex(color) {
+                throw ValidationError("color must be a #rrggbb hex value")
+            }
+        }
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionStatus, target: target.target,
                            args: options.withWindow(ControlArgs(status: state, blink: blink ? true : nil,
-                                                                 autoReset: autoReset ? true : nil, sound: sound)))
+                                                                 autoReset: autoReset ? true : nil, sound: sound,
+                                                                 color: color)))
         }
     }
 
