@@ -117,12 +117,17 @@ paths:
   and the ⌃⇧P palette — the row menu targets the clicked node id, the menu bar + palette go through `AppActions.clearActiveSessionStatus`
   (the active session); all route to `AppStore.setAgentIndicator(AgentIndicator(), forSession:)`,
   the GUI half of `session.status idle`.
-  **Typing also clears an attention glyph:** `GhosttySurfaceView.keyDown` calls `AgentStatus.clearedByKeystroke(isEscape:)`
-  on the owning session's `agentIndicator.status` and, when it returns true,
-  fires `onUserInputClearsStatus` (wired by the main/split surface factories to the same `setAgentIndicator(AgentIndicator(), …)`
-  → idle).
-  The decision is host-free + unit-tested in `agtermCore`: `blocked`/`completed` clear on ANY key (you've
-  engaged with the prompt / finished result); `active` clears ONLY on Escape — the interrupt key (`keyCode == 53`)
+  **Typing also clears an attention glyph (pane-scoped):** `GhosttySurfaceView.keyDown` fires
+  `onUserInputClearsStatus(isEscape:)` UNCONDITIONALLY (it no longer reads `agentIndicator` itself),
+  and each surface factory — main (`left`), split (`right`), and scratch (`scratch`) — wires that closure
+  to the pane-scoped decision, clearing to idle via `setAgentIndicator(AgentIndicator(), …)` ONLY when the
+  host-free `AgentIndicator.clearedBy(pane:isEscape:)` says the keystroke's OWN pane owns the current status.
+  So a block set from a background pane (a `right`- or `scratch`-tagged `session status --pane`) SURVIVES
+  foreground typing in the main pane — only a keystroke in the owning pane clears it — and the scratch,
+  which has no `view.session`, still self-clears because the closure (not `keyDown`) owns the decision.
+  The per-status decision is host-free + unit-tested in `agtermCore` (`clearedBy` gates `clearedByKeystroke`
+  on the pane match): `blocked`/`completed` clear on ANY key (you've engaged with the prompt / finished result);
+  `active` clears ONLY on Escape — the interrupt key (`keyCode == 53`)
   — so ordinary typing while the agent works does NOT wipe the "working" glyph,
   but cancelling a prompt with Esc does; `idle` has no glyph.
   This is the ONE input-driven clear (status is otherwise control-driven).
@@ -141,6 +146,14 @@ paths:
   Peer terminals get the decline case for free by different means agterm avoids:
   cmux owns the permission decision UI (a blocking hook round-trip captures accept/deny),
   herdr scrapes the PTY (the prompt chrome leaving the screen clears it).
+- **Pane-aware attention navigation.**
+  The same `AgentIndicator.statusPane` tag (set via `session.status --pane`, see the Control API rule) also
+  decides WHERE attention navigation lands: auto-follow and `session.go next-attention|prev-attention` reveal
+  and focus the pane that set the block — flipping `splitFocused` to the split, or showing a hidden scratch
+  via `AppStore.toggleScratch` — instead of always the main pane (the shared `AppActions.revealActiveBlockedPane`;
+  see the Menu/actions rule).
+  So a `right`- or `scratch`-tagged block both survives foreground typing in another pane AND pulls you to
+  the waiting pane, not just the session.
 - **Titlebar attention bell (opt-in, window-wide aggregate of the glyph).**
   When `attentionButtonEnabled` is on (Settings ▸ General, default OFF — see the Settings section),
   `customTitlebar` (`ContentView`) shows a bell icon just after the title that recovers the per-session

@@ -301,10 +301,10 @@ overlay surfaces inject no `AGTERM_PANE` (single-command runners; harmless nil�
 - Modify: `.claude/rules/notifications.md`
 - Modify: `.claude/rules/menu-actions.md`
 
-- [ ] update the agent-status / control sections of `README.md` and `site/docs.html` (the `--pane` arg, `tree.statusPane`, `AGTERM_PANE`); keep the two mirrors in step
-- [ ] note pane-aware status in `.claude/rules/control-api.md` (session.status `--pane`, tree `statusPane`), `.claude/rules/notifications.md` (pane-scoped keystroke-clear + pane-aware nav), and `.claude/rules/menu-actions.md` (the "Attention navigation" note — nav now focuses the blocked pane)
-- [ ] do NOT touch `CHANGELOG.md` (release-only)
-- [ ] `make lint` clean — must pass before next task
+- [x] update the agent-status / control sections of `README.md` and `site/docs.html` (the `--pane` arg, `tree.statusPane`, `AGTERM_PANE`); keep the two mirrors in step
+- [x] note pane-aware status in `.claude/rules/control-api.md` (session.status `--pane`, tree `statusPane`), `.claude/rules/notifications.md` (pane-scoped keystroke-clear + pane-aware nav), and `.claude/rules/menu-actions.md` (the "Attention navigation" note — nav now focuses the blocked pane)
+- [x] do NOT touch `CHANGELOG.md` (release-only)
+- [x] `make lint` clean — must pass before next task
 
 ### Task 13: Verify acceptance criteria
 - [ ] verify all Overview requirements: block in split-right / hidden-split / scratch survives foreground typing AND nav lands on + reveals the blocked pane

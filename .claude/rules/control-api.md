@@ -519,6 +519,30 @@ paths:
   + `AgentStatusTests` (indicator color + Equatable) + CLI mapping in `CommandsTests` + the e2e
   `testSessionStatusColorValidatesHex` in `ControlSidebarStatusUITests` (asserts the command path — the
   glyph TINT itself is not accessibility-observable).
+  `args.pane` (`left`|`right`|`scratch`, REUSING the shared `--pane` addressing vocabulary — parsed to the
+  host-free `StatusPane` and validated by the dispatcher, an `--pane must be left, right, or scratch` error
+  that leaves the status UNCHANGED) records WHICH pane set the status onto the ephemeral `AgentIndicator.statusPane`
+  (nil/omitted is treated as `left` = the main pane).
+  It drives two consumers.
+  (1) Pane-scoped keystroke-clear: the main/split/scratch surface factories each wire `onUserInputClearsStatus`
+  to a closure that clears only when the host-free `AgentIndicator.clearedBy(pane:isEscape:)` says the keystroke's
+  OWN pane owns the current status, so a `right`- or `scratch`-tagged block SURVIVES foreground typing in the
+  main pane (see the Notifications rule).
+  (2) Pane-aware attention navigation: auto-follow and `session.go next-attention|prev-attention` reveal and
+  focus the tagged pane — flip `splitFocused` to the split, or show a hidden scratch via `AppStore.toggleScratch`
+  — instead of always the main pane (the shared `AppActions.revealActiveBlockedPane`; see the Menu/actions rule).
+  It reads back on each `tree` node as `ControlSessionNode.statusPane` (omitted when nil, gated on the SAME
+  non-idle condition as `status` so an idle node reports neither).
+  Four-point keep-in-sync audit for `session.status --pane`: (1) the `StatusPane` enum + `AgentIndicator.statusPane`
+  + `AgentIndicator.clearedBy(pane:isEscape:)` + `ControlSessionStatusUpdate.pane` + `ControlSessionNode.statusPane`
+  + `SurfaceEnvironment.session(pane:)` (injects `AGTERM_PANE`) in `agtermCore`, plus the dispatcher `StatusPane`
+  parse/validation, (2) the `.sessionStatus` arm threading `update.pane` into the indicator + the per-factory
+  `AGTERM_PANE` env + the pane-scoped keystroke-clear closures + the `revealActiveBlockedPane` nav step,
+  (3) the `session status --pane` option (`validatePaneArgument`-guarded) + the hook wrapper forwarding
+  `$AGTERM_PANE` as `--pane`, (4) round-trip in `ControlProtocolTests` + dispatcher validation in `ControlDispatcherTests`
+  + `AgentStatusTests` (the `clearedBy` truth table) + `SurfaceEnvironmentTests` + `AgentStatusWrapperTests`
+  + CLI mapping in `CommandsTests` + the e2e in `PaneAwareStatusUITests`.
+  It is control-native for the tag itself (no GUI sets a pane), the same keep-in-sync footing as `--color`/`--sound`.
   Visibility is keep-state vs one-time, decided by `autoReset` alone: `AppStore.selectSession` resets
   an `autoReset` indicator (the `completed` flash) to idle on BOTH the session visited AND the one left
   (right after `clearUnseen`), so it never lingers on a row you switch away from,

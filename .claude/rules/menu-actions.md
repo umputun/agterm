@@ -200,6 +200,15 @@ paths:
   unit-tested) and is driven by Navigate ▸ Previous/Next Attention Session,
   the action palette, and `session.go next-attention|prev-attention`; the two new `BuiltinAction`s (`previous_attention_session`/`next_attention_session`)
   join the arrow-bound set (nil `defaultChord`, hardcoded ⌃⌥↑/↓ via `arrowShortcut`).
+  Attention nav (and idle auto-follow) now REVEAL the blocked PANE, not just the session: after the move,
+  `selectNextAttentionSession`/`selectPreviousAttentionSession` (and `autoFollowed(_:)`) call the shared
+  `AppActions.revealActiveBlockedPane()`, which reads the landed session's `agentIndicator.statusPane` and
+  focuses that pane — for `right`, the split surface via `focusSplitPane(_:wantSplit: true)` (a FIXED target,
+  UNGATED on `hasSplit`, so a promoted split survivor is still focused, and its `onFocusChange` re-asserts
+  `splitFocused` to win the shown-split re-render race); for `scratch`, shows a hidden scratch via
+  `AppStore.toggleScratch` then focuses it; for `left`/nil, the main pane.
+  Both nav paths route through the one helper so they can't drift (the tag is set by `session.status --pane`
+  — see the Control API + Notifications rules).
 - `Delete Workspace` lives once in `AppActions.deleteWorkspace(_:)` (confirm alert when the workspace
   still has sessions, then `AppStore.removeWorkspace`) and is invoked from all three surfaces — the sidebar
   workspace row's context menu, the menu bar, and the action palette (the latter two via `deleteActiveWorkspace()`,
