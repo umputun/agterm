@@ -286,11 +286,11 @@ overlay surfaces inject no `AGTERM_PANE` (single-command runners; harmless nil�
 - Modify: `agterm/Resources/agent-skill/reference.md`
 - Modify: `agterm/Resources/agent-skill/examples.md`
 
-- [ ] document `session.status --pane left|right|scratch` and the `tree` `statusPane` field (reference.md + SKILL.md summary)
-- [ ] add an examples.md recipe (agent in split/scratch sets its pane so nav lands right)
-- [ ] confirm the command COUNT stays 50 (new arg, not a new command)
-- [ ] edit ONLY `agterm/Resources/agent-skill/` — never the installed `~/.claude`/`~/.codex` copies
-- [ ] `make lint` clean — must pass before next task
+- [x] document `session.status --pane left|right|scratch` and the `tree` `statusPane` field (reference.md + SKILL.md summary)
+- [x] add an examples.md recipe (agent in split/scratch sets its pane so nav lands right)
+- [x] confirm the command COUNT stays 50 (new arg, not a new command) *(verified: SKILL.md still reads "50 commands"; `--color` and `--pane` are both args on the existing `session.status`)*
+- [x] edit ONLY `agterm/Resources/agent-skill/` — never the installed `~/.claude`/`~/.codex` copies
+- [x] `make lint` clean — must pass before next task
 
 ### Task 12: README, website, and engineering-rule notes
 

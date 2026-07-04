@@ -99,7 +99,9 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 **tree** — print the workspace/session tree (`--json` for structured). Each session node carries
 `foreground`/`splitForeground` (the live argv of each pane's foreground process, omitted when the pane
 is at its shell prompt) — i.e. what each pane is currently running — `status` (the agent-status set
-via `session status`: `active`|`completed`|`blocked`, omitted when idle), and `background` (the background
+via `session status`: `active`|`completed`|`blocked`, omitted when idle), `statusPane` (which pane set
+that status: `left` (main) | `right` (split) | `scratch`, from `session status --pane`, omitted when
+unset or idle), and `background` (the background
 spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear).
 
 **workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom` ·
@@ -131,7 +133,7 @@ spec — image/text watermark or solid color — set via `session background`, o
   equivalent — bind it via a `command "agtermctl session resize …"` custom action). `--split-ratio` sets
   the absolute left-pane fraction (0..1, clamped to 0.05..0.95); `--grow-left`/`--grow-right` nudge it by
   a fraction. Prints the applied (clamped) fraction.
-- `status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb]` — set the sidebar agent glyph (`--sound default` or a system sound name plays a one-shot sound; `--color` tints the glyph for this call only, reverting on the next status set without it).
+- `status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb] [--pane left|right|scratch]` — set the sidebar agent glyph (`--sound default` or a system sound name plays a one-shot sound; `--color` tints the glyph for this call only, reverting on the next status set without it; `--pane` records which pane set it — `left`=main, `right`=split, `scratch` — so foreground typing in another pane won't clear it and attention nav lands on the blocking pane, read back as the tree `statusPane` field).
 - `flag [on|off|toggle|clear]` — flag a session for the flagged working-set view (`clear` unflags all).
 - `background image <path> [--opacity F] [--fit contain|cover|stretch|none] [--position P] [--repeat]` ·
   `background text <text> [--color #rrggbb] [--opacity F] [--fit ...] [--position ...]` ·
