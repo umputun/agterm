@@ -127,6 +127,44 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
         XCTAssertFalse(onScreen.contains("\(mainTag)-42"), "the revealed scratch must not carry the main pane's marker")
     }
 
+    // the inverse of the hidden-scratch reveal: a `right`-tagged block on the split with the scratch ALREADY
+    // SHOWN (covering the panes). Without hiding the cover, both focus paths resolve to the scratch and nav
+    // never reaches the blocked pane; the reveal must HIDE the covering scratch first, then surface the right
+    // pane. The scratch is a background cover here — the block was set by the split behind it.
+    func testAttentionNavRevealsSplitBehindShownScratch() throws {
+        let sessionA = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sessionA)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "split on should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the session should report split:true")
+
+        let leftTag = "PAWCL-\(UUID().uuidString.prefix(8))"
+        let rightTag = "PAWCR-\(UUID().uuidString.prefix(8))"
+        try seedPaneMarker(target: sessionA, pane: "left", tag: leftTag)
+        try seedPaneMarker(target: sessionA, pane: "right", tag: rightTag)
+
+        // focus the main (left) pane, then SHOW the scratch so it covers both panes.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(sessionA)","args":{"pane":"left"}}"#)["ok"] as? Bool,
+                       true, "focusing the left pane should succeed")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.scratch","target":"\#(sessionA)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "scratch on should succeed")
+        XCTAssertTrue(try pollScratch(id: sessionA, equals: true, timeout: 10), "the scratch should cover the panes")
+
+        // the split (right) pane's agent blocks behind the covering scratch; park on a fresh session.
+        try blockPane("right", target: sessionA)
+        XCTAssertEqual(try statusPane(of: sessionA), "right", "the block should be tagged right")
+        _ = try parkOnNewSession()
+
+        attentionNavDown()
+
+        XCTAssertTrue(try pollActiveNode(equals: sessionA, timeout: 12), "attention-nav should land on the blocked session")
+        XCTAssertTrue(try pollScratch(id: sessionA, equals: false, timeout: 12),
+                      "the reveal should hide the covering scratch to expose the blocked pane")
+        XCTAssertTrue(try pollOnScreen(target: sessionA, contains: "\(rightTag)-42"),
+                      "with the scratch hidden, the split (right) pane should be the on-screen surface")
+        let onScreen = try XCTUnwrap(onScreenText(sessionA), "the on-screen read should return text")
+        XCTAssertFalse(onScreen.contains("\(leftTag)-42"), "the revealed right pane must not carry the main pane's marker")
+    }
+
     // the core fix: typing in the MAIN pane must NOT clear a block tagged `right` or `scratch` (a background
     // pane set it). The positive control at the end proves the SAME keystrokes DO reach the main pane's
     // keyDown and clear a `left`-tagged block — so the survivals above are real pane-scoping, not lost keys.

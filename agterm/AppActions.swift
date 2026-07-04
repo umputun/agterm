@@ -652,9 +652,19 @@ final class AppActions {
     /// `topmostSurface` resolves to the scratch; `.left`/nil focus the session's current active surface via
     /// `focusActiveSession` (the main pane unless a split is focused — no forced flip). The retry loops
     /// cover a split/scratch surface that materializes a beat after the reveal.
+    /// The INVERSE of the `.scratch` show-if-hidden guard: for a NON-scratch target (`left`/`right`/nil)
+    /// with the scratch currently SHOWN, hide the covering scratch (keep-alive `toggleScratch`) FIRST so the
+    /// requested pane becomes the visible/topmost surface — otherwise `focusSplitPane`/`focusActiveSession`
+    /// both resolve to the covering scratch (`topmostSurface`) and nav never reaches the blocked pane. Only
+    /// the scratch cover is dismissed; an active overlay is left alone (closing a running overlay would kill
+    /// its program).
     private func revealActiveBlockedPane() {
         guard let session = store?.activeSession else { focusActiveSession(); return }
-        switch session.agentIndicator.statusPane {
+        let pane = session.agentIndicator.statusPane
+        // a shown scratch covers the panes and masks a non-scratch block; hide it first so the requested
+        // pane is revealed. overlays are deliberately not touched — closing a running overlay is destructive.
+        if pane != .scratch, session.scratchActive { store?.toggleScratch(session.id) }
+        switch pane {
         case .right where session.splitSurface != nil:
             session.splitFocused = true
             focusSplitPane(session, wantSplit: true)
