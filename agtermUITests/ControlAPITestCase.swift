@@ -110,6 +110,23 @@ class ControlAPITestCase: XCTestCase {
         XCTAssertTrue(app.staticTexts["session-row"].waitForExistence(timeout: 30), "seeded session should exist")
     }
 
+    /// Terminate the running app, write `json` as `<stateDir>/settings.json`, and relaunch with the same
+    /// isolated state dir + socket so a test can exercise a seeded `AppSettings`. `SettingsStore` reads the
+    /// file directly under the state dir (the `AGTERM_STATE_DIR` override), and the app applies GUI-only
+    /// settings at launch — e.g. `SettingsModel.applyAutoFollow` pushes the seeded auto-follow timeout into
+    /// each window's store — so seeding + relaunch is how a control-only test enables a GUI-only setting.
+    /// The previously seeded session set restores from the same state dir.
+    func relaunch(withSettings json: String) throws {
+        app.terminate()
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        try Data(json.utf8).write(to: stateDir.appendingPathComponent("settings.json"))
+        app = XCUIApplication()
+        app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
+        app.launchEnvironment["AGTERM_CONTROL_SOCKET"] = socketPath
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["session-row"].waitForExistence(timeout: 30), "seeded session should exist")
+    }
+
     /// Build a `session.type` request line with JSON-escaped `text` (covers the newline and the quoted
     /// path); `pane` addresses a pane (`left`|`right`|`scratch`, nil = the main pane).
     func typeRequest(text: String, target: String? = nil, select: Bool, pane: String? = nil) -> String {
