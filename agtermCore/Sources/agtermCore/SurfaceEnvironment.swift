@@ -4,8 +4,10 @@ import Foundation
 /// The platform surface owns shell creation; this keeps the variable set testable.
 public enum SurfaceEnvironment {
     /// Environment for a session-owned surface: main pane, split pane, overlay, or scratch.
+    /// `pane`, when non-nil, adds `AGTERM_PANE` so the hook wrapper can forward `--pane` and a status
+    /// set from a background pane records which surface blocked; overlay surfaces pass nil (nil→main).
     public static func session(sessionID: UUID, windowID: UUID?, workspaceID: UUID?,
-                               socketPath: String) -> [String: String] {
+                               socketPath: String, pane: StatusPane? = nil) -> [String: String] {
         var env = [
             "AGTERM_ENABLED": "1",
             "AGTERM_SESSION_ID": sessionID.uuidString,
@@ -16,6 +18,9 @@ public enum SurfaceEnvironment {
         }
         if let workspaceID {
             env["AGTERM_WORKSPACE_ID"] = workspaceID.uuidString
+        }
+        if let pane {
+            env["AGTERM_PANE"] = pane.rawValue
         }
         return env
     }

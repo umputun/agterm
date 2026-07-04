@@ -178,10 +178,10 @@ overlay surfaces inject no `AGTERM_PANE` (single-command runners; harmless nil�
 - Modify: `agtermCore/Sources/agtermCore/SurfaceEnvironment.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/SurfaceEnvironmentTests.swift`
 
-- [ ] add `pane: StatusPane?` param to `SurfaceEnvironment.session(...)`; when non-nil add `AGTERM_PANE = pane.rawValue`
-- [ ] leave `quickTerminal(...)` unchanged (not in the session tree)
-- [ ] write tests: `pane: .left/.right/.scratch` inject `AGTERM_PANE=left/right/scratch`; `pane: nil` omits the key; existing `AGTERM_SESSION_ID`/socket/window/workspace assertions still hold
-- [ ] run `cd agtermCore && swift test`, `make lint` — must pass before next task
+- [x] add `pane: StatusPane?` param to `SurfaceEnvironment.session(...)`; when non-nil add `AGTERM_PANE = pane.rawValue`
+- [x] leave `quickTerminal(...)` unchanged (not in the session tree)
+- [x] write tests: `pane: .left/.right/.scratch` inject `AGTERM_PANE=left/right/scratch`; `pane: nil` omits the key; existing `AGTERM_SESSION_ID`/socket/window/workspace assertions still hold
+- [x] run `cd agtermCore && swift test`, `make lint` — must pass before next task
 
 ### Task 3: Protocol + dispatcher — carry and validate the pane (host-free)
 
