@@ -235,9 +235,9 @@ overlay surfaces inject no `AGTERM_PANE` (single-command runners; harmless nil�
 **Files:**
 - Modify: `agterm/Control/ControlServer+SessionActions.swift`
 
-- [ ] in `setSessionStatus`, build `AgentIndicator(status:blink:autoReset:statusPane:)` from `update.pane`
-- [ ] verify the GUI Clear Status paths and keystroke-clear still build a plain `AgentIndicator()` (nil pane)
-- [ ] `make build` succeeds; `make lint` clean — must pass before next task *(behavior covered by the e2e in Task 10)*
+- [x] in `setSessionStatus`, build `AgentIndicator(status:blink:autoReset:statusPane:)` from `update.pane`
+- [x] verify the GUI Clear Status paths and keystroke-clear still build a plain `AgentIndicator()` (nil pane) — confirmed: `AppActions.clearAgentStatus` (`:182`), `WorkspaceSidebar+ContextMenu.menuClearStatus` (`:155`), and both keystroke-clear closures (`agtermApp.swift:216`/`:318`) all use `AgentIndicator()` with default nil pane
+- [x] `make build` succeeds; `make lint` clean — must pass before next task *(behavior covered by the e2e in Task 10)*
 
 ### Task 8: App — per-factory AGTERM_PANE env + closure-based pane-scoped keystroke-clear
 

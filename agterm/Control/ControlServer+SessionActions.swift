@@ -368,8 +368,8 @@ extension ControlServer: ControlActions {
             // capture the status BEFORE mutating so the Settings default plays only on a real transition.
             let wasBlocked = store.session(withID: id)?.agentIndicator.status == .blocked
             store.setAgentIndicator(AgentIndicator(status: update.status, blink: update.blink ?? false,
-                                                   autoReset: update.autoReset ?? false, color: update.color),
-                                    forSession: id)
+                                                   autoReset: update.autoReset ?? false,
+                                                   color: update.color, statusPane: update.pane), forSession: id)
             // explicit per-call sound wins on any status; the Settings default plays only when a session
             // newly enters `blocked`, not on a repeated `blocked` set.
             let blockedDefault = wasBlocked ? nil : self.settingsModel.settings.blockedStatusSoundName
