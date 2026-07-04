@@ -263,9 +263,11 @@ final class AppActions {
     /// Step to the next/previous session needing attention (status `blocked` or `completed`), wrapping
     /// around and skipping idle/active sessions. Shares `navigateSession` with the GUI, palette, and the
     /// `session.go next-attention|prev-attention` control command. Notes user activity like the plain
-    /// session nav (a manual step to an attention session buys the idle grace too).
-    func selectNextAttentionSession() { store?.noteUserActivity(); store?.navigateSession(.nextAttention); focusActiveSession() }
-    func selectPreviousAttentionSession() { store?.noteUserActivity(); store?.navigateSession(.previousAttention); focusActiveSession() }
+    /// session nav (a manual step to an attention session buys the idle grace too), then reveals and focuses
+    /// the moved-to session's blocked pane (`revealActiveBlockedPane`) so nav lands on the split/scratch pane
+    /// that set the status, not just the session's plain focused pane.
+    func selectNextAttentionSession() { store?.noteUserActivity(); store?.navigateSession(.nextAttention); revealActiveBlockedPane() }
+    func selectPreviousAttentionSession() { store?.noteUserActivity(); store?.navigateSession(.previousAttention); revealActiveBlockedPane() }
 
     /// Delete a workspace and all of its sessions. Confirms first when the workspace still has
     /// sessions (the delete ends their shells); an empty workspace deletes without a prompt.
@@ -623,11 +625,34 @@ final class AppActions {
     /// session. Selection alone does NOT move first responder (the eager deck keeps the prior surface as
     /// responder), so pull focus into the newly selected session — but ONLY when the firing window is key.
     /// A non-key window keeps just the selection change and focuses normally when it next becomes key.
-    /// Session granularity — no split-pane logic. `focusActiveSession` targets the frontmost (= key) store,
-    /// which is the firing window here since we gate on its being key.
+    /// `revealActiveBlockedPane` targets the frontmost (= key) store — the firing window here since we gate
+    /// on its being key — and reveals the pane that set the status (split/scratch), so the initial jump lands
+    /// on the waiting pane, not just the session's plain focused pane.
     private func autoFollowed(_ sessionID: UUID?) {
         guard let sessionID, let windowID = library.windowID(forSession: sessionID),
               WindowRegistry.shared.isKeyWindow(windowID) else { return }
+        revealActiveBlockedPane()
+    }
+
+    /// Reveal and focus the active session's blocked pane, reading its agent-status pane tag so navigation
+    /// lands on the pane actually waiting for input rather than the session's plain focused pane. Shared by
+    /// the auto-follow jump and attention navigation. `.right` flips `splitFocused` so `focusActiveSession`'s
+    /// `topmostSurface` → `activeSurface` follows to `splitSurface` — WITHOUT gating on `hasSplit`, so a
+    /// promoted split survivor (primary exited, survivor in `splitSurface`, `hasSplit` false) is still
+    /// focused. `.scratch` shows the scratch only when hidden (a show-if-hidden guard, never a bare toggle
+    /// that could HIDE a shown one) so `topmostSurface` resolves to the scratch. `.left`/nil keep the plain
+    /// main-pane focus. `focusActiveSession`'s retry loop covers a split/scratch surface that materializes a
+    /// beat after the reveal.
+    private func revealActiveBlockedPane() {
+        guard let session = store?.activeSession else { focusActiveSession(); return }
+        switch session.agentIndicator.statusPane {
+        case .right:
+            session.splitFocused = true
+        case .scratch:
+            if !session.scratchActive { store?.toggleScratch(session.id) }
+        case .left, .none:
+            break
+        }
         focusActiveSession()
     }
 
