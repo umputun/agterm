@@ -166,7 +166,9 @@ public final class AppStore {
         let activeWorkspaceID = activeID.flatMap { workspace(forSession: $0)?.id }
         let nodes = workspaces.map { workspace in
             let sessions = workspace.sessions.map { session in
-                let status = session.agentIndicator.status == .idle ? nil : session.agentIndicator.status.rawValue
+                let idle = session.agentIndicator.status == .idle
+                let status = idle ? nil : session.agentIndicator.status.rawValue
+                let statusPane = idle ? nil : session.agentIndicator.statusPane?.rawValue
                 return ControlSessionNode(id: session.id.uuidString, name: session.displayName,
                                           cwd: session.effectiveCwd, title: session.oscTitle,
                                           active: session.id == activeID,
@@ -174,6 +176,7 @@ public final class AppStore {
                                           scratch: session.scratchActive, flagged: session.flagged,
                                           foreground: foreground(session),
                                           splitForeground: splitForeground(session), status: status,
+                                          statusPane: statusPane,
                                           background: session.backgroundWatermark)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,

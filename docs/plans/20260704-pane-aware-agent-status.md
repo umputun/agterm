@@ -205,9 +205,9 @@ overlay surfaces inject no `AGTERM_PANE` (single-command runners; harmless nil�
 - Modify: `agtermCore/Sources/agtermCore/AppStore.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTests.swift`
 
-- [ ] at the `ControlSessionNode(...)` construction (`AppStore.swift:170`), pass `statusPane` from the indicator, gated on the SAME non-idle condition as `status` (idle → nil), so the read-back is never self-contradictory (`status == nil` while `statusPane == "right"`)
-- [ ] write tests: a non-idle session with `statusPane == .right` yields a node with `statusPane == "right"`; an idle session yields BOTH `status == nil` and `statusPane == nil` (even if the indicator carried a pane)
-- [ ] run `cd agtermCore && swift test`, `make lint` — must pass before next task
+- [x] at the `ControlSessionNode(...)` construction (`AppStore.swift:170`), pass `statusPane` from the indicator, gated on the SAME non-idle condition as `status` (idle → nil), so the read-back is never self-contradictory (`status == nil` while `statusPane == "right"`)
+- [x] write tests: a non-idle session with `statusPane == .right` yields a node with `statusPane == "right"`; an idle session yields BOTH `status == nil` and `statusPane == nil` (even if the indicator carried a pane)
+- [x] run `cd agtermCore && swift test`, `make lint` — must pass before next task
 
 ### Task 5: CLI — session status --pane
 

@@ -756,7 +756,7 @@ struct AppStoreTests {
         b.scratchActive = true
         b.flagged = true
         b.backgroundWatermark = BackgroundWatermark(kind: .text, text: "PROD")
-        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: b.id)
+        store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: b.id)
         store.selectSession(b.id)
 
         let tree = store.controlTree()
@@ -772,9 +772,48 @@ struct AppStoreTests {
             ControlSessionNode(id: b.id.uuidString, name: "remote:~/b", cwd: "/live/b",
                                title: "remote:~/b", active: true, split: true,
                                overlay: true, scratch: true, flagged: true,
-                               status: "blocked",
+                               status: "blocked", statusPane: "right",
                                background: BackgroundWatermark(kind: .text, text: "PROD"))
         ])
+    }
+
+    @Test func controlTreeReportsStatusPaneForNonIdleSession() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: session.id)
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        #expect(node.status == "blocked")
+        #expect(node.statusPane == "right")
+    }
+
+    @Test func controlTreeNilsStatusPaneWhenIdleEvenWithPane() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        // an idle indicator carrying a pane must project BOTH status and statusPane as nil, never a
+        // self-contradictory (status == nil while statusPane == "right") node
+        store.setAgentIndicator(AgentIndicator(status: .idle, statusPane: .right), forSession: session.id)
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        #expect(node.status == nil)
+        #expect(node.statusPane == nil)
+    }
+
+    @Test func controlTreeOmitsStatusPaneWhenNonIdleButUnspecified() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        // non-idle status with no pane recorded: status present, statusPane stays nil
+        store.setAgentIndicator(AgentIndicator(status: .completed), forSession: session.id)
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        #expect(node.status == "completed")
+        #expect(node.statusPane == nil)
     }
 
     @Test func controlTreeUsesForegroundLookups() throws {
