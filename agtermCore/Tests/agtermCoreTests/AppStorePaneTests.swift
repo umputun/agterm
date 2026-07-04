@@ -199,6 +199,36 @@ struct AppStorePaneTests {
         #expect(split.teardownCount == 1)                  // the promoted surface is torn down exactly once
     }
 
+    // Regression (the fix `handlePaneExit` routes to): promote a survivor into the main slot, split AGAIN,
+    // then exit the (promoted) MAIN pane. Because the survivor's role is now primary, its exit runs
+    // `closePrimaryPane` — which must collapse onto the FRESH right pane (promote it, tear down the exited
+    // main), not the stale `closeSplitPane` that would tear down the new split and strand the dead main.
+    @Test func closePrimaryPaneAfterPromotionAndResplitCollapsesToNewSplit() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let primary = SpySurface(); session.surface = primary
+        let firstSplit = SpySurface(); session.splitSurface = firstSplit
+        session.isSplit = true
+        session.hasSplit = true
+        session.splitFocused = true
+        store.closePrimaryPane(session.id)                 // primary exits → firstSplit promoted into main
+        #expect(session.surface === firstSplit)            // precondition: firstSplit is now the sole pane
+        #expect(session.splitSurface == nil)
+        // re-split the promoted single pane: a fresh right pane mounts beside the survivor.
+        let secondSplit = SpySurface(); session.splitSurface = secondSplit
+        session.isSplit = true
+        session.hasSplit = true
+        session.splitFocused = true
+        store.closePrimaryPane(session.id)                 // the promoted MAIN pane's own exit routes here
+        #expect(store.session(withID: session.id) != nil)  // session survives — the split is promoted, not lost
+        #expect(session.surface === secondSplit)           // the FRESH right pane took over the main slot
+        #expect(session.splitSurface == nil)
+        #expect(secondSplit.promotedCount == 1)            // it was promoted, not torn down
+        #expect(secondSplit.teardownCount == 0)
+        #expect(firstSplit.teardownCount == 1)             // the exited (promoted) main pane is torn down
+    }
+
     @Test func closePrimaryPaneWithoutSplitClosesSession() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

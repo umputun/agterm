@@ -212,20 +212,9 @@ struct agtermApp: App {
                                       initialInput: plan.initialInput, env: env)
         view.session = session
         let sessionID = session.id
-        view.onExit = {
-            store.closePrimaryPane(sessionID)
-            // a promoted survivor was built by makeSplitSurface (which omits onFontSizeChange); as the
-            // session's now-sole pane it should persist its own cmd +/- like a real primary, so adopt that
-            // wiring. no-op when the session closed instead (single pane) — `surface` is then nil.
-            if let promoted = store.session(withID: sessionID)?.surface as? GhosttySurfaceView {
-                promoted.onFontSizeChange = { store.setFontSize(sessionID, $0) }
-            }
-            // focus the surviving (now maximized) pane; if the whole (single) session closed instead,
-            // focus the session it reselected to. the collapse/switch re-hosts the target, so use the retry.
-            // resolve through `topmostSurface`, so a pane exiting under an overlay or scratch hands focus to
-            // the cover on top rather than to the pane it hides.
-            let target = store.session(withID: sessionID)?.topmostSurface ?? store.activeSession?.topmostSurface
-            (target as? GhosttySurfaceView)?.focusAfterReparent()
+        view.onExit = { [weak view] in
+            guard let view else { return }
+            Self.handlePaneExit(view, store: store, sessionID: sessionID)
         }
         view.onFocusChange = { focused in
             guard focused else { return }
@@ -245,6 +234,33 @@ struct agtermApp: App {
         view.onFontSizeChange = { store.setFontSize(sessionID, $0) }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
         return view
+    }
+
+    /// Shell-exit handler shared by BOTH pane factories, dispatched on the surface's CURRENT role rather
+    /// than the factory that built it: a promoted split survivor (built by `makeSplitSurface`, then moved
+    /// into the main slot with `isSplitPane` cleared) must run `closePrimaryPane` on its own exit — else
+    /// a re-split followed by exiting the main pane fires the stale `closeSplitPane`, whose guard now
+    /// passes (both slots live) and tears down the fresh right pane, stranding the session on the dead
+    /// left one. Mirrors the role-aware `onFocusChange` so fresh and promoted panes route the same way.
+    @MainActor
+    private static func handlePaneExit(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID) {
+        if view.isSplitPane {
+            store.closeSplitPane(sessionID)
+        } else {
+            store.closePrimaryPane(sessionID)
+            // a promoted survivor was built by makeSplitSurface (which omits onFontSizeChange); as the
+            // session's now-sole pane it should persist its own cmd +/- like a real primary, so adopt that
+            // wiring. no-op when the session closed instead (single pane) — `surface` is then nil.
+            if let promoted = store.session(withID: sessionID)?.surface as? GhosttySurfaceView {
+                promoted.onFontSizeChange = { store.setFontSize(sessionID, $0) }
+            }
+        }
+        // focus the surviving (now maximized) pane; if the whole session closed instead, focus the session
+        // it reselected to. the collapse/switch re-hosts the target, so use the retry.
+        // resolve through `topmostSurface`, so a pane exiting under an overlay or scratch hands focus to
+        // the cover on top rather than to the pane it hides.
+        let target = store.session(withID: sessionID)?.topmostSurface ?? store.activeSession?.topmostSurface
+        (target as? GhosttySurfaceView)?.focusAfterReparent()
     }
 
     /// The `initial_input` for a restored pane: the captured foreground argv re-rendered as a shell
@@ -349,14 +365,9 @@ struct agtermApp: App {
         view.session = session
         view.isSplitPane = true
         let sessionID = session.id
-        view.onExit = {
-            store.closeSplitPane(sessionID)
-            // focus the surviving (now maximized) pane; if the whole session closed (primary already
-            // exited), focus the session it reselected to. the collapse/switch re-hosts it, so retry.
-            // resolve through `topmostSurface`, so a pane exiting under an overlay or scratch hands focus to
-            // the cover on top rather than to the pane it hides.
-            let target = store.session(withID: sessionID)?.topmostSurface ?? store.activeSession?.topmostSurface
-            (target as? GhosttySurfaceView)?.focusAfterReparent()
+        view.onExit = { [weak view] in
+            guard let view else { return }
+            Self.handlePaneExit(view, store: store, sessionID: sessionID)
         }
         view.onFocusChange = { [weak view] focused in
             guard focused else { return }

@@ -20,6 +20,13 @@ public protocol TerminalSurface: AnyObject {
     func promoteToPrimaryPane()
 }
 
+public extension TerminalSurface {
+    /// Default no-op so adding this requirement stays source-compatible for conformers that route
+    /// pwd/title reports role-agnostically and have nothing to reassign. `GhosttySurfaceView` overrides
+    /// it (dynamically dispatched via the witness table) to clear its split-role flag.
+    func promoteToPrimaryPane() {}
+}
+
 /// The direction the search selection steps, in agterm's natural convention:
 /// `next` = forward = visually DOWN the screen (toward newer output), `previous` = back = visually UP
 /// (toward older scrollback). Host-free so the inversion to libghostty's own `navigate_search` strings is
