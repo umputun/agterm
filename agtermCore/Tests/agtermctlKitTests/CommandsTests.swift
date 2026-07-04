@@ -375,6 +375,27 @@ struct CommandsTests {
         #expect(validationMessage(["session", "status", "blocked", "--color", "nope"]) == "color must be a #rrggbb hex value")
     }
 
+    @Test func sessionStatusWithPane() throws {
+        let expected = ControlRequest(cmd: .sessionStatus, target: "s1",
+                                      args: ControlArgs(pane: "right", status: "blocked"))
+        #expect(try request(["session", "status", "blocked", "--pane", "right", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionStatusWithPaneScratch() throws {
+        let req = try request(["session", "status", "blocked", "--pane", "scratch"])
+        #expect(req.args?.pane == "scratch")
+    }
+
+    @Test func sessionStatusWithoutPaneOmitsIt() throws {
+        let req = try request(["session", "status", "blocked"])
+        #expect(req.args?.pane == nil)
+    }
+
+    @Test func sessionStatusRejectsBadPane() {
+        // `other` is a session.focus mode, not a status pane — status accepts left|right|scratch only.
+        #expect(validationMessage(["session", "status", "blocked", "--pane", "other"]) == "--pane must be left, right, or scratch")
+    }
+
     @Test func sessionSearchWithNeedle() throws {
         let expected = ControlRequest(cmd: .sessionSearch, target: "active", args: ControlArgs(text: "error"))
         #expect(try request(["session", "search", "error"]) == expected)
