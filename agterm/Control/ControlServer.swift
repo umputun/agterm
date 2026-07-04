@@ -346,13 +346,9 @@ final class ControlServer {
                 .sessionFocus, .sessionResize, .sessionStatus, .sessionFlag, .notify,
                 .fontInc, .fontDec, .fontReset, .keymapReload, .configReload, .themeSet, .themeList,
                 .sidebar, .sidebarMode, .sidebarExpand, .sidebarCollapse, .sessionType, .sessionCopy,
-                .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResult:
+                .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResult, .sessionBackground,
+                .sessionText, .restoreClear:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
-        case .sessionBackground:
-            return setBackground(request.target, request.args)
-        case .sessionText:
-            return readText(request.target, window: request.args?.window, pane: request.args?.pane,
-                            all: request.args?.all ?? false, lines: request.args?.lines)
         case .sessionSearch:
             // resolve first (cross-window when no `args.window`), then select + realize the surface; the
             // realize path is async (bounded poll), so this can't go through the synchronous
@@ -383,8 +379,6 @@ final class ControlServer {
             return windowMove(request.target, x: request.args?.x, y: request.args?.y, display: request.args?.display)
         case .windowZoom:
             return windowZoom(request.target)
-        case .restoreClear:
-            return clearSavedCommands()
         }
     }
 
@@ -393,7 +387,7 @@ final class ControlServer {
     /// (consumed at restore); the SAVE is what wipes the on-disk copy from the last quit, also closing
     /// the force-quit re-fire window. Drives `restore.clear` / `agtermctl restore clear`. App-global like
     /// `keymap.reload` (no `--window` selector — it clears every open window).
-    private func clearSavedCommands() -> ControlResponse {
+    func clearRestoreCommands() -> ControlResponse {
         for session in library.allOpenSessions() {
             session.foregroundCommand = nil
             session.splitForegroundCommand = nil

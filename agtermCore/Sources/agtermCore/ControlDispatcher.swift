@@ -40,6 +40,10 @@ public protocol ControlActions {
                             options: ControlSessionOverlayOpenOptions) -> ControlResponse
     func closeSessionOverlay(_ target: String?, window: String?) -> ControlResponse
     func sessionOverlayResult(_ target: String?, window: String?) -> ControlResponse
+    func setSessionBackground(_ target: String?, window: String?,
+                              options: ControlSessionBackgroundOptions) -> ControlResponse
+    func readSessionText(_ target: String?, window: String?, options: ControlSessionTextOptions) -> ControlResponse
+    func clearRestoreCommands() -> ControlResponse
 }
 
 public struct ControlSessionTypeOptions: Equatable, Sendable {
@@ -70,6 +74,26 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
     }
 }
 
+public struct ControlSessionBackgroundOptions: Equatable, Sendable {
+    public let watermark: BackgroundWatermark?
+
+    public init(watermark: BackgroundWatermark?) {
+        self.watermark = watermark
+    }
+}
+
+public struct ControlSessionTextOptions: Equatable, Sendable {
+    public let pane: String?
+    public let all: Bool
+    public let lines: Int?
+
+    public init(pane: String?, all: Bool, lines: Int?) {
+        self.pane = pane
+        self.all = all
+        self.lines = lines
+    }
+}
+
 /// Routes the command groups that have been hoisted from the app control switch. Commands outside this
 /// first migrated set return nil so the app can keep handling them in its existing switch.
 @MainActor
@@ -84,6 +108,27 @@ public struct ControlDispatcher {
         switch request.cmd {
         case .tree:
             return actions.controlTree(window: request.args?.window)
+        case .sessionNew, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
+                .sessionMove, .sessionFlag, .sessionStatus:
+            return dispatchSessionCommand(request)
+        case .sessionSplit, .sessionScratch, .sessionFocus, .sessionResize, .sessionType,
+                .sessionCopy, .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResult,
+                .sessionBackground, .sessionText:
+            return await dispatchSessionSurfaceCommand(request)
+        case .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete,
+                .workspaceMove, .workspaceFocus:
+            return dispatchWorkspaceCommand(request)
+        case .fontInc, .fontDec, .fontReset, .keymapReload, .configReload, .notify,
+                .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarExpand,
+                .sidebarCollapse, .restoreClear:
+            return dispatchAppCommand(request)
+        default:
+            return nil
+        }
+    }
+
+    private func dispatchSessionCommand(_ request: ControlRequest) -> ControlResponse {
+        switch request.cmd {
         case .sessionNew:
             let args = request.args
             if args?.workspace != nil, args?.workspaceName != nil {
@@ -116,18 +161,6 @@ public struct ControlDispatcher {
                 return ControlResponse(ok: false, error: "session.rename requires a name")
             }
             return actions.renameSession(request.target, window: request.args?.window, name: name)
-        case .workspaceNew:
-            return actions.createWorkspace(window: request.args?.window, name: request.args?.name)
-        case .workspaceSelect:
-            return actions.selectWorkspace(request.target, window: request.args?.window)
-        case .workspaceRename:
-            guard let name = request.args?.name?.trimmingCharacters(in: .whitespacesAndNewlines),
-                  !name.isEmpty else {
-                return ControlResponse(ok: false, error: "workspace.rename requires a name")
-            }
-            return actions.renameWorkspace(request.target, window: request.args?.window, name: name)
-        case .workspaceDelete:
-            return actions.deleteWorkspace(request.target, window: request.args?.window)
         case .sessionMove:
             if request.args?.to != nil && request.args?.workspace != nil {
                 return ControlResponse(ok: false, error: "session.move takes either --to or a workspace, not both")
@@ -142,16 +175,6 @@ public struct ControlDispatcher {
                 return ControlResponse(ok: false, error: "session.move requires --to or a workspace")
             }
             return actions.moveSession(request.target, window: request.args?.window, move: .workspace(workspace))
-        case .workspaceMove:
-            guard let to = request.args?.to else {
-                return ControlResponse(ok: false, error: "workspace.move requires --to")
-            }
-            guard let direction = ReorderDirection(rawValue: to) else {
-                return ControlResponse(ok: false, error: "workspace.move --to must be up|down|top|bottom")
-            }
-            return actions.moveWorkspace(request.target, window: request.args?.window, direction: direction)
-        case .workspaceFocus:
-            return actions.focusWorkspace(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionFlag:
             return actions.setSessionFlag(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionStatus:
@@ -162,6 +185,41 @@ public struct ControlDispatcher {
                                                     autoReset: request.args?.autoReset,
                                                     sound: request.args?.sound)
             return actions.setSessionStatus(request.target, window: request.args?.window, update: update)
+        default:
+            preconditionFailure("unexpected session command: \(request.cmd.rawValue)")
+        }
+    }
+
+    private func dispatchWorkspaceCommand(_ request: ControlRequest) -> ControlResponse {
+        switch request.cmd {
+        case .workspaceNew:
+            return actions.createWorkspace(window: request.args?.window, name: request.args?.name)
+        case .workspaceSelect:
+            return actions.selectWorkspace(request.target, window: request.args?.window)
+        case .workspaceRename:
+            guard let name = request.args?.name?.trimmedOrNil else {
+                return ControlResponse(ok: false, error: "workspace.rename requires a name")
+            }
+            return actions.renameWorkspace(request.target, window: request.args?.window, name: name)
+        case .workspaceDelete:
+            return actions.deleteWorkspace(request.target, window: request.args?.window)
+        case .workspaceMove:
+            guard let to = request.args?.to else {
+                return ControlResponse(ok: false, error: "workspace.move requires --to")
+            }
+            guard let direction = ReorderDirection(rawValue: to) else {
+                return ControlResponse(ok: false, error: "workspace.move --to must be up|down|top|bottom")
+            }
+            return actions.moveWorkspace(request.target, window: request.args?.window, direction: direction)
+        case .workspaceFocus:
+            return actions.focusWorkspace(request.target, window: request.args?.window, mode: request.args?.mode)
+        default:
+            preconditionFailure("unexpected workspace command: \(request.cmd.rawValue)")
+        }
+    }
+
+    private func dispatchSessionSurfaceCommand(_ request: ControlRequest) async -> ControlResponse {
+        switch request.cmd {
         case .sessionSplit:
             return actions.splitSession(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionScratch:
@@ -180,6 +238,48 @@ public struct ControlDispatcher {
             case (nil, .some(let delta)):
                 return actions.resizeSplit(request.target, window: request.args?.window, resize: .delta(delta))
             }
+        case .sessionType:
+            guard let text = request.args?.text else {
+                return ControlResponse(ok: false, error: "session.type requires text")
+            }
+            return await actions.typeSession(request.target, window: request.args?.window,
+                                             options: ControlSessionTypeOptions(
+                                                text: text,
+                                                select: request.args?.select ?? false,
+                                                pane: request.args?.pane
+                                             ))
+        case .sessionCopy:
+            return actions.copySessionSelection(request.target, window: request.args?.window)
+        case .sessionOverlayOpen:
+            guard let command = request.args?.command, !command.isEmpty else {
+                return ControlResponse(ok: false, error: "session.overlay.open requires a command")
+            }
+            if let color = request.args?.color, !WatermarkConfig.isValidColorHex(color) {
+                return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
+            }
+            return actions.openSessionOverlay(request.target, window: request.args?.window,
+                                              options: ControlSessionOverlayOpenOptions(
+                                                command: command,
+                                                cwd: request.args?.cwd,
+                                                wait: request.args?.wait ?? false,
+                                                sizePercent: request.args?.sizePercent,
+                                                backgroundColor: request.args?.color
+                                              ))
+        case .sessionOverlayClose:
+            return actions.closeSessionOverlay(request.target, window: request.args?.window)
+        case .sessionOverlayResult:
+            return actions.sessionOverlayResult(request.target, window: request.args?.window)
+        case .sessionBackground:
+            return dispatchSessionBackground(request)
+        case .sessionText:
+            return dispatchSessionText(request)
+        default:
+            preconditionFailure("unexpected session surface command: \(request.cmd.rawValue)")
+        }
+    }
+
+    private func dispatchAppCommand(_ request: ControlRequest) -> ControlResponse {
+        switch request.cmd {
         case .fontInc:
             return actions.font(request.target, window: request.args?.window, action: "increase_font_size:1")
         case .fontDec:
@@ -214,39 +314,85 @@ public struct ControlDispatcher {
             return actions.expandSidebar(window: request.args?.window)
         case .sidebarCollapse:
             return actions.collapseSidebar(window: request.args?.window)
-        case .sessionType:
-            guard let text = request.args?.text else {
-                return ControlResponse(ok: false, error: "session.type requires text")
+        case .restoreClear:
+            return actions.clearRestoreCommands()
+        default:
+            preconditionFailure("unexpected app command: \(request.cmd.rawValue)")
+        }
+    }
+
+    private func dispatchSessionBackground(_ request: ControlRequest) -> ControlResponse {
+        // The args bag is normalized into the option struct here so the app-side adapter stays a small
+        // fixed-arity signature (swiftlint function_parameter_count) rather than a 10-parameter dispatch.
+        if let fit = request.args?.fit, !WatermarkConfig.isValidFit(fit) {
+            return ControlResponse(ok: false, error: "invalid fit: \(fit) (contain|cover|stretch|none)")
+        }
+        if let position = request.args?.position, !WatermarkConfig.isValidPosition(position) {
+            return ControlResponse(ok: false, error: "invalid position: \(position)")
+        }
+        if let opacity = request.args?.opacity, !WatermarkConfig.isValidOpacity(opacity) {
+            return ControlResponse(ok: false, error: "invalid opacity: \(opacity) (0.0-1.0)")
+        }
+        let watermark: BackgroundWatermark?
+        switch request.args?.mode {
+        case "image":
+            guard let path = request.args?.path, !path.isEmpty else {
+                return ControlResponse(ok: false, error: "session.background image requires a path")
             }
-            return await actions.typeSession(request.target, window: request.args?.window,
-                                             options: ControlSessionTypeOptions(
-                                                text: text,
-                                                select: request.args?.select ?? false,
-                                                pane: request.args?.pane
-                                             ))
-        case .sessionCopy:
-            return actions.copySessionSelection(request.target, window: request.args?.window)
-        case .sessionOverlayOpen:
-            guard let command = request.args?.command, !command.isEmpty else {
-                return ControlResponse(ok: false, error: "session.overlay.open requires a command")
+            guard WatermarkConfig.isValidImagePath(path) else {
+                return ControlResponse(ok: false, error: "image path must not contain control characters")
+            }
+            watermark = BackgroundWatermark(kind: .image, imagePath: path, opacity: request.args?.opacity,
+                                            fit: request.args?.fit.flatMap(BackgroundWatermark.Fit.init(rawValue:)),
+                                            position: request.args?.position.flatMap(BackgroundWatermark.Position.init(rawValue:)),
+                                            repeats: request.args?.repeats)
+        case "text":
+            guard let text = request.args?.text, !text.isEmpty else {
+                return ControlResponse(ok: false, error: "session.background text requires text")
+            }
+            guard text.count <= WatermarkConfig.maxTextLength else {
+                return ControlResponse(ok: false,
+                                       error: "session.background text too long (max \(WatermarkConfig.maxTextLength) characters)")
             }
             if let color = request.args?.color, !WatermarkConfig.isValidColorHex(color) {
                 return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
             }
-            return actions.openSessionOverlay(request.target, window: request.args?.window,
-                                              options: ControlSessionOverlayOpenOptions(
-                                                command: command,
-                                                cwd: request.args?.cwd,
-                                                wait: request.args?.wait ?? false,
-                                                sizePercent: request.args?.sizePercent,
-                                                backgroundColor: request.args?.color
-                                              ))
-        case .sessionOverlayClose:
-            return actions.closeSessionOverlay(request.target, window: request.args?.window)
-        case .sessionOverlayResult:
-            return actions.sessionOverlayResult(request.target, window: request.args?.window)
+            watermark = BackgroundWatermark(kind: .text, text: text, colorHex: request.args?.color,
+                                            opacity: request.args?.opacity,
+                                            fit: request.args?.fit.flatMap(BackgroundWatermark.Fit.init(rawValue:)),
+                                            position: request.args?.position.flatMap(BackgroundWatermark.Position.init(rawValue:)))
+        case "color":
+            // No per-call opacity: a solid color honors the window translucency set in Settings, applied at
+            // emit time via `WatermarkConfig.overlayText(windowOpacity:)` (see `GhosttySurfaceView`).
+            guard let color = request.args?.color, !color.isEmpty else {
+                return ControlResponse(ok: false, error: "session.background color requires a color")
+            }
+            guard WatermarkConfig.isValidColorHex(color) else {
+                return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
+            }
+            watermark = BackgroundWatermark(kind: .color, colorHex: color)
+        case "clear", .none:
+            watermark = nil
         default:
-            return nil
+            return ControlResponse(ok: false,
+                                   error: "invalid background mode: \(request.args?.mode ?? "") (image|text|color|clear)")
         }
+        return actions.setSessionBackground(request.target, window: request.args?.window,
+                                            options: ControlSessionBackgroundOptions(watermark: watermark))
+    }
+
+    private func dispatchSessionText(_ request: ControlRequest) -> ControlResponse {
+        let all = request.args?.all ?? false
+        let lines = request.args?.lines
+        if all, lines != nil {
+            return ControlResponse(ok: false, error: "use either --all or --lines, not both")
+        }
+        if let lines, lines <= 0 {
+            return ControlResponse(ok: false, error: "--lines must be greater than 0")
+        }
+        return actions.readSessionText(request.target, window: request.args?.window,
+                                       options: ControlSessionTextOptions(pane: request.args?.pane,
+                                                                          all: all,
+                                                                          lines: lines))
     }
 }
