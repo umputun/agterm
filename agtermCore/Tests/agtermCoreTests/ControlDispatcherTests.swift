@@ -136,6 +136,106 @@ struct ControlDispatcherTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func sessionNewRoutesPlacementOptions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSessionNewResponse = ControlResponse(ok: true, result: ControlResult(id: "new-session"))
+
+        let after = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew,
+            args: ControlArgs(after: "active")
+        ))
+        let before = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew,
+            args: ControlArgs(before: "anchor")
+        ))
+
+        #expect(after == ControlResponse(ok: true, result: ControlResult(id: "new-session")))
+        #expect(before == ControlResponse(ok: true, result: ControlResult(id: "new-session")))
+        #expect(actions.calls == [
+            .sessionNew(ControlSessionCreateOptions(window: nil, cwd: nil, workspace: nil, workspaceName: nil,
+                                                    createWorkspace: nil, command: nil, name: nil, after: "active")),
+            .sessionNew(ControlSessionCreateOptions(window: nil, cwd: nil, workspace: nil, workspaceName: nil,
+                                                    createWorkspace: nil, command: nil, name: nil, before: "anchor"))
+        ])
+    }
+
+    @Test func sessionNewRejectsConflictingPlacementArguments() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let bothAnchors = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew,
+            args: ControlArgs(after: "a", before: "b")
+        ))
+        let anchorAndWorkspace = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew,
+            args: ControlArgs(workspace: "dest", after: "a")
+        ))
+        let anchorAndWorkspaceName = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew,
+            args: ControlArgs(workspaceName: "servers", before: "a")
+        ))
+
+        #expect(bothAnchors == ControlResponse(ok: false, error: "use either --after or --before, not both"))
+        #expect(anchorAndWorkspace == ControlResponse(
+            ok: false, error: "session.new takes --after/--before or a workspace, not both"))
+        #expect(anchorAndWorkspaceName == ControlResponse(
+            ok: false, error: "session.new takes --after/--before or a workspace, not both"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionMoveRoutesPlacementForms() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let after = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "session",
+            args: ControlArgs(window: "win", after: "anchor")
+        ))
+        let before = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "session",
+            args: ControlArgs(before: "anchor")
+        ))
+
+        #expect(after == ControlResponse(ok: true))
+        #expect(before == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .sessionMove(target: "session", window: "win", .place(anchor: "anchor", after: true)),
+            .sessionMove(target: "session", window: nil, .place(anchor: "anchor", after: false))
+        ])
+    }
+
+    @Test func sessionMoveRejectsConflictingPlacementForms() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let bothAnchors = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "active",
+            args: ControlArgs(after: "a", before: "b")
+        ))
+        let anchorAndTo = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "active",
+            args: ControlArgs(to: "up", after: "a")
+        ))
+        let anchorAndWorkspace = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "active",
+            args: ControlArgs(workspace: "dest", before: "a")
+        ))
+
+        #expect(bothAnchors == ControlResponse(ok: false, error: "use either --after or --before, not both"))
+        #expect(anchorAndTo == ControlResponse(
+            ok: false, error: "session.move takes --after/--before or --to, not both"))
+        #expect(anchorAndWorkspace == ControlResponse(
+            ok: false, error: "session.move takes --after/--before or a workspace, not both"))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func sessionSelectGoCloseAndRenameRouteThroughActions() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

@@ -137,6 +137,13 @@ public struct ControlDispatcher {
         switch request.cmd {
         case .sessionNew:
             let args = request.args
+            if args?.after != nil, args?.before != nil {
+                return ControlResponse(ok: false, error: "use either --after or --before, not both")
+            }
+            // The anchor sid carries its own workspace, so placement can't also name one.
+            if args?.after != nil || args?.before != nil, args?.workspace != nil || args?.workspaceName != nil {
+                return ControlResponse(ok: false, error: "session.new takes --after/--before or a workspace, not both")
+            }
             if args?.workspace != nil, args?.workspaceName != nil {
                 return ControlResponse(ok: false, error: "use either --workspace or --workspace-name, not both")
             }
@@ -150,7 +157,9 @@ public struct ControlDispatcher {
                 workspaceName: args?.workspaceName,
                 createWorkspace: args?.createWorkspace,
                 command: args?.command,
-                name: args?.name
+                name: args?.name,
+                after: args?.after,
+                before: args?.before
             ))
         case .sessionSelect:
             return actions.selectSession(request.target, window: request.args?.window)
@@ -168,19 +177,35 @@ public struct ControlDispatcher {
             }
             return actions.renameSession(request.target, window: request.args?.window, name: name)
         case .sessionMove:
-            if request.args?.to != nil && request.args?.workspace != nil {
+            let args = request.args
+            if args?.after != nil, args?.before != nil {
+                return ControlResponse(ok: false, error: "use either --after or --before, not both")
+            }
+            // Placement mode: the anchor sid self-identifies the destination workspace, so it's
+            // mutually exclusive with --to and with a workspace parameter.
+            if let anchor = args?.after ?? args?.before {
+                if args?.to != nil {
+                    return ControlResponse(ok: false, error: "session.move takes --after/--before or --to, not both")
+                }
+                if args?.workspace != nil {
+                    return ControlResponse(ok: false, error: "session.move takes --after/--before or a workspace, not both")
+                }
+                return actions.moveSession(request.target, window: args?.window,
+                                           move: .place(anchor: anchor, after: args?.after != nil))
+            }
+            if args?.to != nil && args?.workspace != nil {
                 return ControlResponse(ok: false, error: "session.move takes either --to or a workspace, not both")
             }
-            if let to = request.args?.to {
+            if let to = args?.to {
                 guard let direction = ReorderDirection(rawValue: to) else {
                     return ControlResponse(ok: false, error: "session.move --to must be up|down|top|bottom")
                 }
-                return actions.moveSession(request.target, window: request.args?.window, move: .reorder(direction))
+                return actions.moveSession(request.target, window: args?.window, move: .reorder(direction))
             }
-            guard let workspace = request.args?.workspace else {
+            guard let workspace = args?.workspace else {
                 return ControlResponse(ok: false, error: "session.move requires --to or a workspace")
             }
-            return actions.moveSession(request.target, window: request.args?.window, move: .workspace(workspace))
+            return actions.moveSession(request.target, window: args?.window, move: .workspace(workspace))
         case .sessionFlag:
             return actions.setSessionFlag(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionStatus:

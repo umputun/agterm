@@ -175,7 +175,7 @@ host-free logic stays in `agtermCore` (no GhosttyKit/AppKit/CoreGraphics).
 - [x] `cd agtermCore && swift test` — must pass before Task 3.
 
 ### Task 3: Dispatcher — validation + routing for the place mode
-- [ ] `ControlDispatcher.swift` `.sessionMove` arm: extend the guards so exactly one
+- [x] `ControlDispatcher.swift` `.sessionMove` arm: extend the guards so exactly one
       placement intent is set among {positional workspace, `--to`, `--after`/`--before`}.
       Emit clear errors:
       - `--after` + `--before` → `"use either --after or --before, not both"`.
@@ -185,13 +185,13 @@ host-free logic stays in `agtermCore` (no GhosttyKit/AppKit/CoreGraphics).
         workspace, not both"` (the anchor already names the workspace).
       Then route to `actions.moveSession(request.target, window:, move: .place(anchor:,
       after:))`. Leave the existing `--to`/workspace/neither branches intact.
-- [ ] `ControlDispatcher.swift` `.sessionNew` arm: reject `--after`/`--before` combined
+- [x] `ControlDispatcher.swift` `.sessionNew` arm: reject `--after`/`--before` combined
       with each other or with `--workspace`/`--workspace-name` (the anchor names the
       workspace), then pass `after`/`before` through into `ControlSessionCreateOptions`.
-- [ ] `ControlDispatcherTests.swift`: add tests using the existing mock `ControlActions`
+- [x] `ControlDispatcherTests.swift`: add tests using the existing mock `ControlActions`
       — assert each new error string, and that a valid `--after`/`--before` produces the
       right `ControlSessionMove.place`/`ControlSessionCreateOptions` handed to the mock.
-- [ ] `cd agtermCore && swift test` — must pass before Task 4.
+- [x] `cd agtermCore && swift test` — must pass before Task 4.
 
 ### Task 4: App-side ControlActions — resolve the anchor and place
 - [ ] `ControlServer+SessionActions.swift` `moveSession(...)`: handle the new
