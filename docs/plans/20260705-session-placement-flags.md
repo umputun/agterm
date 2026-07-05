@@ -265,17 +265,25 @@ host-free logic stays in `agtermCore` (no GhosttyKit/AppKit/CoreGraphics).
       example lines to the `agtermctl` recipe block in both.
 
 ### Task 8: Verify acceptance criteria
-- [ ] `agtermctl session new --after active` creates right after the current session in
-      one round-trip (the discussion's headline case).
-- [ ] `agtermctl session move --after <sid> --target <sid>` positions with no visible
-      step-by-step shuffle; cross-workspace anchor relocates + positions.
-- [ ] All error guards (after+before, after/before vs `--to`, after/before vs workspace,
-      anchor not-found/ambiguous) return clear messages.
-- [ ] `cd agtermCore && swift test` green; `make build` succeeds; `make lint` passes
-      (`--strict`, zero findings).
-- [ ] XCUITest e2e suite passes.
-- [ ] Verify no source file crossed 1000 lines from these edits; if one is close, flag
-      it (do not bump the swiftlint limit).
+- [x] `agtermctl session new --after active` creates right after the current session in
+      one round-trip (functional path verified by e2e
+      `testSessionNewPlaceRelativeToAnchor`; the "watch it land visually" smoke is manual
+      — Post-Completion).
+- [x] `agtermctl session move --after <sid> --target <sid>` positions with no visible
+      step-by-step shuffle; cross-workspace anchor relocates + positions (functional path
+      verified by e2e `testSessionMovePlaceWithinWorkspace` /
+      `testSessionMovePlaceCrossWorkspace`; the "no visible shuffle" visual is manual —
+      Post-Completion).
+- [x] All error guards (after+before, after/before vs `--to`, after/before vs workspace,
+      anchor not-found/ambiguous) return clear messages (dispatcher unit tests +
+      `testSessionMovePlaceRejects*` / `testSessionNewPlaceRejectsConflicts` e2e).
+- [x] `cd agtermCore && swift test` green (1159 tests); `make build` succeeds; `make
+      lint` passes (`--strict`, zero findings).
+- [x] XCUITest e2e suite passes (the 7 new tests added in Task 6).
+- [x] Verify no source file crossed 1000 lines from these edits — clean; only three
+      files exceed 900 lines and all are tests (2000-line budget):
+      `ControlDispatcherTests.swift` (1392), `WindowLibraryTests.swift` (953),
+      `CommandsTests.swift` (938). No source file bump needed.
 
 ## Technical Details
 
