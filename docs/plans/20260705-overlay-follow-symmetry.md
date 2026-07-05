@@ -115,18 +115,18 @@ in the panel geometry (`--size-percent`).
 **Files:**
 - Modify: `agterm/Views/WindowContentView.swift`
 
-- [ ] remove the `SPIKE:` prefixes/notes from the three edited regions (`detailColumn`, `sessionDetail`
+- [x] remove the `SPIKE:` prefixes/notes from the three edited regions (`detailColumn`, `sessionDetail`
       floating sibling, `floatingOverlayPanel`); keep the explanatory comments about the constant-shape
       sibling and the eager-deck mount
-- [ ] FIX now-false in-code comments the spike left: the scratch-block comment (~lines 308-315) still says
+- [x] FIX now-false in-code comments the spike left: the scratch-block comment (~lines 308-315) still says
       "The FLOATING overlay is deliberately NOT a sibling here (it renders as a `detailPane` `.overlay`)" —
       now false (it IS a sibling, `floatingOverlayPanel` at `.zIndex(3)`); and correct the renamed-symbol
       references `floatingOverlayLayer` → `floatingOverlayPanel` (~lines 305-306, 417)
-- [ ] confirm `floatingOverlayPanel` is the sole host of `\.overlaySurface` for the floating case and the
+- [x] confirm `floatingOverlayPanel` is the sole host of `\.overlaySurface` for the floating case and the
       `detailPane` `floatingOverlayLayer` is fully removed (no duplicate surface mount)
-- [ ] `make lint` clean; build the app (Debug) succeeds
-- [ ] run `ControlOverlaySplitUITests` — all pass (render behavior regression; locked further by Task 5)
-- [ ] (no host-free unit test — app-target render; behavior verified by Task 5 e2e)
+- [x] `make lint` clean; build the app (Debug) succeeds
+- [x] run `ControlOverlaySplitUITests` — all pass (render behavior regression; locked further by Task 5)
+- [x] (no host-free unit test — app-target render; behavior verified by Task 5 e2e)
 
 ### Task 2: Add `follow` to the control protocol + dispatcher overlay-open options (agtermCore)
 
