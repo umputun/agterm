@@ -70,6 +70,60 @@ struct AppStoreOrganizationTests {
         #expect(movedRef.customName == "build")
     }
 
+    @Test func addSessionAppendsWhenIndexNil() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: work.id, cwd: "/b")!
+        #expect(store.workspaces[0].sessions.map(\.id) == [a.id, b.id])
+    }
+
+    @Test func addSessionInsertsAtHead() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let head = store.addSession(toWorkspace: work.id, cwd: "/head", at: 0)!
+        #expect(store.workspaces[0].sessions.map(\.id) == [head.id, a.id])
+    }
+
+    @Test func addSessionInsertsAtMiddle() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: work.id, cwd: "/b")!
+        let mid = store.addSession(toWorkspace: work.id, cwd: "/mid", at: 1)!
+        #expect(store.workspaces[0].sessions.map(\.id) == [a.id, mid.id, b.id])
+    }
+
+    @Test func addSessionInsertsAtTail() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let tail = store.addSession(toWorkspace: work.id, cwd: "/tail", at: 1)!
+        #expect(store.workspaces[0].sessions.map(\.id) == [a.id, tail.id])
+    }
+
+    @Test func addSessionClampsNegativeIndexToHead() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let clamped = store.addSession(toWorkspace: work.id, cwd: "/clamped", at: -5)!
+        #expect(store.workspaces[0].sessions.map(\.id) == [clamped.id, a.id])
+    }
+
+    @Test func addSessionClampsOutOfRangeIndexToTail() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let clamped = store.addSession(toWorkspace: work.id, cwd: "/clamped", at: 99)!
+        #expect(store.workspaces[0].sessions.map(\.id) == [a.id, clamped.id])
+    }
+
+    @Test func addSessionUnknownWorkspaceReturnsNilWithIndex() {
+        let store = makeStore()
+        #expect(store.addSession(toWorkspace: UUID(), cwd: "/a", at: 0) == nil)
+    }
+
     @Test func setFlagTogglesAndPersists() {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
         let persistence = PersistenceStore(directory: dir)

@@ -154,23 +154,25 @@ host-free logic stays in `agtermCore` (no GhosttyKit/AppKit/CoreGraphics).
 - [x] `cd agtermCore && swift test` — must pass before Task 2.
 
 ### Task 2: Host-free placement math — `SidebarDrop.resolveRelative` + `AppStore.addSession(at:)`
-- [ ] `SidebarDrop.swift`: add
-      `public static func resolveRelative(sourceWorkspace: UUID, sourceIndex: Int,
-      anchorWorkspace: UUID, anchorIndex: Int, anchorCount: Int, placeAfter: Bool) ->
+- [x] `SidebarDrop.swift`: add
+      `public static func resolveRelative(source: (workspace: UUID, index: Int),
+      anchor: (workspace: UUID, index: Int, count: Int), placeAfter: Bool) ->
       SessionResolution?` — a thin wrapper that builds
-      `SessionDropTarget.sessionRow(owner: anchorWorkspace, sessionIndex: anchorIndex,
-      sessionCount: anchorCount)`, picks `childIndex = placeAfter ? onItemIndex :
-      anchorIndex`, and delegates to `resolveSession(...)`. This reuses the tested
-      after-this-row + post-removal off-by-one + no-op logic; no new arithmetic.
-- [ ] `AppStore.swift`: add an optional `at index: Int? = nil` to `addSession(...)`;
+      `SessionDropTarget.sessionRow(workspace: anchor.workspace, sessionIndex:
+      anchor.index, sessionCount: anchor.count)`, picks `childIndex = placeAfter ?
+      onItemIndex : anchor.index`, and delegates to `resolveSession(...)`. This reuses
+      the tested after-this-row + post-removal off-by-one + no-op logic; no new
+      arithmetic. (Tuple params instead of six scalars to satisfy swiftlint's 5-param
+      cap; the tuples mirror `AppStore.sessionLocation`'s return shape.)
+- [x] `AppStore.swift`: add an optional `at index: Int? = nil` to `addSession(...)`;
       when set, `insert(at:)` at the clamped index (`max(0, min(index, count))`) instead
       of `append`. `nil` keeps today's append behavior (all existing callers unchanged).
-- [ ] Add unit tests for `resolveRelative`: same-workspace before/after (incl. the
+- [x] Add unit tests for `resolveRelative`: same-workspace before/after (incl. the
       downward off-by-one), cross-workspace before/after (no off-by-one), and
       anchor==source → nil (no-op). Place alongside the existing `SidebarDrop` tests.
-- [ ] Add unit tests for `addSession(...at:)`: insert at head/middle/tail, and
+- [x] Add unit tests for `addSession(...at:)`: insert at head/middle/tail, and
       out-of-range index clamps to `0...count`.
-- [ ] `cd agtermCore && swift test` — must pass before Task 3.
+- [x] `cd agtermCore && swift test` — must pass before Task 3.
 
 ### Task 3: Dispatcher — validation + routing for the place mode
 - [ ] `ControlDispatcher.swift` `.sessionMove` arm: extend the guards so exactly one

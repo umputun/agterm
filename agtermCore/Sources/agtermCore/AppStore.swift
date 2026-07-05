@@ -214,15 +214,23 @@ public final class AppStore {
         return workspace(named: needle) ?? addWorkspace(name: needle)
     }
 
-    /// Creates a session in the given workspace, appends it, and selects it.
-    /// An optional `name` seeds the session's `customName` (trimmed; blank clears it
-    /// to the auto basename, matching `renameSession`). Returns nil if no workspace matches.
+    /// Creates a session in the given workspace and selects it. An optional `name` seeds the session's
+    /// `customName` (trimmed; blank clears it to the auto basename, matching `renameSession`). With `at`
+    /// nil the session is appended (the default); with `at` set it is inserted at the clamped index
+    /// (`0...count`), backing the control `session.new --after`/`--before` placement. Returns nil if no
+    /// workspace matches.
     @discardableResult
-    public func addSession(toWorkspace workspaceID: UUID, cwd: String, command: String? = nil, name: String? = nil) -> Session? {
-        guard let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
+    public func addSession(toWorkspace workspaceID: UUID, cwd: String, command: String? = nil,
+                           name: String? = nil, at index: Int? = nil) -> Session? {
+        guard let wsIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
         let session = Session(initialCwd: cwd, customName: name?.trimmedOrNil)
         session.initialCommand = command
-        workspaces[index].sessions.append(session)
+        if let index {
+            let destination = max(0, min(index, workspaces[wsIndex].sessions.count))
+            workspaces[wsIndex].sessions.insert(session, at: destination)
+        } else {
+            workspaces[wsIndex].sessions.append(session)
+        }
         selectedSessionID = session.id
         autoUnfocusIfOutsideFocus(session.id) // a control-driven add into another workspace must reveal it
         recordRecency()
