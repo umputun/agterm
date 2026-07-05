@@ -45,8 +45,12 @@ paths:
   which shell received the keystrokes and that focus follows.
 - **Simulating a macOS light/dark flip: the `debug.appearance` control seam.**
   macOS XCUITest has no API to change the system appearance, so `AppearanceFlipUITests` drives the
-  UI-test-only `debug.appearance` command (`light`|`dark`), which sets `NSApp.appearance` — firing
-  `viewDidChangeEffectiveAppearance` on every view, i.e. the REAL flip path end to end.
+  UI-test-only `debug.appearance` command (`light`|`dark`), which sets `NSApp.appearance` AND posts
+  `.agtermSystemAppearanceChanged` directly, driving the REAL flip path (scheme sync → debounced
+  zoom-preserving reload) end to end.
+  Production follows the appearance via an app-level KVO observer on `NSApplication.effectiveAppearance`
+  (`SystemAppearanceObserver`); the seam posts the notification itself so the test does not depend on
+  whether KVO fires on an explicit `NSApp.appearance` set.
   The arm is refused outside an XCUITest launch and is keep-in-sync EXEMPT (see [[control-api]]).
   Set an explicit STARTING side first so the test is independent of the machine's appearance,
   assert the response's echoed side to prove the flip reached the app,

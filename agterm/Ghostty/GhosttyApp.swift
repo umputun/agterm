@@ -252,7 +252,7 @@ final class GhosttyApp {
     /// risking a use-after-free. Returns the rebuilt config's diagnostic count (0 = clean) so a
     /// Reload Config can warn the user about a malformed `ghostty.conf`.
     @discardableResult
-    func reloadConfig(surfaces: [GhosttySurfaceView]) -> Int {
+    func reloadConfig(surfaces: [GhosttySurfaceView], isDark: Bool) -> Int {
         // no app (called before `ghostty_app_new` succeeded) or `ghostty_config_new` allocation failure:
         // nothing was re-read, so report the last known count. The property name is "from the most recent
         // loadConfig", and both paths are effectively unreachable in practice (the app is always booted
@@ -260,12 +260,15 @@ final class GhosttyApp {
         guard let app else { return lastConfigDiagnosticsCount }
         let inputs = Self.resolveConfigInputs()
         guard let newConfig = loadConfig(inputs) else { return lastConfigDiagnosticsCount }
-        // re-assert each surface's light/dark scheme from its LIVE appearance BEFORE feeding the config:
-        // libghostty re-resolves a dual `theme = light:,dark:` to the side matching the surface's recorded
-        // conditional state, so a surface whose state lagged would otherwise re-derive the wrong side and a
-        // dark-theme change (or the initial dark launch) wouldn't reach the terminal. Cheap (no-op when
-        // unchanged), and the config re-feed below is what actually re-renders.
-        for surface in surfaces { surface.syncColorScheme() }
+        // Re-assert the app + each surface's light/dark scheme from the authoritative `isDark` (the
+        // KVO-delivered side, else `currentIsDark()`) BEFORE feeding the config: libghostty re-resolves a
+        // dual `theme = light:,dark:` to the side matching the recorded conditional state, so a stale side
+        // would re-derive the wrong theme. Setting the APP scheme here (not only per surface) makes a
+        // ZERO-surface reload chrome-correct — the CONFIG_CHANGE clone below resolves to `isDark` even with
+        // no surfaces, so a dark launch re-sides the sidebar/titlebar before any surface exists. Cheap
+        // (each set no-ops when unchanged); the config re-feed below is what actually re-renders.
+        ghostty_app_set_color_scheme(app, isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT)
+        for surface in surfaces { surface.syncColorScheme(isDark: isDark) }
         ghostty_app_update_config(app, newConfig)
         // ghostty replies to update_config with a synchronous app-target CONFIG_CHANGE carrying the
         // config it APPLIED — the dual `theme = light:,dark:` resolved to the current appearance side.
@@ -279,10 +282,9 @@ final class GhosttyApp {
         // refresh the chrome colors from the NEW config BEFORE the watermark re-assert below: a default-tinted
         // `.text` watermark re-renders its PNG reading `terminalForegroundColor`, so the foreground must already
         // reflect the new theme — otherwise the text watermark's color lags one reload behind a theme change.
-        // the selection colors re-side from the SURFACES' appearance — the side syncColorScheme just
-        // recorded (see GhosttySurfaceView.isDarkAppearance).
-        resolveThemeColors(from: derivedConfig ?? newConfig, inputs: inputs,
-                           isDark: surfaces.first?.isDarkAppearance ?? Self.currentIsDark())
+        // the selection colors re-side from the authoritative `isDark` passed in (the side the app +
+        // surfaces were just set to), NOT re-read from any view.
+        resolveThemeColors(from: derivedConfig ?? newConfig, inputs: inputs, isDark: isDark)
         if let derivedConfig { ghostty_config_free(derivedConfig) }
         // the broadcast above pushes the shared config (no background image, default font size) to every
         // surface, wiping any per-surface watermark and zoom — so re-assert each affected surface's
@@ -309,9 +311,9 @@ final class GhosttyApp {
 
     /// Re-resolve the selection chrome colors for the given appearance side. Used by the full config
     /// load AND by the appearance-flip reload (which re-resolves the theme's colors), so the
-    /// selected-row pill follows a light/dark theme flip. `isDark` is explicit at every call site — no
-    /// defaulted `NSApp` read a future caller could silently pick up (see
-    /// `GhosttySurfaceView.isDarkAppearance`). No-op until a config has loaded.
+    /// selected-row pill follows a light/dark theme flip. `isDark` is explicit at every call site (the
+    /// reload threads the KVO-delivered side) — no defaulted appearance read a future caller could
+    /// silently pick up. No-op until a config has loaded.
     func refreshSelectionColors(isDark: Bool) {
         guard let inputs = lastConfigInputs else { return }
         let (selectionBackground, selectionForeground) = Self.resolveSelectionColors(
@@ -560,11 +562,14 @@ extension Notification.Name {
     /// for the window to re-key.
     static let agtermAppearanceChanged = Notification.Name("agterm.appearanceChanged")
 
-    /// Posted from a surface's `viewDidChangeEffectiveAppearance` when the macOS light/dark appearance
-    /// changes (and at first window attach), so `SettingsModel` re-resolves the active side of a
-    /// light/dark theme pair and rewrites+reloads the config. This pinned libghostty doesn't switch a
-    /// `theme = light:,dark:` conditional at runtime, so agterm drives the swap itself. Distinct from
-    /// `agtermAppearanceChanged` (the settings→chrome direction); this is the system→settings direction.
+    /// Posted by `SystemAppearanceObserver` (an app-level KVO observer on `NSApplication.effectiveAppearance`)
+    /// when the macOS light/dark appearance changes, and once at launch, carrying the resolved `isDark` in
+    /// userInfo. `SettingsModel` re-resolves the active side of a `theme = light:,dark:` pair and
+    /// rewrites+reloads the config — this pinned libghostty doesn't switch the dual conditional at runtime,
+    /// so agterm drives the swap itself. KVO delivers the settled value across sleep/wake, unlike the old
+    /// per-view `viewDidChangeEffectiveAppearance` hook that wedged. Also posted by the `debug.appearance`
+    /// UI-test seam. Distinct from `agtermAppearanceChanged` (the settings→chrome direction); this is the
+    /// system→settings direction.
     static let agtermSystemAppearanceChanged = Notification.Name("agterm.systemAppearanceChanged")
 
     /// Posted when a window becomes frontmost (the active-window change is async, via the window's

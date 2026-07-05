@@ -534,8 +534,10 @@ final class ControlServer {
 
     /// UI-TEST-ONLY seam: force the app-level appearance so an XCUITest can simulate a macOS light/dark
     /// flip deterministically (macOS XCUITest has no API to change the system appearance). Setting
-    /// `NSApp.appearance` fires `viewDidChangeEffectiveAppearance` on every view, so the REAL flip path
-    /// (scheme sync → notification → debounced zoom-preserving reload) is exercised end to end. Refused
+    /// `NSApp.appearance` changes `NSApp.effectiveAppearance`; this arm ALSO posts
+    /// `.agtermSystemAppearanceChanged` directly, so the REAL flip path (scheme sync → debounced
+    /// zoom-preserving reload) is exercised end to end without depending on whether KVO fires on an
+    /// explicit set (production relies on the KVO observer firing on a genuine system flip). Refused
     /// outside an XCUITest launch, and deliberately EXEMPT from the four-point keep-in-sync (no agtermctl
     /// subcommand, absent from the catalog/skill) — test scaffolding, not a control surface. Setting
     /// echoes the resulting effective side in `result.text`; the BARE form (no name) reads the side the
@@ -553,6 +555,9 @@ final class ControlServer {
             return ControlResponse(ok: false, error: "debug.appearance requires light|dark")
         }
         NSApp.appearance = NSAppearance(named: side == "dark" ? .darkAqua : .aqua)
+        // drive the flip pipeline directly (a duplicate KVO post, if any, is same-side-suppressed).
+        NotificationCenter.default.post(name: .agtermSystemAppearanceChanged, object: nil,
+                                        userInfo: ["isDark": GhosttyApp.currentIsDark()])
         return ControlResponse(ok: true, result: ControlResult(text: GhosttyApp.currentIsDark() ? "dark" : "light"))
     }
 

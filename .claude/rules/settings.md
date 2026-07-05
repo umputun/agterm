@@ -214,7 +214,7 @@ paths:
   zoom) then clears it.
   `AppActions.reloadGhosttyConfig` (`@discardableResult -> Int`, returning the diagnostic count;
   File ▸ Reload Config + the palette + the overlay close + the `config.reload` control command) → `SettingsModel.reloadGhosttyConfig`
-  → `GhosttyApp.reloadConfig(surfaces:)` (`@discardableResult -> Int`, returning + caching `lastConfigDiagnosticsCount`)
+  → `GhosttyApp.reloadConfig(surfaces:isDark:)` (`@discardableResult -> Int`, returning + caching `lastConfigDiagnosticsCount`; `isDark` = the side to resolve the dual theme to, from `currentIsDark()` on the explicit path)
   + `resetSessionFontSizesAllWindows()` + `.agtermAppearanceChanged`; a non-zero count posts `NotificationManager.notifyConfigDiagnostics(count:)`
   from `SettingsModel.reloadGhosttyConfig` (mirroring `reloadKeymap`, so EVERY caller surfaces it — incl.
   a Key Mapping directory change via `setConfigDirectory`, which now reloads BOTH co-located files).

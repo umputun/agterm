@@ -644,9 +644,10 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         // set the app color scheme to the current appearance BEFORE creating the surface: a new surface
         // derives its initial theme from the app's conditional state (`ghostty_surface_new` reads it), so
         // a dual `theme = light:,dark:` renders the correct side from the FIRST frame instead of defaulting
-        // to light and only correcting on a later reload. `set_color_scheme` records the state; it early-
-        // returns when unchanged, so repeating it per surface is cheap.
-        let isDark = effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        // to light and only correcting on a later reload. Read the APP-level side (`currentIsDark()`, i.e.
+        // `NSApp.effectiveAppearance`) — the single source the KVO observer also feeds, not this view's own
+        // `effectiveAppearance`. `set_color_scheme` records the state; it early-returns when unchanged.
+        let isDark = GhosttyApp.currentIsDark()
         ghostty_app_set_color_scheme(app, isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT)
 
         // create the surface with `config.env_vars` pointing at the retained `envVars` storage. The
@@ -830,45 +831,17 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         updateMetalLayerSize()
     }
 
-    override func viewDidChangeEffectiveAppearance() {
-        super.viewDidChangeEffectiveAppearance()
-        syncColorScheme()
-        // set_color_scheme only RECORDS the new conditional state (and emits a soft reload_config libghostty
-        // wants serviced); it does not re-render. libghostty re-resolves a `theme = light:,dark:` conditional
-        // when the host re-feeds the config via update_config, so post the appearance change and let
-        // `SettingsModel` trigger that reload (the raw dual file text is stable across flips, so its
-        // write-diff would otherwise skip it). Fires per surface + at first attach; `SettingsModel` debounces
-        // and no-ops unless following with both slots set. The userInfo carries THIS view's side (see
-        // `isDarkAppearance` for why the side must never be re-read at receive time).
-        NotificationCenter.default.post(name: .agtermSystemAppearanceChanged, object: nil,
-                                        userInfo: ["isDark": isDarkAppearance])
-    }
-
-    /// Whether this view currently resolves to the dark appearance — the side libghostty renders with,
-    /// since `syncColorScheme` records exactly this value. CANONICAL single source for the appearance
-    /// side: the flip plumbing reads the VIEW's side everywhere (the notification userInfo, the
-    /// `lastAppliedIsDark` latch, the selection-color re-side) because `NSApp.effectiveAppearance` can
-    /// LAG the views around sleep/wake — a receive-time NSApp re-read compared a stale side, wrongly
-    /// suppressed the flip reload, left the terminal stuck on the old theme, and inverted the latch so
-    /// the next toggle misbehaved too (the wake-from-sleep bug).
-    var isDarkAppearance: Bool {
-        effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-    }
-
-    /// Record this surface's (and the app's) light/dark scheme from its live `effectiveAppearance`, so the
-    /// NEXT `update_config` re-resolves a dual `theme = light:,dark:` to the matching side. libghostty
-    /// derives the active side from the surface's RECORDED conditional state at `update_config` time — not
-    /// from the config file alone — so a surface whose recorded state lagged (e.g. created before its
-    /// window's appearance resolved) would re-derive the WRONG side, and a dark-theme change would never
-    /// reach the terminal even though the app-resolved chrome followed. Re-asserting it here before each
-    /// reload keeps the terminal in sync. `set_color_scheme` early-returns when unchanged, so it is cheap.
-    func syncColorScheme() {
+    /// Record this surface's light/dark scheme from the authoritative `isDark` (the app-level side the
+    /// caller resolved from `NSApp.effectiveAppearance`), so the NEXT `update_config` re-resolves a dual
+    /// `theme = light:,dark:` to the matching side. libghostty derives the active side from the surface's
+    /// RECORDED conditional state at `update_config` time — not from the config file alone — so a surface
+    /// whose recorded state lagged (e.g. created before its window's appearance resolved) would re-derive
+    /// the WRONG side. Re-asserting it before each reload keeps the terminal in sync; `set_color_scheme`
+    /// early-returns when unchanged, so it is cheap. The APP-level scheme is set once by the caller
+    /// (`GhosttyApp.reloadConfig`), so this only touches the surface.
+    func syncColorScheme(isDark: Bool) {
         guard let surface else { return }
-        let isDark = isDarkAppearance
         ghostty_surface_set_color_scheme(surface, isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT)
-        if let app = GhosttyApp.shared.app {
-            ghostty_app_set_color_scheme(app, isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT)
-        }
     }
 
     private func updateMetalLayerSize() {

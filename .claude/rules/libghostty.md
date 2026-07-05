@@ -37,25 +37,36 @@ paths:
   The switch is NOT fully autonomous on `set_color_scheme`: `ghostty_surface/app_set_color_scheme` only
   RECORD the new conditional state and emit a SOFT `reload_config` action (which agterm does not handle,
   so it is dropped); libghostty re-resolves only when the host re-feeds the config via `update_config`.
-  agterm therefore triggers the reload ITSELF on a flip: `viewDidChangeEffectiveAppearance` sets both
-  schemes + posts `.agtermSystemAppearanceChanged`, and `SettingsModel.appearanceChanged` calls
-  `reloadConfigPreservingSessionZoom` DIRECTLY (NOT through `apply()`/`writeGhosttyConfig`, whose text-diff
-  would skip the reload — the raw dual file is byte-identical across flips).
+  agterm therefore triggers the reload ITSELF on a flip.
+  The appearance side is single-sourced from the APP-level `NSApplication.effectiveAppearance`, observed
+  via KVO in `SystemAppearanceObserver` (the same mechanism Ghostty and the AppKit community use — Apple
+  exposes no notification API for appearance).
+  The observer posts `.agtermSystemAppearanceChanged` with the KVO-delivered `isDark` (`change.newValue`,
+  the SETTLED value, never re-read at receive time), and `SettingsModel.appearanceChanged` threads that
+  `isDark` straight into `reloadConfigPreservingSessionZoom` → `GhosttyApp.reloadConfig(surfaces:isDark:)`,
+  which sets the app + each surface scheme from it and re-feeds the config via `update_config` (NOT through
+  `apply()`/`writeGhosttyConfig`, whose text-diff would skip the reload — the raw dual file is byte-identical
+  across flips).
+  KVO is what makes this survive sleep/wake: it fires when the property SETTLES (including the belated
+  update after wake), so there is no dead callback to route around — unlike the old per-view
+  `viewDidChangeEffectiveAppearance` hook, which stopped firing in the wedge and left the terminal stuck
+  on the old theme (the wake-from-sleep bug).
+  Deliberately NOT `AppleInterfaceStyle` (wrong under macOS "Auto" scheduled switching) and NOT the
+  distributed `AppleInterfaceThemeChangedNotification` (fires before `effectiveAppearance` settles).
   The flip reload PRESERVES each session's ⌘+/⌘− zoom (an automatic OS flip must not wipe it silently):
   it skips `resetSessionFontSizesAllWindows`, and `reapplySessionConfigIfNeeded` (the widened watermark
   re-assert) re-emits each zoomed session's `font-size` per surface after the shared-config broadcast.
   Only the explicit reloads (File ▸ Reload / `config.reload` / a settings change) keep the documented
   zoom-clearing contract via `reloadConfigClearingSessionZoom`.
-  The appearance SIDE is single-sourced from the VIEWS, never re-read from `NSApp.effectiveAppearance`
-  at receive time: the notification's userInfo carries the posting view's `isDark`,
-  and every reload records `lastAppliedIsDark` from the first live surface's appearance — the exact
-  value `syncColorScheme` feeds ghostty (`GhosttySurfaceView.isDarkAppearance`).
-  `NSApp.effectiveAppearance` can LAG the views around sleep/wake, so the old receive-time re-read
-  compared a stale side, wrongly suppressed the reload, and left the terminal stuck on the old theme
-  with the latch inverted — the wake-from-sleep "appearance toggle stopped working" bug.
-  The notification ALSO fires per surface at ATTACH (not only on real OS flips), so `appearanceChanged`
-  suppresses same-side re-posts via `lastAppliedIsDark` (seeded `false` because a host-loaded config
-  starts light-sided) — otherwise opening a session would reload the config on every attach.
+  Every reload records `lastAppliedIsDark` from the `isDark` it applied (the KVO-delivered side threaded
+  through `reloadConfig`), so "latch == applied side" holds by construction — there is ONE source now, so
+  the poster-vs-rendered divergence the old two-source (view + watchdog) design feared is gone.
+  `appearanceChanged` suppresses same-side re-posts via that latch (seeded `false` because a host-loaded
+  config starts light-sided), so the KVO `[.initial]` launch seed and any coalesced burst drive at most
+  one reload.
+  A zero-surface reload is chrome-correct: `reloadConfig` sets the APP scheme (`ghostty_app_set_color_scheme`)
+  before `update_config`, so the CONFIG_CHANGE clone resolves to the applied side even with no surfaces —
+  a dark launch re-sides the sidebar/titlebar before any surface exists.
   The chrome retints on the same reload, but NOT from the host-loaded config: `ghostty_config_get` on
   a config the host built always reads the DEFAULT (light) conditional side — there is no C API to
   re-side a host config.

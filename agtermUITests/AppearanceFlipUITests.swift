@@ -3,11 +3,13 @@ import XCTest
 /// End-to-end regression test for the appearance-flip reload: an automatic macOS light/dark flip
 /// re-resolves the dual theme but must PRESERVE each session's ⌘+/⌘− font zoom (the explicit reloads
 /// keep the zoom-clearing contract; the flip is the deliberate exception). The flip rides the
-/// UI-test-only `debug.appearance` seam: setting `NSApp.appearance` fires
-/// `viewDidChangeEffectiveAppearance` on every view, so the REAL flip path (scheme sync → notification
-/// → debounced zoom-preserving reload) runs end to end; the seam's BARE (read) form then reports the
-/// side the last config feed applied, proving the flip drove the reload. A `ControlAPITestCase`
-/// subclass in its own file, sharing the launch + socket harness with the other `Control*UITests`.
+/// UI-test-only `debug.appearance` seam: setting `NSApp.appearance` changes `NSApp.effectiveAppearance`
+/// and the seam posts `.agtermSystemAppearanceChanged` directly, so the REAL flip path (scheme sync →
+/// debounced zoom-preserving reload) runs end to end; the seam's BARE (read) form then reports the side
+/// the last config feed applied, proving the flip drove the reload. (Production follows the appearance
+/// via an app-level KVO observer on `NSApplication.effectiveAppearance`, `SystemAppearanceObserver`.) A
+/// `ControlAPITestCase` subclass in its own file, sharing the launch + socket harness with the other
+/// `Control*UITests`.
 @MainActor
 final class AppearanceFlipUITests: ControlAPITestCase {
     func testAppearanceFlipPreservesFontZoom() throws {

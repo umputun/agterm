@@ -175,10 +175,13 @@ paths:
 
   One extra `Command` case is deliberately NOT part of the catalog: `debug.appearance` (`light`|`dark`
   via `args.name`) is a UI-TEST-ONLY seam that sets `NSApp.appearance` so an XCUITest can simulate a
-  macOS light/dark flip (macOS XCUITest has no API for it); the `ControlServer` arm refuses it outside
-  an XCUITest launch (`ContentView.isUITestLaunch`), it gets NO `agtermctl` subcommand,
-  and it stays out of the agent skill — a documented keep-in-sync EXEMPTION (test scaffolding,
-  not a control surface).
+  macOS light/dark flip (macOS XCUITest has no API for it); the arm ALSO posts
+  `.agtermSystemAppearanceChanged` directly so the flip pipeline runs deterministically without depending
+  on whether KVO fires on an explicit `NSApp.appearance` set (production follows the appearance via an
+  app-level KVO observer on `NSApplication.effectiveAppearance` — see the theme-picker/libghostty rules).
+  The `ControlServer` arm refuses it outside an XCUITest launch (`ContentView.isUITestLaunch`), it gets
+  NO `agtermctl` subcommand, and it stays out of the agent skill — a documented keep-in-sync EXEMPTION
+  (test scaffolding, not a control surface).
   Setting echoes the resulting effective side in `result.text`; the BARE form (no name) reads the side
   the last config feed applied (`SettingsModel.lastAppliedIsDark`), which the test polls to prove the
   flip actually drove the reload.

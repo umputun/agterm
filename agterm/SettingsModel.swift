@@ -84,10 +84,10 @@ final class SettingsModel {
         // seed the restore-denylist.conf (multiplexers) on first launch, then parse it into GhosttyApp.
         ensureStarterRestoreDenylist()
         loadRestoreDenylist()
-        // follow the macOS light/dark appearance: a surface's viewDidChangeEffectiveAppearance sets the
-        // color scheme and posts this (per surface + at first attach); we re-feed the config so libghostty
-        // re-resolves the dual `theme = light:,dark:` conditional to the new side. The side rides the
-        // notification (the POSTING view's) — see `appearanceChanged` for why it is never re-read here.
+        // follow the macOS light/dark appearance: `SystemAppearanceObserver` (app-level KVO on
+        // NSApp.effectiveAppearance) posts this with the resolved `isDark`; we re-feed the config so
+        // libghostty re-resolves the dual `theme = light:,dark:` conditional to the new side. The side
+        // rides the notification (the KVO-delivered value) and is threaded straight into the reload.
         NotificationCenter.default.addObserver(forName: .agtermSystemAppearanceChanged, object: nil,
                                                queue: .main) { [weak self] note in
             guard let isDark = note.userInfo?["isDark"] as? Bool else { return }
@@ -95,13 +95,12 @@ final class SettingsModel {
         }
     }
 
-    /// The appearance side the last config feed applied, used to suppress same-appearance re-posts of
-    /// `.agtermSystemAppearanceChanged` (the notification fires per surface at ATTACH, not only on real
-    /// OS flips — a new session/split would otherwise trigger a full reload + zoom wipe). Starts `false`
-    /// because a host-loaded config is always resolved to the LIGHT side: a light launch then skips the
-    /// first-attach reload entirely, while a dark launch takes exactly one (which is also what re-sides
-    /// the chrome colors via the CONFIG_CHANGE clone). Read-only outside: the UI-test-only
-    /// `debug.appearance` probe (bare form) reports it so a test can assert a flip drove the reload.
+    /// The appearance side the last config feed applied, used to suppress redundant re-posts of
+    /// `.agtermSystemAppearanceChanged` on the same side (KVO `[.initial]` seeds one at launch, and the
+    /// debounce can coalesce a burst). Starts `false` because a host-loaded config is always resolved to
+    /// the LIGHT side: a light launch then skips the seeding reload entirely, while a dark launch takes
+    /// exactly one (which re-sides the chrome colors via the CONFIG_CHANGE clone). Read-only outside: the
+    /// UI-test-only `debug.appearance` probe (bare form) reports it so a test can assert a flip drove the reload.
     private(set) var lastAppliedIsDark = false
 
     /// Re-feed the config on a macOS appearance flip so libghostty re-resolves the dual theme to the new
@@ -110,13 +109,15 @@ final class SettingsModel {
     /// `lastAppliedIsDark`). The config file holds the RAW `theme = light:,dark:` value and is IDENTICAL
     /// across flips, so `writeGhosttyConfig()` would no-op and `apply()` would skip the reload; reload
     /// DIRECTLY instead. ghostty already recorded the new scheme (`set_color_scheme`) and re-resolves
-    /// when we re-feed the config via `update_config`. Debounced because the notification fires once per
-    /// deck surface (latest posted side wins). Unlike an explicit File ▸ Reload / `config.reload`, an
-    /// automatic flip PRESERVES each session's ⌘+/⌘− zoom — silently wiping it on an OS schedule would
-    /// be a surprise.
+    /// when we re-feed the config via `update_config`. Debounced because a burst can arrive (KVO
+    /// `[.initial]` at launch, plus the seam); the latest posted side wins. Unlike an explicit File ▸
+    /// Reload / `config.reload`, an automatic flip PRESERVES each session's ⌘+/⌘− zoom — silently wiping
+    /// it on an OS schedule would be a surprise.
     ///
-    /// `isDark` is the POSTING view's side, never re-read from `NSApp.effectiveAppearance` at receive
-    /// time — NSApp can lag the views around sleep/wake (see `GhosttySurfaceView.isDarkAppearance`).
+    /// `isDark` is the KVO-delivered side (from `SystemAppearanceObserver`), threaded straight into the
+    /// reload so libghostty is set to exactly this side — never re-read from a view, whose
+    /// `effectiveAppearance` can lag around sleep/wake. This makes `lastAppliedIsDark` equal the applied
+    /// side by construction. A zero-surface reload is safe (the app-scheme set re-sides the chrome clone).
     private func appearanceChanged(isDark: Bool) {
         guard settings.followSystemAppearance == true, settings.theme != nil, settings.darkTheme != nil else { return }
         appearanceDebouncer.schedule(after: Self.appearanceDebounceInterval) { [weak self] in
@@ -125,15 +126,6 @@ final class SettingsModel {
             reloadConfigPreservingSessionZoom(isDark: isDark)
             NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
         }
-    }
-
-    /// The appearance side the terminals actually render with: the first live surface's own resolved
-    /// appearance (the value `syncColorScheme` records into libghostty; see
-    /// `GhosttySurfaceView.isDarkAppearance`), falling back to `NSApp.effectiveAppearance` when no
-    /// surface exists. Recording `lastAppliedIsDark` from this keeps the latch equal to the rendered
-    /// side by construction.
-    private func renderedIsDark() -> Bool {
-        liveSurfaces().first?.isDarkAppearance ?? GhosttyApp.currentIsDark()
     }
 
     func setFontFamily(_ value: String?) { settings.fontFamily = value; persistAndApply() }
@@ -467,26 +459,29 @@ final class SettingsModel {
     /// appearance flip is the one deliberate exception (`reloadConfigPreservingSessionZoom`).
     @discardableResult
     private func reloadConfigClearingSessionZoom() -> Int {
-        // every reload re-sides the config to the surfaces' CURRENT appearance (surface schemes + the
-        // CONFIG_CHANGE chrome clone), so record the side here — for ALL reload paths, not just the
-        // appearance flip — to keep `appearanceChanged()`'s same-side suppression from firing one
-        // spurious reload later. The surface-derived side, not NSApp's (see `renderedIsDark`).
-        lastAppliedIsDark = renderedIsDark()
+        // every reload re-sides the config (surface schemes + the CONFIG_CHANGE chrome clone) to the
+        // CURRENT appearance, so record the side here — for ALL reload paths, not just the appearance
+        // flip — to keep `appearanceChanged()`'s same-side suppression from firing one spurious reload
+        // later. The app-level `NSApp.effectiveAppearance` (via `currentIsDark()`) is the single source.
+        let isDark = GhosttyApp.currentIsDark()
+        lastAppliedIsDark = isDark
         // open windows reset live, closed ones by rewriting their snapshot file (the shared config reset
         // every surface to the default size, so a closed window mustn't reopen later overriding the new default).
         library.resetSessionFontSizesAllWindows()
-        return GhosttyApp.shared.reloadConfig(surfaces: liveSurfaces())
+        return GhosttyApp.shared.reloadConfig(surfaces: liveSurfaces(), isDark: isDark)
     }
 
     /// The appearance-flip variant of the reload above: re-feeds the config so libghostty re-resolves
     /// the dual theme, but KEEPS every session's ⌘+/⌘− zoom — after the shared-config broadcast,
     /// `reapplySessionConfigIfNeeded` re-emits the session's `fontSize` per surface (the same
-    /// round-trip that re-asserts watermarks). An automatic OS flip (or the first-attach reload of a
+    /// round-trip that re-asserts watermarks). An automatic OS flip (or the launch seeding reload of a
     /// dark launch) must not silently wipe zoom; only the explicit reloads carry the documented
-    /// zoom-clearing contract. `isDark` is the flip's poster-derived side (see `appearanceChanged`).
+    /// zoom-clearing contract. The latch records the `isDark` we actually applied (the KVO-delivered
+    /// side threaded through the reload), so "latch == applied side" holds for ALL reload paths — there
+    /// is one source now, so the poster-vs-rendered divergence the old two-source design feared is gone.
     private func reloadConfigPreservingSessionZoom(isDark: Bool) {
+        GhosttyApp.shared.reloadConfig(surfaces: liveSurfaces(), isDark: isDark)
         lastAppliedIsDark = isDark
-        GhosttyApp.shared.reloadConfig(surfaces: liveSurfaces())
     }
 
     /// Read `keymap.conf` and parse it into `keymap` + `keymapDiagnostics`. A MISSING file is not an

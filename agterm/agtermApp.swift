@@ -17,6 +17,7 @@ struct agtermApp: App {
     @State var settingsModel: SettingsModel
     @State private var controlServer: ControlServer
     @State private var customCommandRunner: CustomCommandRunner
+    @State private var appearanceObserver: SystemAppearanceObserver
 
     /// The plain `WindowGroup`'s scene id, used by `openWindow(id:)` to spawn additional windows.
     private static let windowGroupID = "terminal"
@@ -42,6 +43,9 @@ struct agtermApp: App {
         _customCommandRunner = State(initialValue: CustomCommandRunner(
             library: library, settings: settingsModel,
             socketProvider: { controlServer.resolvedSocketPath }))
+        // follows the macOS light/dark appearance via an app-level KVO observer on
+        // NSApp.effectiveAppearance (see SystemAppearanceObserver). No dependencies; started in `.task`.
+        _appearanceObserver = State(initialValue: SystemAppearanceObserver())
     }
 
     var body: some Scene {
@@ -135,6 +139,9 @@ struct agtermApp: App {
                     // open id. runs once (the .task fires per window) via the library latch.
                     reopenWindows()
                     appDelegate.scheduleRestoredWindowReconciliation(reason: "scene-task")
+                    // start following the macOS appearance last: `[.initial]` seeds the launch side once
+                    // the eager-deck surfaces exist (idempotent, so per-window `.task` re-entry is safe).
+                    appearanceObserver.start()
                 }
         }
         // chromeless: no system title bar (the traffic lights float over our custom titlebar row in
