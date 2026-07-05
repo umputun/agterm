@@ -437,7 +437,7 @@ paths:
   `onExit → closeOverlay`.
   Both variants render IN the per-session eager deck, so the overlay program runs regardless of which
   session is active — the only visible difference is geometry.
-  The FULL overlay is an in-deck ZStack sibling in `WindowContentView.sessionDetail` (`.zIndex(1)` above the
+  The FULL overlay is an in-deck ZStack sibling in `WindowContentView.sessionDetail` (`.zIndex(2)` above the
   pane(s), gated on `fullOverlay`): it draws translucent + blurred (NO opaque backing) with the pane(s)
   behind hidden at `.opacity(0)` + `.allowsHitTesting(false)` (kept MOUNTED,
   shells alive like the deck's inactive sessions), so its transparency reveals the window backing (desktop,

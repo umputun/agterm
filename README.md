@@ -226,7 +226,7 @@ agtermctl session overlay open "revdiff HEAD~3" --target 9f3c  # review the last
 agtermctl session overlay open "htop"                          # on the active session
 agtermctl session overlay open "htop" --size-percent 70        # a floating, framed panel at 70% of the pane
 agtermctl session overlay open "revdiff HEAD~3" --size-percent 80 --background-color "#2a1a3a"  # tint the overlay pane
-agtermctl session overlay open "revdiff HEAD~3" --follow        # switch the user to the target as the overlay opens
+agtermctl session overlay open "revdiff HEAD~3" --target 9f3c --follow  # switch the user to session 9f3c as the overlay opens
 agtermctl session overlay open "make test" --wait              # keep the overlay open after exit (press a key to close)
 agtermctl session overlay open "make test" --block             # block until it exits; exit with its status
 agtermctl session overlay close --target 9f3c                  # close it from a script

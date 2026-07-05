@@ -1124,7 +1124,7 @@
               <span style="color: #f2b45c">"#2a1a3a"</span><br /><br /><span style="color: #6b727a"
                 ># switch the user to the target as the overlay opens</span
               ><br />agtermctl session overlay open <span style="color: #f2b45c">"revdiff HEAD~3"</span> --size-percent 80
-              --follow<br /><br /><span style="color: #6b727a"
+              --target 9f3c --follow<br /><br /><span style="color: #6b727a"
                 ># keep it open after exit, or block until it exits and inherit its status</span
               ><br />agtermctl session overlay open <span style="color: #f2b45c">"make test"</span> --wait<br />agtermctl session
               overlay open <span style="color: #f2b45c">"make test"</span> --block<br />agtermctl session overlay close --target
