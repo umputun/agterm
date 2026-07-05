@@ -101,17 +101,25 @@ paths:
   `ShellEscape.path` still escapes file-URL paths so a path with spaces lands as one shell token on Enter;
   the newline-escaping from #96 is now belt-and-suspenders under bracketed paste.
 - **Search bar placement (NSSplitView-overrun rule).**
-  `TerminalSearchBar` (`agterm/Views/`) is anchored on `detailPane` via `.overlay(alignment: .topTrailing) { searchBarLayer }`
-  — the SAME level as `floatingOverlayLayer`, NEVER inside any session's `sessionDetail` HSplitView-hosting
-  subtree.
-  This is the same hard-won rule as the floating overlay: adding a conditional sibling (or flipping a
-  pane modifier) inside `sessionDetail`'s ZStack when `searchActive` flips would re-host the `NSSplitView`
-  and overrun it UP into the transparent titlebar.
-  The bar reads `store.activeSession?.searchActive` and shows only when set,
-  so the split subtree's SHAPE is constant whether or not the bar is shown.
-  Because it is a `detailPane` `.overlay`, it renders ABOVE the in-deck scratch (zIndex 1 inside `sessionDetail`)
-  and the FULL overlay (zIndex 2) without any layout change — so search-over-scratch shows the bar on
-  top of the scratch with no `sessionDetail`/HSplitView perturbation.
+  The underlying rule: nothing may change `sessionDetail`'s ZStack SHAPE when a per-session toggle flips —
+  adding/removing a child (or flipping a pane modifier) inside that HSplitView-hosting subtree re-hosts the
+  `NSSplitView` and overruns it UP into the transparent titlebar.
+  Two surfaces obey it in two different ways.
+  The SEARCH BAR (`TerminalSearchBar`, `agterm/Views/`) stays OUT of `sessionDetail` entirely: it is anchored
+  on `detailPane` via `.overlay(alignment: .topTrailing) { searchBarLayer }`, NEVER inside any session's
+  `sessionDetail` subtree, so toggling it can't perturb the split at all.
+  The bar reads `store.activeSession?.searchActive` and shows only when set.
+  Because it is a `detailPane` `.overlay` it composites ABOVE the whole detail deck without any layout change
+  — the in-deck scratch (zIndex 1 inside `sessionDetail`), the FULL overlay (zIndex 2), and the floating
+  overlay panel (zIndex 3) — so search-over-scratch shows the bar on top of the scratch with no HSplitView
+  perturbation.
+  The FLOATING overlay takes the opposite route: it IS a `sessionDetail` ZStack sibling (`floatingOverlayPanel`
+  at `.zIndex(3)`), but an ALWAYS-PRESENT, constant-shape one — its panel content (surface + frame +
+  click-catcher) is gated INSIDE the sibling, so the ZStack child count never changes when a floating overlay
+  opens/closes and the `NSSplitView` is never re-hosted, even though the pane(s) stay VISIBLE behind the opaque
+  panel.
+  (`floatingOverlayPanel` is per-session in the eager deck, so its program runs regardless of which session is
+  active — see the surface-lifecycle note.)
 - **Window overlays sit BELOW the custom titlebar, NOT as a body-level `.overlay` (transparent-titlebar-scrim
   rule).** The quick terminal, command palettes, and Ctrl-Tab switcher render via `windowOverlayLayer`
   — a ZStack sibling INSIDE the body's root ZStack, inset by `titlebarHeight` (`.padding(.top, titlebarHeight)`)

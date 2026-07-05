@@ -230,12 +230,12 @@ in the panel geometry (`--size-percent`).
 
 ### Task 8: Update documentation and finalize
 
-- [ ] confirm all keep-in-sync surfaces (Task 6) match the shipped behavior
-- [ ] REQUIRED: update `.claude/rules/libghostty.md` — the "Search bar placement (NSSplitView-overrun rule)"
+- [x] confirm all keep-in-sync surfaces (Task 6) match the shipped behavior
+- [x] REQUIRED: update `.claude/rules/libghostty.md` — the "Search bar placement (NSSplitView-overrun rule)"
       note (~line 105) references `floatingOverlayLayer` and the "`.overlay { floatingOverlayLayer }` on
       `detailPane`" model as load-bearing fact; the floating overlay is no longer a `detailPane` `.overlay`,
       so rewrite it to the in-deck constant-shape-sibling model (the search bar stays at `detailPane`)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] (physical move deferred to exec finalize step) move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
