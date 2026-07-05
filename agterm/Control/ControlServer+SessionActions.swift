@@ -53,11 +53,11 @@ extension ControlServer: ControlActions {
                                     backgroundColor: options.backgroundColor) else {
                 return ControlResponse(ok: false, error: "overlay already open")
             }
-            // A floating overlay (sizePercent set) renders only for the active session, so on a non-active
-            // target its surface never mounts and its program never runs -- and `--block` would poll
-            // forever. Select the target so it mounts and runs (the full overlay mounts in the eager deck
-            // regardless, so this only matters for floating).
-            if options.sizePercent != nil {
+            // Both overlay kinds mount and run in the per-session eager deck regardless of which session
+            // is active (the floating panel is a constant-shape sibling in `sessionDetail`), so opening
+            // never needs an implicit select. The select is now the user-facing `--follow`: the caller
+            // asked to jump to the target, so switch to it (a no-op when it's already active).
+            if options.follow {
                 store.selectSession(id)
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
@@ -264,8 +264,9 @@ extension ControlServer: ControlActions {
             }
             if want, store.selectedSessionID != id {
                 // the scratch is a full-coverage surface that grabs focus on show; it only makes sense on
-                // the visible session, so select the target first (mirrors the floating-overlay arm).
-                // Otherwise a non-active target's scratch surface would steal first responder while hidden.
+                // the visible session, so select the target first. Unlike the overlay (which runs in the
+                // eager deck without selecting), the scratch must be on the active session -- otherwise a
+                // non-active target's scratch surface would steal first responder while hidden.
                 store.selectSession(id)
             }
             if want != session.scratchActive {

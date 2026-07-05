@@ -156,14 +156,14 @@ in the panel geometry (`--size-percent`).
 **Files:**
 - Modify: `agterm/Control/ControlServer+SessionActions.swift`
 
-- [ ] in `openSessionOverlay`, change `if options.sizePercent != nil { store.selectSession(id) }` to
+- [x] in `openSessionOverlay`, change `if options.sizePercent != nil { store.selectSession(id) }` to
       `if options.follow { store.selectSession(id) }`
-- [ ] update the surrounding doc comment: the select is now the user-facing `--follow`, not a
+- [x] update the surrounding doc comment: the select is now the user-facing `--follow`, not a
       floating-surface-mount workaround (the in-deck render makes floating run without it)
-- [ ] fix the stale cross-reference in the scratch arm (~line 267) — "select the target first (mirrors the
+- [x] fix the stale cross-reference in the scratch arm (~line 267) — "select the target first (mirrors the
       floating-overlay arm)" no longer holds once the floating select is `--follow`-gated
-- [ ] `make lint` clean; app builds
-- [ ] (no host-free unit test — app-target side effect; behavior verified by Task 5 e2e — `[x]` this
+- [x] `make lint` clean; app builds
+- [x] (no host-free unit test — app-target side effect; behavior verified by Task 5 e2e — `[x]` this
       after Task 5 is green)
 
 ### Task 4: Add `--follow` to the `agtermctl overlay open` subcommand
