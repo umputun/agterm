@@ -206,8 +206,9 @@ paths:
   `focusSplitPane(_:wantSplit: true)` (a FIXED target, UNGATED on `hasSplit`, so a promoted split survivor
   is still focused, and its `onFocusChange` re-asserts `splitFocused` to win the shown-split re-render race);
   for `scratch`, shows a hidden scratch via `AppStore.toggleScratch` then focuses it;
-  for `left`/nil, the main pane; and it is a no-op (plain `focusActiveSession`) for a session with no
-  pane-tagged block, so ordinary selections are unaffected.
+  for `left`/nil, the main pane; and it is a no-op (plain `focusActiveSession`) for an IDLE session
+  (no status set), so ordinary selections are unaffected (the idle gate is what keeps a plain nav to a
+  session with a shown scratch from dismissing it).
   It fires from ALL of: attention-nav (⌃⌥↑/↓, `selectNext/PreviousAttentionSession`),
   plain session nav (⌥⌘↑/↓/first/last, `selectNext/Previous/First/LastSession`),
   the ⌃P/attention command palette (async in the palette item's run closure),

@@ -296,6 +296,48 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
         XCTAssertFalse(onScreen.contains("\(leftTag)-42"), "the revealed right pane must not carry the main pane's marker")
     }
 
+    // regression: selecting a session that merely has its scratch SHOWN — with NO agent status (idle) — must
+    // LEAVE the scratch shown. Before the idle-gate, `revealActiveBlockedPane` hid the scratch whenever
+    // `statusPane` was nil (`nil != .scratch` is true) on EVERY selection, so a plain sidebar click to an idle
+    // session dismissed its scratch. Now an idle session is a pure no-op. A stay-shown poll (not a single
+    // read) is used so the async reveal can't false-pass by hiding the scratch a beat after the first check.
+    func testSelectingIdleSessionKeepsShownScratch() throws {
+        let sessionA = try activeSessionID()
+        let rowName = "PAWIDLE-\(UUID().uuidString.prefix(8))"
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.rename","target":"\#(sessionA)","args":{"name":"\#(rowName)"}}"#)["ok"] as? Bool,
+                       true, "renaming the session should succeed")
+
+        let mainTag = "PAWIM-\(UUID().uuidString.prefix(8))"
+        let scratchTag = "PAWIS-\(UUID().uuidString.prefix(8))"
+        try seedPaneMarker(target: sessionA, pane: "left", tag: mainTag)
+
+        // show the scratch and seed it; leave it SHOWN. the session stays IDLE (no session.status at all).
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.scratch","target":"\#(sessionA)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "scratch on should succeed")
+        XCTAssertTrue(try pollScratch(id: sessionA, equals: true, timeout: 10), "the scratch should be shown")
+        try seedPaneMarker(target: sessionA, pane: "scratch", tag: scratchTag)
+        XCTAssertNil(try statusPane(of: sessionA), "sanity: an idle session carries no status pane")
+
+        // park the selection on a fresh session, then click BACK to the idle session's row — a GUI selection
+        // that runs the reveal, which must be a no-op for the idle session and NOT hide its scratch.
+        _ = try parkOnNewSession()
+        clickSessionRow(named: rowName)
+        XCTAssertTrue(try pollActiveNode(equals: sessionA, timeout: 12), "clicking the row should select the idle session")
+
+        // the sidebar-click reveal is dispatched async; poll across its window and require the scratch stays
+        // shown on EVERY tick (a single read could catch it before the pre-fix reveal hid it).
+        var stayedShown = true
+        for _ in 0..<8 {
+            usleep(250_000)
+            if try sessionNode(id: sessionA)?["scratch"] as? Bool != true { stayedShown = false; break }
+        }
+        XCTAssertTrue(stayedShown, "the shown scratch must stay shown after selecting the idle session (reveal is a no-op)")
+        XCTAssertTrue(try pollOnScreen(target: sessionA, contains: "\(scratchTag)-42"),
+                      "the scratch must remain the on-screen surface")
+        let onScreen = try XCTUnwrap(onScreenText(sessionA), "the on-screen read should return text")
+        XCTAssertFalse(onScreen.contains("\(mainTag)-42"), "the idle-session selection must not dismiss the scratch to the main pane")
+    }
+
     // MARK: - Helpers
 
     /// Type Escape into the focused surface until the agent-status glyph clears (retrying rides out a

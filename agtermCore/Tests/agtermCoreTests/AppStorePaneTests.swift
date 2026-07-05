@@ -418,4 +418,83 @@ struct AppStorePaneTests {
         store.removeWorkspace(ws.id)
         #expect(scratch.teardownCount == 1)
     }
+
+    // MARK: - status-pane reconcile on pane teardown
+
+    @Test func closeSplitClearsRightTaggedStatus() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.splitSurface = SpySurface(); session.isSplit = true; session.hasSplit = true
+        // a block set by the split (`--pane right`); once the split shell exits, the surviving main pane can
+        // never keystroke-clear a `.right` tag, so teardown must clear it.
+        store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: session.id)
+        store.closeSplit(session.id)
+        #expect(session.agentIndicator.status == .idle)
+        #expect(session.agentIndicator.statusPane == nil)
+    }
+
+    @Test func closeSplitLeavesMainTaggedStatus() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.splitSurface = SpySurface(); session.isSplit = true; session.hasSplit = true
+        // a `.left`/main block is owned by the surviving main pane — tearing the split down must NOT clear it.
+        store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .left), forSession: session.id)
+        store.closeSplit(session.id)
+        #expect(session.agentIndicator.status == .blocked)
+        #expect(session.agentIndicator.statusPane == .left)
+    }
+
+    @Test func closePrimaryPaneClearsLeftAndNilTaggedStatus() {
+        for pane: StatusPane? in [.left, nil] {
+            let store = makeStore()
+            let ws = store.addWorkspace(name: "work")
+            let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+            session.surface = SpySurface(); session.splitSurface = SpySurface()
+            session.isSplit = true; session.hasSplit = true
+            // the primary owned a `.left`/nil-tagged block and is promoted away, so the promoted (right-wired)
+            // survivor could never keystroke-clear it — teardown must.
+            store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: pane), forSession: session.id)
+            store.closePrimaryPane(session.id)
+            #expect(session.agentIndicator.status == .idle)
+        }
+    }
+
+    @Test func closePrimaryPaneLeavesRightTaggedStatus() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.surface = SpySurface(); session.splitSurface = SpySurface()
+        session.isSplit = true; session.hasSplit = true
+        // the `.right` block is owned by the split, which becomes the promoted survivor — still clearable, keep it.
+        store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: session.id)
+        store.closePrimaryPane(session.id)
+        #expect(session.agentIndicator.status == .blocked)
+        #expect(session.agentIndicator.statusPane == .right)
+    }
+
+    @Test func closeScratchClearsScratchTaggedStatus() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.scratchActive = true; session.scratchSurface = SpySurface()
+        // a scratch-tagged block loses its owning surface on the scratch shell's exit.
+        store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .scratch), forSession: session.id)
+        #expect(store.closeScratch(session.id) == true)
+        #expect(session.agentIndicator.status == .idle)
+        #expect(session.agentIndicator.statusPane == nil)
+    }
+
+    @Test func closeScratchLeavesMainTaggedStatus() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.surface = SpySurface()
+        session.scratchActive = true; session.scratchSurface = SpySurface()
+        // a main-pane block survives the scratch teardown (the main pane is still there to clear it).
+        store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .left), forSession: session.id)
+        #expect(store.closeScratch(session.id) == true)
+        #expect(session.agentIndicator.status == .blocked)
+    }
 }

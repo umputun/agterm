@@ -131,6 +131,11 @@ paths:
   — so ordinary typing while the agent works does NOT wipe the "working" glyph,
   but cancelling a prompt with Esc does; `idle` has no glyph.
   This is the ONE input-driven clear (status is otherwise control-driven).
+  Because the clear is pane-SCOPED, a tag whose owning pane's shell EXITS would otherwise strand a glyph
+  no surviving surface can match, so `AppStore.closeSplit`/`closePrimaryPane`/`closeScratch` reconcile the
+  indicator on teardown — clearing a status owned by the destroyed pane (`.right` on closeSplit, `.left`/nil
+  on the primary→split promote, `.scratch` on closeScratch) — mirroring the `clearSearch()` reset on the
+  same paths (host-free, `AppStorePaneTests`).
   It covers the Esc-decline/interrupt case Claude Code fires NO hook for — the keystroke flows through
   the surface's `keyDown` on its way to the agent's PTY, so it clears the stale glyph the moment you
   deal with the prompt — and clears the `completed` flash once you re-engage.
@@ -152,7 +157,7 @@ paths:
   plain session nav (⌥⌘↑/↓/first/last), the ⌃P/attention command palette, a sidebar row click,
   and idle auto-follow — reveals and focuses the pane that set the block — flipping `splitFocused` to the
   split, or showing a hidden scratch via `AppStore.toggleScratch` — instead of always the main pane (the
-  shared `AppActions.revealActiveBlockedPane`, a no-op for a session with no pane-tagged block;
+  shared `AppActions.revealActiveBlockedPane`, a no-op for an IDLE session (no status set);
   see the Menu/actions rule).
   The `session.go next-attention|prev-attention` control arm only steps the selection (`navigateSession`),
   it does NOT itself run the reveal — the pane focus is a GUI/auto-follow concern.

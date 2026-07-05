@@ -73,8 +73,9 @@ paths:
   after the selection + the sidebar's own focus-restore settle — calls `AppActions.revealActiveBlockedPane()`,
   so clicking a session whose agent blocked in its split (right) or scratch pane lands you on THAT pane,
   not the plain focused pane.
-  It is a no-op (plain `focusActiveSession`) for a session with no pane-tagged block,
-  so ordinary clicks are unaffected.
+  It is a no-op (plain `focusActiveSession`) for an IDLE session (no status set),
+  so ordinary clicks are unaffected — the reveal never dismisses a merely-shown scratch (a non-idle
+  nil-tagged block is treated as `left`/main).
   This matches attention-nav, plain session nav, the command palettes, and idle auto-follow,
   which all route through the same helper (see the Menu/actions + Notifications rules).
   Covered by `PaneAwareStatusUITests.testSidebarClickRevealsBlockedSplitPane`.

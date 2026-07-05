@@ -638,8 +638,8 @@ final class AppActions {
     /// lands on the pane actually waiting for input rather than the session's plain focused pane. Called on
     /// every user-initiated selection — the auto-follow jump, attention navigation (⌃⌥↑/↓), plain session
     /// nav (⌥⌘↑/↓/first/last), the ⌃P / attention command palette, and a sidebar row click — so however you
-    /// reach a blocked session you land on its waiting pane; it is a no-op (plain `focusActiveSession`) for a
-    /// session with no pane-tagged block, so ordinary selections are unaffected. `.right` — only WHEN the
+    /// reach a blocked session you land on its waiting pane; it is a no-op (plain `focusActiveSession`) for an
+    /// IDLE session (no status set), so ordinary selections are unaffected. `.right` — only WHEN the
     /// split surface exists
     /// (`splitSurface != nil`) — flips `splitFocused` then focuses the split surface via
     /// `focusSplitPane(wantSplit: true)` — a FIXED target, NOT the `splitFocused`-following
@@ -664,6 +664,11 @@ final class AppActions {
     /// its program).
     func revealActiveBlockedPane() {
         guard let session = store?.activeSession else { focusActiveSession(); return }
+        // reveal is a no-op for an IDLE session: with no status there is nothing to reveal, and the
+        // scratch-hide / split-focus side effects below must never fire on plain navigation to a session
+        // that merely has its (keep-alive) scratch shown. a non-idle block with no `--pane` tag is treated
+        // as `left` and still reveals the main pane (hiding a covering scratch).
+        guard session.agentIndicator.status != .idle else { focusActiveSession(); return }
         let pane = session.agentIndicator.statusPane
         // a shown scratch covers the panes and masks a non-scratch block; hide it first so the requested
         // pane is revealed. overlays are deliberately not touched — closing a running overlay is destructive.
