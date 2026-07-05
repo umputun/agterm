@@ -489,6 +489,41 @@ struct ControlProtocolTests {
         #expect(decoded.args?.workspace == nil)
     }
 
+    @Test func sessionMoveRoundTripsWithAfterAnchor() throws {
+        let request = ControlRequest(cmd: .sessionMove, target: "9f3c", args: ControlArgs(after: "active"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.after == "active")
+        #expect(decoded.args?.before == nil)
+        #expect(decoded.args?.to == nil)
+        #expect(decoded.args?.workspace == nil)
+    }
+
+    @Test func sessionMoveRoundTripsWithBeforeAnchor() throws {
+        let request = ControlRequest(cmd: .sessionMove, target: "9f3c", args: ControlArgs(before: "1a2b"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.before == "1a2b")
+        #expect(decoded.args?.after == nil)
+    }
+
+    @Test func sessionNewRoundTripsWithAfterAnchor() throws {
+        let request = ControlRequest(cmd: .sessionNew, args: ControlArgs(after: "active"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.after == "active")
+        #expect(decoded.args?.before == nil)
+        #expect(decoded.args?.workspace == nil)
+    }
+
+    @Test func sessionNewRoundTripsWithBeforeAnchor() throws {
+        let request = ControlRequest(cmd: .sessionNew, args: ControlArgs(before: "1a2b"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.before == "1a2b")
+        #expect(decoded.args?.after == nil)
+    }
+
     @Test func workspaceMoveRoundTripsWithDirection() throws {
         let request = ControlRequest(cmd: .workspaceMove, target: "active", args: ControlArgs(to: "top"))
         let decoded = try roundTrip(request)

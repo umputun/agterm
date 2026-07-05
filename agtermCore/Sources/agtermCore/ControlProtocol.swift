@@ -122,6 +122,13 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// `session.move` / `workspace.move` (`up`|`down`|`top`|`bottom`), and for `session.search`
     /// (`next`|`prev`|`close`).
     public var to: String?
+    /// Anchor session (id / unique prefix / `active`) to place a session right AFTER, for the placement
+    /// form of `session.new` / `session.move`. The anchor carries its own workspace (resolved across the
+    /// whole store), so it self-identifies the destination — mutually exclusive with `to`, `before`, and
+    /// the workspace parameter.
+    public var after: String?
+    /// Anchor session to place a session right BEFORE, the mirror of `after` (mutually exclusive with it).
+    public var before: String?
     /// The desktop-notification title for `notify` (optional; defaults to the target session's name).
     public var title: String?
     /// The desktop-notification body for `notify` (required).
@@ -161,7 +168,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public init(name: String? = nil, cwd: String? = nil, workspace: String? = nil, workspaceName: String? = nil,
                 createWorkspace: Bool? = nil, text: String? = nil, select: Bool? = nil, mode: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, window: String? = nil,
-                pane: String? = nil, to: String? = nil, title: String? = nil, body: String? = nil,
+                pane: String? = nil, to: String? = nil, after: String? = nil, before: String? = nil,
+                title: String? = nil, body: String? = nil,
                 width: Int? = nil, height: Int? = nil, x: Int? = nil, y: Int? = nil, display: Int? = nil,
                 status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil, sound: String? = nil,
                 ratio: Double? = nil, ratioDelta: Double? = nil,
@@ -181,6 +189,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.window = window
         self.pane = pane
         self.to = to
+        self.after = after
+        self.before = before
         self.title = title
         self.body = body
         self.width = width

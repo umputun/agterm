@@ -69,6 +69,10 @@ public enum ControlSidebarViewMode: Equatable, Sendable {
 public enum ControlSessionMove: Equatable, Sendable {
     case reorder(ReorderDirection)
     case workspace(String)
+    /// Relocate + position relative to an anchor session (id / prefix / `active`). `after == false`
+    /// places before the anchor. The anchor carries its own workspace, so this form self-identifies the
+    /// destination and never reads the workspace parameter.
+    case place(anchor: String, after: Bool)
 }
 
 /// Parsed resize request for `session.resize`.
@@ -86,9 +90,15 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
     public let createWorkspace: Bool?
     public let command: String?
     public let name: String?
+    /// Anchor session to place the new session right AFTER (id / prefix / `active`); the anchor carries
+    /// its own workspace, so this bypasses `workspace`/`workspaceName`. Mutually exclusive with `before`.
+    public let after: String?
+    /// Anchor session to place the new session right BEFORE, the mirror of `after`.
+    public let before: String?
 
     public init(window: String?, cwd: String?, workspace: String?, workspaceName: String?,
-                createWorkspace: Bool?, command: String?, name: String?) {
+                createWorkspace: Bool?, command: String?, name: String?,
+                after: String? = nil, before: String? = nil) {
         self.window = window
         self.cwd = cwd
         self.workspace = workspace
@@ -96,6 +106,8 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
         self.createWorkspace = createWorkspace
         self.command = command
         self.name = name
+        self.after = after
+        self.before = before
     }
 }
 

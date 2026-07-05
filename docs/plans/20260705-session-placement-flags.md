@@ -138,20 +138,20 @@ host-free logic stays in `agtermCore` (no GhosttyKit/AppKit/CoreGraphics).
 ## Implementation Steps
 
 ### Task 1: Wire model — `after`/`before` on the protocol + modes
-- [ ] `ControlProtocol.swift`: add `public var after: String?` and `public var before:
+- [x] `ControlProtocol.swift`: add `public var after: String?` and `public var before:
       String?` to `ControlArgs` (near `to`/`workspace`), and add both to the `init`
       parameter list (all optional, default nil — keeps every existing call site and
       old-JSON decode working).
-- [ ] `ControlModes.swift`: add a placement case to `ControlSessionMove`, e.g.
+- [x] `ControlModes.swift`: add a placement case to `ControlSessionMove`, e.g.
       `case place(anchor: String, after: Bool)` (a single Bool distinguishes
       after/before; keep the enum small and `Equatable, Sendable`).
-- [ ] `ControlModes.swift`: add `public let after: String?` / `public let before:
+- [x] `ControlModes.swift`: add `public let after: String?` / `public let before:
       String?` to `ControlSessionCreateOptions` and its `init`.
-- [ ] `ControlProtocolTests.swift`: add round-trip tests — `session.new` with
+- [x] `ControlProtocolTests.swift`: add round-trip tests — `session.new` with
       `after`/`before`, and `session.move` with `after`/`before` — asserting the fields
       survive encode/decode and other fields stay nil (mirror
       `sessionMoveReorderRoundTripsWithDirection`).
-- [ ] `cd agtermCore && swift test` — must pass before Task 2.
+- [x] `cd agtermCore && swift test` — must pass before Task 2.
 
 ### Task 2: Host-free placement math — `SidebarDrop.resolveRelative` + `AppStore.addSession(at:)`
 - [ ] `SidebarDrop.swift`: add
