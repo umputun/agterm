@@ -73,11 +73,18 @@ public struct WorkspaceSnapshot: Codable, Equatable, Sendable {
     public var id: UUID
     public var name: String
     public var sessions: [SessionSnapshot]
+    /// Whether the sidebar row was collapsed. Optional AND stored as the inverse of `isExpanded` so a
+    /// snapshot already on disk before this field was added still decodes (missing → nil → not collapsed
+    /// → expanded, the default) instead of failing the load and wiping the saved tree, like the fields on
+    /// `SessionSnapshot`. Only a collapsed workspace writes it (`true`); an expanded one omits it, so an
+    /// all-expanded tree serializes byte-identically to a legacy snapshot.
+    public var collapsed: Bool?
 
-    public init(id: UUID, name: String, sessions: [SessionSnapshot]) {
+    public init(id: UUID, name: String, sessions: [SessionSnapshot], collapsed: Bool? = nil) {
         self.id = id
         self.name = name
         self.sessions = sessions
+        self.collapsed = collapsed
     }
 }
 

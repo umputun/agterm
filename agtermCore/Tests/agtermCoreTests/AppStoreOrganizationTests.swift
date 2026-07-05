@@ -165,6 +165,68 @@ struct AppStoreOrganizationTests {
         #expect(store.focusedWorkspaceID == work.id)
     }
 
+    @Test func newWorkspaceStartsExpanded() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        #expect(work.isExpanded)
+        #expect(store.workspaces[0].isExpanded)
+    }
+
+    @Test func setWorkspacesExpandedTogglesAndPersists() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let persistence = PersistenceStore(directory: dir)
+        let store = AppStore(persistence: persistence)
+        let a = store.addWorkspace(name: "a")
+        let b = store.addWorkspace(name: "b")
+        // only `a` stays expanded; `b` collapses.
+        store.setWorkspacesExpanded([a.id])
+        #expect(store.workspaces[0].isExpanded)
+        #expect(!store.workspaces[1].isExpanded)
+        let loaded = persistence.load()
+        #expect(loaded.workspaces[0].collapsed == nil)   // expanded → omitted
+        #expect(loaded.workspaces[1].collapsed == true)  // collapsed → written
+        _ = b
+    }
+
+    @Test func setWorkspacesExpandedUnchangedDoesNotWrite() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let persistence = PersistenceStore(directory: dir)
+        let store = AppStore(persistence: persistence)
+        let a = store.addWorkspace(name: "a")
+        // collapse a, flush to disk, then hand-edit the on-disk file to a sentinel and re-issue the SAME
+        // state: a no-op mutator must not overwrite the sentinel (proving it skipped save()).
+        store.setWorkspacesExpanded([]) // a collapsed, saved
+        let sentinelURL = dir.appendingPathComponent("workspaces.json")
+        try! Data("{ not json }".utf8).write(to: sentinelURL)
+        store.setWorkspacesExpanded([]) // same state → no save, sentinel survives
+        #expect(try! Data(contentsOf: sentinelURL) == Data("{ not json }".utf8))
+        _ = a
+    }
+
+    @Test func setWorkspaceExpandedTogglesSingleWorkspaceAndPersists() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let persistence = PersistenceStore(directory: dir)
+        let store = AppStore(persistence: persistence)
+        let a = store.addWorkspace(name: "a")
+        let b = store.addWorkspace(name: "b")
+        store.setWorkspaceExpanded(a.id, expanded: false)
+        #expect(!store.workspaces[0].isExpanded)
+        #expect(store.workspaces[1].isExpanded) // b untouched — per-workspace, not whole-tree
+        let loaded = persistence.load()
+        #expect(loaded.workspaces[0].collapsed == true)
+        #expect(loaded.workspaces[1].collapsed == nil)
+        _ = b
+    }
+
+    @Test func setWorkspaceExpandedUnknownOrUnchangedIsNoOp() {
+        let store = makeStore()
+        let a = store.addWorkspace(name: "a")
+        store.setWorkspaceExpanded(UUID(), expanded: false) // unknown id
+        #expect(store.workspaces[0].isExpanded)
+        store.setWorkspaceExpanded(a.id, expanded: true) // already expanded
+        #expect(store.workspaces[0].isExpanded)
+    }
+
     @Test func visibleWorkspacesReturnsAllWhenUnfocused() {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")

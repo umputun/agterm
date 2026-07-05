@@ -73,6 +73,18 @@ final class SidebarUITests: XCTestCase {
         return app.menuItems[title].firstMatch
     }
 
+    /// Polls until the number of visible `session-row` static texts equals `expected`. Used by the
+    /// collapse-persistence test, where the observable is how many session rows show under the
+    /// expanded-vs-collapsed workspaces.
+    private func pollSessionRowCount(_ expected: Int, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if app.staticTexts.matching(identifier: "session-row").count == expected { return true }
+            usleep(150_000)
+        }
+        return app.staticTexts.matching(identifier: "session-row").count == expected
+    }
+
     /// Polls an element's `value` until it equals `expected`.
     private func waitForValue(_ element: XCUIElement, _ expected: String, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
@@ -130,6 +142,126 @@ final class SidebarUITests: XCTestCase {
         // click again → expand → the session row comes back.
         ws.click()
         XCTAssertTrue(session.waitForExistence(timeout: 5), "expanding the workspace should show its session row again")
+    }
+
+    /// A workspace's collapsed state persists per window and restores on relaunch. Collapse a workspace
+    /// whose session is NOT the selected one (so the launch-time reveal of the active session can't
+    /// re-expand it), confirm the snapshot records it, then relaunch and confirm it comes back collapsed.
+    func testWorkspaceCollapsePersistsAcrossRelaunch() throws {
+        XCTAssertTrue(app.staticTexts["workspace 1"].waitForExistence(timeout: 20), "seeded workspace should exist")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "seeded session A should be visible")
+
+        // add a second workspace and give it its own session B (created via the workspace-row menu so it
+        // lands in workspace 2); B becomes the selected/active session.
+        app.buttons["New Workspace"].click()
+        let ws2 = app.staticTexts["workspace 2"]
+        XCTAssertTrue(ws2.waitForExistence(timeout: 5), "second workspace should appear")
+        ws2.rightClick()
+        presentedMenuItem("New Session").click()
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "workspace 2 should now show its own session B")
+
+        // collapse workspace 1 (NOT the active workspace) → its session A hides, leaving only B.
+        app.staticTexts["workspace 1"].click()
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 8), "collapsing workspace 1 should hide session A")
+        XCTAssertTrue(stateDir.pollSnapshot(equals: true, timeout: 8) { snapshot in
+            (snapshot["workspaces"] as? [[String: Any]])?
+                .first(where: { $0["name"] as? String == "workspace 1" })?["collapsed"] as? Bool
+        }, "collapsing workspace 1 should persist collapsed=true")
+
+        // relaunch with the same state dir: workspace 1 must restore COLLAPSED. The active session B's
+        // workspace (2) is revealed on launch, so exactly one session row (B) shows; A stays hidden under
+        // the restored-collapsed workspace 1.
+        app.terminate()
+        app = XCUIApplication()
+        app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["workspace 1"].waitForExistence(timeout: 20), "workspace 1 should restore")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10),
+                      "workspace 1 should restore collapsed (session A hidden); only the active session B shows")
+
+        // expanding workspace 1 again brings A back and clears the persisted collapse.
+        app.staticTexts["workspace 1"].click()
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 8), "expanding workspace 1 should reveal session A again")
+    }
+
+    /// Collapsing the workspace that OWNS the active session must persist that collapse even though the
+    /// active session is force-revealed on relaunch: the reveal shows the session but is a view action, so
+    /// it must NOT re-persist the workspace as expanded. Guards the reveal-must-not-burn-collapse fix.
+    func testActiveWorkspaceCollapsePersistsDespiteReveal() throws {
+        XCTAssertTrue(app.staticTexts["workspace 1"].waitForExistence(timeout: 20), "seeded workspace should exist")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "seeded active session should be visible")
+
+        // collapse the active session's own workspace → its row hides, snapshot records collapsed=true.
+        app.staticTexts["workspace 1"].click()
+        XCTAssertTrue(pollSessionRowCount(0, timeout: 8), "collapsing the active workspace should hide its session row")
+        XCTAssertTrue(stateDir.pollSnapshot(equals: true, timeout: 8) { snapshot in
+            (snapshot["workspaces"] as? [[String: Any]])?.first?["collapsed"] as? Bool
+        }, "collapsing the active workspace should persist collapsed=true")
+
+        // relaunch: the active session is revealed (its row shows again), but the persisted collapse must
+        // survive — the reveal must not have flipped the snapshot back to expanded.
+        app.terminate()
+        app = XCUIApplication()
+        app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
+        app.launchForUITest()
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 20), "the active session should be force-revealed on relaunch")
+        XCTAssertTrue(stateDir.pollSnapshot(equals: true, timeout: 8) { snapshot in
+            (snapshot["workspaces"] as? [[String: Any]])?.first?["collapsed"] as? Bool
+        }, "the launch reveal must not re-persist the workspace as expanded (still collapsed=true)")
+    }
+
+    /// Collapse Workspaces while a workspace is FOCUSED must still collapse the focus-hidden workspaces,
+    /// not just the one visible row. Guards the focused-mode collapseOthers fix (it reduces the tracked set
+    /// to the active workspace across ALL workspaces, so hidden ones are persisted collapsed too).
+    func testCollapseWorkspacesWhileFocusedCollapsesHiddenWorkspaces() throws {
+        XCTAssertTrue(app.staticTexts["workspace 1"].waitForExistence(timeout: 20), "seeded workspace should exist")
+        // give workspace 2 its own session B (via its row menu) so it becomes the active workspace.
+        app.buttons["New Workspace"].click()
+        let ws2 = app.staticTexts["workspace 2"]
+        XCTAssertTrue(ws2.waitForExistence(timeout: 5), "second workspace should appear")
+        ws2.rightClick()
+        presentedMenuItem("New Session").click()
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "workspace 2 should show its own active session B")
+
+        // focus workspace 2 → workspace 1 (holding the non-active session A) is now hidden from the tree.
+        ws2.rightClick()
+        presentedMenuItem("Focus").click()
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 8), "focusing workspace 2 should hide workspace 1's session")
+
+        // Collapse Workspaces (View menu) must collapse workspace 1 even though it is hidden by the focus.
+        app.menuBars.menuBarItems["View"].click()
+        let collapse = app.menuItems["Collapse Workspaces"]
+        XCTAssertTrue(collapse.waitForExistence(timeout: 5), "Collapse Workspaces menu item should appear")
+        collapse.click()
+        XCTAssertTrue(stateDir.pollSnapshot(equals: true, timeout: 8) { snapshot in
+            (snapshot["workspaces"] as? [[String: Any]])?
+                .first(where: { $0["name"] as? String == "workspace 1" })?["collapsed"] as? Bool
+        }, "Collapse Workspaces must persist the focus-hidden workspace 1 as collapsed")
+    }
+
+    /// Moving the active session into a freshly created workspace must keep it visible: a runtime-added
+    /// workspace defaults expanded, so its rows show without a manual expand. The move does not change the
+    /// selection, so nothing reveals the workspace — only the model-expanded-default (picked up by the
+    /// rebuild's formUnion) renders it open. Guards that fix.
+    func testMovingActiveSessionIntoNewWorkspaceKeepsItVisible() throws {
+        let row = sessionRow()
+        XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded active session should exist")
+        app.buttons["New Workspace"].click()
+        XCTAssertTrue(app.staticTexts["workspace 2"].waitForExistence(timeout: 5), "second workspace should appear")
+
+        // move the active session into the new (never-revealed) workspace 2 via its context menu.
+        row.rightClick()
+        let moveTo = app.menuItems["Move to"]
+        XCTAssertTrue(moveTo.waitForExistence(timeout: 5), "Move to submenu should appear")
+        moveTo.hover()
+        let target = app.menuItems["workspace 2"]
+        XCTAssertTrue(target.waitForExistence(timeout: 5), "target workspace in submenu should appear")
+        target.click()
+
+        // the moved session stays selected (no reveal fires), so it only shows if workspace 2 renders
+        // expanded from its isExpanded=true default; without that it would be hidden under a collapsed row.
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 8),
+                      "the active session should stay visible in the new workspace (rendered expanded by default)")
     }
 
     // issue #41: Esc must cancel the inline rename — close edit mode and discard the typed change.

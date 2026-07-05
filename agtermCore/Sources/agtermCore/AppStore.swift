@@ -530,6 +530,33 @@ public final class AppStore {
         save()
     }
 
+    /// Sets one workspace's expand/collapse state and persists it. Clean no-op (no write) for an unknown id
+    /// or when unchanged. The sidebar calls this for a GENUINE per-row user toggle only (a row click or the
+    /// disclosure triangle), never for a programmatic reveal — so a deliberate collapse survives a later
+    /// reveal of a session inside the workspace, and toggling one workspace never touches another's saved
+    /// state (unlike `setWorkspacesExpanded`, which rewrites the whole tree).
+    public func setWorkspaceExpanded(_ id: UUID, expanded: Bool) {
+        guard let index = workspaces.firstIndex(where: { $0.id == id }), workspaces[index].isExpanded != expanded else { return }
+        workspaces[index].isExpanded = expanded
+        save()
+    }
+
+    /// Marks each workspace expanded iff its id is in `expandedIDs` and persists the collapse state so it
+    /// survives a relaunch. One `save()` for the whole diff; a clean no-op (no write) when nothing changed.
+    /// Backs the deliberate all-workspace commands (Expand Workspaces / Collapse Workspaces), which set
+    /// every workspace at once; per-row toggles use `setWorkspaceExpanded` instead.
+    public func setWorkspacesExpanded(_ expandedIDs: Set<UUID>) {
+        var changed = false
+        for index in workspaces.indices {
+            let expanded = expandedIDs.contains(workspaces[index].id)
+            if workspaces[index].isExpanded != expanded {
+                workspaces[index].isExpanded = expanded
+                changed = true
+            }
+        }
+        if changed { save() }
+    }
+
     /// The focused workspace, resolved from `focusedWorkspaceID` — nil when unfocused OR when the id is
     /// stale (its workspace no longer exists). The single id→workspace lookup the tree filter and the
     /// bottom-bar focus pill both read, so they can't drift.
@@ -636,7 +663,7 @@ public final class AppStore {
     /// `@MainActor`; the resulting value is `Sendable` and safe to hand to a writer.
     public func snapshot() -> Snapshot {
         let workspaceSnapshots = workspaces.map { workspace in
-            WorkspaceSnapshot(id: workspace.id, name: workspace.name, sessions: workspace.sessions.map { session in
+            let sessions = workspace.sessions.map { session in
                 SessionSnapshot(id: session.id, customName: session.customName, cwd: session.currentCwd ?? session.initialCwd,
                                 isSplit: session.isSplit, fontSize: session.fontSize,
                                 splitCwd: session.splitCwd ?? session.initialSplitCwd, splitRatio: session.splitRatio,
@@ -645,7 +672,11 @@ public final class AppStore {
                                 splitForegroundCommand: session.splitForegroundCommand,
                                 initialCommand: session.initialCommand,
                                 backgroundWatermark: session.backgroundWatermark)
-            })
+            }
+            // only a collapsed workspace writes the flag; an expanded one omits it (nil) so an all-expanded
+            // tree serializes identically to a legacy snapshot.
+            return WorkspaceSnapshot(id: workspace.id, name: workspace.name, sessions: sessions,
+                                     collapsed: workspace.isExpanded ? nil : true)
         }
         return Snapshot(selectedSessionID: selectedSessionID, workspaces: workspaceSnapshots,
                         sidebarWidth: sidebarWidth, sidebarVisible: sidebarVisible, sidebarMode: sidebarMode,
@@ -679,7 +710,9 @@ public final class AppStore {
                 session.backgroundWatermark = sessionSnapshot.backgroundWatermark
                 return session
             }
-            return Workspace(id: workspaceSnapshot.id, name: workspaceSnapshot.name, sessions: sessions)
+            // absent/nil collapsed → expanded (back-compat with snapshots written before the field existed).
+            return Workspace(id: workspaceSnapshot.id, name: workspaceSnapshot.name, sessions: sessions,
+                             isExpanded: !(workspaceSnapshot.collapsed ?? false))
         }
         // clamp on restore (not just nil-default) so a corrupt or hand-edited snapshot can't drive an
         // out-of-range frame width; the drag path clamps to the same bounds.
