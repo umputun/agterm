@@ -45,13 +45,66 @@ struct AgentStatusTests {
         #expect(indicator.status == .idle)
         #expect(indicator.blink == false)
         #expect(indicator.autoReset == false)
+        #expect(indicator.color == nil)
+        #expect(indicator.statusPane == nil)
     }
 
     @Test func indicatorCustomInit() {
-        let indicator = AgentIndicator(status: .active, blink: true, autoReset: true)
+        let indicator = AgentIndicator(status: .active, blink: true, autoReset: true, color: "#ff0000")
         #expect(indicator.status == .active)
         #expect(indicator.blink == true)
         #expect(indicator.autoReset == true)
+        #expect(indicator.color == "#ff0000")
+        #expect(indicator.statusPane == nil)
+    }
+
+    @Test func statusPaneRawValueRoundTrip() {
+        #expect(StatusPane(rawValue: "left") == .left)
+        #expect(StatusPane(rawValue: "right") == .right)
+        #expect(StatusPane(rawValue: "scratch") == .scratch)
+        #expect(StatusPane(rawValue: "main") == nil)
+        #expect(StatusPane.allCases == [.left, .right, .scratch])
+    }
+
+    @Test func indicatorCarriesStatusPane() {
+        let indicator = AgentIndicator(status: .blocked, statusPane: .right)
+        #expect(indicator.status == .blocked)
+        #expect(indicator.statusPane == .right)
+    }
+
+    @Test func indicatorEquatableIncludesStatusPane() {
+        #expect(AgentIndicator(status: .blocked, statusPane: .right) == AgentIndicator(status: .blocked, statusPane: .right))
+        #expect(AgentIndicator(status: .blocked, statusPane: .right) != AgentIndicator(status: .blocked, statusPane: .left))
+        #expect(AgentIndicator(status: .blocked, statusPane: .right) != AgentIndicator(status: .blocked))
+    }
+
+    @Test func clearedByMatchingPaneFollowsClearedByKeystroke() {
+        // matching pane clears iff the status itself is clearable by that keystroke
+        #expect(AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .right, isEscape: false))
+        #expect(AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .right, isEscape: true))
+        #expect(AgentIndicator(status: .completed, statusPane: .scratch).clearedBy(pane: .scratch, isEscape: false))
+        // active clears only on Escape, and only for its own pane
+        #expect(!AgentIndicator(status: .active, statusPane: .right).clearedBy(pane: .right, isEscape: false))
+        #expect(AgentIndicator(status: .active, statusPane: .right).clearedBy(pane: .right, isEscape: true))
+        // idle never clears
+        #expect(!AgentIndicator(status: .idle, statusPane: .right).clearedBy(pane: .right, isEscape: true))
+    }
+
+    @Test func clearedByNonMatchingPaneNeverClears() {
+        // a keystroke from a different pane must never clear a background block
+        #expect(!AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .left, isEscape: false))
+        #expect(!AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .left, isEscape: true))
+        #expect(!AgentIndicator(status: .blocked, statusPane: .scratch).clearedBy(pane: .left, isEscape: false))
+        #expect(!AgentIndicator(status: .active, statusPane: .scratch).clearedBy(pane: .right, isEscape: true))
+    }
+
+    @Test func clearedByNilStatusPaneTreatedAsLeft() {
+        // nil statusPane behaves as .left (main): a left keystroke clears, right/scratch do not
+        #expect(AgentIndicator(status: .blocked).clearedBy(pane: .left, isEscape: false))
+        #expect(!AgentIndicator(status: .blocked).clearedBy(pane: .right, isEscape: false))
+        #expect(!AgentIndicator(status: .blocked).clearedBy(pane: .scratch, isEscape: true))
+        #expect(AgentIndicator(status: .active).clearedBy(pane: .left, isEscape: true))
+        #expect(!AgentIndicator(status: .active).clearedBy(pane: .left, isEscape: false))
     }
 
     @Test func indicatorEquatableEqual() {
@@ -84,6 +137,9 @@ struct AgentStatusTests {
         #expect(AgentIndicator(status: .active) != AgentIndicator(status: .completed))
         #expect(AgentIndicator(status: .active, blink: true) != AgentIndicator(status: .active, blink: false))
         #expect(AgentIndicator(status: .completed, autoReset: true) != AgentIndicator(status: .completed, autoReset: false))
+        // a color-only difference is distinguished, so a color change reloads the sidebar row (RowContent).
+        #expect(AgentIndicator(status: .blocked, color: "#ff0000") != AgentIndicator(status: .blocked))
+        #expect(AgentIndicator(status: .blocked, color: "#ff0000") != AgentIndicator(status: .blocked, color: "#00ff00"))
     }
 
     @Test func attentionRankOrdersBlockedActiveCompleted() {

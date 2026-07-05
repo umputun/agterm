@@ -58,8 +58,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
 
         context.coordinator.outlineView = outline
         context.coordinator.renameController.outlineView = outline
+        // seed the tracked expansion from the persisted per-workspace state BEFORE the reload, so
+        // rebuildAndReload restores each workspace's saved open/collapsed state (a collapsed workspace
+        // stays collapsed across relaunch) instead of force-expanding every row.
+        context.coordinator.seedExpansionFromModel()
         context.coordinator.rebuildAndReload()
-        context.coordinator.expandAll()
         context.coordinator.syncSelection()
         // on launch AppKit makes the sidebar the window's initial first responder; hand
         // focus to the terminal once the window + surface are attached (retries internally).
@@ -138,6 +141,13 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// discards its own expansion state for items it no longer renders, so on the way back to the tree
         /// this set is the only record of which workspaces were open.
         private var expandedWorkspaceIDs = Set<UUID>()
+        /// Set true around PROGRAMMATIC `expandItem`/`collapseItem` (the launch/rebuild re-apply, the
+        /// `syncSelection` reveal, the focus force-expand). While set, the didExpand/DidCollapse callbacks
+        /// still update the visual `expandedWorkspaceIDs` but SKIP the persist write-back, so a view-only
+        /// reveal or focus zoom-in never burns a workspace's deliberately-persisted collapse. Only a genuine
+        /// user toggle (row click / disclosure triangle) — which fires the callback with this false —
+        /// persists. `expandAll`/`collapseOthers` set it too and persist once explicitly at the end.
+        private var suppressExpansionPersist = false
         /// Scheduled single-click workspace expand/collapse, deferred by the double-click interval so a
         /// double-click (rename) can cancel it — otherwise the first click of a rename double-click would
         /// flip the workspace open/closed on its way into edit mode. See `handleSingleClick`.
@@ -404,18 +414,26 @@ struct WorkspaceSidebar: NSViewRepresentable {
             nodeCache = nodeCache.filter { seen.contains($0.key) }
             roots = newRoots
 
-            // prune expansion tracking for workspaces that no longer exist, so a removed-then-re-added id
-            // can't carry stale expansion.
+            // keep the tracked set in step with the model: drop ids for workspaces that no longer exist,
+            // then pick up any the model reports expanded but that aren't tracked yet — a workspace added
+            // at runtime defaults `isExpanded == true`, so this renders it open rather than collapsed. A
+            // user-collapsed workspace has `isExpanded == false` (so it's excluded) and a programmatic
+            // reveal keeps its already-present id (formUnion only adds), so neither is disturbed.
             expandedWorkspaceIDs.formIntersection(Set(store.workspaces.map(\.id)))
+            expandedWorkspaceIDs.formUnion(store.workspaces.filter(\.isExpanded).map(\.id))
 
             // restore expansion from the tracked set rather than the live outline state: a flagged-mode
             // reload drops the workspace nodes, so the outline forgets they were expanded, but the tracked
             // set remembers across the interlude. A freshly-focused workspace is expanded unconditionally —
-            // focus is a "zoom in", so its sessions must show even if the workspace was collapsed.
+            // focus is a "zoom in", so its sessions must show even if the workspace was collapsed. This
+            // re-apply is a VIEW restore, not a user action, so suppress the persist: a focused-but-collapsed
+            // workspace must keep its persisted collapse (the zoom-in shows it, but doesn't un-collapse it).
             outline.reloadData()
+            suppressExpansionPersist = true
             for node in roots where expandedWorkspaceIDs.contains(node.id) || node.id == store.focusedWorkspaceID {
                 outline.expandItem(node)
             }
+            suppressExpansionPersist = false
             updateEmptyState()
         }
 
@@ -451,33 +469,51 @@ struct WorkspaceSidebar: NSViewRepresentable {
             label.textColor = (GhosttyApp.shared.terminalForegroundColor ?? .secondaryLabelColor).withAlphaComponent(0.6)
         }
 
-        /// Expands every workspace row (new workspaces start open). Seeds the tracked expansion from the
-        /// live workspaces — NOT the current `roots`, which are session nodes when launched in flagged mode
-        /// or a single subtree when launched focused — so a later switch back to the full tree remembers
-        /// every workspace as expanded instead of collapsing them all.
+        /// Seeds the tracked expansion set from the persisted per-workspace state (`Workspace.isExpanded`),
+        /// so the launch reload restores each workspace's saved open/collapsed state. Sets only the tracked
+        /// set — `rebuildAndReload` applies it to the outline. Called once from `makeNSView`.
+        func seedExpansionFromModel() {
+            expandedWorkspaceIDs = Set(store.workspaces.filter(\.isExpanded).map(\.id))
+        }
+
+        /// Expands every workspace row — the "Expand Workspaces" user action. Seeds the tracked expansion
+        /// from the live `store.workspaces`, NOT the current `roots` (a single subtree when a workspace is
+        /// focused), so unfocusing back to the full tree remembers every workspace as expanded. The
+        /// per-item callbacks are suppressed; the whole-tree state is persisted once via
+        /// `setWorkspacesExpanded` since this is a deliberate all-workspace command.
         func expandAll() {
             guard let outline = outlineView else { return }
             for workspace in store.workspaces { expandedWorkspaceIDs.insert(workspace.id) }
+            suppressExpansionPersist = true
             for node in roots where node.kind == .workspace { outline.expandItem(node) }
+            suppressExpansionPersist = false
+            store.setWorkspacesExpanded(expandedWorkspaceIDs)
         }
 
         /// Collapses every workspace except the active one (the workspace of the active session,
         /// `store.currentWorkspaceID`), keeping that one expanded and scrolling its row into view so it
-        /// stays visible. Updates the tracked expansion set to match (the expand/collapse delegate
-        /// callbacks also fire, but the explicit update keeps the set correct even if a state is unchanged).
-        /// Tree-mode only — no workspace rows exist in flagged mode, so it is a graceful no-op there.
+        /// stays visible. Tree-mode only — no workspace rows exist in flagged mode, so it is a graceful
+        /// no-op there.
         func collapseOthers() {
             guard let outline = outlineView, store.sidebarMode == .tree else { return }
             let keepID = store.currentWorkspaceID
+            // this command targets ALL workspaces, not just the visible `roots`: reduce the tracked set to
+            // exactly the active workspace so a focus filter that hides some workspaces can't leave them in
+            // the set and get them persisted expanded by the batch write below. The outline expand/collapse
+            // only touches the rows currently on screen.
+            if let keepID { expandedWorkspaceIDs = [keepID] } else { expandedWorkspaceIDs = [] }
+            suppressExpansionPersist = true
             for node in roots where node.kind == .workspace {
                 if node.id == keepID {
                     if !outline.isItemExpanded(node) { outline.expandItem(node) }
-                    expandedWorkspaceIDs.insert(node.id)
-                } else {
-                    if outline.isItemExpanded(node) { outline.collapseItem(node) }
-                    expandedWorkspaceIDs.remove(node.id)
+                } else if outline.isItemExpanded(node) {
+                    outline.collapseItem(node)
                 }
             }
+            suppressExpansionPersist = false
+            // persist the whole-tree collapse state once — this is a deliberate command, so it writes every
+            // workspace (only the active one expanded), unlike the per-toggle callback path.
+            store.setWorkspacesExpanded(expandedWorkspaceIDs)
             // keep the active workspace's row on screen (mirrors syncSelection's scroll-into-view).
             guard let keepID, let node = nodeCache[keepID] else { return }
             let row = outline.row(forItem: node)
@@ -488,12 +524,18 @@ struct WorkspaceSidebar: NSViewRepresentable {
             guard let node = notification.userInfo?[Self.outlineItemUserInfoKey] as? SidebarNode,
                   node.kind == .workspace else { return }
             expandedWorkspaceIDs.insert(node.id)
+            // persist ONLY a genuine user expand (row click / disclosure triangle). A programmatic reveal or
+            // rebuild re-apply sets suppressExpansionPersist, so it updates the visual set above without
+            // burning the persisted collapse intent.
+            if !suppressExpansionPersist { store.setWorkspaceExpanded(node.id, expanded: true) }
         }
 
         func outlineViewItemDidCollapse(_ notification: Notification) {
             guard let node = notification.userInfo?[Self.outlineItemUserInfoKey] as? SidebarNode,
                   node.kind == .workspace else { return }
             expandedWorkspaceIDs.remove(node.id)
+            // persist only a genuine user collapse; programmatic collapses are suppressed (see didExpand).
+            if !suppressExpansionPersist { store.setWorkspaceExpanded(node.id, expanded: false) }
         }
 
         private func node(for id: UUID, kind: SidebarNode.Kind) -> SidebarNode {
@@ -522,9 +564,13 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // session leave a user-collapsed workspace and a user-moved scroll position alone.
             let selectionChanged = selectedID != lastRevealedSelection
             // a session selected by keyboard nav may live in a collapsed workspace, whose row is -1
-            // until expanded; expand its owner first so the row resolves.
+            // until expanded; expand its owner first so the row resolves. This reveal is a VIEW action,
+            // not a user expand, so suppress the persist: navigating into (or launching with the selection
+            // inside) a deliberately-collapsed workspace shows the session without un-collapsing it on disk.
             if selectionChanged, let owner = ownerWorkspaceNode(ofSession: selectedID), !outline.isItemExpanded(owner) {
+                suppressExpansionPersist = true
                 outline.expandItem(owner)
+                suppressExpansionPersist = false
             }
             let row = outline.row(forItem: node)
             guard row >= 0 else { return }
@@ -557,6 +603,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // before auto-follow can pull the selection back.
             store.noteUserActivity()
             store.selectSession(node.id)
+            // land on the selected session's blocked pane when it carries a pane-tagged block (a no-op
+            // otherwise), async so it runs after the selection + the sidebar's own focus-restore settle.
+            DispatchQueue.main.async { [weak self] in self?.actions.revealActiveBlockedPane() }
         }
 
         /// Returns keyboard focus to the active session's terminal after a sidebar

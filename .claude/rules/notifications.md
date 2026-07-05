@@ -88,9 +88,13 @@ paths:
   `StatusIconView` (an `NSImageView` sibling of `BadgeView` in `WorkspaceSidebar`) draws the row's tinted
   SF Symbol just LEFT of the count badge — `active`=`ellipsis.circle.fill`,
   `blocked`=`exclamationmark.circle.fill`, `completed`=`checkmark.circle.fill`,
-  `.idle`=hidden, each tinted with its configurable Settings color (`GhosttyApp.{active,blocked,completed}StatusColor`,
-  default `#DBD9E6` muted lavender-grey / system amber / system green; see the Settings section) — with
-  accessibility role `.staticText`, id `agent-status`, value = the state name (so XCUITest matches `app.staticTexts["agent-status"]`),
+  `.idle`=hidden, each tinted via the shared `GhosttyApp.statusColor(for:override:)`: the ephemeral
+  `AgentIndicator.color` per-call OVERRIDE (`session.status --color`, a valid `#rrggbb` wins) else its
+  configurable Settings color (`GhosttyApp.{active,blocked,completed}StatusColor`,
+  default `#DBD9E6` muted lavender-grey / system amber / system green; see the Settings + Control API sections)
+  — the SwiftUI attention-list `StatusGlyph` resolves through the SAME override helper so the two can't drift —
+  with accessibility role `.staticText`, id `agent-status`, value = the state name (so XCUITest matches `app.staticTexts["agent-status"]`;
+  the glyph TINT, per-call or not, is NOT accessibility-observable),
   and a `CABasicAnimation` `opacity` pulse added only while visible AND `blink` (the install's `UserPromptSubmit→active --blink`
   hook pulses the in-progress glyph).
   The glyph shows on EVERY non-idle session, the selected one INCLUDED — there is NO visibility gate.
@@ -113,15 +117,25 @@ paths:
   and the ⌃⇧P palette — the row menu targets the clicked node id, the menu bar + palette go through `AppActions.clearActiveSessionStatus`
   (the active session); all route to `AppStore.setAgentIndicator(AgentIndicator(), forSession:)`,
   the GUI half of `session.status idle`.
-  **Typing also clears an attention glyph:** `GhosttySurfaceView.keyDown` calls `AgentStatus.clearedByKeystroke(isEscape:)`
-  on the owning session's `agentIndicator.status` and, when it returns true,
-  fires `onUserInputClearsStatus` (wired by the main/split surface factories to the same `setAgentIndicator(AgentIndicator(), …)`
-  → idle).
-  The decision is host-free + unit-tested in `agtermCore`: `blocked`/`completed` clear on ANY key (you've
-  engaged with the prompt / finished result); `active` clears ONLY on Escape — the interrupt key (`keyCode == 53`)
+  **Typing also clears an attention glyph (pane-scoped):** `GhosttySurfaceView.keyDown` fires
+  `onUserInputClearsStatus(isEscape:)` UNCONDITIONALLY (it no longer reads `agentIndicator` itself),
+  and each surface factory — main (`left`), split (`right`), and scratch (`scratch`) — wires that closure
+  to the pane-scoped decision, clearing to idle via `setAgentIndicator(AgentIndicator(), …)` ONLY when the
+  host-free `AgentIndicator.clearedBy(pane:isEscape:)` says the keystroke's OWN pane owns the current status.
+  So a block set from a background pane (a `right`- or `scratch`-tagged `session status --pane`) SURVIVES
+  foreground typing in the main pane — only a keystroke in the owning pane clears it — and the scratch,
+  which has no `view.session`, still self-clears because the closure (not `keyDown`) owns the decision.
+  The per-status decision is host-free + unit-tested in `agtermCore` (`clearedBy` gates `clearedByKeystroke`
+  on the pane match): `blocked`/`completed` clear on ANY key (you've engaged with the prompt / finished result);
+  `active` clears ONLY on Escape — the interrupt key (`keyCode == 53`)
   — so ordinary typing while the agent works does NOT wipe the "working" glyph,
   but cancelling a prompt with Esc does; `idle` has no glyph.
   This is the ONE input-driven clear (status is otherwise control-driven).
+  Because the clear is pane-SCOPED, a tag whose owning pane's shell EXITS would otherwise strand a glyph
+  no surviving surface can match, so `AppStore.closeSplit`/`closePrimaryPane`/`closeScratch` reconcile the
+  indicator on teardown — clearing a status owned by the destroyed pane (`.right` on closeSplit, `.left`/nil
+  on the primary→split promote, `.scratch` on closeScratch) — mirroring the `clearSearch()` reset on the
+  same paths (host-free, `AppStorePaneTests`).
   It covers the Esc-decline/interrupt case Claude Code fires NO hook for — the keystroke flows through
   the surface's `keyDown` on its way to the agent's PTY, so it clears the stale glyph the moment you
   deal with the prompt — and clears the `completed` flash once you re-engage.
@@ -137,6 +151,18 @@ paths:
   Peer terminals get the decline case for free by different means agterm avoids:
   cmux owns the permission decision UI (a blocking hook round-trip captures accept/deny),
   herdr scrapes the PTY (the prompt chrome leaving the screen clears it).
+- **Pane-aware selection reveal.**
+  The same `AgentIndicator.statusPane` tag (set via `session.status --pane`, see the Control API rule) also
+  decides WHERE a GUI selection lands: EVERY user-initiated selection — attention-nav (⌃⌥↑/⌃⌥↓),
+  plain session nav (⌥⌘↑/↓/first/last), the ⌃P/attention command palette, a sidebar row click,
+  and idle auto-follow — reveals and focuses the pane that set the block — flipping `splitFocused` to the
+  split, or showing a hidden scratch via `AppStore.toggleScratch` — instead of always the main pane (the
+  shared `AppActions.revealActiveBlockedPane`, a no-op for an IDLE session (no status set);
+  see the Menu/actions rule).
+  The `session.go next-attention|prev-attention` control arm only steps the selection (`navigateSession`),
+  it does NOT itself run the reveal — the pane focus is a GUI/auto-follow concern.
+  So a `right`- or `scratch`-tagged block both survives foreground typing in another pane AND pulls you to
+  the waiting pane, not just the session.
 - **Titlebar attention bell (opt-in, window-wide aggregate of the glyph).**
   When `attentionButtonEnabled` is on (Settings ▸ General, default OFF — see the Settings section),
   `customTitlebar` (`ContentView`) shows a bell icon just after the title that recovers the per-session

@@ -99,6 +99,32 @@ struct CommandsTests {
         #expect(validationMessage(["session", "new", "--create-workspace"]) == "--create-workspace requires --workspace-name")
     }
 
+    @Test func sessionNewAfter() throws {
+        let expected = ControlRequest(cmd: .sessionNew, args: ControlArgs(after: "active"))
+        #expect(try request(["session", "new", "--after", "active"]) == expected)
+    }
+
+    @Test func sessionNewBefore() throws {
+        let expected = ControlRequest(cmd: .sessionNew, args: ControlArgs(before: "s1"))
+        #expect(try request(["session", "new", "--before", "s1"]) == expected)
+    }
+
+    @Test func sessionNewRejectsAfterAndBefore() {
+        #expect(validationMessage(["session", "new", "--after", "a", "--before", "b"])
+            == "use either --after or --before, not both")
+    }
+
+    @Test func sessionNewRejectsAfterAndWorkspace() {
+        // the anchor sid already names the workspace, so placement can't also address one.
+        #expect(validationMessage(["session", "new", "--after", "a", "--workspace", "ws1"])
+            == "session.new takes --after/--before or a workspace, not both")
+    }
+
+    @Test func sessionNewRejectsBeforeAndWorkspaceName() {
+        #expect(validationMessage(["session", "new", "--before", "a", "--workspace-name", "servers"])
+            == "session.new takes --after/--before or a workspace, not both")
+    }
+
     @Test func sessionClose() throws {
         #expect(try request(["session", "close", "--target", "x"]) == ControlRequest(cmd: .sessionClose, target: "x"))
     }
@@ -123,13 +149,39 @@ struct CommandsTests {
     }
 
     @Test func sessionMoveRequiresWorkspaceOrTo() {
-        // neither the workspace positional nor --to is set — validate() rejects it with a usage message.
-        #expect(validationMessage(["session", "move"]) == "provide a destination workspace or --to")
+        // no placement intent at all — validate() rejects it with a usage message naming all three forms.
+        #expect(validationMessage(["session", "move"]) == "provide a destination workspace, --to, or --after/--before")
     }
 
     @Test func sessionMoveRejectsWorkspaceAndTo() {
         // both the workspace positional and --to are set — validate() rejects it with a usage message.
         #expect(validationMessage(["session", "move", "ws2", "--to", "up"]) == "provide a destination workspace or --to, not both")
+    }
+
+    @Test func sessionMoveAfter() throws {
+        let expected = ControlRequest(cmd: .sessionMove, target: "s1", args: ControlArgs(after: "s2"))
+        #expect(try request(["session", "move", "--after", "s2", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionMoveBefore() throws {
+        let expected = ControlRequest(cmd: .sessionMove, target: "s1", args: ControlArgs(before: "s2"))
+        #expect(try request(["session", "move", "--before", "s2", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionMoveRejectsAfterAndBefore() {
+        #expect(validationMessage(["session", "move", "--after", "a", "--before", "b"])
+            == "use either --after or --before, not both")
+    }
+
+    @Test func sessionMoveRejectsAfterAndTo() {
+        #expect(validationMessage(["session", "move", "--after", "a", "--to", "up"])
+            == "session.move takes --after/--before or --to, not both")
+    }
+
+    @Test func sessionMoveRejectsAfterAndWorkspace() {
+        // the anchor already names the workspace, so it can't also take a destination workspace.
+        #expect(validationMessage(["session", "move", "ws2", "--after", "a"])
+            == "session.move takes --after/--before or a workspace, not both")
     }
 
     @Test func sessionTypeWithText() throws {
@@ -352,6 +404,48 @@ struct CommandsTests {
     @Test func sessionStatusWithoutSound() throws {
         let req = try request(["session", "status", "active"])
         #expect(req.args?.sound == nil)
+    }
+
+    @Test func sessionStatusWithColor() throws {
+        let req = try request(["session", "status", "blocked", "--color", "#ff0000"])
+        #expect(req.cmd == .sessionStatus)
+        #expect(req.args?.status == "blocked")
+        #expect(req.args?.color == "#ff0000")
+        #expect(req == ControlRequest(cmd: .sessionStatus, target: "active",
+                                      args: ControlArgs(status: "blocked", color: "#ff0000")))
+    }
+
+    @Test func sessionStatusWithoutColor() throws {
+        let req = try request(["session", "status", "active"])
+        #expect(req.args?.color == nil)
+    }
+
+    @Test func sessionStatusRejectsBadColor() {
+        // a non-#rrggbb color is rejected by validate() before any request is built; pin the exact message
+        // so an unrelated parse failure can't masquerade as color validation (matches the sibling
+        // `session background color` rejection tests).
+        #expect(validationMessage(["session", "status", "blocked", "--color", "nope"]) == "color must be a #rrggbb hex value")
+    }
+
+    @Test func sessionStatusWithPane() throws {
+        let expected = ControlRequest(cmd: .sessionStatus, target: "s1",
+                                      args: ControlArgs(pane: "right", status: "blocked"))
+        #expect(try request(["session", "status", "blocked", "--pane", "right", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionStatusWithPaneScratch() throws {
+        let req = try request(["session", "status", "blocked", "--pane", "scratch"])
+        #expect(req.args?.pane == "scratch")
+    }
+
+    @Test func sessionStatusWithoutPaneOmitsIt() throws {
+        let req = try request(["session", "status", "blocked"])
+        #expect(req.args?.pane == nil)
+    }
+
+    @Test func sessionStatusRejectsBadPane() {
+        // `other` is a session.focus mode, not a status pane — status accepts left|right|scratch only.
+        #expect(validationMessage(["session", "status", "blocked", "--pane", "other"]) == "--pane must be left, right, or scratch")
     }
 
     @Test func sessionSearchWithNeedle() throws {

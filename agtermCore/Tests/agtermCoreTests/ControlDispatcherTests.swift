@@ -136,6 +136,106 @@ struct ControlDispatcherTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func sessionNewRoutesPlacementOptions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSessionNewResponse = ControlResponse(ok: true, result: ControlResult(id: "new-session"))
+
+        let after = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew,
+            args: ControlArgs(after: "active")
+        ))
+        let before = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew,
+            args: ControlArgs(before: "anchor")
+        ))
+
+        #expect(after == ControlResponse(ok: true, result: ControlResult(id: "new-session")))
+        #expect(before == ControlResponse(ok: true, result: ControlResult(id: "new-session")))
+        #expect(actions.calls == [
+            .sessionNew(ControlSessionCreateOptions(window: nil, cwd: nil, workspace: nil, workspaceName: nil,
+                                                    createWorkspace: nil, command: nil, name: nil, after: "active")),
+            .sessionNew(ControlSessionCreateOptions(window: nil, cwd: nil, workspace: nil, workspaceName: nil,
+                                                    createWorkspace: nil, command: nil, name: nil, before: "anchor"))
+        ])
+    }
+
+    @Test func sessionNewRejectsConflictingPlacementArguments() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let bothAnchors = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew,
+            args: ControlArgs(after: "a", before: "b")
+        ))
+        let anchorAndWorkspace = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew,
+            args: ControlArgs(workspace: "dest", after: "a")
+        ))
+        let anchorAndWorkspaceName = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew,
+            args: ControlArgs(workspaceName: "servers", before: "a")
+        ))
+
+        #expect(bothAnchors == ControlResponse(ok: false, error: "use either --after or --before, not both"))
+        #expect(anchorAndWorkspace == ControlResponse(
+            ok: false, error: "session.new takes --after/--before or a workspace, not both"))
+        #expect(anchorAndWorkspaceName == ControlResponse(
+            ok: false, error: "session.new takes --after/--before or a workspace, not both"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionMoveRoutesPlacementForms() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let after = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "session",
+            args: ControlArgs(window: "win", after: "anchor")
+        ))
+        let before = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "session",
+            args: ControlArgs(before: "anchor")
+        ))
+
+        #expect(after == ControlResponse(ok: true))
+        #expect(before == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .sessionMove(target: "session", window: "win", .place(anchor: "anchor", after: true)),
+            .sessionMove(target: "session", window: nil, .place(anchor: "anchor", after: false))
+        ])
+    }
+
+    @Test func sessionMoveRejectsConflictingPlacementForms() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let bothAnchors = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "active",
+            args: ControlArgs(after: "a", before: "b")
+        ))
+        let anchorAndTo = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "active",
+            args: ControlArgs(to: "up", after: "a")
+        ))
+        let anchorAndWorkspace = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            target: "active",
+            args: ControlArgs(workspace: "dest", before: "a")
+        ))
+
+        #expect(bothAnchors == ControlResponse(ok: false, error: "use either --after or --before, not both"))
+        #expect(anchorAndTo == ControlResponse(
+            ok: false, error: "session.move takes --after/--before or --to, not both"))
+        #expect(anchorAndWorkspace == ControlResponse(
+            ok: false, error: "session.move takes --after/--before or a workspace, not both"))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func sessionSelectGoCloseAndRenameRouteThroughActions() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -347,21 +447,90 @@ struct ControlDispatcherTests {
             cmd: .sessionStatus,
             target: "session",
             args: ControlArgs(window: "win", status: "blocked", blink: true,
-                              autoReset: true, sound: "default")
+                              autoReset: true, sound: "default", color: "#ff0000")
         ))
         let bad = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionStatus,
             target: "session",
             args: ControlArgs(status: "bogus")
         ))
+        let badColor = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionStatus,
+            target: "session",
+            args: ControlArgs(status: "blocked", color: "nope")
+        ))
 
         #expect(status == ControlResponse(ok: true))
         #expect(bad == ControlResponse(ok: false, error: "invalid status"))
+        #expect(badColor == ControlResponse(ok: false, error: "invalid color (expected #rrggbb)"))
+        // the bad-color request errors before reaching the actions, so only the good one is recorded.
         #expect(actions.calls == [
             .sessionStatus(target: "session", window: "win",
                            ControlSessionStatusUpdate(status: .blocked, blink: true,
-                                                      autoReset: true, sound: "default"))
+                                                      autoReset: true, sound: "default", color: "#ff0000", pane: nil))
         ])
+    }
+
+    @Test func sessionStatusRevertsColorWhenOmitted() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        // set a per-call color, then set again with NO color: the second update must carry color nil,
+        // proving the "next call without --color discards it" contract at the dispatch/update layer (the
+        // app arm builds a fresh AgentIndicator from update.color, so a nil update.color clears the tint).
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionStatus, target: "session",
+                                                     args: ControlArgs(status: "blocked", color: "#ff0000")))
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionStatus, target: "session",
+                                                     args: ControlArgs(status: "blocked")))
+
+        #expect(actions.calls == [
+            .sessionStatus(target: "session", window: nil,
+                           ControlSessionStatusUpdate(status: .blocked, blink: nil, autoReset: nil,
+                                                      sound: nil, color: "#ff0000")),
+            .sessionStatus(target: "session", window: nil,
+                           ControlSessionStatusUpdate(status: .blocked, blink: nil, autoReset: nil,
+                                                      sound: nil, color: nil))
+        ])
+    }
+
+    @Test func sessionStatusCarriesValidPaneAndRejectsInvalidPane() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let tagged = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionStatus,
+            target: "session",
+            args: ControlArgs(pane: "right", status: "blocked")
+        ))
+        let badPane = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionStatus,
+            target: "session",
+            args: ControlArgs(pane: "middle", status: "blocked")
+        ))
+
+        #expect(tagged == ControlResponse(ok: true))
+        #expect(badPane == ControlResponse(ok: false, error: "--pane must be left, right, or scratch"))
+        // the invalid pane never reaches actions (status unchanged), only the valid one is recorded.
+        #expect(actions.calls == [
+            .sessionStatus(target: "session", window: nil,
+                           ControlSessionStatusUpdate(status: .blocked, blink: nil,
+                                                      autoReset: nil, sound: nil, pane: .right))
+        ])
+    }
+
+    @Test func sessionStatusColorErrorWinsOverInvalidPane() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        // both --color and --pane are invalid; color is validated first, so the color error wins.
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionStatus,
+            target: "session",
+            args: ControlArgs(pane: "middle", status: "blocked", color: "nope")
+        ))
+
+        #expect(response == ControlResponse(ok: false, error: "invalid color (expected #rrggbb)"))
+        #expect(actions.calls.isEmpty)
     }
 
     @Test func splitScratchFocusAndResizeRouteParsedInputs() async {
@@ -669,11 +838,269 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.overlayResult(target: "session", window: nil)])
     }
 
+    @Test func sessionBackgroundRoutesParsedTextImageColorAndClearForms() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSessionBackgroundResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
+
+        let text = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionBackground,
+            target: "session",
+            args: ControlArgs(text: "DRAFT", mode: "text", window: "win", color: "#ff0000",
+                              opacity: 0.15, fit: "contain", position: "top-left")
+        ))
+        let image = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionBackground,
+            target: "session",
+            args: ControlArgs(mode: "image", path: "/tmp/bg.png", fit: "cover",
+                              position: "bottom-right", repeats: true)
+        ))
+        let color = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionBackground,
+            target: "session",
+            args: ControlArgs(mode: "color", color: "#102030")
+        ))
+        let clear = await dispatcher.dispatch(ControlRequest(cmd: .sessionBackground, target: "session"))
+
+        let textWatermark = BackgroundWatermark(kind: .text, text: "DRAFT", colorHex: "#ff0000",
+                                                opacity: 0.15, fit: .contain, position: .topLeft)
+        let imageWatermark = BackgroundWatermark(kind: .image, imagePath: "/tmp/bg.png",
+                                                 fit: .cover, position: .bottomRight, repeats: true)
+        let colorWatermark = BackgroundWatermark(kind: .color, colorHex: "#102030")
+        #expect(text == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(image == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(color == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(clear == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(actions.calls == [
+            .sessionBackground(target: "session", window: "win",
+                               ControlSessionBackgroundOptions(watermark: textWatermark)),
+            .sessionBackground(target: "session", window: nil,
+                               ControlSessionBackgroundOptions(watermark: imageWatermark)),
+            .sessionBackground(target: "session", window: nil,
+                               ControlSessionBackgroundOptions(watermark: colorWatermark)),
+            .sessionBackground(target: "session", window: nil,
+                               ControlSessionBackgroundOptions(watermark: nil))
+        ])
+    }
+
+    @Test func sessionBackgroundRejectsInvalidInputsBeforeCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let tooLong = String(repeating: "x", count: WatermarkConfig.maxTextLength + 1)
+
+        let badFit = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionBackground,
+            args: ControlArgs(mode: "image", path: "/tmp/bg.png", fit: "wide")
+        ))
+        let badPosition = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionBackground,
+            args: ControlArgs(mode: "image", path: "/tmp/bg.png", position: "middle")
+        ))
+        let badOpacity = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionBackground,
+            args: ControlArgs(mode: "image", path: "/tmp/bg.png", opacity: 1.5)
+        ))
+        let missingPath = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionBackground,
+            args: ControlArgs(mode: "image")
+        ))
+        let controlPath = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionBackground,
+            args: ControlArgs(mode: "image", path: "/tmp/bg\n.png")
+        ))
+        let missingText = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionBackground,
+            args: ControlArgs(mode: "text")
+        ))
+        let longText = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionBackground,
+            args: ControlArgs(text: tooLong, mode: "text")
+        ))
+        let badTextColor = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionBackground,
+            args: ControlArgs(text: "DRAFT", mode: "text", color: "red")
+        ))
+        let missingColor = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionBackground,
+            args: ControlArgs(mode: "color")
+        ))
+        let badColor = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionBackground,
+            args: ControlArgs(mode: "color", color: "blue")
+        ))
+        let badMode = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionBackground,
+            args: ControlArgs(mode: "pattern")
+        ))
+
+        #expect(badFit == ControlResponse(ok: false, error: "invalid fit: wide (contain|cover|stretch|none)"))
+        #expect(badPosition == ControlResponse(ok: false, error: "invalid position: middle"))
+        #expect(badOpacity == ControlResponse(ok: false, error: "invalid opacity: 1.5 (0.0-1.0)"))
+        #expect(missingPath == ControlResponse(ok: false, error: "session.background image requires a path"))
+        #expect(controlPath == ControlResponse(ok: false, error: "image path must not contain control characters"))
+        #expect(missingText == ControlResponse(ok: false, error: "session.background text requires text"))
+        #expect(longText == ControlResponse(
+            ok: false,
+            error: "session.background text too long (max \(WatermarkConfig.maxTextLength) characters)"
+        ))
+        #expect(badTextColor == ControlResponse(ok: false, error: "invalid color: red (#rrggbb)"))
+        #expect(missingColor == ControlResponse(ok: false, error: "session.background color requires a color"))
+        #expect(badColor == ControlResponse(ok: false, error: "invalid color: blue (#rrggbb)"))
+        #expect(badMode == ControlResponse(
+            ok: false,
+            error: "invalid background mode: pattern (image|text|color|clear)"
+        ))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionTextRoutesOptionsAndKeepsExactActionResponse() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSessionTextResponse = ControlResponse(ok: true, result: ControlResult(text: "line\n"))
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionText,
+            target: "session",
+            args: ControlArgs(window: "win", pane: "scratch", lines: 10)
+        ))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(text: "line\n")))
+        #expect(actions.calls == [
+            .sessionText(target: "session", window: "win",
+                         ControlSessionTextOptions(pane: "scratch", all: false, lines: 10))
+        ])
+    }
+
+    @Test func sessionTextRejectsInvalidLineOptionsBeforeCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let both = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionText,
+            args: ControlArgs(all: true, lines: 5)
+        ))
+        let zero = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionText,
+            args: ControlArgs(lines: 0)
+        ))
+
+        #expect(both == ControlResponse(ok: false, error: "use either --all or --lines, not both"))
+        #expect(zero == ControlResponse(ok: false, error: "--lines must be greater than 0"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func restoreClearRoutesThroughActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextRestoreClearResponse = ControlResponse(ok: true)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .restoreClear))
+
+        #expect(response == ControlResponse(ok: true))
+        #expect(actions.calls == [.restoreClear])
+    }
+
+    @Test func windowCommandsRouteParsedInputsAndKeepActionResponses() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextWindowRenameResponse = ControlResponse(ok: true, result: ControlResult(id: "win"))
+        actions.nextWindowResizeResponse = ControlResponse(ok: true, result: ControlResult(id: "win"))
+        actions.nextWindowMoveResponse = ControlResponse(ok: true, result: ControlResult(id: "win"))
+        actions.nextWindowZoomResponse = ControlResponse(ok: false, error: "window not open — window.select it first")
+
+        let renamed = await dispatcher.dispatch(ControlRequest(
+            cmd: .windowRename,
+            target: "9f3c",
+            args: ControlArgs(name: "  Renamed  ")
+        ))
+        let resized = await dispatcher.dispatch(ControlRequest(
+            cmd: .windowResize,
+            target: "9f3c",
+            args: ControlArgs(width: 1200, height: 800)
+        ))
+        let moved = await dispatcher.dispatch(ControlRequest(
+            cmd: .windowMove,
+            target: "9f3c",
+            args: ControlArgs(x: 100, y: 50, display: 1)
+        ))
+        let zoomed = await dispatcher.dispatch(ControlRequest(cmd: .windowZoom, target: "9f3c"))
+
+        #expect(renamed == ControlResponse(ok: true, result: ControlResult(id: "win")))
+        #expect(resized == ControlResponse(ok: true, result: ControlResult(id: "win")))
+        #expect(moved == ControlResponse(ok: true, result: ControlResult(id: "win")))
+        #expect(zoomed == ControlResponse(ok: false, error: "window not open — window.select it first"))
+        #expect(actions.calls == [
+            .windowRename(target: "9f3c", "Renamed"),
+            .windowResize(target: "9f3c", width: 1200, height: 800),
+            .windowMove(target: "9f3c", x: 100, y: 50, display: 1),
+            .windowZoom(target: "9f3c")
+        ])
+    }
+
+    @Test func windowCommandsRejectInvalidInputsBeforeCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let missingName = await dispatcher.dispatch(ControlRequest(cmd: .windowRename, target: "win"))
+        let blankName = await dispatcher.dispatch(ControlRequest(
+            cmd: .windowRename,
+            target: "win",
+            args: ControlArgs(name: "   ")
+        ))
+        let missingResize = await dispatcher.dispatch(ControlRequest(
+            cmd: .windowResize,
+            target: "win",
+            args: ControlArgs(width: 1200)
+        ))
+        let badResize = await dispatcher.dispatch(ControlRequest(
+            cmd: .windowResize,
+            target: "win",
+            args: ControlArgs(width: 0, height: 800)
+        ))
+        let missingMoveY = await dispatcher.dispatch(ControlRequest(
+            cmd: .windowMove,
+            target: "win",
+            args: ControlArgs(x: 100)
+        ))
+
+        #expect(missingName == ControlResponse(ok: false, error: "window.rename requires a name"))
+        #expect(blankName == ControlResponse(ok: false, error: "window.rename requires a name"))
+        #expect(missingResize == ControlResponse(ok: false, error: "window.resize requires positive width and height"))
+        #expect(badResize == ControlResponse(ok: false, error: "window.resize requires positive width and height"))
+        #expect(missingMoveY == ControlResponse(ok: false, error: "window.move requires x and y"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func windowCommandsKeepHostSideLookupAndPlatformErrors() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextWindowRenameResponse = ControlResponse(ok: false, error: "no such window: missing")
+        actions.nextWindowMoveResponse = ControlResponse(ok: false, error: "display 3 out of range (have 1)")
+
+        let missingWindow = await dispatcher.dispatch(ControlRequest(
+            cmd: .windowRename,
+            target: "missing",
+            args: ControlArgs(name: "Renamed")
+        ))
+        let badDisplay = await dispatcher.dispatch(ControlRequest(
+            cmd: .windowMove,
+            target: "win",
+            args: ControlArgs(x: 100, y: 50, display: 3)
+        ))
+
+        #expect(missingWindow == ControlResponse(ok: false, error: "no such window: missing"))
+        #expect(badDisplay == ControlResponse(ok: false, error: "display 3 out of range (have 1)"))
+        #expect(actions.calls == [
+            .windowRename(target: "missing", "Renamed"),
+            .windowMove(target: "win", x: 100, y: 50, display: 3)
+        ])
+    }
+
     @Test func nonMigratedCommandFallsThrough() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
 
-        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionText))
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionSearch))
 
         #expect(response == nil)
         #expect(actions.calls.isEmpty)
@@ -717,6 +1144,13 @@ private final class MockControlActions: ControlActions {
         case overlayOpen(target: String?, window: String?, ControlSessionOverlayOpenOptions)
         case overlayClose(target: String?, window: String?)
         case overlayResult(target: String?, window: String?)
+        case sessionBackground(target: String?, window: String?, ControlSessionBackgroundOptions)
+        case sessionText(target: String?, window: String?, ControlSessionTextOptions)
+        case windowRename(target: String?, String)
+        case windowResize(target: String?, width: Int, height: Int)
+        case windowMove(target: String?, x: Int, y: Int, display: Int?)
+        case windowZoom(target: String?)
+        case restoreClear
     }
 
     var calls: [Call] = []
@@ -737,6 +1171,13 @@ private final class MockControlActions: ControlActions {
     var nextOverlayOpenResponse = ControlResponse(ok: true)
     var nextOverlayCloseResponse = ControlResponse(ok: true)
     var nextOverlayResultResponse = ControlResponse(ok: true)
+    var nextSessionBackgroundResponse = ControlResponse(ok: true)
+    var nextSessionTextResponse = ControlResponse(ok: true)
+    var nextWindowRenameResponse = ControlResponse(ok: true)
+    var nextWindowResizeResponse = ControlResponse(ok: true)
+    var nextWindowMoveResponse = ControlResponse(ok: true)
+    var nextWindowZoomResponse = ControlResponse(ok: true)
+    var nextRestoreClearResponse = ControlResponse(ok: true)
 
     func controlTree(window: String?) -> ControlResponse {
         calls.append(.tree(window: window))
@@ -911,5 +1352,41 @@ private final class MockControlActions: ControlActions {
     func sessionOverlayResult(_ target: String?, window: String?) -> ControlResponse {
         calls.append(.overlayResult(target: target, window: window))
         return nextOverlayResultResponse
+    }
+
+    func setSessionBackground(_ target: String?, window: String?,
+                              options: ControlSessionBackgroundOptions) -> ControlResponse {
+        calls.append(.sessionBackground(target: target, window: window, options))
+        return nextSessionBackgroundResponse
+    }
+
+    func readSessionText(_ target: String?, window: String?, options: ControlSessionTextOptions) -> ControlResponse {
+        calls.append(.sessionText(target: target, window: window, options))
+        return nextSessionTextResponse
+    }
+
+    func windowRename(_ target: String?, name: String) -> ControlResponse {
+        calls.append(.windowRename(target: target, name))
+        return nextWindowRenameResponse
+    }
+
+    func windowResize(_ target: String?, width: Int, height: Int) -> ControlResponse {
+        calls.append(.windowResize(target: target, width: width, height: height))
+        return nextWindowResizeResponse
+    }
+
+    func windowMove(_ target: String?, x: Int, y: Int, display: Int?) -> ControlResponse {
+        calls.append(.windowMove(target: target, x: x, y: y, display: display))
+        return nextWindowMoveResponse
+    }
+
+    func windowZoom(_ target: String?) -> ControlResponse {
+        calls.append(.windowZoom(target: target))
+        return nextWindowZoomResponse
+    }
+
+    func clearRestoreCommands() -> ControlResponse {
+        calls.append(.restoreClear)
+        return nextRestoreClearResponse
     }
 }

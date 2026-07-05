@@ -441,15 +441,17 @@ private struct AgentStatusSettingsView: View {
             Section("Auto-follow") {
                 Picker("Auto-follow blocked sessions", selection: autoFollowAttention) {
                     Text("Disabled").tag(AppSettings.AutoFollowAttention.off)
-                    Text("5s").tag(AppSettings.AutoFollowAttention.s5)
-                    Text("10s").tag(AppSettings.AutoFollowAttention.s10)
-                    Text("30s").tag(AppSettings.AutoFollowAttention.s30)
-                    Text("60s").tag(AppSettings.AutoFollowAttention.s60)
-                    Text("5m").tag(AppSettings.AutoFollowAttention.m5)
+                    Text("5 sec idle").tag(AppSettings.AutoFollowAttention.s5)
+                    Text("10 sec idle").tag(AppSettings.AutoFollowAttention.s10)
+                    Text("30 sec idle").tag(AppSettings.AutoFollowAttention.s30)
+                    Text("60 sec idle").tag(AppSettings.AutoFollowAttention.s60)
+                    Text("5 min idle").tag(AppSettings.AutoFollowAttention.m5)
                 }
                 .accessibilityIdentifier("settings-auto-follow")
-                Toggle("Don't auto-follow away from a running session", isOn: autoFollowStayOnActive)
+                Toggle("Auto-follow away from a running session", isOn: autoFollowAwayFromRunning)
                     .accessibilityIdentifier("settings-auto-follow-stay-active")
+                    .disabled(autoFollowAttention.wrappedValue == .off)
+                SettingHint("Only applies while auto-follow is on.")
             }
 
             Section {
@@ -496,11 +498,13 @@ private struct AgentStatusSettingsView: View {
                 set: { model.setAutoFollowAttention($0 == .off ? nil : $0.rawValue) })
     }
 
-    /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json
-    /// minimal until the user opts into staying put on a running session.
-    private var autoFollowStayOnActive: Binding<Bool> {
-        Binding(get: { model.settings.autoFollowStayOnActive ?? false },
-                set: { model.setAutoFollowStayOnActive($0 ? true : nil) })
+    /// Inverted view of the stored `autoFollowStayOnActive` so the toggle reads forward ("auto-follow away"
+    /// ON = do leave a running session) instead of a double negative. The stored default nil means "follow
+    /// away", so the toggle shows ON by default; opting to STAY (toggle OFF) stores `true`, and toggling back
+    /// to the follow-away default stores nil to keep settings.json minimal.
+    private var autoFollowAwayFromRunning: Binding<Bool> {
+        Binding(get: { !(model.settings.autoFollowStayOnActive ?? false) },
+                set: { model.setAutoFollowStayOnActive($0 ? nil : true) })
     }
 }
 

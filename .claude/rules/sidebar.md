@@ -68,6 +68,17 @@ paths:
   under the control keep-in-sync rule), so it adds NO control command — the ALL-workspaces
   `sidebar.expand`/`sidebar.collapse` stay the control surface.
   Covered by `SidebarUITests.testClickWorkspaceRowTogglesExpansion`.
+- **A session ROW click reveals a blocked session's pane-tagged pane.**
+  `Coordinator.outlineViewSelectionDidChange` selects the clicked session (`selectSession`) then — async,
+  after the selection + the sidebar's own focus-restore settle — calls `AppActions.revealActiveBlockedPane()`,
+  so clicking a session whose agent blocked in its split (right) or scratch pane lands you on THAT pane,
+  not the plain focused pane.
+  It is a no-op (plain `focusActiveSession`) for an IDLE session (no status set),
+  so ordinary clicks are unaffected — the reveal never dismisses a merely-shown scratch (a non-idle
+  nil-tagged block is treated as `left`/main).
+  This matches attention-nav, plain session nav, the command palettes, and idle auto-follow,
+  which all route through the same helper (see the Menu/actions + Notifications rules).
+  Covered by `PaneAwareStatusUITests.testSidebarClickRevealsBlockedSplitPane`.
 - Accessibility identifiers `session-row`, `workspace-row`, `edit-field`,
   and `add-session` back the XCUITests.
   Note the rename field surfaces as a `TextField` for sessions and a `StaticText` for workspaces,
@@ -195,10 +206,30 @@ paths:
 - **Persistence (per-window, no version bump).**
   `Session.flagged` persists via `SessionSnapshot.flagged: Bool?` (decode → `false`),
   `sidebarMode` via `Snapshot.sidebarMode: SidebarMode?` (→ `.tree`), `focusedWorkspaceID` via `Snapshot.focusedWorkspaceID: UUID?`
-  (naturally Optional → nil).
-  All three Optional fields, so legacy JSON with none of the keys decodes to the unflagged / `.tree`
-  / unfocused defaults without throwing (the load-fresh-on-decode-failure contract) — no `Snapshot` version
-  bump.
-  Round-trips + legacy-decode covered in `PersistenceTests`, mutations/derived-list/focus-clear/auto-unfocus
-  in `AppStoreTests`.
+  (naturally Optional → nil), and each workspace's expand/collapse state via `WorkspaceSnapshot.collapsed: Bool?`
+  (decode → `false` → expanded).
+  All four Optional fields, so legacy JSON with none of the keys decodes to the unflagged / `.tree`
+  / unfocused / expanded defaults without throwing (the load-fresh-on-decode-failure contract) — no `Snapshot`
+  version bump.
+  `collapsed` is stored as the INVERSE of `Workspace.isExpanded` and only WRITTEN when collapsed (`true`);
+  an expanded workspace omits it, so an all-expanded tree serializes byte-identically to a legacy snapshot,
+  and "lack of the field = expanded" holds.
+  The sidebar Coordinator seeds `expandedWorkspaceIDs` from `Workspace.isExpanded` in `makeNSView`
+  (`seedExpansionFromModel`, replacing the old unconditional `expandAll`) so a collapsed workspace restores
+  collapsed.
+  **Only a GENUINE user toggle persists.**
+  The `outlineViewItemDidExpand`/`DidCollapse` callbacks write back via `AppStore.setWorkspaceExpanded(_:expanded:)`
+  (a PER-workspace mutator, so toggling one row never rewrites another's saved state), and `expandAll`/`collapseOthers`
+  persist the whole tree once via `setWorkspacesExpanded(_:)`.
+  A `suppressExpansionPersist` flag is set around every PROGRAMMATIC `expandItem`/`collapseItem` — the launch/`rebuildAndReload`
+  re-apply, the `syncSelection` reveal, and the focused-workspace force-expand — so those update the VISUAL
+  `expandedWorkspaceIDs` (needed for the flagged-mode round-trip) WITHOUT touching the persisted `isExpanded`.
+  This is what makes a deliberate collapse durable: revealing a session inside a collapsed workspace (nav,
+  notification click, or the launch-time active-session reveal) or focusing it shows the row but does NOT
+  un-collapse it on disk — the collapse survives until the user expands the row themselves.
+  The active session is still force-revealed on launch (`syncSelection`), so it is never hidden inside a
+  collapsed workspace; the row just re-collapses on the next launch (its persisted state is untouched).
+  Round-trips + legacy-decode (incl. explicit `collapsed:false`) covered in `PersistenceTests`,
+  per-workspace + whole-tree mutators / no-op-no-write in `AppStoreOrganizationTests`, and the
+  collapse-survives-relaunch + reveal-does-not-repersist end-to-end cases in `SidebarUITests`.
 

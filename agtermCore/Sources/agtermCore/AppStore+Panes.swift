@@ -32,6 +32,17 @@ extension AppStore {
         return applied
     }
 
+    /// Clear the agent-status indicator when the pane that OWNED it is being torn down, so a pane-tagged
+    /// block (`session.status --pane`) can't strand a glyph no surviving surface can keystroke-clear
+    /// (`AgentIndicator.clearedBy` requires the typing pane to match `statusPane`). `owner` is the pane
+    /// whose surface is going away; a nil tag counts as `.left` (main), matching the clear-decision default.
+    /// Mirrors the `clearSearch()` reconcile on these same teardown paths.
+    private func clearIndicatorOwnedByPane(_ owner: StatusPane, of session: Session) {
+        guard session.agentIndicator.status != .idle,
+              (session.agentIndicator.statusPane ?? .left) == owner else { return }
+        setAgentIndicator(AgentIndicator(), forSession: session.id)
+    }
+
     /// Closes the split pane: hides it AND tears down its surface, so a subsequent split
     /// starts a fresh shell. Used when the split shell exits on its own; resets the focus flag so a
     /// stale `splitFocused` doesn't point the collapsed view at the gone pane.
@@ -49,6 +60,9 @@ extension AppStore {
         // a search bar pinned to the torn-down split surface would otherwise stay stuck (the weak
         // `searchSurface` zeroes but `searchActive` stays true), so reset search on the surviving session.
         session.clearSearch()
+        // the split (right) pane owned any `.right`-tagged block; with it gone the surviving main pane can
+        // never keystroke-clear that tag, so clear it here (mirrors the search reset above).
+        clearIndicatorOwnedByPane(.right, of: session)
         save()
     }
 
@@ -76,6 +90,9 @@ extension AppStore {
         // the primary surface (possibly the search owner) is torn down while the session survives as the
         // promoted split, so reset search rather than leave a stuck bar pinned to the gone primary.
         session.clearSearch()
+        // the gone primary owned any `.left`/nil-tagged block; the promoted (right-wired) survivor can never
+        // keystroke-clear a `.left` tag, so clear it here (a `.right` tag stays — the survivor still owns it).
+        clearIndicatorOwnedByPane(.left, of: session)
         save()
     }
 
@@ -159,6 +176,9 @@ extension AppStore {
         // closeSplit/closePrimaryPane handling. Guarded on identity so a search owned by the main/split pane
         // (the scratch can cover a session whose pane opened search) survives the scratch teardown.
         if session.searchSurface === scratch { session.clearSearch() }
+        // a `.scratch`-tagged block loses its owning surface here; clear it so it can't strand a glyph the
+        // surviving main/split panes can never keystroke-clear (a main/split tag survives — the helper guards).
+        clearIndicatorOwnedByPane(.scratch, of: session)
         scratch.teardown()
         session.scratchSurface = nil
         return true

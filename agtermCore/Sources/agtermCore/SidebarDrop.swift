@@ -63,6 +63,21 @@ public enum SidebarDrop {
         return SessionResolution(workspace: workspace, dropChildIndex: dropChildIndex, destination: destination)
     }
 
+    /// Resolves an anchor-relative session placement (control `--after`/`--before <sid>`) into the same
+    /// move `resolveSession` produces for a drag. `placeAfter` lands just after the anchor row (via
+    /// `onItemIndex`, which maps to `anchorIndex + 1`); otherwise it lands at the anchor's slot. Reuses
+    /// the drop math verbatim, so the post-removal off-by-one, cross-workspace index space, and
+    /// anchor==source no-op all fall out unchanged. Returns nil for a no-op.
+    public static func resolveRelative(source: (workspace: UUID, index: Int),
+                                       anchor: (workspace: UUID, index: Int, count: Int),
+                                       placeAfter: Bool) -> SessionResolution? {
+        let target = SessionDropTarget.sessionRow(workspace: anchor.workspace, sessionIndex: anchor.index,
+                                                  sessionCount: anchor.count)
+        let childIndex = placeAfter ? onItemIndex : anchor.index
+        return resolveSession(sourceWorkspace: source.workspace, sourceIndex: source.index,
+                              target: target, childIndex: childIndex)
+    }
+
     /// The destination of a dragged workspace, or nil when the drop is a no-op. `destination` is the
     /// POST-removal index `AppStore.moveWorkspace` expects; `dropChildIndex` is the PRE-removal slot to
     /// highlight (or `onItemIndex` to append). Same downward `childIndex - 1` adjustment as sessions.

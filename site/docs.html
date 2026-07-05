@@ -1009,6 +1009,9 @@
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# next|prev|first|last</span><br />agtermctl session move --to up
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# reorder: up|down|top|bottom</span><br />agtermctl session move
               <span style="color: #f2b45c">"$ws"</span> <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# relocate to a workspace</span
+              ><br />agtermctl session new --after active
+              <span style="color: #6b727a">&nbsp;&nbsp;# create right after the current session (--before to precede)</span><br />agtermctl session move --after
+              <span style="color: #f2b45c">9f3c</span> <span style="color: #6b727a">&nbsp;&nbsp;# place after an anchor (its workspace is used; relocates cross-workspace)</span
               ><br />agtermctl workspace move --to top
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# reorder a workspace</span><br />agtermctl workspace focus on
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# collapse tree to active ws (on|off|toggle)</span>
@@ -1223,8 +1226,12 @@
               inside agterm gets <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_ENABLED</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_WINDOW_ID</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_WORKSPACE_ID</span>,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_SESSION_ID</span>, and
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_SOCKET</span> (the live socket path), so a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_SESSION_ID</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_SOCKET</span> (the live socket path), and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE</span> (which pane the shell runs in —
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left</span> (main),
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span> (split), or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span>; unset in an overlay), so a
               script can drive its own window without hard-coding ids.
             </div>
           </section>
@@ -1634,6 +1641,8 @@
               active --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session status blocked
               --sound default --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session status
               completed --auto-reset --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session
+              status blocked --color <span style="color: #5ea1f2">'#ff0000'</span> --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session
+              status blocked --pane right --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session
               status idle --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span>
               <span style="color: #6b727a">&nbsp;# clear it</span>
             </div>
@@ -1648,7 +1657,22 @@
                 >Ping</span
               >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">Tink</span>). To make every blocked
               prompt sound without touching the hooks, set
-              <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Blocked sound</strong>. Typing into a
+              <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Blocked sound</strong>.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--color</span>
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#rrggbb</span>) overrides the glyph
+              tint for that one call — it rides the status, so the next status set without it reverts to the configured color.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span>
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">left</span>|<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >right</span
+              >|<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">scratch</span>, defaulting to the
+              main pane) records which pane set the status: a block set from a background pane survives typing in another pane, and
+              any GUI selection of the session (auto-follow, attention nav ⌃⌥↑/↓, plain session nav, the command palettes, and
+              a sidebar click) reveals and focuses that pane — the split, or a hidden scratch — instead of the main pane, so an
+              agent in a split or scratch tags its own pane to be found (the control <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session go next-attention</span>
+              only steps the selection, it does not itself move focus into the pane). It reads back on
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusPane</span>. Typing into a
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">blocked</span>/<span
                 style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
                 >completed</span
@@ -1664,7 +1688,8 @@
               or the action palette's "Show Attention" — opens the <strong style="color: #e6e1d7">attention list</strong>: this
               window's non-idle sessions, sorted blocked → active → completed. Over the control channel,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports
-              each session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">status</span>.
+              each session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">status</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusPane</span> (which pane set it).
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               <strong style="color: #e6e1d7">Auto-follow blocked sessions.</strong> When several agents run at once, a session

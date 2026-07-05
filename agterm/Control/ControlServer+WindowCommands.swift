@@ -75,10 +75,7 @@ extension ControlServer {
     /// Resolve a window id and resize its on-screen window to `width` x `height` points (frame size).
     /// The window must be open; a closed window errors (resize it after `window.select`). Control-native
     /// (no GUI surface — the native title bar already drags-to-resize).
-    func windowResize(_ target: String?, width: Int?, height: Int?) -> ControlResponse {
-        guard let width, let height, width > 0, height > 0 else {
-            return ControlResponse(ok: false, error: "window.resize requires positive width and height")
-        }
+    func windowResize(_ target: String?, width: Int, height: Int) -> ControlResponse {
         return resolver.resolveWindowID(target) { id in
             guard WindowRegistry.shared.resize(id, width: width, height: height) else {
                 return ControlResponse(ok: false, error: "window not open — window.select it first")
@@ -90,10 +87,7 @@ extension ControlServer {
     /// Resolve a window id and move its on-screen window so its top-left corner is at (`x`, `y`) points in
     /// the global top-left space (origin = the primary display's top-left, spanning all displays). The
     /// window must be open; a closed window errors. Control-native (no GUI surface).
-    func windowMove(_ target: String?, x: Int?, y: Int?, display: Int?) -> ControlResponse {
-        guard let x, let y else {
-            return ControlResponse(ok: false, error: "window.move requires x and y")
-        }
+    func windowMove(_ target: String?, x: Int, y: Int, display: Int?) -> ControlResponse {
         if let display, display < 0 || display >= NSScreen.screens.count {
             return ControlResponse(ok: false, error: "display \(display) out of range (have \(NSScreen.screens.count))")
         }
@@ -118,10 +112,7 @@ extension ControlServer {
     }
 
     /// Resolve a window id and rename it (the name lives in the index). Requires a name. Returns the id.
-    func windowRename(_ target: String?, name: String?) -> ControlResponse {
-        guard let name = trimmed(name) else {
-            return ControlResponse(ok: false, error: "window.rename requires a name")
-        }
+    func windowRename(_ target: String?, name: String) -> ControlResponse {
         return resolver.resolveWindowID(target) { id in
             library.renameWindow(id, to: name)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))

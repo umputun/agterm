@@ -347,13 +347,9 @@ final class ControlServer {
                 .sessionFocus, .sessionResize, .sessionStatus, .sessionFlag, .notify,
                 .fontInc, .fontDec, .fontReset, .keymapReload, .configReload, .themeSet, .themeList,
                 .sidebar, .sidebarMode, .sidebarExpand, .sidebarCollapse, .sessionType, .sessionCopy,
-                .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResult:
+                .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResult, .sessionBackground,
+                .sessionText, .windowRename, .windowResize, .windowMove, .windowZoom, .restoreClear:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
-        case .sessionBackground:
-            return setBackground(request.target, request.args)
-        case .sessionText:
-            return readText(request.target, window: request.args?.window, pane: request.args?.pane,
-                            all: request.args?.all ?? false, lines: request.args?.lines)
         case .sessionSearch:
             // resolve first (cross-window when no `args.window`), then select + realize the surface; the
             // realize path is async (bounded poll), so this can't go through the synchronous
@@ -374,18 +370,8 @@ final class ControlServer {
             return await windowSelect(request.target)
         case .windowClose:
             return await windowClose(request.target)
-        case .windowRename:
-            return windowRename(request.target, name: request.args?.name)
         case .windowDelete:
             return windowDelete(request.target)
-        case .windowResize:
-            return windowResize(request.target, width: request.args?.width, height: request.args?.height)
-        case .windowMove:
-            return windowMove(request.target, x: request.args?.x, y: request.args?.y, display: request.args?.display)
-        case .windowZoom:
-            return windowZoom(request.target)
-        case .restoreClear:
-            return clearSavedCommands()
         case .debugAppearance:
             return setDebugAppearance(args: request.args)
         }
@@ -425,7 +411,7 @@ final class ControlServer {
     /// (consumed at restore); the SAVE is what wipes the on-disk copy from the last quit, also closing
     /// the force-quit re-fire window. Drives `restore.clear` / `agtermctl restore clear`. App-global like
     /// `keymap.reload` (no `--window` selector — it clears every open window).
-    private func clearSavedCommands() -> ControlResponse {
+    func clearRestoreCommands() -> ControlResponse {
         for session in library.allOpenSessions() {
             session.foregroundCommand = nil
             session.splitForegroundCommand = nil
@@ -455,12 +441,13 @@ final class ControlServer {
     /// Creates a session in `workspaceID` of `store` with the `session.new` args (cwd default $HOME,
     /// optional command/name), focuses it when it lands in the frontmost window (so a keymap `session new`
     /// opens focused like the GUI New Session; a background `--window` target keeps focus), and returns the
-    /// new id. Shared by the id- and name-addressed paths of the `.sessionNew` arm.
+    /// new id. Shared by the id- and name-addressed paths of the `.sessionNew` arm. `at` is the anchor-relative
+    /// insertion slot for `--after`/`--before` (clamped in `AppStore`); nil appends.
     func makeSessionResponse(in store: AppStore, workspaceID: UUID,
-                             options: ControlSessionCreateOptions) -> ControlResponse {
+                             options: ControlSessionCreateOptions, at index: Int? = nil) -> ControlResponse {
         let cwd = options.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path
         guard let session = store.addSession(toWorkspace: workspaceID, cwd: cwd,
-                                             command: options.command, name: options.name) else {
+                                             command: options.command, name: options.name, at: index) else {
             return ControlResponse(ok: false, error: "could not create session")
         }
         if store === library.activeStore { actions.focusActiveSession() }

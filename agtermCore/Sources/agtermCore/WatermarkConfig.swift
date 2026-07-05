@@ -33,11 +33,14 @@ public enum WatermarkConfig {
 
     /// Valid `#rrggbb` hex color — exactly what `NSColor(agtermHex:)` parses (an optional leading `#` then
     /// six hex digits). A malformed value is rejected at the boundary rather than silently falling back to
-    /// the terminal foreground, matching the fit/position rejection.
+    /// the terminal foreground, matching the fit/position rejection. The digit check is ASCII-only
+    /// (`isASCII && isHexDigit`): plain `isHexDigit` also accepts fullwidth Unicode forms (e.g. `ＦＦ００００`)
+    /// that `NSColor(agtermHex:)`'s `UInt32(radix:)` cannot parse, which would pass validation and then
+    /// silently render the default color.
     public static func isValidColorHex(_ hex: String) -> Bool {
         var s = Substring(hex)
         if s.first == "#" { s = s.dropFirst() }
-        return s.count == 6 && s.allSatisfy(\.isHexDigit)
+        return s.count == 6 && s.allSatisfy { $0.isASCII && $0.isHexDigit }
     }
 
     /// Valid `.image` watermark path: no ASCII control character (any scalar `< 0x20`). `imagePath` is the

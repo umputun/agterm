@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.7.1 - 2026-07-04
+
+### Improvements
+
+- tag agent status with the pane that set it, so a block raised in a split or scratch pane survives typing in another pane and navigation reveals the waiting pane #130 @umputun
+- per-call --color override for the session.status glyph tint #129 @umputun
+- pointing-hand cursor on ⌘-hover over a link, with ⌘-click opening validated web and mail links #125 @vnazarenko
+- continue routing control commands through the host-free dispatcher #128 @melonamin
+- clearer auto-follow settings: a "60 sec idle" timeout label and a forward-reading "auto-follow away from a running session" toggle @umputun
+
 ## v0.7.0 - 2026-07-04
 
 ### New Features

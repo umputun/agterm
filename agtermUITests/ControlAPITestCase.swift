@@ -272,6 +272,19 @@ class ControlAPITestCase: XCTestCase {
         }
     }
 
+    /// Polls the hermetic snapshot file until the session ids in the workspace at `workspaceIndex` equal
+    /// `expected`, in order (case-insensitive compare). Used by cross-workspace placement tests where the
+    /// destination is not the first workspace, so `pollSessionOrder` (first-workspace-only) can't observe it.
+    func pollSessionOrder(inWorkspace workspaceIndex: Int, equals expected: [UUID], timeout: TimeInterval) -> Bool {
+        let wanted = expected.map { $0.uuidString.lowercased() }
+        return stateDir.pollSnapshot(equals: wanted, timeout: timeout) { obj in
+            guard let workspaces = obj["workspaces"] as? [[String: Any]],
+                  workspaceIndex < workspaces.count,
+                  let sessions = workspaces[workspaceIndex]["sessions"] as? [[String: Any]] else { return nil }
+            return sessions.compactMap { ($0["id"] as? String)?.lowercased() }
+        }
+    }
+
     /// Polls the hermetic snapshot file until the workspace names equal `expected`, in order.
     func pollWorkspaceNames(_ expected: [String], timeout: TimeInterval) -> Bool {
         stateDir.pollSnapshot(equals: expected, timeout: timeout) { obj in

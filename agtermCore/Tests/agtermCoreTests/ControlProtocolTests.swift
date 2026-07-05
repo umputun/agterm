@@ -118,6 +118,20 @@ struct ControlProtocolTests {
         #expect(decoded.args?.sound == nil)
     }
 
+    @Test func sessionStatusRoundTripsWithColor() throws {
+        let request = ControlRequest(cmd: .sessionStatus, target: "9f3c",
+                                     args: ControlArgs(status: "blocked", color: "#ff0000"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.color == "#ff0000")
+    }
+
+    @Test func sessionStatusOmitsColorWhenNil() throws {
+        let request = ControlRequest(cmd: .sessionStatus, target: "9f3c", args: ControlArgs(status: "active"))
+        let decoded = try roundTrip(request)
+        #expect(decoded.args?.color == nil)
+    }
+
     @Test func sessionStatusDecodesSound() throws {
         let json = #"{"cmd":"session.status","args":{"status":"blocked","sound":"default"}}"#
         let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8))
@@ -321,6 +335,26 @@ struct ControlProtocolTests {
         #expect(decoded.status == nil)
     }
 
+    @Test func treeSessionNodeRoundTripsWithStatusPane() throws {
+        // the read side of session.status --pane: which pane set the status rides the tree node.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true,
+                                         status: "blocked", statusPane: "right")
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.statusPane == "right")
+    }
+
+    @Test func treeSessionNodeOmitsStatusPaneWhenNil() throws {
+        // a session with no pane tag — the key must be omitted, not emitted as null.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("statusPane"), "a nil statusPane must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.statusPane == nil)
+    }
+
     @Test func treeSessionNodeRoundTripsWithBackground() throws {
         // the read side of session.background: the watermark spec rides the tree node so a script can query it.
         let watermark = BackgroundWatermark(kind: .text, text: "PROD", colorHex: "#ff0000",
@@ -453,6 +487,41 @@ struct ControlProtocolTests {
         #expect(decoded.cmd == .sessionMove)
         #expect(decoded.args?.to == "up")
         #expect(decoded.args?.workspace == nil)
+    }
+
+    @Test func sessionMoveRoundTripsWithAfterAnchor() throws {
+        let request = ControlRequest(cmd: .sessionMove, target: "9f3c", args: ControlArgs(after: "active"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.after == "active")
+        #expect(decoded.args?.before == nil)
+        #expect(decoded.args?.to == nil)
+        #expect(decoded.args?.workspace == nil)
+    }
+
+    @Test func sessionMoveRoundTripsWithBeforeAnchor() throws {
+        let request = ControlRequest(cmd: .sessionMove, target: "9f3c", args: ControlArgs(before: "1a2b"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.before == "1a2b")
+        #expect(decoded.args?.after == nil)
+    }
+
+    @Test func sessionNewRoundTripsWithAfterAnchor() throws {
+        let request = ControlRequest(cmd: .sessionNew, args: ControlArgs(after: "active"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.after == "active")
+        #expect(decoded.args?.before == nil)
+        #expect(decoded.args?.workspace == nil)
+    }
+
+    @Test func sessionNewRoundTripsWithBeforeAnchor() throws {
+        let request = ControlRequest(cmd: .sessionNew, args: ControlArgs(before: "1a2b"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.before == "1a2b")
+        #expect(decoded.args?.after == nil)
     }
 
     @Test func workspaceMoveRoundTripsWithDirection() throws {

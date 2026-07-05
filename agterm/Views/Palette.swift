@@ -18,6 +18,9 @@ struct PaletteItem: Identifiable {
     /// A leading agent-status glyph (the attention palette's rows carry it), nil for items with no
     /// status — only the `.attention` palette sets it, so the other palettes render no glyph.
     let status: AgentStatus?
+    /// Per-call `#rrggbb` glyph-tint override for the leading status glyph (the session's
+    /// `AgentIndicator.color`), so the attention row matches the sidebar; nil = the default status color.
+    let statusColor: String?
     /// Fired when this item BECOMES the selection (keyboard navigation), distinct from `run` (Enter/
     /// click). Only the `.themes` palette sets it — it drives the live theme preview; nil everywhere
     /// else, so the other palettes have no selection side effect.
@@ -25,13 +28,15 @@ struct PaletteItem: Identifiable {
     let run: () -> Void
 
     init(id: String? = nil, title: String, subtitle: String? = nil, shortcut: String? = nil,
-         badge: String? = nil, status: AgentStatus? = nil, onSelect: (() -> Void)? = nil, run: @escaping () -> Void) {
+         badge: String? = nil, status: AgentStatus? = nil, statusColor: String? = nil,
+         onSelect: (() -> Void)? = nil, run: @escaping () -> Void) {
         self.id = id ?? title
         self.title = title
         self.subtitle = subtitle
         self.shortcut = shortcut
         self.badge = badge
         self.status = status
+        self.statusColor = statusColor
         self.onSelect = onSelect
         self.run = run
     }
@@ -210,7 +215,7 @@ struct CommandPalette: View {
     private func row(_ item: PaletteItem, index: Int) -> some View {
         HStack {
             if let status = item.status {
-                StatusGlyph(status: status)
+                StatusGlyph(status: status, colorHex: item.statusColor)
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title)

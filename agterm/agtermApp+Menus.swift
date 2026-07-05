@@ -279,14 +279,14 @@ extension agtermApp {
             }
     }
 
-    /// Opens the standard About panel, enriched with a clickable repository link and — on release
+    /// Opens the standard About panel, enriched with a clickable agterm.com link and — on release
     /// builds, where `GIT_COMMIT` is baked into the bundle — the short build commit shown in the
     /// version's parenthetical. Dev builds (no baked commit) fall back to the plain version.
     private func showAboutPanel() {
         var options: [NSApplication.AboutPanelOptionKey: Any] = [:]
-        let repo = "https://github.com/umputun/agterm"
-        if let url = URL(string: repo) {
-            options[.credits] = NSAttributedString(string: repo, attributes: [
+        let website = "https://agterm.com"
+        if let url = URL(string: website) {
+            options[.credits] = NSAttributedString(string: website, attributes: [
                 .link: url,
                 .font: NSFont.systemFont(ofSize: NSFont.smallSystemFontSize),
             ])

@@ -375,6 +375,55 @@ final class PersistenceTests {
         #expect(restored.workspaces[0].sessions[0].fontSize == 17.5)
     }
 
+    @Test func workspaceCollapsePersistsAndRestores() {
+        let app = AppStore(persistence: store)
+        let a = app.addWorkspace(name: "a")
+        let b = app.addWorkspace(name: "b")
+        app.setWorkspacesExpanded([a.id]) // collapse b, keep a expanded
+        let disk = store.load()
+        #expect(disk.workspaces[0].collapsed == nil)  // expanded → omitted
+        #expect(disk.workspaces[1].collapsed == true) // collapsed → written
+
+        let restored = AppStore(persistence: store)
+        restored.restore(from: disk)
+        #expect(restored.workspaces[0].isExpanded)     // a
+        #expect(!restored.workspaces[1].isExpanded)    // b
+        _ = b
+    }
+
+    @Test func legacyWorkspaceWithoutCollapsedDecodesExpanded() throws {
+        // a workspaces.json written before `collapsed` existed has no key; it must decode (not throw and
+        // wipe the tree) and restore expanded — lack of the field means expanded, for back-compat.
+        let ws = UUID()
+        let session = UUID()
+        let json = #"{ "version": 1, "workspaces": "# +
+            #"[ { "id": "\#(ws.uuidString)", "name": "work", "sessions": [ { "id": "\#(session.uuidString)", "cwd": "/a" } ] } ] }"#
+        try Data(json.utf8).write(to: fileURL)
+        let loaded = store.load()
+        #expect(loaded.workspaces.map(\.id) == [ws])
+        #expect(loaded.workspaces[0].collapsed == nil)
+
+        let app = AppStore(persistence: store)
+        app.restore(from: loaded)
+        #expect(app.workspaces[0].isExpanded)
+    }
+
+    @Test func explicitCollapsedFalseDecodesExpanded() throws {
+        // an explicit `collapsed: false` (a hand-edit, or a snapshot from a future build that always writes
+        // the field) must decode to expanded, same as an absent key — `!(false ?? false)` == expanded.
+        let ws = UUID()
+        let session = UUID()
+        let json = #"{ "version": 1, "workspaces": [ { "id": "\#(ws.uuidString)", "name": "work", "# +
+            #""collapsed": false, "sessions": [ { "id": "\#(session.uuidString)", "cwd": "/a" } ] } ] }"#
+        try Data(json.utf8).write(to: fileURL)
+        let loaded = store.load()
+        #expect(loaded.workspaces[0].collapsed == false)
+
+        let app = AppStore(persistence: store)
+        app.restore(from: loaded)
+        #expect(app.workspaces[0].isExpanded)
+    }
+
     @Test func selectSessionPersistsSelectionToDisk() {
         let app = AppStore(persistence: store)
         let work = app.addWorkspace(name: "work")

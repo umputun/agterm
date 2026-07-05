@@ -255,17 +255,19 @@ final class AppActions {
     /// then moves first responder into the moved-to session's focused pane. Each also notes the manual
     /// navigation as user activity so it buys the full idle grace before auto-follow can pull the
     /// selection back (the control `session.go` drives `navigateSession` directly, so it stays silent).
-    func selectNextSession() { store?.noteUserActivity(); store?.navigateSession(.next); focusActiveSession() }
-    func selectPreviousSession() { store?.noteUserActivity(); store?.navigateSession(.previous); focusActiveSession() }
-    func selectFirstSession() { store?.noteUserActivity(); store?.navigateSession(.first); focusActiveSession() }
-    func selectLastSession() { store?.noteUserActivity(); store?.navigateSession(.last); focusActiveSession() }
+    func selectNextSession() { store?.noteUserActivity(); store?.navigateSession(.next); revealActiveBlockedPane() }
+    func selectPreviousSession() { store?.noteUserActivity(); store?.navigateSession(.previous); revealActiveBlockedPane() }
+    func selectFirstSession() { store?.noteUserActivity(); store?.navigateSession(.first); revealActiveBlockedPane() }
+    func selectLastSession() { store?.noteUserActivity(); store?.navigateSession(.last); revealActiveBlockedPane() }
 
     /// Step to the next/previous session needing attention (status `blocked` or `completed`), wrapping
     /// around and skipping idle/active sessions. Shares `navigateSession` with the GUI, palette, and the
     /// `session.go next-attention|prev-attention` control command. Notes user activity like the plain
-    /// session nav (a manual step to an attention session buys the idle grace too).
-    func selectNextAttentionSession() { store?.noteUserActivity(); store?.navigateSession(.nextAttention); focusActiveSession() }
-    func selectPreviousAttentionSession() { store?.noteUserActivity(); store?.navigateSession(.previousAttention); focusActiveSession() }
+    /// session nav (a manual step to an attention session buys the idle grace too), then reveals and focuses
+    /// the moved-to session's blocked pane (`revealActiveBlockedPane`) so nav lands on the split/scratch pane
+    /// that set the status, not just the session's plain focused pane.
+    func selectNextAttentionSession() { store?.noteUserActivity(); store?.navigateSession(.nextAttention); revealActiveBlockedPane() }
+    func selectPreviousAttentionSession() { store?.noteUserActivity(); store?.navigateSession(.previousAttention); revealActiveBlockedPane() }
 
     /// Delete a workspace and all of its sessions. Confirms first when the workspace still has
     /// sessions (the delete ends their shells); an empty workspace deletes without a prompt.
@@ -623,12 +625,64 @@ final class AppActions {
     /// session. Selection alone does NOT move first responder (the eager deck keeps the prior surface as
     /// responder), so pull focus into the newly selected session — but ONLY when the firing window is key.
     /// A non-key window keeps just the selection change and focuses normally when it next becomes key.
-    /// Session granularity — no split-pane logic. `focusActiveSession` targets the frontmost (= key) store,
-    /// which is the firing window here since we gate on its being key.
+    /// `revealActiveBlockedPane` targets the frontmost (= key) store — the firing window here since we gate
+    /// on its being key — and reveals the pane that set the status (split/scratch), so the initial jump lands
+    /// on the waiting pane, not just the session's plain focused pane.
     private func autoFollowed(_ sessionID: UUID?) {
         guard let sessionID, let windowID = library.windowID(forSession: sessionID),
               WindowRegistry.shared.isKeyWindow(windowID) else { return }
-        focusActiveSession()
+        revealActiveBlockedPane()
+    }
+
+    /// Reveal and focus the active session's blocked pane, reading its agent-status pane tag so navigation
+    /// lands on the pane actually waiting for input rather than the session's plain focused pane. Called on
+    /// every user-initiated selection — the auto-follow jump, attention navigation (⌃⌥↑/↓), plain session
+    /// nav (⌥⌘↑/↓/first/last), the ⌃P / attention command palette, and a sidebar row click — so however you
+    /// reach a blocked session you land on its waiting pane; it is a no-op (plain `focusActiveSession`) for an
+    /// IDLE session (no status set), so ordinary selections are unaffected. `.right` — only WHEN the
+    /// split surface exists
+    /// (`splitSurface != nil`) — flips `splitFocused` then focuses the split surface via
+    /// `focusSplitPane(wantSplit: true)` — a FIXED target, NOT the `splitFocused`-following
+    /// `focusActiveSession`: a SHOWN (side-by-side) split's deck re-render churns first responder onto the
+    /// main pane, whose `onFocusChange` writes `splitFocused = false`, and a follow-the-flag focus target
+    /// then chases the wrong pane; re-asserting the split surface directly wins the race (its `onFocusChange`
+    /// re-sets `splitFocused = true`). The gate is `splitSurface != nil` (NOT `hasSplit`), so it still covers
+    /// a promoted split survivor (primary exited, survivor in `splitSurface`, `hasSplit` false — still
+    /// focused), while a STALE `right` tag on a genuinely single-pane session (a manual `session.status
+    /// --pane right`, or after the split collapsed) falls through to `focusActiveSession` instead of setting
+    /// `splitFocused = true` with no split surface (the `splitFocused` invariant is "true only while the
+    /// split pane exists"). `.scratch` shows the
+    /// scratch only when hidden (a show-if-hidden guard, never a bare toggle that could HIDE a shown one) so
+    /// `topmostSurface` resolves to the scratch; `.left`/nil focus the session's current active surface via
+    /// `focusActiveSession` (the main pane unless a split is focused — no forced flip). The retry loops
+    /// cover a split/scratch surface that materializes a beat after the reveal.
+    /// The INVERSE of the `.scratch` show-if-hidden guard: for a NON-scratch target (`left`/`right`/nil)
+    /// with the scratch currently SHOWN, hide the covering scratch (keep-alive `toggleScratch`) FIRST so the
+    /// requested pane becomes the visible/topmost surface — otherwise `focusSplitPane`/`focusActiveSession`
+    /// both resolve to the covering scratch (`topmostSurface`) and nav never reaches the blocked pane. Only
+    /// the scratch cover is dismissed; an active overlay is left alone (closing a running overlay would kill
+    /// its program).
+    func revealActiveBlockedPane() {
+        guard let session = store?.activeSession else { focusActiveSession(); return }
+        // reveal is a no-op for an IDLE session: with no status there is nothing to reveal, and the
+        // scratch-hide / split-focus side effects below must never fire on plain navigation to a session
+        // that merely has its (keep-alive) scratch shown. a non-idle block with no `--pane` tag is treated
+        // as `left` and still reveals the main pane (hiding a covering scratch).
+        guard session.agentIndicator.status != .idle else { focusActiveSession(); return }
+        let pane = session.agentIndicator.statusPane
+        // a shown scratch covers the panes and masks a non-scratch block; hide it first so the requested
+        // pane is revealed. overlays are deliberately not touched — closing a running overlay is destructive.
+        if pane != .scratch, session.scratchActive { store?.toggleScratch(session.id) }
+        switch pane {
+        case .right where session.splitSurface != nil:
+            session.splitFocused = true
+            focusSplitPane(session, wantSplit: true)
+        case .scratch:
+            if !session.scratchActive { store?.toggleScratch(session.id) }
+            focusActiveSession()
+        case .left, .right, .none:
+            focusActiveSession()
+        }
     }
 
     /// Move first responder back to the active session's topmost surface (used after the quick terminal

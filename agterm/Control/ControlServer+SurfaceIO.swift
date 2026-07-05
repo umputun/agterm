@@ -38,29 +38,12 @@ extension ControlServer {
     /// `BackgroundWatermark` spec (nil for `clear`), persist it on the session (`AppStore`, so it rides
     /// `SessionSnapshot`), then apply it to the session's realized surface(s). A never-shown session keeps
     /// the spec and applies it itself when its surface is created. Returns the session id.
-    func setBackground(_ target: String?, _ args: ControlArgs?) -> ControlResponse {
-        // the args bag IS the option struct — unpack the watermark fields once so the arm stays a small
-        // fixed-arity signature (swiftlint function_parameter_count) rather than a 10-parameter dispatch.
-        let window = args?.window, mode = args?.mode, path = args?.path, text = args?.text
-        let color = args?.color, opacity = args?.opacity, fit = args?.fit
-        let position = args?.position, repeats = args?.repeats
-        if let fit, !WatermarkConfig.isValidFit(fit) {
-            return ControlResponse(ok: false, error: "invalid fit: \(fit) (contain|cover|stretch|none)")
-        }
-        if let position, !WatermarkConfig.isValidPosition(position) {
-            return ControlResponse(ok: false, error: "invalid position: \(position)")
-        }
-        if let opacity, !WatermarkConfig.isValidOpacity(opacity) {
-            return ControlResponse(ok: false, error: "invalid opacity: \(opacity) (0.0-1.0)")
-        }
-        let watermark: BackgroundWatermark?
-        switch mode {
-        case "image":
-            guard let path, !path.isEmpty else {
+    func setSessionBackground(_ target: String?, window: String?,
+                              options: ControlSessionBackgroundOptions) -> ControlResponse {
+        let watermark = options.watermark
+        if let watermark, watermark.kind == .image {
+            guard let path = watermark.imagePath, !path.isEmpty else {
                 return ControlResponse(ok: false, error: "session.background image requires a path")
-            }
-            guard WatermarkConfig.isValidImagePath(path) else {
-                return ControlResponse(ok: false, error: "image path must not contain control characters")
             }
             guard WatermarkRenderer.isSupportedImage(path) else {
                 return ControlResponse(ok: false, error: "unsupported image (PNG or JPEG only): \(path)")
@@ -68,39 +51,6 @@ extension ControlServer {
             guard FileManager.default.fileExists(atPath: path) else {
                 return ControlResponse(ok: false, error: "no such image file: \(path)")
             }
-            watermark = BackgroundWatermark(kind: .image, imagePath: path, opacity: opacity,
-                                            fit: fit.flatMap(BackgroundWatermark.Fit.init(rawValue:)),
-                                            position: position.flatMap(BackgroundWatermark.Position.init(rawValue:)),
-                                            repeats: repeats)
-        case "text":
-            guard let text, !text.isEmpty else {
-                return ControlResponse(ok: false, error: "session.background text requires text")
-            }
-            guard text.count <= WatermarkConfig.maxTextLength else {
-                return ControlResponse(ok: false,
-                                       error: "session.background text too long (max \(WatermarkConfig.maxTextLength) characters)")
-            }
-            if let color, !WatermarkConfig.isValidColorHex(color) {
-                return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
-            }
-            watermark = BackgroundWatermark(kind: .text, text: text, colorHex: color,
-                                            opacity: opacity,
-                                            fit: fit.flatMap(BackgroundWatermark.Fit.init(rawValue:)),
-                                            position: position.flatMap(BackgroundWatermark.Position.init(rawValue:)))
-        case "color":
-            // no per-call opacity: a solid color honors the window translucency set in Settings, applied at
-            // emit time via `WatermarkConfig.overlayText(windowOpacity:)` (see `GhosttySurfaceView`).
-            guard let color, !color.isEmpty else {
-                return ControlResponse(ok: false, error: "session.background color requires a color")
-            }
-            guard WatermarkConfig.isValidColorHex(color) else {
-                return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
-            }
-            watermark = BackgroundWatermark(kind: .color, colorHex: color)
-        case "clear", .none:
-            watermark = nil
-        default:
-            return ControlResponse(ok: false, error: "invalid background mode: \(mode ?? "") (image|text|color|clear)")
         }
         return resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
@@ -136,8 +86,8 @@ extension ControlServer {
     /// here too, not only in the CLI `validate()`, so a raw socket client can't bypass it (an unchecked
     /// `lines <= 0` would silently fall through to the full buffer). A genuinely blank screen reads ok with
     /// an empty string; a failed surface read is an error, not a silent empty.
-    func readText(_ target: String?, window: String?, pane: String?,
-                  all: Bool, lines: Int?) -> ControlResponse {
+    func readSessionText(_ target: String?, window: String?, options: ControlSessionTextOptions) -> ControlResponse {
+        let pane = options.pane, all = options.all, lines = options.lines
         if all, lines != nil {
             return ControlResponse(ok: false, error: "use either --all or --lines, not both")
         }

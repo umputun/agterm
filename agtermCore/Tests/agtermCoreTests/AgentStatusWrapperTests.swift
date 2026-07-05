@@ -94,4 +94,36 @@ struct AgentStatusWrapperTests {
         let r = try runWrapper(["active"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_SOCKET": "/tmp/s.sock"], stubExit: 64)
         #expect(r.exit == 0)
     }
+
+    @Test func paneForwardedWhenAgtermPaneSet() throws {
+        // the app injects AGTERM_PANE per surface; the wrapper splices `--pane <value>` before "$@"
+        let r = try runWrapper(["blocked"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_SOCKET": "/tmp/s.sock", "AGTERM_PANE": "right"])
+        #expect(r.argv == ["session", "status", "blocked", "--target", "sid", "--socket", "/tmp/s.sock", "--pane", "right"])
+        #expect(r.exit == 0)
+    }
+
+    @Test func paneForwardedWithoutSocket() throws {
+        // no socket branch also carries the pane, right after --target
+        let r = try runWrapper(["blocked"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_PANE": "scratch"])
+        #expect(r.argv == ["session", "status", "blocked", "--target", "sid", "--pane", "scratch"])
+    }
+
+    @Test func paneSplicedBeforeExtraArgs() throws {
+        // --pane comes before the forwarded "$@" (e.g. --blink), never after
+        let r = try runWrapper(["blocked", "--blink"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_SOCKET": "/tmp/s.sock", "AGTERM_PANE": "right"])
+        #expect(r.argv == ["session", "status", "blocked", "--target", "sid", "--socket", "/tmp/s.sock", "--pane", "right", "--blink"])
+    }
+
+    @Test func paneOmittedWhenAgtermPaneUnset() throws {
+        // no AGTERM_PANE: no --pane flag at all
+        let r = try runWrapper(["active"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_SOCKET": "/tmp/s.sock"])
+        #expect(!r.argv.contains("--pane"))
+    }
+
+    @Test func paneNoOpWithoutSessionID() throws {
+        // AGTERM_PANE set but no AGTERM_SESSION_ID: still a no-op, exit 0, no call
+        let r = try runWrapper(["active"], env: ["AGTERM_PANE": "right"])
+        #expect(r.argv.isEmpty)
+        #expect(r.exit == 0)
+    }
 }

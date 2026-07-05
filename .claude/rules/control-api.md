@@ -202,10 +202,28 @@ paths:
 
   `workspace.delete` honors keep-at-least-one and returns an error instead of the GUI confirm alert (nothing
   blocks on a modal).
-  `session.move` is MODE-BEARING: `args.to` (`up`|`down`|`top`|`bottom`) REORDERS the session within
-  its own workspace (parses `ReorderDirection`, drives `AppStore.reorderSession` → the existing `moveSession(at:)`
-  primitive, returns the session id), while `args.workspace` RELOCATES it to another workspace (unchanged
-  — still appends at the end); both-set and neither-set are errors, and an invalid direction is an error.
+  `session.move` is MODE-BEARING with THREE exclusive placement intents:
+  `args.to` (`up`|`down`|`top`|`bottom`) REORDERS the session within its own workspace (parses `ReorderDirection`,
+  drives `AppStore.reorderSession` → the existing `moveSession(at:)` primitive, returns the session id);
+  `args.workspace` RELOCATES it to another workspace (still APPENDS at the end);
+  and `args.after`/`args.before` (a session address — id / prefix / `active`) PLACE it directly after/before
+  an anchor session (`ControlSessionMove.place(anchor:after:)`).
+  The anchor CARRIES ITS OWN WORKSPACE — it is resolved against the store's FULL session set (all workspaces),
+  so it names the destination workspace itself and relocates + positions in one shot (cross-workspace
+  falls out for free).
+  Placement reuses the drag-drop index math host-free: `SidebarDrop.resolveRelative` (the tested "after
+  this row" `sessionIndex + 1` + the same-workspace post-removal off-by-one + the anchor==source no-op)
+  feeding `AppStore.moveSession(_:toWorkspace:at:)`.
+  Exactly one intent must be set: after+before is an error (`"use either --after or --before, not both"`),
+  after/before + `--to` is an error (`"session.move takes --after/--before or --to, not both"`),
+  after/before + a workspace is an error (`"session.move takes --after/--before or a workspace, not both"`
+  — the anchor already names the workspace), both `--to`+workspace and neither are errors,
+  and an invalid direction is an error.
+  Keep-in-sync: `ControlArgs.after`/`before` + `ControlSessionMove.place` in `ControlProtocol.swift`/`ControlModes.swift`,
+  the `.sessionMove` place-mode routing + guards in `ControlDispatcher`, the app-side `moveSession` place
+  case (`ControlServer+SessionActions.swift`, resolving both target + anchor locations and calling
+  `resolveRelative`), the `session move --after/--before` CLI, and round-trip / dispatcher / e2e
+  (`testSessionMovePlaceWithinWorkspace`, `testSessionMovePlaceCrossWorkspace`, the reject-* guards) tests.
   `workspace.move` is the workspace REORDER (control-native, no separate verb):
   `args.to` (`up`|`down`|`top`|`bottom`) resolves the workspace target via the shared `resolveWorkspace`
   (honoring the global `--window` selector like other workspace commands),
@@ -297,6 +315,15 @@ paths:
   A `workspaceName` with no match and no `createWorkspace` errors, both addressing modes set is an error,
   and `createWorkspace` without `workspaceName` is an error (nothing to create by id);
   the same two rules are pre-validated CLI-side by `session new`'s `validate()`.
+  `args.after`/`args.before` (a session address — id / prefix / `active`) instead PLACE the new session
+  directly after/before an anchor session rather than appending at the end (`ControlSessionCreateOptions.after`/`before`).
+  The anchor CARRIES ITS OWN WORKSPACE (resolved across all workspaces), so it names the destination
+  itself — after/before is a self-contained placement mode, mutually exclusive with each other and with
+  `--workspace`/`--workspace-name` (errors: `"use either --after or --before, not both"` and
+  `"session.new takes --after/--before or a workspace, not both"`, dispatcher-owned + CLI-pre-validated).
+  The app-side `createSession` resolves the anchor, takes its `(workspace, index)`, and inserts via
+  `AppStore.addSession(…, at: before ? index : index + 1)` (the new optional `at index:`, clamped).
+  `agtermctl session new --after active` = create right after the current session in one round-trip.
   `args.command` runs that command AS the session's process instead of the login shell (like kitty's
   `launch <cmd>` / ghostty's `command`) — NO echoed command line, and the session closes when the command
   exits (the normal single-pane `onExit` → `closePrimaryPane`).
@@ -315,6 +342,12 @@ paths:
   This is NOT the overlay's path — `makeOverlaySurface` explicitly wraps its command in `sh -c '…'` (so
   the overlay DOES get shell semantics); a session `--command` that needs shell features must wrap ITSELF,
   e.g. `--command "sh -c '…'"`.
+  Either way the command runs under the app's GUI environment, whose `PATH` is the launchd default (no
+  `/opt/homebrew/bin`), NOT a login shell's PATH, so a bare Homebrew or other non-default binary is not
+  found and exits 127 — the session/overlay opens then vanishes and `session.overlay.result` reports 127.
+  The fix is an absolute path or a LOGIN-shell wrapper (`zsh -lc '…'`); a plain `sh -c` gets shell
+  operators but NOT the login PATH, so the overlay's built-in `sh -c` wrapper does not by itself solve it
+  (the bundled agent-skill documents this caveat on the three `--command`/overlay entries).
   Keep-in-sync: the `.sessionNew` case carries `ControlArgs.command` plus `ControlArgs.name` (custom
   name) and `ControlArgs.workspaceName` + `ControlArgs.createWorkspace` (name-addressing + ensure);
   the arm pre-validates the mutual-exclusion / create-needs-name rules and shares `makeSessionResponse`
@@ -364,19 +397,20 @@ paths:
   focused pane, the SAME resolution `session.search` uses), so a no-`pane` read returns what's visible,
   not a pane hidden under the scratch) picks the pane.
   `args.all`+`args.lines` are mutually exclusive and `args.lines` must be > 0 — validated SERVER-SIDE in
-  `readText` (mirroring the CLI `validate()`), NOT only CLI-side, so a raw socket client can't bypass it
+  the dispatcher (`ControlDispatcher.dispatchSessionText`, mirroring the CLI `validate()`), NOT only CLI-side, so a raw socket client can't bypass it
   (an unchecked `lines ≤ 0` would otherwise fall through to the full buffer).
   UNLIKE `session.focus`, the `pane` here is `left|right|scratch` (no `other`).
   A genuinely BLANK screen reads `ok` with an empty string (NOT an error, on purpose — differs from `session.copy`'s
   `no selection`), but a FAILED `ghostty_surface_read_text` is a `failed to read surface buffer` error:
-  `readScreenText` returns `""` for the empty read and nil ONLY for a real failure, which `readText` maps
+  `readScreenText` returns `""` for the empty read and nil ONLY for a real failure, which the app-side `readSessionText` maps
   to the error (so a caller can tell a blank terminal from a broken read).
   Plain text only — the pinned libghostty exposes only `ghostty_surface_read_text` (no per-cell SGR),
   so `--ansi` is out of scope until a styled surface read lands upstream and the pin is bumped.
   Four-point keep-in-sync audit for `session.text`: (1) `case sessionText = "session.text"` + new `ControlArgs.all: Bool?`/`lines: Int?`
-  (reuses `pane` + `ControlResult.text`) in `ControlProtocol.swift`, (2) the `.sessionText` dispatch arm (`readText`)
-  in `ControlServer`, (3) the `session text [--all] [--lines N] [--pane left|right|scratch]` subcommand in `agtermctlKit`
-  (`validate()` guards the flag combos, re-enforced SERVER-SIDE in `readText`), (4) round-trip tests in
+  (reuses `pane` + `ControlResult.text`) in `ControlProtocol.swift`, (2) the `.sessionText` dispatcher arm —
+  `ControlDispatcher.dispatchSessionText` (validation + response shape) with the app-side `readSessionText` (the surface read) behind `ControlActions`,
+  (3) the `session text [--all] [--lines N] [--pane left|right|scratch]` subcommand in `agtermctlKit`
+  (`validate()` guards the flag combos, re-enforced SERVER-SIDE in the dispatcher), (4) round-trip tests in
   `ControlProtocolTests` + the e2e (`testSessionTextReturnsBuffer`, `testSessionTextSplitPaneWithoutSplitErrors`,
   `testSessionTextRejectsInvalidArgsServerSide`, `testSessionTextBlankScreenReturnsOkEmpty`) in `SessionTextUITests`
   (a `ControlAPITestCase` subclass in its own file, sharing the harness base with the `Control*UITests` suites).
@@ -506,14 +540,61 @@ paths:
   per-call wins; the default is blocked-only), with the transition gate itself in the server.
   That setting is keep-in-sync EXEMPT like the status colors, since the per-status sound already has
   full control coverage via `--sound`.
+  `args.color` (`#rrggbb`, REUSING the `session.background`/`session.overlay.open` field — no new arg —
+  validated by the shared `WatermarkConfig.isValidColorHex` in the dispatcher, an `invalid color (expected #rrggbb)`
+  error that leaves the status UNCHANGED) is a per-call glyph-tint OVERRIDE.
+  It rides the ephemeral `AgentIndicator` (`AgentIndicator.color`), so — because `setSessionStatus` builds
+  a fresh indicator every call — the next `session.status` without a color naturally DISCARDS it (no explicit
+  clear); nil renders the Settings-configured status color.
+  Both glyph render sites resolve it through the SHARED `GhosttyApp.statusColor(for:override:)` (a valid
+  hex wins, nil/malformed falls back to `statusColor(for:)`): the AppKit sidebar `StatusIconView` and the
+  SwiftUI attention-list `StatusGlyph` (`PaletteItem.statusColor`), so they can't drift.
+  It is keep-in-sync EXEMPT like the status colors/sound — the per-call color has full control coverage
+  via `--color` and no GUI setter (the Settings colors are the app-wide default, not a per-session tint).
   Setting a non-idle status is control-driven (the hooks/agents call it;
   no GUI sets active/completed/blocked), but clearing to idle ALSO has a GUI — the **Clear Status** action
   (see the Agent-status glyph note) — so the idle case is keep-in-sync covered by `session.status idle`.
   Cross-window via the shared `resolveSession` (the install's Stop hook targets its own `$AGTERM_SESSION_ID`,
   which may live in a non-frontmost window).
-  The arm (`setSessionStatus`) builds an `AgentIndicator{status, blink, autoReset}` (host-free,
+  The arm (`setSessionStatus`) builds an `AgentIndicator{status, blink, autoReset, color}` (host-free,
   ephemeral — never in `SessionSnapshot`) and drives the single `AppStore.setAgentIndicator(_:forSession:)`
   mutation point (unknown id = clean no-op), returning the id.
+  Four-point keep-in-sync audit for `session.status --color`: (1) `ControlArgs.color` (reused) +
+  `AgentIndicator.color` + `ControlSessionStatusUpdate.color` in `agtermCore`, the dispatcher hex-validation,
+  (2) the `.sessionStatus` arm threading `update.color` into the indicator + the two render sites via
+  `GhosttyApp.statusColor(for:override:)`, (3) the `session status --color` option (`validate()`-guarded)
+  in `agtermctlKit`, (4) round-trip in `ControlProtocolTests` + dispatcher validation in `ControlDispatcherTests`
+  + `AgentStatusTests` (indicator color + Equatable) + CLI mapping in `CommandsTests` + the e2e
+  `testSessionStatusColorValidatesHex` in `ControlSidebarStatusUITests` (asserts the command path — the
+  glyph TINT itself is not accessibility-observable).
+  `args.pane` (`left`|`right`|`scratch`, REUSING the shared `--pane` addressing vocabulary — parsed to the
+  host-free `StatusPane` and validated by the dispatcher, an `--pane must be left, right, or scratch` error
+  that leaves the status UNCHANGED) records WHICH pane set the status onto the ephemeral `AgentIndicator.statusPane`
+  (nil/omitted is treated as `left` = the main pane).
+  It drives two consumers.
+  (1) Pane-scoped keystroke-clear: the main/split/scratch surface factories each wire `onUserInputClearsStatus`
+  to a closure that clears only when the host-free `AgentIndicator.clearedBy(pane:isEscape:)` says the keystroke's
+  OWN pane owns the current status, so a `right`- or `scratch`-tagged block SURVIVES foreground typing in the
+  main pane (see the Notifications rule).
+  (2) Pane-aware attention navigation: auto-follow and the GUI attention-nav (⌃⌥↑/⌃⌥↓, menu, palette) reveal
+  and focus the tagged pane — flip `splitFocused` to the split, or show a hidden scratch via `AppStore.toggleScratch`
+  — instead of always the main pane (the shared `AppActions.revealActiveBlockedPane`, wired into
+  `selectNext/PreviousAttentionSession` + `autoFollowed`).
+  The `session.go next-attention|prev-attention` control arm (`goSession`) only drives `AppStore.navigateSession`
+  and does NOT call the reveal, so the socket steps the selection but does not itself move focus into the pane
+  (see the Menu/actions rule).
+  It reads back on each `tree` node as `ControlSessionNode.statusPane` (omitted when nil, gated on the SAME
+  non-idle condition as `status` so an idle node reports neither).
+  Four-point keep-in-sync audit for `session.status --pane`: (1) the `StatusPane` enum + `AgentIndicator.statusPane`
+  + `AgentIndicator.clearedBy(pane:isEscape:)` + `ControlSessionStatusUpdate.pane` + `ControlSessionNode.statusPane`
+  + `SurfaceEnvironment.session(pane:)` (injects `AGTERM_PANE`) in `agtermCore`, plus the dispatcher `StatusPane`
+  parse/validation, (2) the `.sessionStatus` arm threading `update.pane` into the indicator + the per-factory
+  `AGTERM_PANE` env + the pane-scoped keystroke-clear closures + the `revealActiveBlockedPane` nav step,
+  (3) the `session status --pane` option (`validatePaneArgument`-guarded) + the hook wrapper forwarding
+  `$AGTERM_PANE` as `--pane`, (4) round-trip in `ControlProtocolTests` + dispatcher validation in `ControlDispatcherTests`
+  + `AgentStatusTests` (the `clearedBy` truth table) + `SurfaceEnvironmentTests` + `AgentStatusWrapperTests`
+  + CLI mapping in `CommandsTests` + the e2e in `PaneAwareStatusUITests`.
+  It is control-native for the tag itself (no GUI sets a pane), the same keep-in-sync footing as `--color`/`--sound`.
   Visibility is keep-state vs one-time, decided by `autoReset` alone: `AppStore.selectSession` resets
   an `autoReset` indicator (the `completed` flash) to idle on BOTH the session visited AND the one left
   (right after `clearUnseen`), so it never lingers on a row you switch away from,
@@ -664,7 +745,7 @@ paths:
   App-global like `keymap.reload` (clears all open windows, no `--window`).
   Four-point keep-in-sync audit for `restore.clear`: (1) `case restoreClear = "restore.clear"` in `ControlProtocol.swift`
   (no target/args; `foreground`/`splitForeground` added to `ControlSessionNode`),
-  (2) the `.restoreClear` dispatch arm (`clearSavedCommands`) in `ControlServer` + the foreground population
+  (2) the `.restoreClear` dispatcher arm → the app-side `ControlActions.clearRestoreCommands` + the foreground population
   in the tree builder, (3) the `restore clear` subcommand (`Restore`) in `agtermctlKit`,
   (4) round-trip (`restoreClearRoundTrips` + `treeSessionNodeRoundTripsWithForeground`/`…OmitsForegroundWhenNil`)
   in `ControlProtocolTests` + the e2e (`testTreeExposesForegroundProcess`,
@@ -713,8 +794,9 @@ paths:
   Four-point keep-in-sync audit for `session.background`: (1) `case sessionBackground = "session.background"`
   + `ControlArgs.path`/`color`/`opacity`/`fit`/`position`/`repeats` in `ControlProtocol.swift` (+ `background`
   on `ControlSessionNode` for the read-back),
-  (2) the `.sessionBackground` dispatch arm (`setBackground`, validating + building the spec, then `applyWatermark`
-  to the realized surfaces) in `ControlServer` (+ `background:` populated in the tree builder), (3) the
+  (2) the `.sessionBackground` dispatcher arm — `ControlDispatcher.dispatchSessionBackground` validates + builds the spec,
+  the app-side `setSessionBackground` does the filesystem checks (`isSupportedImage`/`fileExists`) + `applyWatermark`
+  to the realized surfaces (+ `background:` populated in the tree builder), (3) the
   `session background image|text|color|clear` subcommands in `agtermctlKit` (shared opacity/color/fit/position
   `validate()`; `color` takes color only, no opacity), (4) round-trip in `ControlProtocolTests` (incl.
   `treeSessionNodeRoundTripsWithBackground` + `backgroundWatermarkColorKindSerializes`)

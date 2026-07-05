@@ -95,7 +95,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// foreground), or the solid background color for mode `color` (required). Mode `color` takes no
     /// opacity — it honors the Settings window translucency. Also the optional solid background color for
     /// `session.overlay.open` (the overlay pane's own color, independent of the session's); nil = the
-    /// default theme background, honoring the same window translucency.
+    /// default theme background, honoring the same window translucency. And the optional per-call glyph-tint
+    /// override for `session.status` (rides the ephemeral indicator, so it lasts only until the next
+    /// `session.status` without a color); nil = the Settings-configured status color.
     public var color: String?
     /// The `background-image-opacity` for `session.background` (image + text), 0...1; nil = ghostty's 1.0.
     public var opacity: Double?
@@ -107,8 +109,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var repeats: Bool?
     /// Which split pane to focus for `session.focus` (`left`|`right`|`other`; `other` toggles); also
     /// which pane to read for `session.text` (`left`|`right`; omitted = the focused pane, no `other`),
-    /// and which pane `session.type` injects into (`left`|`right`; omitted = the left/main pane, the
-    /// pre-pane behavior).
+    /// which pane `session.type` injects into (`left`|`right`; omitted = the left/main pane, the
+    /// pre-pane behavior), and which pane set `session.status` (`left`|`right`|`scratch`; omitted =
+    /// `left`/main, parsed to `StatusPane`).
     public var pane: String?
     /// Absolute left-pane split fraction (0...1) for `session.resize`, clamped server-side to
     /// `AppStore.splitRatioMin...splitRatioMax`. Mutually exclusive with `ratioDelta`.
@@ -125,6 +128,13 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// `session.move` / `workspace.move` (`up`|`down`|`top`|`bottom`), and for `session.search`
     /// (`next`|`prev`|`close`).
     public var to: String?
+    /// Anchor session (id / unique prefix / `active`) to place a session right AFTER, for the placement
+    /// form of `session.new` / `session.move`. The anchor carries its own workspace (resolved across the
+    /// whole store), so it self-identifies the destination — mutually exclusive with `to`, `before`, and
+    /// the workspace parameter.
+    public var after: String?
+    /// Anchor session to place a session right BEFORE, the mirror of `after` (mutually exclusive with it).
+    public var before: String?
     /// The desktop-notification title for `notify` (optional; defaults to the target session's name).
     public var title: String?
     /// The desktop-notification body for `notify` (required).
@@ -170,7 +180,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public init(name: String? = nil, cwd: String? = nil, workspace: String? = nil, workspaceName: String? = nil,
                 createWorkspace: Bool? = nil, text: String? = nil, select: Bool? = nil, mode: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, window: String? = nil,
-                pane: String? = nil, to: String? = nil, title: String? = nil, body: String? = nil,
+                pane: String? = nil, to: String? = nil, after: String? = nil, before: String? = nil,
+                title: String? = nil, body: String? = nil,
                 width: Int? = nil, height: Int? = nil, x: Int? = nil, y: Int? = nil, display: Int? = nil,
                 status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil, sound: String? = nil,
                 ratio: Double? = nil, ratioDelta: Double? = nil,
@@ -191,6 +202,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.window = window
         self.pane = pane
         self.to = to
+        self.after = after
+        self.before = before
         self.title = title
         self.body = body
         self.width = width
@@ -255,6 +268,9 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// The session's agent status (`active`/`completed`/`blocked`) as the `AgentStatus` raw value, or nil
     /// when the session is idle (omitted from the JSON). The read side of `session.status`.
     public let status: String?
+    /// Which pane set the session's agent status (`"left"|"right"|"scratch"`, `left`=main, `right`=split),
+    /// or nil when idle or unspecified (omitted from the JSON). The read side of `session.status --pane`.
+    public let statusPane: String?
     /// The session's background watermark spec, or nil when none is set (omitted from the JSON). The read
     /// side of `session.background` — set/clear/query symmetry, so a script can inspect the current watermark.
     public let background: BackgroundWatermark?
@@ -262,7 +278,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 overlay: Bool = false, scratch: Bool = false, flagged: Bool = false,
                 foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil,
-                background: BackgroundWatermark? = nil) {
+                statusPane: String? = nil, background: BackgroundWatermark? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -275,6 +291,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.foreground = foreground
         self.splitForeground = splitForeground
         self.status = status
+        self.statusPane = statusPane
         self.background = background
     }
 }

@@ -42,8 +42,8 @@ holds the pane the shortcut fired from, so `session type --pane "$AGT_PANE"` typ
 Run a command AS the session's process (closes when it exits, no echoed command line):
 
 ```bash
-agtermctl session new --command "htop"
-agtermctl session new --command "ssh host -p 22"   # argv-split (quotes respected), no shell, no echo
+agtermctl session new --command "ssh host -p 22"     # a default-PATH binary: argv-split (quotes respected), no shell, no echo
+agtermctl session new --command "zsh -lc 'htop'"     # Homebrew/non-default binary: --command has the app's GUI PATH, so wrap in a login shell (or use an absolute path); bare "htop" exits 127
 ```
 
 Create a session pre-named (label set at creation, no follow-up rename):
@@ -70,6 +70,33 @@ agtermctl session resize --split-ratio 0.7 --target "$a"   # left pane gets 70% 
 b=$(agtermctl session new --workspace "$ws" --json | jq -r '.result.id')
 agtermctl session rename "logs" --target "$b"
 ```
+
+## Place a session next to another instead of appending
+
+`session new` appends at the end of the workspace by default. `--after`/`--before` place it directly
+after/before an anchor session in one round-trip — no `move --to up` walk. The anchor is a session
+address (id / unique prefix / `active`) and carries its own workspace, so it names the destination
+itself (mutually exclusive with `--workspace`/`--workspace-name`).
+
+```bash
+# the headline case: create right after the current session
+agtermctl session new --after active
+
+# create right before a specific session (by unique prefix)
+agtermctl session new --before 3f2a --name "notes"
+```
+
+`session move` gains the same placement mode. Relocate a session and slot it after/before an anchor —
+wherever the anchor lives, even in another workspace — in one shot, with no visible row-by-row shuffle:
+
+```bash
+# move the current session to sit right after another (cross-workspace if the anchor is elsewhere)
+agtermctl session move --after 3f2a --target active
+agtermctl session move --before "$logs" --target "$server"
+```
+
+`--after`/`--before` are mutually exclusive with each other, with `--to`, and with a destination
+workspace — the anchor already picks the workspace.
 
 ## Resize the split divider from a keybinding
 
@@ -102,10 +129,12 @@ echo "exit status: $?"
 cat /tmp/notes.md
 ```
 
-Floating panel variant (session stays visible behind it):
+Floating panel variant (session stays visible behind it). Note: a floating overlay renders only over the
+active session, so opening it on a background `--target` SWITCHES the user to that session — use a full
+overlay (no `--size-percent`) when you must not disturb the user's current view:
 
 ```bash
-agtermctl session overlay open "htop" --target "$AGTERM_SESSION_ID" --size-percent 70   # this session
+agtermctl session overlay open "zsh -lc 'htop'" --target "$AGTERM_SESSION_ID" --size-percent 70   # login shell so Homebrew's htop is on PATH; bare "htop" flashes open then vanishes (exit 127)
 # tint the overlay pane so it stands out from the session behind it:
 agtermctl session overlay open "revdiff HEAD~3" --target "$AGTERM_SESSION_ID" --size-percent 80 --background-color "#2a1a3a"
 # ... later
@@ -178,7 +207,7 @@ A third per-session full-coverage shell. Hide keeps it alive; `exit` in it recre
 agtermctl session scratch on        # show (selects the target)
 agtermctl session scratch off       # hide, shell stays alive
 agtermctl session scratch toggle
-agtermctl session scratch on --command "lazygit"   # run a program instead of a shell (run-once)
+agtermctl session scratch on --command "zsh -lc 'lazygit'"   # run a program instead of a shell (run-once); login-shell wrap so Homebrew's PATH is found (bare "lazygit" exits 127)
 ```
 
 ## Flag a working set and view just the flagged sessions
@@ -280,8 +309,35 @@ agtermctl session status active --blink --target "$AGTERM_SESSION_ID"   # workin
 agtermctl session status completed --auto-reset --target "$AGTERM_SESSION_ID"  # one-shot done flash
 agtermctl session status blocked --sound default --target "$AGTERM_SESSION_ID" # needs input, with a beep
 agtermctl session status completed --sound Glass --target "$AGTERM_SESSION_ID" # done, with a named sound
+agtermctl session status blocked --color '#ff0000' --target "$AGTERM_SESSION_ID" # per-call red tint (reverts on next status)
+agtermctl session status blocked --pane right --target "$AGTERM_SESSION_ID"     # a split-pane agent tags its pane (see below)
 agtermctl session status idle --target "$AGTERM_SESSION_ID"             # clear
 ```
+
+## Tag the blocking pane so navigation lands on it
+
+An agent running in a split or scratch pane sets `--pane` so its block survives foreground typing in
+another pane and the user's attention navigation lands on the RIGHT pane — the split, or a hidden scratch,
+not the main pane. Auto-follow and any GUI selection — the attention-nav (⌃⌥↑/⌃⌥↓), plain session nav,
+the command palettes, and a sidebar row click — reveal and focus the tagged pane; the socket
+`session go --to next-attention` only steps the selection, it does not move focus into the pane.
+Without `--pane` the status is treated as coming from the main (`left`) pane, so a block set from the split
+can be wiped by typing in the main pane and the reveal lands on the wrong surface.
+
+```bash
+# an agent working in the split pane; $AGT_PANE is set in a custom keymap command, else name it
+agtermctl session status active --pane right --target "$AGTERM_SESSION_ID"   # working, in the split
+agtermctl session status blocked --pane right --target "$AGTERM_SESSION_ID"  # needs input; the user's attention nav focuses the split
+
+# an agent working in the scratch terminal (even while it is hidden)
+agtermctl session status blocked --pane scratch --target "$AGTERM_SESSION_ID" # the user's attention nav SHOWS + focuses the scratch
+
+# read back which pane blocked
+agtermctl tree --json | jq -r '.result.tree.workspaces[].sessions[] | select(.status) | "\(.name): \(.status) in \(.statusPane // "left")"'
+```
+
+`--pane left` (or omitting it) is the main pane. Feed a keymap command's `$AGT_PANE` straight through
+(`session status blocked --pane "$AGT_PANE"`) to tag the exact pane a shortcut fired from.
 
 ## Navigate and manage windows
 

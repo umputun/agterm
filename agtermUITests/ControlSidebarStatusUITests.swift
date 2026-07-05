@@ -281,9 +281,48 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertEqual(try currentStatus(), "completed", "an unknown sound must leave the status unchanged")
     }
 
-    // the agent-status icon is gated by the visibility rule: it shows only on a session that is NOT the
-    // frontmost window's selected one. Set status on a non-selected session → the icon appears; select that
-    // session → it hides; select a different session → it reappears (mirrors the notify-badge test).
+    // session.status --color sets a per-call glyph tint. The tint itself is NOT accessibility-observable
+    // (glyph color, like the cursor's solid/hollow state, isn't in the AX tree — covered host-free +
+    // manual), so this drives the command path end-to-end: a valid #rrggbb applies the status, and a
+    // malformed color is rejected before the mutation and leaves the status unchanged.
+    func testSessionStatusColorValidatesHex() throws {
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let root = try XCTUnwrap(treeResult["tree"] as? [String: Any], "result should carry a tree")
+        let workspaces = try XCTUnwrap(root["workspaces"] as? [[String: Any]], "tree should list workspaces")
+        let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
+        let seeded = try XCTUnwrap(sessions.first?["id"] as? String, "should have a seeded session id")
+
+        func currentStatus() throws -> String? {
+            let t = try sendCommand(#"{"cmd":"tree"}"#)
+            let r = try XCTUnwrap(t["result"] as? [String: Any])
+            let ws = try XCTUnwrap((r["tree"] as? [String: Any])?["workspaces"] as? [[String: Any]])
+            let all = ws.flatMap { $0["sessions"] as? [[String: Any]] ?? [] }
+            return all.first { ($0["id"] as? String) == seeded }?["status"] as? String
+        }
+
+        // a valid #rrggbb applies the status and shows the glyph. NOTE: the `"#ff0000"` value contains the
+        // `"#` sequence, which would close a `#"..."#` raw string early, so this line uses the `##"..."##`
+        // delimiter (and `\##(seeded)` interpolation) — the rest of the file's `#"..."#` JSON has no `#`.
+        let ok = try sendCommand(##"{"cmd":"session.status","target":"\##(seeded)","args":{"status":"blocked","color":"#ff0000"}}"##)
+        XCTAssertEqual(ok["ok"] as? Bool, true, "session.status --color #ff0000 should succeed: \(ok)")
+        XCTAssertEqual(try currentStatus(), "blocked", "the status should be applied")
+        XCTAssertTrue(app.staticTexts["agent-status"].waitForExistence(timeout: 12),
+                      "the status glyph should appear on the session's row")
+
+        // a malformed color is rejected before the mutation.
+        let bad = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"active","color":"nope"}}"#)
+        XCTAssertEqual(bad["ok"] as? Bool, false, "a malformed color should fail: \(bad)")
+        XCTAssertEqual(bad["error"] as? String, "invalid color (expected #rrggbb)", "should report the invalid color: \(bad)")
+
+        // the rejected call must NOT have changed the status — validation happens before the mutation.
+        XCTAssertEqual(try currentStatus(), "blocked", "an invalid color must leave the status unchanged")
+    }
+
+    // the agent-status icon shows on every non-idle session, the selected one INCLUDED — there is no
+    // visibility gate. Set active on a non-selected session → the icon appears; select that session → it
+    // STAYS (active is keep-state); set completed --auto-reset on a non-selected session → it shows, then
+    // VISITING (selecting) it clears the auto-reset flash.
     func testAgentStatusIconShowsRegardlessOfSelectionAndAutoResetClears() throws {
         let tree = try sendCommand(#"{"cmd":"tree"}"#)
         let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")

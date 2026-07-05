@@ -94,6 +94,16 @@ extension ControlServer: ControlActions {
     /// there is nothing to create by id. cwd/command/name are applied in makeSessionResponse.
     func createSession(_ options: ControlSessionCreateOptions) -> ControlResponse {
         resolver.resolvePlacementStore(options.window) { store in
+            // anchor-relative placement (`--after`/`--before`): the anchor sid names its own workspace,
+            // so this bypasses the `--workspace`/`--workspace-name` addressing entirely. `before` inserts
+            // at the anchor's slot, `after` just past it (clamped in `AppStore.addSession`).
+            if let anchor = options.after ?? options.before {
+                let placeBefore = options.before != nil
+                return resolveAnchorLocation(anchor, in: store) { location in
+                    let index = placeBefore ? location.index : location.index + 1
+                    return makeSessionResponse(in: store, workspaceID: location.workspace, options: options, at: index)
+                }
+            }
             // name addressing: reuse-or-create with `createWorkspace`, else require an existing match.
             if let name = options.workspaceName {
                 // a blank name can neither be found NOR created — report that directly rather than
@@ -115,6 +125,21 @@ extension ControlServer: ControlActions {
                            active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
                 makeSessionResponse(in: store, workspaceID: workspaceID, options: options)
             }
+        }
+    }
+
+    /// Resolve an anchor session address (`--after`/`--before`) across the store's whole session set (all
+    /// workspaces, so the anchor names its own destination workspace) and hand its `(workspace, index,
+    /// count)` location to `body`. An unresolved or ambiguous anchor yields the shared resolver error; the
+    /// location guard is defense-in-depth (the id came from the store's own list, so it always resolves).
+    private func resolveAnchorLocation(_ anchor: String, in store: AppStore,
+                                       _ body: ((workspace: UUID, index: Int, count: Int)) -> ControlResponse) -> ControlResponse {
+        resolver.resolve(anchor, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
+                       active: store.selectedSessionID, noun: "session") { anchorID in
+            guard let location = store.sessionLocation(ofSession: anchorID) else {
+                return ControlResponse(ok: false, error: "no such session")
+            }
+            return body(location)
         }
     }
 
@@ -380,8 +405,12 @@ extension ControlServer: ControlActions {
     /// other value = named system sound); it is validated up-front so an unknown name is an `unknown sound`
     /// error that leaves the status unchanged (an empty value is treated as no per-call sound). When no
     /// per-call `sound` is given and the session TRANSITIONS into `blocked`, the user's configured Settings
-    /// "Blocked sound" (`blockedStatusSoundName`) plays as a best-effort default. The indicator is ephemeral
-    /// and rendered on every non-idle session.
+    /// "Blocked sound" (`blockedStatusSoundName`) plays as a best-effort default. `update.color`, when set,
+    /// is a `#rrggbb` glyph-tint override (hex-validated in the dispatcher) that rides the ephemeral
+    /// indicator, so it lasts only until the next `session.status` without a color. `update.pane`
+    /// (`StatusPane`, validated in the dispatcher) is threaded onto the indicator's `statusPane` — the pane
+    /// that set the status — driving the pane-scoped keystroke-clear and the pane-aware attention reveal;
+    /// nil is treated as `left`/main. The indicator is ephemeral and rendered on every non-idle session.
     func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) -> ControlResponse {
         // an explicit per-call sound is validated up-front: an unknown name errors without changing status.
         // an empty value is treated as no per-call sound, matching `AgentStatus.effectiveSound`.
@@ -393,7 +422,8 @@ extension ControlServer: ControlActions {
             // capture the status BEFORE mutating so the Settings default plays only on a real transition.
             let wasBlocked = store.session(withID: id)?.agentIndicator.status == .blocked
             store.setAgentIndicator(AgentIndicator(status: update.status, blink: update.blink ?? false,
-                                                   autoReset: update.autoReset ?? false), forSession: id)
+                                                   autoReset: update.autoReset ?? false,
+                                                   color: update.color, statusPane: update.pane), forSession: id)
             // explicit per-call sound wins on any status; the Settings default plays only when a session
             // newly enters `blocked`, not on a repeated `blocked` set.
             let blockedDefault = wasBlocked ? nil : self.settingsModel.settings.blockedStatusSoundName
@@ -434,8 +464,9 @@ extension ControlServer: ControlActions {
     }
 
     /// Mode-bearing `session.move`: `to` reorders the session within its own workspace
-    /// (`up`|`down`|`top`|`bottom`), `workspace` relocates it to another workspace (appending). Exactly
-    /// one of the two is required; both set or neither set is an error. An invalid `to` direction errors.
+    /// (`up`|`down`|`top`|`bottom`), `workspace` relocates it to another workspace (appending), `place`
+    /// relocates + positions relative to an anchor session (the anchor carries its own workspace). Exactly
+    /// one form is required (enforced in the dispatcher). An invalid `to` direction errors.
     func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse {
         switch move {
         case .reorder(let dir):
@@ -452,6 +483,29 @@ extension ControlServer: ControlActions {
                     store.moveSession(sessionID, toWorkspace: workspaceID)
                     return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))
                 }
+            }
+        case .place(let anchor, let after):
+            return placeSession(target, window: window, anchor: anchor, after: after)
+        }
+    }
+
+    /// Resolve the moved session and its anchor within the same store, then relocate + position via the
+    /// host-free `SidebarDrop.resolveRelative` drop math. The anchor is resolved across the whole store
+    /// (all workspaces), so it self-identifies the destination workspace. A nil resolution (anchor==self
+    /// or an already-in-place move) is a successful no-op.
+    private func placeSession(_ target: String?, window: String?, anchor: String, after: Bool) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, sessionID in
+            guard let source = store.sessionLocation(ofSession: sessionID) else {
+                return ControlResponse(ok: false, error: "no such session")
+            }
+            return resolveAnchorLocation(anchor, in: store) { anchorLoc in
+                if let resolution = SidebarDrop.resolveRelative(
+                    source: (workspace: source.workspace, index: source.index),
+                    anchor: (workspace: anchorLoc.workspace, index: anchorLoc.index, count: anchorLoc.count),
+                    placeAfter: after) {
+                    store.moveSession(sessionID, toWorkspace: resolution.workspace, at: resolution.destination)
+                }
+                return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))
             }
         }
     }

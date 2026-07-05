@@ -57,15 +57,16 @@ struct agtermApp: App {
         WindowGroup(id: Self.windowGroupID) {
             ContentView(
                 library: library,
-                makeSurface: { Self.makeSurface(for: $0, store: $1, env: surfaceEnv(for: $0), library: library) },
-                makeSplitSurface: { Self.makeSplitSurface(for: $0, store: $1, env: surfaceEnv(for: $0), library: library) },
+                makeSurface: { Self.makeSurface(for: $0, store: $1, env: surfaceEnv(for: $0, pane: .left), library: library) },
+                makeSplitSurface: { Self.makeSplitSurface(for: $0, store: $1, env: surfaceEnv(for: $0, pane: .right), library: library) },
                 makeOverlaySurface: { Self.makeOverlaySurface(for: $0, store: $1, env: surfaceEnv(for: $0)) },
                 makeScratchSurface: { session, store in
                     // suppress the scratch's creation autoFocus when a full overlay OR this window's quick
                     // terminal is already up — each renders above the scratch and owns focus.
                     let qtVisible = library.windowID(forSession: session.id)
                         .flatMap { QuickTerminalRegistry.shared.controller(for: $0) }?.isVisible ?? false
-                    return Self.makeScratchSurface(for: session, store: store, env: surfaceEnv(for: session),
+                    return Self.makeScratchSurface(for: session, store: store,
+                                                   env: surfaceEnv(for: session, pane: .scratch),
                                                    suppressAutoFocus: session.overlayActive || qtVisible,
                                                    library: library)
                 },
@@ -220,7 +221,7 @@ struct agtermApp: App {
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
-        view.onUserInputClearsStatus = { store.setAgentIndicator(AgentIndicator(), forSession: sessionID) }
+        Self.wireStatusClear(view, store: store, sessionID: sessionID, pane: .left)
         view.onUserInput = { store.noteUserActivity() }
         view.onFontSizeChange = { store.setFontSize(sessionID, $0) }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
@@ -289,6 +290,21 @@ struct agtermApp: App {
         view.onSearchSelected = { selected in store.session(withID: sessionID)?.searchSelected = selected }
     }
 
+    /// Wire the pane-scoped keystroke-clear: `keyDown` fires `onUserInputClearsStatus` unconditionally, and
+    /// this closure clears the status back to idle ONLY when the host-free `AgentIndicator.clearedBy(pane:isEscape:)`
+    /// says the keystroke's OWN pane owns the current status — so a block set from a background pane survives
+    /// foreground typing in another pane. Wired by all three surface factories with only the pane differing
+    /// (main=`.left`, split=`.right`, scratch=`.scratch`), like `wireSearchCallbacks`; the scratch has no
+    /// `view.session`, so the decision must live in this closure rather than `keyDown`.
+    @MainActor
+    private static func wireStatusClear(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID, pane: StatusPane) {
+        view.onUserInputClearsStatus = { isEscape in
+            if store.session(withID: sessionID)?.agentIndicator.clearedBy(pane: pane, isEscape: isEscape) == true {
+                store.setAgentIndicator(AgentIndicator(), forSession: sessionID)
+            }
+        }
+    }
+
     /// Split-pane surface factory: a second independent login shell in the session's current
     /// directory. Wired to the session as `isSplitPane`, so its PWD/title reports go to
     /// `session.splitCwd`/`splitTitle` (never clobbering the primary's), and on shell exit it closes
@@ -322,7 +338,7 @@ struct agtermApp: App {
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
-        view.onUserInputClearsStatus = { store.setAgentIndicator(AgentIndicator(), forSession: sessionID) }
+        Self.wireStatusClear(view, store: store, sessionID: sessionID, pane: .right)
         view.onUserInput = { store.noteUserActivity() }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
         return view
@@ -388,6 +404,7 @@ struct agtermApp: App {
                                       autoFocus: !suppressAutoFocus, env: env)
         let sessionID = session.id
         view.onExit = { store.closeScratch(sessionID) }
+        Self.wireStatusClear(view, store: store, sessionID: sessionID, pane: .scratch)
         // typing in the scratch counts as user activity: reset the window's auto-follow idle timer so an
         // idle fire can't change the underlying selection (hiding the per-session scratch) while you type
         // in it. destroySurface nils this, breaking the store -> surface -> closure retain cycle.
@@ -399,13 +416,15 @@ struct agtermApp: App {
         return view
     }
 
-    /// The `AGTERM_*` environment a tree surface (main / split / overlay) exposes to its spawned shell.
-    /// The window id comes from the open store that owns the session (split/overlay inherit it via
-    /// the same session); the workspace from the session's owning workspace; `AGTERM_SOCKET` is the path
+    /// The `AGTERM_*` environment a tree surface (main / split / overlay / scratch) exposes to its spawned
+    /// shell. The window id comes from the open store that owns the session (split/overlay/scratch inherit it
+    /// via the same session); the workspace from the session's owning workspace; `AGTERM_SOCKET` is the path
     /// `ControlServer` will bind (resolved at init, so a launch-window shell that materializes before
-    /// `start()` binds still sees it), honoring a test's `AGTERM_CONTROL_SOCKET` override.
+    /// `start()` binds still sees it), honoring a test's `AGTERM_CONTROL_SOCKET` override. `pane` injects the
+    /// matching `AGTERM_PANE` (`left`=main, `right`=split, `scratch`) so the hook wrapper forwards `--pane`
+    /// and a status set from a background pane records which surface blocked; the overlay passes nil (no pane).
     @MainActor
-    private func surfaceEnv(for session: Session) -> [String: String] {
+    private func surfaceEnv(for session: Session, pane: StatusPane? = nil) -> [String: String] {
         var windowID: WindowInfo.ID?
         var workspaceID: UUID?
         if let resolvedWindowID = library.windowID(forSession: session.id) {
@@ -415,7 +434,8 @@ struct agtermApp: App {
             }
         }
         return SurfaceEnvironment.session(sessionID: session.id, windowID: windowID,
-                                          workspaceID: workspaceID, socketPath: controlServer.resolvedSocketPath)
+                                          workspaceID: workspaceID, socketPath: controlServer.resolvedSocketPath,
+                                          pane: pane)
     }
 
     /// The `AGTERM_*` environment a window's quick terminal exposes — scratch, not in the tree, so it

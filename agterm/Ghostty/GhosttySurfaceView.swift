@@ -93,13 +93,15 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// responder, so the app can track which split pane is active. Set by the factory.
     var onFocusChange: ((Bool) -> Void)?
 
-    /// Called on the main actor when a key is pressed into this surface while the owning session's
-    /// agent-status is an attention state — `blocked` (waiting on you) or `completed` (finished). Typing
-    /// into the session, including the very Esc/answer keystroke that resolves a permission prompt, means
-    /// you've engaged with it, so the factory wires this to clear the stale glyph to idle. `active` is left
-    /// alone (the agent is still working). The status is otherwise control-driven; this is the one
+    /// Called on the main actor on EVERY keystroke into this surface, carrying whether the key was Escape.
+    /// The factory's closure owns the pane-scoped decision (via `AgentIndicator.clearedBy(pane:isEscape:)`):
+    /// it clears the glyph to idle only when THIS surface's pane owns a clearable status — `blocked`/`completed`
+    /// on any key (you've engaged with the prompt / finished result), `active` only on Escape (the interrupt
+    /// key). Typing in a foreground pane therefore no longer wipes a background pane's block. Passing the
+    /// pane in the closure (not reading `view.session`) is what lets the scratch surface — which has no
+    /// `view.session` — self-clear its own block. The status is otherwise control-driven; this is the one
     /// input-driven clear, covering the decline case Claude Code fires no hook for.
-    var onUserInputClearsStatus: (() -> Void)?
+    var onUserInputClearsStatus: ((Bool) -> Void)?
 
     /// Called on the main actor on EVERY keystroke into this surface, so the app can stamp user activity
     /// and reset the window's auto-follow idle timer. Unlike `onUserInputClearsStatus` (which fires only on
@@ -217,6 +219,13 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     var keyTextAccumulator: [String] = []
     var currentKeyEvent: NSEvent?
     private var currentTrackingArea: NSTrackingArea?
+
+    /// The mouse-cursor shape libghostty last requested for this surface (`GHOSTTY_ACTION_MOUSE_SHAPE`):
+    /// the I-beam over the grid, the pointing hand over a detected link / OSC-8 hyperlink, resize/crosshair
+    /// in the matching modes. `resetCursorRects` maps it to an `NSCursor`. Defaults to the terminal I-beam
+    /// so the resting cursor is right before the first event. Not `private` so the `+Input` extension (which
+    /// owns the cursor-rect override and `applyMouseShape`) can read it.
+    var mouseShape: ghostty_action_mouse_shape_e = GHOSTTY_MOUSE_SHAPE_TEXT
 
     init(workingDirectory: String, fontSize: Float? = nil, command: String? = nil, initialInput: String? = nil,
          waitAfterCommand: Bool = false, autoFocus: Bool = false, env: [String: String] = [:]) {
@@ -904,7 +913,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         if let existing = currentTrackingArea { removeTrackingArea(existing) }
         let area = NSTrackingArea(
             rect: bounds,
-            options: [.mouseMoved, .activeInKeyWindow, .inVisibleRect],
+            options: [.mouseMoved, .mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
             owner: self
         )
         addTrackingArea(area)

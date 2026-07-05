@@ -17,7 +17,7 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
     /// the quick-Esc case: a pending question can still read `active` when you cancel it (Claude Code's
     /// `blocked` notification lands seconds later), and the Esc-interrupt itself fires no hook, so this
     /// keystroke clear is the only signal that drops the stale `active`. `idle` has no glyph to clear.
-    public func clearedByKeystroke(isEscape: Bool) -> Bool {
+    func clearedByKeystroke(isEscape: Bool) -> Bool {
         switch self {
         case .blocked, .completed: return true
         case .active: return isEscape
@@ -60,9 +60,18 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
     }
 }
 
+/// StatusPane records which pane of a session set the current agent status, using the same
+/// `left|right|scratch` vocabulary as the `--pane` control argument (`left`=main, `right`=split).
+/// It rides on `AgentIndicator` so pane-scoped keystroke-clear and pane-aware navigation know which
+/// surface blocked. Raw values serialize to JSON as `"left"|"right"|"scratch"`.
+public enum StatusPane: String, Codable, Sendable, CaseIterable {
+    case left, right, scratch
+}
+
 /// AgentIndicator is the per-session agent status value: the state plus an optional blink flag (pulse
-/// the glyph for attention) and an optional autoReset flag (clear back to idle once the session is
-/// visited). It is ephemeral (never persisted) and set only via the control API.
+/// the glyph for attention), an optional autoReset flag (clear back to idle once the session is
+/// visited), an optional per-call color override for the glyph tint, and the pane that set the status.
+/// It is ephemeral (never persisted) and set only via the control API.
 public struct AgentIndicator: Equatable, Sendable {
     /// status is the current agent state; `.idle` renders no glyph.
     public var status: AgentStatus = .idle
@@ -71,10 +80,28 @@ public struct AgentIndicator: Equatable, Sendable {
     /// autoReset, when true, the indicator resets to idle once the session is visited (selected) — a
     /// caller-set, status-agnostic flag, like blink.
     public var autoReset: Bool = false
+    /// color, when set, is a `#rrggbb` hex that overrides the Settings-configured glyph tint for this
+    /// glyph only — a caller-set, per-call value that rides the ephemeral indicator, so the next
+    /// `session.status` call without a color naturally discards it. nil renders the default status color.
+    public var color: String?
+    /// statusPane records which pane set this status; nil means unspecified and is treated as `.left`
+    /// (main) by the clear logic.
+    public var statusPane: StatusPane?
 
-    public init(status: AgentStatus = .idle, blink: Bool = false, autoReset: Bool = false) {
+    public init(status: AgentStatus = .idle, blink: Bool = false, autoReset: Bool = false,
+                color: String? = nil, statusPane: StatusPane? = nil) {
         self.status = status
         self.blink = blink
         self.autoReset = autoReset
+        self.color = color
+        self.statusPane = statusPane
+    }
+
+    /// clearedBy reports whether a keystroke from `pane` should clear this indicator back to idle. It
+    /// clears only when the keystroke's own pane owns the current status (a nil `statusPane` is treated
+    /// as `.left`) AND the status itself is clearable by that keystroke (`AgentStatus.clearedByKeystroke`).
+    /// This keeps foreground typing from wiping a status set by a background pane.
+    public func clearedBy(pane: StatusPane, isEscape: Bool) -> Bool {
+        (statusPane ?? .left) == pane && status.clearedByKeystroke(isEscape: isEscape)
     }
 }

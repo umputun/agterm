@@ -100,6 +100,58 @@ struct SidebarDropTests {
         #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsB, dropChildIndex: Self.onItem, destination: 2))
     }
 
+    // MARK: - Anchor-relative placement (control --after/--before)
+
+    @Test func relativeSameWorkspaceAfterAnchor() {
+        // [a(0), b(1), c(2)]; place c (source 2) AFTER a (anchor idx 0) → lands right after a at 1.
+        let move = SidebarDrop.resolveRelative(
+            source: (Self.wsA, 2), anchor: (Self.wsA, 0, 3), placeAfter: true)
+        #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsA, dropChildIndex: 1, destination: 1))
+    }
+
+    @Test func relativeSameWorkspaceAfterAnchorDownwardAppliesMinusOne() {
+        // [a(0), b(1), c(2), d(3)]; place a (source 0) AFTER c (anchor idx 2). after → dropChildIndex 3;
+        // same-workspace downward (0 < 3) subtracts 1 → destination 2 (the discriminating off-by-one).
+        let move = SidebarDrop.resolveRelative(
+            source: (Self.wsA, 0), anchor: (Self.wsA, 2, 4), placeAfter: true)
+        #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsA, dropChildIndex: 3, destination: 2))
+    }
+
+    @Test func relativeSameWorkspaceBeforeAnchor() {
+        // [a(0), b(1), c(2)]; place c (source 2) BEFORE b (anchor idx 1) → childIndex = anchorIndex = 1.
+        let move = SidebarDrop.resolveRelative(
+            source: (Self.wsA, 2), anchor: (Self.wsA, 1, 3), placeAfter: false)
+        #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsA, dropChildIndex: 1, destination: 1))
+    }
+
+    @Test func relativeCrossWorkspaceAfterAnchorNoAdjustment() {
+        // place a wsA session AFTER wsB's y (anchor idx 1) → dropChildIndex 2; cross-workspace, no -1.
+        let move = SidebarDrop.resolveRelative(
+            source: (Self.wsA, 0), anchor: (Self.wsB, 1, 3), placeAfter: true)
+        #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsB, dropChildIndex: 2, destination: 2))
+    }
+
+    @Test func relativeCrossWorkspaceBeforeAnchorNoAdjustment() {
+        // place a wsA session BEFORE wsB's y (anchor idx 1) → childIndex 1; cross-workspace, no -1.
+        let move = SidebarDrop.resolveRelative(
+            source: (Self.wsA, 0), anchor: (Self.wsB, 1, 3), placeAfter: false)
+        #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsB, dropChildIndex: 1, destination: 1))
+    }
+
+    @Test func relativeAnchorIsSourceBeforeIsNoOp() {
+        // [a(0), b(1), c(2)]; place b (source 1) BEFORE itself → lands in its own slot → no-op.
+        let move = SidebarDrop.resolveRelative(
+            source: (Self.wsA, 1), anchor: (Self.wsA, 1, 3), placeAfter: false)
+        #expect(move == nil)
+    }
+
+    @Test func relativeAnchorIsSourceAfterIsNoOp() {
+        // [a(0), b(1), c(2)]; place b (source 1) AFTER itself → after the -1 lands in its own slot → no-op.
+        let move = SidebarDrop.resolveRelative(
+            source: (Self.wsA, 1), anchor: (Self.wsA, 1, 3), placeAfter: true)
+        #expect(move == nil)
+    }
+
     // MARK: - Workspace reorder
 
     @Test func workspaceMoveUp() {

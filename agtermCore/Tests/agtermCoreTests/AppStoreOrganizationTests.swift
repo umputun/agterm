@@ -70,6 +70,60 @@ struct AppStoreOrganizationTests {
         #expect(movedRef.customName == "build")
     }
 
+    @Test func addSessionAppendsWhenIndexNil() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: work.id, cwd: "/b")!
+        #expect(store.workspaces[0].sessions.map(\.id) == [a.id, b.id])
+    }
+
+    @Test func addSessionInsertsAtHead() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let head = store.addSession(toWorkspace: work.id, cwd: "/head", at: 0)!
+        #expect(store.workspaces[0].sessions.map(\.id) == [head.id, a.id])
+    }
+
+    @Test func addSessionInsertsAtMiddle() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: work.id, cwd: "/b")!
+        let mid = store.addSession(toWorkspace: work.id, cwd: "/mid", at: 1)!
+        #expect(store.workspaces[0].sessions.map(\.id) == [a.id, mid.id, b.id])
+    }
+
+    @Test func addSessionInsertsAtTail() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let tail = store.addSession(toWorkspace: work.id, cwd: "/tail", at: 1)!
+        #expect(store.workspaces[0].sessions.map(\.id) == [a.id, tail.id])
+    }
+
+    @Test func addSessionClampsNegativeIndexToHead() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let clamped = store.addSession(toWorkspace: work.id, cwd: "/clamped", at: -5)!
+        #expect(store.workspaces[0].sessions.map(\.id) == [clamped.id, a.id])
+    }
+
+    @Test func addSessionClampsOutOfRangeIndexToTail() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let clamped = store.addSession(toWorkspace: work.id, cwd: "/clamped", at: 99)!
+        #expect(store.workspaces[0].sessions.map(\.id) == [a.id, clamped.id])
+    }
+
+    @Test func addSessionUnknownWorkspaceReturnsNilWithIndex() {
+        let store = makeStore()
+        #expect(store.addSession(toWorkspace: UUID(), cwd: "/a", at: 0) == nil)
+    }
+
     @Test func setFlagTogglesAndPersists() {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
         let persistence = PersistenceStore(directory: dir)
@@ -163,6 +217,68 @@ struct AppStoreOrganizationTests {
         store.setFocusedWorkspace(work.id)
         store.removeWorkspace(doomed.id)
         #expect(store.focusedWorkspaceID == work.id)
+    }
+
+    @Test func newWorkspaceStartsExpanded() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        #expect(work.isExpanded)
+        #expect(store.workspaces[0].isExpanded)
+    }
+
+    @Test func setWorkspacesExpandedTogglesAndPersists() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let persistence = PersistenceStore(directory: dir)
+        let store = AppStore(persistence: persistence)
+        let a = store.addWorkspace(name: "a")
+        let b = store.addWorkspace(name: "b")
+        // only `a` stays expanded; `b` collapses.
+        store.setWorkspacesExpanded([a.id])
+        #expect(store.workspaces[0].isExpanded)
+        #expect(!store.workspaces[1].isExpanded)
+        let loaded = persistence.load()
+        #expect(loaded.workspaces[0].collapsed == nil)   // expanded → omitted
+        #expect(loaded.workspaces[1].collapsed == true)  // collapsed → written
+        _ = b
+    }
+
+    @Test func setWorkspacesExpandedUnchangedDoesNotWrite() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let persistence = PersistenceStore(directory: dir)
+        let store = AppStore(persistence: persistence)
+        let a = store.addWorkspace(name: "a")
+        // collapse a, flush to disk, then hand-edit the on-disk file to a sentinel and re-issue the SAME
+        // state: a no-op mutator must not overwrite the sentinel (proving it skipped save()).
+        store.setWorkspacesExpanded([]) // a collapsed, saved
+        let sentinelURL = dir.appendingPathComponent("workspaces.json")
+        try! Data("{ not json }".utf8).write(to: sentinelURL)
+        store.setWorkspacesExpanded([]) // same state → no save, sentinel survives
+        #expect(try! Data(contentsOf: sentinelURL) == Data("{ not json }".utf8))
+        _ = a
+    }
+
+    @Test func setWorkspaceExpandedTogglesSingleWorkspaceAndPersists() {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
+        let persistence = PersistenceStore(directory: dir)
+        let store = AppStore(persistence: persistence)
+        let a = store.addWorkspace(name: "a")
+        let b = store.addWorkspace(name: "b")
+        store.setWorkspaceExpanded(a.id, expanded: false)
+        #expect(!store.workspaces[0].isExpanded)
+        #expect(store.workspaces[1].isExpanded) // b untouched — per-workspace, not whole-tree
+        let loaded = persistence.load()
+        #expect(loaded.workspaces[0].collapsed == true)
+        #expect(loaded.workspaces[1].collapsed == nil)
+        _ = b
+    }
+
+    @Test func setWorkspaceExpandedUnknownOrUnchangedIsNoOp() {
+        let store = makeStore()
+        let a = store.addWorkspace(name: "a")
+        store.setWorkspaceExpanded(UUID(), expanded: false) // unknown id
+        #expect(store.workspaces[0].isExpanded)
+        store.setWorkspaceExpanded(a.id, expanded: true) // already expanded
+        #expect(store.workspaces[0].isExpanded)
     }
 
     @Test func visibleWorkspacesReturnsAllWhenUnfocused() {

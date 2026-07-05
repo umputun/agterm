@@ -200,6 +200,25 @@ paths:
   unit-tested) and is driven by Navigate ▸ Previous/Next Attention Session,
   the action palette, and `session.go next-attention|prev-attention`; the two new `BuiltinAction`s (`previous_attention_session`/`next_attention_session`)
   join the arrow-bound set (nil `defaultChord`, hardcoded ⌃⌥↑/↓ via `arrowShortcut`).
+  EVERY user-initiated GUI selection now REVEALS the blocked PANE, not just the session: the shared
+  `AppActions.revealActiveBlockedPane()` (formerly private, now called on all selection paths) reads the
+  landed session's `agentIndicator.statusPane` and focuses that pane — for `right`, the split surface via
+  `focusSplitPane(_:wantSplit: true)` (a FIXED target, UNGATED on `hasSplit`, so a promoted split survivor
+  is still focused, and its `onFocusChange` re-asserts `splitFocused` to win the shown-split re-render race);
+  for `scratch`, shows a hidden scratch via `AppStore.toggleScratch` then focuses it;
+  for `left`/nil, the main pane; and it is a no-op (plain `focusActiveSession`) for an IDLE session
+  (no status set), so ordinary selections are unaffected (the idle gate is what keeps a plain nav to a
+  session with a shown scratch from dismissing it).
+  It fires from ALL of: attention-nav (⌃⌥↑/↓, `selectNext/PreviousAttentionSession`),
+  plain session nav (⌥⌘↑/↓/first/last, `selectNext/Previous/First/LastSession`),
+  the ⌃P/attention command palette (async in the palette item's run closure),
+  a sidebar row click (`WorkspaceSidebar.Coordinator.outlineViewSelectionDidChange`, async),
+  and idle auto-follow (`autoFollowed(_:)`) — the palette/sidebar paths dispatch async so the reveal runs
+  AFTER the palette/selection focus-restore settles.
+  All paths route through the one helper so they can't drift (the tag is set by `session.status --pane`
+  — see the Control API + Notifications rules).
+  Only the control `session.go next-attention|prev-attention` does NOT reveal (`goSession` just drives
+  `AppStore.navigateSession`), so the socket steps the selection without moving focus into the pane.
 - `Delete Workspace` lives once in `AppActions.deleteWorkspace(_:)` (confirm alert when the workspace
   still has sessions, then `AppStore.removeWorkspace`) and is invoked from all three surfaces — the sidebar
   workspace row's context menu, the menu bar, and the action palette (the latter two via `deleteActiveWorkspace()`,

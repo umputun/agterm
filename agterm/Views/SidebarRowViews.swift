@@ -125,7 +125,7 @@ final class StatusIconView: NSImageView {
             return
         }
         isHidden = false
-        image = Self.icon(for: indicator.status)
+        image = Self.icon(for: indicator.status, override: indicator.color)
         widthConstraint.constant = Self.glyphWidth
         setAccessibilityValue(indicator.status.rawValue)
         if indicator.blink { startBlink() } else { stopBlink() }
@@ -146,12 +146,12 @@ final class StatusIconView: NSImageView {
         layer?.removeAnimation(forKey: Self.blinkKey)
     }
 
-    private static func icon(for status: AgentStatus) -> NSImage? {
+    private static func icon(for status: AgentStatus, override colorHex: String?) -> NSImage? {
         guard status != .idle else { return nil } // unreachable: `apply` returns early on `.idle` before drawing
         // symbol + color come from the shared mapping (AgentStatus.symbolName + GhosttyApp.statusColor)
-        // so this glyph and the SwiftUI StatusGlyph stay identical.
+        // so this glyph and the SwiftUI StatusGlyph stay identical; a per-call `--color` overrides the tint.
         let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
-            .applying(NSImage.SymbolConfiguration(paletteColors: [GhosttyApp.shared.statusColor(for: status)]))
+            .applying(NSImage.SymbolConfiguration(paletteColors: [GhosttyApp.shared.statusColor(for: status, override: colorHex)]))
         return NSImage(systemSymbolName: status.symbolName, accessibilityDescription: status.rawValue)?
             .withSymbolConfiguration(config)
     }
