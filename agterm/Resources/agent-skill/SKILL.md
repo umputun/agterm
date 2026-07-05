@@ -157,14 +157,15 @@ spec — image/text watermark or solid color — set via `session background`, o
   terminal background color. Per session; survives restart. `--opacity` 0.0–1.0. (An image/text watermark
   renders the pane opaque, overriding window translucency, so it shows; a `color` takes no opacity and
   honors the Settings window translucency instead.)
-- `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb]` ·
+- `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow]` ·
   `overlay close` ·
   `overlay result` — run a program on top of a session; `--block` waits and exits with its status.
   Target with `--target "$AGTERM_SESSION_ID"` for YOUR session (default `active` is the user's selection).
-  **A floating overlay (`--size-percent`) SWITCHES the user to its target** — it renders only over the
-  active session, so opening one on a background session pulls the user there. A FULL overlay (no
-  `--size-percent`) does NOT switch: it opens on the target and appears when the user visits that session.
-  Use a full overlay when you must not disturb what the user is looking at.
+  **By default `overlay open` does NOT switch the user** — full and floating (`--size-percent`) both open
+  on `--target` and run their program in the background; the panel appears when the user visits that
+  session. **Pass `--follow` to select the target after opening** (a no-op if it is already active): use
+  `--follow` when you want the user pulled to the overlay, omit it to open quietly on your own or another
+  session.
   `--background-color` gives the overlay pane its own solid color, independent of the session's. An
   overlay is a real terminal (pty), which is also how you **display an image inline** — via the bundled
   `scripts/show-image.sh` (see below).

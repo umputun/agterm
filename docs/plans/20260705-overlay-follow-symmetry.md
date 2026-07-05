@@ -205,18 +205,18 @@ in the panel geometry (`--size-percent`).
 - Modify: `.claude/rules/control-api.md`
 - Modify: `README.md`, `site/docs.html`
 
-- [ ] rewrite the floating-switch notes committed in `98b1f0c` to the `--follow` model: default opens on
+- [x] rewrite the floating-switch notes committed in `98b1f0c` to the `--follow` model: default opens on
       `--target` without switching (both kinds); `--follow` selects the target. Update the `overlay open`
       entries + the Addressing note as needed
-- [ ] rewrite the WHOLE `session.overlay.open` passage in `.claude/rules/control-api.md` (spans ~lines
+- [x] rewrite the WHOLE `session.overlay.open` passage in `.claude/rules/control-api.md` (spans ~lines
       440-475, not one line): it currently documents the two-render-places architecture, "`ControlServer`
       SELECTS the target when a floating overlay opens," and three `floatingOverlayLayer` references (~444,
       454, 464) — all now wrong. Replace with: floating renders in-deck (`floatingOverlayPanel`, constant-shape
       sibling), both kinds run in the eager deck, and the select is `--follow`-gated (not `sizePercent`-gated)
-- [ ] update `README.md` and `site/docs.html` overlay wording if they describe the switch behavior; add
+- [x] update `README.md` and `site/docs.html` overlay wording if they describe the switch behavior; add
       `--follow` to the CLI examples
-- [ ] verify agent-skill command count unchanged (no new command — `follow` is an arg)
-- [ ] (docs task — no code tests; `make lint` still clean)
+- [x] verify agent-skill command count unchanged (no new command — `follow` is an arg)
+- [x] (docs task — no code tests; `make lint` still clean)
 
 ### Task 7: Verify acceptance criteria
 

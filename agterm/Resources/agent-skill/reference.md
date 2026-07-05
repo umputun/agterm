@@ -26,8 +26,8 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
   `$AGTERM_SESSION_ID`; the user is usually on a different session while you work. Pass
   `--target "$AGTERM_SESSION_ID"` on any session-scoped command (`overlay open`, `scratch`, `type`,
   `text`, `background`, `status`, `copy`, …) that must act on the session you run in — otherwise it hits
-  whatever the user has selected. A floating `overlay open --size-percent` additionally SELECTS its
-  target, switching the user to it.
+  whatever the user has selected. `overlay open` opens in the background without switching the user
+  (both full and floating); pass `--follow` to additionally SELECT the target, switching the user to it.
 - `--window <id|prefix|active>` (on session/workspace/tree/font/notify commands) picks which window's
   tree to act on; default is the frontmost. With `--window` set, that window must be open. Without it,
   an id/prefix session target is matched across all open windows.
@@ -224,17 +224,17 @@ state; there is no control command to set them.
   background-opacity); a `color` instead honors the Settings window translucency. Read the current
   background back from a session's `background` field in `tree --json` (a `{kind, colorHex, …}` object,
   omitted when none).
-- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--target] [--window W]`
+- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--target] [--window W]`
   — run `command` in an ephemeral terminal on top of the session; it closes when the command exits.
   `command` runs through `sh -c` (so shell operators DO work here) but with the app's GUI `PATH` (no
   `/opt/homebrew/bin`), so a bare Homebrew or other non-default binary fails with exit 127 — the overlay
   flashes open then vanishes and `overlay result` reports 127; give an absolute path or wrap in
   `"zsh -lc '…'"`.
   Full-size by default (hides the session); `--size-percent N` (1–100) makes it a floating framed panel
-  with the session visible behind. **A floating overlay renders only over the ACTIVE session, so opening
-  one on a non-active target SWITCHES the user to that session** — a full overlay does NOT (it mounts in
-  the target's deck slot and appears when the user visits it). Use a full overlay when you must not
-  disturb the user's current view. `--background-color #rrggbb` gives the overlay pane its own solid
+  with the session visible behind. **By default the overlay does NOT switch the active session** — full
+  and floating both open on `--target` and run their program in the background, appearing when the user
+  visits that session. **Pass `--follow` to select the target after opening** (a no-op if it is already
+  active); use it when you want the user pulled to the overlay, omit it to open quietly. `--background-color #rrggbb` gives the overlay pane its own solid
   background color, independent of the session's own `session background color` (nil = the default theme
   background); it honors the Settings window translucency, captured when the overlay opens. `--wait` keeps the overlay open after the command exits (press a key
   to close). `--block` waits for the command to exit and makes agtermctl exit with the command's status

@@ -129,14 +129,15 @@ echo "exit status: $?"
 cat /tmp/notes.md
 ```
 
-Floating panel variant (session stays visible behind it). Note: a floating overlay renders only over the
-active session, so opening it on a background `--target` SWITCHES the user to that session — use a full
-overlay (no `--size-percent`) when you must not disturb the user's current view:
+Floating panel variant (session stays visible behind it). Like a full overlay it opens in the background
+without switching the user; add `--follow` when you want the user pulled to the overlay:
 
 ```bash
 agtermctl session overlay open "zsh -lc 'htop'" --target "$AGTERM_SESSION_ID" --size-percent 70   # login shell so Homebrew's htop is on PATH; bare "htop" flashes open then vanishes (exit 127)
 # tint the overlay pane so it stands out from the session behind it:
 agtermctl session overlay open "revdiff HEAD~3" --target "$AGTERM_SESSION_ID" --size-percent 80 --background-color "#2a1a3a"
+# switch the user to the target as it opens:
+agtermctl session overlay open "revdiff HEAD~3" --target "$AGTERM_SESSION_ID" --size-percent 80 --follow
 # ... later
 agtermctl session overlay close
 ```

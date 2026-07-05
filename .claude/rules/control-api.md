@@ -435,41 +435,52 @@ paths:
   `overlaySizePercent`, nil = full / non-nil = floating; and `overlayBackgroundColor`,
   set at open / cleared at close), and the surface runs `config.command` with
   `onExit → closeOverlay`.
-  The two variants render in DIFFERENT places.
+  Both variants render IN the per-session eager deck, so the overlay program runs regardless of which
+  session is active — the only visible difference is geometry.
   The FULL overlay is an in-deck ZStack sibling in `WindowContentView.sessionDetail` (`.zIndex(1)` above the
   pane(s), gated on `fullOverlay`): it draws translucent + blurred (NO opaque backing) with the pane(s)
   behind hidden at `.opacity(0)` + `.allowsHitTesting(false)` (kept MOUNTED,
   shells alive like the deck's inactive sessions), so its transparency reveals the window backing (desktop,
   tint + blur), not the session.
-  The FLOATING overlay (`overlaySizePercent` set) is rendered OUTSIDE `sessionDetail` — as `.overlay { floatingOverlayLayer }`
-  on `detailPane` — so `sessionDetail` for the floating case adds NO sibling to its ZStack:
-  just the pane(s) at opacity 1, the same SHAPE as no-overlay (which is what keeps the NSSplitView from
-  moving).
+  The FLOATING overlay (`overlaySizePercent` set) is `floatingOverlayPanel(session:isActive:)`, an
+  ALWAYS-PRESENT ZStack sibling in `sessionDetail` (`.zIndex(3)`).
+  It is a CONSTANT-SHAPE sibling: the panel content (opaque `terminalColor` backing + hairline frame +
+  shadow, quick-terminal styling; the overlay surface; the click-catcher) is gated INSIDE it, so the ZStack
+  child COUNT stays constant across open/close — the same SHAPE as no-overlay, which is what keeps the
+  AppKit `NSSplitView` from re-hosting and overrunning UP into the transparent titlebar.
+  (The panel used to mount OUTSIDE `sessionDetail` as a `detailPane` `.overlay` for exactly this reason;
+  the always-present constant-shape sibling holds the same invariant IN-deck, which is what lets the
+  floating surface mount per-session and run in the background like the full overlay.)
   Hit-testing stays gated on `.allowsHitTesting(!fullOverlay)` and must NOT flip when a floating overlay
   opens: changing the panes' OWN `allowsHitTesting` on overlay-open (e.g. to `!session.overlayActive`)
-  ALSO triggers the NSSplitView titlebar-overrun — the SAME class of perturbation as adding a sibling,
-  even though it looks like a pure interaction change (Codex insisted hit-testing was layout-inert;
+  ALSO triggers the NSSplitView titlebar-overrun — the SAME class of perturbation as changing the ZStack's
+  shape, even though it looks like a pure interaction change (Codex insisted hit-testing was layout-inert;
   a review-loop regression proved otherwise).
-  So the floating panes stay hit-testable, and the overlay's focus is protected OUTSIDE `sessionDetail`:
-  a transparent `Color.clear.contentShape(Rectangle())` catcher in `floatingOverlayLayer` (on `detailPane`)
-  absorbs clicks AROUND the panel so they can't reach the panes and steal the overlay program's first
-  responder.
-  (Generalize the rule: ANYTHING in `sessionDetail`'s HSplitView-hosting subtree that CHANGES when `overlayActive`
-  flips — a sibling, a flattened ZStack, or a toggled pane modifier — overruns the split into the titlebar;
-  keep that subtree identical for the floating case and do everything else at the `detailPane` level.)
-  This separation is load-bearing: adding a conditional sibling INSIDE `sessionDetail`'s ZStack (the
-  HSplitView-hosting subtree) made SwiftUI re-host it and the AppKit `NSSplitView` overrun UP into the
+  So the floating panes stay hit-testable, and the overlay's focus is protected by a transparent
+  `Color.clear.contentShape(Rectangle())` catcher INSIDE `floatingOverlayPanel` that absorbs clicks AROUND
+  the panel so they can't reach the panes and steal the overlay program's first responder.
+  (Generalize the rule: ANYTHING in `sessionDetail`'s HSplitView-hosting subtree that CHANGES SHAPE when
+  `overlayActive` flips — adding/removing a sibling, a flattened ZStack, or a toggled pane modifier —
+  overruns the split into the titlebar; keep the subtree's shape identical across open/close and gate the
+  panel content INSIDE the constant-shape sibling.)
+  This constant-shape invariant is load-bearing: a CONDITIONAL sibling inside `sessionDetail`'s ZStack (the
+  HSplitView-hosting subtree) made SwiftUI re-host it and the `NSSplitView` overrun UP into the
   transparent titlebar, painting the split over the header (Codex-confirmed;
   the quick terminal renders at this level for the same reason and never hit it).
-  Anchoring on `detailPane` also means `floatingOverlayLayer`'s `GeometryReader` reports the terminal
-  area EXACTLY — no manual sidebar/titlebar insets (computing those at the window level mis-centered
-  the panel one line low) — so it sizes the opaque framed panel (`terminalColor` backing + hairline frame
-  + shadow, quick-terminal styling) to `sizePercent`% and centers it in the detail area,
-  the pane(s) visible around it.
-  Only the active session's floating overlay shows, so `ControlServer` SELECTS the target when a floating
-  overlay (`sizePercent` set) opens — its surface only mounts for the active session,
-  so without the select a non-active target's program would never run and a `--block` open would poll
-  forever (the full overlay needs no select; it mounts in the eager deck regardless).
+  `floatingOverlayPanel`'s `GeometryReader` reports the detail area EXACTLY — no manual sidebar/titlebar
+  insets (computing those at the window level mis-centered the panel one line low) — so it sizes the opaque
+  framed panel to `sizePercent`% and centers it in the detail area, the pane(s) visible around it.
+  `isActive` gates the overlay surface's focus, so a background floating overlay RUNS but does not steal
+  focus (mirrors the full overlay).
+  Because both kinds mount in the eager deck, `ControlServer` does NOT select on open by default; it SELECTS
+  the target ONLY when the caller passes `--follow` (gated on `options.follow`, NOT on `sizePercent`) — the
+  user-facing "pull me to the overlay" switch.
+  Without `--follow` full and floating both open on `--target` and run in the background; a `--block` open
+  completes without changing the active session.
+  `follow` is a new optional ARG on the existing `overlay.open` command (NO new `Command` case): threaded
+  `ControlProtocol` (`ControlArgs.follow`) → `ControlDispatcher` `.sessionOverlayOpen`
+  (`ControlSessionOverlayOpenOptions.follow`) → `ControlServer` → the `agtermctl … --follow` flag,
+  omitted = false for back-compat.
   On close an `.onChange(of: session.overlayActive)` drives `focusAfterReparent()` on the session's `activeSurface`
   so first responder returns to the underlying terminal — the pane re-activating only does a single `makeFirstResponder`,
   which loses the teardown/re-host race (same reason the open path needs the `autoFocus` retry).
@@ -482,7 +493,8 @@ paths:
   `--wait`/`overlayWait` keeps the prompt (returns `false` from the action so `close_surface_cb` closes
   after a keypress).
   `handleProcessExit` is idempotent (both the action and `close_surface_cb` can fire).
-  The overlay is rendered only for the *active* session, so the caller selects the session first.
+  Both variants mount in the eager deck, so the caller does NOT need to select the target; `--follow`
+  selects it only when the user should be pulled to the overlay.
   **Exit-status capture (`session.overlay.result` + `agtermctl … --block`).** `makeOverlaySurface` wraps
   the command in a FIXED `sh -c '( eval "$AGTERM_OVL_CMD" ); echo $? > "$AGTERM_OVL_CODE"'` — the real
   command + a per-surface temp path ride in env (`AGTERM_OVL_CMD`/`AGTERM_OVL_CODE`,

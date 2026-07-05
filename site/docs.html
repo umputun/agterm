@@ -1122,6 +1122,9 @@
               ><br />agtermctl session overlay open <span style="color: #f2b45c">"htop"</span> --size-percent 70<br />agtermctl
               session overlay open <span style="color: #f2b45c">"revdiff HEAD~3"</span> --size-percent 80 --background-color
               <span style="color: #f2b45c">"#2a1a3a"</span><br /><br /><span style="color: #6b727a"
+                ># switch the user to the target as the overlay opens</span
+              ><br />agtermctl session overlay open <span style="color: #f2b45c">"revdiff HEAD~3"</span> --size-percent 80
+              --follow<br /><br /><span style="color: #6b727a"
                 ># keep it open after exit, or block until it exits and inherit its status</span
               ><br />agtermctl session overlay open <span style="color: #f2b45c">"make test"</span> --wait<br />agtermctl session
               overlay open <span style="color: #f2b45c">"make test"</span> --block<br />agtermctl session overlay close --target
@@ -1132,11 +1135,13 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--wait</span> keeps a "press any key
               to close" prompt so you can read the final output;
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--block</span> reports only the exit
-              status (the overlay never captures stdout — a TUI writes its own result file). A full overlay renders only for the
-              active session; a floating <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+              status (the overlay never captures stdout — a TUI writes its own result file). By default an overlay opens on its
+              target without switching the active session (full and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
                 >--size-percent</span
               >
-              overlay auto-selects its target. A
+              floating alike);
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--follow</span> switches the user to
+              the target. A
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">(overlay)</span> tag in
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree</span> marks a session
               whose overlay is open.
