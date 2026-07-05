@@ -34,5 +34,7 @@
 	<string>public.app-category.developer-tools</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 Umputun</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Command-line tools you run inside agterm (for example, voice dictation in Claude Code) request microphone access through agterm.</string>
 </dict>
 </plist>
