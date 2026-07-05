@@ -31,10 +31,19 @@ struct Session: ParsableCommand {
         @Flag(name: .long, help: "With --workspace-name, create the workspace when it does not exist (reuse it otherwise).") var createWorkspace = false
         @Option(name: .long, help: "Run this command as the session's process instead of the login shell (no echoed command line; the session closes when it exits).") var command: String?
         @Option(name: .long, help: "Initial session name (defaults to the auto basename).") var name: String?
+        @Option(name: .long, help: "Place the new session right AFTER this anchor session (id/prefix/active); the anchor carries its own workspace, replacing --workspace.") var after: String?
+        @Option(name: .long, help: "Place the new session right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?
         @OptionGroup var options: ClientOptions
         var echoesResultID: Bool { true }
 
         func validate() throws {
+            if after != nil, before != nil {
+                throw ValidationError("use either --after or --before, not both")
+            }
+            // the anchor sid already names the workspace, so placement can't also address one.
+            if after != nil || before != nil, workspace != nil || workspaceName != nil {
+                throw ValidationError("session.new takes --after/--before or a workspace, not both")
+            }
             if workspace != nil, workspaceName != nil {
                 throw ValidationError("use either --workspace or --workspace-name, not both")
             }
@@ -46,7 +55,8 @@ struct Session: ParsableCommand {
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionNew, args: options.withWindow(
                 ControlArgs(name: name, cwd: cwd, workspace: workspace, workspaceName: workspaceName,
-                            createWorkspace: createWorkspace ? true : nil, command: command)))
+                            createWorkspace: createWorkspace ? true : nil, command: command,
+                            after: after, before: before)))
         }
     }
 
@@ -93,24 +103,50 @@ struct Session: ParsableCommand {
     }
 
     struct Move: RequestCommand {
-        static let configuration = CommandConfiguration(abstract: "Move a session to another workspace, or reorder it with --to.")
-        @Argument(help: "Destination workspace id/prefix (relocate). Omit with --to.") var workspace: String?
+        static let configuration = CommandConfiguration(
+            abstract: "Move a session: to another workspace, reorder with --to, or place relative to an anchor with --after/--before.")
+        @Argument(help: "Destination workspace id/prefix (relocate). Omit with --to or --after/--before.") var workspace: String?
         @Option(name: .long, help: "Reorder within the workspace: up, down, top, or bottom.") var to: String?
+        @Option(name: .long, help: "Place right AFTER this anchor session (id/prefix/active); the anchor carries its own workspace (relocates + positions in one shot).") var after: String?
+        @Option(name: .long, help: "Place right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
-        // exactly one of the workspace positional (relocate) or --to (reorder) must be set; reject the
-        // neither/both cases at parse time so it's a clean usage error, unit-testable without a socket.
+        // exactly one placement intent among {workspace positional (relocate), --to (reorder),
+        // --after/--before (anchor-relative place)}; reject the empty/conflicting cases at parse time so
+        // it's a clean usage error, unit-testable without a socket. The anchor carries its own workspace,
+        // so placement is mutually exclusive with both --to and a destination workspace.
         func validate() throws {
+            if after != nil, before != nil {
+                throw ValidationError("use either --after or --before, not both")
+            }
+            if after != nil || before != nil {
+                if to != nil {
+                    throw ValidationError("session.move takes --after/--before or --to, not both")
+                }
+                if workspace != nil {
+                    throw ValidationError("session.move takes --after/--before or a workspace, not both")
+                }
+                return
+            }
             switch (workspace, to) {
-            case (nil, nil): throw ValidationError("provide a destination workspace or --to")
+            case (nil, nil): throw ValidationError("provide a destination workspace, --to, or --after/--before")
             case (.some, .some): throw ValidationError("provide a destination workspace or --to, not both")
             default: break
             }
         }
 
         func makeRequest() throws -> ControlRequest {
-            let args = workspace.map { ControlArgs(workspace: $0) } ?? ControlArgs(to: to)
+            let args: ControlArgs
+            if let after {
+                args = ControlArgs(after: after)
+            } else if let before {
+                args = ControlArgs(before: before)
+            } else if let workspace {
+                args = ControlArgs(workspace: workspace)
+            } else {
+                args = ControlArgs(to: to)
+            }
             return ControlRequest(cmd: .sessionMove, target: target.target, args: options.withWindow(args))
         }
     }

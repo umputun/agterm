@@ -213,20 +213,20 @@ host-free logic stays in `agtermCore` (no GhosttyKit/AppKit/CoreGraphics).
       `@MainActor` glue.)
 
 ### Task 5: CLI — `--after`/`--before` on `session new` and `session move`
-- [ ] `SessionCommands.swift` `Session.New`: add `@Option(name: .long) var after:
+- [x] `SessionCommands.swift` `Session.New`: add `@Option(name: .long) var after:
       String?` and `var before: String?`. In `validate()`, reject after+before together
       and either combined with `--workspace`/`--workspace-name`. In `makeRequest()`,
       thread `after`/`before` into the `ControlArgs(...)`.
-- [ ] `SessionCommands.swift` `Session.Move`: add `--after`/`--before` options. Rework
+- [x] `SessionCommands.swift` `Session.Move`: add `--after`/`--before` options. Rework
       `validate()` from the two-way switch to enforce exactly one of {positional
       workspace, `--to`, after/before} with matching usage errors, and after+before not
       both. Rework `makeRequest()` to build the right `ControlArgs` for the place mode.
       Update the `configuration.abstract`/help to mention placement.
-- [ ] `CommandsTests.swift`: add parse tests — `session new --after <sid>` /
+- [x] `CommandsTests.swift`: add parse tests — `session new --after <sid>` /
       `--before`, `session move --after <sid> --target <sid>` / `--before` map to the
       expected `ControlRequest`; and `validate()` rejection tests for the new
       mutual-exclusion messages (mirror `sessionMoveRejectsWorkspaceAndTo`).
-- [ ] `cd agtermCore && swift test` — must pass before Task 6.
+- [x] `cd agtermCore && swift test` — must pass before Task 6.
 
 ### Task 6: E2E — XCUITest over the socket
 - [ ] `ControlAPIUITests.swift`: `session.move` `--after`/`--before` within one
