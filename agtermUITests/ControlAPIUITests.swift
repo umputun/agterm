@@ -925,6 +925,37 @@ final class ControlAPIUITests: ControlAPITestCase {
                       "the new session should land right before third")
     }
 
+    // session.new --after with an anchor in ANOTHER workspace creates the new session in the anchor's
+    // workspace (not the active one) at the right slot — the "anchor carries its own workspace" claim for
+    // session.new, which a single-workspace snapshot can't distinguish from currentWorkspaceID.
+    func testSessionNewPlaceCrossWorkspace() throws {
+        let aID = UUID(uuidString: "E1110000-0000-0000-0000-000000000001")!
+        let bID = UUID(uuidString: "E2220000-0000-0000-0000-000000000002")!
+        let xID = UUID(uuidString: "E3330000-0000-0000-0000-000000000003")!
+        let yID = UUID(uuidString: "E4440000-0000-0000-0000-000000000004")!
+        let snapshot = """
+        {"version":1,"selectedSessionID":"\(aID.uuidString)","workspaces":[\
+        {"id":"\(UUID().uuidString)","name":"ws one","sessions":[\
+        {"id":"\(aID.uuidString)","customName":null,"cwd":"\(NSHomeDirectory())"},\
+        {"id":"\(bID.uuidString)","customName":null,"cwd":"\(NSHomeDirectory())"}]},\
+        {"id":"\(UUID().uuidString)","name":"ws two","sessions":[\
+        {"id":"\(xID.uuidString)","customName":null,"cwd":"\(NSHomeDirectory())"},\
+        {"id":"\(yID.uuidString)","customName":null,"cwd":"\(NSHomeDirectory())"}]}]}
+        """
+        try relaunch(withSnapshot: snapshot)
+        XCTAssertTrue(pollSessionCounts([2, 2], timeout: 10), "should start with two sessions per workspace")
+
+        // create right after X (in ws two) while the active session A is in ws one: the new session must
+        // land in ws two (the anchor's workspace), not ws one: ws one -> [A, B], ws two -> [X, NEW, Y].
+        let resp = try sendCommand(#"{"cmd":"session.new","args":{"after":"\#(xID.uuidString)"}}"#)
+        XCTAssertEqual(resp["ok"] as? Bool, true, "cross-workspace session.new --after should succeed: \(resp)")
+        let newID = try XCTUnwrap(((resp["result"] as? [String: Any])?["id"] as? String).flatMap(UUID.init(uuidString:)),
+                                  "session.new should return the new id: \(resp)")
+        XCTAssertTrue(pollSessionCounts([2, 3], timeout: 10), "the new session should land in ws two (3), ws one unchanged (2)")
+        XCTAssertTrue(pollSessionOrder(inWorkspace: 1, equals: [xID, newID, yID], timeout: 10),
+                      "the new session should land right after X in ws two")
+    }
+
     // session.move rejects --after + --before together with the either/or guard.
     func testSessionMovePlaceRejectsAfterAndBefore() throws {
         let response = try sendCommand(#"{"cmd":"session.move","target":"active","args":{"after":"active","before":"active"}}"#)
