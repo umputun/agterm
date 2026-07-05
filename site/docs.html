@@ -1,0 +1,1866 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Documentation — agterm | terminal for AI coding agents</title>
+    <meta
+      name="description"
+      content="agterm documentation: install, workspaces and sessions, split panes, overlays, the agtermctl control CLI, agent status, keymaps, themes, and window management."
+    />
+    <meta
+      name="keywords"
+      content="agterm docs, agtermctl, agterm control api, agterm keymap, agterm agent skill, macOS terminal documentation"
+    />
+    <meta name="author" content="umputun" />
+    <link rel="canonical" href="https://agterm.com/docs" />
+    <meta property="og:type" content="article" />
+    <meta property="og:title" content="Documentation — agterm" />
+    <meta
+      property="og:description"
+      content="Install agterm, learn workspaces, sessions, overlays, and the agtermctl control CLI."
+    />
+    <meta property="og:url" content="https://agterm.com/docs" />
+    <meta property="og:image" content="https://agterm.com/assets/agterm-og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:site_name" content="agterm" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@umputun" />
+    <meta name="twitter:title" content="Documentation — agterm" />
+    <meta
+      name="twitter:description"
+      content="Install agterm, learn workspaces, sessions, overlays, and the agtermctl control CLI."
+    />
+    <meta name="twitter:image" content="https://agterm.com/assets/agterm-og.png" />
+    <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png" />
+    <meta name="theme-color" content="#191d20" />
+    <link rel="preload" href="/assets/fonts/jetbrains-mono-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/assets/fonts/ibm-plex-sans-latin.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <div
+      style="
+        background: #191d20;
+        color: #e6e1d7;
+        font-family: &quot;IBM Plex Sans&quot;, system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        min-height: 100vh;
+      "
+    >
+      <!-- ===== NAV ===== -->
+      <div
+        style="
+          position: sticky;
+          top: 0;
+          z-index: 50;
+          background: rgba(25, 29, 32, 0.72);
+          backdrop-filter: blur(14px);
+          border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+        "
+      >
+        <div
+          style="
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 0 28px;
+            height: 64px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+          "
+        >
+          <a href="/" style="display: flex; align-items: center; gap: 11px; color: #e6e1d7">
+            <svg width="27" height="27" viewBox="0 0 100 100" fill="none" style="display: block; border-radius: 22%">
+              <rect width="100" height="100" rx="24" fill="#1e40d8"></rect>
+              <rect x="26" y="26" width="20" height="20" rx="5" stroke="#fff" stroke-width="5"></rect>
+              <rect x="54" y="26" width="20" height="20" rx="5" stroke="#fff" stroke-width="5"></rect>
+              <rect x="26" y="54" width="20" height="20" rx="5" stroke="#fff" stroke-width="5"></rect>
+              <rect x="54" y="54" width="20" height="20" rx="5" stroke="#fff" stroke-width="5"></rect>
+            </svg>
+            <span
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 16px;
+                letter-spacing: -0.01em;
+              "
+              >agterm</span
+            >
+            <span
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 12px;
+                color: #6b727a;
+                border-left: 1px solid rgba(255, 255, 255, 0.12);
+                padding-left: 11px;
+                margin-left: 2px;
+              "
+              >docs</span
+            >
+          </a>
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              gap: 6px;
+              font-family: &quot;JetBrains Mono&quot;, monospace;
+              font-size: 13.5px;
+            "
+          >
+            <a href="/" style="color: #949ba4; padding: 8px 12px; border-radius: 7px" class="hv1">← home</a>
+            <a
+              href="https://github.com/umputun/agterm"
+              style="
+                color: #c9cdd2;
+                border: 1px solid rgba(255, 255, 255, 0.16);
+                background: rgba(255, 255, 255, 0.03);
+                padding: 7px 14px;
+                border-radius: 7px;
+                font-weight: 500;
+              "
+              class="hv8"
+              >GitHub ↗</a
+            >
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== LAYOUT ===== -->
+      <div style="max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: 236px 1fr; gap: 48px; padding: 0 28px">
+        <!-- SIDEBAR -->
+        <aside
+          class="doc-scroll"
+          style="
+            position: sticky;
+            top: 64px;
+            align-self: start;
+            height: calc(100vh - 64px);
+            overflow-y: auto;
+            padding: 38px 0 60px;
+            font-family: &quot;JetBrains Mono&quot;, monospace;
+          "
+        >
+          <nav style="display: flex; flex-direction: column; gap: 4px; font-size: 13.5px">
+            <a href="#overview" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Overview</a>
+            <a href="#install" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Install</a>
+            <div style="height: 16px"></div>
+            <span style="color: #4a5158; font-size: 11px; letter-spacing: 0.12em; padding: 4px 12px">CONCEPTS</span>
+            <a href="#workspaces" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9"
+              >Workspaces &amp; sessions</a
+            >
+            <a href="#terminals" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Terminals</a>
+            <a href="#navigation" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Navigation</a>
+            <a href="#windows" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Windows</a>
+            <a href="#notifications" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Notifications</a>
+            <a href="#settings" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Customization</a>
+            <div style="height: 16px"></div>
+            <span style="color: #4a5158; font-size: 11px; letter-spacing: 0.12em; padding: 4px 12px">SCRIPTING</span>
+            <a href="#agtermctl" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">agtermctl reference</a>
+            <a href="#keymap" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Customizing keys</a>
+            <a href="#ghostty" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Ghostty config</a>
+            <a href="#status" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Agent status</a>
+            <div style="height: 16px"></div>
+            <span style="color: #4a5158; font-size: 11px; letter-spacing: 0.12em; padding: 4px 12px">HELP</span>
+            <a href="#restore" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Restore &amp; persistence</a>
+            <a href="#troubleshooting" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9"
+              >Troubleshooting</a
+            >
+          </nav>
+        </aside>
+
+        <!-- CONTENT -->
+        <main style="min-width: 0; padding: 48px 0 120px; max-width: 760px">
+          <!-- title -->
+          <div
+            style="
+              font-family: &quot;JetBrains Mono&quot;, monospace;
+              font-size: 12px;
+              letter-spacing: 0.16em;
+              text-transform: uppercase;
+              color: #6d82f3;
+              margin-bottom: 14px;
+            "
+          >
+            Documentation
+          </div>
+          <h1
+            style="
+              font-family: &quot;JetBrains Mono&quot;, monospace;
+              font-weight: 800;
+              font-size: clamp(32px, 5vw, 48px);
+              letter-spacing: -0.03em;
+              line-height: 1.02;
+              margin: 0 0 20px;
+            "
+          >
+            agterm
+          </h1>
+          <p style="font-size: 19px; line-height: 1.6; color: #bfbab0; margin: 0 0 8px">
+            A native macOS terminal for working with AI coding agents across many sessions at once.
+          </p>
+
+          <!-- OVERVIEW -->
+          <section id="overview" style="scroll-margin-top: 88px; padding-top: 48px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Overview
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              agterm is intentionally opinionated: rather than scattering shells across tabs, it organizes them into named
+              workspaces, each holding the sessions for one project or context. Several agent-driven sessions run side by side and
+              you move between them without losing track of which is which.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              The design is deliberately minimal: a sensible minimum out of the box, plus a complete control API and CLI on top.
+              Almost everything is scriptable, so anything past the defaults you build yourself. None of it is limited to agents —
+              it works as a capable general-purpose terminal too.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 24px">
+              For the real terminal work — rendering, VT parsing, and shell I/O — agterm embeds
+              <a href="https://ghostty.org" style="color: #6d82f3">Ghostty</a>'s engine (libghostty); everything above is agterm's
+              own.
+            </p>
+            <div
+              style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin-bottom: 8px"
+            >
+              <div
+                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px"
+              >
+                <div
+                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; color: #6d82f3; margin-bottom: 6px"
+                >
+                  Workspace organization
+                </div>
+                <p style="font-size: 13.5px; color: #949ba4; margin: 0; line-height: 1.55">
+                  A vertical, two-level sidebar groups sessions under named workspaces.
+                </p>
+              </div>
+              <div
+                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px"
+              >
+                <div
+                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; color: #5ea1f2; margin-bottom: 6px"
+                >
+                  Programmatic control
+                </div>
+                <p style="font-size: 13.5px; color: #949ba4; margin: 0; line-height: 1.55">
+                  agtermctl drives almost everything over a local socket.
+                </p>
+              </div>
+              <div
+                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px"
+              >
+                <div
+                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; color: #7ece8f; margin-bottom: 6px"
+                >
+                  Splits, scratch &amp; overlays
+                </div>
+                <p style="font-size: 13.5px; color: #949ba4; margin: 0; line-height: 1.55">
+                  Split a session into two shells, drop a scratch over it, or run a program in an overlay.
+                </p>
+              </div>
+              <div
+                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px"
+              >
+                <div
+                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; color: #b18cf2; margin-bottom: 6px"
+                >
+                  Agent skill
+                </div>
+                <p style="font-size: 13.5px; color: #949ba4; margin: 0; line-height: 1.55">
+                  An installable skill teaches Claude Code or Codex to drive agterm through agtermctl.
+                </p>
+              </div>
+              <div
+                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px"
+              >
+                <div
+                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; color: #f2b45c; margin-bottom: 6px"
+                >
+                  Status at a glance
+                </div>
+                <p style="font-size: 13.5px; color: #949ba4; margin: 0; line-height: 1.55">
+                  Tinted glyphs show which of many agents needs you.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <!-- INSTALL -->
+          <section id="install" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Install
+            </h2>
+            <div
+              style="
+                background: rgba(109, 130, 243, 0.08);
+                border: 1px solid rgba(109, 130, 243, 0.28);
+                border-radius: 10px;
+                padding: 14px 18px;
+                margin: 0 0 22px;
+                font-size: 14px;
+                color: #b9c1f5;
+                line-height: 1.6;
+              "
+            >
+              <strong style="color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace">Available now</strong> — Signed,
+              notarized builds are published on the
+              <a href="https://github.com/umputun/agterm/releases" style="color: #6d82f3">releases page</a>. Install via Homebrew
+              or the direct download below; building from source is optional.
+            </div>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
+              Releases are signed and notarized for Apple Silicon (arm64) Macs running macOS 14 or later, so they open without any
+              Gatekeeper workaround.
+            </p>
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 17px;
+                color: #e6e1d7;
+                margin: 28px 0 12px;
+              "
+            >
+              Homebrew
+            </h3>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 16px 18px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 14px;
+                color: #e6e1d7;
+                overflow-x: auto;
+              "
+            >
+              <span style="color: #6d82f3">$ </span>brew install --cask umputun/apps/agterm
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 14px 0 0">
+              The cask also installs the
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span> command-line tool,
+              so cask users shouldn't run the in-app installer as well.
+            </p>
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 17px;
+                color: #e6e1d7;
+                margin: 28px 0 12px;
+              "
+            >
+              Direct download
+            </h3>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0">
+              Download the latest
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.dmg</span> from the
+              <a href="https://github.com/umputun/agterm/releases" style="color: #6d82f3">releases page</a>, open it, and drag
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agterm.app</span> into
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/Applications</span>.
+            </p>
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 17px;
+                color: #e6e1d7;
+                margin: 28px 0 12px;
+              "
+            >
+              Optional Help-menu installers
+            </h3>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0 0 14px">
+              None are needed to use agterm as a terminal; each connects it to a wider workflow, and you can run any of them later.
+            </p>
+            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 12px">
+              <li style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                ><strong style="color: #e6e1d7">Install Command Line Tool…</strong> puts the bundled
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> on your PATH (a
+                symlink in <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/usr/local/bin</span>)
+                so you can script the app. The Homebrew cask already installs it.
+              </li>
+              <li style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                ><strong style="color: #e6e1d7">Install Agent Status Hooks…</strong> lets a coding agent (Claude Code, Codex, or
+                others) report its state onto its session's row, so you can tell which of several running agents is active,
+                blocked, or finished.
+              </li>
+              <li style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                ><strong style="color: #e6e1d7">Install Agent Skill…</strong> teaches Claude Code or Codex how to drive agterm
+                through <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span>, so an
+                agent inside a session can build its own layout, run overlays, and manage windows without you explaining the API.
+                It drives the app through the CLI, so install that one too.
+              </li>
+            </ul>
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 17px;
+                color: #e6e1d7;
+                margin: 28px 0 12px;
+              "
+            >
+              Build from source
+            </h3>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 0 0 14px">
+              Requires macOS 14+, Xcode 26 with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">xcodegen</span> on PATH (plus its
+              Metal Toolchain), and Homebrew.
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 16px 18px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 14px;
+                color: #e6e1d7;
+                line-height: 1.9;
+                overflow-x: auto;
+              "
+            >
+              <span style="color: #6b727a"># build libghostty + stage resources (idempotent)</span><br /><span
+                style="color: #6d82f3"
+                >$ </span
+              >scripts/setup.sh<br /><span style="color: #6b727a"># generate the Xcode project, build Debug, launch</span
+              ><br /><span style="color: #6d82f3">$ </span>scripts/run.sh<br /><span style="color: #6b727a"
+                ># host-free unit tests, no Xcode needed</span
+              ><br /><span style="color: #6d82f3">$ </span>cd agtermCore &amp;&amp; swift test
+            </div>
+          </section>
+
+          <!-- WORKSPACES -->
+          <section id="workspaces" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Workspaces &amp; sessions
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
+              A <strong style="color: #e6e1d7">session</strong> is one running shell with a name, a working directory, and its own
+              scrollback — the unit you work in and the row you see in the sidebar. A
+              <strong style="color: #e6e1d7">workspace</strong> is a named group of sessions for one project or context. Sessions
+              can move between workspaces while still running, keeping their shell and scrollback.
+            </p>
+            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px">
+              <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="
+                    position: absolute;
+                    left: 0;
+                    top: 2px;
+                    color: #6d82f3;
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                  "
+                  >›</span
+                >Two-level sidebar tree: workspaces, each containing sessions. Each row carries a leading kind icon — a filled
+                folder for a workspace, an outlined terminal for a session.
+              </li>
+              <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="
+                    position: absolute;
+                    left: 0;
+                    top: 2px;
+                    color: #6d82f3;
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                  "
+                  >›</span
+                >Default session name is the basename of its working directory. Renaming pins a custom name; clearing it reverts.
+              </li>
+              <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="
+                    position: absolute;
+                    left: 0;
+                    top: 2px;
+                    color: #6d82f3;
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                  "
+                  >›</span
+                >Add workspaces and sessions from a two-icon bar at the bottom of the sidebar. Rename inline (double-click a row).
+                Move a session between workspaces by dragging — it keeps running, shell and scrollback intact.
+              </li>
+              <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="
+                    position: absolute;
+                    left: 0;
+                    top: 2px;
+                    color: #6d82f3;
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                  "
+                  >›</span
+                >Narrow a crowded sidebar two ways: <strong style="color: #e6e1d7">flag</strong> sessions across workspaces into a
+                flat working-set view (a flag is durable and survives a move), or <strong style="color: #e6e1d7">focus</strong> a
+                single workspace to collapse the tree to just its sessions. The two are independent.
+              </li>
+            </ul>
+            <figure
+              style="
+                margin: 28px 0 0;
+                background: #22272b;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 12px;
+                overflow: hidden;
+              "
+            >
+              <img
+                src="/assets/screenshot-context-menu.webp"
+                alt="Session context menu"
+                width="554"
+                height="451"
+                loading="lazy"
+                style="display: block; width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06)"
+              />
+              <figcaption style="padding: 14px 18px; font-size: 13.5px; color: #949ba4">
+                A session's right-click context menu.
+              </figcaption>
+            </figure>
+          </section>
+
+          <!-- TERMINALS -->
+          <section id="terminals" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Terminals: split, scratch, quick, search, overlay
+            </h2>
+            <div style="display: flex; flex-direction: column; gap: 16px">
+              <div
+                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px 22px"
+              >
+                <div
+                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 14px; color: #6d82f3; margin-bottom: 8px"
+                >
+                  Split panes <span style="color: #6b727a">⌘D</span>
+                </div>
+                <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
+                  A session can split into two shells side by side. Both panes share one sidebar row — a split is one session with
+                  two terminals, not two sessions. One pane is focused at a time and the divider position is remembered.
+                </p>
+              </div>
+              <div
+                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px 22px"
+              >
+                <div
+                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 14px; color: #6d82f3; margin-bottom: 8px"
+                >
+                  Quick terminal <span style="color: #6b727a">⌃`</span>
+                </div>
+                <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
+                  A single throwaway shell per window, not tied to any session, overlaid at 90% of the window and opening in the
+                  active session's directory. Click again or the surrounding margin to dismiss; hiding keeps its shell alive.
+                </p>
+              </div>
+              <div
+                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px 22px"
+              >
+                <div
+                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 14px; color: #6d82f3; margin-bottom: 8px"
+                >
+                  Per-session scratch <span style="color: #6b727a">⌘J</span>
+                </div>
+                <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
+                  An extra shell belonging to one session, for a quick aside next to your main work. It covers the session
+                  full-screen and hides again without killing it. Opens in the session's directory; not restored across launches.
+                </p>
+              </div>
+              <div
+                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px 22px"
+              >
+                <div
+                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 14px; color: #6d82f3; margin-bottom: 8px"
+                >
+                  In-terminal search <span style="color: #6b727a">⌘F</span>
+                </div>
+                <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
+                  A search bar at the top of the focused terminal highlights matches in live scrollback with an "N of M" counter.
+                  Enter steps forward, Shift-Enter back, Esc closes.
+                </p>
+              </div>
+              <div
+                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px 22px"
+              >
+                <div
+                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 14px; color: #6d82f3; margin-bottom: 8px"
+                >
+                  Overlay <span style="color: #6b727a">control API</span>
+                </div>
+                <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
+                  Runs one program in a temporary terminal over a session and disappears when the program exits, leaving the
+                  session unchanged. Mostly driven from the control API to launch an interactive program (a diff viewer, a process
+                  monitor) — full-size or as a floating panel. See the
+                  <a href="#agtermctl" style="color: #6d82f3">agtermctl reference</a>.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <!-- NAVIGATION -->
+          <section id="navigation" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Navigation
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
+              agterm is built to run from the keyboard. Every action has a shortcut and appears in the menus. Three fuzzy palettes
+              (type to filter, Enter to run, Esc to dismiss) and a Ctrl-Tab MRU switcher cover the rest.
+            </p>
+            <div
+              style="
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 12px;
+                overflow: hidden;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+              "
+            >
+              <div style="display: grid; grid-template-columns: 120px 1fr; gap: 0">
+                <div
+                  style="
+                    padding: 12px 16px;
+                    background: #15191c;
+                    color: #6d82f3;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+                  "
+                >
+                  ⌃P
+                </div>
+                <div
+                  style="
+                    padding: 12px 16px;
+                    background: #22272b;
+                    color: #cbc6bc;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+                  "
+                >
+                  Session switcher — jump by name or working directory
+                </div>
+                <div
+                  style="
+                    padding: 12px 16px;
+                    background: #15191c;
+                    color: #6d82f3;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+                  "
+                >
+                  ⌃⇧P
+                </div>
+                <div
+                  style="
+                    padding: 12px 16px;
+                    background: #22272b;
+                    color: #cbc6bc;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+                  "
+                >
+                  Action palette — run any command
+                </div>
+                <div
+                  style="
+                    padding: 12px 16px;
+                    background: #15191c;
+                    color: #6d82f3;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+                  "
+                >
+                  ⌃⇧O
+                </div>
+                <div
+                  style="
+                    padding: 12px 16px;
+                    background: #22272b;
+                    color: #cbc6bc;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+                  "
+                >
+                  Custom-commands palette — your keymap.conf commands
+                </div>
+                <div
+                  style="
+                    padding: 12px 16px;
+                    background: #15191c;
+                    color: #6d82f3;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+                  "
+                >
+                  ⌥⌘↑↓
+                </div>
+                <div
+                  style="
+                    padding: 12px 16px;
+                    background: #22272b;
+                    color: #cbc6bc;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+                  "
+                >
+                  Previous / Next session
+                </div>
+                <div
+                  style="
+                    padding: 12px 16px;
+                    background: #15191c;
+                    color: #6d82f3;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+                  "
+                >
+                  ⌃⌥↑↓
+                </div>
+                <div
+                  style="
+                    padding: 12px 16px;
+                    background: #22272b;
+                    color: #cbc6bc;
+                    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+                  "
+                >
+                  Previous / Next attention session
+                </div>
+                <div style="padding: 12px 16px; background: #15191c; color: #6d82f3">Ctrl-Tab</div>
+                <div style="padding: 12px 16px; background: #22272b; color: #cbc6bc">
+                  MRU session switcher (app-switcher style; survives a relaunch)
+                </div>
+              </div>
+            </div>
+            <figure
+              style="
+                margin: 28px 0 0;
+                background: #22272b;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 12px;
+                overflow: hidden;
+              "
+            >
+              <img
+                src="/assets/screenshot-action-palette.webp"
+                alt="Action palette"
+                width="1187"
+                height="696"
+                loading="lazy"
+                style="display: block; width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06)"
+              />
+              <figcaption style="padding: 14px 18px; font-size: 13.5px; color: #949ba4">
+                A split session with the action palette open.
+              </figcaption>
+            </figure>
+          </section>
+
+          <!-- WINDOWS -->
+          <section id="windows" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Windows
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0">
+              A window is a top-level bundle of workspaces and sessions in its own on-screen macOS window, with its own sidebar and
+              its own sessions — so "work" and "personal" can run as two separate windows at once, each with its own tree. Keep a
+              library of windows, open one per screen, and create, rename, or delete them from the File menu (New Window ⌥⌘N) or the
+              action palette. The set of windows open at quit reopens on the next launch, frames restored.
+            </p>
+          </section>
+
+          <!-- NOTIFICATIONS -->
+          <section id="notifications" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Notifications
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0">
+              A program in any session can raise a desktop notification (via OSC 9 / 777, or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl notify</span>). It surfaces
+              as a macOS banner and an unseen-count badge on the sidebar row (rolled up onto a collapsed workspace); clicking the
+              banner brings agterm forward and focuses the exact pane that raised it, and focusing a session clears its badge.
+              Banners and count badges toggle independently in General settings. For a coding agent that just needs to say it is
+              waiting, <a href="#status" style="color: #6d82f3">agent status</a> is usually the better fit.
+            </p>
+          </section>
+
+          <!-- SETTINGS -->
+          <section id="settings" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Customization &amp; settings
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              A live-preview theme picker (View ▸ Select Theme…, or the action palette) applies each of the 512 bundled themes to
+              the open terminals as you move through the list — Enter commits and syncs it to Settings, Esc reverts to the one you
+              started on. Settings (⌘,) has five tabs, and changes apply live:
+            </p>
+            <div style="display: flex; flex-direction: column; gap: 10px; margin: 0 0 8px">
+              <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                ><strong style="color: #e6e1d7">General</strong> — mouse scroll speed and right-click-to-paste, where a new session
+                opens, an opt-in re-run of each pane's foreground command on restart, an opt-in confirm before closing a session,
+                and whether to load your global Ghostty config.
+              </div>
+              <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                ><strong style="color: #e6e1d7">Appearance</strong> — terminal font and theme, window background opacity and blur,
+                the sidebar tint, and how much the inactive split pane dims.
+              </div>
+              <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                ><strong style="color: #e6e1d7">Notifications</strong> — the banner, the unseen-count badge, and the title-bar
+                attention indicator.
+              </div>
+              <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                ><strong style="color: #e6e1d7">Agent Status</strong> — the status-glyph colors, the blocked-session sound, and an
+                idle timeout to auto-follow blocked sessions.
+              </div>
+              <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                ><strong style="color: #e6e1d7">Key Mapping</strong> — the directory holding
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keymap.conf</span>, a list of any
+                parse errors, and a reload button.
+              </div>
+            </div>
+            <figure
+              style="
+                margin: 24px 0 0;
+                background: #22272b;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 12px;
+                overflow: hidden;
+              "
+            >
+              <img
+                src="/assets/screenshot-keymap-editor.webp"
+                alt="Keymap editor"
+                width="1330"
+                height="828"
+                loading="lazy"
+                style="display: block; width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06)"
+              />
+              <figcaption style="padding: 14px 18px; font-size: 13.5px; color: #949ba4">The keymap editor.</figcaption>
+            </figure>
+          </section>
+
+          <!-- AGTERMCTL -->
+          <section id="agtermctl" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              agtermctl reference
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              agterm can be driven from a script over a local unix-domain socket through the companion CLI,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span>. This is for
+              fire-and-forget scripting that manages workspaces and sessions, injects text, and invokes control actions — there is
+              no output streaming and no event subscription.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              Each command targets a session or workspace by its UUID, a unique prefix of that UUID (git-style), or the keyword
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> (the selected session /
+              current workspace). <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--target</span>
+              defaults to <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span>, so the
+              current one rarely needs naming. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >--target</span
+              >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--workspace</span> take an id, a
+              prefix, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> — never a
+              name. Mutating commands print the affected id; add
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--json</span> for the raw response,
+              or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--socket PATH</span> to override
+              the socket. The exit code is zero on success, non-zero on error.
+            </p>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 24px 0 12px;
+              "
+            >
+              Sessions &amp; workspaces
+            </h3>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+                line-height: 1.95;
+                overflow-x: auto;
+                color: #e6e1d7;
+              "
+            >
+              <span style="color: #6b727a"># print the workspace/session tree with ids</span><br />agtermctl tree<br /><br /><span
+                style="color: #6b727a"
+                ># create a workspace, capture its id, open a session in it</span
+              ><br /><span style="color: #6d82f3">ws</span>=$(agtermctl workspace new work)<br />agtermctl session new --workspace
+              <span style="color: #f2b45c">"$ws"</span> --cwd ~/src/agterm<br /><br /><span style="color: #6b727a"
+                ># run a command as the session's process (argv-style; wrap in sh -c for shell syntax)</span
+              ><br />agtermctl session new --command <span style="color: #f2b45c">"ssh user@host"</span><br />agtermctl session new
+              --name <span style="color: #f2b45c">myhost</span> --workspace-name
+              <span style="color: #f2b45c">servers</span> --create-workspace<br /><br /><span style="color: #6b727a"
+                ># step / reorder / relocate</span
+              ><br />agtermctl session go --to next
+              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# next|prev|first|last</span><br />agtermctl session move --to up
+              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# reorder: up|down|top|bottom</span><br />agtermctl session move
+              <span style="color: #f2b45c">"$ws"</span> <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# relocate to a workspace</span
+              ><br />agtermctl workspace move --to top
+              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# reorder a workspace</span><br />agtermctl workspace focus on
+              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# collapse tree to active ws (on|off|toggle)</span>
+            </div>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              Typing, selection &amp; text
+            </h3>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+                line-height: 1.95;
+                overflow-x: auto;
+                color: #e6e1d7;
+              "
+            >
+              <span style="color: #6b727a"># inject text (every newline is a real Return; use $'…\n' or --stdin)</span
+              ><br />agtermctl session type --target 9f3c <span style="color: #f2b45c">$'make test\n'</span><br />echo
+              <span style="color: #f2b45c">'make test'</span> | agtermctl session type --stdin<br /><br /><span
+                style="color: #6b727a"
+                ># route to a pane: left (default) | right (split) | scratch (even when hidden)</span
+              ><br />agtermctl session type --pane right <span style="color: #f2b45c">$'ls\n'</span><br /><br /><span
+                style="color: #6b727a"
+                ># a never-shown session needs --select to realize its surface first</span
+              ><br />agtermctl session type --target <span style="color: #f2b45c">"$id"</span> --select
+              <span style="color: #f2b45c">$'echo hi\n'</span><br /><br /><span style="color: #6b727a"
+                ># read a pane's selection (does not touch the clipboard) or its output</span
+              ><br /><span style="color: #6d82f3">sel</span>=$(agtermctl session copy --target 9f3c)<br />agtermctl session text
+              --pane scratch --target 9f3c
+            </div>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              Splits, scratch, quick &amp; search
+            </h3>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+                line-height: 1.95;
+                overflow-x: auto;
+                color: #e6e1d7;
+              "
+            >
+              agtermctl session split toggle<br />agtermctl session resize --split-ratio 0.7
+              <span style="color: #6b727a">&nbsp;# or --grow-left/--grow-right D</span><br />agtermctl session scratch toggle
+              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# on|off|toggle</span><br />agtermctl session flag on
+              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# on|off|toggle|clear</span><br />agtermctl
+              sidebar mode flagged <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# tree|flagged|toggle</span><br />agtermctl quick
+              toggle<br />agtermctl font inc <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# active surface font size</span
+              ><br /><br /><span style="color: #6b727a"># open the search bar, print the "N of M" counter</span><br />agtermctl
+              session search <span style="color: #f2b45c">"error"</span><br />agtermctl session search --next
+              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# --prev | --close</span>
+            </div>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              Overlays
+            </h3>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+                line-height: 1.95;
+                overflow-x: auto;
+                color: #e6e1d7;
+              "
+            >
+              <span style="color: #6b727a"># full overlay on a session (hides the shell beneath)</span><br />agtermctl session
+              overlay open <span style="color: #f2b45c">"revdiff HEAD~3"</span> --target 9f3c<br /><br /><span
+                style="color: #6b727a"
+                ># floating framed panel at 70% of the pane, optionally tinted</span
+              ><br />agtermctl session overlay open <span style="color: #f2b45c">"htop"</span> --size-percent 70<br />agtermctl
+              session overlay open <span style="color: #f2b45c">"revdiff HEAD~3"</span> --size-percent 80 --background-color
+              <span style="color: #f2b45c">"#2a1a3a"</span><br /><br /><span style="color: #6b727a"
+                ># keep it open after exit, or block until it exits and inherit its status</span
+              ><br />agtermctl session overlay open <span style="color: #f2b45c">"make test"</span> --wait<br />agtermctl session
+              overlay open <span style="color: #f2b45c">"make test"</span> --block<br />agtermctl session overlay close --target
+              9f3c<br />agtermctl session overlay result
+              <span style="color: #6b727a">&nbsp;&nbsp;# last overlay's exit status</span>
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--wait</span> keeps a "press any key
+              to close" prompt so you can read the final output;
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--block</span> reports only the exit
+              status (the overlay never captures stdout — a TUI writes its own result file). A full overlay renders only for the
+              active session; a floating <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >--size-percent</span
+              >
+              overlay auto-selects its target. A
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">(overlay)</span> tag in
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree</span> marks a session
+              whose overlay is open.
+            </p>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              Windows
+            </h3>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+                line-height: 1.95;
+                overflow-x: auto;
+                color: #e6e1d7;
+              "
+            >
+              agtermctl window list <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# id  name  [open]  [active]</span
+              ><br /><span style="color: #6d82f3">w</span>=$(agtermctl window new work)<br />agtermctl window select
+              <span style="color: #f2b45c">"$w"</span> <span style="color: #6b727a">&nbsp;# raise it (opening if closed)</span
+              ><br />agtermctl window rename <span style="color: #f2b45c">"$w"</span> personal<br />agtermctl window close
+              <span style="color: #f2b45c">"$w"</span> <span style="color: #6b727a">&nbsp;&nbsp;# close its window (bundle kept)</span
+              ><br />agtermctl window delete <span style="color: #f2b45c">"$w"</span>
+              <span style="color: #6b727a">&nbsp;# delete (last window can't be deleted)</span><br /><br /><span
+                style="color: #6b727a"
+                ># --window targets a specific window's tree on session/workspace/tree/font</span
+              ><br />agtermctl tree --window <span style="color: #f2b45c">"$w"</span><br />agtermctl session new --window
+              <span style="color: #f2b45c">"$w"</span> --cwd ~/src/agterm
+            </div>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              Keymap, config &amp; notify
+            </h3>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+                line-height: 1.95;
+                overflow-x: auto;
+                color: #e6e1d7;
+              "
+            >
+              agtermctl keymap reload
+              <span style="color: #6b727a">&nbsp;# re-read keymap.conf, returns the diagnostic count</span><br />agtermctl config
+              reload <span style="color: #6b727a">&nbsp;# re-read the ghostty config, returns the diagnostic count</span
+              ><br />agtermctl notify --title <span style="color: #f2b45c">Build</span> --body
+              <span style="color: #f2b45c">"tests passed"</span>
+            </div>
+
+            <div
+              style="
+                background: rgba(94, 161, 242, 0.07);
+                border: 1px solid rgba(94, 161, 242, 0.22);
+                border-radius: 10px;
+                padding: 16px 18px;
+                margin: 22px 0 0;
+                font-size: 14px;
+                color: #a9c6ec;
+                line-height: 1.65;
+              "
+            >
+              <strong style="color: #5ea1f2; font-family: &quot;JetBrains Mono&quot;, monospace">In-session env</strong> — a shell
+              inside agterm gets <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_ENABLED</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_WINDOW_ID</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_WORKSPACE_ID</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_SESSION_ID</span>, and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_SOCKET</span> (the live socket path), so a
+              script can drive its own window without hard-coding ids.
+            </div>
+          </section>
+
+          <!-- KEYMAP -->
+          <section id="keymap" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Customizing keys
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
+              agterm reads a user-editable, kitty-flavored keymap file at
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">~/.config/agterm/keymap.conf</span
+              >. It rebinds built-in menu shortcuts and defines custom shell commands bound to keys (and listed in the action
+              palette). The file is optional — a commented starter is written on first launch, and the directory can be changed in
+              <strong style="color: #e6e1d7">Settings ▸ Key Mapping</strong>. Two verbs; blank lines and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#</span> comments are ignored.
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+                line-height: 1.95;
+                overflow-x: auto;
+                color: #e6e1d7;
+              "
+            >
+              <span style="color: #6b727a"># rebind a built-in to a single chord (no leader sequences for built-ins)</span><br /><span
+                style="color: #5ea1f2"
+                >map</span
+              >
+              cmd+shift+d&nbsp;&nbsp;&nbsp;toggle_split<br /><span style="color: #5ea1f2">map</span>
+              ctrl+shift+k&nbsp;&nbsp;command_palette<br /><br /><span style="color: #6b727a"
+                ># define custom commands ("name" shows in the palette; chord optional)</span
+              ><br /><span style="color: #5ea1f2">command</span>
+              <span style="color: #f2b45c">"Open in Zed"</span>&nbsp;&nbsp;cmd+shift+e&nbsp;&nbsp;open -a Zed {AGT_SESSION_PWD}<br /><span
+                style="color: #5ea1f2"
+                >command</span
+              >
+              <span style="color: #f2b45c">"Lazygit"</span
+              >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;ctrl+a&gt;g&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;agtermctl session overlay open lazygit
+              --socket {AGT_SOCKET}<br /><span style="color: #5ea1f2">command</span>
+              <span style="color: #f2b45c">"Deploy"</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;./deploy.sh
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              A chord is modifier words (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >ctrl</span
+              >, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">cmd</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">opt</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift</span>) joined by
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span> and a base key (a single
+              character or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tab</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >space</span
+              >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">return</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >delete</span
+              >). Custom commands may also use a leader sequence
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ctrl+a&gt;g</span>), and their chord
+              must include a modifier — a bare key can't shadow a plain terminal key.
+            </p>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              Bindable built-in actions
+            </h3>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.9;
+                overflow-x: auto;
+                color: #cbc6bc;
+              "
+            >
+              new_window&nbsp;&nbsp;&nbsp;rename_window&nbsp;&nbsp;&nbsp;delete_window<br />new_workspace&nbsp;&nbsp;&nbsp;rename_workspace&nbsp;&nbsp;&nbsp;delete_workspace<br />new_session&nbsp;&nbsp;&nbsp;open_directory&nbsp;&nbsp;&nbsp;rename_session<br />close_session&nbsp;&nbsp;&nbsp;clear_status<br />increase_font_size&nbsp;&nbsp;&nbsp;decrease_font_size&nbsp;&nbsp;&nbsp;reset_font_size<br />toggle_split&nbsp;&nbsp;&nbsp;toggle_scratch&nbsp;&nbsp;&nbsp;toggle_search<br />toggle_sidebar&nbsp;&nbsp;&nbsp;toggle_flag&nbsp;&nbsp;&nbsp;toggle_flagged_view<br />focus_left_pane&nbsp;&nbsp;&nbsp;focus_right_pane&nbsp;&nbsp;&nbsp;focus_workspace<br />previous_session&nbsp;&nbsp;&nbsp;next_session&nbsp;&nbsp;&nbsp;first_session&nbsp;&nbsp;&nbsp;last_session<br />previous_attention_session&nbsp;&nbsp;&nbsp;next_attention_session<br />quick_terminal&nbsp;&nbsp;&nbsp;session_palette&nbsp;&nbsp;&nbsp;command_palette<br />custom_command_palette&nbsp;&nbsp;&nbsp;show_attention&nbsp;&nbsp;&nbsp;select_theme
+            </div>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              Command tokens
+            </h3>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.9;
+                overflow-x: auto;
+                color: #cbc6bc;
+              "
+            >
+              {AGT_SESSION_ID}&nbsp;&nbsp;&nbsp;{AGT_SESSION_NAME}&nbsp;&nbsp;&nbsp;{AGT_SESSION_PWD}<br />{AGT_WORKSPACE_ID}&nbsp;&nbsp;&nbsp;{AGT_WORKSPACE_NAME}<br />{AGT_WINDOW_ID}&nbsp;&nbsp;&nbsp;{AGT_WINDOW_NAME}<br />{AGT_PANE}&nbsp;&nbsp;&nbsp;{AGT_SELECTION}&nbsp;&nbsp;&nbsp;{AGT_SOCKET}
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              Tokens expand at fire time (also exported as
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$AGT_*</span> env vars on the spawned
+              process). A token is substituted <strong style="color: #e6e1d7">raw</strong> into the shell line, so for content you
+              don't control —
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{AGT_SELECTION}</span>, and also
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{AGT_SESSION_NAME}</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >{AGT_SESSION_PWD}</span
+              >
+              (a remote host can set these via OSC) — prefer the matching quoted env var, e.g.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">"$AGT_SELECTION"</span>.
+            </p>
+            <div
+              style="
+                background: rgba(242, 180, 92, 0.07);
+                border: 1px solid rgba(242, 180, 92, 0.22);
+                border-radius: 10px;
+                padding: 16px 18px;
+                margin: 20px 0 0;
+                font-size: 14px;
+                color: #e2c79a;
+                line-height: 1.65;
+              "
+            >
+              <strong style="color: #f2b45c; font-family: &quot;JetBrains Mono&quot;, monospace">Detached, no TTY</strong> — a
+              custom command runs as a detached
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/bin/sh -c</span> with no controlling terminal, so
+              it suits fire-and-forget launches (GUI apps, scripts) — not interactive TUIs. Run a TUI like
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">lazygit</span> in an overlay
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl session overlay open</span>) or a scratch
+              terminal, which have a real TTY. A non-zero exit posts a notification banner.
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 20px 0 0">
+              Open the file with <strong style="color: #e6e1d7">File ▸ Edit Keymap…</strong> (or the ⌃⇧P palette): it opens in a
+              95% overlay running <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$VISUAL</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >$EDITOR</span
+              >
+              (falling back to <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">vi</span>) and
+              reloads on quit. Apply edits made elsewhere with
+              <strong style="color: #e6e1d7">File ▸ Reload Keymap</strong> or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl keymap reload</span>. A
+              malformed line never discards the rest — it surfaces in the diagnostics list in Settings ▸ Key Mapping while the good
+              lines still apply.
+            </p>
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 28px 0 12px;
+              "
+            >
+              v1 limitations
+            </h3>
+            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px">
+              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                >Built-in rebinds are single-chord only; leader sequences work only for custom commands.
+              </li>
+              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                >A few keys can't be expressed because they clash with the grammar's separators: the arrow keys,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span> (the chord-joiner), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&gt;</span> (the leader separator).
+                The arrow-bound actions and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                  >increase_font_size</span
+                >
+                keep their defaults unless mapped to a parseable chord.
+              </li>
+              <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                >The Ctrl-Tab MRU switcher and Ctrl-1/Ctrl-2 pane focus are not rebindable yet.
+              </li>
+            </ul>
+          </section>
+
+          <!-- GHOSTTY -->
+          <section id="ghostty" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Ghostty config
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 18px">
+              agterm builds its terminal config from four sources, each overriding the one before it:
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13px;
+                line-height: 1.9;
+                overflow-x: auto;
+                color: #949ba4;
+              "
+            >
+              ghostty defaults → ~/.config/ghostty/config → <span style="color: #e6e1d7">&lt;config dir&gt;/ghostty.conf</span> →
+              agterm Settings<br /><span style="color: #6b727a"
+                >&nbsp;&nbsp;(lowest)&nbsp;&nbsp;&nbsp;&nbsp;(global, OFF by
+                default)&nbsp;&nbsp;&nbsp;&nbsp;(agterm-scoped)&nbsp;&nbsp;&nbsp;&nbsp;(UI wins)</span
+              >
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              agterm is self-contained: <strong style="color: #e6e1d7">by default it does not read your global</strong>
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/ghostty/config</span>, so a
+              config written for the standalone Ghostty.app never silently changes agterm. Turn on
+              <strong style="color: #e6e1d7">Settings ▸ General ▸ Use my global Ghostty config</strong> to fold it in.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >&lt;config dir&gt;/ghostty.conf</span
+              >
+              (default <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >~/.config/agterm/ghostty.conf</span
+              >) is the place to customize agterm. It sits next to
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keymap.conf</span>, is always loaded,
+              and is scoped to agterm so the standalone Ghostty.app never reads it. Put any ghostty config key there — the keys
+              agterm manages from Settings (font, theme, opacity, blur, scroll speed) still win. A common use:
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">macos-option-as-alt = true</span>. The
+              full key reference is at <a href="https://ghostty.org/docs/config" style="color: #6d82f3">ghostty.org/docs/config</a>.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              Programs can read and write the macOS clipboard over OSC 52. agterm prompts before a program
+              <strong style="color: #e6e1d7">reads</strong> your clipboard (a read hands its contents back to the program); a normal
+              ⌘V paste is never prompted. Clipboard <strong style="color: #e6e1d7">writes</strong> go through by default, matching
+              other terminals so a remote <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >tmux</span
+              >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">vim</span> yank still reaches your
+              clipboard. To gate writes, set
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">clipboard-write = ask</span> or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">deny</span>. Each prompt offers
+              <em>Don't ask again this session</em>.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              Open the file with <strong style="color: #e6e1d7">File ▸ Edit ghostty.conf…</strong> (a 95% editor overlay, same as
+              Edit Keymap). Apply edits made elsewhere with <strong style="color: #e6e1d7">File ▸ Reload Config</strong> or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl config reload</span>. A
+              malformed line is skipped and the good ones still apply; the returned diagnostic count covers every config source.
+            </p>
+          </section>
+
+          <!-- STATUS -->
+          <section id="status" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Agent status
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 22px">
+              A coding agent running in a session can flag its status on that session's sidebar row, so you can tell at a glance
+              which of many concurrent agents needs you. The glyph shows just left of the notification badge on every non-idle
+              session; a one-time
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">completed</span> flash auto-clears
+              once you visit the session.
+            </p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 0 0 24px">
+              <div
+                style="
+                  background: #22272b;
+                  border: 1px solid rgba(255, 255, 255, 0.08);
+                  border-radius: 11px;
+                  padding: 16px 18px;
+                  display: flex;
+                  align-items: center;
+                  gap: 12px;
+                "
+              >
+                <span
+                  style="width: 9px; height: 9px; border-radius: 100px; background: #5ea1f2; box-shadow: 0 0 10px #5ea1f2"
+                ></span>
+                <div>
+                  <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 600">active</div>
+                  <div style="font-size: 12px; color: #949ba4">blue ellipsis</div>
+                </div>
+              </div>
+              <div
+                style="
+                  background: #22272b;
+                  border: 1px solid rgba(255, 255, 255, 0.08);
+                  border-radius: 11px;
+                  padding: 16px 18px;
+                  display: flex;
+                  align-items: center;
+                  gap: 12px;
+                "
+              >
+                <span
+                  style="width: 9px; height: 9px; border-radius: 100px; background: #f2b45c; box-shadow: 0 0 10px #f2b45c"
+                ></span>
+                <div>
+                  <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 600">blocked</div>
+                  <div style="font-size: 12px; color: #949ba4">amber exclamation</div>
+                </div>
+              </div>
+              <div
+                style="
+                  background: #22272b;
+                  border: 1px solid rgba(255, 255, 255, 0.08);
+                  border-radius: 11px;
+                  padding: 16px 18px;
+                  display: flex;
+                  align-items: center;
+                  gap: 12px;
+                "
+              >
+                <span
+                  style="width: 9px; height: 9px; border-radius: 100px; background: #7ece8f; box-shadow: 0 0 10px #7ece8f"
+                ></span>
+                <div>
+                  <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 600">
+                    completed
+                  </div>
+                  <div style="font-size: 12px; color: #949ba4">green check</div>
+                </div>
+              </div>
+              <div
+                style="
+                  background: #22272b;
+                  border: 1px solid rgba(255, 255, 255, 0.08);
+                  border-radius: 11px;
+                  padding: 16px 18px;
+                  display: flex;
+                  align-items: center;
+                  gap: 12px;
+                "
+              >
+                <span style="width: 9px; height: 9px; border-radius: 100px; border: 1.5px solid #4a5158"></span>
+                <div>
+                  <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 600">idle</div>
+                  <div style="font-size: 12px; color: #949ba4">nothing</div>
+                </div>
+              </div>
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0 0 14px">
+              An agent sets it over the control channel:
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+                line-height: 1.95;
+                overflow-x: auto;
+                color: #e6e1d7;
+              "
+            >
+              <span style="color: #6b727a"># state is idle | active | completed | blocked</span><br />agtermctl session status
+              active --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session status blocked
+              --sound default --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session status
+              completed --auto-reset --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session
+              status idle --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span>
+              <span style="color: #6b727a">&nbsp;# clear it</span>
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--auto-reset</span> clears the
+              indicator the moment you visit the session;
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--blink</span> pulses the glyph; and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--sound</span> plays a one-shot sound
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">default</span>, or a system sound
+              name like <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">Basso</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >Ping</span
+              >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">Tink</span>). To make every blocked
+              prompt sound without touching the hooks, set
+              <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Blocked sound</strong>. Typing into a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">blocked</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >completed</span
+              >
+              session clears its status; Esc interrupts an
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> one and clears it too.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              When the sidebar is hidden the glyphs go with it, so an optional
+              <strong style="color: #e6e1d7">title-bar bell</strong> (Settings ▸ Notifications ▸ Show attention indicator, off by
+              default) reflects the window: dimmed when nothing needs you, plain when a session is active or completed, filled
+              amber when any is blocked. Clicking it — or ⌃⇧I, <strong style="color: #e6e1d7">Navigate ▸ Go to Attention…</strong>,
+              or the action palette's "Show Attention" — opens the <strong style="color: #e6e1d7">attention list</strong>: this
+              window's non-idle sessions, sorted blocked → active → completed. Over the control channel,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports
+              each session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">status</span>.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              <strong style="color: #e6e1d7">Auto-follow blocked sessions.</strong> When several agents run at once, a session
+              that blocks is easy to miss. Turn on
+              <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Auto-follow blocked sessions</strong>
+              (Disabled by default, or a 5s/10s/30s/60s/5m idle timeout) and, after you have been idle from input for that long,
+              the window selects and focuses the oldest blocked session, so you are pulled to whatever agent is waiting. It is
+              per-window and window-wide (crossing workspaces within the window), and always picks the oldest blocked session
+              first. Being parked on a blocked session suppresses further jumps until you type a reply, which clears its glyph
+              and re-arms the timer for the next one. The opt-in <strong style="color: #e6e1d7">Don't auto-follow away from a
+              running session</strong> (off by default) holds the selection put while the current session is
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span>. Over the control
+              channel, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span>
+              reports the window's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">idleMs</span>
+              (ms since your last input, live) and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">autoFollowMs</span> (the configured
+              timeout in ms, omitted when Disabled);
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl window list --json</span>
+              reports <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">autoFollowMs</span> per
+              window (as of the last refresh), but not the live
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">idleMs</span>.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              To wire it up automatically, <strong style="color: #e6e1d7">Help ▸ Install Agent Status Hooks…</strong> installs a
+              hooks package: a generic bash/zsh/fish shell integration (flags
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> while a command
+              matching <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_AGENT_RE</span> runs;
+              the default set is codex, gemini, cursor-agent, aider, opencode, crush, goose), and four Claude Code hooks (prompt →
+              active, tool run → active, Stop → completed, permission prompt → blocked). For Codex it prints a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">notify</span> line to add to
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex/config.toml</span>.
+              Re-running is idempotent.
+            </p>
+          </section>
+
+          <!-- RESTORE -->
+          <section id="restore" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Restore &amp; persistence
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
+              Sessions come back on the next launch with their directory, font size, and split state restored. Restore
+              reconstructs the structure, not the running processes — three limitations follow from that design:
+            </p>
+            <ul style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 14px">
+              <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 2px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                ><strong style="color: #e6e1d7">Live processes are not reattached.</strong> By default a restored session
+                re-spawns a fresh login shell in its saved directory. The optional
+                <strong style="color: #e6e1d7">Restore running commands on restart</strong> toggle (General settings, off by
+                default) re-runs the command each pane had in the foreground at the last clean quit — a re-run, not a reattach.
+                Only a single-process command restores faithfully; a force-quit or crash captures nothing; and the multiplexers in
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">restore-denylist.conf</span>
+                (seeded with tmux/screen/zellij) start fresh.
+              </li>
+              <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 2px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                ><strong style="color: #e6e1d7">The saved directory depends on OSC 7.</strong> It relies on Ghostty
+                shell-integration (auto-injected for zsh, bash, fish, and nu). If the working directory is never reported, a
+                session restores to the directory it was created in.
+              </li>
+              <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="position: absolute; left: 0; top: 2px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
+                  >›</span
+                ><strong style="color: #e6e1d7">Directory is saved on structural changes, not every cd.</strong> It persists on
+                quit and on each add/close/move/rename/select — not on every prompt redraw, which would thrash the disk. A crash
+                loses only the directory changes made since the last structural change or quit.
+              </li>
+            </ul>
+          </section>
+
+          <!-- TROUBLESHOOTING -->
+          <section id="troubleshooting" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Troubleshooting
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
+              Where the logs and config live, how to read them, and the common problems (a keymap editor that won't open, a custom
+              action that does nothing, missing notifications) are covered in the repo's troubleshooting guide.
+            </p>
+            <div style="display: flex; flex-wrap: wrap; gap: 12px">
+              <a
+                href="https://github.com/umputun/agterm/blob/master/docs/troubleshooting.md"
+                style="
+                  font-family: &quot;JetBrains Mono&quot;, monospace;
+                  font-size: 13.5px;
+                  color: #e6e1d7;
+                  border: 1px solid rgba(255, 255, 255, 0.15);
+                  padding: 11px 18px;
+                  border-radius: 9px;
+                "
+                class="hv10"
+                >troubleshooting.md ↗</a
+              >
+              <a
+                href="https://github.com/umputun/agterm/issues/new"
+                style="
+                  font-family: &quot;JetBrains Mono&quot;, monospace;
+                  font-size: 13.5px;
+                  color: #e6e1d7;
+                  border: 1px solid rgba(255, 255, 255, 0.15);
+                  padding: 11px 18px;
+                  border-radius: 9px;
+                "
+                class="hv10"
+                >Open an issue ↗</a
+              >
+              <a
+                href="https://github.com/umputun/agterm/discussions/new"
+                style="
+                  font-family: &quot;JetBrains Mono&quot;, monospace;
+                  font-size: 13.5px;
+                  color: #e6e1d7;
+                  border: 1px solid rgba(255, 255, 255, 0.15);
+                  padding: 11px 18px;
+                  border-radius: 9px;
+                "
+                class="hv10"
+                >Start a discussion ↗</a
+              >
+            </div>
+          </section>
+
+          <!-- attribution -->
+          <div
+            style="
+              margin-top: 64px;
+              padding-top: 24px;
+              border-top: 1px solid rgba(255, 255, 255, 0.07);
+              font-size: 13.5px;
+              line-height: 1.7;
+              color: #6b727a;
+            "
+          >
+            agterm embeds <strong style="color: #949ba4">libghostty</strong>, the terminal engine from
+            <a href="https://github.com/ghostty-org/ghostty" style="color: #949ba4" class="hv11">Ghostty</a> (MIT) — rendering, VT
+            parsing, and shell I/O, built from upstream source at a pinned commit. The way agterm drives libghostty's C API from a
+            SwiftUI/AppKit app was learned from
+            <a href="https://github.com/thdxg/macterm" style="color: #949ba4" class="hv11">macterm</a> (MIT), and SwiftUI guidance
+            came from the
+            <a href="https://github.com/AvdLee/SwiftUI-Agent-Skill" style="color: #949ba4" class="hv11">SwiftUI Agent Skill</a>
+            (MIT). The model, sidebar, persistence, control channel, and multi-window code are original to agterm.
+          </div>
+        </main>
+      </div>
+
+      <!-- ===== FOOTER ===== -->
+      <div style="border-top: 1px solid rgba(255, 255, 255, 0.07); background: #131619">
+        <div
+          style="
+            max-width: 1240px;
+            margin: 0 auto;
+            padding: 32px 28px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: space-between;
+            align-items: center;
+            font-family: &quot;JetBrains Mono&quot;, monospace;
+          "
+        >
+          <a href="/" style="display: flex; align-items: center; gap: 10px; color: #949ba4; font-size: 13.5px" class="hv7"
+            >← agterm.com</a
+          >
+          <div style="display: flex; gap: 24px; font-size: 13px">
+            <a href="https://github.com/umputun/agterm" style="color: #949ba4" class="hv7">GitHub</a>
+            <a href="https://github.com/umputun/agterm/issues" style="color: #949ba4" class="hv7">Issues</a>
+            <a href="https://github.com/umputun/agterm/discussions" style="color: #949ba4" class="hv7">Discussions</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

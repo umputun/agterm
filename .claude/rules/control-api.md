@@ -46,6 +46,19 @@ paths:
      the socket client in `SocketClient.swift`) plus a thin `agtermctl` executable.
      It links `swift-argument-parser`; the `agtermCore` library target stays dependency-free.
      Builds with `swift build`, needs no Xcode/GhosttyKit.
+- **New/changed control commands are dispatcher-first** (the `refactor`/`hoist` migration, #78 onward).
+  A host-free `ControlDispatcher` in `agtermCore` (`ControlDispatcher.swift`) now fronts layer 2's dispatch:
+  its `dispatch(_:)` owns command parsing, argument validation, error strings, and the success-response
+  shape, calling the app through the `ControlActions` protocol, which `ControlServer` conforms to and
+  which supplies ONLY target resolution and the AppKit/process side effects.
+  Commands migrate group-by-group; one the dispatcher doesn't yet own returns `nil` and falls through to
+  `ControlServer`'s existing switch, so that switch is a fallthrough for not-yet-migrated commands, NOT the
+  home for new ones.
+  So when adding or changing a command: put every host-free part (arg checks, error text, the payload) in
+  `ControlDispatcher` with a unit test, and put only the side effect behind a `ControlActions` method — do
+  NOT add fresh validation/response logic inline in the `ControlServer` switch.
+  (This is the control-channel case of the root `CLAUDE.md` "hoist host-free logic down into `agtermCore`"
+  module-boundary rule.)
 - **Bundling + install.**
   The `agterm` target's `Bundle agtermctl CLI` postBuildScript (`project.yml`) runs `swift build -c release --product agtermctl`,
   copies it to `agterm.app/Contents/MacOS/agtermctl`, ad-hoc signs the helper,

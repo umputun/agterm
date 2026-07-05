@@ -39,9 +39,46 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
-      - name: swift test
+      - name: swift test (with coverage)
         working-directory: agtermCore
-        run: swift test
+        run: swift test --enable-code-coverage
+      - name: export lcov
+        working-directory: agtermCore
+        # rewrite the absolute SF: paths llvm-cov emits to repo-relative so the
+        # separate linux coverage job can resolve them against its own checkout
+        run: |
+          BIN=$(swift build --show-bin-path)
+          xcrun llvm-cov export \
+            "$BIN/agtermCorePackageTests.xctest/Contents/MacOS/agtermCorePackageTests" \
+            -instr-profile "$BIN/codecov/default.profdata" \
+            -format=lcov \
+            -ignore-filename-regex='(\.build|Tests|checkouts)/' \
+            | sed "s|SF:$GITHUB_WORKSPACE/|SF:|g" > coverage.lcov
+      - name: upload lcov artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-lcov
+          path: agtermCore/coverage.lcov
+
+  coverage:
+    name: Coverage upload
+    needs: [changes, test]
+    if: needs.changes.outputs.swift == 'true'
+    # the coveralls action installs its reporter via a brew tap on macOS (now blocked
+    # by homebrew's tap-trust gate); on linux it downloads a binary, so upload here
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: coverage-lcov
+      - name: submit coverage to coveralls
+        continue-on-error: true
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: coverage.lcov
+          format: lcov
 
   lint:
     name: swiftlint

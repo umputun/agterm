@@ -4,8 +4,8 @@ import SwiftUI
 
 /// The Settings window (Cmd+,): five tabs — General (mouse, sessions, ghostty config),
 /// Appearance (font/theme + window translucency + pane dimming), Notifications (banner / badge /
-/// attention toggles), Agent Status (the sidebar glyph colors + blocked sound), and Key Mapping
-/// (the config directory + keymap diagnostics + Reload).
+/// attention toggles), Agent Status (the sidebar glyph colors + blocked sound + auto-follow), and Key
+/// Mapping (the config directory + keymap diagnostics + Reload).
 struct SettingsView: View {
     let model: SettingsModel
 
@@ -33,7 +33,7 @@ struct SettingsView: View {
                 .tabItem { Label("Key Mapping", systemImage: "keyboard") }
                 .tag(Tab.keyMapping)
         }
-        .frame(width: 480, height: 600)
+        .frame(width: 480, height: 550)
         // keep macOS from saving/restoring the Settings window across launches. Otherwise a
         // process-launch reopen (see agtermApp's FB11763863 workaround) resurrects a stale Settings
         // window on whatever tab it was last on, which steals key focus from the real launch window.
@@ -87,7 +87,6 @@ private struct GeneralSettingsView: View {
                 }
                 Toggle("Right-click pastes", isOn: rightClickPaste)
                     .accessibilityIdentifier("settings-right-click-paste")
-                SettingHint("Right-click pastes the clipboard into the terminal.")
             }
 
             Section("Sessions") {
@@ -113,10 +112,8 @@ private struct GeneralSettingsView: View {
                 }
                 Toggle("Restore running commands on restart", isOn: restoreRunningCommand)
                     .accessibilityIdentifier("settings-restore-running-command")
-                SettingHint("Re-runs each pane's foreground command on relaunch; multiplexers start fresh.")
                 Toggle("Confirm before closing a session", isOn: confirmCloseSession)
                     .accessibilityIdentifier("settings-confirm-close-session")
-                SettingHint("Asks before ⌘W closes a session and ends what's running in it.")
             }
 
             Section("Ghostty Config") {
@@ -241,7 +238,6 @@ private struct AppearanceSettingsView: View {
             Section("Window") {
                 Toggle("Compact toolbar", isOn: compactToolbar)
                     .accessibilityIdentifier("settings-compact-toolbar")
-                SettingHint("Shorter title bar with smaller icons; hides the working-directory subtitle.")
 
                 HStack {
                     Text("Background Opacity")
@@ -381,15 +377,12 @@ private struct NotificationsSettingsView: View {
             Section("Notifications") {
                 Toggle("Show notification banners", isOn: notificationsEnabled)
                     .accessibilityIdentifier("settings-notifications")
-                SettingHint("Terminal desktop notifications (OSC 9 / 777) in Notification Center.")
 
                 Toggle("Show notification badges", isOn: notificationBadgeEnabled)
                     .accessibilityIdentifier("settings-notification-badges")
-                SettingHint("The red unseen-count pill on sidebar rows; the count keeps tracking either way.")
 
                 Toggle("Show attention indicator", isOn: attentionButtonEnabled)
                     .accessibilityIdentifier("settings-attention-button")
-                SettingHint("A title-bar bell that highlights when a session needs attention. Click it to jump there.")
             }
         }
         .formStyle(.grouped)
@@ -419,8 +412,8 @@ private struct NotificationsSettingsView: View {
 }
 
 /// Agent Status tab: a Colors section (the three sidebar glyph colors — active / blocked /
-/// completed), a Sound section (the blocked sound), and a trailing Reset that clears both back to
-/// their defaults.
+/// completed), a Sound section (the blocked sound), an Auto-follow section (the idle-timeout picker +
+/// stay-on-active toggle), and a trailing Reset that clears the colors and sound back to their defaults.
 private struct AgentStatusSettingsView: View {
     let model: SettingsModel
 
@@ -433,7 +426,6 @@ private struct AgentStatusSettingsView: View {
                     .accessibilityIdentifier("settings-status-blocked")
                 ColorPicker("Completed", selection: completedStatusColor, supportsOpacity: false)
                     .accessibilityIdentifier("settings-status-completed")
-                SettingHint("Colors for the per-session sidebar status glyph.")
             }
 
             Section("Sound") {
@@ -444,7 +436,20 @@ private struct AgentStatusSettingsView: View {
                     }
                 }
                 .accessibilityIdentifier("settings-status-blocked-sound")
-                SettingHint("Played when a session becomes blocked.")
+            }
+
+            Section("Auto-follow") {
+                Picker("Auto-follow blocked sessions", selection: autoFollowAttention) {
+                    Text("Disabled").tag(AppSettings.AutoFollowAttention.off)
+                    Text("5s").tag(AppSettings.AutoFollowAttention.s5)
+                    Text("10s").tag(AppSettings.AutoFollowAttention.s10)
+                    Text("30s").tag(AppSettings.AutoFollowAttention.s30)
+                    Text("60s").tag(AppSettings.AutoFollowAttention.s60)
+                    Text("5m").tag(AppSettings.AutoFollowAttention.m5)
+                }
+                .accessibilityIdentifier("settings-auto-follow")
+                Toggle("Don't auto-follow away from a running session", isOn: autoFollowStayOnActive)
+                    .accessibilityIdentifier("settings-auto-follow-stay-active")
             }
 
             Section {
@@ -482,6 +487,20 @@ private struct AgentStatusSettingsView: View {
                     model.setBlockedStatusSoundName(value)
                     if let value { StatusSoundPlayer.shared.action(for: value)?() }
                 })
+    }
+
+    /// The auto-follow idle timeout; nil (the default) reads as `.off`, and picking `.off` stores nil so
+    /// settings.json stays minimal. An unknown stored value also resolves to `.off`.
+    private var autoFollowAttention: Binding<AppSettings.AutoFollowAttention> {
+        Binding(get: { AppSettings.AutoFollowAttention(tolerant: model.settings.autoFollowAttention) },
+                set: { model.setAutoFollowAttention($0 == .off ? nil : $0.rawValue) })
+    }
+
+    /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json
+    /// minimal until the user opts into staying put on a running session.
+    private var autoFollowStayOnActive: Binding<Bool> {
+        Binding(get: { model.settings.autoFollowStayOnActive ?? false },
+                set: { model.setAutoFollowStayOnActive($0 ? true : nil) })
     }
 }
 

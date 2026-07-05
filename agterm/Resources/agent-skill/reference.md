@@ -41,6 +41,12 @@ background spec set via `session background` — a `{kind, text?, imagePath?, co
 position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set). Workspace nodes carry
 `id`, `name`, `active`, `sessions`.
 
+The tree object itself carries two top-level read-only fields: `idleMs` (milliseconds since the last
+user input in the window, omitted before any activity) and `autoFollowMs` (the window's Auto-follow
+timeout in milliseconds, omitted when the setting is Disabled). `idleMs` is live and grows while the
+window is idle, so it is on `tree` only, never `window.list`. Both are read-only projections of GUI
+state; there is no control command to set them.
+
 ## workspace
 
 - `workspace new [name] [--window W]` — create a workspace; returns its id. Name defaults to an
@@ -208,7 +214,11 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
 ## window
 
 - `window new [name]` — create and open a window; returns its id.
-- `window list` — `result.windows`, each with `id`, `name`, `open`, `active`.
+- `window list` — `result.windows`, each with `id`, `name`, `open`, `active`, and `autoFollowMs` (the
+  window's Auto-follow timeout in milliseconds, omitted when the setting is Disabled). The `autoFollowMs`
+  here is served from a cache and reflects the value as of the last refresh, so a just-changed setting may
+  lag until the next command. Unlike `tree`, `window.list` does NOT carry `idleMs` — the live idle metric
+  would freeze in that cache.
 - `window select <id>` — raise it if open, else open it.
 - `window close <id>` — close the on-screen window (the bundle is kept; reopen with select).
 - `window rename <id> <name>`.

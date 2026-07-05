@@ -108,6 +108,10 @@ struct agtermApp: App {
                     // custom commands and run them (both are built after `actions`, so they're set here
                     // rather than in the init, mirroring the NotificationManager wiring below).
                     actions.settingsModel = settingsModel
+                    // seed the auto-follow setting into every open window's store now that the model is
+                    // wired — deterministic regardless of the per-window resolveStore/onAppear ordering
+                    // (the resolveStore seed handles windows opened later). Idempotent.
+                    settingsModel.applyAutoFollowToAllWindows()
                     actions.customCommandRunner = customCommandRunner
                     // the action hub opens the .themes palette for the "Select Theme…" launcher + menu.
                     actions.palette = palette
@@ -217,6 +221,7 @@ struct agtermApp: App {
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
         view.onUserInputClearsStatus = { store.setAgentIndicator(AgentIndicator(), forSession: sessionID) }
+        view.onUserInput = { store.noteUserActivity() }
         view.onFontSizeChange = { store.setFontSize(sessionID, $0) }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
         return view
@@ -318,6 +323,7 @@ struct agtermApp: App {
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
         view.onUserInputClearsStatus = { store.setAgentIndicator(AgentIndicator(), forSession: sessionID) }
+        view.onUserInput = { store.noteUserActivity() }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
         return view
     }
@@ -352,6 +358,10 @@ struct agtermApp: App {
         // removes the session first, so this no-ops there — but the result is unqueryable after that anyway.
         view.onExitCodeCaptured = { store.recordOverlayExit(sessionID, code: $0) }
         view.onExit = { store.closeOverlay(sessionID) }
+        // typing in the cover counts as user activity: reset the window's auto-follow idle timer so an
+        // idle fire can't change the underlying selection (vanishing the overlay) while you type in it.
+        // destroySurface nils this, breaking the store -> surface -> closure retain cycle.
+        view.onUserInput = { store.noteUserActivity() }
         return view
     }
 
@@ -378,6 +388,10 @@ struct agtermApp: App {
                                       autoFocus: !suppressAutoFocus, env: env)
         let sessionID = session.id
         view.onExit = { store.closeScratch(sessionID) }
+        // typing in the scratch counts as user activity: reset the window's auto-follow idle timer so an
+        // idle fire can't change the underlying selection (hiding the per-session scratch) while you type
+        // in it. destroySurface nils this, breaking the store -> surface -> closure retain cycle.
+        view.onUserInput = { store.noteUserActivity() }
         // the scratch supports in-terminal search (⌘F), so wire the four onSearch* callbacks and mark it
         // searchable — pinned to the same session, like the main/split panes. Unlike the overlay/quick
         // terminal, the scratch behaves like a real pane (kept alive across hides), so a bar over it is safe.

@@ -27,7 +27,11 @@ paths:
   nil = default 5 = neutral, NOT a ghostty key)
   + `rightClickPaste` (ghostty `right-click-action`, nil = on)
   + `newSessionDirectory`/`newSessionCustomDirectory` (where a new ⌘T session opens: nil = home default,
-  else the current session's cwd or a fixed custom dir; NOT ghostty keys).
+  else the current session's cwd or a fixed custom dir; NOT ghostty keys)
+  + `autoFollowAttention`/`autoFollowStayOnActive` (the per-window idle auto-follow-to-oldest-blocked policy:
+  `autoFollowAttention` an `AutoFollowAttention` raw string [nil = off/disabled], `autoFollowStayOnActive`
+  [nil/false = off] the "don't leave a running session" opt-in; NOT ghostty keys, save-only + fanned out into
+  every open window's `AppStore` via `SettingsModel.applyAutoFollow` → `AppStore.setAutoFollow`).
   `theme`/`darkTheme`/`followSystemAppearance` are the macOS light/dark appearance-sync state: `theme` is the single/light-slot theme, `darkTheme` the dark slot, `followSystemAppearance` (nil = off) the toggle; when following, `ghosttyConfigLines()` emits ghostty's raw dual `theme = light:NAME,dark:NAME` conditional and libghostty resolves the side at runtime — `ghosttyConfigLines()` takes NO `isDark` arg (see the Theme picker rule; `ThemeResolution` is gone, only `AppSettings.dualThemeSides` survives, for the sidebar selection colors).
   The three `*StatusColorHex` (`#RRGGBB`, nil = active `#DBD9E6` muted lavender-grey + system amber/green)
   color the sidebar agent-status glyph: `SettingsModel` passes the hex to `GhosttyApp.setAgentStatusColors`
@@ -126,7 +130,7 @@ paths:
   `ContentView` mirrors the color into `terminalColor` view state (the quick terminal's opaque backing
   re-renders with the new color) and `TitleProbeView` re-applies the window appearance.
   Without this the chrome only refreshed when the window next re-keyed.
-  UI is the standard SwiftUI `Settings` scene (Cmd+,) with a 5-tab `TabView` (frame 480×600).
+  UI is the standard SwiftUI `Settings` scene (Cmd+,) with a 5-tab `TabView` (frame 480×550).
   An explicit `TabView(selection:)` binding (`@State` default `.general`) suppresses SwiftUI's
   `com_apple_SwiftUI_Settings_selectedTabIndex` auto-persistence, so the window always opens on General
   instead of restoring the last-used tab.
@@ -141,11 +145,15 @@ paths:
   inactive-pane-mute slider).
   **Notifications** (a **Notifications** section with the banner / badge / attention-indicator toggles).
   **Agent Status** (a **Colors** section with the three glyph color pickers, a **Sound** section with
-  the blocked-sound picker, and a trailing **Reset** that clears both back to defaults).
+  the blocked-sound picker, an **Auto-follow** section with the idle-timeout Picker
+  (Disabled/5s/10s/30s/60s/5m) + the "Don't auto-follow away from a running session" Toggle, and a trailing
+  **Reset** that clears the colors and sound back to defaults — not the auto-follow settings).
   **Key Mapping** (the config directory holding `keymap.conf` + a read-only diagnostics list + a Reload
   button — see the Keymap section).
-  Captions under controls are kept to a single terse line and dropped entirely from self-explanatory
-  controls (font/theme/opacity/sidebar-tint/colors), so each tab fits without scrolling.
+  Captions under controls are dropped for self-explanatory controls, which is nearly all of them.
+  A caption is kept ONLY when it carries information the label can't — currently just two:
+  `Blur needs opacity below 100%` (a functional dependency) and the Ghostty-config edit-path hint.
+  This keeps the busiest tab short enough that the 550-tall window fits every tab without scrolling.
   The notification toggle (`AppSettings.notificationsEnabled`, nil = on) is mirrored to `NotificationManager.bannersEnabled`
   by `SettingsModel`; it gates only the OS banner, never the badge, and is NOT a ghostty config key (no
   reload).

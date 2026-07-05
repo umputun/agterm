@@ -95,6 +95,9 @@ struct ContentView: View {
         }
         store = resolved
         resolvedID = id
+        // seed this freshly resolved store with the current auto-follow setting: the store is built
+        // host-free in WindowLibrary and can't read SettingsModel, so the app target pushes it in here.
+        actions.settingsModel?.applyAutoFollow(to: resolved)
         // reopening a window loads an @ObservationIgnored store, which the Dock badge's observation can't
         // see (symmetric to the willClose close poke) — recompute so a reopened window's unseen total counts.
         DockBadgeController.shared.refresh()

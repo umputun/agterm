@@ -297,9 +297,19 @@ public struct ControlWorkspaceNode: Codable, Sendable, Equatable {
 /// The whole workspace tree, the payload of a `tree` response.
 public struct ControlTree: Codable, Sendable, Equatable {
     public let workspaces: [ControlWorkspaceNode]
+    /// Milliseconds since the last user input in the projected window, or nil before any activity (omitted
+    /// from the JSON). A LIVE, continuously-growing delta — `tree`-only because the tree is built fresh on
+    /// the main actor per request; it must NOT ride `window.list` (cache-served, so it would freeze between
+    /// commands). The read side of the auto-follow idle metric.
+    public let idleMs: Int?
+    /// The window's auto-follow-blocked timeout in milliseconds, or nil when the feature is disabled
+    /// (omitted from the JSON). The read side of the GUI-only Auto-follow setting.
+    public let autoFollowMs: Int?
 
-    public init(workspaces: [ControlWorkspaceNode]) {
+    public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil) {
         self.workspaces = workspaces
+        self.idleMs = idleMs
+        self.autoFollowMs = autoFollowMs
     }
 }
 
@@ -310,12 +320,18 @@ public struct ControlWindowNode: Codable, Sendable, Equatable {
     public let name: String
     public let open: Bool
     public let active: Bool
+    /// The window's auto-follow-blocked timeout in milliseconds, or nil when disabled (omitted from the
+    /// JSON), as of the last cache refresh — `window.list` is answered from a nonisolated fast path, so a
+    /// just-changed setting may lag until the next command. Acceptable because the config rarely changes;
+    /// the live `idleMs` is deliberately kept off `window.list` (tree-only) for exactly this reason.
+    public let autoFollowMs: Int?
 
-    public init(id: String, name: String, open: Bool, active: Bool) {
+    public init(id: String, name: String, open: Bool, active: Bool, autoFollowMs: Int? = nil) {
         self.id = id
         self.name = name
         self.open = open
         self.active = active
+        self.autoFollowMs = autoFollowMs
     }
 }
 

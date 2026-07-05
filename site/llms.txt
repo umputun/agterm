@@ -1,0 +1,28 @@
+# agterm
+
+> Native macOS terminal on libghostty for running many AI coding agents in named workspaces
+
+agterm is a native macOS terminal, built on libghostty (Ghostty's engine), for running many AI coding agents at once. Instead of scattering sessions across tabs, it groups them into named workspaces, shows each agent's status on its sidebar row, and exposes almost every action to a scriptable control CLI — so a screen of concurrent agents stays legible and it's obvious which one needs you. It is also a fast, modern general-purpose terminal for everyday work.
+
+## Key Features
+
+- Two-level vertical sidebar: workspaces grouping their sessions, with drag-reorder, a flagged working-set view, and single-workspace focus
+- Agent-status glyphs on sidebar rows: active, blocked, completed, idle — auto-wired for Claude Code and Codex
+- agtermctl control CLI over a local unix-domain socket: create, rename, move, and type into sessions, run overlays, move windows, capture output, post notifications tied to a session
+- Installable agent skill that teaches Claude Code and Codex the control model and the full agtermctl command set
+- Surfaces per session: split panes (two shells), a per-session scratch terminal, a window-wide quick terminal, and floating/full overlays
+- Multi-window: a library of windows (e.g. "work" and "personal"), one per screen, restored on next launch
+- 512 bundled themes with a live-preview picker, fully rebindable kitty-flavored keymap.conf, and full session persistence
+- In-terminal search, fuzzy command palettes, and a Ctrl-Tab MRU session switcher
+
+## Install
+
+- Homebrew: `brew install --cask umputun/apps/agterm` (Apple Silicon, macOS 14+, signed and notarized)
+- Direct download: https://github.com/umputun/agterm/releases
+
+## Links
+
+- Website: https://agterm.com
+- Documentation: https://agterm.com/docs
+- Source: https://github.com/umputun/agterm
+- License: MIT (embeds libghostty from Ghostty, MIT)

@@ -114,6 +114,24 @@ final class SidebarUITests: XCTestCase {
                       "workspace header should show the new name after rename")
     }
 
+    // clicking anywhere on a workspace row (not just the disclosure triangle) toggles its expansion.
+    // the toggle is deferred by the double-click interval so a rename double-click can cancel it, so the
+    // child session hides/returns a beat after the click rather than instantly.
+    func testClickWorkspaceRowTogglesExpansion() throws {
+        let ws = app.staticTexts["workspace 1"]
+        XCTAssertTrue(ws.waitForExistence(timeout: 20), "workspace header should exist")
+        let session = sessionRow()
+        XCTAssertTrue(session.waitForExistence(timeout: 20), "seeded session row should be visible while expanded")
+
+        // click the row body → collapse → the child session row disappears.
+        ws.click()
+        XCTAssertTrue(session.waitForNonExistence(timeout: 5), "collapsing the workspace should hide its session row")
+
+        // click again → expand → the session row comes back.
+        ws.click()
+        XCTAssertTrue(session.waitForExistence(timeout: 5), "expanding the workspace should show its session row again")
+    }
+
     // issue #41: Esc must cancel the inline rename — close edit mode and discard the typed change.
     func testRenameSessionEscCancels() throws {
         let row = sessionRow()

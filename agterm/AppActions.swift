@@ -57,8 +57,27 @@ final class AppActions {
     var themePreviewActive = false
     var themePreviewOriginal: String?
 
+    /// The `.agtermAutoFollowed` observer token. Installed once in `init` (the app builds one `AppActions`)
+    /// so an idle auto-follow in the key window moves first responder into the newly selected session.
+    private var autoFollowObserver: NSObjectProtocol?
+
     init(library: WindowLibrary) {
         self.library = library
+        // bridge the host-free `AppStore.autoFollowFire` post to the app-target focus move: agtermCore can't
+        // call `focusActiveSession`, so it posts and we resolve + focus here. runs on the main queue.
+        autoFollowObserver = NotificationCenter.default.addObserver(
+            forName: .agtermAutoFollowed, object: nil, queue: .main
+        ) { [weak self] note in
+            let sessionID = note.userInfo?[AppStore.autoFollowSessionIDKey] as? UUID
+            MainActor.assumeIsolated { self?.autoFollowed(sessionID) }
+        }
+    }
+
+    // isolated so it can read the `@MainActor` non-Sendable observer token; balances the block-based
+    // observer registered in init. AppActions is app-lifetime (one per app), so this rarely runs, but an
+    // unbalanced addObserver(forName:) is a latent leak either way.
+    isolated deinit {
+        if let autoFollowObserver { NotificationCenter.default.removeObserver(autoFollowObserver) }
     }
 
     // MARK: - Workspaces & sessions
@@ -72,6 +91,9 @@ final class AppActions {
         guard let store, let workspaceID = store.currentWorkspaceID,
               let session = store.addSession(toWorkspace: workspaceID, cwd: resolvedNewSessionCwd())
         else { return }
+        // creating + selecting a session is a user-initiated selection: note activity so it buys the full
+        // idle grace before auto-follow can pull the selection away from the just-made session.
+        store.noteUserActivity()
         store.selectSession(session.id)
         focusActiveSession()
     }
@@ -99,6 +121,9 @@ final class AppActions {
         guard panel.runModal() == .OK, let url = panel.url,
               let session = store.addSession(toWorkspace: workspaceID, cwd: url.path)
         else { return }
+        // creating + selecting a session is a user-initiated selection: note activity so it buys the full
+        // idle grace before auto-follow can pull the selection away from the just-made session.
+        store.noteUserActivity()
         store.selectSession(session.id)
         focusActiveSession()
     }
@@ -227,17 +252,20 @@ final class AppActions {
     /// Step the selection to the previous/next session, or jump to the first/last, in the sidebar's
     /// flattened visual order (`navigateSession` owns the logic so the GUI, palette, and control
     /// channel can't drift). Each routes through `selectSession` (recency/badge/persist/workspace)
-    /// then moves first responder into the moved-to session's focused pane.
-    func selectNextSession() { store?.navigateSession(.next); focusActiveSession() }
-    func selectPreviousSession() { store?.navigateSession(.previous); focusActiveSession() }
-    func selectFirstSession() { store?.navigateSession(.first); focusActiveSession() }
-    func selectLastSession() { store?.navigateSession(.last); focusActiveSession() }
+    /// then moves first responder into the moved-to session's focused pane. Each also notes the manual
+    /// navigation as user activity so it buys the full idle grace before auto-follow can pull the
+    /// selection back (the control `session.go` drives `navigateSession` directly, so it stays silent).
+    func selectNextSession() { store?.noteUserActivity(); store?.navigateSession(.next); focusActiveSession() }
+    func selectPreviousSession() { store?.noteUserActivity(); store?.navigateSession(.previous); focusActiveSession() }
+    func selectFirstSession() { store?.noteUserActivity(); store?.navigateSession(.first); focusActiveSession() }
+    func selectLastSession() { store?.noteUserActivity(); store?.navigateSession(.last); focusActiveSession() }
 
     /// Step to the next/previous session needing attention (status `blocked` or `completed`), wrapping
     /// around and skipping idle/active sessions. Shares `navigateSession` with the GUI, palette, and the
-    /// `session.go next-attention|prev-attention` control command.
-    func selectNextAttentionSession() { store?.navigateSession(.nextAttention); focusActiveSession() }
-    func selectPreviousAttentionSession() { store?.navigateSession(.previousAttention); focusActiveSession() }
+    /// `session.go next-attention|prev-attention` control command. Notes user activity like the plain
+    /// session nav (a manual step to an attention session buys the idle grace too).
+    func selectNextAttentionSession() { store?.noteUserActivity(); store?.navigateSession(.nextAttention); focusActiveSession() }
+    func selectPreviousAttentionSession() { store?.noteUserActivity(); store?.navigateSession(.previousAttention); focusActiveSession() }
 
     /// Delete a workspace and all of its sessions. Confirms first when the workspace still has
     /// sessions (the delete ends their shells); an empty workspace deletes without a prompt.
@@ -591,6 +619,18 @@ final class AppActions {
 
     // MARK: - Focus
 
+    /// Bridge for `.agtermAutoFollowed`: an idle auto-follow has moved some window's selection to a blocked
+    /// session. Selection alone does NOT move first responder (the eager deck keeps the prior surface as
+    /// responder), so pull focus into the newly selected session — but ONLY when the firing window is key.
+    /// A non-key window keeps just the selection change and focuses normally when it next becomes key.
+    /// Session granularity — no split-pane logic. `focusActiveSession` targets the frontmost (= key) store,
+    /// which is the firing window here since we gate on its being key.
+    private func autoFollowed(_ sessionID: UUID?) {
+        guard let sessionID, let windowID = library.windowID(forSession: sessionID),
+              WindowRegistry.shared.isKeyWindow(windowID) else { return }
+        focusActiveSession()
+    }
+
     /// Move first responder back to the active session's topmost surface (used after the quick terminal
     /// or a palette/rename field closes). Targets `topmostSurface` (overlay > scratch > active pane) so a
     /// palette close re-focuses whatever is actually visible — the scratch or overlay if one is up, else
@@ -672,6 +712,10 @@ final class AppActions {
     /// Selects a session in its owning store and focuses the firing pane.
     private func revealSession(_ sessionID: UUID, pane: PaneRole, in store: AppStore) {
         guard let session = store.session(withID: sessionID) else { return }
+        // clicking a notification banner is a user-initiated selection: note activity on the SAME (owning)
+        // store it selects into — reveal can cross windows — so it buys the full idle grace before
+        // auto-follow can pull the selection away.
+        store.noteUserActivity()
         store.selectSession(session.id)
         let wantSplit = pane == .split && session.hasSplit
         session.splitFocused = wantSplit

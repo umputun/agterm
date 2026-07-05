@@ -65,6 +65,10 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
         field.setAccessibilityIdentifier("edit-field")
         field.window?.makeFirstResponder(field)
         editing = true
+        // pause auto-follow while the rename field owns first responder: an armed idle jump would move the
+        // outline selection off this row and yank focus into the followed terminal, silently committing the
+        // rename mid-edit. balanced by the resume in `restore` when editing ends.
+        store.suppressAutoFollow()
     }
 
     /// Intercepts Esc during an inline rename. The field is focused via `makeFirstResponder`
@@ -116,6 +120,8 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
     /// its accessibility identifier to the row identifier for its kind.
     private func restore(field: NSTextField, kind: SidebarNode.Kind?) {
         editing = false
+        // rename ended (commit or cancel) — lift the suppression `beginEditing` took so auto-follow resumes.
+        store.resumeAutoFollow()
         field.isEditable = false
         field.isBordered = false
         field.drawsBackground = false

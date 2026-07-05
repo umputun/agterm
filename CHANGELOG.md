@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.7.0 - 2026-07-04
+
+### New Features
+
+- auto-follow attention: after an idle timeout a window jumps to the oldest blocked session, opt-in per window #122 @umputun
+- pane-addressable session.type and the AGT_PANE keymap token #90 @fkirill
+- --pane scratch for session.text and session.type #117 @umputun
+- wrap session next/prev navigation at the ends #85 @vnazarenko
+
+### Improvements
+
+- toggle workspace expansion on a full-row click @umputun
+- launch the agterm.com website #118 @umputun
+- continue routing control commands through the host-free dispatcher @melonamin
+
+### Bug Fixes
+
+- cap the Ctrl-Tab MRU list at 10 sessions @umputun
+- use the title-case app name in the macOS menu bar #116 @umputun
+
 ## v0.6.1 - 2026-07-03
 
 ### Improvements

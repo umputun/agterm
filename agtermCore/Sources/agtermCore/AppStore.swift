@@ -93,6 +93,43 @@ public final class AppStore {
     /// The quiet window before a scheduled (selection/font) save writes to disk.
     private static let saveDebounceInterval: TimeInterval = 0.3
 
+    /// The idle timeout after which the window auto-jumps its selection to the oldest blocked session, or
+    /// nil when auto-follow is off (the default). Set by the Settings fan-out; read by `noteUserActivity`
+    /// (to arm the debouncer) and the control tree. `@ObservationIgnored`: read imperatively, no view reacts.
+    @ObservationIgnored var autoFollowTimeout: TimeInterval?
+
+    /// Whether auto-follow suppresses the jump while the current session is `active` (the opt-in "don't
+    /// auto-follow away from a running session" toggle). Default false. `@ObservationIgnored`.
+    @ObservationIgnored var autoFollowStayOnActive = false
+
+    /// The last time the user interacted with this window (a keystroke or a manual selection), stamped
+    /// unconditionally by `noteUserActivity` so the idle metric is independent of the feature being on.
+    /// nil until the first interaction. `@ObservationIgnored`: read imperatively (`idleMs`, the control
+    /// tree) and stamped at high frequency, so no view should react to it.
+    @ObservationIgnored var lastActivityAt: Date?
+
+    /// Coalesces user activity into a single deferred `autoFollowFire`: each `noteUserActivity` reschedules,
+    /// so the fire runs only once the user has been idle for `autoFollowTimeout`. `internal` (NOT private)
+    /// so `@testable` tests can drive its `flush()` seam.
+    @ObservationIgnored let autoFollowDebouncer = Debouncer()
+
+    /// Coalesces the deferred re-arms the auto-follow status observer schedules into one per runloop turn,
+    /// mirroring `DockBadgeController.scheduleRefresh`: a single agent-status flip can fire several live
+    /// observation trackers at once, so this collapses them to one re-arm (and one re-registration).
+    /// `internal` only so the `AppStore+AutoFollow` extension (a separate file) can reach it.
+    @ObservationIgnored var autoFollowRearmScheduled = false
+
+    /// Non-zero while a non-terminal editor or transient overlay in this window owns first responder — the
+    /// sidebar inline-rename field or an open command palette. `autoFollowFire` no-ops while this is
+    /// positive, so an armed idle jump can't yank the selection out from under an in-progress rename or
+    /// reshuffle a palette's action target. A COUNT (not a bool) so the several independent suppressors can
+    /// overlap safely: each brackets itself with `suppressAutoFollow`/`resumeAutoFollow`, and a suppressor
+    /// lifting while another still holds keeps the jump suppressed. The app owns the first-responder
+    /// knowledge; the store just gates on the count. `internal` so the `AppStore+AutoFollow` extension can
+    /// read it; mutated only through the two public methods so the app target (a separate module) can't
+    /// desync it. `@ObservationIgnored`: read imperatively at fire time, no view reacts.
+    @ObservationIgnored var autoFollowSuppressionCount = 0
+
     public init(workspaces: [Workspace] = [], selectedSessionID: UUID? = nil,
                 persistence: PersistenceStore = PersistenceStore()) {
         self.workspaces = workspaces
@@ -142,7 +179,7 @@ public final class AppStore {
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID, sessions: sessions)
         }
-        return ControlTree(workspaces: nodes)
+        return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs)
     }
 
     /// Creates a workspace and appends it. Clears any active focus so the new (empty)

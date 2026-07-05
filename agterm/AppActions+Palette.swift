@@ -163,6 +163,9 @@ extension AppActions {
         let workspaceName = store.workspace(forSession: id)?.name ?? ""
         let subtitle = "\(workspaceName) · \(session.subtitleDetail)"
         return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: subtitle, status: status) {
+            // picking a session from the ⌃P / attention palette is a user-initiated selection: note activity
+            // so it buys the full idle grace before auto-follow can pull the selection back.
+            store.noteUserActivity()
             store.selectSession(id)
         }
     }

@@ -28,6 +28,66 @@ extension ControlServer: ControlActions {
         collapseWorkspaces(window: window)
     }
 
+    func typeSession(_ target: String?, window: String?, options: ControlSessionTypeOptions) async -> ControlResponse {
+        // Resolve first (cross-window when no `args.window`), then realize-and-inject; the realize
+        // path is async (bounded poll), so this can't go through the synchronous `resolveSession`
+        // helper. The not-found / ambiguous error strings must stay in sync with `resolve(...)`.
+        switch resolver.resolveSessionTarget(target, window: window) {
+        case .failure(let response):
+            return response
+        case .success(let (store, id)):
+            return await injectText(options.text, into: id, store: store, select: options.select,
+                                    pane: options.pane)
+        }
+    }
+
+    func copySessionSelection(_ target: String?, window: String?) -> ControlResponse {
+        copySelection(target, window: window)
+    }
+
+    func openSessionOverlay(_ target: String?, window: String?,
+                            options: ControlSessionOverlayOpenOptions) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            guard store.openOverlay(id, command: options.command, cwd: options.cwd,
+                                    wait: options.wait, sizePercent: options.sizePercent,
+                                    backgroundColor: options.backgroundColor) else {
+                return ControlResponse(ok: false, error: "overlay already open")
+            }
+            // A floating overlay (sizePercent set) renders only for the active session, so on a non-active
+            // target its surface never mounts and its program never runs -- and `--block` would poll
+            // forever. Select the target so it mounts and runs (the full overlay mounts in the eager deck
+            // regardless, so this only matters for floating).
+            if options.sizePercent != nil {
+                store.selectSession(id)
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    func closeSessionOverlay(_ target: String?, window: String?) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            guard store.closeOverlay(id) else {
+                return ControlResponse(ok: false, error: "no overlay")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    func sessionOverlayResult(_ target: String?, window: String?) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            guard let session = store.session(withID: id) else {
+                return ControlResponse(ok: false, error: "no such session")
+            }
+            if session.overlayActive {
+                return ControlResponse(ok: false, error: OverlayResultError.stillRunning)
+            }
+            guard let code = session.overlayExitCode else {
+                return ControlResponse(ok: false, error: OverlayResultError.noResult)
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, exitCode: code))
+        }
+    }
+
     /// The destination workspace is addressed one of two mutually-exclusive ways: `workspace`
     /// (id / unique prefix / `active`, the default) or `workspaceName` (the sidebar label),
     /// the latter optionally with `createWorkspace` to add it when absent. create needs a name —
@@ -55,6 +115,78 @@ extension ControlServer: ControlActions {
                            active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
                 makeSessionResponse(in: store, workspaceID: workspaceID, options: options)
             }
+        }
+    }
+
+    func selectSession(_ target: String?, window: String?) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            store.selectSession(id)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    func goSession(window: String?, direction: SessionNavigation) -> ControlResponse {
+        // relative navigation acts on the store's current selection, so no session target -- just
+        // the frontmost-or-`--window` store.
+        resolver.resolvePlacementStore(window) { store in
+            store.navigateSession(direction)
+            guard let id = store.selectedSessionID else {
+                return ControlResponse(ok: false, error: "no session to navigate")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    func closeSession(_ target: String?, window: String?) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            store.closeSession(id)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    func renameSession(_ target: String?, window: String?, name: String) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            store.renameSession(id, to: name)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    func createWorkspace(window: String?, name: String?) -> ControlResponse {
+        // placement target: the window's frontmost store (or `args.window`'s). name defaults to
+        // the auto-generated workspace name when none is given.
+        resolver.resolvePlacementStore(window) { store in
+            let name = trimmed(name) ?? store.defaultWorkspaceName
+            let workspace = store.addWorkspace(name: name)
+            return ControlResponse(ok: true, result: ControlResult(id: workspace.id.uuidString))
+        }
+    }
+
+    func selectWorkspace(_ target: String?, window: String?) -> ControlResponse {
+        // selecting a workspace selects its first session (workspace rows are not selectable on
+        // their own); an empty workspace just clears nothing and reports the workspace id.
+        resolver.resolveWorkspace(target, window: window) { store, id in
+            if let first = store.workspaces.first(where: { $0.id == id })?.sessions.first {
+                store.selectSession(first.id)
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse {
+        resolver.resolveWorkspace(target, window: window) { store, id in
+            store.renameWorkspace(id, to: name)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse {
+        // honors keep-at-least-one; returns an error rather than the GUI confirm alert.
+        resolver.resolveWorkspace(target, window: window) { store, id in
+            guard store.canRemoveWorkspace else {
+                return ControlResponse(ok: false, error: "cannot delete last workspace")
+            }
+            store.removeWorkspace(id)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
 
@@ -165,6 +297,79 @@ extension ControlServer: ControlActions {
             NotificationCenter.default.post(name: .agtermApplySplitRatio, object: session)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString, ratio: applied))
         }
+    }
+
+    // MARK: - Keymap
+
+    /// Re-read and re-parse `keymap.conf`, returning the count of parse diagnostics. The SAME
+    /// `reloadKeymap()` path the GUI's File ▸ Reload Keymap menu/palette item drives, so the menu/palette
+    /// and `keymap.reload` never diverge — control-native here only in the count it reports back.
+    func reloadKeymap() -> ControlResponse {
+        settingsModel.reloadKeymap()
+        return ControlResponse(ok: true, result: ControlResult(count: settingsModel.keymapDiagnostics.count))
+    }
+
+    // MARK: - Config
+
+    /// Re-read and apply the ghostty config, returning the config-diagnostic count (0 = clean), counted
+    /// across ALL config sources (bundled defaults, the global `~/.config/ghostty/config`, the agterm-scoped
+    /// `ghostty.conf`, and the UI settings conf) — libghostty diagnostics carry no source-file attribution.
+    /// The SAME `AppActions.reloadGhosttyConfig()` path the GUI's File ▸ Reload Config menu/palette item
+    /// drives (which posts the warning banner on diagnostics), so the GUI and `config.reload` never diverge
+    /// — control-native here only in the count it reports back. The count is the value the reload actually
+    /// produced (threaded back from the reload), not a separate re-read. App-global (one settings model +
+    /// one GhosttyApp), so no `--window` selector, like `keymap.reload`.
+    func reloadGhosttyConfig() -> ControlResponse {
+        ControlResponse(ok: true, result: ControlResult(count: actions.reloadGhosttyConfig()))
+    }
+
+    // MARK: - Theme
+
+    /// Set + persist a theme PER SLOT — the control half of the Settings pickers / the `.themes` palette
+    /// commit (no live preview over the socket). `args.name` (alias `args.light`; both is an error) sets the
+    /// light/single slot, keeping any dark slot; `args.dark` sets the dark slot and turns macOS-appearance
+    /// syncing ON (the stored value becomes ghostty's dual `light:,dark:`, light side seeded), and the
+    /// reserved `dark == "none"` clears it (syncing off). A nil/empty name selects ghostty's built-in colors
+    /// ("default ghostty"), NOT the seeded `agterm` app default; any other name must be a bundled theme, else
+    /// an error (a typo silently doing nothing is worse than a fail). Echoes the full post-change state
+    /// (`theme`/`sync`/`light`/`dark`). App-global: one `SettingsModel`, so no `--window` selector.
+    func setTheme(args: ControlArgs?) -> ControlResponse {
+        let name = ThemeCatalog.resolvedName(args?.name)
+        let light = ThemeCatalog.resolvedName(args?.light)
+        let dark = ThemeCatalog.resolvedName(args?.dark)
+        if name != nil && light != nil {
+            return ControlResponse(ok: false, error: "theme.set takes either a name or --light, not both")
+        }
+        let lightSlot = name ?? light
+        let clearDark = dark == "none"
+        let catalog = ThemeCatalog(names: actions.availableThemes())
+        for theme in [lightSlot, clearDark ? nil : dark].compactMap({ $0 })
+        where !catalog.contains(name: theme) {
+            return ControlResponse(ok: false, error: "unknown theme: \(theme)")
+        }
+        if clearDark {
+            actions.setDarkTheme(nil)
+            if lightSlot != nil { actions.setLightTheme(lightSlot) }
+        } else if let dark {
+            if let lightSlot {
+                actions.setSystemThemes(light: lightSlot, dark: dark)
+            } else {
+                actions.setDarkTheme(dark)
+            }
+        } else {
+            actions.setLightTheme(lightSlot) // nil = bare `theme set`: reset to ghostty built-in
+        }
+        return ControlResponse(ok: true, result: ControlResult(
+            theme: actions.currentTheme, sync: actions.followsSystemAppearance,
+            light: actions.currentLightTheme, dark: actions.currentDarkTheme))
+    }
+
+    func listThemes() -> ControlResponse {
+        ControlResponse(ok: true, result: ControlResult(theme: actions.currentTheme,
+                                                        themes: actions.availableThemes(),
+                                                        sync: actions.followsSystemAppearance,
+                                                        light: actions.currentLightTheme,
+                                                        dark: actions.currentDarkTheme))
     }
 
     /// Set the target session's agent-status indicator (control-native: no GUI/menu equivalent, like
@@ -284,10 +489,7 @@ extension ControlServer: ControlActions {
     /// Post a desktop notification attributed to a session (default: the active session of the
     /// frontmost window, via `resolveSession`). `title` defaults to the session name; `body` is
     /// required. Errors when no open window owns the resolved session.
-    func sendNotification(_ target: String?, window: String?, title: String?, body: String?) -> ControlResponse {
-        guard let body, !body.isEmpty else {
-            return ControlResponse(ok: false, error: "notify requires a body")
-        }
+    func sendNotification(_ target: String?, window: String?, title: String?, body: String) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")

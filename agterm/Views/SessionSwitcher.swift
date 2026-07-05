@@ -26,6 +26,9 @@ final class SessionSwitcher {
 
     private static let tabKey: UInt16 = 48
     private static let escapeKey: UInt16 = 53
+    /// Cap on rows the Ctrl-Tab switcher shows: it's a quick most-recent jump, not a full session list
+    /// (the ⌃P fuzzy palette covers everything). The recency STORE keeps its full 100-item history.
+    private static let maxCandidates = 10
 
     init(library: WindowLibrary) { self.library = library }
 
@@ -60,14 +63,14 @@ final class SessionSwitcher {
         if isActive, !event.modifierFlags.contains(.control) { commit() }
     }
 
-    /// Snapshot the MRU order (live sessions only) and pre-select the previous session. No-op when
-    /// there's nothing to switch to (fewer than two sessions). The candidate set is scoped to the
-    /// VISIBLE/FILTERED sessions (`navigableSessions` — the flagged set in flagged mode, the focused
-    /// workspace's sessions when focused, else all), so clearing the flag/focus restores the full MRU.
+    /// Snapshot the MRU order (live sessions only, capped at `maxCandidates`) and pre-select the previous
+    /// session. No-op when there's nothing to switch to (fewer than two sessions). The candidate set is
+    /// scoped to the VISIBLE/FILTERED sessions (`navigableSessions` — the flagged set in flagged mode, the
+    /// focused workspace's sessions when focused, else all), so clearing the flag/focus restores the full MRU.
     private func begin() {
         guard let store else { return }
         let valid = Set(store.navigableSessions.map(\.id))
-        let order = store.sessionRecency.top(valid.count, in: valid)
+        let order = store.sessionRecency.top(Self.maxCandidates, in: valid)
         guard order.count > 1 else { return }
         candidates = order
         index = 1
@@ -83,6 +86,9 @@ final class SessionSwitcher {
     private func commit() {
         defer { reset() }
         guard candidates.indices.contains(index), let store else { return }
+        // a Ctrl-Tab commit is a user-initiated selection: note activity so it buys the full idle grace
+        // before auto-follow can pull the selection back.
+        store.noteUserActivity()
         store.selectSession(candidates[index])
     }
 

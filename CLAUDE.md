@@ -181,35 +181,18 @@ The app must build, `swift test` must stay green, and `make lint` must pass afte
   especially before claiming infra facts (CI presence, config files).
   The repo root vs the `agtermCore` SwiftPM subpackage makes root-vs-subdir confusion easy;
   verify the directory, don't trust a negative relative result.
-- **CI / release (`.github/workflows/`).**
-  `ci.yml` runs on push/PR to `master`, gated by a `dorny/paths-filter` (`**/*.swift`,
-  `agtermCore/**`, `agterm/**`, `project.yml`, `scripts/**`, `.swiftlint.yml`, `ci.yml`): a `test` job
-  (`swift test` in `agtermCore`), a `lint` job (`brew install swiftlint` then `swiftlint lint --strict`
-  — no build, it only parses sources), and a `build` job (`brew install xcodegen` then `scripts/build.sh`,
-  Release, with `GhosttyKit.xcframework` + ghostty/terminfo resources restored from an `actions/cache`
-  keyed on `scripts/setup.sh`), all on `macos-26`, concurrency cancel-in-progress.
-  **CI does NOT run the XCUITests** — it builds the app but never test-runs the app target;
-  only the host-free `swift test` runs in CI.
-  The `lint` job is `--strict`, so any swiftlint warning fails the build (see the `make lint` note above).
-  There is NO `release.yml` — releases are cut LOCALLY, not by CI.
-  `scripts/release.sh <version> --publish` runs on the maintainer's Mac, the only place the
-  `Developer ID Application: Brave Elk LLC` cert and the `agterm-notary` keychain profile live.
-  It builds Release, then signs + notarizes + staples the app AND the DMG (the DMG container is
-  codesigned before notarizing — `hdiutil`'s image is otherwise unsigned and fails the `spctl`
-  primary-signature check), creates the tag + GitHub release, uploads the DMG, and pushes the Homebrew
-  cask to `umputun/homebrew-apps` with the maintainer's own `gh` auth (no `HOMEBREW_TAP_PAT` needed).
-  A no-`--publish` run is a full dry-run (build → sign → notarize → staple → `spctl`) that stops before
-  uploading.
+- **CI and release mechanics live in path-scoped rules** — `.claude/rules/ci.md` (scoped to
+  `.github/workflows/**`) for the `ci.yml` job graph (`test` → `coverage` uploading to Coveralls on Linux,
+  the `SF:`-path rewrite, `lint`, `build`), and `.claude/rules/release.md` (scoped to `scripts/release.sh`)
+  for the LOCAL, maintainer-only sign/notarize/staple + Homebrew-cask flow (there is NO `release.yml` —
+  release is NOT CI).
+  Read the matching rule before touching CI or the release script.
+  One guardrail stays in this root file because it binds during FEATURE work, when no CI/release file is
+  open to trigger those rules:
   **`CHANGELOG.md` is RELEASE-ONLY — never touch it in a feature PR.**
   It is written only at release time (the `docs: update changelog for vX.Y.Z` commit / the release flow).
   A feature's own doc updates go to `README.md`, the bundled `agterm/Resources/agent-skill/`,
   and the relevant `.claude/rules/*.md` note — not the changelog.
-  **At release time, run the new `CHANGELOG.md` version section through the `draft-approval` skill BEFORE
-  writing/committing it** — write the section to a temp file, open it in `draft-review.sh` (revdiff),
-  address annotations, then get an explicit in-chat go-ahead.
-  Do NOT just paste the section inline and ask — `scripts/release.sh` publishes that exact section as the
-  GitHub release body (release.sh:70-85), so it is outward-facing text and gets the full draft-approval/revdiff
-  flow, same as a `gh`/`glab` comment.
 
 ## GhosttyKit.xcframework
 
@@ -247,6 +230,21 @@ The app must build, `swift test` must stay green, and `make lint` must pass afte
   Use plain `Double`-backed structs in `agtermCore` (see `WindowGeometry.Size`/`Point`/`Rect`) and convert
   to/from CG at the app-target call site.
   Treat CoreGraphics geometry types as if they were on the banned list above.
+- **Hoist host-free logic DOWN into `agtermCore`; keep the app target a thin side-effect adapter.**
+  The sustained refactor direction (the `refactor`/`hoist` PR series, #78 onward) moves command validation,
+  argument parsing, dispatch routing, response shaping, and static catalogs OUT of the app target INTO
+  `agtermCore`, so `swift test` exercises them with no app host.
+  For the control channel this is the `ControlDispatcher` + `ControlActions` seam
+  (`agtermCore/Sources/agtermCore/ControlDispatcher.swift`): `dispatch(_:)` owns parsing + validation +
+  response shape, and the app-target `ControlServer` conforms to `ControlActions` supplying ONLY target
+  resolution and AppKit/process side effects.
+  Commands are migrated group-by-group; a command the dispatcher doesn't yet own returns `nil` and falls
+  through to `ControlServer`'s existing switch.
+  The same "logic host-free, side effects app-side" split already governs the installers
+  (`CLIInstall`/`AgentHooksInstall`/`SkillInstall`), the status sound (`AgentStatus.effectiveSound`), and
+  the watermark (`WatermarkConfig`).
+  When adding a feature, ask which parts are host-free and put those in `agtermCore` by default — see the
+  dispatcher-first rule in `.claude/rules/control-api.md` for the control-command case.
 
 ## C-callback isolation
 
@@ -287,6 +285,31 @@ always in context:
   they are install OUTPUTS that Help ▸ Install Agent Skill (`SkillInstaller`) regenerates from the bundle,
   so a manual edit there is wrong and must never even be offered (`~/.claude/skills/agterm/` is snapshotted
   in the dot-files repo, but that does not make it a source).
+- **The website (`site/`) is the fifth keep-in-sync surface.**
+  `site/docs.html` is a hand-authored mirror of `README.md` — when you add features, flags,
+  keybindings, or modes, update both.
+  `site/index.html` (the features grid and install copy) and the `softwareVersion` in its
+  `SoftwareApplication` JSON-LD must reflect major features and the latest release.
+  See the `## Website` section below for the deploy model.
+
+## Website
+
+`agterm.com` is a hand-authored static site in `site/`, deployed via Cloudflare Pages with no build step
+(the revdiff pattern).
+Cloudflare's Git integration auto-deploys `site/` on every push to `master`; there is no wrangler config
+and no deploy workflow in the repo.
+All Cloudflare wiring — the Pages project, the `agterm.com` custom domain, and the output directory (`site`)
+— lives in the Cloudflare dashboard, not in git, so it is not reproducible from the repo.
+Cloudflare Pages strips `.html` and 308-redirects `/docs.html` to `/docs`, so every canonical link,
+`og:url`, and `sitemap.xml` entry uses the extensionless `https://agterm.com/docs`.
+
+The site is lean and self-contained — nothing is embedded.
+`site/style.css` holds the reset, keyframes, `@font-face`, and the hover classes;
+the two pages keep the design's inline styles.
+Assets are self-hosted under `site/assets/`: latin `woff2` fonts in `site/assets/fonts/`,
+screenshots as `webp`, plus a generated 1200×630 `agterm-og.png` social card and favicons.
+The pages were converted from a design-tool bundle export whose source zip lives on the maintainer's
+Desktop, not in the repo, so a visual redesign means re-exporting the design and re-running that conversion.
 
 ## Subsystem notes (path-scoped rules)
 
@@ -322,7 +345,7 @@ This only changes raw-text line breaks — the rendered markdown is identical �
   Triggers on `ControlServer.swift`, `ControlProtocol`/`ControlResolve`,
   `agtermctlKit`/`agtermctl`, the three installers + their host-free `*Install` logic,
   `Resources/agent-skill/`, and the control UI tests.
-- `settings.md` — `AppSettings`/`SettingsModel`, the 3-tab Settings scene,
+- `settings.md` — `AppSettings`/`SettingsModel`, the 5-tab Settings scene,
   ghostty-config emission, window translucency.
   Triggers on `SettingsModel.swift`, `SettingsView`/`SettingsCatalog`/`WindowAppearance`/`NSColor+AgtermHex`,
   `AppSettings`/`SettingsStore`, and the settings UI tests.
@@ -345,3 +368,10 @@ This only changes raw-text line breaks — the rendered markdown is identical �
   Triggers on the `Ghostty/` surfaces, `ContentView.swift`, `TerminalView`/`TerminalSearchBar`.
 - `app-icon.md` — the adaptive Icon Composer `.icon` build rules.
   Triggers on `AppIcon.icon/`, `project.yml`.
+- `ci.md` — the `ci.yml` job graph: the `test`/`coverage`/`lint`/`build` split,
+  coverage → Coveralls-on-Linux with the `SF:`-path rewrite, the paths-filter, and the badge scope.
+  Triggers on `.github/workflows/**`.
+- `release.md` — the LOCAL, maintainer-only `scripts/release.sh` flow:
+  sign/notarize/staple the app + DMG, tag + GitHub release, Homebrew-cask push, the release-time
+  changelog draft-approval.
+  Triggers on `scripts/release.sh`.

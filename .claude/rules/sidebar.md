@@ -55,6 +55,19 @@ paths:
 - Add affordances live in a bottom bar in `WindowContentView`: a workspace button and a session menu (New Session
   / Open Directory…).
   The two session actions are also on each workspace row's right-click menu.
+- **A single click anywhere on a workspace ROW toggles its expansion** (not just the disclosure triangle),
+  so the whole row is the hit target.
+  Wired via the outline's `action` (`Coordinator.handleSingleClick`) — which fires on a genuine click,
+  NEVER during a drag, so workspace drag-reorder is untouched — and guarded against the disclosure-triangle
+  region (`frameOfOutlineCell`) so a triangle click doesn't double-toggle.
+  The toggle is DEFERRED by `NSEvent.doubleClickInterval` and CANCELED by `handleDoubleClick`,
+  so a double-click (rename) doesn't flip the workspace open/closed on its way into edit mode
+  (instant-toggle was tried and rejected: AppKit commits the first click of a double before it knows a
+  second is coming, so instant forces a visible toggle-then-revert flicker on rename).
+  This is pure click-routing over the existing per-workspace `expandItem`/`collapseItem` (an exempt case
+  under the control keep-in-sync rule), so it adds NO control command — the ALL-workspaces
+  `sidebar.expand`/`sidebar.collapse` stay the control surface.
+  Covered by `SidebarUITests.testClickWorkspaceRowTogglesExpansion`.
 - Accessibility identifiers `session-row`, `workspace-row`, `edit-field`,
   and `add-session` back the XCUITests.
   Note the rename field surfaces as a `TextField` for sessions and a `StaticText` for workspaces,

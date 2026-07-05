@@ -8,10 +8,39 @@ import AppKit
 extension WorkspaceSidebar.Coordinator {
     // MARK: - Context menu
 
+    /// Single click on a workspace row toggles its expansion, so the whole row is a hit target for
+    /// expand/collapse (not just the disclosure triangle). The toggle is DEFERRED by the double-click
+    /// interval: a double-click (`handleDoubleClick`) cancels it, so renaming a workspace no longer flips
+    /// it open/closed on the way into edit mode. `action` fires on a genuine click, never during a drag,
+    /// so workspace drag-reorder is unaffected.
+    @objc func handleSingleClick(_ sender: NSOutlineView) {
+        let row = sender.clickedRow
+        guard row >= 0, let node = sender.item(atRow: row) as? SidebarNode, node.kind == .workspace else { return }
+        // clicking the disclosure triangle already toggles natively — ignore that region so we don't double-toggle.
+        if let event = NSApp.currentEvent {
+            let point = sender.convert(event.locationInWindow, from: nil)
+            if point.x < sender.frameOfOutlineCell(atRow: row).maxX { return }
+        }
+        pendingRowToggle?.cancel()
+        let toggle = DispatchWorkItem { [weak self, weak node] in
+            guard let self, let node, let outline = self.outlineView else { return }
+            self.toggleExpansion(of: node, in: outline)
+        }
+        pendingRowToggle = toggle
+        DispatchQueue.main.asyncAfter(deadline: .now() + NSEvent.doubleClickInterval, execute: toggle)
+    }
+
     @objc func handleDoubleClick(_ sender: NSOutlineView) {
+        // a double-click is a rename, not an expand/collapse: cancel the pending single-click toggle.
+        pendingRowToggle?.cancel()
+        pendingRowToggle = nil
         let row = sender.clickedRow
         guard row >= 0, let node = sender.item(atRow: row) as? SidebarNode else { return }
         renameController.beginEditing(node: node)
+    }
+
+    private func toggleExpansion(of node: SidebarNode, in outline: NSOutlineView) {
+        if outline.isItemExpanded(node) { outline.collapseItem(node) } else { outline.expandItem(node) }
     }
 
     /// Builds the per-row context menu. Resolves the clicked row lazily so the
@@ -157,6 +186,9 @@ extension WorkspaceSidebar.Coordinator {
     /// Adds a session to `workspaceID` at `cwd` and selects it.
     private func addSession(toWorkspace workspaceID: UUID, cwd: String) {
         if let session = store.addSession(toWorkspace: workspaceID, cwd: cwd) {
+            // creating + selecting from the sidebar context menu is a user-initiated selection on THIS
+            // window's store: note activity so it buys the full idle grace before auto-follow pulls away.
+            store.noteUserActivity()
             store.selectSession(session.id)
             actions.focusActiveSession()
         }

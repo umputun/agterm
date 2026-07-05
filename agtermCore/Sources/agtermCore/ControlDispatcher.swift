@@ -7,6 +7,14 @@ import Foundation
 public protocol ControlActions {
     func controlTree(window: String?) -> ControlResponse
     func createSession(_ options: ControlSessionCreateOptions) -> ControlResponse
+    func selectSession(_ target: String?, window: String?) -> ControlResponse
+    func goSession(window: String?, direction: SessionNavigation) -> ControlResponse
+    func closeSession(_ target: String?, window: String?) -> ControlResponse
+    func renameSession(_ target: String?, window: String?, name: String) -> ControlResponse
+    func createWorkspace(window: String?, name: String?) -> ControlResponse
+    func selectWorkspace(_ target: String?, window: String?) -> ControlResponse
+    func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse
+    func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse
     func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse
     func moveWorkspace(_ target: String?, window: String?, direction: ReorderDirection) -> ControlResponse
     func focusWorkspace(_ target: String?, window: String?, mode: String?) -> ControlResponse
@@ -16,10 +24,50 @@ public protocol ControlActions {
     func scratchSession(_ target: String?, window: String?, mode: String?, command: String?) -> ControlResponse
     func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse
     func resizeSplit(_ target: String?, window: String?, resize: ControlSplitResize) -> ControlResponse
+    func font(_ target: String?, window: String?, action: String) -> ControlResponse
+    func reloadKeymap() -> ControlResponse
+    func reloadGhosttyConfig() -> ControlResponse
+    func sendNotification(_ target: String?, window: String?, title: String?, body: String) -> ControlResponse
+    func setTheme(args: ControlArgs?) -> ControlResponse
+    func listThemes() -> ControlResponse
     func setSidebarVisibility(_ mode: ControlToggleMode) -> ControlResponse
     func setSidebarViewMode(_ mode: ControlSidebarViewMode) -> ControlResponse
     func expandSidebar(window: String?) -> ControlResponse
     func collapseSidebar(window: String?) -> ControlResponse
+    func typeSession(_ target: String?, window: String?, options: ControlSessionTypeOptions) async -> ControlResponse
+    func copySessionSelection(_ target: String?, window: String?) -> ControlResponse
+    func openSessionOverlay(_ target: String?, window: String?,
+                            options: ControlSessionOverlayOpenOptions) -> ControlResponse
+    func closeSessionOverlay(_ target: String?, window: String?) -> ControlResponse
+    func sessionOverlayResult(_ target: String?, window: String?) -> ControlResponse
+}
+
+public struct ControlSessionTypeOptions: Equatable, Sendable {
+    public let text: String
+    public let select: Bool
+    public let pane: String?
+
+    public init(text: String, select: Bool, pane: String?) {
+        self.text = text
+        self.select = select
+        self.pane = pane
+    }
+}
+
+public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
+    public let command: String
+    public let cwd: String?
+    public let wait: Bool
+    public let sizePercent: Int?
+    public let backgroundColor: String?
+
+    public init(command: String, cwd: String?, wait: Bool, sizePercent: Int?, backgroundColor: String?) {
+        self.command = command
+        self.cwd = cwd
+        self.wait = wait
+        self.sizePercent = sizePercent
+        self.backgroundColor = backgroundColor
+    }
 }
 
 /// Routes the command groups that have been hoisted from the app control switch. Commands outside this
@@ -32,7 +80,7 @@ public struct ControlDispatcher {
         self.actions = actions
     }
 
-    public func dispatch(_ request: ControlRequest) -> ControlResponse? {
+    public func dispatch(_ request: ControlRequest) async -> ControlResponse? {
         switch request.cmd {
         case .tree:
             return actions.controlTree(window: request.args?.window)
@@ -53,6 +101,33 @@ public struct ControlDispatcher {
                 command: args?.command,
                 name: args?.name
             ))
+        case .sessionSelect:
+            return actions.selectSession(request.target, window: request.args?.window)
+        case .sessionGo:
+            // unknown/missing `to` is a structured error.
+            guard let dir = (request.args?.to).flatMap(SessionNavigation.init(wire:)) else {
+                return ControlResponse(ok: false, error: "session.go requires --to next|prev|first|last|next-attention|prev-attention")
+            }
+            return actions.goSession(window: request.args?.window, direction: dir)
+        case .sessionClose:
+            return actions.closeSession(request.target, window: request.args?.window)
+        case .sessionRename:
+            guard let name = request.args?.name else {
+                return ControlResponse(ok: false, error: "session.rename requires a name")
+            }
+            return actions.renameSession(request.target, window: request.args?.window, name: name)
+        case .workspaceNew:
+            return actions.createWorkspace(window: request.args?.window, name: request.args?.name)
+        case .workspaceSelect:
+            return actions.selectWorkspace(request.target, window: request.args?.window)
+        case .workspaceRename:
+            guard let name = request.args?.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !name.isEmpty else {
+                return ControlResponse(ok: false, error: "workspace.rename requires a name")
+            }
+            return actions.renameWorkspace(request.target, window: request.args?.window, name: name)
+        case .workspaceDelete:
+            return actions.deleteWorkspace(request.target, window: request.args?.window)
         case .sessionMove:
             if request.args?.to != nil && request.args?.workspace != nil {
                 return ControlResponse(ok: false, error: "session.move takes either --to or a workspace, not both")
@@ -105,6 +180,26 @@ public struct ControlDispatcher {
             case (nil, .some(let delta)):
                 return actions.resizeSplit(request.target, window: request.args?.window, resize: .delta(delta))
             }
+        case .fontInc:
+            return actions.font(request.target, window: request.args?.window, action: "increase_font_size:1")
+        case .fontDec:
+            return actions.font(request.target, window: request.args?.window, action: "decrease_font_size:1")
+        case .fontReset:
+            return actions.font(request.target, window: request.args?.window, action: "reset_font_size")
+        case .keymapReload:
+            return actions.reloadKeymap()
+        case .configReload:
+            return actions.reloadGhosttyConfig()
+        case .notify:
+            guard let body = request.args?.body, !body.isEmpty else {
+                return ControlResponse(ok: false, error: "notify requires a body")
+            }
+            return actions.sendNotification(request.target, window: request.args?.window,
+                                            title: request.args?.title, body: body)
+        case .themeSet:
+            return actions.setTheme(args: request.args)
+        case .themeList:
+            return actions.listThemes()
         case .sidebar:
             guard let mode = ControlToggleMode.parse(request.args?.mode, on: "show", off: "hide") else {
                 return ControlResponse(ok: false, error: "invalid sidebar mode: \(request.args?.mode ?? "toggle")")
@@ -119,6 +214,37 @@ public struct ControlDispatcher {
             return actions.expandSidebar(window: request.args?.window)
         case .sidebarCollapse:
             return actions.collapseSidebar(window: request.args?.window)
+        case .sessionType:
+            guard let text = request.args?.text else {
+                return ControlResponse(ok: false, error: "session.type requires text")
+            }
+            return await actions.typeSession(request.target, window: request.args?.window,
+                                             options: ControlSessionTypeOptions(
+                                                text: text,
+                                                select: request.args?.select ?? false,
+                                                pane: request.args?.pane
+                                             ))
+        case .sessionCopy:
+            return actions.copySessionSelection(request.target, window: request.args?.window)
+        case .sessionOverlayOpen:
+            guard let command = request.args?.command, !command.isEmpty else {
+                return ControlResponse(ok: false, error: "session.overlay.open requires a command")
+            }
+            if let color = request.args?.color, !WatermarkConfig.isValidColorHex(color) {
+                return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
+            }
+            return actions.openSessionOverlay(request.target, window: request.args?.window,
+                                              options: ControlSessionOverlayOpenOptions(
+                                                command: command,
+                                                cwd: request.args?.cwd,
+                                                wait: request.args?.wait ?? false,
+                                                sizePercent: request.args?.sizePercent,
+                                                backgroundColor: request.args?.color
+                                              ))
+        case .sessionOverlayClose:
+            return actions.closeSessionOverlay(request.target, window: request.args?.window)
+        case .sessionOverlayResult:
+            return actions.sessionOverlayResult(request.target, window: request.args?.window)
         default:
             return nil
         }
