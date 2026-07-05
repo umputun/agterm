@@ -30,9 +30,11 @@ final class SystemAppearanceObserver {
         guard observation == nil else { return }
         observation = NSApplication.shared.observe(\.effectiveAppearance, options: [.new, .initial]) { [weak self] _, change in
             // Resolve the Bool in the non-isolated KVO closure so the non-Sendable NSAppearance never
-            // crosses the main-actor hop. The change carries the SETTLED value — never re-read here.
+            // crosses the hop. The change carries the SETTLED value — never re-read here. KVO's handler is
+            // @Sendable (no main-thread guarantee), so HOP to main rather than assert isolation — matches
+            // the GhosttyCallbacks convention (`DispatchQueue.main.async`, never `assumeIsolated`).
             let isDark = change.newValue?.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            MainActor.assumeIsolated { self?.post(isDark: isDark) }
+            DispatchQueue.main.async { self?.post(isDark: isDark) }
         }
     }
 
