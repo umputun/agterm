@@ -346,31 +346,11 @@ final class ControlServer {
                 .sessionFocus, .sessionResize, .sessionStatus, .sessionFlag, .notify,
                 .fontInc, .fontDec, .fontReset, .keymapReload, .configReload, .themeSet, .themeList,
                 .sidebar, .sidebarMode, .sidebarExpand, .sidebarCollapse, .sessionType, .sessionCopy,
-                .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResult, .sessionBackground,
-                .sessionText, .windowRename, .windowResize, .windowMove, .windowZoom, .restoreClear:
+                .sessionSearch, .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResult,
+                .sessionBackground, .sessionText, .quick, .windowNew, .windowList, .windowSelect,
+                .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
+                .restoreClear:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
-        case .sessionSearch:
-            // resolve first (cross-window when no `args.window`), then select + realize the surface; the
-            // realize path is async (bounded poll), so this can't go through the synchronous
-            // `resolveSession` helper. error strings stay in sync with `resolve(...)`.
-            switch resolver.resolveSessionTarget(request.target, window: request.args?.window) {
-            case .failure(let response):
-                return response
-            case .success(let (store, id)):
-                return await searchSession(id, store: store, text: request.args?.text, to: request.args?.to)
-            }
-        case .quick:
-            return setQuickTerminal(mode: request.args?.mode)
-        case .windowNew:
-            return windowNew(name: request.args?.name)
-        case .windowList:
-            return ControlResponse(ok: true, result: ControlResult(windows: buildWindowList()))
-        case .windowSelect:
-            return await windowSelect(request.target)
-        case .windowClose:
-            return await windowClose(request.target)
-        case .windowDelete:
-            return windowDelete(request.target)
         }
     }
 

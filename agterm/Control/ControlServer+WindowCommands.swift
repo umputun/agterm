@@ -20,6 +20,10 @@ extension ControlServer {
         library.controlWindowNodes()
     }
 
+    func windowList() -> ControlResponse {
+        ControlResponse(ok: true, result: ControlResult(windows: buildWindowList()))
+    }
+
     /// Resolve a window id and surface it: raise an already-open window, or open a closed one (the
     /// action hub's opener claims its id + spawns the window). A closed window's store loads only when
     /// its SwiftUI window appears, so this bounded-polls for it to open before replying — a script can
