@@ -409,12 +409,13 @@ final class ControlServer {
     /// Creates a session in `workspaceID` of `store` with the `session.new` args (cwd default $HOME,
     /// optional command/name), focuses it when it lands in the frontmost window (so a keymap `session new`
     /// opens focused like the GUI New Session; a background `--window` target keeps focus), and returns the
-    /// new id. Shared by the id- and name-addressed paths of the `.sessionNew` arm.
+    /// new id. Shared by the id- and name-addressed paths of the `.sessionNew` arm. `at` is the anchor-relative
+    /// insertion slot for `--after`/`--before` (clamped in `AppStore`); nil appends.
     func makeSessionResponse(in store: AppStore, workspaceID: UUID,
-                             options: ControlSessionCreateOptions) -> ControlResponse {
+                             options: ControlSessionCreateOptions, at index: Int? = nil) -> ControlResponse {
         let cwd = options.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path
         guard let session = store.addSession(toWorkspace: workspaceID, cwd: cwd,
-                                             command: options.command, name: options.name) else {
+                                             command: options.command, name: options.name, at: index) else {
             return ControlResponse(ok: false, error: "could not create session")
         }
         if store === library.activeStore { actions.focusActiveSession() }

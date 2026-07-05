@@ -194,7 +194,7 @@ host-free logic stays in `agtermCore` (no GhosttyKit/AppKit/CoreGraphics).
 - [x] `cd agtermCore && swift test` — must pass before Task 4.
 
 ### Task 4: App-side ControlActions — resolve the anchor and place
-- [ ] `ControlServer+SessionActions.swift` `moveSession(...)`: handle the new
+- [x] `ControlServer+SessionActions.swift` `moveSession(...)`: handle the new
       `.place(anchor:, after:)` case. Resolve the `--target` session to `(store,
       sessionID)`; look up its `sessionLocation`; resolve the anchor sid against the
       store's full session set (`store.workspaces.flatMap(\.sessions).map(\.id)`, active
@@ -203,13 +203,13 @@ host-free logic stays in `agtermCore` (no GhosttyKit/AppKit/CoreGraphics).
       resolution call `store.moveSession(sessionID, toWorkspace: resolution.workspace,
       at: resolution.destination)`; on nil treat as a successful no-op. Return
       `result.id = sessionID`.
-- [ ] `ControlServer+SessionActions.swift` `createSession(...)`: when `after`/`before`
+- [x] `ControlServer+SessionActions.swift` `createSession(...)`: when `after`/`before`
       is set, resolve the anchor sid across the store, take its `(workspace, index)`,
       create via `store.addSession(toWorkspace: anchorWS, cwd:, command:, name:, at:
       before ? index : index + 1)` (clamped in `AppStore`), then focus if in the active
       store. Bypass the `--workspace`/`--workspace-name` resolution path for this branch.
-- [ ] Build the app (`make build`) — must compile; `make lint` clean.
-- [ ] (Behavior verified by the e2e tests in Task 6 — no host-free unit seam for this
+- [x] Build the app (`make build`) — must compile; `make lint` clean.
+- [x] (Behavior verified by the e2e tests in Task 6 — no host-free unit seam for this
       `@MainActor` glue.)
 
 ### Task 5: CLI — `--after`/`--before` on `session new` and `session move`

@@ -94,6 +94,20 @@ extension ControlServer: ControlActions {
     /// there is nothing to create by id. cwd/command/name are applied in makeSessionResponse.
     func createSession(_ options: ControlSessionCreateOptions) -> ControlResponse {
         resolver.resolvePlacementStore(options.window) { store in
+            // anchor-relative placement (`--after`/`--before`): the anchor sid names its own workspace,
+            // so this bypasses the `--workspace`/`--workspace-name` addressing entirely. `before` inserts
+            // at the anchor's slot, `after` just past it (clamped in `AppStore.addSession`).
+            if let anchor = options.after ?? options.before {
+                let placeBefore = options.before != nil
+                return resolver.resolve(anchor, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
+                               active: store.selectedSessionID, noun: "session") { anchorID in
+                    guard let location = store.sessionLocation(ofSession: anchorID) else {
+                        return ControlResponse(ok: false, error: "no such session")
+                    }
+                    let index = placeBefore ? location.index : location.index + 1
+                    return makeSessionResponse(in: store, workspaceID: location.workspace, options: options, at: index)
+                }
+            }
             // name addressing: reuse-or-create with `createWorkspace`, else require an existing match.
             if let name = options.workspaceName {
                 // a blank name can neither be found NOR created — report that directly rather than
@@ -412,8 +426,9 @@ extension ControlServer: ControlActions {
     }
 
     /// Mode-bearing `session.move`: `to` reorders the session within its own workspace
-    /// (`up`|`down`|`top`|`bottom`), `workspace` relocates it to another workspace (appending). Exactly
-    /// one of the two is required; both set or neither set is an error. An invalid `to` direction errors.
+    /// (`up`|`down`|`top`|`bottom`), `workspace` relocates it to another workspace (appending), `place`
+    /// relocates + positions relative to an anchor session (the anchor carries its own workspace). Exactly
+    /// one form is required (enforced in the dispatcher). An invalid `to` direction errors.
     func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse {
         switch move {
         case .reorder(let dir):
@@ -430,6 +445,33 @@ extension ControlServer: ControlActions {
                     store.moveSession(sessionID, toWorkspace: workspaceID)
                     return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))
                 }
+            }
+        case .place(let anchor, let after):
+            return placeSession(target, window: window, anchor: anchor, after: after)
+        }
+    }
+
+    /// Resolve the moved session and its anchor within the same store, then relocate + position via the
+    /// host-free `SidebarDrop.resolveRelative` drop math. The anchor is resolved across the whole store
+    /// (all workspaces), so it self-identifies the destination workspace. A nil resolution (anchor==self
+    /// or an already-in-place move) is a successful no-op.
+    private func placeSession(_ target: String?, window: String?, anchor: String, after: Bool) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, sessionID in
+            guard let source = store.sessionLocation(ofSession: sessionID) else {
+                return ControlResponse(ok: false, error: "no such session")
+            }
+            return resolver.resolve(anchor, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
+                           active: store.selectedSessionID, noun: "session") { anchorID in
+                guard let anchorLoc = store.sessionLocation(ofSession: anchorID) else {
+                    return ControlResponse(ok: false, error: "no such session")
+                }
+                if let resolution = SidebarDrop.resolveRelative(
+                    source: (workspace: source.workspace, index: source.index),
+                    anchor: (workspace: anchorLoc.workspace, index: anchorLoc.index, count: anchorLoc.count),
+                    placeAfter: after) {
+                    store.moveSession(sessionID, toWorkspace: resolution.workspace, at: resolution.destination)
+                }
+                return ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString))
             }
         }
     }
