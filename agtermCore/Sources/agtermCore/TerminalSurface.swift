@@ -16,15 +16,10 @@ public protocol TerminalSurface: AnyObject {
     /// Reassigns this surface from the split (right) pane role to the primary pane, so its live
     /// pwd/title reports flow to the session's main fields (`currentCwd`/`oscTitle`) instead of the
     /// split fields (`splitCwd`/`splitTitle`). Called by `closePrimaryPane` when the primary pane's
-    /// shell exits and the surviving split pane is promoted to the session's sole pane.
+    /// shell exits and the surviving split pane is promoted to the session's sole pane. A hard
+    /// requirement (no default) like `teardown()`: a conformer that routes pwd/title by role MUST
+    /// reassign here, so a future surface fails to compile rather than silently mis-reporting.
     func promoteToPrimaryPane()
-}
-
-public extension TerminalSurface {
-    /// Default no-op so adding this requirement stays source-compatible for conformers that route
-    /// pwd/title reports role-agnostically and have nothing to reassign. `GhosttySurfaceView` overrides
-    /// it (dynamically dispatched via the witness table) to clear its split-role flag.
-    func promoteToPrimaryPane() {}
 }
 
 /// The direction the search selection steps, in agterm's natural convention:

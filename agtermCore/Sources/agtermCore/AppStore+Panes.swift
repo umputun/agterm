@@ -86,7 +86,7 @@ extension AppStore {
         }
         let priorPrimary = session.surface // the exiting pane, torn down below; scopes the search reset
         priorPrimary?.teardown()
-        // Promote the surviving split pane into the primary slot. `promoteToPrimaryPane` flips the
+        // promote the surviving split pane into the primary slot. `promoteToPrimaryPane` flips the
         // surface's split-role flag so its future pwd/title reports write to the main fields.
         survivor.promoteToPrimaryPane()
         session.surface = survivor
@@ -100,11 +100,13 @@ extension AppStore {
         session.initialCommand = nil
         // migrate the split pane's live/persisted metadata up to the session (main) fields, then clear the
         // now-meaningless split fields so nothing still describes a pane that no longer exists.
-        if let cwd = session.splitCwd { session.currentCwd = cwd }
-        if let title = session.splitTitle { session.oscTitle = title }
-        // cwd/title fall back to the exited primary's value when the split reported none (a sane default —
-        // a fresh split seeds its cwd from the primary anyway); foregroundCommand does NOT — it is replaced
-        // outright (nil clears it) so the dead primary's captured command can never linger on the survivor.
+        // cwd prefers the split's live PWD, then its restore-seed (`initialSplitCwd`, set for a restored
+        // split whose shell hasn't emitted OSC yet), and only falls back to the exited primary's cwd when
+        // the split has none at all (a fresh split seeds its cwd from the primary anyway). title is replaced
+        // OUTRIGHT from the split's (nil clears it) so the dead primary's title can never linger on the
+        // survivor — likewise foregroundCommand, so the exited primary's captured command can't either.
+        session.currentCwd = session.splitCwd ?? session.initialSplitCwd ?? session.currentCwd
+        session.oscTitle = session.splitTitle
         session.foregroundCommand = session.splitForegroundCommand
         session.splitCwd = nil
         session.splitTitle = nil

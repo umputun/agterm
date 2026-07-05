@@ -148,6 +148,27 @@ struct AppStorePaneTests {
         #expect(session.addressableSurface == nil)        // never-shown session still errors "session not realized"
     }
 
+    @Test func closePrimaryPaneUsesRestoredSplitCwdAndClearsTitleWhenSplitHasNoOSCYet() {
+        // a RESTORED split whose shell hasn't emitted OSC yet: `initialSplitCwd` is seeded but the live
+        // `splitCwd`/`splitTitle` are still nil. Exiting the primary must promote the survivor showing ITS
+        // restore-seed cwd and NO title — not the exited primary's cwd/title lingering until the survivor's
+        // next report.
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.surface = SpySurface()
+        session.splitSurface = SpySurface()
+        session.isSplit = true
+        session.hasSplit = true
+        session.currentCwd = "/primary"             // the exited primary's live cwd on the main field
+        session.oscTitle = "primary-title"          // the exited primary's title
+        session.initialSplitCwd = "/restored-split" // the survivor's restore-seed; no live splitCwd/splitTitle yet
+        store.closePrimaryPane(session.id)
+        #expect(session.currentCwd == "/restored-split") // the survivor's restore-seed cwd, not the primary's
+        #expect(session.oscTitle == nil)                 // the primary's title must NOT linger on the survivor
+        #expect(session.initialSplitCwd == nil)          // split fields cleared after promotion
+    }
+
     @Test func closePrimaryPaneKeepsSearchOwnedBySurvivor() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
