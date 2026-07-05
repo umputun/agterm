@@ -108,14 +108,19 @@ spec — image/text watermark or solid color — set via `session background`, o
 `focus [on|off|toggle]` (collapse the sidebar tree to a single workspace).
 
 **session**
-- `new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--name NAME]` —
+- `new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--name NAME] [--after SID | --before SID]` —
   create (and focus) a session. Target the workspace by id/prefix (`--workspace`) OR by name
   (`--workspace-name`, mutually exclusive); add `--create-workspace` to reuse-or-create the named
   workspace when absent. `--command` runs that program as the session process instead of a login shell;
-  `--name` seeds the sidebar label (default: the auto basename).
+  `--name` seeds the sidebar label (default: the auto basename). `--after`/`--before` place it directly
+  after/before an anchor session (id/prefix/`active`) instead of appending — the anchor carries its own
+  workspace, so it's mutually exclusive with `--workspace`/`--workspace-name`. `new --after active` =
+  create right after the current session.
 - `close` · `select` · `rename <name>`.
 - `go --to next|prev|first|last|next-attention|prev-attention` — move the selection between sessions.
-- `move <workspace>` (relocate) or `move --to up|down|top|bottom` (reorder within the workspace).
+- `move <workspace>` (relocate) or `move --to up|down|top|bottom` (reorder within the workspace) or
+  `move --after SID | --before SID` (place after/before an anchor session; the anchor carries its own
+  workspace, so this relocates + positions in one shot, even cross-workspace).
 - `type <text> [--stdin] [--select] [--pane left|right|scratch]` — inject keystrokes (real typing, Enter
   included) into the main pane, the split pane with `--pane right`, or the scratch terminal (even hidden)
   with `--pane scratch`.

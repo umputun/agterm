@@ -251,18 +251,18 @@ host-free logic stays in `agtermCore` (no GhosttyKit/AppKit/CoreGraphics).
       (All 7 new tests pass; deployed daily-driver untouched.)
 
 ### Task 7: Keep-in-sync docs (HARD)
-- [ ] `agterm/Resources/agent-skill/reference.md`: document `--after`/`--before` on
+- [x] `agterm/Resources/agent-skill/reference.md`: document `--after`/`--before` on
       `session.new` and `session.move` (args, semantics, cross-workspace behavior,
       mutual exclusion with `--to`/workspace).
-- [ ] `agterm/Resources/agent-skill/SKILL.md`: update the `session.new`/`session.move`
+- [x] `agterm/Resources/agent-skill/SKILL.md`: update the `session.new`/`session.move`
       summary lines; keep the command count at 50 (no new command).
-- [ ] `agterm/Resources/agent-skill/examples.md`: add the headline recipe
+- [x] `agterm/Resources/agent-skill/examples.md`: add the headline recipe
       (`agtermctl session new --after active`) and a `session move --after <sid>` recipe.
-- [ ] `.claude/rules/control-api.md`: update the `session.move` catalog note (it is now
+- [x] `.claude/rules/control-api.md`: update the `session.move` catalog note (it is now
       place-bearing too — `--after`/`--before` anchor-relative placement, anchor carries
       the workspace) and the `session.new` line.
-- [ ] Confirm `README.md` / `site/docs.html` mention the control API generically enough
-      that no change is needed; update if they enumerate `session` flags.
+- [x] `README.md` / `site/docs.html` enumerate `session` flags — added `--after`/`--before`
+      example lines to the `agtermctl` recipe block in both.
 
 ### Task 8: Verify acceptance criteria
 - [ ] `agtermctl session new --after active` creates right after the current session in

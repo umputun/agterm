@@ -188,11 +188,13 @@ agtermctl session new --command "ssh user@host"  # run a command as the session'
 agtermctl session new --command "sh -c 'clear; ssh user@host'"  # --command is argv-style (no shell); wrap in sh -c for ;, $VAR, redirects
 agtermctl session new --name "myhost" --command "ssh user@host"  # pre-name the session (sidebar label set at creation)
 agtermctl session new --workspace-name servers --create-workspace --name "myhost"  # open in the "servers" workspace, creating it if absent (idempotent)
+agtermctl session new --after active             # create right after the current session (--before to precede it); the anchor's workspace is used
 agtermctl session type --target 9f3c $'make test\n'      # inject text into a session by id prefix
 echo 'make test' | agtermctl session type --target active --stdin
 agtermctl session go --to next                   # step to the next session (next|prev|first|last; stops at ends)
 agtermctl session move --to up                   # reorder the active session within its workspace (up|down|top|bottom)
 agtermctl session move "$ws"                      # relocate the active session to another workspace (appends)
+agtermctl session move --after 9f3c              # place the active session right after another (--before to precede it); relocates cross-workspace if the anchor lives elsewhere
 agtermctl workspace move --to top                # reorder a workspace among its siblings (up|down|top|bottom)
 agtermctl session split toggle                   # split the active session
 agtermctl session resize --split-ratio 0.7       # set the split divider (left-pane fraction); or --grow-left/--grow-right D

@@ -188,10 +188,28 @@ paths:
 
   `workspace.delete` honors keep-at-least-one and returns an error instead of the GUI confirm alert (nothing
   blocks on a modal).
-  `session.move` is MODE-BEARING: `args.to` (`up`|`down`|`top`|`bottom`) REORDERS the session within
-  its own workspace (parses `ReorderDirection`, drives `AppStore.reorderSession` → the existing `moveSession(at:)`
-  primitive, returns the session id), while `args.workspace` RELOCATES it to another workspace (unchanged
-  — still appends at the end); both-set and neither-set are errors, and an invalid direction is an error.
+  `session.move` is MODE-BEARING with THREE exclusive placement intents:
+  `args.to` (`up`|`down`|`top`|`bottom`) REORDERS the session within its own workspace (parses `ReorderDirection`,
+  drives `AppStore.reorderSession` → the existing `moveSession(at:)` primitive, returns the session id);
+  `args.workspace` RELOCATES it to another workspace (still APPENDS at the end);
+  and `args.after`/`args.before` (a session address — id / prefix / `active`) PLACE it directly after/before
+  an anchor session (`ControlSessionMove.place(anchor:after:)`).
+  The anchor CARRIES ITS OWN WORKSPACE — it is resolved against the store's FULL session set (all workspaces),
+  so it names the destination workspace itself and relocates + positions in one shot (cross-workspace
+  falls out for free).
+  Placement reuses the drag-drop index math host-free: `SidebarDrop.resolveRelative` (the tested "after
+  this row" `sessionIndex + 1` + the same-workspace post-removal off-by-one + the anchor==source no-op)
+  feeding `AppStore.moveSession(_:toWorkspace:at:)`.
+  Exactly one intent must be set: after+before is an error (`"use either --after or --before, not both"`),
+  after/before + `--to` is an error (`"session.move takes --after/--before or --to, not both"`),
+  after/before + a workspace is an error (`"session.move takes --after/--before or a workspace, not both"`
+  — the anchor already names the workspace), both `--to`+workspace and neither are errors,
+  and an invalid direction is an error.
+  Keep-in-sync: `ControlArgs.after`/`before` + `ControlSessionMove.place` in `ControlProtocol.swift`/`ControlModes.swift`,
+  the `.sessionMove` place-mode routing + guards in `ControlDispatcher`, the app-side `moveSession` place
+  case (`ControlServer+SessionActions.swift`, resolving both target + anchor locations and calling
+  `resolveRelative`), the `session move --after/--before` CLI, and round-trip / dispatcher / e2e
+  (`testSessionMovePlaceWithinWorkspace`, `testSessionMovePlaceCrossWorkspace`, the reject-* guards) tests.
   `workspace.move` is the workspace REORDER (control-native, no separate verb):
   `args.to` (`up`|`down`|`top`|`bottom`) resolves the workspace target via the shared `resolveWorkspace`
   (honoring the global `--window` selector like other workspace commands),
@@ -283,6 +301,15 @@ paths:
   A `workspaceName` with no match and no `createWorkspace` errors, both addressing modes set is an error,
   and `createWorkspace` without `workspaceName` is an error (nothing to create by id);
   the same two rules are pre-validated CLI-side by `session new`'s `validate()`.
+  `args.after`/`args.before` (a session address — id / prefix / `active`) instead PLACE the new session
+  directly after/before an anchor session rather than appending at the end (`ControlSessionCreateOptions.after`/`before`).
+  The anchor CARRIES ITS OWN WORKSPACE (resolved across all workspaces), so it names the destination
+  itself — after/before is a self-contained placement mode, mutually exclusive with each other and with
+  `--workspace`/`--workspace-name` (errors: `"use either --after or --before, not both"` and
+  `"session.new takes --after/--before or a workspace, not both"`, dispatcher-owned + CLI-pre-validated).
+  The app-side `createSession` resolves the anchor, takes its `(workspace, index)`, and inserts via
+  `AppStore.addSession(…, at: before ? index : index + 1)` (the new optional `at index:`, clamped).
+  `agtermctl session new --after active` = create right after the current session in one round-trip.
   `args.command` runs that command AS the session's process instead of the login shell (like kitty's
   `launch <cmd>` / ghostty's `command`) — NO echoed command line, and the session closes when the command
   exits (the normal single-pane `onExit` → `closePrimaryPane`).

@@ -70,7 +70,7 @@ state; there is no control command to set them.
 
 ## session
 
-- `session new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--name NAME] [--window W]`
+- `session new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--name NAME] [--after SID | --before SID] [--window W]`
   — create a session and focus it; returns the new id. `--cwd` sets the start directory (default
   `$HOME`). The destination workspace is addressed one of two mutually-exclusive ways: `--workspace`
   (id / unique prefix / `active`, the default) or `--workspace-name` (the sidebar label) — the latter
@@ -83,7 +83,13 @@ state; there is no control command to set them.
   running commands on restart** is on (default off → a restored session is a plain shell); a live
   captured foreground takes precedence over it. `--name`
   seeds the session's custom name (the sidebar label; blank/omitted leaves the auto basename),
-  equivalent to a `session rename` right after create.
+  equivalent to a `session rename` right after create. `--after SID` / `--before SID` place the new
+  session directly after / before an anchor session instead of appending at the end (the anchor is a
+  session address — id / unique prefix / `active`). The anchor CARRIES ITS OWN WORKSPACE (resolved
+  across all workspaces), so it names the destination workspace itself — `--after`/`--before` are
+  therefore mutually exclusive with each other and with `--workspace`/`--workspace-name` (the anchor
+  already picks the workspace). `agtermctl session new --after active` is the headline case: create
+  right after the current session in one round-trip.
 - `session close [--target] [--window W]`.
 - `session select [--target] [--window W]`.
 - `session rename <name> [--target] [--window W]`.
@@ -94,8 +100,13 @@ state; there is no control command to set them.
   first→last); first/last jump to the ends of that set; next-attention/prev-attention step only through the filtered
   sessions needing attention (status blocked/completed), wrapping. Returns the newly selected id.
 - `session move <workspace> [--target] [--window W]` — relocate the session to another workspace
-  (appends). OR `session move --to up|down|top|bottom [--target]` — reorder within its workspace.
-  Exactly one of the positional workspace or `--to` is required.
+  (appends). OR `session move --to up|down|top|bottom [--target]` — reorder within its workspace. OR
+  `session move --after SID | --before SID [--target]` — place the session directly after / before an
+  anchor session (id / unique prefix / `active`). The anchor CARRIES ITS OWN WORKSPACE (resolved across
+  all workspaces), so it relocates + positions in one shot, wherever the anchor lives — cross-workspace
+  placement falls out for free. Exactly one placement intent is required among {positional workspace,
+  `--to`, `--after`/`--before`}; `--after`/`--before` are mutually exclusive with each other, with `--to`,
+  and with a destination workspace (the anchor already names the workspace).
 - `session type <text> [--stdin] [--select] [--pane left|right|scratch] [--target] [--window W]` — inject text
   as real keystrokes (printable runs plus Return for each newline; no bracketed-paste markers).
   `--stdin` reads the text from stdin instead of the argument. `--select` selects (and realizes) a

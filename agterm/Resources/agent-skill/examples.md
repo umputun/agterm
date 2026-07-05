@@ -71,6 +71,33 @@ b=$(agtermctl session new --workspace "$ws" --json | jq -r '.result.id')
 agtermctl session rename "logs" --target "$b"
 ```
 
+## Place a session next to another instead of appending
+
+`session new` appends at the end of the workspace by default. `--after`/`--before` place it directly
+after/before an anchor session in one round-trip — no `move --to up` walk. The anchor is a session
+address (id / unique prefix / `active`) and carries its own workspace, so it names the destination
+itself (mutually exclusive with `--workspace`/`--workspace-name`).
+
+```bash
+# the headline case: create right after the current session
+agtermctl session new --after active
+
+# create right before a specific session (by unique prefix)
+agtermctl session new --before 3f2a --name "notes"
+```
+
+`session move` gains the same placement mode. Relocate a session and slot it after/before an anchor —
+wherever the anchor lives, even in another workspace — in one shot, with no visible row-by-row shuffle:
+
+```bash
+# move the current session to sit right after another (cross-workspace if the anchor is elsewhere)
+agtermctl session move --after 3f2a --target active
+agtermctl session move --before "$logs" --target "$server"
+```
+
+`--after`/`--before` are mutually exclusive with each other, with `--to`, and with a destination
+workspace — the anchor already picks the workspace.
+
 ## Resize the split divider from a keybinding
 
 The divider is otherwise mouse-drag only — there is no built-in resize action, so bind keys to the CLI
