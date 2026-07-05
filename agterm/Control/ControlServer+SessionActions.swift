@@ -99,11 +99,7 @@ extension ControlServer: ControlActions {
             // at the anchor's slot, `after` just past it (clamped in `AppStore.addSession`).
             if let anchor = options.after ?? options.before {
                 let placeBefore = options.before != nil
-                return resolver.resolve(anchor, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
-                               active: store.selectedSessionID, noun: "session") { anchorID in
-                    guard let location = store.sessionLocation(ofSession: anchorID) else {
-                        return ControlResponse(ok: false, error: "no such session")
-                    }
+                return resolveAnchorLocation(anchor, in: store) { location in
                     let index = placeBefore ? location.index : location.index + 1
                     return makeSessionResponse(in: store, workspaceID: location.workspace, options: options, at: index)
                 }
@@ -129,6 +125,21 @@ extension ControlServer: ControlActions {
                            active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
                 makeSessionResponse(in: store, workspaceID: workspaceID, options: options)
             }
+        }
+    }
+
+    /// Resolve an anchor session address (`--after`/`--before`) across the store's whole session set (all
+    /// workspaces, so the anchor names its own destination workspace) and hand its `(workspace, index,
+    /// count)` location to `body`. An unresolved or ambiguous anchor yields the shared resolver error; the
+    /// location guard is defense-in-depth (the id came from the store's own list, so it always resolves).
+    private func resolveAnchorLocation(_ anchor: String, in store: AppStore,
+                                       _ body: ((workspace: UUID, index: Int, count: Int)) -> ControlResponse) -> ControlResponse {
+        resolver.resolve(anchor, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
+                       active: store.selectedSessionID, noun: "session") { anchorID in
+            guard let location = store.sessionLocation(ofSession: anchorID) else {
+                return ControlResponse(ok: false, error: "no such session")
+            }
+            return body(location)
         }
     }
 
@@ -460,11 +471,7 @@ extension ControlServer: ControlActions {
             guard let source = store.sessionLocation(ofSession: sessionID) else {
                 return ControlResponse(ok: false, error: "no such session")
             }
-            return resolver.resolve(anchor, candidates: store.workspaces.flatMap { $0.sessions.map(\.id) },
-                           active: store.selectedSessionID, noun: "session") { anchorID in
-                guard let anchorLoc = store.sessionLocation(ofSession: anchorID) else {
-                    return ControlResponse(ok: false, error: "no such session")
-                }
+            return resolveAnchorLocation(anchor, in: store) { anchorLoc in
                 if let resolution = SidebarDrop.resolveRelative(
                     source: (workspace: source.workspace, index: source.index),
                     anchor: (workspace: anchorLoc.workspace, index: anchorLoc.index, count: anchorLoc.count),
