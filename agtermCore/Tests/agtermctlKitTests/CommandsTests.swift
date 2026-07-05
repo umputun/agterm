@@ -533,6 +533,29 @@ struct CommandsTests {
         }
     }
 
+    @Test func sessionOverlayOpenWithFollow() throws {
+        // --follow maps to ControlArgs.follow = true; the server selects the target after opening.
+        let expected = ControlRequest(cmd: .sessionOverlayOpen, target: "active",
+                                      args: ControlArgs(command: "revdiff", follow: true))
+        #expect(try request(["session", "overlay", "open", "revdiff", "--follow"]) == expected)
+    }
+
+    @Test func sessionOverlayOpenWithoutFollow() throws {
+        // omitting --follow leaves follow nil (omitted-when-nil on the wire = the no-switch default).
+        let expected = ControlRequest(cmd: .sessionOverlayOpen, target: "active", args: ControlArgs(command: "revdiff"))
+        let built = try request(["session", "overlay", "open", "revdiff"])
+        #expect(built == expected)
+        #expect(built.args?.follow == nil)
+    }
+
+    @Test func sessionOverlayOpenFollowWithBlockAndSizePercentAndTarget() throws {
+        // --follow composes with --block, --size-percent, and --target; follow rides through makeRequest.
+        let expected = ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c",
+                                      args: ControlArgs(command: "htop", sizePercent: 60, follow: true))
+        #expect(try request(["session", "overlay", "open", "htop", "--follow", "--block",
+                             "--size-percent", "60", "--target", "9f3c"]) == expected)
+    }
+
     @Test func sessionOverlayClose() throws {
         #expect(try request(["session", "overlay", "close"]) == ControlRequest(cmd: .sessionOverlayClose, target: "active"))
     }

@@ -172,12 +172,12 @@ in the panel geometry (`--size-percent`).
 - Modify: `agtermCore/Sources/agtermctlKit/SessionCommands.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/CommandsTests.swift`
 
-- [ ] add `@Flag var follow: Bool` to the overlay-open command and thread it into the request's
+- [x] add `@Flag var follow: Bool` to the overlay-open command and thread it into the request's
       `follow` arg
-- [ ] write CLI-parse tests: `overlay open <cmd> --follow` maps to `follow: true`; without it maps to
+- [x] write CLI-parse tests: `overlay open <cmd> --follow` maps to `follow: true`; without it maps to
       `false`/nil; combines cleanly with `--block`, `--size-percent`, `--target`
-- [ ] `cd agtermCore && swift test` — passes
-- [ ] run tests — must pass before next task
+- [x] `cd agtermCore && swift test` — passes
+- [x] run tests — must pass before next task
 
 ### Task 5: e2e — background-run, no-switch by default, switch on `--follow`
 

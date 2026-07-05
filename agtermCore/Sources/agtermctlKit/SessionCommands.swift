@@ -474,6 +474,7 @@ struct Session: ParsableCommand {
             @Option(name: .long, help: "Working directory (default: the session's current directory).") var cwd: String?
             @Flag(name: .long, help: "Keep the overlay open after COMMAND exits (press any key to close).") var wait = false
             @Flag(name: .long, help: "Block until COMMAND exits and exit with its status (the program renders normally; capture its output via the program's own output file).") var block = false
+            @Flag(name: .long, help: "Select (switch to) the target session after opening the overlay (default: open without switching).") var follow = false
             @Option(name: .long, help: "Render a floating, framed panel at PERCENT (1-100) of the pane instead of full-size.") var sizePercent: Int?
             @Option(name: .long, help: "Solid background color (#rrggbb) for the overlay pane, independent of the session's own.") var backgroundColor: String?
             @OptionGroup var target: TargetOptions
@@ -491,7 +492,8 @@ struct Session: ParsableCommand {
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionOverlayOpen, target: target.target,
                                args: options.withWindow(ControlArgs(cwd: cwd, command: command, wait: wait ? true : nil,
-                                                                     sizePercent: sizePercent, color: backgroundColor)))
+                                                                     sizePercent: sizePercent, follow: follow ? true : nil,
+                                                                     color: backgroundColor)))
             }
 
             func run() throws {
