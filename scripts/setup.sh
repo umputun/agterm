@@ -9,6 +9,9 @@
 # main after this SHA blanks the terminal scrollback on a font-size increase.
 # Bump GHOSTTY_REV deliberately once upstream fixes that, re-testing the font-increase case.
 #
+# GhosttyKit.xcframework is built as a UNIVERSAL binary (arm64+x86_64 macOS slice + iOS/iOS-sim
+# slices), enabling cross-architecture support with no Intel hardware required for the build.
+#
 # One-time cost: the build (a few minutes, plus a Metal Toolchain download on first run) is skipped
 # whenever GhosttyKit.xcframework and the resources are already present.
 set -euo pipefail
@@ -66,7 +69,7 @@ git -C "$BUILD_DIR" fetch -q --depth 1 origin "$GHOSTTY_REV"
 git -C "$BUILD_DIR" -c advice.detachedHead=false checkout -q FETCH_HEAD
 
 echo "building GhosttyKit.xcframework with zig 0.15.2 (a few minutes)..."
-( cd "$BUILD_DIR" && "$ZIG" build -Doptimize=ReleaseFast -Demit-xcframework=true -Dxcframework-target=native -Demit-macos-app=false )
+( cd "$BUILD_DIR" && "$ZIG" build -Doptimize=ReleaseFast -Demit-xcframework=true -Demit-macos-app=false )
 
 if $need_xc; then
   echo "staging GhosttyKit.xcframework..."
