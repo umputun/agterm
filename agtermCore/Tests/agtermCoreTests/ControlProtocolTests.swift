@@ -72,6 +72,10 @@ struct ControlProtocolTests {
         let decoded = try roundTrip(request)
         #expect(decoded == request)
         #expect(decoded.args?.follow == nil)
+        // verify the omit-when-nil WIRE contract (the reason follow is Bool?): a nil follow must not be
+        // encoded at all, not emitted as null.
+        let json = String(data: try JSONEncoder().encode(request), encoding: .utf8) ?? ""
+        #expect(!json.contains("follow"), "a nil follow must be omitted from the JSON; got \(json)")
     }
 
     @Test func sessionTextRoundTripsWithAllLinesAndPane() throws {

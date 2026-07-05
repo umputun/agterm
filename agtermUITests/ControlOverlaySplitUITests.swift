@@ -283,11 +283,15 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         let openFull = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(full.uuidString)","args":{"command":"cat","follow":true}}"#)
         XCTAssertEqual(openFull["ok"] as? Bool, true, "full overlay open with follow should succeed: \(openFull)")
         XCTAssertTrue(pollActiveSessionID(full, timeout: 10), "follow must switch the active session to the full-overlay target")
+        XCTAssertTrue(pollSessionOverlay(id: full.uuidString, expected: true, timeout: 10),
+                      "the full overlay must actually mount on its target, not just select it")
 
         // FLOATING overlay with follow → the active session becomes the (different, background) floating target.
         let openFloat = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(floating.uuidString)","args":{"command":"cat","sizePercent":70,"follow":true}}"#)
         XCTAssertEqual(openFloat["ok"] as? Bool, true, "floating overlay open with follow should succeed: \(openFloat)")
         XCTAssertTrue(pollActiveSessionID(floating, timeout: 10), "follow must switch the active session to the floating-overlay target")
+        XCTAssertTrue(pollSessionOverlay(id: floating.uuidString, expected: true, timeout: 10),
+                      "the floating overlay must actually mount on its target, not just select it")
     }
 
     // `follow: true` targeting the ALREADY-active session succeeds and stays on it (the select is a no-op).

@@ -384,10 +384,9 @@ struct WindowContentView: View {
     /// when the session isn't active. The panel is an opaque, framed terminal sized to `overlaySizePercent`%
     /// of the detail area and centered, with the session's pane(s) visible around it.
     @ViewBuilder private func floatingOverlayPanel(session: Session, isActive: Bool) -> some View {
-        let floating = session.overlayActive && session.overlaySizePercent != nil
         GeometryReader { geo in
             ZStack {
-                if floating, let percent = session.overlaySizePercent {
+                if session.floatingOverlayActive, let percent = session.overlaySizePercent {
                     let fraction = CGFloat(percent) / 100
                     // transparent click-catcher over the whole detail area: absorbs clicks AROUND the panel so
                     // they can't reach the still-hit-testable panes behind and steal the overlay's first responder.
@@ -411,7 +410,7 @@ struct WindowContentView: View {
         }
         // when not floating the panel is an empty full-frame GeometryReader — make it inert so it never
         // intercepts clicks meant for the pane(s).
-        .allowsHitTesting(floating)
+        .allowsHitTesting(session.floatingOverlayActive)
     }
 
     /// The terminal search bar, attached as a top-aligned `.overlay` on `detailPane` — NOT inside any
