@@ -11,7 +11,6 @@ cask "agterm" do
   homepage "https://github.com/umputun/agterm"
 
   depends_on macos: :sonoma
-  depends_on arch: :arm64
 
   app "agterm.app"
   binary "#{appdir}/agterm.app/Contents/MacOS/agtermctl", target: "agtermctl"
