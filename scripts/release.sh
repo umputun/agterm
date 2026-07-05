@@ -67,7 +67,7 @@ notarize() {
 }
 
 # build the GitHub release body: the matching CHANGELOG.md section followed by a
-# short install note (signed + notarized; Apple Silicon only, macOS 14+).
+# short install note (signed + notarized; universal binary, macOS 14+).
 release_notes() {
   local section
   section="$(awk -v ver="v$VERSION" '
@@ -85,7 +85,7 @@ release_notes() {
   cat <<EOF
 ---
 
-Signed with a Developer ID certificate and notarized by Apple, so macOS Gatekeeper opens it with no extra steps. Apple Silicon (arm64) only, macOS 14 or later.
+Signed with a Developer ID certificate and notarized by Apple, so macOS Gatekeeper opens it with no extra steps. Universal binary — runs natively on both Apple Silicon and Intel Macs, macOS 14 or later.
 
 - **Homebrew:** \`brew install --cask umputun/apps/agterm\`
 - **Direct download:** open the \`.dmg\` and drag \`agterm.app\` into \`/Applications\`.
@@ -119,6 +119,16 @@ fi
 
 # ── notarize + staple the app ─────────────────────────────────────────────────
 if [ "$SIGNED" = "1" ]; then
+  # verify both architectures are present in the universal binary before notarizing
+  echo "==> verifying universal binary (arm64 + x86_64)"
+  lipo_output="$(lipo -info "$APP/Contents/MacOS/agterm")"
+  if ! echo "$lipo_output" | grep -q "arm64" || ! echo "$lipo_output" | grep -q "x86_64"; then
+    echo "ERROR: universal binary verification failed — expected both arm64 and x86_64, got:" >&2
+    echo "  $lipo_output" >&2
+    exit 1
+  fi
+  echo "  $lipo_output"
+  
   ZIP="$BUILD_DIR/agterm-$VERSION.zip"
   ditto -c -k --sequesterRsrc --keepParent "$APP" "$ZIP"
   notarize "$ZIP"
