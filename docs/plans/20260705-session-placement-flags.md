@@ -229,19 +229,26 @@ host-free logic stays in `agtermCore` (no GhosttyKit/AppKit/CoreGraphics).
 - [x] `cd agtermCore && swift test` — must pass before Task 6.
 
 ### Task 6: E2E — XCUITest over the socket
-- [ ] `ControlAPIUITests.swift`: `session.move` `--after`/`--before` within one
+- [x] `ControlAPIUITests.swift`: `session.move` `--after`/`--before` within one
       workspace — seed three ordered sessions (`relaunch(withSnapshot:)`), move one and
       assert the new order with `pollSessionOrder`.
-- [ ] `session.move` `--after`/`--before` cross-workspace — anchor in another workspace;
+      (`testSessionMovePlaceWithinWorkspace`.)
+- [x] `session.move` `--after`/`--before` cross-workspace — anchor in another workspace;
       assert with `pollSessionCounts` + `pollSessionOrder` that the session relocated to
-      the anchor's workspace at the right slot.
-- [ ] `session.new` `--after`/`--before` — create relative to a seeded session; assert
+      the anchor's workspace at the right slot. (`testSessionMovePlaceCrossWorkspace`;
+      added the `pollSessionOrder(inWorkspace:equals:timeout:)` base-class oracle for the
+      non-first destination workspace.)
+- [x] `session.new` `--after`/`--before` — create relative to a seeded session; assert
       placement/order and that the returned `result.id` is the new session.
-- [ ] Error-guard e2e: after+before together, after/before + `--to`, after/before + a
+      (`testSessionNewPlaceRelativeToAnchor`.)
+- [x] Error-guard e2e: after+before together, after/before + `--to`, after/before + a
       workspace — assert the dispatcher error strings (mirror
-      `testSessionMoveBothToAndWorkspaceErrors`).
-- [ ] Run the XCUITest scheme — the new e2e tests must pass (deployed app untouched;
+      `testSessionMoveBothToAndWorkspaceErrors`). (`testSessionMovePlaceRejectsAfterAndBefore`,
+      `testSessionMovePlaceRejectsAfterAndTo`, `testSessionMovePlaceRejectsAfterAndWorkspace`,
+      `testSessionNewPlaceRejectsConflicts`.)
+- [x] Run the XCUITest scheme — the new e2e tests must pass (deployed app untouched;
       tests use the `.debug` bundle id + isolated `AGTERM_STATE_DIR`/socket).
+      (All 7 new tests pass; deployed daily-driver untouched.)
 
 ### Task 7: Keep-in-sync docs (HARD)
 - [ ] `agterm/Resources/agent-skill/reference.md`: document `--after`/`--before` on
