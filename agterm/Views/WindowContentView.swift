@@ -330,7 +330,7 @@ struct WindowContentView: View {
             }
             if fullOverlay {
                 TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
-                             makeSurface: makeOverlaySurface, isActive: isActive)
+                             makeSurface: makeOverlaySurface, isActive: isActive, deckVisible: isActive)
                     .id("\(session.id.uuidString)-overlay")
                     .zIndex(2)
             }
@@ -392,7 +392,7 @@ struct WindowContentView: View {
                     // they can't reach the still-hit-testable panes behind and steal the overlay's first responder.
                     Color.clear.contentShape(Rectangle())
                     TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
-                                 makeSurface: makeOverlaySurface, isActive: isActive)
+                                 makeSurface: makeOverlaySurface, isActive: isActive, deckVisible: isActive)
                         .frame(width: geo.size.width * fraction, height: geo.size.height * fraction)
                         // solid backing + hairline frame + shadow so the floating panel reads as a distinct
                         // opaque window over the still-visible session (libghostty draws only the terminal).
