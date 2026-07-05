@@ -65,7 +65,7 @@ A file open in the quick terminal, the window's shared scratch overlay:
 
 ## Install
 
-Pre-built releases are for **Apple Silicon (arm64) Macs running macOS 14 or later**.
+Pre-built releases are universal binaries for **Apple Silicon and Intel Macs running macOS 14 or later**.
 
 Releases are signed with a Developer ID certificate and notarized by Apple, so macOS Gatekeeper opens them with no extra steps.
 

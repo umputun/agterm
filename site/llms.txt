@@ -17,7 +17,7 @@ agterm is a native macOS terminal, built on libghostty (Ghostty's engine), for r
 
 ## Install
 
-- Homebrew: `brew install --cask umputun/apps/agterm` (Apple Silicon, macOS 14+, signed and notarized)
+- Homebrew: `brew install --cask umputun/apps/agterm` (Universal — Apple Silicon and Intel, macOS 14+, signed and notarized)
 - Direct download: https://github.com/umputun/agterm/releases
 
 ## Links
