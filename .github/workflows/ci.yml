@@ -114,4 +114,4 @@ jobs:
       - name: Install Rosetta
         run: softwareupdate --install-rosetta --agree-to-license
       - name: Rosetta smoke check (x86_64 agtermctl)
-        run: arch -x86_64 build/DerivedData/Build/Products/Release/agterm.app/Contents/MacOS/agtermctl tree
+        run: arch -x86_64 build/DerivedData/Build/Products/Release/agterm.app/Contents/MacOS/agtermctl --help

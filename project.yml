@@ -127,11 +127,32 @@ targets:
           # otherwise trip the re-seal below.
           rm -rf "$CODESIGNING_FOLDER_PATH/Contents/Resources/AppIcon.icon"
           core="$SRCROOT/agtermCore"
-          swift build --package-path "$core" -c release --product agtermctl
-          src="$(swift build --package-path "$core" -c release --product agtermctl --show-bin-path)/agtermctl"
+          
+          # Build agtermctl as a universal binary (arm64 + x86_64)
+          # SwiftPM doesn't natively support universal binaries, so build each arch separately
+          # using isolated build directories, then combine with lipo.
+          tmpdir="/tmp/agtermctl-build-$$"
+          mkdir -p "$tmpdir"
+          trap "rm -rf '$tmpdir'" EXIT
+          
+          # Build arm64 to its own scratch dir
+          swift build --package-path "$core" -c release --product agtermctl \
+            --scratch-path "$tmpdir/build-arm64" \
+            -Xswiftc -target -Xswiftc arm64-apple-macosx14.0
+          arm64_bin="$tmpdir/build-arm64/release/agtermctl"
+          
+          # Build x86_64 to its own scratch dir
+          swift build --package-path "$core" -c release --product agtermctl \
+            --scratch-path "$tmpdir/build-x86_64" \
+            -Xswiftc -target -Xswiftc x86_64-apple-macosx14.0
+          x86_64_bin="$tmpdir/build-x86_64/release/agtermctl"
+          
           dest="$CODESIGNING_FOLDER_PATH/Contents/MacOS/agtermctl"
           mkdir -p "$(dirname "$dest")"
-          cp -f "$src" "$dest"
+          
+          # Combine into universal binary
+          lipo -create "$arm64_bin" "$x86_64_bin" -output "$dest"
+          
           # ad-hoc sign the helper + re-seal the app (Debug/normal builds). Developer ID signing for
           # releases is done authoritatively by scripts/release.sh AFTER xcodebuild returns (so it
           # can't be clobbered by Xcode's own final code-sign, which also adds the required timestamp).
