@@ -184,19 +184,19 @@ in the panel geometry (`--size-percent`).
 **Files:**
 - Modify: `agtermUITests/ControlOverlaySplitUITests.swift`
 
-- [ ] harness note: the tests send raw socket JSON via `sendCommand` (not the `agtermctl --block` CLI), so
+- [x] harness note: the tests send raw socket JSON via `sendCommand` (not the `agtermctl --block` CLI), so
       "the program runs in the background" is asserted by polling `session.overlay.result` for an exit code
       (the pattern in `testOverlayResultReportsExitCode`), NOT by `--block`. Set up a BACKGROUND target by
       creating a SECOND session (which becomes active) before opening the overlay on the first
-- [ ] e2e: FULL overlay opened on the BACKGROUND target with no `--follow` — the active session is
+- [x] e2e: FULL overlay opened on the BACKGROUND target with no `--follow` — the active session is
       unchanged (assert selected id), and the overlay's program runs (exit observable via `overlay result`)
-- [ ] e2e: FLOATING overlay (`--size-percent`) opened on the BACKGROUND target with no `--follow` — active
+- [x] e2e: FLOATING overlay (`--size-percent`) opened on the BACKGROUND target with no `--follow` — active
       session unchanged AND its program runs in the background via `overlay result` (the core parity
       assertion; the case that had zero coverage)
-- [ ] e2e: FULL and FLOATING with `--follow` — the active session becomes the target
-- [ ] e2e: `--follow` targeting the ALREADY-active session — succeeds and stays on it (no-op select)
-- [ ] run `ControlOverlaySplitUITests` — all pass; then mark Task 1 and Task 3 verification items `[x]`
-- [ ] run tests — must pass before next task
+- [x] e2e: FULL and FLOATING with `--follow` — the active session becomes the target
+- [x] e2e: `--follow` targeting the ALREADY-active session — succeeds and stays on it (no-op select)
+- [x] run `ControlOverlaySplitUITests` — all pass; then mark Task 1 and Task 3 verification items `[x]`
+- [x] run tests — must pass before next task
 
 ### Task 6: Keep-in-sync docs (agent skill, rule, README, site)
 
