@@ -791,14 +791,35 @@ struct ControlDispatcherTests {
             cmd: .sessionOverlayOpen,
             target: "session",
             args: ControlArgs(cwd: "/tmp", command: "cat", wait: true,
-                              sizePercent: 70, window: "win", color: "#2a1a3a")
+                              sizePercent: 70, follow: true, window: "win", color: "#2a1a3a")
         ))
 
         #expect(response == ControlResponse(ok: false, error: "overlay already open"))
         #expect(actions.calls == [
             .overlayOpen(target: "session", window: "win",
                          ControlSessionOverlayOpenOptions(command: "cat", cwd: "/tmp", wait: true,
-                                                          sizePercent: 70, backgroundColor: "#2a1a3a"))
+                                                          sizePercent: 70, backgroundColor: "#2a1a3a",
+                                                          follow: true))
+        ])
+    }
+
+    @Test func sessionOverlayOpenDefaultsFollowToFalseWhenOmitted() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextOverlayOpenResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen,
+            target: "session",
+            args: ControlArgs(command: "cat")
+        ))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(actions.calls == [
+            .overlayOpen(target: "session", window: nil,
+                         ControlSessionOverlayOpenOptions(command: "cat", cwd: nil, wait: false,
+                                                          sizePercent: nil, backgroundColor: nil,
+                                                          follow: false))
         ])
     }
 

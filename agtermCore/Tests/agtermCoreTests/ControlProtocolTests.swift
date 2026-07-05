@@ -53,6 +53,27 @@ struct ControlProtocolTests {
         }
     }
 
+    @Test func sessionOverlayOpenRoundTripsWithFollow() throws {
+        let follow = ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c",
+                                    args: ControlArgs(command: "revdiff", follow: true))
+        let decodedFollow = try roundTrip(follow)
+        #expect(decodedFollow == follow)
+        #expect(decodedFollow.args?.follow == true)
+
+        let noFollow = ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c",
+                                      args: ControlArgs(command: "revdiff", follow: false))
+        let decodedNoFollow = try roundTrip(noFollow)
+        #expect(decodedNoFollow == noFollow)
+        #expect(decodedNoFollow.args?.follow == false)
+    }
+
+    @Test func sessionOverlayOpenOmitsFollowWhenNil() throws {
+        let request = ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c", args: ControlArgs(command: "revdiff"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.follow == nil)
+    }
+
     @Test func sessionTextRoundTripsWithAllLinesAndPane() throws {
         let request = ControlRequest(cmd: .sessionText, target: "9f3c",
                                      args: ControlArgs(pane: "left", all: true, lines: 50))

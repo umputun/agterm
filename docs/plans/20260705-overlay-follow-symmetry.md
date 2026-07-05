@@ -136,20 +136,20 @@ in the panel geometry (`--size-percent`).
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlProtocolTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherTests.swift`
 
-- [ ] add `follow: Bool?` to the overlay-open wire args in `ControlProtocol.swift` (`ControlArgs`),
+- [x] add `follow: Bool?` to the overlay-open wire args in `ControlProtocol.swift` (`ControlArgs`),
       omitted-when-nil for back-compat
-- [ ] add `follow: Bool = false` (DEFAULT required) to `ControlSessionOverlayOpenOptions`
+- [x] add `follow: Bool = false` (DEFAULT required) to `ControlSessionOverlayOpenOptions`
       (`ControlDispatcher.swift` ~line 65) — the default keeps the existing `ControlDispatcherTests`
       construction (~line 800) and the dispatcher call site source-compatible
-- [ ] in the `.sessionOverlayOpen` arm of `ControlDispatcher.dispatch(_:)` (~lines 294-308), populate the
+- [x] in the `.sessionOverlayOpen` arm of `ControlDispatcher.dispatch(_:)` (~lines 294-308), populate the
       options with `follow: request.args?.follow ?? false` — THIS is the wire→options mapping that makes the
       flag reach `ControlServer`; without it the feature is dead while unit tests still pass
-- [ ] round-trip tests (`ControlProtocolTests`): overlay-open request with `follow: true`/`false`/omitted
+- [x] round-trip tests (`ControlProtocolTests`): overlay-open request with `follow: true`/`false`/omitted
       (→ nil) encode/decode stably
-- [ ] routing tests (`ControlDispatcherTests`, extend `sessionOverlayOpenRoutesOptionsAndEchoesActionResponse`
+- [x] routing tests (`ControlDispatcherTests`, extend `sessionOverlayOpenRoutesOptionsAndEchoesActionResponse`
       or add a sibling): `args.follow == true` → routed `options.follow == true`; omitted → `options.follow == false`
-- [ ] `cd agtermCore && swift test` — passes
-- [ ] run tests — must pass before next task
+- [x] `cd agtermCore && swift test` — passes
+- [x] run tests — must pass before next task
 
 ### Task 3: Regate the auto-select on `follow` (behavior change)
 
