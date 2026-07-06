@@ -1,4 +1,8 @@
+#if canImport(Darwin)
 import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 import Foundation
 import agtermCore
 
@@ -40,13 +44,18 @@ struct SocketClient {
 
     /// Open and connect a `AF_UNIX` stream socket to `path`.
     private func connect() throws -> Int32 {
-        guard path.utf8.count < 104 else {
+        var addr = sockaddr_un()
+        let pathCapacity = MemoryLayout.size(ofValue: addr.sun_path)
+        guard path.utf8.count < pathCapacity else {
             throw SocketClientError("socket path too long (\(path.utf8.count) bytes): \(path)")
         }
+        #if canImport(Darwin)
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
+        #else
+        let fd = socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
+        #endif
         guard fd >= 0 else { throw SocketClientError("socket() failed: \(String(cString: strerror(errno)))") }
 
-        var addr = sockaddr_un()
         addr.sun_family = sa_family_t(AF_UNIX)
         let pathBytes = path.utf8CString
         withUnsafeMutablePointer(to: &addr.sun_path) { dst in
@@ -59,7 +68,7 @@ struct SocketClient {
 
         let result = withUnsafePointer(to: &addr) { ptr in
             ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
-                Darwin.connect(fd, sa, socklen_t(MemoryLayout<sockaddr_un>.size))
+                systemConnect(fd, sa, socklen_t(MemoryLayout<sockaddr_un>.size))
             }
         }
         guard result == 0 else {
@@ -187,4 +196,12 @@ struct SocketClient {
         }
         return lines.joined(separator: "\n")
     }
+}
+
+private func systemConnect(_ fd: Int32, _ addr: UnsafePointer<sockaddr>, _ len: socklen_t) -> Int32 {
+    #if canImport(Darwin)
+    return Darwin.connect(fd, addr, len)
+    #else
+    return Glibc.connect(fd, addr, len)
+    #endif
 }
