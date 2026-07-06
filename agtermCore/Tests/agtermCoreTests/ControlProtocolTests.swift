@@ -118,6 +118,13 @@ struct ControlProtocolTests {
         #expect(decoded.args?.pane == "right")
     }
 
+    @Test func sessionSeenRoundTrips() throws {
+        let request = ControlRequest(cmd: .sessionSeen, target: "9f3c", args: ControlArgs(window: "win"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.cmd == .sessionSeen)
+    }
+
     @Test func sessionStatusRoundTripsWithStateAndBlink() throws {
         let request = ControlRequest(cmd: .sessionStatus, target: "9f3c",
                                      args: ControlArgs(status: "active", blink: true, autoReset: true))
@@ -403,6 +410,26 @@ struct ControlProtocolTests {
         #expect(!json.contains("background"), "a nil background must be omitted from the JSON; got \(json)")
         let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
         #expect(decoded.background == nil)
+    }
+
+    @Test func treeSessionNodeRoundTripsWithUnseen() throws {
+        // the read side of the notification badge: the unseen count rides the tree node so a script can
+        // query it (and pair it with session.seen to clear).
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: false, split: false, unseen: 3)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.unseen == 3)
+    }
+
+    @Test func treeSessionNodeOmitsUnseenWhenNil() throws {
+        // a session with no pending notifications — the key must be omitted, not emitted as null or 0.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("unseen"), "a nil unseen count must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.unseen == nil)
     }
 
     @Test func treeRoundTripsWithIdleAndAutoFollowMs() throws {

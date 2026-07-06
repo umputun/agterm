@@ -777,6 +777,28 @@ struct AppStoreTests {
         ])
     }
 
+    @Test func controlTreeReportsUnseenCountWhenPositive() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        session.unseenCount = 4
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        #expect(node.unseen == 4)
+    }
+
+    @Test func controlTreeOmitsUnseenCountWhenZero() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        session.unseenCount = 0
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        #expect(node.unseen == nil) // zero reads as "no badge", omitted from the wire
+    }
+
     @Test func controlTreeReportsStatusPaneForNonIdleSession() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

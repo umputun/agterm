@@ -437,6 +437,17 @@ extension ControlServer: ControlActions {
         }
     }
 
+    /// Clears a session's unseen-notification badge without changing the selection, focus, or agent
+    /// status — the focus-free counterpart to `notify`, which raises the badge over the socket but
+    /// which nothing could lower without visiting the session. Idempotent (a no-op when already zero,
+    /// since `clearUnseen` just assigns 0; the count is ephemeral so it triggers no save).
+    func markSessionSeen(_ target: String?, window: String?) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            store.clearUnseen(id)
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
     /// Mode-bearing `session.move`: `to` reorders the session within its own workspace
     /// (`up`|`down`|`top`|`bottom`), `workspace` relocates it to another workspace (appending), `place`
     /// relocates + positions relative to an anchor session (the anchor carries its own workspace). Exactly

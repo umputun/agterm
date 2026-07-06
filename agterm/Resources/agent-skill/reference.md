@@ -46,8 +46,9 @@ idle), `statusPane` (which pane set that status — `left` (main) | `right` (spl
 as `status`, so it is never reported without a `status`), `foreground`/`splitForeground` (the live argv of each pane's foreground
 process — what it is running — omitted when the pane sits at its shell prompt), and `background` (the
 background spec set via `session background` — a `{kind, text?, imagePath?, colorHex?, opacity?, fit?,
-position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set). Workspace nodes carry
-`id`, `name`, `active`, `sessions`.
+position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set), and `unseen`
+(the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session seen` — omitted
+when zero). Workspace nodes carry `id`, `name`, `active`, `sessions`.
 
 The tree object itself carries two top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity) and `autoFollowMs` (the window's Auto-follow
@@ -201,6 +202,12 @@ state; there is no control command to set them.
   `active`) and are idempotent; `clear` ignores the target and unflags every session in the window.
   Pair with `sidebar mode flagged` to see just the flagged sessions as a flat `session : workspace`
   list. Unknown mode errors. The tree's `flagged` flag tracks membership.
+- `session seen [--target] [--window W]` — clear the session's unseen-notification badge without changing
+  the selection, focus, or agent status. It is the focus-free counterpart to `notify`: `notify` (and a
+  terminal's own OSC 9/777) raise the red badge, and until now the only way to clear it was visiting the
+  session. Idempotent — a no-op when the badge is already zero. Read the current count from the tree node's
+  `unseen` field. This lets an orchestrator acknowledge a driven session's notifications over the socket
+  while keeping the badge a real attention signal on the sessions a human tends.
 - `session background image <path> [--opacity F] [--fit contain|cover|stretch|none] [--position P] [--repeat] [--target] [--window W]`
   — composite the image at `path` (PNG or JPEG only) behind the terminal as a watermark. libghostty
   auto-fits it to the surface and re-fits on every window resize. `--opacity` is 0.0–1.0 (default 1.0);

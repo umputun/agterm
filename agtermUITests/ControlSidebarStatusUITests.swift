@@ -426,6 +426,76 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
                       "re-enabling the badge setting should show the count pill again")
     }
 
+    // session.seen clears a session's unseen badge WITHOUT changing the selection/focus — the focus-free
+    // counterpart to notify. Fire notify on a non-selected session so the badge + tree `unseen` read-back
+    // show, then session.seen clears both while the selection stays on the other session.
+    func testSessionSeenClearsBadgeWithoutFocus() throws {
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let root = try XCTUnwrap(treeResult["tree"] as? [String: Any], "result should carry a tree")
+        let workspaces = try XCTUnwrap(root["workspaces"] as? [[String: Any]], "tree should list workspaces")
+        let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
+        let seeded = try XCTUnwrap(sessions.first?["id"] as? String, "should have a seeded session id")
+
+        // a second session takes focus, leaving the seeded one non-selected so its badge persists.
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true)
+        let newSession = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new returns the new id")
+        XCTAssertTrue(pollSessionCount(2, timeout: 10), "the new session should land")
+
+        // notify (no focus-suppression) bumps the non-selected session's unseen count → the badge shows.
+        let notified = try sendCommand(#"{"cmd":"notify","target":"\#(seeded)","args":{"body":"hi"}}"#)
+        XCTAssertEqual(notified["ok"] as? Bool, true, "notify should succeed: \(notified)")
+        XCTAssertTrue(app.staticTexts["notify-badge"].waitForExistence(timeout: 12),
+                      "the count badge should appear on the non-selected session's row")
+
+        // the tree read-back surfaces the unseen count and the new session is the active one.
+        XCTAssertEqual(unseenCount(forSession: seeded), 1, "tree should report the seeded session's unseen count")
+        XCTAssertEqual(activeNodeID(), newSession, "the new session should be the active selection")
+
+        // session.seen clears the badge; it targets the NON-selected session and returns its id.
+        let seen = try sendCommand(#"{"cmd":"session.seen","target":"\#(seeded)"}"#)
+        XCTAssertEqual(seen["ok"] as? Bool, true, "session.seen should succeed: \(seen)")
+        XCTAssertEqual((seen["result"] as? [String: Any])?["id"] as? String, seeded, "session.seen echoes the target id")
+        XCTAssertTrue(app.staticTexts["notify-badge"].waitForNonExistence(timeout: 12),
+                      "session.seen should clear the count pill")
+
+        // the clear is focus-free: the selection is unchanged and the tree no longer reports unseen.
+        XCTAssertEqual(activeNodeID(), newSession, "session.seen must NOT change the active selection")
+        XCTAssertNil(unseenCount(forSession: seeded), "the seeded session's unseen count should be cleared (omitted)")
+
+        // idempotent: a second seen on an already-clear session is still ok.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.seen","target":"\#(seeded)"}"#)["ok"] as? Bool, true,
+                       "session.seen is idempotent when the badge is already zero")
+    }
+
+    // the unseen badge count reported for a session in the current tree, or nil when omitted (zero).
+    private func unseenCount(forSession id: String) -> Int? {
+        guard let result = (try? sendCommand(#"{"cmd":"tree"}"#))?["result"] as? [String: Any],
+              let root = result["tree"] as? [String: Any],
+              let workspaces = root["workspaces"] as? [[String: Any]] else { return nil }
+        for workspace in workspaces {
+            for session in (workspace["sessions"] as? [[String: Any]] ?? []) where session["id"] as? String == id {
+                return session["unseen"] as? Int
+            }
+        }
+        return nil
+    }
+
+    // the id of the active (selected) session in the current tree, or nil when none is selected.
+    // (distinct from ControlAPITestCase.activeSessionID(), which returns the first session unconditionally.)
+    private func activeNodeID() -> String? {
+        guard let result = (try? sendCommand(#"{"cmd":"tree"}"#))?["result"] as? [String: Any],
+              let root = result["tree"] as? [String: Any],
+              let workspaces = root["workspaces"] as? [[String: Any]] else { return nil }
+        for workspace in workspaces {
+            for session in (workspace["sessions"] as? [[String: Any]] ?? []) where session["active"] as? Bool == true {
+                return session["id"] as? String
+            }
+        }
+        return nil
+    }
+
     // notify posts a banner for the active session; a missing body errors.
     func testNotifySend() throws {
         let ok = try sendCommand(#"{"cmd":"notify","target":"active","args":{"body":"hello","title":"Test"}}"#)

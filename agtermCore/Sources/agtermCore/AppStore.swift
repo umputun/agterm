@@ -177,7 +177,8 @@ public final class AppStore {
                                           foreground: foreground(session),
                                           splitForeground: splitForeground(session), status: status,
                                           statusPane: statusPane,
-                                          background: session.backgroundWatermark)
+                                          background: session.backgroundWatermark,
+                                          unseen: session.unseenCount > 0 ? session.unseenCount : nil)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID, sessions: sessions)

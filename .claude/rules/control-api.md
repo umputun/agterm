@@ -102,7 +102,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 50-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 51-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -172,10 +172,10 @@ paths:
   exact `uuidString` (case-insensitive), or a git-style unique prefix.
   Zero prefix hits → `notFound` error, ≥2 → `ambiguous` error listing the candidates.
   `--target` defaults to `active`, so scripts rarely type an id and never for "the current one".
-- **Command catalog (50 commands):**
+- **Command catalog (51 commands):**
   - `tree`
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`
-  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.result`
+  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.result`
   - `quick`
   - `sidebar`/`sidebar.mode`/`sidebar.expand`/`sidebar.collapse`
   - `notify`
@@ -669,6 +669,26 @@ paths:
   arm (`setSessionFlag`) in `ControlServer`, (3) the `session flag on|off|toggle|clear` subcommand (`FlagCommand`)
   in `agtermctlKit`, (4) round-trip in `ControlProtocolTests` + the e2e `testSessionFlagAndSidebarModeFlagged`
   in `ControlSidebarStatusUITests`.
+  `session.seen` (target = session) clears a session's unseen-notification badge WITHOUT changing the
+  selection, focus, or agent status — the focus-free counterpart to `notify`, which raises the badge over
+  the socket while the only clear paths (`AppStore.selectSession`, a pane's `onFocusChange(true)`) are
+  both focus-coupled.
+  It drives the already-public `AppStore.clearUnseen(_:)` (the same primitive `selectSession` calls),
+  so it is idempotent (a no-op when already zero; the count is ephemeral, absent from `SessionSnapshot`,
+  so it triggers no save) and returns the session id; NO args beyond target/window (leaner than `session.flag`
+  — no mode).
+  It is control-NATIVE (no GUI/menu equivalent — visiting the session is the GUI's only "mark seen", and
+  it is inseparable from selecting) — the same footing as `notify`/`session.type`/`session.copy`.
+  The read side is the new `unseen` field on `ControlSessionNode` (the `session.unseenCount`, populated
+  in the `tree` builder, omitted when zero), so a script can query the count and clear it symmetrically.
+  Four-point keep-in-sync audit for `session.seen`: (1) `case sessionSeen = "session.seen"` +
+  `unseen: Int?` on `ControlSessionNode` in `ControlProtocol.swift` (no new `ControlArgs` field),
+  (2) the `.sessionSeen` dispatch arm (`markSessionSeen`) in `ControlDispatcher`/`ControlServer` + the
+  `unseen` population in `AppStore.controlTree`, (3) the `session seen` subcommand (`Seen`) in `agtermctlKit`,
+  (4) round-trip (`sessionSeenRoundTrips` + `treeSessionNodeRoundTripsWithUnseen`/`…OmitsUnseenWhenNil`)
+  in `ControlProtocolTests` + dispatcher routing in `ControlDispatcherTests` + `AppStoreTests`
+  (`controlTreeReportsUnseenCountWhenPositive`/`…OmitsUnseenCountWhenZero`) + CLI mapping in `CommandsTests`
+  + the e2e `testSessionSeenClearsBadgeWithoutFocus` in `ControlSidebarStatusUITests`.
   `sidebar.mode` (frontmost window) flips the sidebar VIEW between the workspace tree and the flat flagged
   working-set list — `args.mode` is `tree`|`flagged`|`toggle` (delta-computed against `AppStore.sidebarMode`
   so it's idempotent, unknown mode = error), drives `setSidebarViewMode` → `AppStore.setSidebarMode`.
@@ -796,5 +816,5 @@ paths:
   (image/text/color set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
-  examples.md recipes) and the command count there is bumped to 50 to match.
+  examples.md recipes) and the command count there is bumped to 51 to match.
 

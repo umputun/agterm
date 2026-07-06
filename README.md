@@ -141,7 +141,7 @@ agterm arranges terminals into a small hierarchy. These are the only terms you n
 
 **Flagging and focus.** Two ways to cut down a busy sidebar. Flag a few sessions from different workspaces to get a flat working-set view of just those; a flag is durable and survives a move. Focus a single workspace to hide the others, with a one-click way back. The two are independent.
 
-**Notifications.** A program in any session can raise a desktop notification (via OSC 9 / 777, or the control API). It shows as a banner and a count badge on the session's row; clicking the banner jumps to the exact pane that raised it. For a coding agent that just needs to say it is waiting on you, [Agent status](#agent-status) is usually the better fit.
+**Notifications.** A program in any session can raise a desktop notification (via OSC 9 / 777, or the control API). It shows as a banner and a count badge on the session's row; clicking the banner jumps to the exact pane that raised it. The badge clears when you visit the session, or headlessly with `agtermctl session seen` — so an orchestrator driving a session over the socket can acknowledge its notifications without pulling focus to it (`agtermctl tree --json` reports each session's `unseen` count). For a coding agent that just needs to say it is waiting on you, [Agent status](#agent-status) is usually the better fit.
 
 **Agent status.** A coding agent in a session can report its state (active, blocked, completed) onto that session's row, so a screen of concurrent agents shows which one needs you. See [Agent status](#agent-status) for wiring it up.
 
@@ -200,6 +200,7 @@ agtermctl session split toggle                   # split the active session
 agtermctl session resize --split-ratio 0.7       # set the split divider (left-pane fraction); or --grow-left/--grow-right D
 agtermctl session scratch toggle                 # show/hide the active session's scratch terminal (on|off|toggle)
 agtermctl session flag on                        # flag the active session for the flagged working-set view (on|off|toggle|clear)
+agtermctl session seen --target 9f3c             # clear a session's unseen-notification badge without visiting it (focus-free)
 agtermctl sidebar mode flagged                   # show only the flagged sessions as a flat list (tree|flagged|toggle)
 agtermctl workspace focus on                     # collapse the sidebar tree to the active workspace (on|off|toggle)
 agtermctl session search "error"                 # open the search bar and highlight matches; prints the "N of M" counter

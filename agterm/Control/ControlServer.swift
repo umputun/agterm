@@ -343,7 +343,7 @@ final class ControlServer {
         case .tree, .sessionNew, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
                 .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete,
                 .sessionMove, .workspaceMove, .workspaceFocus, .sessionSplit, .sessionScratch,
-                .sessionFocus, .sessionResize, .sessionStatus, .sessionFlag, .notify,
+                .sessionFocus, .sessionResize, .sessionStatus, .sessionFlag, .sessionSeen, .notify,
                 .fontInc, .fontDec, .fontReset, .keymapReload, .configReload, .themeSet, .themeList,
                 .sidebar, .sidebarMode, .sidebarExpand, .sidebarCollapse, .sessionType, .sessionCopy,
                 .sessionSearch, .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResult,

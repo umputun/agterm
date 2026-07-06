@@ -15,7 +15,7 @@ description: >
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.scratch, session.focus, session.resize, session.go, session.copy, session.text, session.search, session.status,
-  session.flag, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
+  session.flag, session.seen, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
   theme.set, theme.list, select theme, edit keymap, show an image, display an image inline, show-image,
   AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: troubleshoot agterm,
@@ -97,7 +97,7 @@ you work. For any session-scoped command meant to act on *this* session — `ove
 `type`, `text`, `background`, `status`, `copy`, … — pass `--target "$AGTERM_SESSION_ID"`. Omit it and
 you open overlays / type into whatever the user has selected, not your own session.
 
-## Command summary (50 commands)
+## Command summary (51 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -107,8 +107,10 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 is at its shell prompt) — i.e. what each pane is currently running — `status` (the agent-status set
 via `session status`: `active`|`completed`|`blocked`, omitted when idle), `statusPane` (which pane set
 that status: `left` (main) | `right` (split) | `scratch`, from `session status --pane`, omitted when
-unset or idle), and `background` (the background
-spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear).
+unset or idle), `background` (the background
+spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear),
+and `unseen` (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session
+seen` — omitted when zero).
 
 **workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom` ·
 `focus [on|off|toggle]` (collapse the sidebar tree to a single workspace).
@@ -150,6 +152,10 @@ spec — image/text watermark or solid color — set via `session background`, o
   a fraction. Prints the applied (clamped) fraction.
 - `status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb] [--pane left|right|scratch]` — set the sidebar agent glyph (`--sound default` or a system sound name plays a one-shot sound; `--color` tints the glyph for this call only, reverting on the next status set without it; `--pane` records which pane set it — `left`=main, `right`=split, `scratch` — so foreground typing in another pane won't clear it and any user-initiated GUI selection (auto-follow, attention-nav ⌃⌥↑/↓, plain session nav, the command palettes, a sidebar row click) reveals the blocking pane, read back as the tree `statusPane` field; the socket `session go next-attention` only steps the selection, it does not itself reveal the pane).
 - `flag [on|off|toggle|clear]` — flag a session for the flagged working-set view (`clear` unflags all).
+- `seen [--target] [--window W]` — clear the session's unseen-notification badge WITHOUT changing the
+  selection or focus (the focus-free counterpart to `notify`, which raises the badge). Idempotent — a
+  no-op when already zero. Read the current count from the tree node's `unseen` field. Use it so an
+  orchestrator can acknowledge a driven session's notifications without pulling focus to it.
 - `background image <path> [--opacity F] [--fit contain|cover|stretch|none] [--position P] [--repeat]` ·
   `background text <text> [--color #rrggbb] [--opacity F] [--fit ...] [--position ...]` ·
   `background color <#rrggbb>` · `background clear` — composite an image (PNG/JPEG) or rasterized text

@@ -225,6 +225,19 @@ agtermctl sidebar mode tree                               # back to the full tre
 agtermctl session flag clear                              # unflag everything in the window
 ```
 
+## Acknowledge a driven session's notifications without stealing focus
+
+An orchestrator relaying a session's output elsewhere (Telegram, another agent) fires `notify` to signal
+"your turn", which raises the session's red unseen badge. Nothing normally clears that badge except
+visiting the session — which pulls the selection to it. `session seen` clears it in place, so the badge
+stays a real attention signal on the sessions a human tends while the driven ones stay clean.
+
+```bash
+agtermctl notify --target "$SID" --body "your turn"      # raises the unseen badge
+agtermctl tree --json | jq '.result.tree.workspaces[].sessions[] | {id, unseen}'  # read the counts
+agtermctl session seen --target "$SID"                   # clear it, selection/focus unchanged
+```
+
 ## Focus a single workspace
 
 Collapse the sidebar tree to one workspace's sessions (hiding the others), with the full tree one

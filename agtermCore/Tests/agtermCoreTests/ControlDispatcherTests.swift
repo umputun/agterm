@@ -439,6 +439,25 @@ struct ControlDispatcherTests {
         ])
     }
 
+    @Test func sessionSeenRoutesTargetAndWindow() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let seen = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionSeen,
+            target: "session",
+            args: ControlArgs(window: "win")
+        ))
+        let active = await dispatcher.dispatch(ControlRequest(cmd: .sessionSeen))
+
+        #expect(seen == ControlResponse(ok: true))
+        #expect(active == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .markSessionSeen(target: "session", window: "win"),
+            .markSessionSeen(target: nil, window: nil)
+        ])
+    }
+
     @Test func sessionStatusRoutesParsedStatusAndRejectsInvalidStatus() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -1206,6 +1225,7 @@ private final class MockControlActions: ControlActions {
         case workspaceMove(target: String?, window: String?, ReorderDirection)
         case workspaceFocus(target: String?, window: String?, String?)
         case sessionFlag(target: String?, window: String?, String?)
+        case markSessionSeen(target: String?, window: String?)
         case sessionStatus(target: String?, window: String?, ControlSessionStatusUpdate)
         case sessionSplit(target: String?, window: String?, String?)
         case sessionScratch(target: String?, window: String?, String?, command: String?)
@@ -1342,6 +1362,11 @@ private final class MockControlActions: ControlActions {
 
     func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse {
         calls.append(.sessionFlag(target: target, window: window, mode))
+        return ControlResponse(ok: true)
+    }
+
+    func markSessionSeen(_ target: String?, window: String?) -> ControlResponse {
+        calls.append(.markSessionSeen(target: target, window: window))
         return ControlResponse(ok: true)
     }
 

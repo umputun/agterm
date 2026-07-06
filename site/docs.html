@@ -849,7 +849,9 @@
               A program in any session can raise a desktop notification (via OSC 9 / 777, or
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl notify</span>). It surfaces
               as a macOS banner and an unseen-count badge on the sidebar row (rolled up onto a collapsed workspace); clicking the
-              banner brings agterm forward and focuses the exact pane that raised it, and focusing a session clears its badge.
+              banner brings agterm forward and focuses the exact pane that raised it, and focusing a session clears its badge — or
+              clear it headlessly with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session seen</span>
+              so an orchestrator driving a session over the socket can acknowledge it without pulling focus.
               Banners and count badges toggle independently in General settings. For a coding agent that just needs to say it is
               waiting, <a href="#status" style="color: #6d82f3">agent status</a> is usually the better fit.
             </p>
@@ -1083,7 +1085,8 @@
               agtermctl session split toggle<br />agtermctl session resize --split-ratio 0.7
               <span style="color: #6b727a">&nbsp;# or --grow-left/--grow-right D</span><br />agtermctl session scratch toggle
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# on|off|toggle</span><br />agtermctl session flag on
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# on|off|toggle|clear</span><br />agtermctl
+              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# on|off|toggle|clear</span><br />agtermctl session seen --target 9f3c
+              <span style="color: #6b727a">&nbsp;# clear the unseen badge, focus-free</span><br />agtermctl
               sidebar mode flagged <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# tree|flagged|toggle</span><br />agtermctl quick
               toggle<br />agtermctl font inc <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# active surface font size</span
               ><br /><br /><span style="color: #6b727a"># open the search bar, print the "N of M" counter</span><br />agtermctl

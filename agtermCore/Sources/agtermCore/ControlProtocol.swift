@@ -20,6 +20,7 @@ public enum Command: String, Codable, Sendable {
     case sessionType = "session.type"
     case sessionStatus = "session.status"
     case sessionFlag = "session.flag"
+    case sessionSeen = "session.seen"
     case sessionBackground = "session.background"
     case sessionSplit = "session.split"
     case sessionScratch = "session.scratch"
@@ -265,11 +266,15 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// The session's background watermark spec, or nil when none is set (omitted from the JSON). The read
     /// side of `session.background` — set/clear/query symmetry, so a script can inspect the current watermark.
     public let background: BackgroundWatermark?
+    /// The session's unseen-notification badge count, or nil when zero (omitted from the JSON). The read
+    /// side of the notification badge: `notify` (and terminal OSC 9/777) raise it, `session.seen` clears it.
+    /// Ephemeral like `status` — never persisted, so it resets to nil on restart.
+    public let unseen: Int?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 overlay: Bool = false, scratch: Bool = false, flagged: Bool = false,
                 foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil,
-                statusPane: String? = nil, background: BackgroundWatermark? = nil) {
+                statusPane: String? = nil, background: BackgroundWatermark? = nil, unseen: Int? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -284,6 +289,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.status = status
         self.statusPane = statusPane
         self.background = background
+        self.unseen = unseen
     }
 }
 

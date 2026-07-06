@@ -19,6 +19,7 @@ public protocol ControlActions {
     func moveWorkspace(_ target: String?, window: String?, direction: ReorderDirection) -> ControlResponse
     func focusWorkspace(_ target: String?, window: String?, mode: String?) -> ControlResponse
     func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse
+    func markSessionSeen(_ target: String?, window: String?) -> ControlResponse
     func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) -> ControlResponse
     func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse
     func scratchSession(_ target: String?, window: String?, mode: String?, command: String?) -> ControlResponse
@@ -124,7 +125,7 @@ public struct ControlDispatcher {
         case .tree:
             return actions.controlTree(window: request.args?.window)
         case .sessionNew, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
-                .sessionMove, .sessionFlag, .sessionStatus:
+                .sessionMove, .sessionFlag, .sessionSeen, .sessionStatus:
             return dispatchSessionCommand(request)
         case .sessionSplit, .sessionScratch, .sessionFocus, .sessionResize, .sessionType,
                 .sessionCopy, .sessionSearch, .sessionOverlayOpen, .sessionOverlayClose,
@@ -218,6 +219,8 @@ public struct ControlDispatcher {
             return actions.moveSession(request.target, window: args?.window, move: .workspace(workspace))
         case .sessionFlag:
             return actions.setSessionFlag(request.target, window: request.args?.window, mode: request.args?.mode)
+        case .sessionSeen:
+            return actions.markSessionSeen(request.target, window: request.args?.window)
         case .sessionStatus:
             guard let status = AgentStatus(rawValue: request.args?.status ?? "") else {
                 return ControlResponse(ok: false, error: "invalid status")

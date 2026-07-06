@@ -20,7 +20,7 @@ struct Session: ParsableCommand {
         abstract: "Session commands.",
         subcommands: [New.self, Close.self, Select.self, Go.self, Rename.self, Move.self, TypeText.self,
                       Split.self, Scratch.self, Focus.self, Resize.self, Copy.self, Text.self, Status.self, FlagCommand.self,
-                      Search.self, Background.self, Overlay.self]
+                      Seen.self, Search.self, Background.self, Overlay.self]
     )
 
     struct New: RequestCommand {
@@ -331,6 +331,16 @@ struct Session: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionFlag, target: target.target, args: options.withWindow(ControlArgs(mode: mode)))
+        }
+    }
+
+    struct Seen: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Clear a session's unseen-notification badge without changing the selection or focus (idempotent).")
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sessionSeen, target: target.target, args: options.withWindow())
         }
     }
 
