@@ -195,10 +195,10 @@ extension GhosttySurfaceView {
         ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
     }
 
-    /// The pointer entered the surface: restore libghostty's mouse position from the current point. Paired
-    /// with `mouseExited`'s `-1, -1` reset — without it, `scrollWheel` (which never sets `mouse_pos`) would
-    /// report a scroll at the stale `-1, -1` if you scroll right after re-entering, before any move, inside
-    /// a mouse-reporting TUI (vim/less/htop).
+    /// The pointer entered the surface: restore libghostty's mouse position from the current point, undoing
+    /// `mouseExited`'s `-1, -1` reset so hovered-link and cursor-shape state are correct on re-entry.
+    /// (`scrollWheel` now also syncs `mouse_pos` from its own event, so the first post-re-entry scroll no
+    /// longer depends on this — but the restore still matters for hover/link state before any move.)
     override func mouseEntered(with event: NSEvent) {
         guard let surface else { return }
         let pt = mousePoint(from: event)
@@ -218,12 +218,13 @@ extension GhosttySurfaceView {
     override func scrollWheel(with event: NSEvent) {
         guard let surface else { return }
         // sync libghostty's mouse position from THIS event before scrolling: mouse_scroll reports the
-        // scroll at the last-known cell, and re-activating the window by clicking (acceptsFirstMouse is
-        // off, so the click is swallowed — no mouseDown) or via cmd-tab delivers no mouseDown/mouseEntered,
-        // leaving the position stale or -1,-1 (from mouseExited). without this the first scroll inside a
+        // scroll at the last-known cell. reactivating the window with no mouse move — cmd-tab/keyboard, or
+        // scrolling to reactivate while the pointer is already inside — delivers no mouseDown/mouseEntered,
+        // so the position stays stale or -1,-1 (from mouseExited). without this the first scroll inside a
         // mouse-reporting TUI (Claude Code, vim, less) reports at the stale cell and does nothing until you
-        // nudge the mouse. companion to the mouseEntered restore, which only covers the cross-the-boundary
-        // re-entry path, not reactivation while the pointer is already inside.
+        // nudge the mouse. (a LEFT click reactivation is already covered by mouseDown via acceptsFirstMouse;
+        // this handles the no-click paths.) companion to the mouseEntered restore, which only covers the
+        // cross-the-boundary re-entry path.
         let pt = mousePoint(from: event)
         ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
         var scrollMods: ghostty_input_scroll_mods_t = 0

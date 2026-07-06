@@ -228,6 +228,24 @@ paths:
   Cursor solid/hollow is not accessibility-observable, so it is NOT unit/UI-testable — verified by instrumenting
   `set_focus` and reading `log show` across split-open + multi-window key switches (exactly one focused
   surface app-wide in every case).
+- **A background window's LEFT reactivation click reaches the surface (`acceptsFirstMouse`), and `scrollWheel` self-syncs the mouse cell.**
+  `GhosttySurfaceView.acceptsFirstMouse(for:)` returns true ONLY for `.leftMouseDown`, so the click that
+  raises an inactive window also runs `mouseDown` — selecting the clicked split pane (`makeFirstResponder`
+  → `onFocusChange` → `splitFocused`), the counterpart to the first-responder path above, instead of AppKit
+  swallowing the click just to raise the window.
+  It is gated to the LEFT button on purpose: a first-mouse right/middle click would otherwise reach
+  `rightMouseDown`/`otherMouseDown`, which forward to libghostty, and with the default
+  `right-click-action = paste` (`AppSettings.rightClickPaste`, nil = paste) that would paste the clipboard
+  into a window you only meant to raise.
+  Separately, `mouse_scroll` reports at libghostty's LAST-KNOWN cell, and a no-mouse-move reactivation
+  (cmd-tab/keyboard, or scrolling to reactivate with the pointer already inside) fires no `mouseDown`/`mouseEntered`,
+  so the position is stale or `-1,-1` (from `mouseExited`).
+  `scrollWheel` therefore pushes `ghostty_surface_mouse_pos` from its own event before `mouse_scroll`, so
+  the first scroll inside a mouse-reporting TUI (Claude Code, vim, less) lands at the real cell instead of
+  doing nothing until you nudge the mouse — the companion to the `mouseEntered` restore (which only covers
+  cross-the-boundary re-entry).
+  Like the cursor-focus case, this input plumbing is not accessibility-observable and is verified by hand,
+  not a UI test.
 - **OSC 52 clipboard access is gated in OUR callbacks, not by a ghostty-internal dialog.**
   A program reading (`\e]52;c;?\a`) or writing (`\e]52;c;<base64>\a`) the system clipboard reaches agterm
   through `read_clipboard_cb`/`confirm_read_clipboard_cb` and `write_clipboard_cb` (`GhosttyCallbacks`).

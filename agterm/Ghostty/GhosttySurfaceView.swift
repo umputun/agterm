@@ -867,14 +867,17 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
     override var acceptsFirstResponder: Bool { true }
 
-    /// Deliver the click that reactivates a background/inactive window straight to the surface (a "first
-    /// mouse") instead of AppKit swallowing it just to raise the window. Without this, clicking a specific
-    /// pane of a two-pane split from another window raises the window but never runs `mouseDown`, so the
-    /// clicked pane doesn't become first responder and `splitFocused` stays on the previously-focused pane
-    /// ("the mouse works but the pane isn't selected"). Returning true makes the reactivation click behave
-    /// like any normal in-window click — it selects the pane AND is reported to the program — matching
-    /// Terminal.app/iTerm2/Ghostty.
-    override func acceptsFirstMouse(for _: NSEvent?) -> Bool { true }
+    /// Deliver the LEFT click that reactivates a background/inactive window straight to the surface (a
+    /// "first mouse") instead of AppKit swallowing it just to raise the window. Without this, clicking a
+    /// specific pane of a two-pane split from another window raises the window but never runs `mouseDown`,
+    /// so the clicked pane doesn't become first responder and `splitFocused` stays on the previously-focused
+    /// pane ("the mouse works but the pane isn't selected"). The left click then behaves like any normal
+    /// in-window click — it selects the pane AND is reported to the program — matching Terminal.app/iTerm2/Ghostty.
+    /// Gated to `.leftMouseDown` on purpose: a first-mouse right/middle click would otherwise reach
+    /// `rightMouseDown`/`otherMouseDown`, which forward to libghostty, and with the default
+    /// `right-click-action = paste` that would paste the clipboard into a window you only meant to raise —
+    /// so right/middle first clicks just raise the window.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { event?.type == .leftMouseDown }
 
     override func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()
