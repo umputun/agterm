@@ -213,8 +213,10 @@ paths:
   EVERY user-initiated GUI selection now REVEALS the blocked PANE, not just the session: the shared
   `AppActions.revealActiveBlockedPane()` (formerly private, now called on all selection paths) reads the
   landed session's `agentIndicator.statusPane` and focuses that pane — for `right`, the split surface via
-  `focusSplitPane(_:wantSplit: true)` (a FIXED target, UNGATED on `hasSplit`, so a promoted split survivor
-  is still focused, and its `onFocusChange` re-asserts `splitFocused` to win the shown-split re-render race);
+  `focusSplitPane(_:wantSplit: true)` (a FIXED target gated on `splitSurface != nil`, and its `onFocusChange`
+  re-asserts `splitFocused` to win the shown-split re-render race). A promoted split survivor is NOT covered
+  by this branch — promotion moves it into `surface` with `splitSurface == nil` (and re-tags a `.right` block
+  to `.left`), so it falls through to `focusActiveSession` as the session's sole main pane, which is correct;
   for `scratch`, shows a hidden scratch via `AppStore.toggleScratch` then focuses it;
   for `left`/nil, the main pane; and it is a no-op (plain `focusActiveSession`) for an IDLE session
   (no status set), so ordinary selections are unaffected (the idle gate is what keeps a plain nav to a

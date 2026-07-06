@@ -118,11 +118,21 @@ extension AppStore {
         if session.searchSurface == nil || session.searchSurface === priorPrimary {
             session.clearSearch()
         }
-        // the exited primary owned any `.left`/nil-tagged agent-status block; clear it (the dead pane is gone).
-        // a `.right`-tagged block belongs to the promoted survivor, which keeps its `.right`-wired
-        // keystroke-clear (wireStatusClear binds the pane at factory time, not by live role), so it stays and
-        // remains clearable — the mirror of closeSplit's `.right` clear when the OTHER pane exits.
-        clearIndicatorOwnedByPane(.left, of: session)
+        // migrate the agent-status identity like the cwd/title above: the exited primary owned any
+        // `.left`/nil-tagged block, which dies with it (clear); a `.right`-tagged block belonged to the
+        // promoted survivor and FOLLOWS it into the main slot — re-tag to `.left` so the `tree` (which now
+        // reports `split:false`) and the survivor's now-`.left`-role-aware keystroke-clear agree, instead of
+        // a self-contradictory `split:false` + `statusPane:"right"`. A `.scratch` block is untouched.
+        if session.agentIndicator.status != .idle {
+            switch session.agentIndicator.statusPane ?? .left {
+            case .left: setAgentIndicator(AgentIndicator(), forSession: session.id)
+            case .right:
+                var promoted = session.agentIndicator
+                promoted.statusPane = .left
+                setAgentIndicator(promoted, forSession: session.id)
+            case .scratch: break
+            }
+        }
         save()
     }
 

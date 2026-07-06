@@ -770,17 +770,19 @@ struct AppStorePaneTests {
         }
     }
 
-    @Test func closePrimaryPaneLeavesRightTaggedStatus() {
+    @Test func closePrimaryPaneMigratesRightTaggedStatusToLeft() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         session.surface = SpySurface(); session.splitSurface = SpySurface()
         session.isSplit = true; session.hasSplit = true
-        // the `.right` block is owned by the split, which becomes the promoted survivor — still clearable, keep it.
+        // the `.right` block is owned by the split, which is PROMOTED into the main slot — its status follows,
+        // re-tagged to `.left` (like the cwd/title migration) so `tree` (now split:false) and the survivor's
+        // left-role-aware keystroke-clear agree, instead of a self-contradictory split:false + statusPane:right.
         store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: session.id)
         store.closePrimaryPane(session.id)
-        #expect(session.agentIndicator.status == .blocked)
-        #expect(session.agentIndicator.statusPane == .right)
+        #expect(session.agentIndicator.status == .blocked)   // the survivor's block persists across promotion
+        #expect(session.agentIndicator.statusPane == .left)  // re-tagged to the (now sole) main pane
     }
 
     @Test func closeScratchClearsScratchTaggedStatus() {

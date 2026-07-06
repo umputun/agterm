@@ -229,7 +229,7 @@ struct agtermApp: App {
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
-        Self.wireStatusClear(view, store: store, sessionID: sessionID, pane: .left)
+        Self.wireStatusClear(view, store: store, sessionID: sessionID)
         view.onUserInput = { store.noteUserActivity() }
         view.onFontSizeChange = { store.setFontSize(sessionID, $0) }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
@@ -333,12 +333,17 @@ struct agtermApp: App {
     /// Wire the pane-scoped keystroke-clear: `keyDown` fires `onUserInputClearsStatus` unconditionally, and
     /// this closure clears the status back to idle ONLY when the host-free `AgentIndicator.clearedBy(pane:isInterrupt:)`
     /// says the keystroke's OWN pane owns the current status — so a block set from a background pane survives
-    /// foreground typing in another pane. Wired by all three surface factories with only the pane differing
-    /// (main=`.left`, split=`.right`, scratch=`.scratch`), like `wireSearchCallbacks`; the scratch has no
-    /// `view.session`, so the decision must live in this closure rather than `keyDown`.
+    /// foreground typing in another pane. The main/split panes resolve their pane from the surface's LIVE role
+    /// (`isSplitPane`) at keystroke time, NOT statically: a promoted split survivor (a split surface whose
+    /// `isSplitPane` was cleared) then clears as `.left`, matching its migrated status identity and `tree`
+    /// addressing — a statically-captured `.right` would keep clearing the wrong pane after promotion, and a
+    /// re-split would leave both panes `.right`-wired (mirrors the role-aware `onFocusChange`). The scratch pane
+    /// passes `fixedPane: .scratch` (never promoted, and it has no `view.session` to read a role from).
     @MainActor
-    private static func wireStatusClear(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID, pane: StatusPane) {
-        view.onUserInputClearsStatus = { isInterrupt in
+    private static func wireStatusClear(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID,
+                                        fixedPane: StatusPane? = nil) {
+        view.onUserInputClearsStatus = { [weak view] isInterrupt in
+            let pane = fixedPane ?? ((view?.isSplitPane ?? false) ? .right : .left)
             if store.session(withID: sessionID)?.agentIndicator.clearedBy(pane: pane, isInterrupt: isInterrupt) == true {
                 store.setAgentIndicator(AgentIndicator(), forSession: sessionID)
             }
@@ -383,7 +388,7 @@ struct agtermApp: App {
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
-        Self.wireStatusClear(view, store: store, sessionID: sessionID, pane: .right)
+        Self.wireStatusClear(view, store: store, sessionID: sessionID)
         view.onUserInput = { store.noteUserActivity() }
         Self.wireSearchCallbacks(view, store: store, sessionID: sessionID, library: library)
         return view
@@ -449,7 +454,7 @@ struct agtermApp: App {
                                       autoFocus: !suppressAutoFocus, env: env)
         let sessionID = session.id
         view.onExit = { store.closeScratch(sessionID) }
-        Self.wireStatusClear(view, store: store, sessionID: sessionID, pane: .scratch)
+        Self.wireStatusClear(view, store: store, sessionID: sessionID, fixedPane: .scratch)
         // typing in the scratch counts as user activity: reset the window's auto-follow idle timer so an
         // idle fire can't change the underlying selection (hiding the per-session scratch) while you type
         // in it. destroySurface nils this, breaking the store -> surface -> closure retain cycle.
