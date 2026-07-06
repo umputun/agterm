@@ -240,10 +240,14 @@ paths:
   Separately, `mouse_scroll` reports at libghostty's LAST-KNOWN cell, and a no-mouse-move reactivation
   (cmd-tab/keyboard, or scrolling to reactivate with the pointer already inside) fires no `mouseDown`/`mouseEntered`,
   so the position is stale or `-1,-1` (from `mouseExited`).
-  `scrollWheel` therefore pushes `ghostty_surface_mouse_pos` from its own event before `mouse_scroll`, so
-  the first scroll inside a mouse-reporting TUI (Claude Code, vim, less) lands at the real cell instead of
-  doing nothing until you nudge the mouse — the companion to the `mouseEntered` restore (which only covers
-  cross-the-boundary re-entry).
+  `scrollWheel` therefore pushes `ghostty_surface_mouse_pos` from its own event before `mouse_scroll`, but
+  ONLY when the point is stale — it differs from `lastReportedMousePoint`, which every mouse handler updates
+  through the shared `reportMousePos` helper.
+  So the first scroll after a no-move reactivation lands at the real cell instead of doing nothing until you
+  nudge the mouse, while a normal already-synced scroll does NOT re-push the same cell on every packet —
+  which in an any-motion + sgr-pixel mouse-reporting TUI would otherwise emit a synthetic motion report per
+  packet.
+  It is the companion to the `mouseEntered` restore (which only covers cross-the-boundary re-entry).
   Like the cursor-focus case, this input plumbing is not accessibility-observable and is verified by hand,
   not a UI test.
 - **OSC 52 clipboard access is gated in OUR callbacks, not by a ghostty-internal dialog.**

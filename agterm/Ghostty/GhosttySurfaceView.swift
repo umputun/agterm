@@ -227,6 +227,13 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// owns the cursor-rect override and `applyMouseShape`) can read it.
     var mouseShape: ghostty_action_mouse_shape_e = GHOSTTY_MOUSE_SHAPE_TEXT
 
+    /// The last pointer position pushed to libghostty via `ghostty_surface_mouse_pos` (view-flipped
+    /// coordinates), or nil before the first report. `scrollWheel` syncs the position only when the current
+    /// point differs from this, so a normal already-synced scroll doesn't re-push the same cell on every
+    /// packet — which in an any-motion + sgr-pixel mouse-reporting TUI would emit a synthetic motion report
+    /// per packet. Not `private` so the `+Input` extension (which owns the mouse handlers) can read/write it.
+    var lastReportedMousePoint: NSPoint?
+
     init(workingDirectory: String, fontSize: Float? = nil, command: String? = nil, initialInput: String? = nil,
          waitAfterCommand: Bool = false, autoFocus: Bool = false, env: [String: String] = [:]) {
         self.workingDirectory = workingDirectory
