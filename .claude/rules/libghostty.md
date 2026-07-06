@@ -29,6 +29,18 @@ paths:
   text (a luminance-contrast black/white fallback when only the background is set).
   The borderless New-Session `Menu` glyph ignores `foregroundStyle` on its label,
   so it's tinted via `.tint(chromeText)`.
+- **The sidebar's disclosure triangle tracks the theme via `NSAppearance`, not a color we set.**
+  The expand/collapse triangle is drawn by `NSOutlineView` itself, colored from the view's `NSAppearance`
+  — which follows the macOS system light/dark setting, NOT the terminal theme.
+  So a light theme under macOS dark mode (or the mirror, a dark theme under macOS light mode) draws the
+  triangle in the wrong brightness and it vanishes against the themed sidebar background
+  (the row text/icons stay visible only because they're set explicitly to `terminalForegroundColor`).
+  `WorkspaceSidebar.Coordinator.applyThemeAppearance()` pins `outline.appearance` to `.darkAqua`/`.aqua`
+  from `GhosttyApp.terminalThemeIsDark` (the theme background's perceived luminance via the host-free
+  `agtermCore.ThemeBrightness.isDark`), called in `makeNSView` (launch) and `appearanceChanged` (live
+  theme switch).
+  The triangle color is not accessibility-observable, so this is verified by eye, not a UI test — like
+  the cursor solid/hollow case.
 - **Sidebar selection is drawn entirely by `SidebarRowView`, not AppKit.**
   `outline.selectionHighlightStyle = .none` (set right after `style = .sourceList`,
   which would otherwise reset it) so AppKit draws no selection of its own — otherwise it paints a gray

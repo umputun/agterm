@@ -30,6 +30,15 @@ final class GhosttyApp {
     /// text + icons, title bar text + buttons) uses it so non-terminal text tracks the theme instead
     /// of the system label color. Nil if the color couldn't be read.
     private(set) var terminalForegroundColor: NSColor?
+    /// Whether the active terminal theme reads as dark, by the background's perceived luminance. Pins
+    /// AppKit-drawn chrome (the sidebar disclosure triangle) to the theme instead of the macOS system
+    /// appearance, so a light theme under macOS dark mode still draws dark, visible chrome. Defaults to
+    /// dark when the background couldn't be read (the app's default chrome).
+    var terminalThemeIsDark: Bool {
+        guard let bg = terminalBackgroundColor?.usingColorSpace(.sRGB) else { return true }
+        return ThemeBrightness.isDark(red: Double(bg.redComponent), green: Double(bg.greenComponent),
+                                      blue: Double(bg.blueComponent))
+    }
     /// The terminal selection-background color (theme `selection-background`). The selected sidebar row
     /// draws its pill in this color so it matches the terminal's own selection. Nil if the theme
     /// doesn't set it (the row falls back to a soft white wash).

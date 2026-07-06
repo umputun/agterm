@@ -58,6 +58,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
 
         context.coordinator.outlineView = outline
         context.coordinator.renameController.outlineView = outline
+        // pin the outline appearance to the theme brightness up front so the disclosure triangle reads on
+        // launch (a light theme under macOS dark mode would otherwise draw an invisible light triangle).
+        context.coordinator.applyThemeAppearance()
         // seed the tracked expansion from the persisted per-workspace state BEFORE the reload, so
         // rebuildAndReload restores each workspace's saved open/collapsed state (a collapsed workspace
         // stays collapsed across relaunch) instead of force-expanding every row.
@@ -209,8 +212,17 @@ struct WorkspaceSidebar: NSViewRepresentable {
             outline.enumerateAvailableRowViews { rowView, _ in rowView.needsDisplay = true }
         }
 
+        /// Pin the outline's appearance to the terminal theme's brightness so AppKit-drawn chrome — the
+        /// disclosure triangle — tracks the theme, not the macOS system light/dark setting. Without this a
+        /// light theme under macOS dark mode draws a light-gray triangle that's invisible on the light
+        /// sidebar (the row text/icons stay visible only because they're set explicitly to the theme color).
+        func applyThemeAppearance() {
+            outlineView?.appearance = NSAppearance(named: GhosttyApp.shared.terminalThemeIsDark ? .darkAqua : .aqua)
+        }
+
         @objc private func appearanceChanged() {
             refreshSelectionAppearance()
+            applyThemeAppearance()
             // a settings change may have flipped the badge-visibility toggle; reconcile so the gated
             // unseen count (0 when off, the real count when on) reloads the affected badge rows.
             reconcile()
