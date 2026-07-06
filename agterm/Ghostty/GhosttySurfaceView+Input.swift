@@ -217,6 +217,15 @@ extension GhosttySurfaceView {
 
     override func scrollWheel(with event: NSEvent) {
         guard let surface else { return }
+        // sync libghostty's mouse position from THIS event before scrolling: mouse_scroll reports the
+        // scroll at the last-known cell, and re-activating the window by clicking (acceptsFirstMouse is
+        // off, so the click is swallowed — no mouseDown) or via cmd-tab delivers no mouseDown/mouseEntered,
+        // leaving the position stale or -1,-1 (from mouseExited). without this the first scroll inside a
+        // mouse-reporting TUI (Claude Code, vim, less) reports at the stale cell and does nothing until you
+        // nudge the mouse. companion to the mouseEntered restore, which only covers the cross-the-boundary
+        // re-entry path, not reactivation while the pointer is already inside.
+        let pt = mousePoint(from: event)
+        ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
         var scrollMods: ghostty_input_scroll_mods_t = 0
         if event.hasPreciseScrollingDeltas { scrollMods |= 1 }
         ghostty_surface_mouse_scroll(surface, event.scrollingDeltaX, event.scrollingDeltaY, scrollMods)
