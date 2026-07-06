@@ -504,9 +504,9 @@ final class AppActions {
     }
 
     /// Show/hide the frontmost window's sidebar. The custom split owns visibility (no system toggle), so
-    /// this flips the active store's per-window `sidebarVisible`; the view animates the change and
-    /// `AppStore` persists it. Shared by the toolbar button, the View menu item, the palette, and the
-    /// `sidebar` control command.
+    /// this flips the active store's per-window `sidebarVisible` (an instant toggle — the width is
+    /// intentionally not animated, see WindowContentView.splitRoot) and `AppStore` persists it. Shared by
+    /// the toolbar button, the View menu item, the palette, and the `sidebar` control command.
     func toggleSidebar() {
         guard let store else { return }
         store.toggleSidebarVisible()

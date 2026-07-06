@@ -141,11 +141,14 @@ struct WindowContentView: View {
             detailColumn
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        // animate the collapse/expand uniformly, whatever flips the flag (toolbar button, menu, palette,
-        // control), now that the toggle no longer wraps its own `withAnimation`.
-        .animation(.easeInOut(duration: 0.15), value: store.sidebarVisible)
-        // animate the tree↔flagged sidebar mode switch the same way, for every caller (bottom-bar
-        // toggle, menu, palette, control).
+        // deliberately NOT animated on visibility: animating the split width interpolates the detail
+        // column's frame every display frame, and detailPane is the EAGER deck (a ZStack over EVERY
+        // session's surface, all mounted). so an animated collapse/expand resizes every ghostty surface
+        // each frame — each resize reflows the grid (set_size) AND force-repaints (refresh), even hidden
+        // opacity-0 panes — a cost that scales with total session count and janks on a window with many
+        // sessions. an instant toggle reflows each surface exactly once. DO NOT re-add the width animation.
+        // the mode switch below is safe to animate — it swaps sidebar CONTENT, not the split width, so
+        // the detail column (and the deck) never resize.
         .animation(.easeInOut(duration: 0.15), value: store.sidebarMode)
     }
 
