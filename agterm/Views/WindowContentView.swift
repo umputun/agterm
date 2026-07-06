@@ -153,8 +153,10 @@ struct WindowContentView: View {
         VStack(spacing: 0) {
             // matches the detail pane's hairline so the line continues across the full width under
             // the title bar (the vertical divider hangs from it at the sidebar/terminal junction).
+            // themed (chromeText at low opacity), same as the detail-pane half, so it stays visible on
+            // light themes too.
             Rectangle()
-                .fill(Color.white.opacity(0.1))
+                .fill(chromeText.opacity(0.1))
                 .frame(height: 1)
             WorkspaceSidebar(store: store, actions: actions)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
@@ -183,7 +185,7 @@ struct WindowContentView: View {
     /// grab strip is reachable from both sides (the terminal column would otherwise shadow its right half).
     private var sidebarDivider: some View {
         Rectangle()
-            .fill(Color.white.opacity(0.1))
+            .fill(chromeText.opacity(0.1))
             .frame(width: 1)
             .frame(maxHeight: .infinity)
             .overlay {
@@ -211,8 +213,9 @@ struct WindowContentView: View {
         VStack(spacing: 0) {
             // a subtle hairline between the title bar and the terminal; lives in the
             // detail pane so it starts at the sidebar's right edge, not the full width.
+            // themed (chromeText at low opacity) so it stays visible on light themes too.
             Rectangle()
-                .fill(Color.white.opacity(0.1))
+                .fill(chromeText.opacity(0.1))
                 .frame(height: 1)
             detailPane
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
