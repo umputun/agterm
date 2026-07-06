@@ -13,4 +13,18 @@ public enum ThemeBrightness {
         let luminance = 0.299 * red + 0.587 * green + 0.114 * blue
         return luminance < 0.5
     }
+
+    /// Whether the sidebar reads as dark once the sidebar-tint wash is composited over the sRGB theme
+    /// background. `shiftAmount` is the signed wash from `AppSettings.sidebarShiftAmount`: negative
+    /// lightens (white wash toward 1), positive darkens (black wash toward 0), magnitude = wash opacity.
+    /// The disclosure triangle sits on this washed color, not the raw background, so this is what the
+    /// appearance pin classifies — a near-threshold theme plus a strong tint can cross the midpoint.
+    public static func isDark(red: Double, green: Double, blue: Double, shiftAmount: Double) -> Bool {
+        let opacity = min(1, abs(shiftAmount))
+        // compositing Color(white: w).opacity(o) over c gives c*(1-o) + w*o; lighten washes white (w=1),
+        // darken washes black (w=0), so the added term is `opacity` when lightening and 0 when darkening.
+        let added = shiftAmount < 0 ? opacity : 0
+        func wash(_ c: Double) -> Double { c * (1 - opacity) + added }
+        return isDark(red: wash(red), green: wash(green), blue: wash(blue))
+    }
 }

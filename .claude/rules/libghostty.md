@@ -36,9 +36,12 @@ paths:
   triangle in the wrong brightness and it vanishes against the themed sidebar background
   (the row text/icons stay visible only because they're set explicitly to `terminalForegroundColor`).
   `WorkspaceSidebar.Coordinator.applyThemeAppearance()` pins `outline.appearance` to `.darkAqua`/`.aqua`
-  from `GhosttyApp.terminalThemeIsDark` (the theme background's perceived luminance via the host-free
-  `agtermCore.ThemeBrightness.isDark`), called in `makeNSView` (launch) and `appearanceChanged` (live
-  theme switch).
+  from `GhosttyApp.terminalThemeIsDark`, called in `makeNSView` (launch) and `appearanceChanged` (live
+  theme switch — which the Sidebar-Tint slider also posts, so a tint change re-pins).
+  `terminalThemeIsDark` classifies the perceived luminance of the color the triangle actually sits on:
+  the theme background with the sidebar-tint wash applied (`ThemeBrightness.isDark(…, shiftAmount:)`,
+  host-free), NOT the raw background — so a strong tint that pushes a near-threshold theme across the
+  0.5 midpoint still picks the readable triangle.
   The triangle color is not accessibility-observable, so this is verified by eye, not a UI test — like
   the cursor solid/hollow case.
 - **Sidebar selection is drawn entirely by `SidebarRowView`, not AppKit.**
