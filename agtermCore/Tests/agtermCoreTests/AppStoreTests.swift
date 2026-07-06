@@ -165,6 +165,20 @@ struct AppStoreTests {
         store.clearUnseen(UUID()) // unknown id is a no-op, no crash
     }
 
+    @Test func clearUnseenDoesNotChangeSelection() {
+        // the focus-free invariant behind session.seen: clearing a NON-selected session's badge must
+        // leave the selection put (markSessionSeen calls clearUnseen and nothing else).
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: ws.id, cwd: "/b")!
+        a.unseenCount = 3
+        store.selectSession(b.id)
+        store.clearUnseen(a.id)
+        #expect(store.selectedSessionID == b.id) // focus-free: selecting is untouched
+        #expect(a.unseenCount == 0)              // the target's badge is cleared
+    }
+
     @Test func setAgentIndicatorSetsFieldOnRightSession() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

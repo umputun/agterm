@@ -464,9 +464,17 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertEqual(activeNodeID(), newSession, "session.seen must NOT change the active selection")
         XCTAssertNil(unseenCount(forSession: seeded), "the seeded session's unseen count should be cleared (omitted)")
 
-        // idempotent: a second seen on an already-clear session is still ok.
-        XCTAssertEqual(try sendCommand(#"{"cmd":"session.seen","target":"\#(seeded)"}"#)["ok"] as? Bool, true,
-                       "session.seen is idempotent when the badge is already zero")
+        // idempotent: a second seen on an already-clear session is ok AND a genuine no-op (end-state holds).
+        let again = try sendCommand(#"{"cmd":"session.seen","target":"\#(seeded)"}"#)
+        XCTAssertEqual(again["ok"] as? Bool, true, "session.seen is idempotent when the badge is already zero")
+        XCTAssertNil(unseenCount(forSession: seeded), "a repeat seen keeps the badge cleared")
+        XCTAssertEqual(activeNodeID(), newSession, "a repeat seen must not change the active selection")
+
+        // an unknown target errors through the shared resolver, like the other session.* commands.
+        let bad = try sendCommand(#"{"cmd":"session.seen","target":"deadbeef"}"#)
+        XCTAssertEqual(bad["ok"] as? Bool, false, "session.seen with an unknown target should fail")
+        XCTAssertTrue((bad["error"] as? String ?? "").hasPrefix("no such session"),
+                      "should report no such session, got: \(bad)")
     }
 
     // the unseen badge count reported for a session in the current tree, or nil when omitted (zero).

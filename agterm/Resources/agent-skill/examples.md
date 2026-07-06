@@ -233,7 +233,7 @@ visiting the session — which pulls the selection to it. `session seen` clears 
 stays a real attention signal on the sessions a human tends while the driven ones stay clean.
 
 ```bash
-agtermctl notify --target "$SID" --body "your turn"      # raises the unseen badge
+agtermctl notify "your turn" --target "$SID"             # raises the unseen badge (body is positional)
 agtermctl tree --json | jq '.result.tree.workspaces[].sessions[] | {id, unseen}'  # read the counts
 agtermctl session seen --target "$SID"                   # clear it, selection/focus unchanged
 ```
