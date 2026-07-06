@@ -37,8 +37,14 @@ struct ThemeNameTests {
         #expect(ThemeName.resolved(from: value, isDark: true) == "Gruvbox Dark Hard")
     }
 
-    @Test func missingSideFallsBackToTheOther() {
-        #expect(ThemeName.resolved(from: "light:Alabaster", isDark: true) == "Alabaster")
-        #expect(ThemeName.resolved(from: "dark:Gruvbox Dark Hard", isDark: false) == "Gruvbox Dark Hard")
+    @Test func oneSidedFormIsNotTreatedAsSplit() {
+        // ghostty requires both sides; a one-sided value is malformed and returned as-is.
+        #expect(ThemeName.resolved(from: "light:Alabaster", isDark: true) == "light:Alabaster")
+        #expect(ThemeName.resolved(from: "dark:Gruvbox Dark Hard", isDark: false) == "dark:Gruvbox Dark Hard")
+    }
+
+    @Test func emptyVariantIsNotTreatedAsSplit() {
+        #expect(ThemeName.resolved(from: "light:,dark:Gruvbox Dark Hard", isDark: false) == "light:,dark:Gruvbox Dark Hard")
+        #expect(ThemeName.resolved(from: "light:Alabaster,dark:", isDark: true) == "light:Alabaster,dark:")
     }
 }

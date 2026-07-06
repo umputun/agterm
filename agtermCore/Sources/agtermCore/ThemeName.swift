@@ -1,41 +1,34 @@
 import Foundation
 
-/// Resolves a ghostty `theme` config value to the single theme name active for a given appearance.
+/// Reduces a ghostty `theme` value to the theme name active for the current appearance.
 ///
-/// ghostty accepts two forms (https://ghostty.org/docs/config/reference#theme): a plain name
-/// (`theme = Gruvbox Dark Hard`), or an appearance-split `theme = light:NameA,dark:NameB` that follows
-/// the system light/dark mode (order-independent, whitespace-trimmed). libghostty resolves
-/// `background`/`foreground` for both forms, but agterm parses the optional `selection-*` colors by hand
-/// from the theme file — so the split form must be reduced to ONE name before that file lookup, else the
-/// whole `light:…,dark:…` string is used as a filename, no theme file matches, and the sidebar selection
-/// pill falls back to an unreadable wash. Host-free (Foundation-only) so it is unit-tested; the app passes
-/// in the current appearance.
+/// The `light:…,dark:…` form must collapse to one name before agterm's by-hand `selection-*` lookup:
+/// the raw form matches no theme file, so the selected sidebar row falls back to an unreadable wash.
+/// Host-free so it is unit-tested.
 public enum ThemeName {
-    /// The theme name to load for `value` under the given appearance. A plain value is returned trimmed.
-    /// For the `light:…,dark:…` form the matching variant is returned, falling back to the other variant,
-    /// then to the trimmed raw value, if a side is missing.
+    /// The theme name for `value` under the appearance. Only a well-formed `light:…,dark:…` (both sides
+    /// present) resolves to a variant; a plain or malformed value is returned as-is.
     public static func resolved(from value: String, isDark: Bool) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespaces)
         var light: String?
         var dark: String?
-        var sawPrefix = false
         for segment in trimmed.split(separator: ",") {
             let part = segment.trimmingCharacters(in: .whitespaces)
             if let name = variant("light:", in: part) {
                 light = name
-                sawPrefix = true
             } else if let name = variant("dark:", in: part) {
                 dark = name
-                sawPrefix = true
             }
         }
-        guard sawPrefix else { return trimmed }
-        return (isDark ? dark : light) ?? dark ?? light ?? trimmed
+        // The split form needs both sides; one-sided or malformed is a plain name.
+        guard let light, let dark else { return trimmed }
+        return isDark ? dark : light
     }
 
-    /// The name after a `light:`/`dark:` prefix (case-insensitive), trimmed; nil when the prefix is absent.
+    /// The trimmed name after a case-insensitive `light:`/`dark:` prefix; nil if absent or empty.
     private static func variant(_ prefix: String, in part: String) -> String? {
         guard part.lowercased().hasPrefix(prefix) else { return nil }
-        return String(part.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+        let name = String(part.dropFirst(prefix.count)).trimmingCharacters(in: .whitespaces)
+        return name.isEmpty ? nil : name
     }
 }

@@ -295,9 +295,9 @@ final class GhosttyApp {
             ?? selectionBackground.map(Self.contrastingText(for:))
     }
 
-    /// Whether the active appearance is dark, for resolving the `theme = light:…,dark:…` form. Uses
-    /// `NSApp` when available; `resolveThemeColors` runs from `init` before `NSApp` is set, so it falls
-    /// back to the system setting rather than force-unwrapping the nil `NSApp`.
+    /// Whether the active appearance is dark, for the `theme = light:…,dark:…` form.
+    /// `resolveThemeColors` runs from `init` before `NSApp` exists, so fall back to
+    /// the system setting instead of force-unwrapping nil `NSApp`.
     private static func currentAppearanceIsDark() -> Bool {
         if let appearance = NSApp?.effectiveAppearance {
             return appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
@@ -345,7 +345,7 @@ final class GhosttyApp {
         if selBg == nil || selFg == nil, let themeName, !themeName.isEmpty,
            let themesDir = Bundle.main.url(forResource: "ghostty", withExtension: nil)?
                .appendingPathComponent("themes", isDirectory: true) {
-            // `theme` may be the `light:…,dark:…` auto-switch form; reduce it to the active name.
+            // `theme` may be the `light:…,dark:…` form; reduce to the active name.
             let effectiveName = ThemeName.resolved(from: themeName, isDark: isDark)
             for (key, value) in keyValues(ofFileAt: themesDir.appendingPathComponent(effectiveName).path) {
                 if key == "selection-background", selBg == nil { selBg = parseHexColor(value) }
