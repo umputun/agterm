@@ -514,6 +514,57 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
                       "refocusing the window should clear the on-screen session's badge without a session switch")
     }
 
+    // the refocus clear is gated on liveFocus, so it clears ONLY the focused pane's session — never other
+    // badged sessions in the same window. This is the inverse of testRefocusingWindowClearsOnScreenSessionBadge:
+    // a regression that dropped the liveFocus guard (clearing every session's badge on didBecomeKey) would
+    // still pass the positive test but fail this one. Two sessions in one window (the second focused); after
+    // refocus only the focused session's badge clears while the non-focused one survives.
+    // A focused session in a KEY window can't hold an unseen badge (it's being seen), so the two badges are
+    // established at different times: the non-focused one while window 1 is key, the focused one only after
+    // window 1 loses key (so it isn't the key window's first responder — the same reason the positive test's
+    // badge survives until refocus).
+    func testRefocusingWindowKeepsNonFocusedSessionBadge() throws {
+        let seeded = try activeSessionID()
+        let firstWindow = try XCTUnwrap(
+            ((try sendCommand(#"{"cmd":"window.list"}"#)["result"] as? [String: Any])?["windows"] as? [[String: Any]])?
+                .first?["id"] as? String, "should have the seeded window id")
+
+        // a second session in the SAME window takes focus; the seeded one becomes the non-focused survivor.
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let focused = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new returns the new id")
+        XCTAssertTrue(pollSessionCount(2, timeout: 10), "the second session should land")
+
+        // badge the NON-focused seeded session while window 1 is key — an unfocused session isn't "seen", so
+        // its badge persists (verified via the frontmost tree while window 1 is still frontmost).
+        XCTAssertEqual(try sendCommand(#"{"cmd":"notify","target":"\#(seeded)","args":{"body":"a"}}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(pollUnseen(seeded, equals: 1, timeout: 12), "the non-focused session should carry a badge before the refocus")
+
+        // a second window materializes and takes key, so window 1 is no longer key. Now badge the FOCUSED
+        // session too: with window 1 un-keyed its focused pane isn't the key window's first responder, so
+        // this badge also persists until the refocus.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.new"}"#)["ok"] as? Bool, true)
+        let appeared = Date().addingTimeInterval(10)
+        while Date() < appeared, app.windows.count < 2 { usleep(200_000) }
+        XCTAssertGreaterThanOrEqual(app.windows.count, 2, "the second window should materialize and take key")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"notify","target":"\#(focused)","args":{"body":"b"}}"#)["ok"] as? Bool, true)
+
+        // re-key window 1: the refocus clears ONLY the focused pane's session; the non-focused one survives.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.select","target":"\#(firstWindow)"}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(pollUnseen(focused, equals: nil, timeout: 12), "the focused session's badge should clear on refocus")
+        XCTAssertEqual(unseenCount(forSession: seeded), 1, "a non-focused session's badge must survive the refocus")
+    }
+
+    // polls the frontmost window's tree until the given session's unseen count equals `expected` (nil = the
+    // badge is cleared / omitted), returning true on match or false on timeout.
+    private func pollUnseen(_ id: String, equals expected: Int?, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if unseenCount(forSession: id) == expected { return true }
+            usleep(200_000)
+        }
+        return unseenCount(forSession: id) == expected
+    }
+
     // the unseen badge count reported for a session in the current tree, or nil when omitted (zero).
     private func unseenCount(forSession id: String) -> Int? {
         guard let result = (try? sendCommand(#"{"cmd":"tree"}"#))?["result"] as? [String: Any],
