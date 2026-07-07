@@ -15,16 +15,6 @@ public enum LinkPolicy {
     /// executable/handler.
     public static let permittedSchemes: Set<String> = ["http", "https", "mailto", "ftp"]
 
-    /// The URL to open for a link click, or nil to ignore it: parseable AND carrying a permitted scheme
-    /// (case-insensitive). nil for an unparseable string, a schemeless string, or a disallowed scheme
-    /// (`file`, `javascript`, a custom app scheme, …).
-    public static func permittedURL(from raw: String) -> URL? {
-        guard let url = URL(string: raw),
-              let scheme = url.scheme?.lowercased(),
-              permittedSchemes.contains(scheme) else { return nil }
-        return url
-    }
-
     /// What a link click should do. Carries the target URL for `.open`/`.reveal`.
     public enum LinkDisposition: Equatable {
         case open(URL)
@@ -41,7 +31,10 @@ public enum LinkPolicy {
     public static let localHostNames: Set<String> = {
         var raw: Set<String> = ["localhost"]
         var buffer = [CChar](repeating: 0, count: 256)   // gethostname() — the name GNU ls uses, no network
-        if gethostname(&buffer, buffer.count) == 0 { raw.insert(String(cString: buffer)) }
+        if gethostname(&buffer, buffer.count) == 0 {
+            let bytes = buffer.prefix { $0 != 0 }.map { UInt8(bitPattern: $0) }   // trim at NUL, then decode
+            raw.insert(String(decoding: bytes, as: UTF8.self))
+        }
         return expandedHostNames(from: raw)
     }()
 
@@ -64,19 +57,36 @@ public enum LinkPolicy {
         return lower.hasSuffix(".") ? String(lower.dropLast()) : lower
     }
 
+    /// The macOS auto-mount roots where a Finder reveal can trigger an NFS/SMB automount: `/net` (`-hosts`),
+    /// `/Network` (`/Network/Servers`), and `/home` (`auto_home`). Matched against the EXACT root or a
+    /// `<root>/…` child, case-insensitively (the boot volume is case-insensitive, so `/NET/…` mounts too), so
+    /// a sibling like `/networkx` is NOT caught. The path must already be dot-normalized (see `disposition`).
+    static func isAutomountPath(_ path: String) -> Bool {
+        let lower = path.lowercased()
+        return ["/net", "/network", "/home"].contains { lower == $0 || lower.hasPrefix($0 + "/") }
+    }
+
     /// Maps a raw terminal link to an action: a permitted web/mail scheme → `.open`; a LOCAL `file://` link
-    /// (empty host, or a host in `localHosts`) → `.reveal` (selected in Finder, never executed); a `file://`
-    /// with a non-local host, a UNC-style `//`-path, or any other scheme / schemeless / unparseable input →
-    /// `.ignore`. `localHosts` is injected (default: this machine's names) so the decision stays host-free
-    /// and unit-testable.
+    /// (empty host, or a host in `localHosts`) → `.reveal` of the HOST-STRIPPED, dot-normalized local path, so
+    /// Finder only ever sees a plain `/…` path and never leans on the original authority for host handling; a
+    /// `file://` with a non-local host, an empty/relative path, a UNC-style `//`-path, an auto-mount path
+    /// (`/net`, `/Network`, `/home` — checked AFTER `..` normalization so `/tmp/../net/x` can't sneak
+    /// through), or any other scheme / schemeless / unparseable input → `.ignore`. `localHosts` is injected
+    /// (default: this machine's names) so the decision stays host-free and unit-testable.
     public static func disposition(for raw: String, localHosts: Set<String> = localHostNames) -> LinkDisposition {
         guard let url = URL(string: raw), let scheme = url.scheme?.lowercased() else { return .ignore }
         if permittedSchemes.contains(scheme) { return .open(url) }
         guard scheme == "file" else { return .ignore }
-        // A UNC-style path (`file:////server/share`, or `file://host//share`) hides a remote target in the
-        // path where the host check can't see it — ignore so a stray link can't trip a Finder network mount.
-        guard !url.path(percentEncoded: false).hasPrefix("//") else { return .ignore }
         let host = normalizedHost(url.host(percentEncoded: false) ?? "")
-        return host.isEmpty || localHosts.contains(host) ? .reveal(url) : .ignore
+        guard host.isEmpty || localHosts.contains(host) else { return .ignore }
+        // reject an empty/relative path (an empty path would make `URL(fileURLWithPath:)` the process CWD) and
+        // a UNC-style `//` path (a remote target hidden in the path where the host check can't see it).
+        let rawPath = url.path(percentEncoded: false)
+        guard rawPath.hasPrefix("/"), !rawPath.hasPrefix("//") else { return .ignore }
+        // reveal a host-stripped, dot-normalized local path (isDirectory: false keeps it off the filesystem,
+        // so the result is deterministic and never stats the target).
+        let local = URL(fileURLWithPath: rawPath, isDirectory: false).standardizedFileURL
+        guard !isAutomountPath(local.path) else { return .ignore }
+        return .reveal(local)
     }
 }
