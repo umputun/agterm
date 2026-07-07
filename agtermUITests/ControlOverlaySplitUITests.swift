@@ -39,8 +39,9 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
     // session.overlay.resize switches an open overlay between floating and full in place. Overlay geometry
     // is a Metal surface (not in the AX tree), so this asserts the COMMAND PATH: resize succeeds while the
     // overlay is up (a percent AND --full) and the overlay stays up across it, errors with no overlay, and
-    // the dispatcher rejects missing/conflicting/out-of-range size args server-side (a raw client can't
-    // bypass the CLI validate()). The visual re-flow is verified manually.
+    // the dispatcher rejects missing/conflicting/out-of-range size args server-side; a raw JSON client (like
+    // this test) skips the CLI's validate() entirely, so the dispatcher is the real enforcement boundary.
+    // The visual re-flow is verified manually.
     func testOverlayResizeSwitchesFloatingAndFull() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
