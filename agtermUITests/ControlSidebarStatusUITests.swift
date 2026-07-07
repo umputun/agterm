@@ -509,7 +509,10 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
 
         // re-key the seeded session's window (the cmd-tab / reactivating-click equivalent). No session
         // switch happens, so a passing clear here can only come from the didBecomeKey → onFocusChange path.
+        // window.select can return before the window is actually key under XCUITest, so wait for it to report
+        // active before asserting the didBecomeKey-driven clear.
         XCTAssertEqual(try sendCommand(#"{"cmd":"window.select","target":"\#(firstWindow)"}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(pollWindowActive(firstWindow, timeout: 12), "window 1 should become key again after window.select")
         XCTAssertTrue(app.staticTexts["notify-badge"].waitForNonExistence(timeout: 12),
                       "refocusing the window should clear the on-screen session's badge without a session switch")
     }
@@ -517,41 +520,55 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
     // the refocus clear is gated on liveFocus, so it clears ONLY the focused pane's session — never other
     // badged sessions in the same window. This is the inverse of testRefocusingWindowClearsOnScreenSessionBadge:
     // a regression that dropped the liveFocus guard (clearing every session's badge on didBecomeKey) would
-    // still pass the positive test but fail this one. Two sessions in one window (the second focused); after
-    // refocus only the focused session's badge clears while the non-focused one survives.
-    // A focused session in a KEY window can't hold an unseen badge (it's being seen), so the two badges are
-    // established at different times: the non-focused one while window 1 is key, the focused one only after
-    // window 1 loses key (so it isn't the key window's first responder — the same reason the positive test's
-    // badge survives until refocus).
+    // still pass the positive test but fail this one. The seeded session holds focus while a SECOND session
+    // carries the badge; refocus lands on the seeded (focused) session, so the second session's pill must
+    // survive. The badged session is deliberately the non-focused one so its badge is tree-verifiable both
+    // before and after the refocus (a focused session in a key window can't hold an unseen badge).
     func testRefocusingWindowKeepsNonFocusedSessionBadge() throws {
         let seeded = try activeSessionID()
         let firstWindow = try XCTUnwrap(
             ((try sendCommand(#"{"cmd":"window.list"}"#)["result"] as? [String: Any])?["windows"] as? [[String: Any]])?
                 .first?["id"] as? String, "should have the seeded window id")
 
-        // a second session in the SAME window takes focus; the seeded one becomes the non-focused survivor.
+        // add a second session, then re-select the seeded one so IT holds focus and the second is the
+        // non-focused session whose badge the refocus must leave alone.
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
-        let focused = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new returns the new id")
+        let other = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new returns the new id")
         XCTAssertTrue(pollSessionCount(2, timeout: 10), "the second session should land")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.select","target":"\#(seeded)"}"#)["ok"] as? Bool, true)
 
-        // badge the NON-focused seeded session while window 1 is key — an unfocused session isn't "seen", so
-        // its badge persists (verified via the frontmost tree while window 1 is still frontmost).
-        XCTAssertEqual(try sendCommand(#"{"cmd":"notify","target":"\#(seeded)","args":{"body":"a"}}"#)["ok"] as? Bool, true)
-        XCTAssertTrue(pollUnseen(seeded, equals: 1, timeout: 12), "the non-focused session should carry a badge before the refocus")
+        // badge the NON-focused second session and confirm the badge landed — an unfocused session isn't
+        // "seen", so its badge persists and is readable via the frontmost tree while window 1 is frontmost.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"notify","target":"\#(other)","args":{"body":"hi"}}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(pollUnseen(other, equals: 1, timeout: 12), "the non-focused session should carry a badge before the refocus")
 
-        // a second window materializes and takes key, so window 1 is no longer key. Now badge the FOCUSED
-        // session too: with window 1 un-keyed its focused pane isn't the key window's first responder, so
-        // this badge also persists until the refocus.
+        // a second window materializes and takes key, so window 1 is no longer key.
         XCTAssertEqual(try sendCommand(#"{"cmd":"window.new"}"#)["ok"] as? Bool, true)
         let appeared = Date().addingTimeInterval(10)
         while Date() < appeared, app.windows.count < 2 { usleep(200_000) }
         XCTAssertGreaterThanOrEqual(app.windows.count, 2, "the second window should materialize and take key")
-        XCTAssertEqual(try sendCommand(#"{"cmd":"notify","target":"\#(focused)","args":{"body":"b"}}"#)["ok"] as? Bool, true)
 
-        // re-key window 1: the refocus clears ONLY the focused pane's session; the non-focused one survives.
+        // re-key window 1 (the cmd-tab refocus). Focus lands on the SEEDED session, never the badged one, so
+        // the non-focused session's pill must survive. Wait for the window to actually become key first.
         XCTAssertEqual(try sendCommand(#"{"cmd":"window.select","target":"\#(firstWindow)"}"#)["ok"] as? Bool, true)
-        XCTAssertTrue(pollUnseen(focused, equals: nil, timeout: 12), "the focused session's badge should clear on refocus")
-        XCTAssertEqual(unseenCount(forSession: seeded), 1, "a non-focused session's badge must survive the refocus")
+        XCTAssertTrue(pollWindowActive(firstWindow, timeout: 12), "window 1 should become key again after window.select")
+        XCTAssertEqual(unseenCount(forSession: other), 1, "a non-focused session's badge must survive the refocus")
+    }
+
+    // polls window.list until the window with `id` reports active (frontmost/key), or times out. Under
+    // XCUITest a window.select response can arrive before the window is actually key, so tests wait on this
+    // before asserting a didBecomeKey-driven effect. Returns true on match, false on timeout.
+    private func pollWindowActive(_ id: String, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let result = (try? sendCommand(#"{"cmd":"window.list"}"#))?["result"] as? [String: Any],
+               let windows = result["windows"] as? [[String: Any]],
+               windows.contains(where: { ($0["id"] as? String)?.lowercased() == id.lowercased() && $0["active"] as? Bool == true }) {
+                return true
+            }
+            usleep(200_000)
+        }
+        return false
     }
 
     // polls the frontmost window's tree until the given session's unseen count equals `expected` (nil = the
