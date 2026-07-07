@@ -52,7 +52,7 @@ any background service started from inside a session captures the spawning sessi
 passes it to every child it ever creates, so status hooks running in those children resolve
 `$AGTERM_SESSION_ID` to the session that happened to start the daemon and report to the WRONG session.
 Before starting such a process from inside agterm, scrub the variables
-(`env -u AGTERM_ENABLED -u AGTERM_SESSION_ID -u AGTERM_SOCKET -u AGTERM_WINDOW_ID -u AGTERM_WORKSPACE_ID <cmd>`);
+(`env -u AGTERM_ENABLED -u AGTERM_PANE -u AGTERM_SESSION_ID -u AGTERM_SOCKET -u AGTERM_WINDOW_ID -u AGTERM_WORKSPACE_ID <cmd>`);
 see troubleshooting.md ("agent-status glyph updates the wrong session") for diagnosing and fixing an
 already-poisoned tmux server.
 
