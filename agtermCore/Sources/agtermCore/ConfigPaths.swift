@@ -47,7 +47,8 @@ public enum ConfigPaths {
         #   map <chord> <action>
         #       Rebind a built-in action to a single chord (no leader sequences for built-ins).
         #       Chords use kitty syntax: mods joined by `+`, e.g. `cmd+shift+d`, `ctrl+\\``.
-        #       Mods: ctrl, cmd, opt, shift. Example:
+        #       Mods: ctrl, cmd, opt, shift. A Shift-typed symbol is shift+<base key>
+        #       (shift+/ for ?, shift+= for +, shift+5 for %). Example:
         #
         #           map cmd+shift+d  toggle_split
         #

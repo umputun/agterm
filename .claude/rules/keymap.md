@@ -114,13 +114,27 @@ paths:
   can still `map` these to a parseable chord, which then wins).
   So the six arrow actions are NOT pure-`defaultChord`-driven by design;
   the other 29 are.
+- **Shifted symbols bind as `shift+<base>` — the runner normalizes to the UNSHIFTED base key.**
+  `charactersIgnoringModifiers` KEEPS shift (shift+/ → "?", shift+= → "+"), and the old
+  `.lowercased()` only undid that for letters (shift+u → "u"), so punctuation landed on the shifted glyph
+  and never matched a `shift+/`-style binding.
+  `CustomCommandRunner.chord(from:)` now derives the base key via `characters(byApplyingModifiers: [])`
+  (the same call `GhosttySurfaceView` uses for unmodified key input), so the runtime chord for shift+/ is
+  `(shift, "/")` and matches the parser's `shift+/`.
+  So every shifted symbol is written `shift+<base>` (`shift+/` = `?`, `shift+=` = `+`, `shift+5` = `%`,
+  `shift+.` = `>`).
+  This is verified END-TO-END by `KeymapUITests.testCustomCommandShiftedSymbolFires` (a real synthesized
+  Shift+/ keypress fires a `shift+/`-bound command) — the host-free tests structurally can't reach
+  `chord(from:)`, which is exactly why the earlier parser-only version shipped a runtime that never fired.
 - **v1 scope cut (confirmed).**
-  Built-in rebinds are single-chord only (leaders only for custom commands);
-  keys that clash with the grammar separators aren't expressible in the file — the arrows (the four arrow
-  actions above keep their defaults unless mapped to a parseable chord),
-  `+` (the chord-joiner, so `increase_font_size`'s default ⌘+ can't be written — `chordSyntax` renders
-  it as `(not expressible)` in the starter and verifies the round-trip),
-  and `>` (the leader separator).
+  Built-in rebinds are single-chord only (leaders only for custom commands).
+  The arrows aren't expressible as a parsed `Chord` (the six arrow actions keep their defaults unless
+  mapped to a parseable chord).
+  The literal `+`/`>` still can't be a bare key TOKEN (they are the chord-joiner / leader separator), but
+  those keys ARE bindable as `shift+=`/`shift+.` (see the shift-symbol note above).
+  `increase_font_size`'s default ⌘+ still renders `(not expressible)` in the STARTER file: its stored
+  `Chord(key:"+")` can't round-trip through `displayString` (which emits the `+` glyph, `chordSyntax`
+  verifies the round-trip) — a display-side detail, separate from key MATCHING.
   The Ctrl-Tab MRU switcher and Ctrl-1/Ctrl-2 pane focus are NOT rebindable (they are monitor-driven,
   not menu items — folding them in would reintroduce a monitor-vs-monitor precedence question;
   a custom command bound to one is dropped via `reservedMonitorChords`).

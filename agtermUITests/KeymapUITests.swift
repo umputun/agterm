@@ -127,6 +127,21 @@ final class KeymapUITests: XCTestCase {
                       "the custom single chord ⌘⇧E should run its command and touch the marker file")
     }
 
+    // a custom command bound to a SHIFTED-SYMBOL key fires: bind `shift+/` (the `?` key) to `touch
+    // <file>`, focus the terminal, press Shift+/ (which types `?`), assert the file appears. Regression
+    // guard for the base-key derivation in `CustomCommandRunner.chord(from:)`: the runner must normalize
+    // a shifted symbol to its BASE key (shift+/ → key "/", matching the `shift+/` binding), not to the
+    // shifted glyph "?" — a parser↔runtime mismatch the host-free tests structurally can't reach.
+    func testCustomCommandShiftedSymbolFires() throws {
+        let marker = markerDir.appendingPathComponent("shifted")
+        seedKeymap("command \"Touch Q\" shift+/ touch '\(marker.path)'\n")
+        app.launchForUITest()
+        focusTerminal()
+
+        XCTAssertTrue(chordFiresMarker(marker) { app.typeKey("/", modifierFlags: .shift) },
+                      "a custom command bound to shift+/ should fire when Shift+/ (the ? key) is pressed")
+    }
+
     // a custom command bound to a LEADER sequence fires: bind `ctrl+a>g` to `touch <file>`, focus the
     // terminal, press ctrl+a then g (two key events), assert the file appears. ctrl+a normally moves to
     // the line start in the shell, but the runner arms on it and consumes the sequence.

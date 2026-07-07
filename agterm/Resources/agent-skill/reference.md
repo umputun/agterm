@@ -367,9 +367,11 @@ Key Mapping). Two verbs, line-based; blank lines and `#` comments ignored:
   sequence (chords joined by `>`, e.g. `ctrl+a>g`). No chord → palette-only.
 
 A **chord** is modifier words joined by `+` then a base key: modifiers `ctrl`, `cmd`, `opt`, `shift`;
-base key is a single character or `tab`/`space`/`return`/`delete`. Arrows, `+`, and `>` are not
-expressible as a parsed chord. Some chords are reserved (the Ctrl-Tab switcher, Ctrl-1/2 pane focus)
-and cannot be bound.
+base key is a single character or `tab`/`space`/`return`/`delete`. A key typed with Shift is written
+`shift+<base>` (`shift+/` = `?`, `shift+=` = `+`, `shift+5` = `%`) — the base key, not the shifted glyph.
+Arrows aren't expressible, and `+`/`>` can't be a bare key token (they are the separators), though those
+keys are bindable via `shift+=`/`shift+.`. Some chords are reserved (the Ctrl-Tab switcher, Ctrl-1/2 pane
+focus) and cannot be bound.
 
 Custom-command tokens (expanded into the `/bin/sh -c` line, raw — prefer the quoted `$AGT_*` env form
 for untrusted content). A remote host can set the session title (OSC) and working directory (OSC 7),

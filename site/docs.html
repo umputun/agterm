@@ -1340,7 +1340,13 @@
               >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">return</span>/<span
                 style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
                 >delete</span
-              >). Custom commands may also use a leader sequence
+              >). A Shift-typed symbol is written
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+&lt;base&gt;</span>
+              (e.g. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+/</span> for
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">?</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+=</span> for
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span>) — the base key, not the
+              shifted symbol. Custom commands may also use a leader sequence
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ctrl+a&gt;g</span>), and their chord
               must include a modifier — a bare key can't shadow a plain terminal key.
             </p>
@@ -1466,13 +1472,15 @@
                 <span
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
-                >A few keys can't be expressed because they clash with the grammar's separators: the arrow keys,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span> (the chord-joiner), and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&gt;</span> (the leader separator).
-                The arrow-bound actions and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                  >increase_font_size</span
-                >
-                keep their defaults unless mapped to a parseable chord.
+                >The arrow keys can't be written as a chord, so the arrow-bound actions keep their defaults unless
+                mapped to a parseable chord. The literal
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&gt;</span> can't be a bare
+                key token (they are the separators), but those keys are bindable as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+=</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+.</span>; only
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">increase_font_size</span>'s
+                default ⌘+ shows as a glyph because its stored form doesn't round-trip through the file.
               </li>
               <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
                 <span
