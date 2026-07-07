@@ -24,6 +24,21 @@ struct AppStorePaneTests {
         #expect(session.splitFocused == true)
     }
 
+    @Test func toggleSplitReshowPreservesFocusedPane() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.toggleSplit(session.id)           // open a NEW split -> focuses the new (right) pane
+        #expect(session.splitFocused == true)
+        session.splitFocused = false            // focus the left pane
+        store.toggleSplit(session.id)           // hide (zoom): left pane stays the maximized one
+        #expect(session.isSplit == false)
+        #expect(session.splitFocused == false)
+        store.toggleSplit(session.id)           // re-show (un-zoom): must keep the left pane focused
+        #expect(session.isSplit == true)
+        #expect(session.splitFocused == false)  // regression guard: no jerk back to the right pane
+    }
+
     @Test func closeSplitHidesAndTearsDownSurface() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

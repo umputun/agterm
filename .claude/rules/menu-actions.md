@@ -96,8 +96,11 @@ paths:
   `effectiveCwd` stays the PRIMARY pane's (non-focus-aware) for seeding new panes + the `AGTERM_SESSION_PWD`
   token; `Session.activeSurface` is the focused pane's surface (the focus helpers + the collapsed detail
   pane target it).
-  **Opening a split moves focus to the new (right) pane** (`AppStore.toggleSplit` sets `splitFocused = true`
-  on open; hiding leaves it set so the focused pane is the one shown maximized).
+  **Opening a NEW split moves focus to the new (right) pane** (`AppStore.toggleSplit` sets `splitFocused = true`
+  only when the split is genuinely new — `hasSplit` was false; hiding leaves it set so the focused pane
+  is the one shown maximized, and RE-showing a hidden split PRESERVES that pane rather than jerking focus
+  back to the right — so a hide/show round-trip, e.g. the tmux-style zoom script that drives `session split off`
+  then `on`, keeps whichever pane you had focused).
   **Hiding the split (the toolbar toggle) keeps BOTH shells alive** and shows the focused pane maximized
   — `detailPane`'s collapsed branch renders `\.splitSurface` when `splitFocused`,
   else `\.surface` — so reopening restores the two panes in place; nothing is destroyed (`closeSplit`
