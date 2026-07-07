@@ -1519,6 +1519,23 @@
               <em>Don't ask again this session</em>.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              A ⌘-click on a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">file://</span> link — the kind
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ls --hyperlink</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">eza</span>, and many compilers emit —
+              <strong style="color: #e6e1d7">reveals</strong> the file in Finder instead of opening it. A terminal renders untrusted
+              program output, so a link could point at a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.app</span> or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.command</span>; revealing selects the file
+              without running it — actually opening it stays a separate, explicit action. Web
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">http</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >https</span
+              >) and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">mailto</span> links still open as
+              before. A <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">file://</span> link naming
+              another host is ignored, so a stray link can't trigger a Finder network mount.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               Open the file with <strong style="color: #e6e1d7">File ▸ Edit ghostty.conf…</strong> (a 95% editor overlay, same as
               Edit Keymap). Apply edits made elsewhere with <strong style="color: #e6e1d7">File ▸ Reload Config</strong> or
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl config reload</span>. A
