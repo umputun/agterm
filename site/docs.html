@@ -366,6 +366,35 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span> command-line tool,
               so cask users shouldn't run the in-app installer as well.
             </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 14px 0 0">
+              Homebrew upgrade note (July 2026). A recent Homebrew change (installed-cask metadata
+              stored as JSON) can make
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">brew upgrade</span>
+              fail for agterm with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">It seems there is already an App at '/Applications/agterm.app'</span>.
+              It affects third-party tap casks in general, not only agterm. Recover with a one-time
+              reinstall, which rewrites the install receipt:
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 16px 18px;
+                margin: 14px 0 0;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 14px;
+                color: #e6e1d7;
+                overflow-x: auto;
+              "
+            >
+              <span style="color: #6d82f3">$ </span>brew reinstall --cask --force agterm
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 14px 0 0">
+              Regular
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">brew upgrade</span>
+              works afterward. This is an upstream Homebrew issue, and the note will be removed once it is fixed.
+            </p>
             <h3
               style="
                 font-family: &quot;JetBrains Mono&quot;, monospace;

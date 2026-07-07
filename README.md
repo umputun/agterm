@@ -77,6 +77,15 @@ brew install --cask umputun/apps/agterm
 
 The cask also installs the `agtermctl` command-line tool, so cask users should not run the in-app installer as well.
 
+> [!NOTE]
+> **Homebrew upgrade note (July 2026).** A recent Homebrew change (installed-cask metadata stored as JSON) can make `brew upgrade` fail for agterm with `It seems there is already an App at '/Applications/agterm.app'`. It affects third-party tap casks in general, not only agterm. Recover with a one-time reinstall, which rewrites the install receipt:
+>
+> ```sh
+> brew reinstall --cask --force agterm
+> ```
+>
+> Regular `brew upgrade` works afterward. This is an upstream Homebrew issue, and the note will be removed once it is fixed.
+
 Direct download:
 
 Download the latest `.dmg` from the [releases page](https://github.com/umputun/agterm/releases), open it, and drag `agterm.app` into `/Applications`.
