@@ -37,6 +37,23 @@ surface ownership, and the C-boundary concurrency contract before changing the b
   Do NOT take a screenshot (`screencapture`) or capture an image via XCUITest (`XCUIScreen.screenshot`/`XCTAttachment`)
   — the user wants to interact with the running app themselves.
   The XCUITest runner is sandboxed and can't write `/tmp` anyway.
+- **Dev instance that must run the user's REAL custom commands / keymap = COPY the config into the
+  isolated state dir; don't rely on `AGTERM_STATE_DIR` alone.**
+  An isolated `AGTERM_STATE_DIR` ALSO redirects the config dir to `<stateDir>/config` (`ConfigPaths`
+  precedence: explicit `AppSettings.configDirectory` → `<stateDir>/config` when the state dir is set →
+  `~/.config/agterm`), so an isolated dev instance does NOT read `~/.config/agterm/keymap.conf` and loses
+  every custom command.
+  Keep them with `cp ~/.config/agterm/{keymap,ghostty,restore-denylist}.conf <stateDir>/config/` before
+  launch — there is NO env var that overrides the config dir independently of the state dir.
+  Two more gotchas: (1) do NOT set an `AGTERM_CONTROL_SOCKET` whose path differs from `<stateDir>/agterm.sock`
+  — a custom command's spawned `agtermctl` derives its socket from the inherited `AGTERM_STATE_DIR`
+  (`<stateDir>/agterm.sock`), so a server bound elsewhere is unreachable; set ONLY `AGTERM_STATE_DIR` (a
+  SHORT `/tmp` path) and let the app + CLI derive the same socket.
+  (2) to make custom commands use the freshly-BUILT `agtermctl` (not the deployed one on PATH), launch with
+  `--env PATH="<devApp>/Contents/MacOS:/opt/homebrew/bin:/usr/bin:/bin:…"` — `CustomCommandRunner` runs
+  `/bin/sh -c` over `ProcessInfo.processInfo.environment`, so the prepended PATH reaches the command; a
+  session shell's login rc re-prioritizes PATH back to the deployed `agtermctl`, so a MANUAL `agtermctl` in
+  a dev session needs the full dev-binary path while keybinding commands resolve the dev binary automatically.
 - **After launching a dev instance for the user to test, default to HANDS-OFF.**
   For the user's MANUAL test (the common case — "run it for me to test",
   "I'll test manually"), do NOT touch the running instance after launch:
