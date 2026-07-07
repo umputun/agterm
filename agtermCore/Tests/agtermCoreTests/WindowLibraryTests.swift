@@ -122,13 +122,16 @@ final class WindowLibraryTests {
         let first = library.windows[0]
         let second = library.newWindow(name: "work")
 
-        // the second window has auto-follow enabled (30s); the first leaves it off (nil autoFollowMs).
+        // the second window has auto-follow enabled (30s) and its sidebar hidden; the first leaves
+        // auto-follow off (nil autoFollowMs) with the sidebar visible (the default).
         library.store(for: second.id)?.autoFollowTimeout = 30
+        library.store(for: second.id)?.setSidebarVisible(false)
 
         #expect(library.controlWindowNodes() == [
-            ControlWindowNode(id: first.id.uuidString, name: first.name, open: true, active: false),
+            ControlWindowNode(id: first.id.uuidString, name: first.name, open: true, active: false,
+                              sidebarVisible: true),
             ControlWindowNode(id: second.id.uuidString, name: "work", open: true, active: true,
-                              autoFollowMs: 30_000),
+                              autoFollowMs: 30_000, sidebarVisible: false),
         ])
     }
 
@@ -140,8 +143,10 @@ final class WindowLibraryTests {
         library.closeWindow(second.id)
         library.frontmostWindowID = second.id
 
+        // the open window reports its live sidebar visibility; the closed one has no store, so nil (omitted).
         #expect(library.controlWindowNodes() == [
-            ControlWindowNode(id: first.id.uuidString, name: first.name, open: true, active: true),
+            ControlWindowNode(id: first.id.uuidString, name: first.name, open: true, active: true,
+                              sidebarVisible: true),
             ControlWindowNode(id: second.id.uuidString, name: "work", open: false, active: false),
         ])
     }

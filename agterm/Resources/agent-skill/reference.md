@@ -26,8 +26,8 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
   `$AGTERM_SESSION_ID`; the user is usually on a different session while you work. Pass
   `--target "$AGTERM_SESSION_ID"` on any session-scoped command (`overlay open`, `scratch`, `type`,
   `text`, `background`, `status`, `copy`, …) that must act on the session you run in — otherwise it hits
-  whatever the user has selected. A floating `overlay open --size-percent` additionally SELECTS its
-  target, switching the user to it.
+  whatever the user has selected. `overlay open` opens in the background without switching the user
+  (both full and floating); pass `--follow` to additionally SELECT the target, switching the user to it.
 - `--window <id|prefix|active>` (on session/workspace/tree/font/notify commands) picks which window's
   tree to act on; default is the frontmost. With `--window` set, that window must be open. Without it,
   an id/prefix session target is matched across all open windows.
@@ -46,14 +46,17 @@ idle), `statusPane` (which pane set that status — `left` (main) | `right` (spl
 as `status`, so it is never reported without a `status`), `foreground`/`splitForeground` (the live argv of each pane's foreground
 process — what it is running — omitted when the pane sits at its shell prompt), and `background` (the
 background spec set via `session background` — a `{kind, text?, imagePath?, colorHex?, opacity?, fit?,
-position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set). Workspace nodes carry
-`id`, `name`, `active`, `sessions`.
+position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set), and `unseen`
+(the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session seen` — omitted
+when zero). Workspace nodes carry `id`, `name`, `active`, `sessions`.
 
-The tree object itself carries two top-level read-only fields: `idleMs` (milliseconds since the last
-user input in the window, omitted before any activity) and `autoFollowMs` (the window's Auto-follow
-timeout in milliseconds, omitted when the setting is Disabled). `idleMs` is live and grows while the
-window is idle, so it is on `tree` only, never `window.list`. Both are read-only projections of GUI
-state; there is no control command to set them.
+The tree object itself carries three top-level read-only fields: `idleMs` (milliseconds since the last
+user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
+timeout in milliseconds, omitted when the setting is Disabled), and `sidebarVisible` (whether the
+window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
+can restore it, e.g. a tmux-style zoom that hides the sidebar and must re-show it only when it was
+visible before). `idleMs` is live and grows while the window is idle, so it is on `tree` only, never
+`window.list`; `sidebarVisible` is on both. All three are read-only projections of GUI state.
 
 ## workspace
 
@@ -201,6 +204,12 @@ state; there is no control command to set them.
   `active`) and are idempotent; `clear` ignores the target and unflags every session in the window.
   Pair with `sidebar mode flagged` to see just the flagged sessions as a flat `session : workspace`
   list. Unknown mode errors. The tree's `flagged` flag tracks membership.
+- `session seen [--target] [--window W]` — clear the session's unseen-notification badge without changing
+  the selection, focus, or agent status. It is the focus-free counterpart to `notify`: `notify` (and a
+  terminal's own OSC 9/777) raise the red badge, and until now the only way to clear it was visiting the
+  session. Idempotent — a no-op when the badge is already zero. Read the current count from the tree node's
+  `unseen` field. This lets an orchestrator acknowledge a driven session's notifications over the socket
+  while keeping the badge a real attention signal on the sessions a human tends.
 - `session background image <path> [--opacity F] [--fit contain|cover|stretch|none] [--position P] [--repeat] [--target] [--window W]`
   — composite the image at `path` (PNG or JPEG only) behind the terminal as a watermark. libghostty
   auto-fits it to the surface and re-fits on every window resize. `--opacity` is 0.0–1.0 (default 1.0);
@@ -224,17 +233,17 @@ state; there is no control command to set them.
   background-opacity); a `color` instead honors the Settings window translucency. Read the current
   background back from a session's `background` field in `tree --json` (a `{kind, colorHex, …}` object,
   omitted when none).
-- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--target] [--window W]`
+- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--target] [--window W]`
   — run `command` in an ephemeral terminal on top of the session; it closes when the command exits.
   `command` runs through `sh -c` (so shell operators DO work here) but with the app's GUI `PATH` (no
   `/opt/homebrew/bin`), so a bare Homebrew or other non-default binary fails with exit 127 — the overlay
   flashes open then vanishes and `overlay result` reports 127; give an absolute path or wrap in
   `"zsh -lc '…'"`.
   Full-size by default (hides the session); `--size-percent N` (1–100) makes it a floating framed panel
-  with the session visible behind. **A floating overlay renders only over the ACTIVE session, so opening
-  one on a non-active target SWITCHES the user to that session** — a full overlay does NOT (it mounts in
-  the target's deck slot and appears when the user visits it). Use a full overlay when you must not
-  disturb the user's current view. `--background-color #rrggbb` gives the overlay pane its own solid
+  with the session visible behind. **By default the overlay does NOT switch the active session** — full
+  and floating both open on `--target` and run their program in the background, appearing when the user
+  visits that session. **Pass `--follow` to select the target after opening** (a no-op if it is already
+  active); use it when you want the user pulled to the overlay, omit it to open quietly. `--background-color #rrggbb` gives the overlay pane its own solid
   background color, independent of the session's own `session background color` (nil = the default theme
   background); it honors the Settings window translucency, captured when the overlay opens. `--wait` keeps the overlay open after the command exits (press a key
   to close). `--block` waits for the command to exit and makes agtermctl exit with the command's status
@@ -259,11 +268,12 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
 ## window
 
 - `window new [name]` — create and open a window; returns its id.
-- `window list` — `result.windows`, each with `id`, `name`, `open`, `active`, and `autoFollowMs` (the
-  window's Auto-follow timeout in milliseconds, omitted when the setting is Disabled). The `autoFollowMs`
-  here is served from a cache and reflects the value as of the last refresh, so a just-changed setting may
-  lag until the next command. Unlike `tree`, `window.list` does NOT carry `idleMs` — the live idle metric
-  would freeze in that cache.
+- `window list` — `result.windows`, each with `id`, `name`, `open`, `active`, `autoFollowMs` (the
+  window's Auto-follow timeout in milliseconds, omitted when the setting is Disabled), and
+  `sidebarVisible` (whether that window's sidebar is shown, read from the open window's store — omitted
+  for a closed window with no live store). The `autoFollowMs` here is served from a cache and reflects the
+  value as of the last refresh, so a just-changed setting may lag until the next command. Unlike `tree`,
+  `window.list` does NOT carry `idleMs` — the live idle metric would freeze in that cache.
 - `window select <id>` — raise it if open, else open it.
 - `window close <id>` — close the on-screen window (the bundle is kept; reopen with select).
 - `window rename <id> <name>`.
@@ -276,8 +286,13 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
   origin is clamped so an off-screen request keeps a grabbable strip of the window on the target display.
 - `window zoom <id>` — toggle the window between its normal frame and a maximized (fill-screen, NOT
   native fullscreen) frame, via the standard `NSWindow.zoom`. A second call restores the prior frame.
-  The window must be open. This is the control half of the double-click-on-header gesture (and the green
-  zoom button); `resize`/`move` are control-native, but `zoom` mirrors a GUI action.
+  The window must be open. This is the control half of the double-click-on-header gesture (a plain green-button
+  click does native full screen, not zoom — Option-click the green button to zoom); `resize`/`move` are
+  control-native, but `zoom` mirrors a GUI action.
+- `window fullscreen <id>` — toggle NATIVE macOS full screen (a separate Space, auto-hidden menu bar),
+  via `NSWindow.toggleFullScreen`. A second call exits. The window must be open. This is the control half
+  of the View ▸ Toggle Full Screen menu item (⌃⌘F, rebindable as `toggle_fullscreen`) and the green
+  traffic-light button — distinct from `zoom`, which only maximizes the frame in the same Space.
 
 `window resize`/`move` are control-native (no GUI equivalent — the title bar already drags-to-resize).
 
@@ -352,9 +367,11 @@ Key Mapping). Two verbs, line-based; blank lines and `#` comments ignored:
   sequence (chords joined by `>`, e.g. `ctrl+a>g`). No chord → palette-only.
 
 A **chord** is modifier words joined by `+` then a base key: modifiers `ctrl`, `cmd`, `opt`, `shift`;
-base key is a single character or `tab`/`space`/`return`/`delete`. Arrows, `+`, and `>` are not
-expressible as a parsed chord. Some chords are reserved (the Ctrl-Tab switcher, Ctrl-1/2 pane focus)
-and cannot be bound.
+base key is a single character or `tab`/`space`/`return`/`delete`. A key typed with Shift is written
+`shift+<base>` (`shift+/` = `?`, `shift+=` = `+`, `shift+5` = `%`) — the base key, not the shifted glyph.
+Arrows aren't expressible, and `+`/`>` can't be a bare key token (they are the separators), though those
+keys are bindable via `shift+=`/`shift+.`. Some chords are reserved (the Ctrl-Tab switcher, Ctrl-1/2 pane
+focus) and cannot be bound.
 
 Custom-command tokens (expanded into the `/bin/sh -c` line, raw — prefer the quoted `$AGT_*` env form
 for untrusted content). A remote host can set the session title (OSC) and working directory (OSC 7),

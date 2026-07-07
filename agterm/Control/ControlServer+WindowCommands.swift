@@ -20,6 +20,10 @@ extension ControlServer {
         library.controlWindowNodes()
     }
 
+    func windowList() -> ControlResponse {
+        ControlResponse(ok: true, result: ControlResult(windows: buildWindowList()))
+    }
+
     /// Resolve a window id and surface it: raise an already-open window, or open a closed one (the
     /// action hub's opener claims its id + spawns the window). A closed window's store loads only when
     /// its SwiftUI window appears, so this bounded-polls for it to open before replying — a script can
@@ -100,11 +104,23 @@ extension ControlServer {
     }
 
     /// Resolve a window id and zoom (maximize-to-screen toggle) its on-screen window. The window must be
-    /// open; a closed window errors. The control half of the double-click-header gesture / the green zoom
-    /// button — drives the same `NSWindow.zoom` as `WindowRegistry.zoom`.
+    /// open; a closed window errors. The control half of the double-click-header gesture (a plain green-button
+    /// click does native full screen, not zoom) — drives the same `NSWindow.zoom` as `WindowRegistry.zoom`.
     func windowZoom(_ target: String?) -> ControlResponse {
         return resolver.resolveWindowID(target) { id in
             guard WindowRegistry.shared.zoom(id) else {
+                return ControlResponse(ok: false, error: "window not open — window.select it first")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    /// Resolve a window id and toggle native macOS full screen on its on-screen window. The window must be
+    /// open; a closed window errors. The control half of the View ▸ Toggle Full Screen menu item / the green
+    /// traffic-light button — drives the same `NSWindow.toggleFullScreen` as `WindowRegistry.fullscreen`.
+    func windowFullscreen(_ target: String?) -> ControlResponse {
+        return resolver.resolveWindowID(target) { id in
+            guard WindowRegistry.shared.fullscreen(id) else {
                 return ControlResponse(ok: false, error: "window not open — window.select it first")
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))

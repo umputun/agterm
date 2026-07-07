@@ -266,27 +266,6 @@ public struct AppSettings: Codable, Equatable, Sendable {
         return isDark ? (darkTheme ?? theme) : theme
     }
 
-    /// Splits ghostty's dual `light:NAME,dark:NAME` theme value into its two sides, or nil for a plain
-    /// value. Emission never calls this (it composes from the two fields); it exists only to pick the
-    /// active side for the sidebar selection colors, which read the raw `theme` line back out of the
-    /// generated config.
-    public static func dualThemeSides(_ raw: String) -> (light: String, dark: String)? {
-        let parts = raw.split(separator: ",")
-        guard parts.count == 2 else { return nil }
-        var light: String?
-        var dark: String?
-        for part in parts {
-            let token = part.trimmingCharacters(in: .whitespaces)
-            if token.hasPrefix("light:") {
-                light = String(token.dropFirst(6)).trimmingCharacters(in: .whitespaces)
-            } else if token.hasPrefix("dark:") {
-                dark = String(token.dropFirst(5)).trimmingCharacters(in: .whitespaces)
-            }
-        }
-        guard let light, let dark, !light.isEmpty, !dark.isEmpty else { return nil }
-        return (light, dark)
-    }
-
     /// The ghostty config lines for the set fields, one `key = value` per line, suitable for a
     /// file loaded via `ghostty_config_load_file`. Unset (or blank) fields are omitted. Values are
     /// written raw — ghostty takes the whole line remainder as the value, so names with spaces

@@ -18,10 +18,11 @@
 # install: shell/integration.sh sits next to agterm-agent-status.sh's dir).
 if [ -n "${ZSH_VERSION:-}" ]; then
   _ags_self="${(%):-%x}"
+  _ags_dir="${_ags_self:a:h:h}"
 else
   _ags_self="${BASH_SOURCE[0]}"
+  _ags_dir="$(cd "$(dirname "$_ags_self")/.." >/dev/null 2>&1 && pwd)"
 fi
-_ags_dir="$(cd "$(dirname "$_ags_self")/.." >/dev/null 2>&1 && pwd)"
 : "${AGTERM_AGENT_BIN:=$_ags_dir/agterm-agent-status.sh}"
 : "${AGTERM_AGENT_RE:=^(codex|gemini|cursor-agent|aider|opencode|crush|goose)([[:space:]]|$)}"
 

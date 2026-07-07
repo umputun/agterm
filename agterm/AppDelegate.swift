@@ -55,6 +55,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Boot libghostty: init, config, app_new, 120fps tick.
         _ = GhosttyApp.shared
         scheduleRestoredWindowReconciliation(reason: "did-finish-launching")
+        // AppKit auto-adds its own "Enter Full Screen" item (Globe+F / ⌃⌘F) to the View menu for any
+        // fullscreen-capable window, and RE-INJECTS it each time the menu opens. agterm ships its OWN
+        // rebindable "Toggle Full Screen" item (so full screen is drivable from the keymap, action palette,
+        // and control channel), so leaving AppKit's item renders a duplicate. Strip the native one
+        // just-in-time whenever a menu begins tracking (the point AppKit re-injects it); a launch-time
+        // one-shot does NOT stick because of the re-injection.
+        AppDelegate.removeNativeFullScreenMenuItem()
+        NotificationCenter.default.addObserver(self, selector: #selector(menuBeganTracking),
+                                               name: NSMenu.didBeginTrackingNotification, object: nil)
+    }
+
+    @objc private func menuBeganTracking(_: Notification) {
+        MainActor.assumeIsolated { AppDelegate.removeNativeFullScreenMenuItem() }
+    }
+
+    /// Remove AppKit's auto-injected fullscreen menu item — the one whose action is `toggleFullScreen:`.
+    /// agterm's own item uses a SwiftUI closure action (a different selector), so only the native item
+    /// matches and our "Toggle Full Screen" is left intact. Finds the owning submenu by content rather than
+    /// by the localized "View" title.
+    @MainActor
+    private static func removeNativeFullScreenMenuItem() {
+        let selector = #selector(NSWindow.toggleFullScreen(_:))
+        for topItem in NSApp.mainMenu?.items ?? [] {
+            guard let submenu = topItem.submenu else { continue }
+            for item in submenu.items where item.action == selector {
+                submenu.removeItem(item)
+            }
+        }
     }
 
     func scheduleUITestWindowActivationRetries() {

@@ -165,6 +165,20 @@ struct AppStoreTests {
         store.clearUnseen(UUID()) // unknown id is a no-op, no crash
     }
 
+    @Test func clearUnseenDoesNotChangeSelection() {
+        // the focus-free invariant behind session.seen: clearing a NON-selected session's badge must
+        // leave the selection put (markSessionSeen calls clearUnseen and nothing else).
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: ws.id, cwd: "/b")!
+        a.unseenCount = 3
+        store.selectSession(b.id)
+        store.clearUnseen(a.id)
+        #expect(store.selectedSessionID == b.id) // focus-free: selecting is untouched
+        #expect(a.unseenCount == 0)              // the target's badge is cleared
+    }
+
     @Test func setAgentIndicatorSetsFieldOnRightSession() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
@@ -775,6 +789,56 @@ struct AppStoreTests {
                                status: "blocked", statusPane: "right",
                                background: BackgroundWatermark(kind: .text, text: "PROD"))
         ])
+    }
+
+    @Test func controlTreeReportsSidebarVisibility() {
+        let store = makeStore()
+        #expect(store.controlTree().sidebarVisible == true) // default: sidebar shown
+        store.setSidebarVisible(false)
+        #expect(store.controlTree().sidebarVisible == false)
+        store.setSidebarVisible(true)
+        #expect(store.controlTree().sidebarVisible == true)
+    }
+
+    @Test func setSidebarVisiblePostsChangeNotificationOnlyOnChange() {
+        // the app-target ControlServer observes this to refresh window.list's cached sidebarVisible; the
+        // post must fire only on an actual change (queue nil so the synchronous post delivers inline).
+        final class Counter: @unchecked Sendable { var n = 0 }
+        let store = makeStore() // default sidebarVisible == true
+        let counter = Counter()
+        let token = NotificationCenter.default.addObserver(forName: .agtermSidebarVisibilityChanged, object: nil,
+                                                           queue: nil) { _ in counter.n += 1 }
+        defer { NotificationCenter.default.removeObserver(token) }
+        store.setSidebarVisible(true)   // unchanged from default -> no post
+        #expect(counter.n == 0)
+        store.setSidebarVisible(false)  // change -> post
+        #expect(counter.n == 1)
+        store.setSidebarVisible(false)  // unchanged -> no post
+        #expect(counter.n == 1)
+        store.setSidebarVisible(true)   // change -> post
+        #expect(counter.n == 2)
+    }
+
+    @Test func controlTreeReportsUnseenCountWhenPositive() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        session.unseenCount = 4
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        #expect(node.unseen == 4)
+    }
+
+    @Test func controlTreeOmitsUnseenCountWhenZero() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        session.unseenCount = 0
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        #expect(node.unseen == nil) // zero reads as "no badge", omitted from the wire
     }
 
     @Test func controlTreeReportsStatusPaneForNonIdleSession() throws {

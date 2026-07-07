@@ -439,6 +439,25 @@ struct ControlDispatcherTests {
         ])
     }
 
+    @Test func sessionSeenRoutesTargetAndWindow() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let seen = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionSeen,
+            target: "session",
+            args: ControlArgs(window: "win")
+        ))
+        let active = await dispatcher.dispatch(ControlRequest(cmd: .sessionSeen))
+
+        #expect(seen == ControlResponse(ok: true))
+        #expect(active == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .markSessionSeen(target: "session", window: "win"),
+            .markSessionSeen(target: nil, window: nil)
+        ])
+    }
+
     @Test func sessionStatusRoutesParsedStatusAndRejectsInvalidStatus() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -791,14 +810,35 @@ struct ControlDispatcherTests {
             cmd: .sessionOverlayOpen,
             target: "session",
             args: ControlArgs(cwd: "/tmp", command: "cat", wait: true,
-                              sizePercent: 70, window: "win", color: "#2a1a3a")
+                              sizePercent: 70, follow: true, window: "win", color: "#2a1a3a")
         ))
 
         #expect(response == ControlResponse(ok: false, error: "overlay already open"))
         #expect(actions.calls == [
             .overlayOpen(target: "session", window: "win",
                          ControlSessionOverlayOpenOptions(command: "cat", cwd: "/tmp", wait: true,
-                                                          sizePercent: 70, backgroundColor: "#2a1a3a"))
+                                                          sizePercent: 70, backgroundColor: "#2a1a3a",
+                                                          follow: true))
+        ])
+    }
+
+    @Test func sessionOverlayOpenDefaultsFollowToFalseWhenOmitted() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextOverlayOpenResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen,
+            target: "session",
+            args: ControlArgs(command: "cat")
+        ))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(actions.calls == [
+            .overlayOpen(target: "session", window: nil,
+                         ControlSessionOverlayOpenOptions(command: "cat", cwd: nil, wait: false,
+                                                          sizePercent: nil, backgroundColor: nil,
+                                                          follow: false))
         ])
     }
 
@@ -1000,6 +1040,76 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.restoreClear])
     }
 
+    @Test func quickRoutesRawModeAndKeepsActionResponse() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextQuickResponse = ControlResponse(ok: false, error: "invalid quick mode: maybe")
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .quick,
+            args: ControlArgs(mode: "maybe")
+        ))
+
+        #expect(response == ControlResponse(ok: false, error: "invalid quick mode: maybe"))
+        #expect(actions.calls == [.quick("maybe")])
+    }
+
+    @Test func sessionSearchRoutesRawInputsAndKeepsActionResponse() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSessionSearchResponse = ControlResponse(
+            ok: true,
+            result: ControlResult(text: "2 of 5", count: 5)
+        )
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionSearch,
+            target: "session",
+            args: ControlArgs(text: "needle", window: "win", to: "next")
+        ))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(text: "2 of 5", count: 5)))
+        #expect(actions.calls == [
+            .sessionSearch(target: "session", window: "win", text: "needle", to: "next")
+        ])
+    }
+
+    @Test func windowLifecycleAndListCommandsRouteThroughActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let windows = [
+            ControlWindowNode(id: "win-a", name: "Main", open: true, active: true),
+            ControlWindowNode(id: "win-b", name: "Build", open: false, active: false)
+        ]
+        actions.nextWindowNewResponse = ControlResponse(ok: true, result: ControlResult(id: "win-b"))
+        actions.nextWindowListResponse = ControlResponse(ok: true, result: ControlResult(windows: windows))
+        actions.nextWindowSelectResponse = ControlResponse(ok: true, result: ControlResult(id: "win-b"))
+        actions.nextWindowCloseResponse = ControlResponse(ok: true, result: ControlResult(id: "win-b"))
+        actions.nextWindowDeleteResponse = ControlResponse(ok: false, error: "cannot delete last window")
+
+        let created = await dispatcher.dispatch(ControlRequest(
+            cmd: .windowNew,
+            args: ControlArgs(name: "Build")
+        ))
+        let listed = await dispatcher.dispatch(ControlRequest(cmd: .windowList))
+        let selected = await dispatcher.dispatch(ControlRequest(cmd: .windowSelect, target: "win-b"))
+        let closed = await dispatcher.dispatch(ControlRequest(cmd: .windowClose, target: "win-b"))
+        let deleted = await dispatcher.dispatch(ControlRequest(cmd: .windowDelete, target: "win-b"))
+
+        #expect(created == ControlResponse(ok: true, result: ControlResult(id: "win-b")))
+        #expect(listed == ControlResponse(ok: true, result: ControlResult(windows: windows)))
+        #expect(selected == ControlResponse(ok: true, result: ControlResult(id: "win-b")))
+        #expect(closed == ControlResponse(ok: true, result: ControlResult(id: "win-b")))
+        #expect(deleted == ControlResponse(ok: false, error: "cannot delete last window"))
+        #expect(actions.calls == [
+            .windowNew("Build"),
+            .windowList,
+            .windowSelect(target: "win-b"),
+            .windowClose(target: "win-b"),
+            .windowDelete(target: "win-b")
+        ])
+    }
+
     @Test func windowCommandsRouteParsedInputsAndKeepActionResponses() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -1024,16 +1134,20 @@ struct ControlDispatcherTests {
             args: ControlArgs(x: 100, y: 50, display: 1)
         ))
         let zoomed = await dispatcher.dispatch(ControlRequest(cmd: .windowZoom, target: "9f3c"))
+        actions.nextWindowFullscreenResponse = ControlResponse(ok: true, result: ControlResult(id: "win"))
+        let fullscreen = await dispatcher.dispatch(ControlRequest(cmd: .windowFullscreen, target: "9f3c"))
 
         #expect(renamed == ControlResponse(ok: true, result: ControlResult(id: "win")))
         #expect(resized == ControlResponse(ok: true, result: ControlResult(id: "win")))
         #expect(moved == ControlResponse(ok: true, result: ControlResult(id: "win")))
         #expect(zoomed == ControlResponse(ok: false, error: "window not open — window.select it first"))
+        #expect(fullscreen == ControlResponse(ok: true, result: ControlResult(id: "win")))
         #expect(actions.calls == [
             .windowRename(target: "9f3c", "Renamed"),
             .windowResize(target: "9f3c", width: 1200, height: 800),
             .windowMove(target: "9f3c", x: 100, y: 50, display: 1),
-            .windowZoom(target: "9f3c")
+            .windowZoom(target: "9f3c"),
+            .windowFullscreen(target: "9f3c")
         ])
     }
 
@@ -1096,15 +1210,6 @@ struct ControlDispatcherTests {
         ])
     }
 
-    @Test func nonMigratedCommandFallsThrough() async {
-        let actions = MockControlActions()
-        let dispatcher = ControlDispatcher(actions: actions)
-
-        let response = await dispatcher.dispatch(ControlRequest(cmd: .sessionSearch))
-
-        #expect(response == nil)
-        #expect(actions.calls.isEmpty)
-    }
 }
 
 @MainActor
@@ -1124,6 +1229,7 @@ private final class MockControlActions: ControlActions {
         case workspaceMove(target: String?, window: String?, ReorderDirection)
         case workspaceFocus(target: String?, window: String?, String?)
         case sessionFlag(target: String?, window: String?, String?)
+        case markSessionSeen(target: String?, window: String?)
         case sessionStatus(target: String?, window: String?, ControlSessionStatusUpdate)
         case sessionSplit(target: String?, window: String?, String?)
         case sessionScratch(target: String?, window: String?, String?, command: String?)
@@ -1139,17 +1245,25 @@ private final class MockControlActions: ControlActions {
         case sidebarViewMode(ControlSidebarViewMode)
         case expand(window: String?)
         case collapse(window: String?)
+        case quick(String?)
         case sessionType(target: String?, window: String?, ControlSessionTypeOptions)
         case sessionCopy(target: String?, window: String?)
+        case sessionSearch(target: String?, window: String?, text: String?, to: String?)
         case overlayOpen(target: String?, window: String?, ControlSessionOverlayOpenOptions)
         case overlayClose(target: String?, window: String?)
         case overlayResult(target: String?, window: String?)
         case sessionBackground(target: String?, window: String?, ControlSessionBackgroundOptions)
         case sessionText(target: String?, window: String?, ControlSessionTextOptions)
+        case windowNew(String?)
+        case windowList
+        case windowSelect(target: String?)
+        case windowClose(target: String?)
         case windowRename(target: String?, String)
+        case windowDelete(target: String?)
         case windowResize(target: String?, width: Int, height: Int)
         case windowMove(target: String?, x: Int, y: Int, display: Int?)
         case windowZoom(target: String?)
+        case windowFullscreen(target: String?)
         case restoreClear
     }
 
@@ -1166,17 +1280,25 @@ private final class MockControlActions: ControlActions {
     var nextConfigResponse = ControlResponse(ok: true)
     var nextThemeSetResponse = ControlResponse(ok: true)
     var nextThemeListResponse = ControlResponse(ok: true)
+    var nextQuickResponse = ControlResponse(ok: true)
     var nextSessionTypeResponse = ControlResponse(ok: true)
     var nextSessionCopyResponse = ControlResponse(ok: true)
+    var nextSessionSearchResponse = ControlResponse(ok: true)
     var nextOverlayOpenResponse = ControlResponse(ok: true)
     var nextOverlayCloseResponse = ControlResponse(ok: true)
     var nextOverlayResultResponse = ControlResponse(ok: true)
     var nextSessionBackgroundResponse = ControlResponse(ok: true)
     var nextSessionTextResponse = ControlResponse(ok: true)
+    var nextWindowNewResponse = ControlResponse(ok: true)
+    var nextWindowListResponse = ControlResponse(ok: true)
+    var nextWindowSelectResponse = ControlResponse(ok: true)
+    var nextWindowCloseResponse = ControlResponse(ok: true)
     var nextWindowRenameResponse = ControlResponse(ok: true)
+    var nextWindowDeleteResponse = ControlResponse(ok: true)
     var nextWindowResizeResponse = ControlResponse(ok: true)
     var nextWindowMoveResponse = ControlResponse(ok: true)
     var nextWindowZoomResponse = ControlResponse(ok: true)
+    var nextWindowFullscreenResponse = ControlResponse(ok: true)
     var nextRestoreClearResponse = ControlResponse(ok: true)
 
     func controlTree(window: String?) -> ControlResponse {
@@ -1246,6 +1368,11 @@ private final class MockControlActions: ControlActions {
 
     func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse {
         calls.append(.sessionFlag(target: target, window: window, mode))
+        return ControlResponse(ok: true)
+    }
+
+    func markSessionSeen(_ target: String?, window: String?) -> ControlResponse {
+        calls.append(.markSessionSeen(target: target, window: window))
         return ControlResponse(ok: true)
     }
 
@@ -1327,6 +1454,11 @@ private final class MockControlActions: ControlActions {
         return nextCollapseResponse
     }
 
+    func setQuickTerminal(mode: String?) -> ControlResponse {
+        calls.append(.quick(mode))
+        return nextQuickResponse
+    }
+
     func typeSession(_ target: String?, window: String?,
                      options: ControlSessionTypeOptions) async -> ControlResponse {
         calls.append(.sessionType(target: target, window: window, options))
@@ -1336,6 +1468,12 @@ private final class MockControlActions: ControlActions {
     func copySessionSelection(_ target: String?, window: String?) -> ControlResponse {
         calls.append(.sessionCopy(target: target, window: window))
         return nextSessionCopyResponse
+    }
+
+    func searchSession(_ target: String?, window: String?,
+                       text: String?, to: String?) async -> ControlResponse {
+        calls.append(.sessionSearch(target: target, window: window, text: text, to: to))
+        return nextSessionSearchResponse
     }
 
     func openSessionOverlay(_ target: String?, window: String?,
@@ -1365,9 +1503,34 @@ private final class MockControlActions: ControlActions {
         return nextSessionTextResponse
     }
 
+    func windowNew(name: String?) -> ControlResponse {
+        calls.append(.windowNew(name))
+        return nextWindowNewResponse
+    }
+
+    func windowList() -> ControlResponse {
+        calls.append(.windowList)
+        return nextWindowListResponse
+    }
+
+    func windowSelect(_ target: String?) async -> ControlResponse {
+        calls.append(.windowSelect(target: target))
+        return nextWindowSelectResponse
+    }
+
+    func windowClose(_ target: String?) async -> ControlResponse {
+        calls.append(.windowClose(target: target))
+        return nextWindowCloseResponse
+    }
+
     func windowRename(_ target: String?, name: String) -> ControlResponse {
         calls.append(.windowRename(target: target, name))
         return nextWindowRenameResponse
+    }
+
+    func windowDelete(_ target: String?) -> ControlResponse {
+        calls.append(.windowDelete(target: target))
+        return nextWindowDeleteResponse
     }
 
     func windowResize(_ target: String?, width: Int, height: Int) -> ControlResponse {
@@ -1383,6 +1546,11 @@ private final class MockControlActions: ControlActions {
     func windowZoom(_ target: String?) -> ControlResponse {
         calls.append(.windowZoom(target: target))
         return nextWindowZoomResponse
+    }
+
+    func windowFullscreen(_ target: String?) -> ControlResponse {
+        calls.append(.windowFullscreen(target: target))
+        return nextWindowFullscreenResponse
     }
 
     func clearRestoreCommands() -> ControlResponse {

@@ -129,14 +129,15 @@ echo "exit status: $?"
 cat /tmp/notes.md
 ```
 
-Floating panel variant (session stays visible behind it). Note: a floating overlay renders only over the
-active session, so opening it on a background `--target` SWITCHES the user to that session — use a full
-overlay (no `--size-percent`) when you must not disturb the user's current view:
+Floating panel variant (session stays visible behind it). Like a full overlay it opens in the background
+without switching the user; add `--follow` when you want the user pulled to the overlay:
 
 ```bash
 agtermctl session overlay open "zsh -lc 'htop'" --target "$AGTERM_SESSION_ID" --size-percent 70   # login shell so Homebrew's htop is on PATH; bare "htop" flashes open then vanishes (exit 127)
 # tint the overlay pane so it stands out from the session behind it:
 agtermctl session overlay open "revdiff HEAD~3" --target "$AGTERM_SESSION_ID" --size-percent 80 --background-color "#2a1a3a"
+# switch the user to the target as it opens:
+agtermctl session overlay open "revdiff HEAD~3" --target "$AGTERM_SESSION_ID" --size-percent 80 --follow
 # ... later
 agtermctl session overlay close
 ```
@@ -222,6 +223,19 @@ agtermctl sidebar mode flagged                            # show only the flagge
 agtermctl session go --to next                            # in flagged mode, nav steps the flagged set only
 agtermctl sidebar mode tree                               # back to the full tree
 agtermctl session flag clear                              # unflag everything in the window
+```
+
+## Acknowledge a driven session's notifications without stealing focus
+
+An orchestrator relaying a session's output elsewhere (Telegram, another agent) fires `notify` to signal
+"your turn", which raises the session's red unseen badge. Nothing normally clears that badge except
+visiting the session — which pulls the selection to it. `session seen` clears it in place, so the badge
+stays a real attention signal on the sessions a human tends while the driven ones stay clean.
+
+```bash
+agtermctl notify "your turn" --target "$SID"             # raises the unseen badge (body is positional)
+agtermctl tree --json | jq '.result.tree.workspaces[].sessions[] | {id, unseen}'  # read the counts
+agtermctl session seen --target "$SID"                   # clear it, selection/focus unchanged
 ```
 
 ## Focus a single workspace
@@ -348,6 +362,7 @@ w=$(agtermctl window new "scratch" --json | jq -r '.result.id')
 agtermctl window resize "$w" --width 1200 --height 800
 agtermctl window move "$w" --x 100 --y 100 --display 0
 agtermctl window zoom "$w"                 # maximize-to-screen toggle (call again to restore)
+agtermctl window fullscreen "$w"           # native macOS full screen toggle (⌃⌘F / green button)
 agtermctl window select "$w"
 ```
 

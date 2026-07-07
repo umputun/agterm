@@ -366,6 +366,35 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span> command-line tool,
               so cask users shouldn't run the in-app installer as well.
             </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 14px 0 0">
+              Homebrew upgrade note (July 2026). A recent Homebrew change (installed-cask metadata
+              stored as JSON) can make
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">brew upgrade</span>
+              fail for agterm with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">It seems there is already an App at '/Applications/agterm.app'</span>.
+              It affects third-party tap casks in general, not only agterm. Recover with a one-time
+              reinstall, which rewrites the install receipt:
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 16px 18px;
+                margin: 14px 0 0;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 14px;
+                color: #e6e1d7;
+                overflow-x: auto;
+              "
+            >
+              <span style="color: #6d82f3">$ </span>brew reinstall --cask --force agterm
+            </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 14px 0 0">
+              Regular
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">brew upgrade</span>
+              works afterward. This is an upstream Homebrew issue, and the note will be removed once it is fixed.
+            </p>
             <h3
               style="
                 font-family: &quot;JetBrains Mono&quot;, monospace;
@@ -849,7 +878,10 @@
               A program in any session can raise a desktop notification (via OSC 9 / 777, or
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl notify</span>). It surfaces
               as a macOS banner and an unseen-count badge on the sidebar row (rolled up onto a collapsed workspace); clicking the
-              banner brings agterm forward and focuses the exact pane that raised it, and focusing a session clears its badge.
+              banner brings agterm forward and focuses the exact pane that raised it, and focusing a session clears its badge — or
+              clear it headlessly with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session seen</span>
+              so an orchestrator driving a session over the socket can acknowledge it without pulling focus
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports each session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">unseen</span> count).
               Banners and count badges toggle independently in General settings. For a coding agent that just needs to say it is
               waiting, <a href="#status" style="color: #6d82f3">agent status</a> is usually the better fit.
             </p>
@@ -1083,7 +1115,8 @@
               agtermctl session split toggle<br />agtermctl session resize --split-ratio 0.7
               <span style="color: #6b727a">&nbsp;# or --grow-left/--grow-right D</span><br />agtermctl session scratch toggle
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# on|off|toggle</span><br />agtermctl session flag on
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# on|off|toggle|clear</span><br />agtermctl
+              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# on|off|toggle|clear</span><br />agtermctl session seen --target 9f3c
+              <span style="color: #6b727a">&nbsp;# clear the unseen badge, focus-free</span><br />agtermctl
               sidebar mode flagged <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# tree|flagged|toggle</span><br />agtermctl quick
               toggle<br />agtermctl font inc <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# active surface font size</span
               ><br /><br /><span style="color: #6b727a"># open the search bar, print the "N of M" counter</span><br />agtermctl
@@ -1122,6 +1155,9 @@
               ><br />agtermctl session overlay open <span style="color: #f2b45c">"htop"</span> --size-percent 70<br />agtermctl
               session overlay open <span style="color: #f2b45c">"revdiff HEAD~3"</span> --size-percent 80 --background-color
               <span style="color: #f2b45c">"#2a1a3a"</span><br /><br /><span style="color: #6b727a"
+                ># switch the user to the target as the overlay opens</span
+              ><br />agtermctl session overlay open <span style="color: #f2b45c">"revdiff HEAD~3"</span> --size-percent 80
+              --target 9f3c --follow<br /><br /><span style="color: #6b727a"
                 ># keep it open after exit, or block until it exits and inherit its status</span
               ><br />agtermctl session overlay open <span style="color: #f2b45c">"make test"</span> --wait<br />agtermctl session
               overlay open <span style="color: #f2b45c">"make test"</span> --block<br />agtermctl session overlay close --target
@@ -1132,11 +1168,13 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--wait</span> keeps a "press any key
               to close" prompt so you can read the final output;
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--block</span> reports only the exit
-              status (the overlay never captures stdout — a TUI writes its own result file). A full overlay renders only for the
-              active session; a floating <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+              status (the overlay never captures stdout — a TUI writes its own result file). By default an overlay opens on its
+              target without switching the active session (full and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
                 >--size-percent</span
               >
-              overlay auto-selects its target. A
+              floating alike);
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--follow</span> switches the user to
+              the target. A
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">(overlay)</span> tag in
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree</span> marks a session
               whose overlay is open.
@@ -1302,7 +1340,13 @@
               >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">return</span>/<span
                 style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
                 >delete</span
-              >). Custom commands may also use a leader sequence
+              >). A Shift-typed symbol is written
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+&lt;base&gt;</span>
+              (e.g. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+/</span> for
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">?</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+=</span> for
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span>) — the base key, not the
+              shifted symbol. Custom commands may also use a leader sequence
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ctrl+a&gt;g</span>), and their chord
               must include a modifier — a bare key can't shadow a plain terminal key.
             </p>
@@ -1331,7 +1375,7 @@
                 color: #cbc6bc;
               "
             >
-              new_window&nbsp;&nbsp;&nbsp;rename_window&nbsp;&nbsp;&nbsp;delete_window<br />new_workspace&nbsp;&nbsp;&nbsp;rename_workspace&nbsp;&nbsp;&nbsp;delete_workspace<br />new_session&nbsp;&nbsp;&nbsp;open_directory&nbsp;&nbsp;&nbsp;rename_session<br />close_session&nbsp;&nbsp;&nbsp;clear_status<br />increase_font_size&nbsp;&nbsp;&nbsp;decrease_font_size&nbsp;&nbsp;&nbsp;reset_font_size<br />toggle_split&nbsp;&nbsp;&nbsp;toggle_scratch&nbsp;&nbsp;&nbsp;toggle_search<br />toggle_sidebar&nbsp;&nbsp;&nbsp;toggle_flag&nbsp;&nbsp;&nbsp;toggle_flagged_view<br />focus_left_pane&nbsp;&nbsp;&nbsp;focus_right_pane&nbsp;&nbsp;&nbsp;focus_workspace<br />previous_session&nbsp;&nbsp;&nbsp;next_session&nbsp;&nbsp;&nbsp;first_session&nbsp;&nbsp;&nbsp;last_session<br />previous_attention_session&nbsp;&nbsp;&nbsp;next_attention_session<br />quick_terminal&nbsp;&nbsp;&nbsp;session_palette&nbsp;&nbsp;&nbsp;command_palette<br />custom_command_palette&nbsp;&nbsp;&nbsp;show_attention&nbsp;&nbsp;&nbsp;select_theme
+              new_window&nbsp;&nbsp;&nbsp;rename_window&nbsp;&nbsp;&nbsp;delete_window<br />new_workspace&nbsp;&nbsp;&nbsp;rename_workspace&nbsp;&nbsp;&nbsp;delete_workspace<br />new_session&nbsp;&nbsp;&nbsp;open_directory&nbsp;&nbsp;&nbsp;rename_session<br />close_session&nbsp;&nbsp;&nbsp;clear_status<br />increase_font_size&nbsp;&nbsp;&nbsp;decrease_font_size&nbsp;&nbsp;&nbsp;reset_font_size<br />toggle_split&nbsp;&nbsp;&nbsp;toggle_scratch&nbsp;&nbsp;&nbsp;toggle_search<br />toggle_sidebar&nbsp;&nbsp;&nbsp;toggle_flag&nbsp;&nbsp;&nbsp;toggle_flagged_view<br />focus_left_pane&nbsp;&nbsp;&nbsp;focus_right_pane&nbsp;&nbsp;&nbsp;focus_workspace<br />previous_session&nbsp;&nbsp;&nbsp;next_session&nbsp;&nbsp;&nbsp;first_session&nbsp;&nbsp;&nbsp;last_session<br />previous_attention_session&nbsp;&nbsp;&nbsp;next_attention_session<br />quick_terminal&nbsp;&nbsp;&nbsp;session_palette&nbsp;&nbsp;&nbsp;command_palette<br />custom_command_palette&nbsp;&nbsp;&nbsp;show_attention<br />select_theme&nbsp;&nbsp;&nbsp;toggle_fullscreen
             </div>
 
             <h3
@@ -1428,13 +1472,15 @@
                 <span
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
-                >A few keys can't be expressed because they clash with the grammar's separators: the arrow keys,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span> (the chord-joiner), and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&gt;</span> (the leader separator).
-                The arrow-bound actions and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                  >increase_font_size</span
-                >
-                keep their defaults unless mapped to a parseable chord.
+                >The arrow keys can't be written as a chord, so the arrow-bound actions keep their defaults unless
+                mapped to a parseable chord. The literal
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&gt;</span> can't be a bare
+                key token (they are the separators), but those keys are bindable as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+=</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+.</span>; only
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">increase_font_size</span>'s
+                default ⌘+ shows as a glyph because its stored form doesn't round-trip through the file.
               </li>
               <li style="font-size: 14.5px; line-height: 1.6; color: #949ba4; padding-left: 22px; position: relative">
                 <span

@@ -102,7 +102,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 50-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 52-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -172,15 +172,15 @@ paths:
   exact `uuidString` (case-insensitive), or a git-style unique prefix.
   Zero prefix hits → `notFound` error, ≥2 → `ambiguous` error listing the candidates.
   `--target` defaults to `active`, so scripts rarely type an id and never for "the current one".
-- **Command catalog (50 commands):**
+- **Command catalog (52 commands):**
   - `tree`
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`
-  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.result`
+  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.result`
   - `quick`
   - `sidebar`/`sidebar.mode`/`sidebar.expand`/`sidebar.collapse`
   - `notify`
   - `font.inc`/`font.dec`/`font.reset`
-  - `window.new`/`window.list`/`window.select`/`window.close`/`window.rename`/`window.delete`/`window.resize`/`window.move`/`window.zoom` (see the Windows section)
+  - `window.new`/`window.list`/`window.select`/`window.close`/`window.rename`/`window.delete`/`window.resize`/`window.move`/`window.zoom`/`window.fullscreen` (see the Windows section)
   - `keymap.reload` (see the Keymap section)
   - `config.reload` (see the Settings section)
   - `theme.set`/`theme.list` (see the Theme picker section)
@@ -449,41 +449,52 @@ paths:
   `overlaySizePercent`, nil = full / non-nil = floating; and `overlayBackgroundColor`,
   set at open / cleared at close), and the surface runs `config.command` with
   `onExit → closeOverlay`.
-  The two variants render in DIFFERENT places.
-  The FULL overlay is an in-deck ZStack sibling in `WindowContentView.sessionDetail` (`.zIndex(1)` above the
+  Both variants render IN the per-session eager deck, so the overlay program runs regardless of which
+  session is active — the only visible difference is geometry.
+  The FULL overlay is an in-deck ZStack sibling in `WindowContentView.sessionDetail` (`.zIndex(2)` above the
   pane(s), gated on `fullOverlay`): it draws translucent + blurred (NO opaque backing) with the pane(s)
   behind hidden at `.opacity(0)` + `.allowsHitTesting(false)` (kept MOUNTED,
   shells alive like the deck's inactive sessions), so its transparency reveals the window backing (desktop,
   tint + blur), not the session.
-  The FLOATING overlay (`overlaySizePercent` set) is rendered OUTSIDE `sessionDetail` — as `.overlay { floatingOverlayLayer }`
-  on `detailPane` — so `sessionDetail` for the floating case adds NO sibling to its ZStack:
-  just the pane(s) at opacity 1, the same SHAPE as no-overlay (which is what keeps the NSSplitView from
-  moving).
+  The FLOATING overlay (`overlaySizePercent` set) is `floatingOverlayPanel(session:isActive:)`, an
+  ALWAYS-PRESENT ZStack sibling in `sessionDetail` (`.zIndex(3)`).
+  It is a CONSTANT-SHAPE sibling: the panel content (opaque `terminalColor` backing + hairline frame +
+  shadow, quick-terminal styling; the overlay surface; the click-catcher) is gated INSIDE it, so the ZStack
+  child COUNT stays constant across open/close — the same SHAPE as no-overlay, which is what keeps the
+  AppKit `NSSplitView` from re-hosting and overrunning UP into the transparent titlebar.
+  (The panel used to mount OUTSIDE `sessionDetail` as a `detailPane` `.overlay` for exactly this reason;
+  the always-present constant-shape sibling holds the same invariant IN-deck, which is what lets the
+  floating surface mount per-session and run in the background like the full overlay.)
   Hit-testing stays gated on `.allowsHitTesting(!fullOverlay)` and must NOT flip when a floating overlay
   opens: changing the panes' OWN `allowsHitTesting` on overlay-open (e.g. to `!session.overlayActive`)
-  ALSO triggers the NSSplitView titlebar-overrun — the SAME class of perturbation as adding a sibling,
-  even though it looks like a pure interaction change (Codex insisted hit-testing was layout-inert;
+  ALSO triggers the NSSplitView titlebar-overrun — the SAME class of perturbation as changing the ZStack's
+  shape, even though it looks like a pure interaction change (Codex insisted hit-testing was layout-inert;
   a review-loop regression proved otherwise).
-  So the floating panes stay hit-testable, and the overlay's focus is protected OUTSIDE `sessionDetail`:
-  a transparent `Color.clear.contentShape(Rectangle())` catcher in `floatingOverlayLayer` (on `detailPane`)
-  absorbs clicks AROUND the panel so they can't reach the panes and steal the overlay program's first
-  responder.
-  (Generalize the rule: ANYTHING in `sessionDetail`'s HSplitView-hosting subtree that CHANGES when `overlayActive`
-  flips — a sibling, a flattened ZStack, or a toggled pane modifier — overruns the split into the titlebar;
-  keep that subtree identical for the floating case and do everything else at the `detailPane` level.)
-  This separation is load-bearing: adding a conditional sibling INSIDE `sessionDetail`'s ZStack (the
-  HSplitView-hosting subtree) made SwiftUI re-host it and the AppKit `NSSplitView` overrun UP into the
+  So the floating panes stay hit-testable, and the overlay's focus is protected by a transparent
+  `Color.clear.contentShape(Rectangle())` catcher INSIDE `floatingOverlayPanel` that absorbs clicks AROUND
+  the panel so they can't reach the panes and steal the overlay program's first responder.
+  (Generalize the rule: ANYTHING in `sessionDetail`'s HSplitView-hosting subtree that CHANGES SHAPE when
+  `overlayActive` flips — adding/removing a sibling, a flattened ZStack, or a toggled pane modifier —
+  overruns the split into the titlebar; keep the subtree's shape identical across open/close and gate the
+  panel content INSIDE the constant-shape sibling.)
+  This constant-shape invariant is load-bearing: a CONDITIONAL sibling inside `sessionDetail`'s ZStack (the
+  HSplitView-hosting subtree) made SwiftUI re-host it and the `NSSplitView` overrun UP into the
   transparent titlebar, painting the split over the header (Codex-confirmed;
   the quick terminal renders at this level for the same reason and never hit it).
-  Anchoring on `detailPane` also means `floatingOverlayLayer`'s `GeometryReader` reports the terminal
-  area EXACTLY — no manual sidebar/titlebar insets (computing those at the window level mis-centered
-  the panel one line low) — so it sizes the opaque framed panel (`terminalColor` backing + hairline frame
-  + shadow, quick-terminal styling) to `sizePercent`% and centers it in the detail area,
-  the pane(s) visible around it.
-  Only the active session's floating overlay shows, so `ControlServer` SELECTS the target when a floating
-  overlay (`sizePercent` set) opens — its surface only mounts for the active session,
-  so without the select a non-active target's program would never run and a `--block` open would poll
-  forever (the full overlay needs no select; it mounts in the eager deck regardless).
+  `floatingOverlayPanel`'s `GeometryReader` reports the detail area EXACTLY — no manual sidebar/titlebar
+  insets (computing those at the window level mis-centered the panel one line low) — so it sizes the opaque
+  framed panel to `sizePercent`% and centers it in the detail area, the pane(s) visible around it.
+  `isActive` gates the overlay surface's focus, so a background floating overlay RUNS but does not steal
+  focus (mirrors the full overlay).
+  Because both kinds mount in the eager deck, `ControlServer` does NOT select on open by default; it SELECTS
+  the target ONLY when the caller passes `--follow` (gated on `options.follow`, NOT on `sizePercent`) — the
+  user-facing "pull me to the overlay" switch.
+  Without `--follow` full and floating both open on `--target` and run in the background; a `--block` open
+  completes without changing the active session.
+  `follow` is a new optional ARG on the existing `overlay.open` command (NO new `Command` case): threaded
+  `ControlProtocol` (`ControlArgs.follow`) → `ControlDispatcher` `.sessionOverlayOpen`
+  (`ControlSessionOverlayOpenOptions.follow`) → `ControlServer` → the `agtermctl … --follow` flag,
+  omitted = false for back-compat.
   On close an `.onChange(of: session.overlayActive)` drives `focusAfterReparent()` on the session's `activeSurface`
   so first responder returns to the underlying terminal — the pane re-activating only does a single `makeFirstResponder`,
   which loses the teardown/re-host race (same reason the open path needs the `autoFocus` retry).
@@ -496,7 +507,8 @@ paths:
   `--wait`/`overlayWait` keeps the prompt (returns `false` from the action so `close_surface_cb` closes
   after a keypress).
   `handleProcessExit` is idempotent (both the action and `close_surface_cb` can fire).
-  The overlay is rendered only for the *active* session, so the caller selects the session first.
+  Both variants mount in the eager deck, so the caller does NOT need to select the target; `--follow`
+  selects it only when the user should be pulled to the overlay.
   **Exit-status capture (`session.overlay.result` + `agtermctl … --block`).** `makeOverlaySurface` wraps
   the command in a FIXED `sh -c '( eval "$AGTERM_OVL_CMD" ); echo $? > "$AGTERM_OVL_CODE"'` — the real
   command + a per-surface temp path ride in env (`AGTERM_OVL_CMD`/`AGTERM_OVL_CODE`,
@@ -678,6 +690,26 @@ paths:
   arm (`setSessionFlag`) in `ControlServer`, (3) the `session flag on|off|toggle|clear` subcommand (`FlagCommand`)
   in `agtermctlKit`, (4) round-trip in `ControlProtocolTests` + the e2e `testSessionFlagAndSidebarModeFlagged`
   in `ControlSidebarStatusUITests`.
+  `session.seen` (target = session) clears a session's unseen-notification badge WITHOUT changing the
+  selection, focus, or agent status — the focus-free counterpart to `notify`, which raises the badge over
+  the socket while the only clear paths (`AppStore.selectSession`, a pane's `onFocusChange(true)`) are
+  both focus-coupled.
+  It drives the already-public `AppStore.clearUnseen(_:)` (the same primitive `selectSession` calls),
+  so it is idempotent (a no-op when already zero; the count is ephemeral, absent from `SessionSnapshot`,
+  so it triggers no save) and returns the session id; NO args beyond target/window (leaner than `session.flag`
+  — no mode).
+  It is control-NATIVE (no GUI/menu equivalent — visiting the session is the GUI's only "mark seen", and
+  it is inseparable from selecting) — the same footing as `notify`/`session.type`/`session.copy`.
+  The read side is the new `unseen` field on `ControlSessionNode` (the `session.unseenCount`, populated
+  in the `tree` builder, omitted when zero), so a script can query the count and clear it symmetrically.
+  Four-point keep-in-sync audit for `session.seen`: (1) `case sessionSeen = "session.seen"` +
+  `unseen: Int?` on `ControlSessionNode` in `ControlProtocol.swift` (no new `ControlArgs` field),
+  (2) the `.sessionSeen` dispatch arm (`markSessionSeen`) in `ControlDispatcher`/`ControlServer` + the
+  `unseen` population in `AppStore.controlTree`, (3) the `session seen` subcommand (`Seen`) in `agtermctlKit`,
+  (4) round-trip (`sessionSeenRoundTrips` + `treeSessionNodeRoundTripsWithUnseen`/`…OmitsUnseenWhenNil`)
+  in `ControlProtocolTests` + dispatcher routing in `ControlDispatcherTests` + `AppStoreTests`
+  (`controlTreeReportsUnseenCountWhenPositive`/`…OmitsUnseenCountWhenZero`) + CLI mapping in `CommandsTests`
+  + the e2e `testSessionSeenClearsBadgeWithoutFocus` in `ControlSidebarStatusUITests`.
   `sidebar.mode` (frontmost window) flips the sidebar VIEW between the workspace tree and the flat flagged
   working-set list — `args.mode` is `tree`|`flagged`|`toggle` (delta-computed against `AppStore.sidebarMode`
   so it's idempotent, unknown mode = error), drives `setSidebarViewMode` → `AppStore.setSidebarMode`.
@@ -735,6 +767,18 @@ paths:
   is each pane running".
   It ALSO surfaces `background` on each node — the `BackgroundWatermark` spec set via `session.background`
   (omitted when none), the read side of set/clear so a script can query the current watermark.
+  `tree` ALSO carries, at the TOP level (alongside `idleMs`/`autoFollowMs`), `sidebarVisible` — the read
+  side of the write-only `sidebar` command (per-window sidebar visibility), populated LIVE from the
+  projected window's store in `AppStore.controlTree`.
+  The SAME field also rides each `ControlWindowNode` on `window.list` (read from `stores[id]?.sidebarVisible`,
+  omitted for a closed window), so a script can enumerate every window's sidebar state.
+  BUT `window.list` is served from the background-thread `cachedWindowNodes` cache
+  (refreshed after every dispatched command + on frontmost change), and a GUI-only ⌃⌘S toggle is neither —
+  so `AppStore.setSidebarVisible` posts `.agtermSidebarVisibilityChanged` (agtermCore) and `ControlServer`
+  observes it to `refreshWindowCache`, keeping the cached `sidebarVisible` honest.
+  A script that reads-then-acts (e.g. the tmux-style zoom that must restore the sidebar only if it was
+  visible) should still prefer `tree`'s LIVE `sidebarVisible` over the cached `window.list` one — the tree
+  is built on the main actor per request, so it can never lag.
   `restore.clear` clears every open session's saved CAPTURED foreground command (`Session.foregroundCommand`/`splitForegroundCommand`)
   and persists via `library.saveAllOpen()`, so the next restart restores plain shells for those panes instead
   of re-running the captured commands (also closing the force-quit re-fire: the restored command is consumed
@@ -805,5 +849,5 @@ paths:
   (image/text/color set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
-  examples.md recipes) and the command count there is bumped to 50 to match.
+  examples.md recipes) and the command count there is bumped to 52 to match.
 

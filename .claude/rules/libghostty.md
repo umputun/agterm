@@ -76,6 +76,21 @@ paths:
   `GhosttyCallbacks` clones that config into a lock-protected box (surface-target `CONFIG_CHANGE`s —
   watermark overlays — are ignored), and `reloadConfig` takes it for `resolveThemeColors` and frees it;
   so no `COLOR_CHANGE` callback is needed for this feature.
+- **The sidebar's disclosure triangle tracks the theme via `NSAppearance`, not a color we set.**
+  The expand/collapse triangle is drawn by `NSOutlineView` itself, colored from the view's `NSAppearance`
+  — which follows the macOS system light/dark setting, NOT the terminal theme.
+  So a light theme under macOS dark mode (or the mirror, a dark theme under macOS light mode) draws the
+  triangle in the wrong brightness and it vanishes against the themed sidebar background
+  (the row text/icons stay visible only because they're set explicitly to `terminalForegroundColor`).
+  `WorkspaceSidebar.Coordinator.applyThemeAppearance()` pins `outline.appearance` to `.darkAqua`/`.aqua`
+  from `GhosttyApp.terminalThemeIsDark`, called in `makeNSView` (launch) and `appearanceChanged` (live
+  theme switch — which the Sidebar-Tint slider also posts, so a tint change re-pins).
+  `terminalThemeIsDark` classifies the perceived luminance of the color the triangle actually sits on:
+  the theme background with the sidebar-tint wash applied (`ThemeBrightness.isDark(…, shiftAmount:)`,
+  host-free), NOT the raw background — so a strong tint that pushes a near-threshold theme across the
+  0.5 midpoint still picks the readable triangle.
+  The triangle color is not accessibility-observable, so this is verified by eye, not a UI test — like
+  the cursor solid/hollow case.
 - **Sidebar selection is drawn entirely by `SidebarRowView`, not AppKit.**
   `outline.selectionHighlightStyle = .none` (set right after `style = .sourceList`,
   which would otherwise reset it) so AppKit draws no selection of its own — otherwise it paints a gray
@@ -148,17 +163,25 @@ paths:
   `ShellEscape.path` still escapes file-URL paths so a path with spaces lands as one shell token on Enter;
   the newline-escaping from #96 is now belt-and-suspenders under bracketed paste.
 - **Search bar placement (NSSplitView-overrun rule).**
-  `TerminalSearchBar` (`agterm/Views/`) is anchored on `detailPane` via `.overlay(alignment: .topTrailing) { searchBarLayer }`
-  — the SAME level as `floatingOverlayLayer`, NEVER inside any session's `sessionDetail` HSplitView-hosting
-  subtree.
-  This is the same hard-won rule as the floating overlay: adding a conditional sibling (or flipping a
-  pane modifier) inside `sessionDetail`'s ZStack when `searchActive` flips would re-host the `NSSplitView`
-  and overrun it UP into the transparent titlebar.
-  The bar reads `store.activeSession?.searchActive` and shows only when set,
-  so the split subtree's SHAPE is constant whether or not the bar is shown.
-  Because it is a `detailPane` `.overlay`, it renders ABOVE the in-deck scratch (zIndex 1 inside `sessionDetail`)
-  and the FULL overlay (zIndex 2) without any layout change — so search-over-scratch shows the bar on
-  top of the scratch with no `sessionDetail`/HSplitView perturbation.
+  The underlying rule: nothing may change `sessionDetail`'s ZStack SHAPE when a per-session toggle flips —
+  adding/removing a child (or flipping a pane modifier) inside that HSplitView-hosting subtree re-hosts the
+  `NSSplitView` and overruns it UP into the transparent titlebar.
+  Two surfaces obey it in two different ways.
+  The SEARCH BAR (`TerminalSearchBar`, `agterm/Views/`) stays OUT of `sessionDetail` entirely: it is anchored
+  on `detailPane` via `.overlay(alignment: .topTrailing) { searchBarLayer }`, NEVER inside any session's
+  `sessionDetail` subtree, so toggling it can't perturb the split at all.
+  The bar reads `store.activeSession?.searchActive` and shows only when set.
+  Because it is a `detailPane` `.overlay` it composites ABOVE the whole detail deck without any layout change
+  — the in-deck scratch (zIndex 1 inside `sessionDetail`), the FULL overlay (zIndex 2), and the floating
+  overlay panel (zIndex 3) — so search-over-scratch shows the bar on top of the scratch with no HSplitView
+  perturbation.
+  The FLOATING overlay takes the opposite route: it IS a `sessionDetail` ZStack sibling (`floatingOverlayPanel`
+  at `.zIndex(3)`), but an ALWAYS-PRESENT, constant-shape one — its panel content (surface + frame +
+  click-catcher) is gated INSIDE the sibling, so the ZStack child count never changes when a floating overlay
+  opens/closes and the `NSSplitView` is never re-hosted, even though the pane(s) stay VISIBLE behind the opaque
+  panel.
+  (`floatingOverlayPanel` is per-session in the eager deck, so its program runs regardless of which session is
+  active — see the surface-lifecycle note.)
 - **Window overlays sit BELOW the custom titlebar, NOT as a body-level `.overlay` (transparent-titlebar-scrim
   rule).** The quick terminal, command palettes, and Ctrl-Tab switcher render via `windowOverlayLayer`
   — a ZStack sibling INSIDE the body's root ZStack, inset by `titlebarHeight` (`.padding(.top, titlebarHeight)`)
@@ -252,6 +275,28 @@ paths:
   Cursor solid/hollow is not accessibility-observable, so it is NOT unit/UI-testable — verified by instrumenting
   `set_focus` and reading `log show` across split-open + multi-window key switches (exactly one focused
   surface app-wide in every case).
+- **A background window's LEFT reactivation click reaches the surface (`acceptsFirstMouse`), and `scrollWheel` self-syncs the mouse cell.**
+  `GhosttySurfaceView.acceptsFirstMouse(for:)` returns true ONLY for `.leftMouseDown`, so the click that
+  raises an inactive window also runs `mouseDown` — selecting the clicked split pane (`makeFirstResponder`
+  → `onFocusChange` → `splitFocused`), the counterpart to the first-responder path above, instead of AppKit
+  swallowing the click just to raise the window.
+  It is gated to the LEFT button on purpose: a first-mouse right/middle click would otherwise reach
+  `rightMouseDown`/`otherMouseDown`, which forward to libghostty, and with the default
+  `right-click-action = paste` (`AppSettings.rightClickPaste`, nil = paste) that would paste the clipboard
+  into a window you only meant to raise.
+  Separately, `mouse_scroll` reports at libghostty's LAST-KNOWN cell, and a no-mouse-move reactivation
+  (cmd-tab/keyboard, or scrolling to reactivate with the pointer already inside) fires no `mouseDown`/`mouseEntered`,
+  so the position is stale or `-1,-1` (from `mouseExited`).
+  `scrollWheel` therefore pushes `ghostty_surface_mouse_pos` from its own event before `mouse_scroll`, but
+  ONLY when the point is stale — it differs from `lastReportedMousePoint`, which every mouse handler updates
+  through the shared `reportMousePos` helper.
+  So the first scroll after a no-move reactivation lands at the real cell instead of doing nothing until you
+  nudge the mouse, while a normal already-synced scroll does NOT re-push the same cell on every packet —
+  which in an any-motion + sgr-pixel mouse-reporting TUI would otherwise emit a synthetic motion report per
+  packet.
+  It is the companion to the `mouseEntered` restore (which only covers cross-the-boundary re-entry).
+  Like the cursor-focus case, this input plumbing is not accessibility-observable and is verified by hand,
+  not a UI test.
 - **OSC 52 clipboard access is gated in OUR callbacks, not by a ghostty-internal dialog.**
   A program reading (`\e]52;c;?\a`) or writing (`\e]52;c;<base64>\a`) the system clipboard reaches agterm
   through `read_clipboard_cb`/`confirm_read_clipboard_cb` and `write_clipboard_cb` (`GhosttyCallbacks`).

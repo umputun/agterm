@@ -135,19 +135,28 @@ extension GhosttySurfaceView {
         return NSPoint(x: local.x, y: bounds.height - local.y)
     }
 
+    /// Push the pointer position from `event` to libghostty and remember it in `lastReportedMousePoint`.
+    /// Every handler that reports a position routes through here so `scrollWheel` can tell when the position
+    /// is already current and skip a redundant `mouse_pos` (which a mouse-reporting TUI would otherwise turn
+    /// into a per-packet synthetic motion report).
+    private func reportMousePos(from event: NSEvent) {
+        guard let surface else { return }
+        let pt = mousePoint(from: event)
+        ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
+        lastReportedMousePoint = pt
+    }
+
     override func mouseDown(with event: NSEvent) {
         guard let surface else { return }
         window?.makeFirstResponder(self)
         updateGhosttyFocus()
-        let pt = mousePoint(from: event)
-        ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
+        reportMousePos(from: event)
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_LEFT, mods(event))
     }
 
     override func mouseUp(with event: NSEvent) {
         guard let surface else { return }
-        let pt = mousePoint(from: event)
-        ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
+        reportMousePos(from: event)
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_LEFT, mods(event))
     }
 
@@ -157,15 +166,13 @@ extension GhosttySurfaceView {
     // terminal context menu, so the return value is discarded like the left handler.
     override func rightMouseDown(with event: NSEvent) {
         guard let surface else { return }
-        let pt = mousePoint(from: event)
-        ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
+        reportMousePos(from: event)
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_RIGHT, mods(event))
     }
 
     override func rightMouseUp(with event: NSEvent) {
         guard let surface else { return }
-        let pt = mousePoint(from: event)
-        ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
+        reportMousePos(from: event)
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_RIGHT, mods(event))
     }
 
@@ -173,15 +180,13 @@ extension GhosttySurfaceView {
     // (back/forward, etc.) falls through to the responder chain via super.
     override func otherMouseDown(with event: NSEvent) {
         guard event.buttonNumber == 2, let surface else { super.otherMouseDown(with: event); return }
-        let pt = mousePoint(from: event)
-        ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
+        reportMousePos(from: event)
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_PRESS, GHOSTTY_MOUSE_MIDDLE, mods(event))
     }
 
     override func otherMouseUp(with event: NSEvent) {
         guard event.buttonNumber == 2, let surface else { super.otherMouseUp(with: event); return }
-        let pt = mousePoint(from: event)
-        ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
+        reportMousePos(from: event)
         _ = ghostty_surface_mouse_button(surface, GHOSTTY_MOUSE_RELEASE, GHOSTTY_MOUSE_MIDDLE, mods(event))
     }
 
@@ -189,21 +194,13 @@ extension GhosttySurfaceView {
     override func rightMouseDragged(with event: NSEvent) { mouseMoved(with: event) }
     override func otherMouseDragged(with event: NSEvent) { mouseMoved(with: event) }
 
-    override func mouseMoved(with event: NSEvent) {
-        guard let surface else { return }
-        let pt = mousePoint(from: event)
-        ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
-    }
+    override func mouseMoved(with event: NSEvent) { reportMousePos(from: event) }
 
-    /// The pointer entered the surface: restore libghostty's mouse position from the current point. Paired
-    /// with `mouseExited`'s `-1, -1` reset — without it, `scrollWheel` (which never sets `mouse_pos`) would
-    /// report a scroll at the stale `-1, -1` if you scroll right after re-entering, before any move, inside
-    /// a mouse-reporting TUI (vim/less/htop).
-    override func mouseEntered(with event: NSEvent) {
-        guard let surface else { return }
-        let pt = mousePoint(from: event)
-        ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
-    }
+    /// The pointer entered the surface: restore libghostty's mouse position from the current point, undoing
+    /// `mouseExited`'s `-1, -1` reset so hovered-link and cursor-shape state are correct on re-entry.
+    /// (`scrollWheel` also syncs `mouse_pos` when stale, so the first post-re-entry scroll no longer depends
+    /// on this — but the restore still matters for hover/link state before any move.)
+    override func mouseEntered(with event: NSEvent) { reportMousePos(from: event) }
 
     /// The pointer left the surface. Report negative coordinates so libghostty clears any hovered-link
     /// state — it drops `over_link`, reverts the mouse shape, and re-renders without the underline (see its
@@ -213,10 +210,25 @@ extension GhosttySurfaceView {
     override func mouseExited(with event: NSEvent) {
         guard let surface, NSEvent.pressedMouseButtons == 0 else { return }
         ghostty_surface_mouse_pos(surface, -1, -1, mods(event))
+        lastReportedMousePoint = NSPoint(x: -1, y: -1)
     }
 
     override func scrollWheel(with event: NSEvent) {
         guard let surface else { return }
+        // sync libghostty's mouse position before scrolling, but ONLY when it's stale: mouse_scroll reports
+        // at the last-known cell, and reactivating the window with no mouse move — cmd-tab/keyboard, or
+        // scrolling to reactivate with the pointer already inside — delivers no mouseDown/mouseEntered, so
+        // the position stays stale or -1,-1 (from mouseExited) and the first scroll inside a mouse-reporting
+        // TUI (Claude Code, vim, less) reports at the wrong cell until you nudge the mouse. gating on
+        // lastReportedMousePoint means an already-synced (normal) scroll doesn't re-push the same cell every
+        // packet — which in an any-motion + sgr-pixel TUI would emit a synthetic motion report per packet.
+        // (a LEFT click reactivation is already covered by mouseDown via acceptsFirstMouse; this handles the
+        // no-click paths.)
+        let pt = mousePoint(from: event)
+        if pt != lastReportedMousePoint {
+            ghostty_surface_mouse_pos(surface, pt.x, pt.y, mods(event))
+            lastReportedMousePoint = pt
+        }
         var scrollMods: ghostty_input_scroll_mods_t = 0
         if event.hasPreciseScrollingDeltas { scrollMods |= 1 }
         ghostty_surface_mouse_scroll(surface, event.scrollingDeltaX, event.scrollingDeltaY, scrollMods)

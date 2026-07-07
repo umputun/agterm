@@ -30,6 +30,19 @@ final class GhosttyApp {
     /// text + icons, title bar text + buttons) uses it so non-terminal text tracks the theme instead
     /// of the system label color. Nil if the color couldn't be read.
     private(set) var terminalForegroundColor: NSColor?
+    /// Whether the active terminal theme reads as dark, by the perceived luminance of the sidebar
+    /// background the disclosure triangle sits on — the theme background with the sidebar-tint wash
+    /// applied. Pins AppKit-drawn chrome (the sidebar disclosure triangle) to the theme instead of the
+    /// macOS system appearance, so a light theme under macOS dark mode still draws dark, visible chrome.
+    /// Classifying the washed color (not the raw background) keeps it correct when a strong sidebar tint
+    /// pushes a near-threshold theme across the midpoint. Defaults to dark when the background couldn't
+    /// be read (the app's default chrome).
+    var terminalThemeIsDark: Bool {
+        guard let bg = terminalBackgroundColor?.usingColorSpace(.sRGB) else { return true }
+        let shiftAmount = AppSettings.sidebarShiftAmount(strength: sidebarBackgroundShift)
+        return ThemeBrightness.isDark(red: Double(bg.redComponent), green: Double(bg.greenComponent),
+                                      blue: Double(bg.blueComponent), shiftAmount: shiftAmount)
+    }
     /// The terminal selection-background color (theme `selection-background`). The selected sidebar row
     /// draws its pill in this color so it matches the terminal's own selection. Nil if the theme
     /// doesn't set it (the row falls back to a soft white wash).
@@ -345,7 +358,8 @@ final class GhosttyApp {
     /// The selection colors can't be read back through `ghostty_config_get` (it doesn't expose the
     /// optional `selection-background`/`selection-foreground` keys), so resolve them by reading the
     /// same config sources `loadConfig` loads — in the same order — plus the active theme file. An
-    /// explicit `selection-*` line wins over the theme's; either color may be nil when unset.
+    /// explicit `selection-*` line wins over the theme's; either color may be nil when unset. The `theme`
+    /// value may be the `light:…,dark:…` auto-switch form, resolved to the active side via `isDark`.
     ///
     /// Known limitation: this scans only the top-level config files; it does NOT follow `config-file`
     /// includes that `ghostty_config_load_recursive_files` expands, so a `selection-*` delegated through
@@ -384,8 +398,9 @@ final class GhosttyApp {
         if selBg == nil || selFg == nil, let themeName, !themeName.isEmpty,
            let themesDir = Bundle.main.url(forResource: "ghostty", withExtension: nil)?
                .appendingPathComponent("themes", isDirectory: true) {
-            let activeTheme = AppSettings.dualThemeSides(themeName).map { isDark ? $0.dark : $0.light } ?? themeName
-            for (key, value) in keyValues(ofFileAt: themesDir.appendingPathComponent(activeTheme).path) {
+            // `theme` may be the `light:…,dark:…` form; reduce to the active name.
+            let effectiveName = ThemeName.resolved(from: themeName, isDark: isDark)
+            for (key, value) in keyValues(ofFileAt: themesDir.appendingPathComponent(effectiveName).path) {
                 if key == "selection-background", selBg == nil { selBg = parseHexColor(value) }
                 if key == "selection-foreground", selFg == nil { selFg = parseHexColor(value) }
             }

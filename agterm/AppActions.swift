@@ -485,10 +485,11 @@ final class AppActions {
 
     // MARK: - Split
 
-    /// Toggle the active session's split. Opening shows both panes and moves focus to the new (right)
-    /// pane; closing HIDES the split (both shells stay alive, nothing is destroyed) and shows the
-    /// focused pane maximized, so reopening restores the two panes in their original positions. Either
-    /// way focus follows `splitFocused`, which `AppStore.toggleSplit` sets to the new pane on open.
+    /// Toggle the active session's split. Opening a NEW split shows both panes and moves focus to the
+    /// new (right) pane; closing HIDES the split (both shells stay alive, nothing is destroyed) and shows
+    /// the focused pane maximized, so reopening restores the two panes in their original positions with
+    /// the SAME pane focused. Either way focus follows `splitFocused`, which `AppStore.toggleSplit` sets
+    /// to the new pane only when the split is genuinely new (a re-show preserves the prior focused pane).
     func toggleSplit() {
         guard let store, let session = store.activeSession else { return }
         store.toggleSplit(session.id)
@@ -504,9 +505,9 @@ final class AppActions {
     }
 
     /// Show/hide the frontmost window's sidebar. The custom split owns visibility (no system toggle), so
-    /// this flips the active store's per-window `sidebarVisible`; the view animates the change and
-    /// `AppStore` persists it. Shared by the toolbar button, the View menu item, the palette, and the
-    /// `sidebar` control command.
+    /// this flips the active store's per-window `sidebarVisible` (an instant toggle — the width is
+    /// intentionally not animated, see WindowContentView.splitRoot) and `AppStore` persists it. Shared by
+    /// the toolbar button, the View menu item, the palette, and the `sidebar` control command.
     func toggleSidebar() {
         guard let store else { return }
         store.toggleSidebarVisible()
@@ -536,6 +537,12 @@ final class AppActions {
 
     /// Toggle the frontmost window's quick terminal (each window owns its own controller).
     func toggleQuickTerminal() { frontmostQuickTerminal?.toggle() }
+
+    /// Toggle native macOS full screen for the key window (the frontmost terminal window). Native full
+    /// screen matches the green traffic-light button and moves the window to its own Space; a second
+    /// invocation exits. Shared by the View ▸ Toggle Full Screen menu item (⌃⌘F), the ⌃⇧P palette, the
+    /// `toggle_fullscreen` keymap action, and the `window.fullscreen` control command.
+    func toggleFullscreen() { NSApp.keyWindow?.toggleFullScreen(nil) }
 
     // MARK: - Font (on the focused terminal)
 

@@ -9,12 +9,15 @@ extension AppStore {
     public func toggleSplit(_ sessionID: UUID) {
         guard let session = session(withID: sessionID) else { return }
         session.isSplit.toggle()
-        // opening marks the session as having a split and moves focus to the new (right) pane; hiding
-        // (toggling off) leaves `hasSplit` and `splitFocused` set so the split indicators persist and
-        // the focused pane is the one shown maximized. Only `closeSplit` clears them.
+        // opening a NEW split marks the session as having one and moves focus to the new (right) pane;
+        // RE-showing a hidden split preserves whichever pane was focused before it was hidden (so a
+        // hide/show round-trip, e.g. the tmux-style zoom script, doesn't jerk focus to the right pane).
+        // hiding (toggling off) leaves `hasSplit` and `splitFocused` set so the split indicators persist
+        // and the focused pane is the one shown maximized. Only `closeSplit` clears them.
         if session.isSplit {
+            let isNewSplit = !session.hasSplit
             session.hasSplit = true
-            session.splitFocused = true
+            if isNewSplit { session.splitFocused = true }
         }
         save()
     }

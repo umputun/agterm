@@ -227,6 +227,13 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// owns the cursor-rect override and `applyMouseShape`) can read it.
     var mouseShape: ghostty_action_mouse_shape_e = GHOSTTY_MOUSE_SHAPE_TEXT
 
+    /// The last pointer position pushed to libghostty via `ghostty_surface_mouse_pos` (view-flipped
+    /// coordinates), or nil before the first report. `scrollWheel` syncs the position only when the current
+    /// point differs from this, so a normal already-synced scroll doesn't re-push the same cell on every
+    /// packet — which in an any-motion + sgr-pixel mouse-reporting TUI would emit a synthetic motion report
+    /// per packet. Not `private` so the `+Input` extension (which owns the mouse handlers) can read/write it.
+    var lastReportedMousePoint: NSPoint?
+
     init(workingDirectory: String, fontSize: Float? = nil, command: String? = nil, initialInput: String? = nil,
          waitAfterCommand: Bool = false, autoFocus: Bool = false, env: [String: String] = [:]) {
         self.workingDirectory = workingDirectory
@@ -884,6 +891,18 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     // MARK: - First responder
 
     override var acceptsFirstResponder: Bool { true }
+
+    /// Deliver the LEFT click that reactivates a background/inactive window straight to the surface (a
+    /// "first mouse") instead of AppKit swallowing it just to raise the window. Without this, clicking a
+    /// specific pane of a two-pane split from another window raises the window but never runs `mouseDown`,
+    /// so the clicked pane doesn't become first responder and `splitFocused` stays on the previously-focused
+    /// pane ("the mouse works but the pane isn't selected"). The left click then behaves like any normal
+    /// in-window click — it selects the pane AND is reported to the program — matching Terminal.app/iTerm2/Ghostty.
+    /// Gated to `.leftMouseDown` on purpose: a first-mouse right/middle click would otherwise reach
+    /// `rightMouseDown`/`otherMouseDown`, which forward to libghostty, and with the default
+    /// `right-click-action = paste` that would paste the clipboard into a window you only meant to raise —
+    /// so right/middle first clicks just raise the window.
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { event?.type == .leftMouseDown }
 
     override func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()

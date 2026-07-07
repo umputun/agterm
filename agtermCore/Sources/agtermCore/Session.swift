@@ -179,6 +179,12 @@ public final class Session: Identifiable {
     /// A floating (sized) overlay is not a cover: it draws an opaque panel over still-visible content.
     public var fullOverlayActive: Bool { overlayActive && overlaySizePercent == nil }
 
+    /// Whether a FLOATING overlay is up: `overlayActive` WITH a size percent — the complement of
+    /// `fullOverlayActive`. A floating overlay draws an opaque, framed panel sized to `overlaySizePercent`%
+    /// over the still-visible session rather than covering it, so it is not a cover. Read by the detail
+    /// pane to gate the floating panel.
+    public var floatingOverlayActive: Bool { overlayActive && overlaySizePercent != nil }
+
     /// Whether the scratch terminal is shown on top of this session (full single-pane size, hiding
     /// the single/split content underneath, like a full overlay). The scratch is a third per-session
     /// shell that — unlike the ephemeral overlay — behaves like the split: hiding it keeps the shell

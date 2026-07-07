@@ -234,6 +234,78 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
                      "the background session's overlay must NOT capture keyboard input")
     }
 
+    // a FULL overlay opened on a BACKGROUND target with no `follow` runs its program in the eager deck
+    // WITHOUT changing the active session: create A (background), then B (active), open the overlay on A,
+    // assert its program ran (overlay.result reports an exit code) and the active session is still B.
+    func testOverlayOpenDefaultDoesNotSwitchActiveSession() throws {
+        let a = try newSession() // first session
+        let b = try newSession() // second session becomes active, so A is a background (non-selected) session
+        XCTAssertTrue(pollActiveSessionID(b, timeout: 10), "B should be the active session after creation")
+
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(a.uuidString)","args":{"command":"sh -c 'exit 3'"}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "opening a full overlay on the background session should succeed: \(open)")
+
+        // the program runs in the background (mounts in the eager deck); overlay.result reports its exit code.
+        XCTAssertEqual(pollOverlayExitCode(target: a.uuidString, timeout: 15), 3,
+                       "the background full overlay's program should run and report its exit code")
+        // the active session is unchanged — a default (no follow) open does NOT switch to the target.
+        XCTAssertTrue(pollActiveSessionID(b, timeout: 5), "a default (no follow) open must not change the active session")
+    }
+
+    // a FLOATING overlay (sizePercent) opened on a BACKGROUND target with no `follow` runs its program in
+    // the eager deck WITHOUT changing the active session — the core parity assertion. Before the in-deck
+    // render, a floating overlay only mounted for the active session, so a background floating overlay never
+    // ran (its exit code would never appear); this proves it now runs like the full overlay does.
+    func testFloatingOverlayOnBackgroundRunsWithoutSwitch() throws {
+        let a = try newSession()
+        let b = try newSession() // active; A is background
+        XCTAssertTrue(pollActiveSessionID(b, timeout: 10), "B should be the active session after creation")
+
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(a.uuidString)","args":{"command":"sh -c 'exit 5'","sizePercent":70}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "opening a floating overlay on the background session should succeed: \(open)")
+
+        // the floating overlay's program must run in the background (mounts in the eager deck like the full one).
+        XCTAssertEqual(pollOverlayExitCode(target: a.uuidString, timeout: 15), 5,
+                       "the background floating overlay's program should run and report its exit code")
+        XCTAssertTrue(pollActiveSessionID(b, timeout: 5), "a default (no follow) floating open must not change the active session")
+    }
+
+    // `follow: true` on a BACKGROUND target switches the active session to that target — for BOTH the full
+    // and the floating overlay (two distinct background targets, since only one overlay may be open per
+    // session). `cat` blocks so each overlay stays up; the assertion is purely that the selection switched.
+    func testOverlayOpenFollowSwitchesToTarget() throws {
+        let full = try newSession()     // background target for the full overlay
+        let floating = try newSession() // background target for the floating overlay
+        let active = try newSession()   // newest session is active; both targets are background
+        XCTAssertTrue(pollActiveSessionID(active, timeout: 10), "the newest session should be active before the follow-opens")
+
+        // FULL overlay with follow → the active session becomes the full target.
+        let openFull = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(full.uuidString)","args":{"command":"cat","follow":true}}"#)
+        XCTAssertEqual(openFull["ok"] as? Bool, true, "full overlay open with follow should succeed: \(openFull)")
+        XCTAssertTrue(pollActiveSessionID(full, timeout: 10), "follow must switch the active session to the full-overlay target")
+        XCTAssertTrue(pollSessionOverlay(id: full.uuidString, expected: true, timeout: 10),
+                      "the full overlay must actually mount on its target, not just select it")
+
+        // FLOATING overlay with follow → the active session becomes the (different, background) floating target.
+        let openFloat = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(floating.uuidString)","args":{"command":"cat","sizePercent":70,"follow":true}}"#)
+        XCTAssertEqual(openFloat["ok"] as? Bool, true, "floating overlay open with follow should succeed: \(openFloat)")
+        XCTAssertTrue(pollActiveSessionID(floating, timeout: 10), "follow must switch the active session to the floating-overlay target")
+        XCTAssertTrue(pollSessionOverlay(id: floating.uuidString, expected: true, timeout: 10),
+                      "the floating overlay must actually mount on its target, not just select it")
+    }
+
+    // `follow: true` targeting the ALREADY-active session succeeds and stays on it (the select is a no-op).
+    func testOverlayOpenFollowOnActiveSessionIsNoop() throws {
+        let a = try newSession()
+        let b = try newSession() // B is active
+        XCTAssertTrue(pollActiveSessionID(b, timeout: 10), "B should be the active session after creation")
+
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(b.uuidString)","args":{"command":"cat","follow":true}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "follow on the already-active session should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: b.uuidString, expected: true, timeout: 10), "the overlay should be up on B")
+        XCTAssertTrue(pollActiveSessionID(b, timeout: 5), "follow on the already-active session must stay on it")
+    }
+
     // session.split toggle shows split:true in the tree; off hides it (keep-alive, mirrors ⌘D — the
     // pane's surface is NOT destroyed, only closeSplit on shell-exit does that), clearing split:false.
     func testSessionSplitToggle() throws {
@@ -456,6 +528,30 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         // neither a ratio nor a delta is a usage error.
         let empty = try sendCommand(#"{"cmd":"session.resize","target":"active","args":{}}"#)
         XCTAssertEqual(empty["ok"] as? Bool, false, "resize with no fraction should fail: \(empty)")
+    }
+
+    /// Creates a session via `session.new` and returns its id as a `UUID`. `session.new` focuses the new
+    /// session, so the returned session becomes the active one.
+    private func newSession() throws -> UUID {
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let idString = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String,
+                                     "session.new should return the new id")
+        return try XCTUnwrap(UUID(uuidString: idString), "session.new id should be a UUID: \(idString)")
+    }
+
+    /// Polls `session.overlay.result` of `target` until the overlay program has exited and its exit code is
+    /// reported (result errors "overlay still running" while up), returning the code, or nil on timeout.
+    /// A reported exit code proves the overlay's program actually ran (used to assert a background overlay runs).
+    private func pollOverlayExitCode(target: String, timeout: TimeInterval) -> Int? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let res = try? sendCommand(#"{"cmd":"session.overlay.result","target":"\#(target)"}"#),
+               res["ok"] as? Bool == true {
+                return (res["result"] as? [String: Any])?["exitCode"] as? Int
+            }
+            usleep(200_000)
+        }
+        return nil
     }
 
     /// Types `command` + Return via the real keyboard (XCUI `typeText`), retrying until `file` reports a

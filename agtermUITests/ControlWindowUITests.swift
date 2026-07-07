@@ -122,6 +122,47 @@ final class ControlWindowUITests: ControlAPITestCase {
                        "window should restore toward \(normal) after a second window.zoom, got \(window.frame.size)")
     }
 
+    // window.fullscreen toggles native macOS full screen for the active window — the control half of the
+    // View ▸ Toggle Full Screen menu item / the green traffic-light button. From a known small frame the
+    // first call fills the screen; a second call restores it. Asserts the command is wired end-to-end
+    // (socket -> dispatcher -> WindowRegistry -> NSWindow.toggleFullScreen) and always leaves the app OUT
+    // of full screen so it can't wedge later tests on a separate Space.
+    func testWindowFullscreen() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session")
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 5), "window should exist")
+        // start from a known un-maximized size so entering full screen unambiguously grows the window.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.resize","args":{"width":800,"height":600}}"#)["ok"] as? Bool, true)
+        var deadline = Date().addingTimeInterval(5)
+        while Date() < deadline, !(abs(window.frame.size.width - 800) < 8 && abs(window.frame.size.height - 600) < 8) {
+            usleep(150_000)
+        }
+        let normal = window.frame.size
+        XCTAssertEqual(normal.width, 800, accuracy: 8, "window should settle near 800 wide before fullscreen, got \(normal)")
+
+        // enter full screen — the window fills the display (the native transition animates ~1s).
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.fullscreen"}"#)["ok"] as? Bool, true)
+        deadline = Date().addingTimeInterval(10)
+        while Date() < deadline {
+            let s = window.frame.size
+            if s.width > normal.width + 50 || s.height > normal.height + 50 { break }
+            usleep(200_000)
+        }
+        XCTAssertTrue(window.frame.size.width > normal.width + 50 || window.frame.size.height > normal.height + 50,
+                      "window should fill the screen after window.fullscreen: normal=\(normal) now=\(window.frame.size)")
+
+        // exit full screen — restores toward the previous frame and leaves the app un-fullscreened.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.fullscreen"}"#)["ok"] as? Bool, true)
+        deadline = Date().addingTimeInterval(10)
+        while Date() < deadline {
+            let s = window.frame.size
+            if abs(s.width - normal.width) < 60, abs(s.height - normal.height) < 60 { break }
+            usleep(200_000)
+        }
+        XCTAssertEqual(window.frame.size.width, normal.width, accuracy: 60,
+                       "window should restore toward \(normal) after exiting full screen, got \(window.frame.size)")
+    }
+
     // A point 14pt below the top edge, horizontally centred: clears the top resize strip, lands inside the
     // titlebar band (compact 30 / tall 48), and sits in the empty header (a Spacer) — clear of the traffic
     // lights on the left and the toolbar buttons on the right, so the click falls through the decorative

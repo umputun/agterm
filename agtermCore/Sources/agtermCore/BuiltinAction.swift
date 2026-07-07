@@ -13,7 +13,7 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
     case closeSession = "close_session", clearStatus = "clear_status"
     case increaseFontSize = "increase_font_size", decreaseFontSize = "decrease_font_size", resetFontSize = "reset_font_size"
     case toggleSplit = "toggle_split", toggleScratch = "toggle_scratch", toggleSearch = "toggle_search"
-    case toggleSidebar = "toggle_sidebar", selectTheme = "select_theme"
+    case toggleSidebar = "toggle_sidebar", selectTheme = "select_theme", toggleFullscreen = "toggle_fullscreen"
     case toggleFlaggedView = "toggle_flagged_view", toggleFlag = "toggle_flag", focusWorkspace = "focus_workspace"
     case focusLeftPane = "focus_left_pane", focusRightPane = "focus_right_pane"
     case previousSession = "previous_session", nextSession = "next_session"
@@ -47,6 +47,7 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
         case .toggleScratch: return Chord(mods: [.command], key: "j")
         case .toggleSearch: return Chord(mods: [.command], key: "f")
         case .toggleSidebar: return Chord(mods: [.command, .control], key: "s")
+        case .toggleFullscreen: return Chord(mods: [.command, .control], key: "f")
         case .toggleFlag: return Chord(mods: [.command, .shift], key: "f")
         case .quickTerminal: return Chord(mods: [.control], key: "`")
         case .sessionPalette: return Chord(mods: [.control], key: "p")

@@ -26,7 +26,13 @@ paths:
   The menu bar has TWO custom menus (besides File/Help).
   **View** (`CommandGroup(after: .toolbar)`) holds appearance + what-is-shown:
   font/theme, sidebar show-hide + expand/collapse, the flagged-view + Flag/Clear-Flagged + Focus Workspace
-  items, and the surface toggles (Split/Scratch/Find/Quick Terminal).
+  items, the surface toggles (Split/Scratch/Find/Quick Terminal), and Toggle Full Screen
+  (`toggle_fullscreen`, ⌃⌘F → `AppActions.toggleFullscreen()`, native `NSWindow.toggleFullScreen` on the
+  key window; the `window.fullscreen` control command is a fourth driver of native full screen, via
+  `WindowRegistry.fullscreen` with id resolution (not through `toggleFullscreen()`) — see control-api / windows).
+  agterm ships its OWN Toggle Full Screen item so full screen is rebindable/palette/control-drivable;
+  `AppDelegate` strips AppKit's auto-injected native "Enter Full Screen" item (re-injected on every menu
+  open) so the two don't render as a duplicate — see the `window.fullscreen` note in windows.md.
   **Navigate** (a separate top-level `CommandMenu("Navigate")`, placed right after the View group so
   AppKit renders it after View) holds moving the selection/focus: the two palettes (Go to Session / Command
   Palette), session stepping (Previous/Next, Previous/Next Attention, First/Last),
@@ -96,8 +102,11 @@ paths:
   `effectiveCwd` stays the PRIMARY pane's (non-focus-aware) for seeding new panes + the `AGTERM_SESSION_PWD`
   token; `Session.activeSurface` is the focused pane's surface (the focus helpers + the collapsed detail
   pane target it).
-  **Opening a split moves focus to the new (right) pane** (`AppStore.toggleSplit` sets `splitFocused = true`
-  on open; hiding leaves it set so the focused pane is the one shown maximized).
+  **Opening a NEW split moves focus to the new (right) pane** (`AppStore.toggleSplit` sets `splitFocused = true`
+  only when the split is genuinely new — `hasSplit` was false; hiding leaves it set so the focused pane
+  is the one shown maximized, and RE-showing a hidden split PRESERVES that pane rather than jerking focus
+  back to the right — so a hide/show round-trip, e.g. the tmux-style zoom script that drives `session split off`
+  then `on`, keeps whichever pane you had focused).
   **Hiding the split (the toolbar toggle) keeps BOTH shells alive** and shows the focused pane maximized
   — `detailPane`'s collapsed branch renders `\.splitSurface` when `splitFocused`,
   else `\.surface` — so reopening restores the two panes in place; nothing is destroyed (`closeSplit`

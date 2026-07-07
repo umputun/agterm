@@ -77,6 +77,15 @@ brew install --cask umputun/apps/agterm
 
 The cask also installs the `agtermctl` command-line tool, so cask users should not run the in-app installer as well.
 
+> [!NOTE]
+> **Homebrew upgrade note (July 2026).** A recent Homebrew change (installed-cask metadata stored as JSON) can make `brew upgrade` fail for agterm with `It seems there is already an App at '/Applications/agterm.app'`. It affects third-party tap casks in general, not only agterm. Recover with a one-time reinstall, which rewrites the install receipt:
+>
+> ```sh
+> brew reinstall --cask --force agterm
+> ```
+>
+> Regular `brew upgrade` works afterward. This is an upstream Homebrew issue, and the note will be removed once it is fixed.
+
 Direct download:
 
 Download the latest `.dmg` from the [releases page](https://github.com/umputun/agterm/releases), open it, and drag `agterm.app` into `/Applications`.
@@ -141,7 +150,7 @@ agterm arranges terminals into a small hierarchy. These are the only terms you n
 
 **Flagging and focus.** Two ways to cut down a busy sidebar. Flag a few sessions from different workspaces to get a flat working-set view of just those; a flag is durable and survives a move. Focus a single workspace to hide the others, with a one-click way back. The two are independent.
 
-**Notifications.** A program in any session can raise a desktop notification (via OSC 9 / 777, or the control API). It shows as a banner and a count badge on the session's row; clicking the banner jumps to the exact pane that raised it. For a coding agent that just needs to say it is waiting on you, [Agent status](#agent-status) is usually the better fit.
+**Notifications.** A program in any session can raise a desktop notification (via OSC 9 / 777, or the control API). It shows as a banner and a count badge on the session's row; clicking the banner jumps to the exact pane that raised it. The badge clears when you visit the session, or headlessly with `agtermctl session seen` — so an orchestrator driving a session over the socket can acknowledge its notifications without pulling focus to it (`agtermctl tree --json` reports each session's `unseen` count). For a coding agent that just needs to say it is waiting on you, [Agent status](#agent-status) is usually the better fit.
 
 **Agent status.** A coding agent in a session can report its state (active, blocked, completed) onto that session's row, so a screen of concurrent agents shows which one needs you. See [Agent status](#agent-status) for wiring it up.
 
@@ -200,6 +209,7 @@ agtermctl session split toggle                   # split the active session
 agtermctl session resize --split-ratio 0.7       # set the split divider (left-pane fraction); or --grow-left/--grow-right D
 agtermctl session scratch toggle                 # show/hide the active session's scratch terminal (on|off|toggle)
 agtermctl session flag on                        # flag the active session for the flagged working-set view (on|off|toggle|clear)
+agtermctl session seen --target 9f3c             # clear a session's unseen-notification badge without visiting it (focus-free)
 agtermctl sidebar mode flagged                   # show only the flagged sessions as a flat list (tree|flagged|toggle)
 agtermctl workspace focus on                     # collapse the sidebar tree to the active workspace (on|off|toggle)
 agtermctl session search "error"                 # open the search bar and highlight matches; prints the "N of M" counter
@@ -227,16 +237,17 @@ agtermctl session overlay open "revdiff HEAD~3" --target 9f3c  # review the last
 agtermctl session overlay open "htop"                          # on the active session
 agtermctl session overlay open "htop" --size-percent 70        # a floating, framed panel at 70% of the pane
 agtermctl session overlay open "revdiff HEAD~3" --size-percent 80 --background-color "#2a1a3a"  # tint the overlay pane
+agtermctl session overlay open "revdiff HEAD~3" --target 9f3c --follow  # switch the user to session 9f3c as the overlay opens
 agtermctl session overlay open "make test" --wait              # keep the overlay open after exit (press a key to close)
 agtermctl session overlay open "make test" --block             # block until it exits; exit with its status
 agtermctl session overlay close --target 9f3c                  # close it from a script
 ```
 
-The overlay renders only for the active session, so select it first (or target `active`) — a floating `--size-percent` overlay auto-selects its target (see below), so this caveat is really about the full overlay. By default it closes the instant the program exits; `--wait` keeps it on a "press any key to close" prompt so you can read the program's final output. A `*` `(overlay)` tag in `agtermctl tree` marks a session whose overlay is open.
+By default an overlay opens on its `--target` without switching the active session — full and floating both run their program in the background and appear when the user visits that session; pass `--follow` to select the target as the overlay opens (a no-op if it is already active). By default it closes the instant the program exits; `--wait` keeps it on a "press any key to close" prompt so you can read the program's final output. A `*` `(overlay)` tag in `agtermctl tree` marks a session whose overlay is open.
 
 `--block` runs the program in the overlay (rendering normally) and blocks until it exits, then exits with the program's status — useful in a script that needs the outcome of an interactive run. The program's output stays its own concern: a TUI writes its result to its own file (for example `revdiff --output=…`) which the script reads, while `--block` reports only the exit status (the overlay never captures stdout). `--block` can't be combined with `--wait`; `session overlay result` reports the last overlay's exit status on demand for a manual open → poll flow.
 
-By default the overlay fills the pane, drawn translucent, hiding the session beneath it. Pass `--size-percent N` (1–100) for a *floating* variant instead: an opaque, framed panel sized to N% of the pane in both dimensions and centered in it, with the session still visible around it. Useful for a small auxiliary program (a picker, a monitor) that you want floating over — not replacing — the terminal you're working in. It composes with `--block` (a blocking floating overlay). Opening a floating overlay selects its target session (the floating panel only renders for the active session), so it always starts even when the target was not active.
+By default the overlay fills the pane, drawn translucent, hiding the session beneath it. Pass `--size-percent N` (1–100) for a *floating* variant instead: an opaque, framed panel sized to N% of the pane in both dimensions and centered in it, with the session still visible around it. Useful for a small auxiliary program (a picker, a monitor) that you want floating over — not replacing — the terminal you're working in. It composes with `--block` (a blocking floating overlay). Like a full overlay it opens in the background and runs even when the target is not active; pass `--follow` to switch the user to the target as it opens.
 
 A session's terminal surface is created lazily — it does not exist until the session has been shown at least once. Injecting text into a never-shown session therefore fails with `session not realized` unless you pass `--select`, which selects the session (realizing its surface) before injecting:
 
@@ -288,7 +299,7 @@ command "Lazygit"      ctrl+a>g     agtermctl session overlay open lazygit --soc
 command "Deploy"                    ./deploy.sh
 ```
 
-A chord is modifier words joined by `+` and a base key, e.g. `cmd+shift+e` or `ctrl+\``. The modifiers are `ctrl`, `cmd`, `opt`, and `shift`. The base key is a single character or one of `tab`, `space`, `return`, `delete`. A custom command's chord may also be a leader sequence — chords separated by `>`, e.g. `ctrl+a>g` (press `ctrl+a`, then `g`). A `command` with no chord is palette-only. A custom command's chord must include a modifier: a bare key like `a` is rejected with a diagnostic and the line is treated as palette-only, so a binding can't silently shadow a plain terminal key (and a palette-only shell line that happens to start with a single-character token isn't swallowed as a binding).
+A chord is modifier words joined by `+` and a base key, e.g. `cmd+shift+e` or `ctrl+\``. The modifiers are `ctrl`, `cmd`, `opt`, and `shift`. The base key is a single character or one of `tab`, `space`, `return`, `delete`. A key you type with Shift is written as `shift+<base key>` (the base key, not the shifted symbol): `shift+/` for `?`, `shift+5` for `%`, `shift+=` for `+`, `shift+.` for `>`. A custom command's chord may also be a leader sequence — chords separated by `>`, e.g. `ctrl+a>g` (press `ctrl+a`, then `g`). A `command` with no chord is palette-only. A custom command's chord must include a modifier: a bare key like `a` is rejected with a diagnostic and the line is treated as palette-only, so a binding can't silently shadow a plain terminal key (and a palette-only shell line that happens to start with a single-character token isn't swallowed as a binding).
 
 The bindable built-in action names are:
 
@@ -305,7 +316,7 @@ previous_session   next_session       first_session      last_session
 previous_attention_session            next_attention_session
 quick_terminal     session_palette    command_palette
 custom_command_palette                show_attention
-select_theme
+select_theme       toggle_fullscreen
 ```
 
 The shell line of a `command` may use these `{AGT_X}` tokens, expanded at fire time (the same values are also exported as `$AGT_X` environment variables on the spawned process):
@@ -330,7 +341,7 @@ After editing the file, apply it with **File ▸ Reload Keymap**, the action pal
 v1 limitations:
 
 - Built-in rebinds are single-chord only; leader sequences (`ctrl+a>g`) work only for custom commands.
-- A few keys are not expressible in the file because they clash with the grammar's separators: the arrow keys, `+` (the chord-joiner, so `increase_font_size`'s default ⌘+ can't be written), and `>` (the leader separator). The arrow-bound actions (`focus_left_pane`, `focus_right_pane`, `previous_session`, `next_session`, `previous_attention_session`, `next_attention_session`) and `increase_font_size` keep their default shortcuts unless you `map` them to a parseable chord.
+- The arrow keys can't be written as a chord, so the arrow-bound actions (`focus_left_pane`, `focus_right_pane`, `previous_session`, `next_session`, `previous_attention_session`, `next_attention_session`) keep their default shortcuts unless you `map` them to a parseable chord. The literal `+` and `>` can't be a bare key token (they are the chord-joiner and leader separators), but those keys are still bindable as `shift+=` and `shift+.`. Only `increase_font_size`'s default ⌘+ shows as a glyph rather than editable text, because its stored form doesn't round-trip through the file.
 - The Ctrl-Tab MRU session switcher and Ctrl-1/Ctrl-2 pane focus are not rebindable yet; they keep their current keys.
 - The action palette shows chords as live kitty syntax (e.g. `cmd+shift+e`) for both custom commands and built-in shortcuts; only chords that can't be expressed in the file fall back to a glyph (the arrow-bound actions and `increase_font_size`'s ⌘+).
 
@@ -413,3 +424,7 @@ agterm embeds **libghostty**, the terminal engine from [Ghostty](https://github.
 The way agterm drives libghostty's C API from a SwiftUI/AppKit app, under the Swift 6 strict-concurrency toolchain, was learned from [macterm](https://github.com/thdxg/macterm) (`thdxg/macterm`, MIT). The libghostty bridge files (`GhosttyApp`, `GhosttyCallbacks`, `GhosttyResources`, `GhosttySurfaceView`, `WindowAppearance`) are adapted from it and each carries an attribution comment. The model, sidebar, persistence, control channel, and multi-window code are original to agterm.
 
 SwiftUI guidance during development came from the [SwiftUI Agent Skill](https://github.com/AvdLee/SwiftUI-Agent-Skill) by Antoine van der Lee (MIT). Special thanks to [@ksenks](https://github.com/ksenks) for recommending it.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for more information.

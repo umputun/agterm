@@ -15,8 +15,8 @@ description: >
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.scratch, session.focus, session.resize, session.go, session.copy, session.text, session.search, session.status,
-  session.flag, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
-  window.select, window.resize, window.move, window.zoom, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
+  session.flag, session.seen, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
+  window.select, window.resize, window.move, window.zoom, window.fullscreen, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
   theme.set, theme.list, select theme, edit keymap, show an image, display an image inline, show-image,
   AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: troubleshoot agterm,
   keymap editor won't open, custom action / custom command not working, agterm logs, file an agterm
@@ -72,11 +72,12 @@ of the tree).
 Inspect the live tree any time with `agtermctl tree --json` (workspaces → sessions, each with
 `id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `scratch`, `status`, `background`). `title` is the raw OSC
 terminal title (e.g. a remote host over SSH), omitted when none was reported — read it when a
-session's local `cwd` is stale because it's connected to a remote. The tree object also carries two
-read-only top-level fields: `idleMs` (ms since the last user input in the window) and `autoFollowMs`
-(the Auto-follow timeout in ms, omitted when Disabled). List windows with
-`agtermctl window list --json`; each window also reports `autoFollowMs` (but not the live `idleMs`,
-which is `tree`-only).
+session's local `cwd` is stale because it's connected to a remote. The tree object also carries three
+read-only top-level fields: `idleMs` (ms since the last user input in the window), `autoFollowMs`
+(the Auto-follow timeout in ms, omitted when Disabled), and `sidebarVisible` (whether the window's
+sidebar is currently shown — the read side of the write-only `sidebar` command). List windows with
+`agtermctl window list --json`; each window also reports `autoFollowMs` and `sidebarVisible` (the
+latter omitted for a closed window), but not the live `idleMs`, which is `tree`-only.
 
 ## Addressing
 
@@ -97,7 +98,7 @@ you work. For any session-scoped command meant to act on *this* session — `ove
 `type`, `text`, `background`, `status`, `copy`, … — pass `--target "$AGTERM_SESSION_ID"`. Omit it and
 you open overlays / type into whatever the user has selected, not your own session.
 
-## Command summary (50 commands)
+## Command summary (52 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -107,8 +108,10 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 is at its shell prompt) — i.e. what each pane is currently running — `status` (the agent-status set
 via `session status`: `active`|`completed`|`blocked`, omitted when idle), `statusPane` (which pane set
 that status: `left` (main) | `right` (split) | `scratch`, from `session status --pane`, omitted when
-unset or idle), and `background` (the background
-spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear).
+unset or idle), `background` (the background
+spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear),
+and `unseen` (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session
+seen` — omitted when zero).
 
 **workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom` ·
 `focus [on|off|toggle]` (collapse the sidebar tree to a single workspace).
@@ -150,6 +153,10 @@ spec — image/text watermark or solid color — set via `session background`, o
   a fraction. Prints the applied (clamped) fraction.
 - `status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb] [--pane left|right|scratch]` — set the sidebar agent glyph (`--sound default` or a system sound name plays a one-shot sound; `--color` tints the glyph for this call only, reverting on the next status set without it; `--pane` records which pane set it — `left`=main, `right`=split, `scratch` — so foreground typing in another pane won't clear it and any user-initiated GUI selection (auto-follow, attention-nav ⌃⌥↑/↓, plain session nav, the command palettes, a sidebar row click) reveals the blocking pane, read back as the tree `statusPane` field; the socket `session go next-attention` only steps the selection, it does not itself reveal the pane).
 - `flag [on|off|toggle|clear]` — flag a session for the flagged working-set view (`clear` unflags all).
+- `seen [--target] [--window W]` — clear the session's unseen-notification badge WITHOUT changing the
+  selection or focus (the focus-free counterpart to `notify`, which raises the badge). Idempotent — a
+  no-op when already zero. Read the current count from the tree node's `unseen` field. Use it so an
+  orchestrator can acknowledge a driven session's notifications without pulling focus to it.
 - `background image <path> [--opacity F] [--fit contain|cover|stretch|none] [--position P] [--repeat]` ·
   `background text <text> [--color #rrggbb] [--opacity F] [--fit ...] [--position ...]` ·
   `background color <#rrggbb>` · `background clear` — composite an image (PNG/JPEG) or rasterized text
@@ -157,21 +164,23 @@ spec — image/text watermark or solid color — set via `session background`, o
   terminal background color. Per session; survives restart. `--opacity` 0.0–1.0. (An image/text watermark
   renders the pane opaque, overriding window translucency, so it shows; a `color` takes no opacity and
   honors the Settings window translucency instead.)
-- `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb]` ·
+- `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow]` ·
   `overlay close` ·
   `overlay result` — run a program on top of a session; `--block` waits and exits with its status.
   Target with `--target "$AGTERM_SESSION_ID"` for YOUR session (default `active` is the user's selection).
-  **A floating overlay (`--size-percent`) SWITCHES the user to its target** — it renders only over the
-  active session, so opening one on a background session pulls the user there. A FULL overlay (no
-  `--size-percent`) does NOT switch: it opens on the target and appears when the user visits that session.
-  Use a full overlay when you must not disturb what the user is looking at.
+  **By default `overlay open` does NOT switch the user** — full and floating (`--size-percent`) both open
+  on `--target` and run their program in the background; the panel appears when the user visits that
+  session. **Pass `--follow` to select the target after opening** (a no-op if it is already active): use
+  `--follow` when you want the user pulled to the overlay, omit it to open quietly on your own or another
+  session.
   `--background-color` gives the overlay pane its own solid color, independent of the session's. An
   overlay is a real terminal (pty), which is also how you **display an image inline** — via the bundled
   `scripts/show-image.sh` (see below).
 
 **window** — `new [name]` · `list` · `select <id>` · `close <id>` · `rename <id> <name>` ·
 `delete <id>` · `resize <id> --width W --height H` · `move <id> --x X --y Y [--display N]` ·
-`zoom <id>` (maximize-to-screen toggle, the double-click-header / green-button action).
+`zoom <id>` (maximize-to-screen toggle, the double-click-header gesture; a plain green-button click does full screen) ·
+`fullscreen <id>` (toggle native macOS full screen, the green-button / ⌃⌘F action).
 
 **quick** — `[show|hide|toggle]` — the window's quick terminal.
 

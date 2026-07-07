@@ -20,6 +20,7 @@ public enum Command: String, Codable, Sendable {
     case sessionType = "session.type"
     case sessionStatus = "session.status"
     case sessionFlag = "session.flag"
+    case sessionSeen = "session.seen"
     case sessionBackground = "session.background"
     case sessionSplit = "session.split"
     case sessionScratch = "session.scratch"
@@ -49,6 +50,7 @@ public enum Command: String, Codable, Sendable {
     case windowResize = "window.resize"
     case windowMove = "window.move"
     case windowZoom = "window.zoom"
+    case windowFullscreen = "window.fullscreen"
     case keymapReload = "keymap.reload"
     case configReload = "config.reload"
     case themeSet = "theme.set"
@@ -147,6 +149,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// For `session.overlay.open`, the percent of the pane (1...100) a *floating* overlay panel
     /// occupies in both dimensions; omitted gives the default full-pane overlay.
     public var sizePercent: Int?
+    /// For `session.overlay.open`, whether to select/switch to the target after opening; omitted/false
+    /// opens in the background without changing the active session (the default for both full and
+    /// floating overlays).
+    public var follow: Bool?
     /// Target window for session/workspace/tree/font commands: id / prefix / `active` (=frontmost).
     /// Selects the window whose tree the command operates on.
     public var window: String?
@@ -179,7 +185,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
 
     public init(name: String? = nil, cwd: String? = nil, workspace: String? = nil, workspaceName: String? = nil,
                 createWorkspace: Bool? = nil, text: String? = nil, select: Bool? = nil, mode: String? = nil,
-                command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, window: String? = nil,
+                command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, follow: Bool? = nil,
+                window: String? = nil,
                 pane: String? = nil, to: String? = nil, after: String? = nil, before: String? = nil,
                 title: String? = nil, body: String? = nil,
                 width: Int? = nil, height: Int? = nil, x: Int? = nil, y: Int? = nil, display: Int? = nil,
@@ -199,6 +206,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.command = command
         self.wait = wait
         self.sizePercent = sizePercent
+        self.follow = follow
         self.window = window
         self.pane = pane
         self.to = to
@@ -274,11 +282,15 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// The session's background watermark spec, or nil when none is set (omitted from the JSON). The read
     /// side of `session.background` — set/clear/query symmetry, so a script can inspect the current watermark.
     public let background: BackgroundWatermark?
+    /// The session's unseen-notification badge count, or nil when zero (omitted from the JSON). The read
+    /// side of the notification badge: `notify` (and terminal OSC 9/777) raise it, `session.seen` clears it.
+    /// Ephemeral like `status` — never persisted, so it resets to nil on restart.
+    public let unseen: Int?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 overlay: Bool = false, scratch: Bool = false, flagged: Bool = false,
                 foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil,
-                statusPane: String? = nil, background: BackgroundWatermark? = nil) {
+                statusPane: String? = nil, background: BackgroundWatermark? = nil, unseen: Int? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -293,6 +305,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.status = status
         self.statusPane = statusPane
         self.background = background
+        self.unseen = unseen
     }
 }
 
@@ -322,11 +335,20 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// The window's auto-follow-blocked timeout in milliseconds, or nil when the feature is disabled
     /// (omitted from the JSON). The read side of the GUI-only Auto-follow setting.
     public let autoFollowMs: Int?
+    /// Whether the projected window's sidebar is currently visible. LIVE — built fresh from the window's
+    /// store per request — so a script can read the current state (the read side of the write-only
+    /// `sidebar` command; e.g. a tmux-style zoom that must restore the sidebar only when it was visible
+    /// before zooming). Always present on a `tree` response (the producer passes a non-optional `Bool`),
+    /// so unlike `idleMs`/`autoFollowMs` it never omits; the per-window `window.list` copy is nil/omitted
+    /// only for a closed window.
+    public let sidebarVisible: Bool?
 
-    public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil) {
+    public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
+                sidebarVisible: Bool? = nil) {
         self.workspaces = workspaces
         self.idleMs = idleMs
         self.autoFollowMs = autoFollowMs
+        self.sidebarVisible = sidebarVisible
     }
 }
 
@@ -342,13 +364,19 @@ public struct ControlWindowNode: Codable, Sendable, Equatable {
     /// just-changed setting may lag until the next command. Acceptable because the config rarely changes;
     /// the live `idleMs` is deliberately kept off `window.list` (tree-only) for exactly this reason.
     public let autoFollowMs: Int?
+    /// Whether this window's sidebar is currently visible, or nil for a CLOSED window with no live store
+    /// (omitted from the JSON) — read from the open window's store, mirroring `autoFollowMs`. The read side
+    /// of the write-only `sidebar` command, per window.
+    public let sidebarVisible: Bool?
 
-    public init(id: String, name: String, open: Bool, active: Bool, autoFollowMs: Int? = nil) {
+    public init(id: String, name: String, open: Bool, active: Bool, autoFollowMs: Int? = nil,
+                sidebarVisible: Bool? = nil) {
         self.id = id
         self.name = name
         self.open = open
         self.active = active
         self.autoFollowMs = autoFollowMs
+        self.sidebarVisible = sidebarVisible
     }
 }
 

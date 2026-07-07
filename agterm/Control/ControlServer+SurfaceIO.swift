@@ -146,6 +146,19 @@ extension ControlServer {
     /// via libghostty's SEARCH_TOTAL callback; `searchTotal`/`searchSelected` are cleared before the query so
     /// the bounded main-actor poll waits for the FRESH count (not a stale prior needle's), then `count` + the
     /// "N of M" display string are returned in `text`.
+    func searchSession(_ target: String?, window: String?, text: String?, to: String?) async -> ControlResponse {
+        // Resolve first (cross-window when no `window`), then select + realize the surface; the realize
+        // path is async (bounded poll), so this can't go through the synchronous `resolveSession`
+        // helper. Error strings stay in sync with `resolve(...)`, and target lookup preserves the
+        // pre-dispatcher error order by winning over `to` validation.
+        switch resolver.resolveSessionTarget(target, window: window) {
+        case .failure(let response):
+            return response
+        case .success(let (store, id)):
+            return await searchSession(id, store: store, text: text, to: to)
+        }
+    }
+
     func searchSession(_ id: UUID, store: AppStore, text: String?, to: String?) async -> ControlResponse {
         // validate `to` up front so a bad mode errors before touching the surface.
         if let to, !["next", "prev", "close"].contains(to) {

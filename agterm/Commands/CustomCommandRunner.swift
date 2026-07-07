@@ -141,9 +141,14 @@ final class CustomCommandRunner {
         if let named = Self.namedKeys[event.keyCode] {
             return Chord(mods: mods, key: named)
         }
-        // charactersIgnoringModifiers yields the base letter regardless of shift, matching the parser's
-        // lowercased single-char keys (e.g. shift+u → "u").
-        guard let chars = event.charactersIgnoringModifiers, let first = chars.first else { return nil }
+        // Derive the UNSHIFTED base key so every key normalizes the same way. `charactersIgnoringModifiers`
+        // KEEPS shift (shift+/ → "?", shift+= → "+"), and `.lowercased()` only undoes that for letters, so
+        // punctuation would otherwise land on the shifted glyph and never match a `shift+/`-style binding.
+        // `characters(byApplyingModifiers: [])` applies NO modifiers, giving the base char for any key
+        // (shift+/ → "/", shift+5 → "5", shift+u → "u"), matching how the keymap spells chords as
+        // `shift+<base>` (same call `GhosttySurfaceView` uses for unmodified key input).
+        guard let chars = event.characters(byApplyingModifiers: []) ?? event.charactersIgnoringModifiers,
+              let first = chars.first else { return nil }
         let key = String(first).lowercased()
         guard !key.isEmpty, key != " " else { return nil }
         return Chord(mods: mods, key: key)

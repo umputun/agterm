@@ -31,7 +31,8 @@ struct WindowControlArea: NSViewRepresentable {
         /// untouched system reads as `nil` here and still zooms — preserving the prior behavior.
         /// Read live on each double-click so a setting change takes effect without an app relaunch.
         /// "Fill" maps to `zoom` (the closest standard NSWindow action; true Fill uses the newer
-        /// window-tiling APIs). Zoom matches the green button and the `window.zoom` control command.
+        /// window-tiling APIs). Zoom matches the `window.zoom` control command (the plain green button does
+        /// native full screen, not zoom).
         ///
         /// A UITest env override (`AGTERM_UITEST_DOUBLECLICK_ACTION`) takes precedence so the gesture
         /// tests are hermetic regardless of the host machine's setting; it rides the environment

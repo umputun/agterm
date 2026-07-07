@@ -19,6 +19,7 @@ public protocol ControlActions {
     func moveWorkspace(_ target: String?, window: String?, direction: ReorderDirection) -> ControlResponse
     func focusWorkspace(_ target: String?, window: String?, mode: String?) -> ControlResponse
     func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse
+    func markSessionSeen(_ target: String?, window: String?) -> ControlResponse
     func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) -> ControlResponse
     func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse
     func scratchSession(_ target: String?, window: String?, mode: String?, command: String?) -> ControlResponse
@@ -34,8 +35,11 @@ public protocol ControlActions {
     func setSidebarViewMode(_ mode: ControlSidebarViewMode) -> ControlResponse
     func expandSidebar(window: String?) -> ControlResponse
     func collapseSidebar(window: String?) -> ControlResponse
+    func setQuickTerminal(mode: String?) -> ControlResponse
     func typeSession(_ target: String?, window: String?, options: ControlSessionTypeOptions) async -> ControlResponse
     func copySessionSelection(_ target: String?, window: String?) -> ControlResponse
+    func searchSession(_ target: String?, window: String?,
+                       text: String?, to: String?) async -> ControlResponse
     func openSessionOverlay(_ target: String?, window: String?,
                             options: ControlSessionOverlayOpenOptions) -> ControlResponse
     func closeSessionOverlay(_ target: String?, window: String?) -> ControlResponse
@@ -43,10 +47,16 @@ public protocol ControlActions {
     func setSessionBackground(_ target: String?, window: String?,
                               options: ControlSessionBackgroundOptions) -> ControlResponse
     func readSessionText(_ target: String?, window: String?, options: ControlSessionTextOptions) -> ControlResponse
+    func windowNew(name: String?) -> ControlResponse
+    func windowList() -> ControlResponse
+    func windowSelect(_ target: String?) async -> ControlResponse
+    func windowClose(_ target: String?) async -> ControlResponse
     func windowRename(_ target: String?, name: String) -> ControlResponse
+    func windowDelete(_ target: String?) -> ControlResponse
     func windowResize(_ target: String?, width: Int, height: Int) -> ControlResponse
     func windowMove(_ target: String?, x: Int, y: Int, display: Int?) -> ControlResponse
     func windowZoom(_ target: String?) -> ControlResponse
+    func windowFullscreen(_ target: String?) -> ControlResponse
     func clearRestoreCommands() -> ControlResponse
 }
 
@@ -68,13 +78,16 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
     public let wait: Bool
     public let sizePercent: Int?
     public let backgroundColor: String?
+    public let follow: Bool
 
-    public init(command: String, cwd: String?, wait: Bool, sizePercent: Int?, backgroundColor: String?) {
+    public init(command: String, cwd: String?, wait: Bool, sizePercent: Int?, backgroundColor: String?,
+                follow: Bool = false) {
         self.command = command
         self.cwd = cwd
         self.wait = wait
         self.sizePercent = sizePercent
         self.backgroundColor = backgroundColor
+        self.follow = follow
     }
 }
 
@@ -98,8 +111,8 @@ public struct ControlSessionTextOptions: Equatable, Sendable {
     }
 }
 
-/// Routes the command groups that have been hoisted from the app control switch. Commands outside this
-/// first migrated set return nil so the app can keep handling them in its existing switch.
+/// Routes control commands through a host-provided action seam. The dispatcher owns command parsing and
+/// response shape; host actions keep target resolution, AppKit state, and terminal-surface side effects.
 @MainActor
 public struct ControlDispatcher {
     private let actions: any ControlActions
@@ -113,22 +126,24 @@ public struct ControlDispatcher {
         case .tree:
             return actions.controlTree(window: request.args?.window)
         case .sessionNew, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
-                .sessionMove, .sessionFlag, .sessionStatus:
+                .sessionMove, .sessionFlag, .sessionSeen, .sessionStatus:
             return dispatchSessionCommand(request)
         case .sessionSplit, .sessionScratch, .sessionFocus, .sessionResize, .sessionType,
-                .sessionCopy, .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResult,
-                .sessionBackground, .sessionText:
+                .sessionCopy, .sessionSearch, .sessionOverlayOpen, .sessionOverlayClose,
+                .sessionOverlayResult, .sessionBackground, .sessionText:
             return await dispatchSessionSurfaceCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus:
             return dispatchWorkspaceCommand(request)
-        case .fontInc, .fontDec, .fontReset, .keymapReload, .configReload, .notify,
+        case .quick, .fontInc, .fontDec, .fontReset, .keymapReload, .configReload, .notify,
                 .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarExpand,
                 .sidebarCollapse, .restoreClear:
             return dispatchAppCommand(request)
-        case .windowRename, .windowResize, .windowMove, .windowZoom:
-            return dispatchWindowCommand(request)
-        default:
+        case .windowNew, .windowList, .windowSelect, .windowClose, .windowRename,
+                .windowDelete, .windowResize, .windowMove, .windowZoom, .windowFullscreen:
+            return await dispatchWindowCommand(request)
+        case .debugAppearance:
+            // UI-test-only seam handled app-side in `ControlServer` (needs AppKit + `ContentView.isUITestLaunch`).
             return nil
         }
     }
@@ -208,6 +223,8 @@ public struct ControlDispatcher {
             return actions.moveSession(request.target, window: args?.window, move: .workspace(workspace))
         case .sessionFlag:
             return actions.setSessionFlag(request.target, window: request.args?.window, mode: request.args?.mode)
+        case .sessionSeen:
+            return actions.markSessionSeen(request.target, window: request.args?.window)
         case .sessionStatus:
             guard let status = AgentStatus(rawValue: request.args?.status ?? "") else {
                 return ControlResponse(ok: false, error: "invalid status")
@@ -291,6 +308,9 @@ public struct ControlDispatcher {
                                              ))
         case .sessionCopy:
             return actions.copySessionSelection(request.target, window: request.args?.window)
+        case .sessionSearch:
+            return await actions.searchSession(request.target, window: request.args?.window,
+                                               text: request.args?.text, to: request.args?.to)
         case .sessionOverlayOpen:
             guard let command = request.args?.command, !command.isEmpty else {
                 return ControlResponse(ok: false, error: "session.overlay.open requires a command")
@@ -304,7 +324,8 @@ public struct ControlDispatcher {
                                                 cwd: request.args?.cwd,
                                                 wait: request.args?.wait ?? false,
                                                 sizePercent: request.args?.sizePercent,
-                                                backgroundColor: request.args?.color
+                                                backgroundColor: request.args?.color,
+                                                follow: request.args?.follow ?? false
                                               ))
         case .sessionOverlayClose:
             return actions.closeSessionOverlay(request.target, window: request.args?.window)
@@ -327,6 +348,8 @@ public struct ControlDispatcher {
             return actions.font(request.target, window: request.args?.window, action: "decrease_font_size:1")
         case .fontReset:
             return actions.font(request.target, window: request.args?.window, action: "reset_font_size")
+        case .quick:
+            return actions.setQuickTerminal(mode: request.args?.mode)
         case .keymapReload:
             return actions.reloadKeymap()
         case .configReload:
@@ -437,13 +460,23 @@ public struct ControlDispatcher {
                                                                           lines: lines))
     }
 
-    private func dispatchWindowCommand(_ request: ControlRequest) -> ControlResponse {
+    private func dispatchWindowCommand(_ request: ControlRequest) async -> ControlResponse {
         switch request.cmd {
+        case .windowNew:
+            return actions.windowNew(name: request.args?.name)
+        case .windowList:
+            return actions.windowList()
+        case .windowSelect:
+            return await actions.windowSelect(request.target)
+        case .windowClose:
+            return await actions.windowClose(request.target)
         case .windowRename:
             guard let name = request.args?.name?.trimmedOrNil else {
                 return ControlResponse(ok: false, error: "window.rename requires a name")
             }
             return actions.windowRename(request.target, name: name)
+        case .windowDelete:
+            return actions.windowDelete(request.target)
         case .windowResize:
             guard let width = request.args?.width, let height = request.args?.height,
                   width > 0, height > 0 else {
@@ -457,6 +490,8 @@ public struct ControlDispatcher {
             return actions.windowMove(request.target, x: x, y: y, display: request.args?.display)
         case .windowZoom:
             return actions.windowZoom(request.target)
+        case .windowFullscreen:
+            return actions.windowFullscreen(request.target)
         default:
             preconditionFailure("unexpected window command: \(request.cmd.rawValue)")
         }

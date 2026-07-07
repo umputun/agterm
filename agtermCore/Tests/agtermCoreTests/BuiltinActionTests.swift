@@ -23,7 +23,8 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.toggleFlag.rawValue == "toggle_flag")
         #expect(BuiltinAction.focusWorkspace.rawValue == "focus_workspace")
         #expect(BuiltinAction.showAttention.rawValue == "show_attention")
-        #expect(BuiltinAction.allCases.count == 35)
+        #expect(BuiltinAction.toggleFullscreen.rawValue == "toggle_fullscreen")
+        #expect(BuiltinAction.allCases.count == 36)
     }
 
     @Test func rejectsUnknownName() {
@@ -70,6 +71,7 @@ struct BuiltinActionTests {
             .toggleScratch: Chord(mods: [.command], key: "j"),
             .toggleSearch: Chord(mods: [.command], key: "f"),
             .toggleSidebar: Chord(mods: [.command, .control], key: "s"),
+            .toggleFullscreen: Chord(mods: [.command, .control], key: "f"),
             .selectTheme: nil,      // keyless — gains a key only when the user maps one
             .toggleFlaggedView: nil, // keyless — gains a key only when the user maps one
             .toggleFlag: Chord(mods: [.command, .shift], key: "f"),
@@ -107,6 +109,13 @@ struct BuiltinActionTests {
     @Test func toggleSidebarDefaultIsCmdCtrlSAndRoundTrips() {
         let chord = Chord(mods: [.command, .control], key: "s")
         #expect(BuiltinAction.toggleSidebar.defaultChord == chord)
+        // must round-trip through the keymap grammar (so the starter renders it, not "(not expressible)").
+        #expect(parseKeybind(chord.displayString) == [chord])
+    }
+
+    @Test func toggleFullscreenDefaultIsCmdCtrlFAndRoundTrips() {
+        let chord = Chord(mods: [.command, .control], key: "f")
+        #expect(BuiltinAction.toggleFullscreen.defaultChord == chord)
         // must round-trip through the keymap grammar (so the starter renders it, not "(not expressible)").
         #expect(parseKeybind(chord.displayString) == [chord])
     }

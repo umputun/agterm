@@ -162,10 +162,11 @@ public final class WindowLibrary {
     public func controlWindowNodes() -> [ControlWindowNode] {
         let active = activeWindowID
         return windows.map {
-            // reach each open store for its auto-follow timeout (config, rarely changes — safe on the cached
-            // fast path); a closed window has no store and reports nil.
+            // reach each open store for its auto-follow timeout + sidebar visibility (per-window state); a
+            // closed window has no store and reports nil for both.
             ControlWindowNode(id: $0.id.uuidString, name: $0.name, open: isOpen($0.id), active: $0.id == active,
-                              autoFollowMs: stores[$0.id]?.autoFollowMs)
+                              autoFollowMs: stores[$0.id]?.autoFollowMs,
+                              sidebarVisible: stores[$0.id]?.sidebarVisible)
         }
     }
 

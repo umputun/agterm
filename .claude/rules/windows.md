@@ -175,11 +175,49 @@ never two bundles in one window.
   (`ControlProtocolTests`) + the e2e `testWindowZoom` plus the gesture tests
   `testDoubleClickHeaderZoomsAndRestores` / `testDoubleClickHeaderHonorsNoneSetting` /
   `testHeaderButtonsStillReceiveClicksOverControlArea` / `testDragHeaderMovesWindow` in `ControlWindowUITests`.
-- **`window.*` control additions (eight commands, plus `window.zoom`).**
+- **`window.fullscreen` (native macOS full screen — control + View-menu / green-button / ⌃⌘F GUI).**
+  `WindowRegistry.fullscreen(_:)` drives the standard `NSWindow.toggleFullScreen(nil)` — enters/exits NATIVE
+  full screen (a separate Space, auto-hidden menu bar); a second call exits.
+  Distinct from `window.zoom`, which only maximizes the frame in the SAME Space.
+  It has a GUI surface across all four keep-in-sync callers: the **View ▸ Toggle Full Screen** menu item and
+  the ⌃⇧P palette "Toggle Full Screen" both drive `AppActions.toggleFullscreen()` →
+  `NSApp.keyWindow?.toggleFullScreen(nil)` (the KEY window, no id resolution — the menu/palette/keymap
+  always act on the frontmost), `BuiltinAction.toggleFullscreen` gives it the ⌃⌘F default (expressible,
+  rebindable via `keymap.conf`), and the green traffic-light button already toggles the same native path.
+  The control command instead resolves a window id like `zoom` (`active`/prefix/id) and requires the window
+  OPEN (closed → the `window not open` error).
+  **AppKit auto-injects its OWN "Enter Full Screen" item (Globe+F / ⌃⌘F) into the View menu for any
+  fullscreen-capable window and RE-INJECTS it every time the menu opens, so agterm's own item would render
+  a DUPLICATE.** `AppDelegate` strips the native one — `removeNativeFullScreenMenuItem` removes the menu item
+  whose action is `toggleFullScreen:` (agterm's item uses a SwiftUI closure action, a different selector, so
+  only the native one matches).
+  It runs once at launch AND on every `NSMenu.didBeginTrackingNotification` (the point AppKit re-injects it) —
+  a launch-time one-shot does NOT stick because of the re-injection; a menu delegate is NOT used (it would
+  clobber SwiftUI's dynamic View-menu updates).
+  Guarded by the e2e `testViewMenuHasSingleFullScreenItem` in `MenuUITests` (View menu shows Toggle Full
+  Screen, NOT the native Enter Full Screen).
+  Four-point keep-in-sync audit: (1) `case windowFullscreen = "window.fullscreen"` in `ControlProtocol.swift`
+  + `case toggleFullscreen = "toggle_fullscreen"` (⌃⌘F `defaultChord`) in `BuiltinAction`,
+  (2) the `.windowFullscreen` dispatch arm (`windowFullscreen`) in `ControlServer` →
+  `WindowRegistry.shared.fullscreen`, plus `AppActions.toggleFullscreen()`, the View menu item, and
+  `PaletteCommand.toggleFullscreen`,
+  (3) the `window fullscreen <id>` subcommand in `agtermctlKit`, (4) `.windowFullscreen` in
+  `windowCommandsRoundTrip` (`ControlProtocolTests`) +
+  `windowCommandsRouteParsedInputsAndKeepActionResponses` (`ControlDispatcherTests`) + the CLI mapping in
+  `CommandsTests` + the e2e `testWindowFullscreen` in `ControlWindowUITests`.
+- **`window.*` control additions (eight commands, plus `window.zoom`/`window.fullscreen`).**
   `window.new` (returns the new id + opens its window), `window.list` (returns `windows` with each window's
-  `open`/`active` flag), `window.select` (raise-or-open), `window.close` (`WindowRegistry.close` → standard
-  teardown), `window.rename`, `window.delete` (`canRemoveWindow` keep-at-least-one → error,
+  `open`/`active` flag, plus `autoFollowMs` and `sidebarVisible` read from the open window's store — both
+  omitted for a closed window), `window.select` (raise-or-open), `window.close` (`WindowRegistry.close` →
+  standard teardown), `window.rename`, `window.delete` (`canRemoveWindow` keep-at-least-one → error,
   not a GUI confirm).
+  `window.list` is answered from the background-thread `cachedWindowNodes` cache (see the fast-path note
+  above), refreshed after every dispatched command + on `.agtermWindowFrontmostChanged`.
+  `sidebarVisible` is the first frequently-GUI-mutated field on that node, so a GUI-only ⌃⌘S sidebar
+  toggle (no control command, no frontmost change) would otherwise leave it stale — `AppStore.setSidebarVisible`
+  posts `.agtermSidebarVisibilityChanged` and `ControlServer` observes it to `refreshWindowCache`.
+  The live, never-cached copy of `sidebarVisible` is on `tree`'s top level (main-actor per request);
+  prefer it for read-then-act scripts.
   `window.resize` (`args.width`/`height` → the window's frame size in points) and `window.move` (`args.x`/`y`
   → the top-left relative to display `args.display`, default the window's current display;
   y from the display top, so multiple displays are addressed by index) drive the app-side `WindowRegistry.resize`/`move`
