@@ -319,11 +319,18 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// The window's auto-follow-blocked timeout in milliseconds, or nil when the feature is disabled
     /// (omitted from the JSON). The read side of the GUI-only Auto-follow setting.
     public let autoFollowMs: Int?
+    /// Whether the projected window's sidebar is currently visible, or nil when unknown (omitted from the
+    /// JSON). LIVE like `idleMs` — built fresh from the window's store per request — so a script can read
+    /// the current state (the read side of the write-only `sidebar` command; e.g. a tmux-style zoom that
+    /// must restore the sidebar only when it was visible before zooming). Also on `window.list` per window.
+    public let sidebarVisible: Bool?
 
-    public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil) {
+    public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
+                sidebarVisible: Bool? = nil) {
         self.workspaces = workspaces
         self.idleMs = idleMs
         self.autoFollowMs = autoFollowMs
+        self.sidebarVisible = sidebarVisible
     }
 }
 
@@ -339,13 +346,19 @@ public struct ControlWindowNode: Codable, Sendable, Equatable {
     /// just-changed setting may lag until the next command. Acceptable because the config rarely changes;
     /// the live `idleMs` is deliberately kept off `window.list` (tree-only) for exactly this reason.
     public let autoFollowMs: Int?
+    /// Whether this window's sidebar is currently visible, or nil for a CLOSED window with no live store
+    /// (omitted from the JSON) — read from the open window's store, mirroring `autoFollowMs`. The read side
+    /// of the write-only `sidebar` command, per window.
+    public let sidebarVisible: Bool?
 
-    public init(id: String, name: String, open: Bool, active: Bool, autoFollowMs: Int? = nil) {
+    public init(id: String, name: String, open: Bool, active: Bool, autoFollowMs: Int? = nil,
+                sidebarVisible: Bool? = nil) {
         self.id = id
         self.name = name
         self.open = open
         self.active = active
         self.autoFollowMs = autoFollowMs
+        self.sidebarVisible = sidebarVisible
     }
 }
 

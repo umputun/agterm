@@ -177,9 +177,17 @@ never two bundles in one window.
   `testHeaderButtonsStillReceiveClicksOverControlArea` / `testDragHeaderMovesWindow` in `ControlWindowUITests`.
 - **`window.*` control additions (eight commands, plus `window.zoom`).**
   `window.new` (returns the new id + opens its window), `window.list` (returns `windows` with each window's
-  `open`/`active` flag), `window.select` (raise-or-open), `window.close` (`WindowRegistry.close` → standard
-  teardown), `window.rename`, `window.delete` (`canRemoveWindow` keep-at-least-one → error,
+  `open`/`active` flag, plus `autoFollowMs` and `sidebarVisible` read from the open window's store — both
+  omitted for a closed window), `window.select` (raise-or-open), `window.close` (`WindowRegistry.close` →
+  standard teardown), `window.rename`, `window.delete` (`canRemoveWindow` keep-at-least-one → error,
   not a GUI confirm).
+  `window.list` is answered from the background-thread `cachedWindowNodes` cache (see the fast-path note
+  above), refreshed after every dispatched command + on `.agtermWindowFrontmostChanged`.
+  `sidebarVisible` is the first frequently-GUI-mutated field on that node, so a GUI-only ⌃⌘S sidebar
+  toggle (no control command, no frontmost change) would otherwise leave it stale — `AppStore.setSidebarVisible`
+  posts `.agtermSidebarVisibilityChanged` and `ControlServer` observes it to `refreshWindowCache`.
+  The live, never-cached copy of `sidebarVisible` is on `tree`'s top level (main-actor per request);
+  prefer it for read-then-act scripts.
   `window.resize` (`args.width`/`height` → the window's frame size in points) and `window.move` (`args.x`/`y`
   → the top-left relative to display `args.display`, default the window's current display;
   y from the display top, so multiple displays are addressed by index) drive the app-side `WindowRegistry.resize`/`move`

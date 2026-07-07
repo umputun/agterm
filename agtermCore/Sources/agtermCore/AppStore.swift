@@ -183,7 +183,8 @@ public final class AppStore {
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID, sessions: sessions)
         }
-        return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs)
+        return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs,
+                           sidebarVisible: sidebarVisible)
     }
 
     /// Creates a workspace and appends it. Clears any active focus so the new (empty)
@@ -516,6 +517,9 @@ public final class AppStore {
         guard sidebarVisible != visible else { return }
         sidebarVisible = visible
         save()
+        // refresh the app-target ControlServer's window.list cache: a GUI-only toggle isn't a control
+        // command, so without this the cached sidebarVisible would lag until the next command.
+        NotificationCenter.default.post(name: .agtermSidebarVisibilityChanged, object: nil)
     }
 
     /// Flips this window's sidebar visibility and persists the new state.

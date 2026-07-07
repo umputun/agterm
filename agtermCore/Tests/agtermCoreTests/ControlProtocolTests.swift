@@ -432,45 +432,52 @@ struct ControlProtocolTests {
         #expect(decoded.unseen == nil)
     }
 
-    @Test func treeRoundTripsWithIdleAndAutoFollowMs() throws {
-        // the tree carries the live idle metric + the auto-follow config, both in ms.
+    @Test func treeRoundTripsWithLiveWindowFields() throws {
+        // the tree carries the live idle metric + the auto-follow config (both ms) + sidebar visibility.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
         let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true,
                                                                  sessions: [session])],
-                               idleMs: 4200, autoFollowMs: 30_000)
+                               idleMs: 4200, autoFollowMs: 30_000, sidebarVisible: false)
         let response = ControlResponse(ok: true, result: ControlResult(tree: tree))
         let decoded = try roundTrip(response)
         #expect(decoded == response)
         #expect(decoded.result?.tree?.idleMs == 4200)
         #expect(decoded.result?.tree?.autoFollowMs == 30_000)
+        #expect(decoded.result?.tree?.sidebarVisible == false)
     }
 
-    @Test func treeOmitsIdleAndAutoFollowMsWhenNil() throws {
-        // no activity yet + auto-follow disabled — both keys must be omitted, not emitted as null.
+    @Test func treeOmitsLiveWindowFieldsWhenNil() throws {
+        // no activity yet + auto-follow disabled + unknown sidebar — every key must be omitted, not null.
         let tree = ControlTree(workspaces: [])
         let json = String(data: try JSONEncoder().encode(tree), encoding: .utf8) ?? ""
         #expect(!json.contains("idleMs"), "a nil idleMs must be omitted from the JSON; got \(json)")
         #expect(!json.contains("autoFollowMs"), "a nil autoFollowMs must be omitted from the JSON; got \(json)")
+        #expect(!json.contains("sidebarVisible"), "a nil sidebarVisible must be omitted from the JSON; got \(json)")
         let decoded = try JSONDecoder().decode(ControlTree.self, from: Data(json.utf8))
         #expect(decoded.idleMs == nil)
         #expect(decoded.autoFollowMs == nil)
+        #expect(decoded.sidebarVisible == nil)
     }
 
-    @Test func windowNodeRoundTripsWithAutoFollowMs() throws {
-        let node = ControlWindowNode(id: "w1", name: "work", open: true, active: true, autoFollowMs: 5000)
+    @Test func windowNodeRoundTripsWithPerWindowFields() throws {
+        let node = ControlWindowNode(id: "w1", name: "work", open: true, active: true, autoFollowMs: 5000,
+                                     sidebarVisible: true)
         let response = ControlResponse(ok: true, result: ControlResult(windows: [node]))
         let decoded = try roundTrip(response)
         #expect(decoded == response)
         #expect(decoded.result?.windows?.first?.autoFollowMs == 5000)
+        #expect(decoded.result?.windows?.first?.sidebarVisible == true)
     }
 
-    @Test func windowNodeOmitsAutoFollowMsWhenNil() throws {
-        // auto-follow disabled (or a closed window with no store) — the key must be omitted, not null.
+    @Test func windowNodeOmitsPerWindowFieldsWhenNil() throws {
+        // auto-follow disabled + a closed window with no store — both keys must be omitted, not null.
         let node = ControlWindowNode(id: "w1", name: "work", open: true, active: false)
         let json = String(data: try JSONEncoder().encode(node), encoding: .utf8) ?? ""
         #expect(!json.contains("autoFollowMs"), "a nil autoFollowMs must be omitted from the JSON; got \(json)")
+        #expect(!json.contains("sidebarVisible"), "a nil sidebarVisible must be omitted from the JSON; got \(json)")
         let decoded = try JSONDecoder().decode(ControlWindowNode.self, from: Data(json.utf8))
         #expect(decoded.autoFollowMs == nil)
+        #expect(decoded.sidebarVisible == nil)
     }
 
     @Test func backgroundWatermarkFitPositionSerializeAsRawStrings() throws {

@@ -119,6 +119,11 @@ final class ControlServer {
         NotificationCenter.default.addObserver(forName: .agtermWindowFrontmostChanged, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshWindowCache() }
         }
+        // a GUI-only sidebar toggle (⌃⌘S / toolbar / menu / palette) mutates sidebarVisible without a
+        // control command, so refresh the cache on it too — otherwise window.list's sidebarVisible lags.
+        NotificationCenter.default.addObserver(forName: .agtermSidebarVisibilityChanged, object: nil, queue: .main) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshWindowCache() }
+        }
     }
 
     /// The socket path the app and the CLI rendezvous on. `AGTERM_CONTROL_SOCKET` is an explicit override

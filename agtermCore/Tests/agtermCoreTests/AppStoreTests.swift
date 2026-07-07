@@ -791,6 +791,34 @@ struct AppStoreTests {
         ])
     }
 
+    @Test func controlTreeReportsSidebarVisibility() {
+        let store = makeStore()
+        #expect(store.controlTree().sidebarVisible == true) // default: sidebar shown
+        store.setSidebarVisible(false)
+        #expect(store.controlTree().sidebarVisible == false)
+        store.setSidebarVisible(true)
+        #expect(store.controlTree().sidebarVisible == true)
+    }
+
+    @Test func setSidebarVisiblePostsChangeNotificationOnlyOnChange() {
+        // the app-target ControlServer observes this to refresh window.list's cached sidebarVisible; the
+        // post must fire only on an actual change (queue nil so the synchronous post delivers inline).
+        final class Counter: @unchecked Sendable { var n = 0 }
+        let store = makeStore() // default sidebarVisible == true
+        let counter = Counter()
+        let token = NotificationCenter.default.addObserver(forName: .agtermSidebarVisibilityChanged, object: nil,
+                                                           queue: nil) { _ in counter.n += 1 }
+        defer { NotificationCenter.default.removeObserver(token) }
+        store.setSidebarVisible(true)   // unchanged from default -> no post
+        #expect(counter.n == 0)
+        store.setSidebarVisible(false)  // change -> post
+        #expect(counter.n == 1)
+        store.setSidebarVisible(false)  // unchanged -> no post
+        #expect(counter.n == 1)
+        store.setSidebarVisible(true)   // change -> post
+        #expect(counter.n == 2)
+    }
+
     @Test func controlTreeReportsUnseenCountWhenPositive() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

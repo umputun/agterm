@@ -746,6 +746,18 @@ paths:
   is each pane running".
   It ALSO surfaces `background` on each node — the `BackgroundWatermark` spec set via `session.background`
   (omitted when none), the read side of set/clear so a script can query the current watermark.
+  `tree` ALSO carries, at the TOP level (alongside `idleMs`/`autoFollowMs`), `sidebarVisible` — the read
+  side of the write-only `sidebar` command (per-window sidebar visibility), populated LIVE from the
+  projected window's store in `AppStore.controlTree`.
+  The SAME field also rides each `ControlWindowNode` on `window.list` (read from `stores[id]?.sidebarVisible`,
+  omitted for a closed window), so a script can enumerate every window's sidebar state.
+  BUT `window.list` is served from the background-thread `cachedWindowNodes` cache
+  (refreshed after every dispatched command + on frontmost change), and a GUI-only ⌃⌘S toggle is neither —
+  so `AppStore.setSidebarVisible` posts `.agtermSidebarVisibilityChanged` (agtermCore) and `ControlServer`
+  observes it to `refreshWindowCache`, keeping the cached `sidebarVisible` honest.
+  A script that reads-then-acts (e.g. the tmux-style zoom that must restore the sidebar only if it was
+  visible) should still prefer `tree`'s LIVE `sidebarVisible` over the cached `window.list` one — the tree
+  is built on the main actor per request, so it can never lag.
   `restore.clear` clears every open session's saved CAPTURED foreground command (`Session.foregroundCommand`/`splitForegroundCommand`)
   and persists via `library.saveAllOpen()`, so the next restart restores plain shells for those panes instead
   of re-running the captured commands (also closing the force-quit re-fire: the restored command is consumed

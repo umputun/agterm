@@ -50,11 +50,13 @@ position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when 
 (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session seen` — omitted
 when zero). Workspace nodes carry `id`, `name`, `active`, `sessions`.
 
-The tree object itself carries two top-level read-only fields: `idleMs` (milliseconds since the last
-user input in the window, omitted before any activity) and `autoFollowMs` (the window's Auto-follow
-timeout in milliseconds, omitted when the setting is Disabled). `idleMs` is live and grows while the
-window is idle, so it is on `tree` only, never `window.list`. Both are read-only projections of GUI
-state; there is no control command to set them.
+The tree object itself carries three top-level read-only fields: `idleMs` (milliseconds since the last
+user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
+timeout in milliseconds, omitted when the setting is Disabled), and `sidebarVisible` (whether the
+window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
+can restore it, e.g. a tmux-style zoom that hides the sidebar and must re-show it only when it was
+visible before). `idleMs` is live and grows while the window is idle, so it is on `tree` only, never
+`window.list`; `sidebarVisible` is on both. All three are read-only projections of GUI state.
 
 ## workspace
 
@@ -266,11 +268,12 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
 ## window
 
 - `window new [name]` — create and open a window; returns its id.
-- `window list` — `result.windows`, each with `id`, `name`, `open`, `active`, and `autoFollowMs` (the
-  window's Auto-follow timeout in milliseconds, omitted when the setting is Disabled). The `autoFollowMs`
-  here is served from a cache and reflects the value as of the last refresh, so a just-changed setting may
-  lag until the next command. Unlike `tree`, `window.list` does NOT carry `idleMs` — the live idle metric
-  would freeze in that cache.
+- `window list` — `result.windows`, each with `id`, `name`, `open`, `active`, `autoFollowMs` (the
+  window's Auto-follow timeout in milliseconds, omitted when the setting is Disabled), and
+  `sidebarVisible` (whether that window's sidebar is shown, read from the open window's store — omitted
+  for a closed window with no live store). The `autoFollowMs` here is served from a cache and reflects the
+  value as of the last refresh, so a just-changed setting may lag until the next command. Unlike `tree`,
+  `window.list` does NOT carry `idleMs` — the live idle metric would freeze in that cache.
 - `window select <id>` — raise it if open, else open it.
 - `window close <id>` — close the on-screen window (the bundle is kept; reopen with select).
 - `window rename <id> <name>`.

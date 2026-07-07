@@ -9,6 +9,13 @@ extension Notification.Name {
     /// responder into the newly selected session (selection alone does not move it, since the eager deck
     /// keeps the prior surface as first responder).
     public static let agtermAutoFollowed = Notification.Name("agterm.autoFollowed")
+
+    /// Posted by `AppStore.setSidebarVisible` whenever a window's sidebar visibility actually changes.
+    /// `window.list` is served from a background-thread cache refreshed after every control command and on
+    /// frontmost changes, but a GUI-only sidebar toggle (⌃⌘S / toolbar / menu / palette) is neither — so
+    /// the app-target `ControlServer` observes this to refresh the cache, keeping `window.list`'s
+    /// `sidebarVisible` honest (the live `tree` reads it directly and needs no refresh).
+    public static let agtermSidebarVisibilityChanged = Notification.Name("agterm.sidebarVisibilityChanged")
 }
 
 // MARK: - Auto-follow attention
