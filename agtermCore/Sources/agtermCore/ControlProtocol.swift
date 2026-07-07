@@ -319,10 +319,12 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// The window's auto-follow-blocked timeout in milliseconds, or nil when the feature is disabled
     /// (omitted from the JSON). The read side of the GUI-only Auto-follow setting.
     public let autoFollowMs: Int?
-    /// Whether the projected window's sidebar is currently visible, or nil when unknown (omitted from the
-    /// JSON). LIVE like `idleMs` — built fresh from the window's store per request — so a script can read
-    /// the current state (the read side of the write-only `sidebar` command; e.g. a tmux-style zoom that
-    /// must restore the sidebar only when it was visible before zooming). Also on `window.list` per window.
+    /// Whether the projected window's sidebar is currently visible. LIVE — built fresh from the window's
+    /// store per request — so a script can read the current state (the read side of the write-only
+    /// `sidebar` command; e.g. a tmux-style zoom that must restore the sidebar only when it was visible
+    /// before zooming). Always present on a `tree` response (the producer passes a non-optional `Bool`),
+    /// so unlike `idleMs`/`autoFollowMs` it never omits; the per-window `window.list` copy is nil/omitted
+    /// only for a closed window.
     public let sidebarVisible: Bool?
 
     public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
