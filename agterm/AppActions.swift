@@ -51,11 +51,13 @@ final class AppActions {
     /// the `.themes` palette. Wired in the scene `.task` (the controller is `agtermApp` `@State`).
     var palette: PaletteController?
 
-    /// The theme captured when the theme picker opened, restored on Esc/cancel. `themePreviewActive`
-    /// gates the preview/commit/cancel so the hooks are inert outside the picker (the palette's other
-    /// modes never touch them).
+    /// Both theme slots captured when the theme picker opened, restored on Esc/cancel. Snapshotting the
+    /// WHOLE pair (not just the on-screen slot) is what makes the revert flip-safe: if macOS switches
+    /// appearance mid-preview, restoring both slots reverts correctly regardless of which slot the
+    /// preview wrote. `themePreviewActive` gates the preview/commit/cancel so the hooks are inert outside
+    /// the picker (the palette's other modes never touch them).
     var themePreviewActive = false
-    var themePreviewOriginal: String?
+    var themePreviewOriginal: (theme: String?, dark: String?)?
 
     /// The `.agtermAutoFollowed` observer token. Installed once in `init` (the app builds one `AppActions`)
     /// so an idle auto-follow in the key window moves first responder into the newly selected session.

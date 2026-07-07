@@ -198,7 +198,7 @@ paths:
   Setting echoes the resulting effective side in `result.text`; the BARE form (no name) reads the side
   the last config feed applied (`SettingsModel.lastAppliedIsDark`), which the test polls to prove the
   flip actually drove the reload.
-  `AppearanceFlipUITests` is its only consumer; the public command count stays 50.
+  `AppearanceFlipUITests` is its only consumer; the public command count stays 53.
 
   `workspace.delete` honors keep-at-least-one and returns an error instead of the GUI confirm alert (nothing
   blocks on a modal).

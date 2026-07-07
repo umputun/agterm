@@ -28,7 +28,7 @@ final class SettingsModel {
     /// Coalesces rapid theme-picker navigation/typing previews so a burst of `previewTheme` calls
     /// triggers a single `apply()` once the quiet window elapses, instead of rebuilding + reloading
     /// every surface on each arrow keypress. Commit flushes it; cancel drops it (see `commitTheme`
-    /// and `previewThemeImmediate`).
+    /// and `revertThemePreview`).
     private let previewThemeDebouncer = Debouncer()
     private static let previewThemeDebounceInterval: TimeInterval = 0.07
 
@@ -307,19 +307,23 @@ final class SettingsModel {
     /// surface reload + chrome refresh), so a burst of arrow/typing previews coalesces to one reload
     /// once the quiet window elapses. Skips `settingsStore.save`, so navigating themes doesn't touch
     /// `settings.json`; the picker commits with `commitTheme()` on Enter (which flushes the pending
-    /// apply) or reverts with `previewThemeImmediate(original)` on Esc. Writes the CURRENT-appearance
-    /// slot (the dark slot while following in dark mode, else `theme`) so the preview renders on screen.
+    /// apply) or reverts with `revertThemePreview(theme:darkTheme:)` on Esc (restoring both captured
+    /// slots). Writes the CURRENT-appearance slot (the dark slot while following in dark mode, else
+    /// `theme`) so the preview renders on screen.
     func previewTheme(_ value: String?) {
         if rendersDarkSlot { settings.darkTheme = value } else { settings.theme = value }
         previewThemeDebouncer.schedule(after: Self.previewThemeDebounceInterval) { [weak self] in self?.apply() }
     }
 
-    /// Apply a theme live IMMEDIATELY (no debounce), cancelling any pending debounced preview — the
-    /// revert half of the picker (Esc / scrim / mode switch / unmount). Synchronous so the original
-    /// theme is restored with no debounce lag and no queued preview fires afterwards.
-    func previewThemeImmediate(_ value: String?) {
+    /// Restore BOTH theme slots IMMEDIATELY (no debounce), cancelling any pending debounced preview — the
+    /// revert half of the picker (Esc / scrim / mode switch / unmount). Synchronous so the captured pair
+    /// is restored with no debounce lag and no queued preview fires afterwards. Writes both slots (not
+    /// the on-screen one) so an appearance flip mid-preview can't leave a previewed value in the wrong
+    /// slot — `AppActions` snapshots the pair on open and passes it straight back.
+    func revertThemePreview(theme: String?, darkTheme: String?) {
         previewThemeDebouncer.cancel()
-        if rendersDarkSlot { settings.darkTheme = value } else { settings.theme = value }
+        settings.theme = theme
+        settings.darkTheme = darkTheme
         apply()
     }
 

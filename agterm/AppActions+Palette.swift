@@ -238,11 +238,12 @@ extension AppActions {
         settingsModel?.settings.activeTheme(isDark: GhosttyApp.currentIsDark())
     }
 
-    /// Capture the on-screen theme (the current-appearance slot) so Esc/cancel can restore it. Idempotent
-    /// while a preview is active.
+    /// Capture BOTH theme slots so Esc/cancel can restore the pre-preview pair. Snapshotting the whole
+    /// pair (not just the on-screen slot) keeps the revert correct even if macOS flips appearance
+    /// mid-preview — see `cancelThemePreview`. Idempotent while a preview is active.
     func beginThemePreview() {
-        guard settingsModel != nil, !themePreviewActive else { return }
-        themePreviewOriginal = effectiveTheme
+        guard let settingsModel, !themePreviewActive else { return }
+        themePreviewOriginal = (settingsModel.settings.theme, settingsModel.settings.darkTheme)
         themePreviewActive = true
     }
 
@@ -263,14 +264,17 @@ extension AppActions {
         themePreviewOriginal = nil
     }
 
-    /// Re-apply the captured original theme and end the preview (Esc / scrim / mode switch / unmount
-    /// without a commit). No-op when no preview is active (e.g. right after a commit). Routes through
-    /// the IMMEDIATE (non-debounced) revert so Esc restores the original theme instantly — the
-    /// navigation preview is debounced, so calling `previewTheme` here would lag or leave the last
-    /// previewed theme stuck applied.
+    /// Restore BOTH captured slots and end the preview (Esc / scrim / mode switch / unmount without a
+    /// commit). No-op when no preview is active (e.g. right after a commit). Routes through the IMMEDIATE
+    /// (non-debounced) revert so Esc restores the original pair instantly — the navigation preview is
+    /// debounced, so calling `previewTheme` here would lag or leave the last previewed theme stuck
+    /// applied. Reverting the WHOLE pair (not the on-screen slot) is flip-safe: an appearance flip
+    /// mid-preview can't strand a previewed value in the wrong slot.
     func cancelThemePreview() {
         guard themePreviewActive else { return }
-        settingsModel?.previewThemeImmediate(themePreviewOriginal)
+        if let original = themePreviewOriginal {
+            settingsModel?.revertThemePreview(theme: original.theme, darkTheme: original.dark)
+        }
         themePreviewActive = false
         themePreviewOriginal = nil
     }

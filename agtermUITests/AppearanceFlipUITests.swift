@@ -47,7 +47,8 @@ final class AppearanceFlipUITests: ControlAPITestCase {
         }
 
         // flip to dark: the response echoing the applied side proves the appearance change reached the
-        // app — which is what fires viewDidChangeEffectiveAppearance → the debounced flip reload.
+        // app — which drives the debounced flip reload (the seam posts .agtermSystemAppearanceChanged,
+        // the same notification the production KVO observer posts).
         let flipped = try sendCommand(#"{"cmd":"debug.appearance","args":{"name":"dark"}}"#)
         XCTAssertEqual(flipped["ok"] as? Bool, true, "the flip should be accepted: \(flipped)")
         XCTAssertEqual((flipped["result"] as? [String: Any])?["text"] as? String, "dark")

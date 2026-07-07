@@ -28,10 +28,13 @@ paths:
   Enter/click commits via `commitThemePreview()` → `SettingsModel.commitTheme()`,
   which FLUSHES the pending debounced apply (so the latest theme is live NOW) then `save()`s.
   Any dismiss without a commit — Esc, scrim tap, switch to another palette mode,
-  unmount — reverts via `cancelThemePreview()` → `previewThemeImmediate(original)`,
-  which CANCELS the pending debounce and re-applies the theme captured on open SYNCHRONOUSLY (no debounce
+  unmount — reverts via `cancelThemePreview()` → `revertThemePreview(theme:darkTheme:)`,
+  which CANCELS the pending debounce and restores BOTH slots captured on open SYNCHRONOUSLY (no debounce
   lag, no stuck last-preview).
-  `AppActions` owns the session state (`themePreviewActive` + `themePreviewOriginal`);
+  `beginThemePreview` snapshots the WHOLE `(theme, darkTheme)` pair (not just the on-screen slot) so the
+  revert stays correct even if macOS flips appearance mid-preview — otherwise the Esc revert would re-resolve
+  the slot at flip-time and write the captured value into the wrong side, stranding both slots.
+  `AppActions` owns the session state (`themePreviewActive` + `themePreviewOriginal`, the captured pair);
   `SettingsModel` stays stateless about it.
   The View wires it through `syncThemeSession()` (begin + select the current theme's row on enter,
   cancel on leave — called from `.onAppear`/`.onChange(of: mode)`) + `.onDisappear { cancelThemePreview() }`
@@ -74,7 +77,7 @@ paths:
   The one surviving dual PARSE is `ThemeName.resolved(from:isDark:)` (host-free, from #146) — used only to pick the active side for the sidebar selection colors (`GhosttyApp.resolveSelectionColors`, which reads the raw `theme` line back out of the config); `ThemeResolution`, the branch's own `AppSettings.dualThemeSides`, and the legacy dual-string migration are gone.
   Settings UI: picker 1 ("Theme", stable AX id `settings-theme`) edits the current-appearance slot via `setThemeForCurrentAppearance`; a `Toggle("Follow system appearance")` (`settings-follow-appearance`, default OFF) drives `setFollowSystemAppearance` (ON seeds the other slot from the current theme so both start equal; OFF collapses to the on-screen theme, no visual flip); and — only while following — an alternate picker (`settings-theme-dark`, labeled for the OTHER appearance) drives `setAlternateTheme`.
   The primary picker offers the "default ghostty" (nil) row only when NOT following, since a dual conditional needs two named themes.
-  A palette PREVIEW writes the CURRENT-appearance slot (`previewTheme` writes the dark slot while following in dark mode, else `theme`), so the on-screen render reflects it and Esc restores the captured slot value.
+  A palette PREVIEW writes the CURRENT-appearance slot (`previewTheme` writes the dark slot while following in dark mode, else `theme`), so the on-screen render reflects it and Esc restores the captured slot pair (both slots, snapshotted on open — flip-safe).
   COMMIT (`AppActions.commitThemePreview` → `SettingsModel.commitTheme()`, save-only) just persists the already-written slot — no dual recompose, since the two slots are separate fields.
   The picker badges/opens on the EFFECTIVE theme (`activeTheme(isDark:)` — the on-screen slot), so the open-row preview is a config no-op.
 - **Control parity = the commit, not the preview**
