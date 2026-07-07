@@ -43,6 +43,7 @@ public protocol ControlActions {
     func openSessionOverlay(_ target: String?, window: String?,
                             options: ControlSessionOverlayOpenOptions) -> ControlResponse
     func closeSessionOverlay(_ target: String?, window: String?) -> ControlResponse
+    func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse
     func sessionOverlayResult(_ target: String?, window: String?) -> ControlResponse
     func setSessionBackground(_ target: String?, window: String?,
                               options: ControlSessionBackgroundOptions) -> ControlResponse
@@ -130,7 +131,7 @@ public struct ControlDispatcher {
             return dispatchSessionCommand(request)
         case .sessionSplit, .sessionScratch, .sessionFocus, .sessionResize, .sessionType,
                 .sessionCopy, .sessionSearch, .sessionOverlayOpen, .sessionOverlayClose,
-                .sessionOverlayResult, .sessionBackground, .sessionText:
+                .sessionOverlayResize, .sessionOverlayResult, .sessionBackground, .sessionText:
             return await dispatchSessionSurfaceCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus:
@@ -326,6 +327,20 @@ public struct ControlDispatcher {
                                               ))
         case .sessionOverlayClose:
             return actions.closeSessionOverlay(request.target, window: request.args?.window)
+        case .sessionOverlayResize:
+            let wantsFull = request.args?.full == true
+            let percent = request.args?.sizePercent
+            if wantsFull, percent != nil {
+                return ControlResponse(ok: false, error: "session.overlay.resize: --full is mutually exclusive with --size-percent")
+            }
+            if !wantsFull, percent == nil {
+                return ControlResponse(ok: false, error: "session.overlay.resize requires --size-percent or --full")
+            }
+            if let percent, !(1...100).contains(percent) {
+                return ControlResponse(ok: false, error: "session.overlay.resize: --size-percent must be 1...100")
+            }
+            return actions.resizeSessionOverlay(request.target, window: request.args?.window,
+                                                sizePercent: wantsFull ? nil : percent)
         case .sessionOverlayResult:
             return actions.sessionOverlayResult(request.target, window: request.args?.window)
         case .sessionBackground:

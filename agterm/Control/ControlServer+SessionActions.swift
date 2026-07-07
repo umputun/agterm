@@ -73,6 +73,15 @@ extension ControlServer: ControlActions {
         }
     }
 
+    func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            guard store.resizeOverlay(id, sizePercent: sizePercent) else {
+                return ControlResponse(ok: false, error: "no overlay")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
     func sessionOverlayResult(_ target: String?, window: String?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {

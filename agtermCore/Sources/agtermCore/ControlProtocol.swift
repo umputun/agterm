@@ -31,6 +31,7 @@ public enum Command: String, Codable, Sendable {
     case sessionSearch = "session.search"
     case sessionOverlayOpen = "session.overlay.open"
     case sessionOverlayClose = "session.overlay.close"
+    case sessionOverlayResize = "session.overlay.resize"
     case sessionOverlayResult = "session.overlay.result"
     case quick
     case sidebar
@@ -141,8 +142,12 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// "press any key to close" prompt) instead of closing immediately.
     public var wait: Bool?
     /// For `session.overlay.open`, the percent of the pane (1...100) a *floating* overlay panel
-    /// occupies in both dimensions; omitted gives the default full-pane overlay.
+    /// occupies in both dimensions; omitted gives the default full-pane overlay. Also carries the new
+    /// size for `session.overlay.resize` (mutually exclusive with `full`).
     public var sizePercent: Int?
+    /// For `session.overlay.resize`, requests the full-pane (translucent, session-hidden) overlay —
+    /// the way to switch a floating overlay back to full. Mutually exclusive with `sizePercent`.
+    public var full: Bool?
     /// For `session.overlay.open`, whether to select/switch to the target after opening; omitted/false
     /// opens in the background without changing the active session (the default for both full and
     /// floating overlays).
@@ -173,8 +178,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
 
     public init(name: String? = nil, cwd: String? = nil, workspace: String? = nil, workspaceName: String? = nil,
                 createWorkspace: Bool? = nil, text: String? = nil, select: Bool? = nil, mode: String? = nil,
-                command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, follow: Bool? = nil,
-                window: String? = nil,
+                command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
+                follow: Bool? = nil, window: String? = nil,
                 pane: String? = nil, to: String? = nil, after: String? = nil, before: String? = nil,
                 title: String? = nil, body: String? = nil,
                 width: Int? = nil, height: Int? = nil, x: Int? = nil, y: Int? = nil, display: Int? = nil,
@@ -193,6 +198,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.command = command
         self.wait = wait
         self.sizePercent = sizePercent
+        self.full = full
         self.follow = follow
         self.window = window
         self.pane = pane

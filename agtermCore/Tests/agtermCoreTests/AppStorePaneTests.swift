@@ -293,6 +293,32 @@ struct AppStorePaneTests {
         #expect(session.overlaySizePercent == 1)
     }
 
+    @Test func resizeOverlaySwitchesFullAndFloatingAndClamps() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        // no overlay open → no-op, leaves size untouched.
+        #expect(store.resizeOverlay(session.id, sizePercent: 50) == false)
+        #expect(session.overlaySizePercent == nil)
+        // open full, then resize it to a floating percent (nil → 60).
+        store.openOverlay(session.id, command: "htop")
+        #expect(session.overlaySizePercent == nil)
+        #expect(store.resizeOverlay(session.id, sizePercent: 60) == true)
+        #expect(session.overlaySizePercent == 60)
+        #expect(session.floatingOverlayActive)
+        // resize back to full (nil).
+        #expect(store.resizeOverlay(session.id, sizePercent: nil) == true)
+        #expect(session.overlaySizePercent == nil)
+        #expect(session.fullOverlayActive)
+        // out-of-range percents clamp to 1...100.
+        store.resizeOverlay(session.id, sizePercent: 250)
+        #expect(session.overlaySizePercent == 100)
+        store.resizeOverlay(session.id, sizePercent: 0)
+        #expect(session.overlaySizePercent == 1)
+        // the overlay program keeps running across every resize (no re-spawn).
+        #expect(session.overlayActive)
+    }
+
     @Test func closeOverlayTearsDownAndClears() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

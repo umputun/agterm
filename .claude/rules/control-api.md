@@ -102,7 +102,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 52-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 53-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -172,10 +172,10 @@ paths:
   exact `uuidString` (case-insensitive), or a git-style unique prefix.
   Zero prefix hits → `notFound` error, ≥2 → `ambiguous` error listing the candidates.
   `--target` defaults to `active`, so scripts rarely type an id and never for "the current one".
-- **Command catalog (52 commands):**
+- **Command catalog (53 commands):**
   - `tree`
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`
-  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.result`
+  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.resize`/`session.overlay.result`
   - `quick`
   - `sidebar`/`sidebar.mode`/`sidebar.expand`/`sidebar.collapse`
   - `notify`
@@ -516,6 +516,27 @@ paths:
   at parse via `validate()`); the program's OUTPUT is its own concern — a TUI like revdiff renders in
   the overlay and writes results to its own `--output` file, which the caller reads (the control channel
   does NOT capture stdout).
+  `session.overlay.resize` (target = session) resizes an ALREADY-OPEN overlay IN PLACE between full and
+  floating — the way to change size without closing and re-running the program.
+  Exactly one of `sizePercent` (1...100 → floating) or `full: true` (→ the full-pane overlay) must be set;
+  both, neither, or a percent outside 1...100 is a dispatcher error (mirrored by the CLI `validate()`), and
+  `no overlay` when none is open.
+  It is a NEW `Command` case (unlike the `--follow` arg, which rode the existing `overlay.open`) because it
+  needs its own arg validation, and `full` is a NEW `ControlArgs` field added to distinguish "switch to
+  full" (nil `overlaySizePercent`) from "unset" on the wire.
+  The arm mutates the non-persisted `Session.overlaySizePercent` via `AppStore.resizeOverlay` (clamping
+  1...100, guarding `overlayActive`), and the detail pane re-flows the SAME surface host: the unified
+  `WindowContentView.overlayPanel` now renders BOTH variants (full = translucent, no chrome, panes hidden by
+  `hideForOverlay`; floating = opaque framed panel over visible panes), so a full<->% switch never re-parents
+  the overlay NSView (which would blank its Metal drawable) nor changes the ZStack shape — the old
+  `if fullOverlay` z2 sibling is gone, and the always-present `overlayPanel` at z3 is the single host.
+  Four-point keep-in-sync audit for `session.overlay.resize`: (1) `case sessionOverlayResize = "session.overlay.resize"`
+  + `ControlArgs.full` in `ControlProtocol.swift`, (2) the `.sessionOverlayResize` dispatcher arm (exactly-one
+  + range validation) → the app-side `resizeSessionOverlay` (→ `AppStore.resizeOverlay`) behind `ControlActions`,
+  (3) the `session overlay resize --size-percent|--full` subcommand (`Resize`, `validate()`-guarded) in
+  `agtermctlKit`, (4) round-trip in `ControlProtocolTests` + dispatcher routing/validation in `ControlDispatcherTests`
+  + `AppStorePaneTests` (resize clamp/switch/no-overlay) + CLI mapping in `CommandsTests` + the e2e
+  `testOverlayResizeSwitchesFloatingAndFull` in `ControlOverlaySplitUITests`.
   Mode-bearing commands (`session.split`/`quick`) compute the delta against current state so `on`/`off`/`show`/`hide`
   are idempotent, and an unknown mode is an error.
   `session.status` flags a per-session agent status on the sidebar row — `args.status` is `idle`|`active`|`completed`|`blocked`
@@ -828,5 +849,5 @@ paths:
   (image/text/color set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
-  examples.md recipes) and the command count there is bumped to 52 to match.
+  examples.md recipes) and the command count there is bumped to 53 to match.
 

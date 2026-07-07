@@ -46,11 +46,23 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c", args: ControlArgs(command: "htop", sizePercent: 70)),
             ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c", args: ControlArgs(command: "revdiff", color: "#2a1a3a")),
             ControlRequest(cmd: .sessionOverlayClose, target: "9f3c"),
+            ControlRequest(cmd: .sessionOverlayResize, target: "9f3c", args: ControlArgs(sizePercent: 60)),
+            ControlRequest(cmd: .sessionOverlayResize, target: "9f3c", args: ControlArgs(full: true)),
             ControlRequest(cmd: .sessionOverlayResult, target: "9f3c"),
         ]
         for request in cases {
             #expect(try roundTrip(request) == request)
         }
+    }
+
+    @Test func sessionOverlayResizeOmitsFullWhenNil() throws {
+        let request = ControlRequest(cmd: .sessionOverlayResize, target: "9f3c", args: ControlArgs(sizePercent: 60))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.full == nil)
+        // omit-when-nil WIRE contract for the new `full` field: a percent resize must not emit `full` at all.
+        let json = String(data: try JSONEncoder().encode(request), encoding: .utf8) ?? ""
+        #expect(!json.contains("full"), "a nil full must be omitted from the JSON; got \(json)")
     }
 
     @Test func sessionOverlayOpenRoundTripsWithFollow() throws {

@@ -878,6 +878,51 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.overlayResult(target: "session", window: nil)])
     }
 
+    @Test func sessionOverlayResizeRoutesSizePercentAndWindow() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextOverlayResizeResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayResize, target: "session",
+            args: ControlArgs(sizePercent: 60, window: "win")
+        ))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(actions.calls == [.overlayResize(target: "session", window: "win", sizePercent: 60)])
+    }
+
+    @Test func sessionOverlayResizeFullRoutesNilSizePercent() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayResize, target: "session", args: ControlArgs(full: true)
+        ))
+
+        #expect(response?.ok == true)
+        #expect(actions.calls == [.overlayResize(target: "session", window: nil, sizePercent: nil)])
+    }
+
+    @Test func sessionOverlayResizeRejectsMissingConflictingAndOutOfRange() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let missing = await dispatcher.dispatch(ControlRequest(cmd: .sessionOverlayResize, target: "session"))
+        let both = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayResize, target: "session", args: ControlArgs(sizePercent: 50, full: true)))
+        let tooBig = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayResize, target: "session", args: ControlArgs(sizePercent: 101)))
+        let tooSmall = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayResize, target: "session", args: ControlArgs(sizePercent: 0)))
+
+        #expect(missing == ControlResponse(ok: false, error: "session.overlay.resize requires --size-percent or --full"))
+        #expect(both == ControlResponse(ok: false, error: "session.overlay.resize: --full is mutually exclusive with --size-percent"))
+        #expect(tooBig == ControlResponse(ok: false, error: "session.overlay.resize: --size-percent must be 1...100"))
+        #expect(tooSmall == ControlResponse(ok: false, error: "session.overlay.resize: --size-percent must be 1...100"))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func sessionBackgroundRoutesParsedTextImageColorAndClearForms() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -1251,6 +1296,7 @@ private final class MockControlActions: ControlActions {
         case sessionSearch(target: String?, window: String?, text: String?, to: String?)
         case overlayOpen(target: String?, window: String?, ControlSessionOverlayOpenOptions)
         case overlayClose(target: String?, window: String?)
+        case overlayResize(target: String?, window: String?, sizePercent: Int?)
         case overlayResult(target: String?, window: String?)
         case sessionBackground(target: String?, window: String?, ControlSessionBackgroundOptions)
         case sessionText(target: String?, window: String?, ControlSessionTextOptions)
@@ -1286,6 +1332,7 @@ private final class MockControlActions: ControlActions {
     var nextSessionSearchResponse = ControlResponse(ok: true)
     var nextOverlayOpenResponse = ControlResponse(ok: true)
     var nextOverlayCloseResponse = ControlResponse(ok: true)
+    var nextOverlayResizeResponse = ControlResponse(ok: true)
     var nextOverlayResultResponse = ControlResponse(ok: true)
     var nextSessionBackgroundResponse = ControlResponse(ok: true)
     var nextSessionTextResponse = ControlResponse(ok: true)
@@ -1485,6 +1532,11 @@ private final class MockControlActions: ControlActions {
     func closeSessionOverlay(_ target: String?, window: String?) -> ControlResponse {
         calls.append(.overlayClose(target: target, window: window))
         return nextOverlayCloseResponse
+    }
+
+    func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse {
+        calls.append(.overlayResize(target: target, window: window, sizePercent: sizePercent))
+        return nextOverlayResizeResponse
     }
 
     func sessionOverlayResult(_ target: String?, window: String?) -> ControlResponse {
