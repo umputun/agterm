@@ -50,6 +50,7 @@ public enum Command: String, Codable, Sendable {
     case windowResize = "window.resize"
     case windowMove = "window.move"
     case windowZoom = "window.zoom"
+    case windowFullscreen = "window.fullscreen"
     case keymapReload = "keymap.reload"
     case configReload = "config.reload"
     case themeSet = "theme.set"

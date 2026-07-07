@@ -210,6 +210,13 @@ extension agtermApp {
                     .disabled(library.activeStore?.activeSession == nil)
                 Button { actions.toggleQuickTerminal() } label: { Label("Quick Terminal", systemImage: "terminal") }
                     .keyboardShortcut(shortcut(for: .quickTerminal))
+                Divider()
+                // native macOS full screen for the key window (⌃⌘F default, rebindable). Toggles: a second
+                // invocation exits. The green traffic-light button drives the same NSWindow.toggleFullScreen.
+                Button { actions.toggleFullscreen() } label: {
+                    Label("Toggle Full Screen", systemImage: "arrow.up.left.and.arrow.down.right")
+                }
+                .keyboardShortcut(shortcut(for: .toggleFullscreen))
             }
             // a dedicated Navigate menu keeps the View menu scannable: moving the selection/focus between
             // existing sessions and split panes lives here — the palettes that jump to a session/command,

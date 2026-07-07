@@ -104,11 +104,23 @@ extension ControlServer {
     }
 
     /// Resolve a window id and zoom (maximize-to-screen toggle) its on-screen window. The window must be
-    /// open; a closed window errors. The control half of the double-click-header gesture / the green zoom
-    /// button — drives the same `NSWindow.zoom` as `WindowRegistry.zoom`.
+    /// open; a closed window errors. The control half of the double-click-header gesture (a plain green-button
+    /// click does native full screen, not zoom) — drives the same `NSWindow.zoom` as `WindowRegistry.zoom`.
     func windowZoom(_ target: String?) -> ControlResponse {
         return resolver.resolveWindowID(target) { id in
             guard WindowRegistry.shared.zoom(id) else {
+                return ControlResponse(ok: false, error: "window not open — window.select it first")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    /// Resolve a window id and toggle native macOS full screen on its on-screen window. The window must be
+    /// open; a closed window errors. The control half of the View ▸ Toggle Full Screen menu item / the green
+    /// traffic-light button — drives the same `NSWindow.toggleFullScreen` as `WindowRegistry.fullscreen`.
+    func windowFullscreen(_ target: String?) -> ControlResponse {
+        return resolver.resolveWindowID(target) { id in
+            guard WindowRegistry.shared.fullscreen(id) else {
                 return ControlResponse(ok: false, error: "window not open — window.select it first")
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))

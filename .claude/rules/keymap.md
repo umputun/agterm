@@ -35,7 +35,7 @@ paths:
   Pure types: `Modifier`/`Chord`/`Keybind`/`parseKeybind`/`keybindConflicts`/`reservedMonitorChords`
   (`Keybind.swift`), `KeybindMatcher` (leader state machine), `CustomCommand`/`CommandContext` (the `{AGT_X}`
   token table — single source of truth for both `{AGT_X}` expansion and the `$AGT_X` env),
-  `BuiltinAction` (the 35 rebindable actions + `defaultChord`), `Keymap`/`parseKeymap` (`Keymap.swift`),
+  `BuiltinAction` (the 36 rebindable actions + `defaultChord`), `Keymap`/`parseKeymap` (`Keymap.swift`),
   `ConfigPaths` (the path resolver).
   All unit-tested under `agtermCoreTests`.
 - **MENU-driven built-in override vs MONITOR-driven custom commands — two different mechanisms.** Built-ins
@@ -101,9 +101,9 @@ paths:
   own dispatch — documented, not validated.
 - **`BuiltinAction.defaultChord` is the single source of truth for the built-in shortcuts (keep-in-sync
   surface).** Task 9 collapsed the old `BuiltinAction` ↔ menu keep-in-sync convention:
-  29 of the 35 built-in menu items now read `equivalent(for:)` (override else `defaultChord`) with NO
+  30 of the 36 built-in menu items now read `equivalent(for:)` (override else `defaultChord`) with NO
   hardcoded `.keyboardShortcut` literal, so adding/changing a default chord happens in `defaultChord`
-  alone (`toggle_search` ⌘F, `toggle_sidebar` ⌃⌘S, `custom_command_palette` ⌃⇧O,
+  alone (`toggle_search` ⌘F, `toggle_sidebar` ⌃⌘S, `toggle_fullscreen` ⌃⌘F, `custom_command_palette` ⌃⇧O,
   and `show_attention` ⌃⇧I are among these — expressible, so pure-`defaultChord`-driven,
   not arrow exceptions).
   The EXCEPTION is the six arrow-bound actions (`focus_left_pane` ⌘⌥←, `focus_right_pane` ⌘⌥→,

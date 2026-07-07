@@ -34,7 +34,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case previousSession, nextSession, previousAttentionSession, nextAttentionSession
     case firstSession, lastSession, showAttention
     case toggleSplit, toggleScratch, toggleSidebar, toggleFlag, focusWorkspace
-    case find, quickTerminal
+    case find, quickTerminal, toggleFullscreen
     case increaseFontSize, decreaseFontSize, resetFontSize, selectTheme
     case editKeymap, reloadKeymap, editGhosttyConfig, reloadConfig
     case deleteWorkspace, toggleFlaggedView, clearFlagged, clearFocus
@@ -86,6 +86,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .focusWorkspace: return "Focus Workspace"
         case .find: return "Find…"
         case .quickTerminal: return "Quick Terminal"
+        case .toggleFullscreen: return "Toggle Full Screen"
         case .increaseFontSize: return "Increase Font Size"
         case .decreaseFontSize: return "Decrease Font Size"
         case .resetFontSize: return "Actual Font Size"
@@ -128,6 +129,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .focusWorkspace: return .focusWorkspace
         case .find: return .toggleSearch
         case .quickTerminal: return .quickTerminal
+        case .toggleFullscreen: return .toggleFullscreen
         case .increaseFontSize: return .increaseFontSize
         case .decreaseFontSize: return .decreaseFontSize
         case .resetFontSize: return .resetFontSize

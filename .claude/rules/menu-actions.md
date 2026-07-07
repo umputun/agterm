@@ -26,7 +26,13 @@ paths:
   The menu bar has TWO custom menus (besides File/Help).
   **View** (`CommandGroup(after: .toolbar)`) holds appearance + what-is-shown:
   font/theme, sidebar show-hide + expand/collapse, the flagged-view + Flag/Clear-Flagged + Focus Workspace
-  items, and the surface toggles (Split/Scratch/Find/Quick Terminal).
+  items, the surface toggles (Split/Scratch/Find/Quick Terminal), and Toggle Full Screen
+  (`toggle_fullscreen`, ⌃⌘F → `AppActions.toggleFullscreen()`, native `NSWindow.toggleFullScreen` on the
+  key window; the `window.fullscreen` control command is a fourth driver of native full screen, via
+  `WindowRegistry.fullscreen` with id resolution (not through `toggleFullscreen()`) — see control-api / windows).
+  agterm ships its OWN Toggle Full Screen item so full screen is rebindable/palette/control-drivable;
+  `AppDelegate` strips AppKit's auto-injected native "Enter Full Screen" item (re-injected on every menu
+  open) so the two don't render as a duplicate — see the `window.fullscreen` note in windows.md.
   **Navigate** (a separate top-level `CommandMenu("Navigate")`, placed right after the View group so
   AppKit renders it after View) holds moving the selection/focus: the two palettes (Go to Session / Command
   Palette), session stepping (Previous/Next, Previous/Next Attention, First/Last),

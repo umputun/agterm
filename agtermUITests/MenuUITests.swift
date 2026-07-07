@@ -68,6 +68,20 @@ final class MenuUITests: XCTestCase {
         app.typeKey(.escape, modifierFlags: [])
     }
 
+    // agterm ships its OWN rebindable "Toggle Full Screen" (⌃⌘F) View item so full screen is drivable from
+    // the keymap / palette / control channel. AppKit would otherwise ALSO auto-add its native "Enter Full
+    // Screen" (Globe+F) item — a duplicate. AppDelegate strips the native one, so the View menu must show
+    // agterm's item and NOT the native "Enter Full Screen".
+    func testViewMenuHasSingleFullScreenItem() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session should exist")
+        app.menuBars.menuBarItems["View"].click()
+        let toggle = app.menuItems["Toggle Full Screen"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 5), "View menu should offer agterm's Toggle Full Screen")
+        XCTAssertFalse(app.menuItems["Enter Full Screen"].exists,
+                       "AppKit's native Enter Full Screen item should be stripped so there's no duplicate")
+        app.typeKey(.escape, modifierFlags: [])
+    }
+
     private func pollFontSize(where predicate: (Double) -> Bool = { _ in true }, timeout: TimeInterval) -> Double? {
         let file = stateDir.windowSnapshotFile()
         let deadline = Date().addingTimeInterval(timeout)

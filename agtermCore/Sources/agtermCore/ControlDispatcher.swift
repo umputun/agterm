@@ -56,6 +56,7 @@ public protocol ControlActions {
     func windowResize(_ target: String?, width: Int, height: Int) -> ControlResponse
     func windowMove(_ target: String?, x: Int, y: Int, display: Int?) -> ControlResponse
     func windowZoom(_ target: String?) -> ControlResponse
+    func windowFullscreen(_ target: String?) -> ControlResponse
     func clearRestoreCommands() -> ControlResponse
 }
 
@@ -139,7 +140,7 @@ public struct ControlDispatcher {
                 .sidebarCollapse, .restoreClear:
             return dispatchAppCommand(request)
         case .windowNew, .windowList, .windowSelect, .windowClose, .windowRename,
-                .windowDelete, .windowResize, .windowMove, .windowZoom:
+                .windowDelete, .windowResize, .windowMove, .windowZoom, .windowFullscreen:
             return await dispatchWindowCommand(request)
         }
     }
@@ -486,6 +487,8 @@ public struct ControlDispatcher {
             return actions.windowMove(request.target, x: x, y: y, display: request.args?.display)
         case .windowZoom:
             return actions.windowZoom(request.target)
+        case .windowFullscreen:
+            return actions.windowFullscreen(request.target)
         default:
             preconditionFailure("unexpected window command: \(request.cmd.rawValue)")
         }

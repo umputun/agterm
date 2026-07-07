@@ -315,7 +315,7 @@ previous_session   next_session       first_session      last_session
 previous_attention_session            next_attention_session
 quick_terminal     session_palette    command_palette
 custom_command_palette                show_attention
-select_theme
+select_theme       toggle_fullscreen
 ```
 
 The shell line of a `command` may use these `{AGT_X}` tokens, expanded at fire time (the same values are also exported as `$AGT_X` environment variables on the spawned process):

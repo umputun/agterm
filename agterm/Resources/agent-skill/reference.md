@@ -283,8 +283,13 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
   origin is clamped so an off-screen request keeps a grabbable strip of the window on the target display.
 - `window zoom <id>` — toggle the window between its normal frame and a maximized (fill-screen, NOT
   native fullscreen) frame, via the standard `NSWindow.zoom`. A second call restores the prior frame.
-  The window must be open. This is the control half of the double-click-on-header gesture (and the green
-  zoom button); `resize`/`move` are control-native, but `zoom` mirrors a GUI action.
+  The window must be open. This is the control half of the double-click-on-header gesture (a plain green-button
+  click does native full screen, not zoom — Option-click the green button to zoom); `resize`/`move` are
+  control-native, but `zoom` mirrors a GUI action.
+- `window fullscreen <id>` — toggle NATIVE macOS full screen (a separate Space, auto-hidden menu bar),
+  via `NSWindow.toggleFullScreen`. A second call exits. The window must be open. This is the control half
+  of the View ▸ Toggle Full Screen menu item (⌃⌘F, rebindable as `toggle_fullscreen`) and the green
+  traffic-light button — distinct from `zoom`, which only maximizes the frame in the same Space.
 
 `window resize`/`move` are control-native (no GUI equivalent — the title bar already drags-to-resize).
 

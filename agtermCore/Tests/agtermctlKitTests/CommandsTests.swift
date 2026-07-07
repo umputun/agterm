@@ -761,6 +761,18 @@ struct CommandsTests {
         #expect(try request(["window", "move", "--x", "100", "--y", "50"]) == expected)
     }
 
+    @Test func windowZoom() throws {
+        #expect(try request(["window", "zoom", "9f3c"]) == ControlRequest(cmd: .windowZoom, target: "9f3c"))
+    }
+
+    @Test func windowFullscreen() throws {
+        #expect(try request(["window", "fullscreen", "9f3c"]) == ControlRequest(cmd: .windowFullscreen, target: "9f3c"))
+    }
+
+    @Test func windowFullscreenDefaultsActive() throws {
+        #expect(try request(["window", "fullscreen"]) == ControlRequest(cmd: .windowFullscreen, target: "active"))
+    }
+
     @Test func windowDeleteDefaultsActive() throws {
         #expect(try request(["window", "delete"]) == ControlRequest(cmd: .windowDelete, target: "active"))
     }

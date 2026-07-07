@@ -6,7 +6,8 @@ import agtermCore
 struct Window: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Window commands.",
-        subcommands: [New.self, List.self, Select.self, Close.self, Rename.self, Delete.self, Resize.self, Move.self, Zoom.self]
+        subcommands: [New.self, List.self, Select.self, Close.self, Rename.self, Delete.self, Resize.self, Move.self,
+                      Zoom.self, Fullscreen.self]
     )
 
     struct New: RequestCommand {
@@ -93,5 +94,13 @@ struct Window: ParsableCommand {
         @OptionGroup var options: BasicOptions
 
         func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .windowZoom, target: id) }
+    }
+
+    struct Fullscreen: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Toggle native macOS full screen for a window.")
+        @Argument(help: "Window id, unique prefix, or 'active'.") var id: String = "active"
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .windowFullscreen, target: id) }
     }
 }

@@ -349,7 +349,7 @@ final class ControlServer {
                 .sessionSearch, .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResult,
                 .sessionBackground, .sessionText, .quick, .windowNew, .windowList, .windowSelect,
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
-                .restoreClear:
+                .windowFullscreen, .restoreClear:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         }
     }

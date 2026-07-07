@@ -537,6 +537,12 @@ final class AppActions {
     /// Toggle the frontmost window's quick terminal (each window owns its own controller).
     func toggleQuickTerminal() { frontmostQuickTerminal?.toggle() }
 
+    /// Toggle native macOS full screen for the key window (the frontmost terminal window). Native full
+    /// screen matches the green traffic-light button and moves the window to its own Space; a second
+    /// invocation exits. Shared by the View ▸ Toggle Full Screen menu item (⌃⌘F), the ⌃⇧P palette, the
+    /// `toggle_fullscreen` keymap action, and the `window.fullscreen` control command.
+    func toggleFullscreen() { NSApp.keyWindow?.toggleFullScreen(nil) }
+
     // MARK: - Font (on the focused terminal)
 
     func increaseFontSize() { focusedSurface()?.performBindingAction("increase_font_size:1") }

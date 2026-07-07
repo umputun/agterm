@@ -102,13 +102,25 @@ final class WindowRegistry {
     }
 
     /// Zooms (the maximize-to-screen toggle) the on-screen window for `id` if one is live, driving the
-    /// standard `NSWindow.zoom` — the same action as the green zoom button and the double-click-header
-    /// gesture. A second call restores the prior frame. Returns false if no window is registered for `id`
+    /// standard `NSWindow.zoom` — the same action as the double-click-header gesture (a plain green-button
+    /// click does native full screen instead; Option-click zooms). A second call restores the prior frame.
+    /// Returns false if no window is registered for `id`
     /// (not open). The control-channel `window.zoom` path.
     @discardableResult
     func zoom(_ id: WindowInfo.ID) -> Bool {
         guard let window = windows[id] else { return false }
         window.zoom(nil)
+        return true
+    }
+
+    /// Toggles native macOS full screen for the on-screen window for `id` if one is live, driving the
+    /// standard `NSWindow.toggleFullScreen` — the same action as the green traffic-light button. A second
+    /// call exits full screen. Returns false if no window is registered for `id` (not open). The
+    /// control-channel `window.fullscreen` path; the GUI half toggles the key window directly.
+    @discardableResult
+    func fullscreen(_ id: WindowInfo.ID) -> Bool {
+        guard let window = windows[id] else { return false }
+        window.toggleFullScreen(nil)
         return true
     }
 }

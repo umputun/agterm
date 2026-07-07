@@ -1134,16 +1134,20 @@ struct ControlDispatcherTests {
             args: ControlArgs(x: 100, y: 50, display: 1)
         ))
         let zoomed = await dispatcher.dispatch(ControlRequest(cmd: .windowZoom, target: "9f3c"))
+        actions.nextWindowFullscreenResponse = ControlResponse(ok: true, result: ControlResult(id: "win"))
+        let fullscreen = await dispatcher.dispatch(ControlRequest(cmd: .windowFullscreen, target: "9f3c"))
 
         #expect(renamed == ControlResponse(ok: true, result: ControlResult(id: "win")))
         #expect(resized == ControlResponse(ok: true, result: ControlResult(id: "win")))
         #expect(moved == ControlResponse(ok: true, result: ControlResult(id: "win")))
         #expect(zoomed == ControlResponse(ok: false, error: "window not open — window.select it first"))
+        #expect(fullscreen == ControlResponse(ok: true, result: ControlResult(id: "win")))
         #expect(actions.calls == [
             .windowRename(target: "9f3c", "Renamed"),
             .windowResize(target: "9f3c", width: 1200, height: 800),
             .windowMove(target: "9f3c", x: 100, y: 50, display: 1),
-            .windowZoom(target: "9f3c")
+            .windowZoom(target: "9f3c"),
+            .windowFullscreen(target: "9f3c")
         ])
     }
 
@@ -1259,6 +1263,7 @@ private final class MockControlActions: ControlActions {
         case windowResize(target: String?, width: Int, height: Int)
         case windowMove(target: String?, x: Int, y: Int, display: Int?)
         case windowZoom(target: String?)
+        case windowFullscreen(target: String?)
         case restoreClear
     }
 
@@ -1293,6 +1298,7 @@ private final class MockControlActions: ControlActions {
     var nextWindowResizeResponse = ControlResponse(ok: true)
     var nextWindowMoveResponse = ControlResponse(ok: true)
     var nextWindowZoomResponse = ControlResponse(ok: true)
+    var nextWindowFullscreenResponse = ControlResponse(ok: true)
     var nextRestoreClearResponse = ControlResponse(ok: true)
 
     func controlTree(window: String?) -> ControlResponse {
@@ -1540,6 +1546,11 @@ private final class MockControlActions: ControlActions {
     func windowZoom(_ target: String?) -> ControlResponse {
         calls.append(.windowZoom(target: target))
         return nextWindowZoomResponse
+    }
+
+    func windowFullscreen(_ target: String?) -> ControlResponse {
+        calls.append(.windowFullscreen(target: target))
+        return nextWindowFullscreenResponse
     }
 
     func clearRestoreCommands() -> ControlResponse {
