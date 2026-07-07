@@ -1350,6 +1350,7 @@ struct AppStoreTests {
         b.currentCwd = "/live/b"
         b.oscTitle = "remote:~/b"
         b.isSplit = true
+        b.hasSplit = true
         b.overlayActive = true
         b.scratchActive = true
         b.flagged = true
@@ -1364,14 +1365,29 @@ struct AppStoreTests {
         #expect(tree.workspaces.map(\.active) == [false, true])
         #expect(tree.workspaces[0].sessions == [
             ControlSessionNode(id: a.id.uuidString, name: "alpha", cwd: "/repo/a",
-                               active: false, split: false)
+                               active: false, split: false,
+                               surfaces: [
+                                ControlSurfaceNode(id: TerminalSurfaceID(sessionID: a.id, surface: .primary).rawValue,
+                                                   kind: "left", active: true, visible: true),
+                               ])
         ])
         #expect(tree.workspaces[1].sessions == [
             ControlSessionNode(id: b.id.uuidString, name: "remote:~/b", cwd: "/live/b",
                                title: "remote:~/b", active: true, split: true,
+                               splitFocused: false,
                                overlay: true, scratch: true, flagged: true,
                                status: "blocked", statusPane: "right",
-                               background: BackgroundWatermark(kind: .text, text: "PROD"))
+                               background: BackgroundWatermark(kind: .text, text: "PROD"),
+                               surfaces: [
+                                ControlSurfaceNode(id: TerminalSurfaceID(sessionID: b.id, surface: .primary).rawValue,
+                                                   kind: "left", active: false, visible: false),
+                                ControlSurfaceNode(id: TerminalSurfaceID(sessionID: b.id, surface: .split).rawValue,
+                                                   kind: "right", active: false, visible: false),
+                                ControlSurfaceNode(id: TerminalSurfaceID(sessionID: b.id, surface: .scratch).rawValue,
+                                                   kind: "scratch", active: false, visible: false),
+                                ControlSurfaceNode(id: TerminalSurfaceID(sessionID: b.id, surface: .overlay).rawValue,
+                                                   kind: "overlay", active: true, visible: true),
+                               ])
         ])
     }
 

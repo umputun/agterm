@@ -37,7 +37,7 @@ struct agtermApp: App {
         _settingsModel = State(initialValue: settingsModel)
         let controlServer = ControlServer(library: library, actions: actions, settingsModel: settingsModel)
         _controlServer = State(initialValue: controlServer)
-        _sessionSwitcher = State(initialValue: SessionSwitcher(library: library))
+        _sessionSwitcher = State(initialValue: SessionSwitcher(library: library, canSwitch: { actions.uiActionsEnabled }))
         _paneShortcuts = State(initialValue: PaneShortcuts(library: library, actions: actions))
         _undoCloseShortcut = State(initialValue: UndoCloseShortcut(actions: actions))
         // the custom-command runner needs the keymap (settings) and the bound socket path (control
@@ -228,6 +228,12 @@ struct agtermApp: App {
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }
+        // the focus-free half of the clear above, for the zoom-hosted case where the focus report is
+        // suppressed but the refocused user is looking at exactly this surface.
+        view.onClearUnseen = {
+            store.clearUnseen(sessionID)
+            NotificationManager.shared.clearDelivered(sessionID: sessionID)
+        }
         Self.wireStatusClear(view, store: store, sessionID: sessionID, pane: .left)
         view.onUserInput = { store.noteUserActivity() }
         view.onFontSizeChange = { store.setFontSize(sessionID, $0) }
@@ -288,9 +294,14 @@ struct agtermApp: App {
             // (it restores the session on its own hide). target the visible `topmostSurface` (overlay >
             // scratch > active pane) and re-assert past the SwiftUI teardown via the bounded retry.
             guard store.selectedSessionID == sessionID else { return }
-            let quickTerminalVisible = library.windowID(forSession: sessionID)
+            let windowID = library.windowID(forSession: sessionID)
+            let quickTerminalVisible = windowID
                 .flatMap { QuickTerminalRegistry.shared.controller(for: $0) }?.isVisible ?? false
             guard !quickTerminalVisible else { return }
+            // terminal zoom owns focus above the whole deck, and zoom-enter itself ends an open search —
+            // this END lands a tick later, so refocusing the deck's topmost surface here would steal
+            // first responder back from the zoomed terminal (the zoom cover bails like the quick one).
+            guard windowID.flatMap({ TerminalZoomRegistry.shared.controller(for: $0) })?.target == nil else { return }
             (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
         }
         view.onSearchTotal = { total in store.session(withID: sessionID)?.searchTotal = total }
@@ -344,6 +355,11 @@ struct agtermApp: App {
         view.onFocusChange = { focused in
             guard focused else { return }
             store.session(withID: sessionID)?.splitFocused = true
+            store.clearUnseen(sessionID)
+            NotificationManager.shared.clearDelivered(sessionID: sessionID)
+        }
+        // the focus-free half of the clear above, for the zoom-hosted case (see makeSurface).
+        view.onClearUnseen = {
             store.clearUnseen(sessionID)
             NotificationManager.shared.clearDelivered(sessionID: sessionID)
         }

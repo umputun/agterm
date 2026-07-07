@@ -92,6 +92,14 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// Called on the main actor when this surface gains (`true`) or loses (`false`) first
     /// responder, so the app can track which split pane is active. Set by the factory.
     var onFocusChange: ((Bool) -> Void)?
+    /// Rehosting for terminal zoom must update libghostty focus without changing app model state such as
+    /// the focused split pane. `TerminalView` flips this while the surface is hosted in the zoom layer.
+    var suppressFocusChange = false
+    /// Called on the main actor to clear the session's unseen badge + delivered banners WITHOUT the
+    /// `splitFocused` write that rides `onFocusChange(true)` — the refocus-clear path for a zoom-hosted
+    /// surface, where the focus report is suppressed but the user is demonstrably looking at the session.
+    /// Set by the main/split factories alongside `onFocusChange`.
+    var onClearUnseen: (() -> Void)?
 
     /// Called on the main actor on EVERY keystroke into this surface, carrying whether the key interrupts
     /// the agent (Escape or Ctrl-C). The factory's closure owns the pane-scoped decision (via
@@ -281,9 +289,18 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// the now-key window, never a background one. Reuses `onFocusChange`, so it clears exactly for the
     /// main/split panes that already clear on a focus transition (a scratch/overlay has no `onFocusChange`
     /// and doesn't clear on focus either), and no-ops after teardown (the closure is nil'd).
+    /// Honors `suppressFocusChange` like the first-responder call sites: a zoom-hosted surface is first
+    /// responder of the key window, so `onFocusChange?(true)` here would mutate `splitFocused` on every
+    /// window-key regain — the model change the zoom host suppresses on the other two paths. The unseen
+    /// badge must still clear, though (the user is looking at exactly this surface), so the suppressed
+    /// branch takes the focus-free `onClearUnseen` path instead of dropping the clear.
     private func clearUnseenOnRefocus() {
         guard liveFocus else { return }
-        onFocusChange?(true)
+        if suppressFocusChange {
+            onClearUnseen?()
+        } else {
+            onFocusChange?(true)
+        }
     }
 
     /// The cursor-focus state to report to libghostty: solid only when this surface is the first responder
@@ -842,6 +859,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         onExit = nil
         onExitCodeCaptured = nil
         onFocusChange = nil
+        onClearUnseen = nil
         onUserInputClearsStatus = nil
         onUserInput = nil
         onFontSizeChange = nil
@@ -948,7 +966,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
             // inside this call, so `liveFocus` would read stale. onFocusChange (split-pane tracking) is
             // independent of key state.
             ghostty_surface_set_focus(surface, window?.isKeyWindow ?? false)
-            onFocusChange?(true)
+            if !suppressFocusChange { onFocusChange?(true) }
         }
         return result
     }
@@ -957,7 +975,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         let result = super.resignFirstResponder()
         if result, let surface {
             ghostty_surface_set_focus(surface, false)
-            onFocusChange?(false)
+            if !suppressFocusChange { onFocusChange?(false) }
         }
         return result
     }

@@ -587,6 +587,18 @@ extension ControlServer: ControlActions {
             return ControlResponse(ok: false, error: "invalid quick mode: \(mode ?? "toggle")")
         }
         let want = parsedMode.desiredValue(current: controller.isVisible)
+        if let zoom = TerminalZoomRegistry.shared.controller(for: library.activeWindowID), zoom.target != nil {
+            // a script must always be able to DISMISS the quick terminal (hide was a guaranteed-ok
+            // idempotent no-op pre-zoom, and cleanup code relies on that): hiding un-zooms a zoomed
+            // quick terminal first, then hides it. Only SHOWING one under/over the zoom layer stays
+            // blocked — that would strand an unmounted-but-visible cover.
+            guard !want else {
+                return ControlResponse(ok: false, error: "terminal zoom active")
+            }
+            if zoom.target == .quick { zoom.clear() }
+            if controller.isVisible { controller.hide() }
+            return ControlResponse(ok: true)
+        }
         if want != controller.isVisible {
             if want { controller.show() } else { controller.hide() }
         }
@@ -651,6 +663,145 @@ extension ControlServer: ControlActions {
             }
         }
         return ControlResponse(ok: false, error: "failed to read surface buffer")
+    }
+
+    /// Show / hide / toggle zoom for an addressable terminal surface. The default target is the active
+    /// surface in the frontmost (or `--window`) window; explicit targets are `surface:<session-id>:<kind>`
+    /// ids copied from `tree`.
+    func setSurfaceZoom(_ target: String?, window: String?, mode: ControlToggleMode) -> ControlResponse {
+        let rawTarget = trimmed(target) ?? "active"
+        if rawTarget == "active" {
+            return setActiveSurfaceZoom(window: window, mode: mode)
+        }
+        switch resolveSurfaceZoom(rawTarget, window: window) {
+        case .failure(let response):
+            return response
+        case .success(let resolved):
+            guard let controller = TerminalZoomRegistry.shared.controller(for: resolved.windowID) else {
+                return ControlResponse(ok: false, error: "window not open — window.select it first")
+            }
+            // `hide` is idempotent like the active-target arm: skip the availability check for `.off` —
+            // the surface may have vanished since (an overlay exited, auto-clearing the zoom) and the
+            // desired end state already holds; `set(.off, …)` on a non-matching target is a no-op.
+            if mode != .off {
+                guard TerminalZoomController.isTargetValid(resolved.target, in: resolved.store,
+                                                           quickTerminalVisible: quickVisible(in: resolved.windowID)) else {
+                    return ControlResponse(ok: false, error: "surface not available: \(resolved.controlID)")
+                }
+            }
+            controller.set(mode, target: resolved.target)
+            return ControlResponse(ok: true, result: ControlResult(id: resolved.controlID))
+        }
+    }
+
+    private func setActiveSurfaceZoom(window: String?, mode: ControlToggleMode) -> ControlResponse {
+        switch resolveOpenWindow(window) {
+        case .failure(let response):
+            return response
+        case .success(let (windowID, store)):
+            guard let controller = TerminalZoomRegistry.shared.controller(for: windowID) else {
+                return ControlResponse(ok: false, error: "window not open — window.select it first")
+            }
+            // this arm only picks the effective target — the current zoom when one is up (so
+            // on/off/toggle act on it), else the resolved active surface — and shapes the response;
+            // the mode-vs-state semantics live in the one host-free state machine,
+            // `TerminalZoomController.set`, shared with the GUI toggle and the explicit-target path.
+            let effectiveTarget: TerminalZoomTarget
+            if let current = controller.target {
+                effectiveTarget = current
+            } else {
+                guard mode != .off else {
+                    return ControlResponse(ok: true)
+                }
+                let quickVisible = quickVisible(in: windowID)
+                guard let zoomTarget = TerminalZoomController.resolveTarget(store: store,
+                                                                            quickTerminalVisible: quickVisible) else {
+                    return ControlResponse(ok: false, error: "no active surface")
+                }
+                guard TerminalZoomController.isTargetValid(zoomTarget, in: store, quickTerminalVisible: quickVisible) else {
+                    return ControlResponse(ok: false, error: "surface not available: \(zoomTarget.controlID)")
+                }
+                effectiveTarget = zoomTarget
+            }
+            controller.set(mode, target: effectiveTarget)
+            return ControlResponse(ok: true, result: ControlResult(id: effectiveTarget.controlID))
+        }
+    }
+
+    private struct SurfaceZoomResolution {
+        let windowID: WindowInfo.ID
+        let store: AppStore
+        let target: TerminalZoomTarget
+        let controlID: String
+    }
+
+    private func resolveSurfaceZoom(_ target: String, window: String?)
+        -> ControlTargetResolver.Resolution<SurfaceZoomResolution> {
+        // `quick` is the control id this command itself returns for a quick-terminal zoom — accept it
+        // back as an explicit target (the API must accept every address it emits). Validity (the quick
+        // terminal actually visible) is checked by the caller's shared `isTargetValid` gate.
+        if target == "quick" {
+            switch resolveOpenWindow(window) {
+            case .failure(let response):
+                return .failure(response)
+            case .success(let (windowID, store)):
+                return .success(SurfaceZoomResolution(windowID: windowID, store: store,
+                                                      target: .quick, controlID: "quick"))
+            }
+        }
+        guard let surfaceID = TerminalSurfaceID(rawValue: target) else {
+            return .failure(ControlResponse(ok: false, error: "invalid surface: \(target)"))
+        }
+        switch resolveSurfaceOwner(surfaceID, window: window) {
+        case .failure(let response):
+            return .failure(response)
+        case .success(let (windowID, store)):
+            let zoomTarget = TerminalZoomTarget.session(surfaceID.sessionID, surfaceID.surface)
+            return .success(SurfaceZoomResolution(windowID: windowID, store: store,
+                                                  target: zoomTarget, controlID: surfaceID.rawValue))
+        }
+    }
+
+    private func resolveOpenWindow(_ window: String?) -> ControlTargetResolver.Resolution<(WindowInfo.ID, AppStore)> {
+        guard let window = trimmed(window) else {
+            guard let windowID = library.activeWindowID, let store = library.store(for: windowID) else {
+                return .failure(ControlResponse(ok: false, error: "no open window"))
+            }
+            return .success((windowID, store))
+        }
+        switch resolver.resolveWindowID(window) {
+        case .failure(let response):
+            return .failure(response)
+        case .success(let windowID):
+            guard let store = library.store(for: windowID) else {
+                return .failure(ControlResponse(ok: false, error: "window not open — window.select it first"))
+            }
+            return .success((windowID, store))
+        }
+    }
+
+    private func resolveSurfaceOwner(_ surfaceID: TerminalSurfaceID, window: String?)
+        -> ControlTargetResolver.Resolution<(WindowInfo.ID, AppStore)> {
+        if trimmed(window) != nil {
+            switch resolveOpenWindow(window) {
+            case .failure(let response):
+                return .failure(response)
+            case .success(let (windowID, store)):
+                guard store.session(withID: surfaceID.sessionID) != nil else {
+                    return .failure(ControlResponse(ok: false, error: "no such surface: \(surfaceID.rawValue)"))
+                }
+                return .success((windowID, store))
+            }
+        }
+        guard let windowID = library.windowID(forSession: surfaceID.sessionID),
+              let store = library.store(for: windowID) else {
+            return .failure(ControlResponse(ok: false, error: "no such surface: \(surfaceID.rawValue)"))
+        }
+        return .success((windowID, store))
+    }
+
+    private func quickVisible(in windowID: WindowInfo.ID) -> Bool {
+        QuickTerminalRegistry.shared.controller(for: windowID)?.isVisible ?? false
     }
 
     /// Show / hide / toggle the frontmost window's sidebar (the custom split owns visibility, so there's

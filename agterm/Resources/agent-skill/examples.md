@@ -6,7 +6,7 @@ Worked `agtermctl` examples. See `reference.md` for exact flags and return shape
 ## Inspect the current state
 
 ```bash
-agtermctl tree --json        # workspaces -> sessions, with active/split/overlay/scratch/flagged flags
+agtermctl tree --json        # workspaces -> sessions, active/split/overlay/scratch/flagged flags, surface ids
 agtermctl window list --json # windows, with open/active flags
 
 # what is each pane RUNNING right now (foreground argv; absent when at the shell prompt)
@@ -383,6 +383,27 @@ agtermctl tree --json | jq -r '.result.tree.workspaces[].sessions[] | select(.st
 
 `--pane left` (or omitting it) is the main pane. Feed a keymap command's `$AGT_PANE` straight through
 (`session status blocked --pane "$AGT_PANE"`) to tag the exact pane a shortcut fired from.
+
+## Zoom a terminal surface by control id
+
+```bash
+# Fill the window with the active terminal surface; call again to leave zoom.
+agtermctl surface zoom
+
+# Zoom the active session's right split pane by id, even if the split is hidden.
+sid=${AGTERM_SESSION_ID:?}
+surface=$(agtermctl tree --json |
+  jq -r --arg sid "$sid" '.result.tree.workspaces[].sessions[]
+    | select(.id == $sid)
+    | .surfaces[]
+    | select(.kind == "right")
+    | .id')
+agtermctl surface zoom show --target "$surface"
+agtermctl surface zoom hide --target "$surface"
+```
+
+`surface zoom` is not `window zoom`: it does not move/resize the macOS window and must not change split
+ratios, sidebar state, focus, or split/scratch visibility. Surface ids come from `tree --json`.
 
 ## Navigate and manage windows
 

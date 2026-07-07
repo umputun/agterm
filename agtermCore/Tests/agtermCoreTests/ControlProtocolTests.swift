@@ -51,6 +51,8 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionOverlayResize, target: "9f3c", args: ControlArgs(sizePercent: 60)),
             ControlRequest(cmd: .sessionOverlayResize, target: "9f3c", args: ControlArgs(full: true)),
             ControlRequest(cmd: .sessionOverlayResult, target: "9f3c"),
+            ControlRequest(cmd: .surfaceZoom, target: "surface:5E5B1C5B-75C5-49E6-8806-2C61D8D6BBA9:right",
+                           args: ControlArgs(mode: "show", window: "win")),
         ]
         for request in cases {
             #expect(try roundTrip(request) == request)
@@ -566,6 +568,34 @@ struct ControlProtocolTests {
         #expect(!json.contains("splitFocused"), "a nil split focus must be omitted from the JSON; got \(json)")
         let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
         #expect(decoded.splitFocused == nil)
+    }
+
+    @Test func treeSessionNodeRoundTripsWithSurfaces() throws {
+        let surfaces = [
+            ControlSurfaceNode(id: "surface:s1:left", kind: "left", active: true, visible: true),
+            ControlSurfaceNode(id: "surface:s1:right", kind: "right", active: false, visible: false),
+        ]
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true,
+                                         split: true, surfaces: surfaces)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+
+        let decoded = try roundTrip(response)
+
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.surfaces == surfaces)
+    }
+
+    @Test func treeSessionNodeToleratesMissingSurfaces() throws {
+        // a pre-`surface.zoom` server omits the key — it must decode as nil, and a node built without
+        // surfaces must omit the key from the JSON (the optional-field pattern of the other tree additions).
+        let raw = #"{"id":"s1","name":"shell","cwd":"/tmp","active":true,"split":false,"# +
+            #""overlay":false,"scratch":false,"flagged":false}"#
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(raw.utf8))
+        #expect(decoded.surfaces == nil)
+
+        let json = String(data: try JSONEncoder().encode(decoded), encoding: .utf8) ?? ""
+        #expect(!json.contains("surfaces"), "nil surfaces must be omitted from the JSON; got \(json)")
     }
 
     @Test func treeRoundTripsWithLiveWindowFields() throws {

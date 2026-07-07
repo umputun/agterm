@@ -254,6 +254,8 @@ extension agtermApp {
                     .disabled(library.activeStore?.activeSession == nil)
                 Button { actions.toggleQuickTerminal() } label: { Label("Quick Terminal", systemImage: "terminal") }
                     .keyboardShortcut(shortcut(for: .quickTerminal))
+                Button { actions.toggleTerminalZoom() } label: { Label("Toggle Terminal Zoom", systemImage: "arrow.up.left.and.arrow.down.right") }
+                    .keyboardShortcut(shortcut(for: .toggleTerminalZoom))
                 Divider()
                 // native macOS full screen for the key window (⌃⌘F default, rebindable). Toggles: a second
                 // invocation exits. The green traffic-light button drives the same NSWindow.toggleFullScreen.
@@ -267,11 +269,11 @@ extension agtermApp {
             // the spatial session stepping, and the pane focus. all drive the SAME AppActions the View items
             // did; only their menu home changed (the control API / palette / keymap surfaces are untouched).
             CommandMenu("Navigate") {
-                Button { palette.toggle(.sessions) } label: { Label("Go to Session", systemImage: "rectangle.stack") }
+                Button { actions.toggleSessionPalette() } label: { Label("Go to Session", systemImage: "rectangle.stack") }
                     .keyboardShortcut(shortcut(for: .sessionPalette))
-                Button { palette.toggle(.actions) } label: { Label("Command Palette", systemImage: "command") }
+                Button { actions.toggleActionPalette() } label: { Label("Command Palette", systemImage: "command") }
                     .keyboardShortcut(shortcut(for: .commandPalette))
-                Button { palette.toggle(.customCommands) } label: { Label("Custom Commands", systemImage: "terminal") }
+                Button { actions.toggleCustomCommandPalette() } label: { Label("Custom Commands", systemImage: "terminal") }
                     .keyboardShortcut(shortcut(for: .customCommandPalette))
                 Button { actions.toggleAttentionPalette() } label: { Label("Go to Attention…", systemImage: "bell") }
                     .keyboardShortcut(shortcut(for: .showAttention))

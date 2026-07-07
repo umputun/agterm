@@ -244,6 +244,10 @@ extension ControlServer {
             (session.searchSurface as? GhosttySurfaceView)?.endSearch()
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
+        if let windowID = library.windowID(forSession: id),
+           TerminalZoomRegistry.shared.controller(for: windowID)?.target != nil {
+            return ControlResponse(ok: false, error: "terminal zoom active")
+        }
 
         // open/needle/navigate need the bar + highlights visible, so select the target (also realizes a
         // never-shown surface). the OPEN uses the search target — a covering scratch (scratchActive, no

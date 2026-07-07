@@ -166,6 +166,27 @@ struct Quick: ParsableCommand {
     }
 }
 
+// MARK: - surface
+
+struct Surface: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Terminal surface commands.",
+        subcommands: [Zoom.self]
+    )
+
+    struct Zoom: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Zoom a terminal surface (show|hide|toggle).")
+        @Argument(help: "Mode: show, hide, or toggle (default).") var mode: String = "toggle"
+        @OptionGroup var target: SurfaceTargetOptions
+        @OptionGroup var options: ClientOptions
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .surfaceZoom, target: target.target,
+                           args: options.withWindow(ControlArgs(mode: mode)))
+        }
+    }
+}
+
 // MARK: - sidebar
 
 struct Sidebar: ParsableCommand {

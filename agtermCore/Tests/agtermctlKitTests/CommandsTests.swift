@@ -675,6 +675,23 @@ struct CommandsTests {
         #expect(validationMessage(["quick", "text", "--lines", "0"]) == "--lines must be greater than 0")
     }
 
+    @Test func surfaceZoomDefaultsToggleActive() throws {
+        #expect(try request(["surface", "zoom"]) ==
+            ControlRequest(cmd: .surfaceZoom, target: "active", args: ControlArgs(mode: "toggle")))
+    }
+
+    @Test func surfaceZoomTargetsSurfaceID() throws {
+        let id = "surface:5E5B1C5B-75C5-49E6-8806-2C61D8D6BBA9:right"
+
+        #expect(try request(["surface", "zoom", "show", "--target", id]) ==
+            ControlRequest(cmd: .surfaceZoom, target: id, args: ControlArgs(mode: "show")))
+    }
+
+    @Test func surfaceZoomTargetsWindow() throws {
+        #expect(try request(["surface", "zoom", "hide", "--window", "win"]) ==
+            ControlRequest(cmd: .surfaceZoom, target: "active", args: ControlArgs(mode: "hide", window: "win")))
+    }
+
     @Test func sidebarDefaultsToggle() throws {
         #expect(try request(["sidebar"]) == ControlRequest(cmd: .sidebar, args: ControlArgs(mode: "toggle")))
     }

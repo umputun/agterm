@@ -363,10 +363,10 @@ final class ControlServer {
             return response
         }
         switch request.cmd {
-        case .tree, .sessionNew, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
-                .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete,
-                .sessionMove, .workspaceMove, .workspaceFocus, .sessionSplit, .sessionScratch,
-                .sessionFocus, .sessionResize, .sessionStatus, .sessionFlag, .sessionSeen, .notify,
+        case .tree, .sessionNew, .sessionSelect, .sessionGo, .sessionClose, .sessionRename, .sessionMove,
+                .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete, .workspaceMove, .workspaceFocus,
+                .sessionSplit, .sessionScratch, .sessionFocus, .sessionResize, .surfaceZoom,
+                .sessionStatus, .sessionFlag, .sessionSeen, .notify,
                 .fontInc, .fontDec, .fontReset, .keymapReload, .configReload, .themeSet, .themeList,
                 .sidebar, .sidebarMode, .sidebarExpand, .sidebarCollapse, .sessionType, .sessionCopy,
                 .sessionPaste, .sessionSelectAll,
