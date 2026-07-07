@@ -256,11 +256,33 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     private func observeKeyWindowChanges() {
         let center = NotificationCenter.default
         for name in [NSWindow.didBecomeKeyNotification, NSWindow.didResignKeyNotification] {
+            let becameKey = name == NSWindow.didBecomeKeyNotification
             let token = center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.updateGhosttyFocus() }
+                MainActor.assumeIsolated {
+                    guard let self else { return }
+                    self.updateGhosttyFocus()
+                    // returning focus to agterm (cmd-tab or a reactivating click) while this pane is the
+                    // one on screen counts as "seeing" the session — clear its unseen badge, the same as a
+                    // focus transition does. becomeFirstResponder can't cover this: AppKit's per-window
+                    // first responder never resigned while agterm was backgrounded, so no focus transition
+                    // fires on return, leaving the badge stuck until you switch sessions and back.
+                    if becameKey { self.clearUnseenOnRefocus() }
+                }
             }
             focusObservers.append(token)
         }
+    }
+
+    /// Clear the "you've seen it" state (unseen badge + delivered banners) for this pane's session when
+    /// agterm regains key focus on it — the inverse of notification suppression (which drops a banner only
+    /// when the firing pane is the key window's first responder AND the app is active). `liveFocus` already
+    /// encodes both: a window is key only while the app is active, so it fires solely for the focused pane of
+    /// the now-key window, never a background one. Reuses `onFocusChange`, so it clears exactly for the
+    /// main/split panes that already clear on a focus transition (a scratch/overlay has no `onFocusChange`
+    /// and doesn't clear on focus either), and no-ops after teardown (the closure is nil'd).
+    private func clearUnseenOnRefocus() {
+        guard liveFocus else { return }
+        onFocusChange?(true)
     }
 
     /// The cursor-focus state to report to libghostty: solid only when this surface is the first responder

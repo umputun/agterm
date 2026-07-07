@@ -477,6 +477,43 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
                       "should report no such session, got: \(bad)")
     }
 
+    // returning agterm to the foreground on a session that's on screen clears that session's badge — the
+    // same "you've seen it" clear a focus transition does. Reproduced across two windows because re-keying
+    // a window fires the SAME NSWindow.didBecomeKey path as app reactivation, without the flaky
+    // background-the-app dance: open a second window so the seeded session's window loses key, notify the
+    // seeded session so its badge shows, then re-select its window. window.select does NOT re-select the
+    // session, so only the didBecomeKey → onFocusChange clear can drop the badge — a genuine regression
+    // for #155 (the badge used to stay stuck until you switched sessions and back).
+    func testRefocusingWindowClearsOnScreenSessionBadge() throws {
+        let seeded = try activeSessionID()
+
+        // capture the seeded window's id before opening a second one — window.select needs it to re-key
+        // the ORIGINAL window (--target defaults to the active window, which becomes the new one).
+        let windows = try XCTUnwrap(
+            (try sendCommand(#"{"cmd":"window.list"}"#)["result"] as? [String: Any])?["windows"] as? [[String: Any]],
+            "window.list should carry windows")
+        let firstWindow = try XCTUnwrap(windows.first?["id"] as? String, "should have the seeded window id")
+
+        // a second window materializes and takes key, so the seeded session's window is no longer key (its
+        // focused pane keeps first responder per-window, but the window isn't key — the bug's precondition).
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.new"}"#)["ok"] as? Bool, true)
+        let appeared = Date().addingTimeInterval(10)
+        while Date() < appeared, app.windows.count < 2 { usleep(200_000) }
+        XCTAssertGreaterThanOrEqual(app.windows.count, 2, "the second window should materialize and take key")
+
+        // notify (no focus-suppression) bumps the seeded session's badge while its window is unkeyed.
+        let notified = try sendCommand(#"{"cmd":"notify","target":"\#(seeded)","args":{"body":"hi"}}"#)
+        XCTAssertEqual(notified["ok"] as? Bool, true, "notify should succeed: \(notified)")
+        XCTAssertTrue(app.staticTexts["notify-badge"].waitForExistence(timeout: 12),
+                      "the badge should appear on the seeded session's row")
+
+        // re-key the seeded session's window (the cmd-tab / reactivating-click equivalent). No session
+        // switch happens, so a passing clear here can only come from the didBecomeKey → onFocusChange path.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.select","target":"\#(firstWindow)"}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(app.staticTexts["notify-badge"].waitForNonExistence(timeout: 12),
+                      "refocusing the window should clear the on-screen session's badge without a session switch")
+    }
+
     // the unseen badge count reported for a session in the current tree, or nil when omitted (zero).
     private func unseenCount(forSession id: String) -> Int? {
         guard let result = (try? sendCommand(#"{"cmd":"tree"}"#))?["result"] as? [String: Any],
