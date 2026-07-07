@@ -1160,7 +1160,10 @@
               --target 9f3c --follow<br /><br /><span style="color: #6b727a"
                 ># keep it open after exit, or block until it exits and inherit its status</span
               ><br />agtermctl session overlay open <span style="color: #f2b45c">"make test"</span> --wait<br />agtermctl session
-              overlay open <span style="color: #f2b45c">"make test"</span> --block<br />agtermctl session overlay close --target
+              overlay open <span style="color: #f2b45c">"make test"</span> --block<br /><br /><span style="color: #6b727a"
+                ># resize an open overlay in place — floating percent, or back to full (the program keeps running)</span
+              ><br />agtermctl session overlay resize --size-percent 60 --target 9f3c<br />agtermctl session overlay resize --full
+              --target 9f3c<br /><br />agtermctl session overlay close --target
               9f3c<br />agtermctl session overlay result
               <span style="color: #6b727a">&nbsp;&nbsp;# last overlay's exit status</span>
             </div>
@@ -1174,7 +1177,12 @@
               >
               floating alike);
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--follow</span> switches the user to
-              the target. A
+              the target.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay resize</span> changes an
+              open overlay in place —
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent</span> makes it floating,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--full</span> switches it back — without
+              restarting the program. A
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">(overlay)</span> tag in
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree</span> marks a session
               whose overlay is open.

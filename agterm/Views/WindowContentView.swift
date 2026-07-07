@@ -222,8 +222,8 @@ struct WindowContentView: View {
                 .frame(height: 1)
             detailPane
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // the floating overlay renders in-deck inside `sessionDetail` (`floatingOverlayPanel`), not at
-                // this `detailPane` level.
+                // the overlay renders in-deck inside `sessionDetail` (`overlayPanel`), not at this
+                // `detailPane` level.
                 // the search bar, anchored at the `detailPane` level (never inside `sessionDetail`'s
                 // HSplitView ZStack) so toggling it can't overrun the NSSplitView up into the titlebar.
                 // Sits at the top-right of the detail area, like a standard find bar.
@@ -308,21 +308,21 @@ struct WindowContentView: View {
             // gate hit-testing on `hideForOverlay` (full overlay OR scratch), NOT `session.overlayActive`:
             // this modifier must NOT change when a floating overlay opens, or the AppKit NSSplitView
             // re-lays-out and overruns up into the titlebar (same class of perturbation as adding a sibling).
-            // a floating overlay therefore leaves the panes hit-testable here; `floatingOverlayPanel`'s
-            // transparent catcher absorbs clicks around the panel so they can't reach the panes.
+            // a floating overlay therefore leaves the panes hit-testable here; `overlayPanel`'s transparent
+            // catcher absorbs clicks around the panel so they can't reach the panes.
             .allowsHitTesting(!hideForOverlay)
-            // the scratch terminal renders here, in-deck, above the (hidden) pane(s) — like the FULL overlay,
-            // a full-coverage sibling is safe (the panes go opacity 0, the split's frame is hidden). It sits
-            // BELOW the ephemeral overlay (zIndex 1 vs 2) AND goes hidden while a full overlay is up, exactly
-            // like the pane(s): under window translucency every surface's background renders fully transparent,
-            // so a scratch left visible below would show through the overlay (reading as "the overlay opened
-            // under the scratch"). The FLOATING overlay is the `floatingOverlayPanel` sibling below (zIndex 3):
-            // it is ALWAYS present with a constant shape (its panel content is gated internally), so adding it
-            // never re-hosts the NSSplitView even though the panes stay VISIBLE — and its opaque panel needs no
-            // hiding of the scratch behind it.
+            // the scratch terminal renders here, in-deck, above the (hidden) pane(s) — a full-coverage sibling
+            // is safe (the panes go opacity 0, the split's frame is hidden). It sits BELOW the ephemeral overlay
+            // (zIndex 1 vs `overlayPanel`'s 3) AND goes hidden while a full overlay is up, exactly like the
+            // pane(s): under window translucency every surface's background renders fully transparent, so a
+            // scratch left visible below would show through the overlay (reading as "the overlay opened under
+            // the scratch"). BOTH overlay variants are the `overlayPanel` sibling below (zIndex 3): it is ALWAYS
+            // present with a constant shape (its content is gated internally), so opening/resizing an overlay
+            // never re-hosts the NSSplitView — and the floating panel's opaque backing needs no hiding of the
+            // scratch behind it.
             if session.scratchActive {
-                // gate focus on every surface that covers the scratch — a full overlay (renders above it,
-                // zIndex 2) AND the window-level quick terminal — so the deck's focusIfNeeded can't grab the
+                // gate focus on every surface that covers the scratch — a full overlay (renders above it, in
+                // `overlayPanel` at zIndex 3) AND the window-level quick terminal — so the deck's focusIfNeeded can't grab the
                 // scratch behind them. When the cover goes away, isActive flips true and the deck re-grabs it.
                 // (matches the autoFocus suppression in makeScratchSurface.) `deckVisible` mirrors the panes'
                 // rule so only an on-screen scratch is a file-drop target.
@@ -334,18 +334,14 @@ struct WindowContentView: View {
                     .id("\(session.id.uuidString)-scratch")
                     .zIndex(1)
             }
-            if fullOverlay {
-                TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
-                             makeSurface: makeOverlaySurface, isActive: isActive, deckVisible: isActive)
-                    .id("\(session.id.uuidString)-overlay")
-                    .zIndex(2)
-            }
-            // the FLOATING overlay renders IN-DECK (per session) so its surface mounts + program runs even
-            // when the session isn't active. ALWAYS PRESENT (constant ZStack shape) — the panel content is
-            // gated INSIDE `floatingOverlayPanel`, the sibling itself never appears/disappears, so opening a
-            // floating overlay never re-hosts the NSSplitView (the titlebar-overrun trigger). Unlike the full
-            // overlay, it leaves the pane(s) visible behind its opaque framed panel.
-            floatingOverlayPanel(session: session, isActive: isActive)
+            // the overlay — FULL or FLOATING — renders IN-DECK (per session) so its surface mounts + program
+            // runs even when the session isn't active. ONE ALWAYS-PRESENT host (constant ZStack shape): the
+            // content is gated INSIDE `overlayPanel`, the sibling itself never appears/disappears, so opening,
+            // closing, OR resizing an overlay never re-hosts the NSSplitView (the titlebar-overrun trigger)
+            // and never re-parents the surface (which would blank its Metal drawable). Full fills the area
+            // translucent with the pane(s) hidden by `hideForOverlay`; floating draws an opaque framed panel
+            // over the still-visible pane(s). Switching full<->% (session.overlay.resize) only re-flows the frame.
+            overlayPanel(session: session, isActive: isActive)
                 .zIndex(3)
         }
         // when the overlay closes, the underlying pane must reclaim first responder. the pane re-activating
@@ -383,40 +379,48 @@ struct WindowContentView: View {
         }
     }
 
-    /// The FLOATING overlay, rendered IN-DECK inside each session's `sessionDetail` ZStack as an
-    /// ALWAYS-PRESENT sibling — the panel content is gated INSIDE the GeometryReader, so the ZStack's child
-    /// count never changes when the overlay opens (constant shape = no NSSplitView re-host = no titlebar
-    /// overrun). Because it is per-session in the eager deck, the surface mounts and its program runs even
-    /// when the session isn't active. The panel is an opaque, framed terminal sized to `overlaySizePercent`%
-    /// of the detail area and centered, with the session's pane(s) visible around it.
-    @ViewBuilder private func floatingOverlayPanel(session: Session, isActive: Bool) -> some View {
+    /// The overlay — FULL or FLOATING — rendered IN-DECK inside each session's `sessionDetail` ZStack as ONE
+    /// ALWAYS-PRESENT sibling. The content is gated INSIDE the GeometryReader, so the ZStack's child count
+    /// never changes when an overlay opens/closes (constant shape = no NSSplitView re-host = no titlebar
+    /// overrun), and BOTH variants share this single surface host, so `session.overlay.resize` switching
+    /// full<->% only re-flows the frame — it never re-parents the NSView (which would blank its Metal drawable).
+    /// A nil `overlaySizePercent` fills the detail area translucent (no opaque backing/frame) with the pane(s)
+    /// hidden by `hideForOverlay`; a percent draws an opaque, framed panel at that size, centered, with the
+    /// pane(s) visible around it. Per-session in the eager deck, so the surface mounts + program runs even when
+    /// the session isn't active.
+    @ViewBuilder private func overlayPanel(session: Session, isActive: Bool) -> some View {
         GeometryReader { geo in
             ZStack {
-                if session.floatingOverlayActive, let percent = session.overlaySizePercent {
-                    let fraction = CGFloat(percent) / 100
-                    // transparent click-catcher over the whole detail area: absorbs clicks AROUND the panel so
-                    // they can't reach the still-hit-testable panes behind and steal the overlay's first responder.
+                if session.overlayActive {
+                    let floating = session.overlaySizePercent != nil
+                    let fraction = session.overlaySizePercent.map { CGFloat($0) / 100 } ?? 1
+                    // transparent click-catcher over the whole detail area: absorbs clicks AROUND a floating
+                    // panel so they can't reach the still-hit-testable panes and steal the overlay's first
+                    // responder (the full variant hides the panes, so it's covered either way).
                     Color.clear.contentShape(Rectangle())
                     TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                  makeSurface: makeOverlaySurface, isActive: isActive, deckVisible: isActive)
                         .frame(width: geo.size.width * fraction, height: geo.size.height * fraction)
-                        // solid backing + hairline frame + shadow so the floating panel reads as a distinct
-                        // opaque window over the still-visible session (libghostty draws only the terminal).
-                        .background(terminalColor)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        // floating = opaque backing + hairline frame + shadow so it reads as a distinct window
+                        // over the still-visible session; full = translucent, no chrome (libghostty draws only
+                        // the terminal, so the window backing shows through). The modifier CHAIN stays constant
+                        // across both variants — only the parameters go inert for full — so a full<->% resize
+                        // keeps the same view tree and never re-hosts the surface NSView.
+                        .background(floating ? terminalColor : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: floating ? 12 : 0))
                         .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .strokeBorder(Color.white.opacity(0.18), lineWidth: 1)
+                            RoundedRectangle(cornerRadius: floating ? 12 : 0)
+                                .strokeBorder(floating ? Color.white.opacity(0.18) : Color.clear, lineWidth: 1)
                         )
-                        .shadow(radius: 24)
+                        .shadow(radius: floating ? 24 : 0)
                         .id("\(session.id.uuidString)-overlay")
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
-        // when not floating the panel is an empty full-frame GeometryReader — make it inert so it never
+        // when no overlay is up the panel is an empty full-frame GeometryReader — make it inert so it never
         // intercepts clicks meant for the pane(s).
-        .allowsHitTesting(session.floatingOverlayActive)
+        .allowsHitTesting(session.overlayActive)
     }
 
     /// The terminal search bar, attached as a top-aligned `.overlay` on `detailPane` — NOT inside any

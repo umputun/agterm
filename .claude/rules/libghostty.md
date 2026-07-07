@@ -172,15 +172,15 @@ paths:
   `sessionDetail` subtree, so toggling it can't perturb the split at all.
   The bar reads `store.activeSession?.searchActive` and shows only when set.
   Because it is a `detailPane` `.overlay` it composites ABOVE the whole detail deck without any layout change
-  — the in-deck scratch (zIndex 1 inside `sessionDetail`), the FULL overlay (zIndex 2), and the floating
-  overlay panel (zIndex 3) — so search-over-scratch shows the bar on top of the scratch with no HSplitView
+  — the in-deck scratch (zIndex 1 inside `sessionDetail`) and the overlay panel (zIndex 3, hosting BOTH the
+  full and floating overlay) — so search-over-scratch shows the bar on top of the scratch with no HSplitView
   perturbation.
-  The FLOATING overlay takes the opposite route: it IS a `sessionDetail` ZStack sibling (`floatingOverlayPanel`
-  at `.zIndex(3)`), but an ALWAYS-PRESENT, constant-shape one — its panel content (surface + frame +
-  click-catcher) is gated INSIDE the sibling, so the ZStack child count never changes when a floating overlay
-  opens/closes and the `NSSplitView` is never re-hosted, even though the pane(s) stay VISIBLE behind the opaque
-  panel.
-  (`floatingOverlayPanel` is per-session in the eager deck, so its program runs regardless of which session is
+  The overlay takes the opposite route: it IS a `sessionDetail` ZStack sibling (`overlayPanel` at
+  `.zIndex(3)`), but an ALWAYS-PRESENT, constant-shape one — its panel content (surface + frame +
+  click-catcher) is gated INSIDE the sibling, so the ZStack child count never changes when an overlay
+  opens/closes/resizes and the `NSSplitView` is never re-hosted, even when a floating overlay leaves the
+  pane(s) VISIBLE behind its opaque panel.
+  (`overlayPanel` is per-session in the eager deck, so its program runs regardless of which session is
   active — see the surface-lifecycle note.)
 - **Window overlays sit BELOW the custom titlebar, NOT as a body-level `.overlay` (transparent-titlebar-scrim
   rule).** The quick terminal, command palettes, and Ctrl-Tab switcher render via `windowOverlayLayer`

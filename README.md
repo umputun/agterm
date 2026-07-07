@@ -240,10 +240,12 @@ agtermctl session overlay open "revdiff HEAD~3" --size-percent 80 --background-c
 agtermctl session overlay open "revdiff HEAD~3" --target 9f3c --follow  # switch the user to session 9f3c as the overlay opens
 agtermctl session overlay open "make test" --wait              # keep the overlay open after exit (press a key to close)
 agtermctl session overlay open "make test" --block             # block until it exits; exit with its status
+agtermctl session overlay resize --size-percent 60 --target 9f3c  # resize an open overlay to a floating 60% panel
+agtermctl session overlay resize --full --target 9f3c          # switch it back to the full-pane overlay
 agtermctl session overlay close --target 9f3c                  # close it from a script
 ```
 
-By default an overlay opens on its `--target` without switching the active session — full and floating both run their program in the background and appear when the user visits that session; pass `--follow` to select the target as the overlay opens (a no-op if it is already active). By default it closes the instant the program exits; `--wait` keeps it on a "press any key to close" prompt so you can read the program's final output. A `*` `(overlay)` tag in `agtermctl tree` marks a session whose overlay is open.
+By default an overlay opens on its `--target` without switching the active session — full and floating both run their program in the background and appear when the user visits that session; pass `--follow` to select the target as the overlay opens (a no-op if it is already active). `session overlay resize` changes an already-open overlay in place — `--size-percent N` (1–100) makes it a floating panel, `--full` switches it back to full size — and the program keeps running across the change. By default it closes the instant the program exits; `--wait` keeps it on a "press any key to close" prompt so you can read the program's final output. A `*` `(overlay)` tag in `agtermctl tree` marks a session whose overlay is open.
 
 `--block` runs the program in the overlay (rendering normally) and blocks until it exits, then exits with the program's status — useful in a script that needs the outcome of an interactive run. The program's output stays its own concern: a TUI writes its result to its own file (for example `revdiff --output=…`) which the script reads, while `--block` reports only the exit status (the overlay never captures stdout). `--block` can't be combined with `--wait`; `session overlay result` reports the last overlay's exit status on demand for a manual open → poll flow.
 

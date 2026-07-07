@@ -55,6 +55,9 @@ jobs:
             -ignore-filename-regex='(\.build|Tests|checkouts)/' \
             | sed "s|SF:$GITHUB_WORKSPACE/|SF:|g" > coverage.lcov
       - name: upload lcov artifact
+        # coverage is best-effort: a transient artifact-service outage must not
+        # red the build when the tests themselves passed
+        continue-on-error: true
         uses: actions/upload-artifact@v4
         with:
           name: coverage-lcov
@@ -70,6 +73,9 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
+        # the upload side is best-effort; if the artifact never landed, don't fail
+        # this job either — the coveralls submit below is already continue-on-error
+        continue-on-error: true
         with:
           name: coverage-lcov
       - name: submit coverage to coveralls

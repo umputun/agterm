@@ -251,6 +251,12 @@ visible before). `idleMs` is live and grows while the window is idle, so it is o
   own output file, not the control channel. Returns the overlay's session id. `--target` defaults to
   `active`, so an automated caller should pass `--target "$AGTERM_SESSION_ID"` — otherwise a (usually
   blocking, full-pane) overlay lands on whatever session is currently active, not the calling one.
+- `session overlay resize (--size-percent N | --full) [--target] [--window W]` — resize an ALREADY-OPEN
+  overlay in place. Exactly one of `--size-percent N` (1–100, makes it a floating framed panel) or
+  `--full` (switches it back to the full-pane overlay that hides the session) is required; passing both
+  or neither, or a percent outside 1–100, is an error. The overlay program keeps running across the
+  resize — it is a layout re-flow, never a re-spawn. Errors `no overlay` when none is open. Returns the
+  session id.
 - `session overlay close [--target] [--window W]` — close (destroy) the overlay.
 - `session overlay result [--target] [--window W]` — returns `result.exitCode` once the overlay has
   closed. Errors `still running` while up, `no result` if none ran.

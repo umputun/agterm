@@ -53,6 +53,14 @@ paths:
   and `reloadChangedBadgeRows`/`snapshotBadges` reload only the changed session + workspace rows.
   Cleared by `AppStore.selectSession` and by a pane's `onFocusChange(true)` (which also calls `clearDelivered`
   — focusing a pane means you've seen the session).
+  `onFocusChange(true)` fires on a first-responder TRANSITION, which does NOT happen when agterm merely
+  regains key focus (AppKit's per-window first responder never resigned while the app was backgrounded),
+  so refocusing the app onto the same on-screen session left the badge stuck (#155).
+  `GhosttySurfaceView.clearUnseenOnRefocus` closes that: the `didBecomeKey` observer (already re-pushing
+  the cursor's `liveFocus`) also re-runs the same `onFocusChange(true)` clear on the become-key edge, gated
+  on `liveFocus` (key window AND this pane is first responder) so it fires only for the ONE focused pane of
+  the now-key window — the inverse of the suppression condition below. A non-focused session's pill is
+  untouched (its `liveFocus` is false), so it stays until you select that session.
   **The count pill rendering is gated by the `notificationBadgeEnabled` Settings toggle** (see the Settings
   section): the Coordinator's `effectiveUnseen(_:)` returns 0 when the flag is off,
   applied to BOTH the session badge and the workspace roll-up (and to `RowContent.unseen` so a toggle

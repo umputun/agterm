@@ -136,6 +136,17 @@ extension AppStore {
         return true
     }
 
+    /// Resizes an already-open overlay in place. `sizePercent` (clamped to 1...100) switches it to a
+    /// *floating* opaque framed panel at that percent of the pane with the session visible behind it;
+    /// nil switches it to the full-pane overlay that hides the session and draws translucent. The overlay
+    /// surface stays mounted (the detail pane hosts both variants in one place), so this only re-flows the
+    /// layout — the program keeps running, never re-spawns. No-op (returns false) with no overlay open.
+    @discardableResult public func resizeOverlay(_ sessionID: UUID, sizePercent: Int?) -> Bool {
+        guard let session = session(withID: sessionID), session.overlayActive else { return false }
+        session.overlaySizePercent = sizePercent.map { min(100, max(1, $0)) }
+        return true
+    }
+
     /// Records the overlay program's exit status (parsed app-side from the wrapper's temp file on the
     /// surface's teardown) so `session.overlay.result` can report it after the overlay closes. No-op
     /// for an unknown session.

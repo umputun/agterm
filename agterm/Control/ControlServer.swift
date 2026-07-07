@@ -355,8 +355,8 @@ final class ControlServer {
                 .sessionFocus, .sessionResize, .sessionStatus, .sessionFlag, .sessionSeen, .notify,
                 .fontInc, .fontDec, .fontReset, .keymapReload, .configReload, .themeSet, .themeList,
                 .sidebar, .sidebarMode, .sidebarExpand, .sidebarCollapse, .sessionType, .sessionCopy,
-                .sessionSearch, .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResult,
-                .sessionBackground, .sessionText, .quick, .windowNew, .windowList, .windowSelect,
+                .sessionSearch, .sessionOverlayOpen, .sessionOverlayClose, .sessionOverlayResize,
+                .sessionOverlayResult, .sessionBackground, .sessionText, .quick, .windowNew, .windowList, .windowSelect,
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
                 .windowFullscreen, .restoreClear:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")

@@ -36,6 +36,47 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(closeAgain["error"] as? String, "no overlay", "\(closeAgain)")
     }
 
+    // session.overlay.resize switches an open overlay between floating and full in place. Overlay geometry
+    // is a Metal surface (not in the AX tree), so this asserts the COMMAND PATH: resize succeeds while the
+    // overlay is up (a percent AND --full) and the overlay stays up across it, errors with no overlay, and
+    // the dispatcher rejects missing/conflicting/out-of-range size args server-side; a raw JSON client (like
+    // this test) skips the CLI's validate() entirely, so the dispatcher is the real enforcement boundary.
+    // The visual re-flow is verified manually.
+    func testOverlayResizeSwitchesFloatingAndFull() throws {
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
+        let id = try XCTUnwrap(result["id"] as? String, "session.new should return the new id")
+
+        // resizing with no overlay open errors.
+        let noOverlay = try sendCommand(#"{"cmd":"session.overlay.resize","target":"\#(id)","args":{"sizePercent":60}}"#)
+        XCTAssertEqual(noOverlay["ok"] as? Bool, false, "resize with no overlay should fail: \(noOverlay)")
+        XCTAssertEqual(noOverlay["error"] as? String, "no overlay", "\(noOverlay)")
+
+        // open a full overlay (cat is long-lived), then resize it to floating and back to full.
+        let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"command":"cat"}}"#)
+        XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the overlay should be up")
+
+        let toFloating = try sendCommand(#"{"cmd":"session.overlay.resize","target":"\#(id)","args":{"sizePercent":60}}"#)
+        XCTAssertEqual(toFloating["ok"] as? Bool, true, "resize to floating should succeed: \(toFloating)")
+        // the overlay stays up across the resize (in-place re-flow, never a re-spawn).
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 5), "the overlay stays up after resize")
+
+        let toFull = try sendCommand(#"{"cmd":"session.overlay.resize","target":"\#(id)","args":{"full":true}}"#)
+        XCTAssertEqual(toFull["ok"] as? Bool, true, "resize back to full should succeed: \(toFull)")
+
+        // the dispatcher rejects the bad arg combos server-side.
+        let neither = try sendCommand(#"{"cmd":"session.overlay.resize","target":"\#(id)"}"#)
+        XCTAssertEqual(neither["ok"] as? Bool, false, "resize with neither arg should fail: \(neither)")
+        let both = try sendCommand(#"{"cmd":"session.overlay.resize","target":"\#(id)","args":{"sizePercent":50,"full":true}}"#)
+        XCTAssertEqual(both["ok"] as? Bool, false, "resize with both args should fail: \(both)")
+        let oob = try sendCommand(#"{"cmd":"session.overlay.resize","target":"\#(id)","args":{"sizePercent":150}}"#)
+        XCTAssertEqual(oob["ok"] as? Bool, false, "resize with out-of-range percent should fail: \(oob)")
+
+        let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
+    }
+
     // session.overlay.open --background-color: a valid #rrggbb opens the overlay (the colored surface is
     // a Metal layer, not in the AX tree, so the color is verified manually — this asserts the arm accepts
     // and applies it via the lifecycle), and a malformed color is rejected before the overlay opens.

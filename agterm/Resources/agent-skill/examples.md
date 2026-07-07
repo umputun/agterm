@@ -138,6 +138,9 @@ agtermctl session overlay open "zsh -lc 'htop'" --target "$AGTERM_SESSION_ID" --
 agtermctl session overlay open "revdiff HEAD~3" --target "$AGTERM_SESSION_ID" --size-percent 80 --background-color "#2a1a3a"
 # switch the user to the target as it opens:
 agtermctl session overlay open "revdiff HEAD~3" --target "$AGTERM_SESSION_ID" --size-percent 80 --follow
+# resize the open overlay in place (the program keeps running): shrink to a floating panel, then back to full
+agtermctl session overlay resize --size-percent 60 --target "$AGTERM_SESSION_ID"
+agtermctl session overlay resize --full --target "$AGTERM_SESSION_ID"
 # ... later
 agtermctl session overlay close
 ```

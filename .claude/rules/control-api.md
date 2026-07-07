@@ -102,7 +102,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 52-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 53-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -172,10 +172,10 @@ paths:
   exact `uuidString` (case-insensitive), or a git-style unique prefix.
   Zero prefix hits → `notFound` error, ≥2 → `ambiguous` error listing the candidates.
   `--target` defaults to `active`, so scripts rarely type an id and never for "the current one".
-- **Command catalog (52 commands):**
+- **Command catalog (53 commands):**
   - `tree`
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`
-  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.result`
+  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.resize`/`session.overlay.result`
   - `quick`
   - `sidebar`/`sidebar.mode`/`sidebar.expand`/`sidebar.collapse`
   - `notify`
@@ -250,9 +250,9 @@ paths:
   never a teardown), recreated fresh after its shell's own `exit`.
   NOT persisted (absent from `SessionSnapshot`, like the overlay) — `Session.scratchActive`/`scratchSurface`,
   `AppStore.toggleScratch`/`closeScratch` (the latter only on `exit` + session/workspace/window teardown).
-  Full-overlay rendering only (never floating) so it's a structural clone of the proven `if fullOverlay`
-  ZStack sibling at `.zIndex(1)`, BELOW the ephemeral overlay (`.zIndex(2)` — a normal overlay launched
-  over the scratch sits on top); the panes' opacity/hit-testing gate is `hideForOverlay = fullOverlay || scratchActive`
+  Full-overlay rendering only (never floating): a conditional `sessionDetail` ZStack sibling at `.zIndex(1)`
+  (the structural pattern the now-removed `if fullOverlay` sibling used), BELOW the ephemeral `overlayPanel`
+  (`.zIndex(3)` — a normal overlay launched over the scratch sits on top); the panes' opacity/hit-testing gate is `hideForOverlay = fullOverlay || scratchActive`
   (still false for a FLOATING overlay, preserving the NSSplitView-overrun invariant).
   GUI half: ⌘J (`BuiltinAction.toggleScratch`), title-bar `scratch-toggle` button,
   View ▸ Show/Hide Scratch, the ⌃⇧P palette "Toggle Scratch" — all through `AppActions.toggleScratch()`.
@@ -451,39 +451,46 @@ paths:
   `onExit → closeOverlay`.
   Both variants render IN the per-session eager deck, so the overlay program runs regardless of which
   session is active — the only visible difference is geometry.
-  The FULL overlay is an in-deck ZStack sibling in `WindowContentView.sessionDetail` (`.zIndex(2)` above the
-  pane(s), gated on `fullOverlay`): it draws translucent + blurred (NO opaque backing) with the pane(s)
-  behind hidden at `.opacity(0)` + `.allowsHitTesting(false)` (kept MOUNTED,
-  shells alive like the deck's inactive sessions), so its transparency reveals the window backing (desktop,
-  tint + blur), not the session.
-  The FLOATING overlay (`overlaySizePercent` set) is `floatingOverlayPanel(session:isActive:)`, an
-  ALWAYS-PRESENT ZStack sibling in `sessionDetail` (`.zIndex(3)`).
-  It is a CONSTANT-SHAPE sibling: the panel content (opaque `terminalColor` backing + hairline frame +
-  shadow, quick-terminal styling; the overlay surface; the click-catcher) is gated INSIDE it, so the ZStack
-  child COUNT stays constant across open/close — the same SHAPE as no-overlay, which is what keeps the
-  AppKit `NSSplitView` from re-hosting and overrunning UP into the transparent titlebar.
+  The overlay is ONE always-present, CONSTANT-SHAPE ZStack sibling in `WindowContentView.sessionDetail`,
+  `overlayPanel(session:isActive:)` at `.zIndex(3)`, hosting BOTH variants from a single surface host (the
+  pre-unify split — a `fullOverlay`-gated `.zIndex(2)` sibling PLUS a separate `floatingOverlayPanel` at
+  `.zIndex(3)` — is GONE; `session.overlay.resize` below is why one host matters).
+  The panel content (the overlay surface; the opaque `terminalColor` backing + hairline frame + shadow; the
+  click-catcher) is gated INSIDE the always-present `GeometryReader` on `session.overlayActive`, so the
+  ZStack child COUNT stays constant across open/close/resize — the same SHAPE as no-overlay, which is what
+  keeps the AppKit `NSSplitView` from re-hosting and overrunning UP into the transparent titlebar.
   (The panel used to mount OUTSIDE `sessionDetail` as a `detailPane` `.overlay` for exactly this reason;
-  the always-present constant-shape sibling holds the same invariant IN-deck, which is what lets the
-  floating surface mount per-session and run in the background like the full overlay.)
-  Hit-testing stays gated on `.allowsHitTesting(!fullOverlay)` and must NOT flip when a floating overlay
-  opens: changing the panes' OWN `allowsHitTesting` on overlay-open (e.g. to `!session.overlayActive`)
-  ALSO triggers the NSSplitView titlebar-overrun — the SAME class of perturbation as changing the ZStack's
-  shape, even though it looks like a pure interaction change (Codex insisted hit-testing was layout-inert;
-  a review-loop regression proved otherwise).
-  So the floating panes stay hit-testable, and the overlay's focus is protected by a transparent
-  `Color.clear.contentShape(Rectangle())` catcher INSIDE `floatingOverlayPanel` that absorbs clicks AROUND
-  the panel so they can't reach the panes and steal the overlay program's first responder.
+  the always-present constant-shape sibling holds the same invariant IN-deck.)
+  FULL (`overlaySizePercent` nil): fraction 1.0, drawn translucent + blurred with NO opaque backing and NO
+  chrome (`Color.clear` backing, 0 corner radius, 0 shadow), and the pane(s) behind hidden at `.opacity(0)`
+  + `.allowsHitTesting(false)` via `hideForOverlay` (= `fullOverlay || scratchActive`; kept MOUNTED, shells
+  alive like the deck's inactive sessions), so its transparency reveals the window backing (desktop, tint +
+  blur), not the session.
+  FLOATING (`overlaySizePercent` set): fraction = `percent/100`, drawn as an opaque `terminalColor`-backed,
+  hairline-framed, shadowed panel centered in the detail area with the pane(s) VISIBLE around it.
+  The modifier CHAIN is IDENTICAL across both variants — only the parameter VALUES flip (backing color,
+  corner radius, shadow radius, frame fraction) — so `session.overlay.resize` switching full<->% is a
+  value-update, never a child add/remove or a re-parent of the overlay surface NSView (a re-parent would
+  blank its Metal drawable).
+  Hit-testing on the PANES stays gated on `.allowsHitTesting(!hideForOverlay)` and must NOT flip when a
+  FLOATING overlay opens: changing the panes' OWN `allowsHitTesting` on overlay-open (e.g. to
+  `!session.overlayActive`) ALSO triggers the NSSplitView titlebar-overrun — the SAME class of perturbation
+  as changing the ZStack's shape, even though it looks like a pure interaction change (Codex insisted
+  hit-testing was layout-inert; a review-loop regression proved otherwise).
+  So a floating overlay leaves the panes hit-testable, and the overlay's focus is protected by a transparent
+  `Color.clear.contentShape(Rectangle())` catcher INSIDE `overlayPanel` that absorbs clicks AROUND the panel
+  so they can't reach the panes and steal the overlay program's first responder.
   (Generalize the rule: ANYTHING in `sessionDetail`'s HSplitView-hosting subtree that CHANGES SHAPE when
   `overlayActive` flips — adding/removing a sibling, a flattened ZStack, or a toggled pane modifier —
-  overruns the split into the titlebar; keep the subtree's shape identical across open/close and gate the
-  panel content INSIDE the constant-shape sibling.)
+  overruns the split into the titlebar; keep the subtree's shape identical across open/close/resize and gate
+  the panel content INSIDE the constant-shape sibling.)
   This constant-shape invariant is load-bearing: a CONDITIONAL sibling inside `sessionDetail`'s ZStack (the
   HSplitView-hosting subtree) made SwiftUI re-host it and the `NSSplitView` overrun UP into the
   transparent titlebar, painting the split over the header (Codex-confirmed;
   the quick terminal renders at this level for the same reason and never hit it).
-  `floatingOverlayPanel`'s `GeometryReader` reports the detail area EXACTLY — no manual sidebar/titlebar
-  insets (computing those at the window level mis-centered the panel one line low) — so it sizes the opaque
-  framed panel to `sizePercent`% and centers it in the detail area, the pane(s) visible around it.
+  `overlayPanel`'s `GeometryReader` reports the detail area EXACTLY — no manual sidebar/titlebar insets
+  (computing those at the window level mis-centered the panel one line low) — so it sizes the floating panel
+  to `sizePercent`% and centers it in the detail area, the pane(s) visible around it.
   `isActive` gates the overlay surface's focus, so a background floating overlay RUNS but does not steal
   focus (mirrors the full overlay).
   Because both kinds mount in the eager deck, `ControlServer` does NOT select on open by default; it SELECTS
@@ -530,6 +537,27 @@ paths:
   at parse via `validate()`); the program's OUTPUT is its own concern — a TUI like revdiff renders in
   the overlay and writes results to its own `--output` file, which the caller reads (the control channel
   does NOT capture stdout).
+  `session.overlay.resize` (target = session) resizes an ALREADY-OPEN overlay IN PLACE between full and
+  floating — the way to change size without closing and re-running the program.
+  Exactly one of `sizePercent` (1...100 → floating) or `full: true` (→ the full-pane overlay) must be set;
+  both, neither, or a percent outside 1...100 is a dispatcher error (mirrored by the CLI `validate()`), and
+  `no overlay` when none is open.
+  It is a NEW `Command` case (unlike the `--follow` arg, which rode the existing `overlay.open`) because it
+  needs its own arg validation, and `full` is a NEW `ControlArgs` field added to distinguish "switch to
+  full" (nil `overlaySizePercent`) from "unset" on the wire.
+  The arm mutates the non-persisted `Session.overlaySizePercent` via `AppStore.resizeOverlay` (clamping
+  1...100, guarding `overlayActive`), and the detail pane re-flows the SAME surface host: the unified
+  `WindowContentView.overlayPanel` now renders BOTH variants (full = translucent, no chrome, panes hidden by
+  `hideForOverlay`; floating = opaque framed panel over visible panes), so a full<->% switch never re-parents
+  the overlay NSView (which would blank its Metal drawable) nor changes the ZStack shape — the old
+  `if fullOverlay` z2 sibling is gone, and the always-present `overlayPanel` at z3 is the single host.
+  Four-point keep-in-sync audit for `session.overlay.resize`: (1) `case sessionOverlayResize = "session.overlay.resize"`
+  + `ControlArgs.full` in `ControlProtocol.swift`, (2) the `.sessionOverlayResize` dispatcher arm (exactly-one
+  + range validation) → the app-side `resizeSessionOverlay` (→ `AppStore.resizeOverlay`) behind `ControlActions`,
+  (3) the `session overlay resize --size-percent|--full` subcommand (`Resize`, `validate()`-guarded) in
+  `agtermctlKit`, (4) round-trip in `ControlProtocolTests` + dispatcher routing/validation in `ControlDispatcherTests`
+  + `AppStorePaneTests` (resize clamp/switch/no-overlay) + CLI mapping in `CommandsTests` + the e2e
+  `testOverlayResizeSwitchesFloatingAndFull` in `ControlOverlaySplitUITests`.
   Mode-bearing commands (`session.split`/`quick`) compute the delta against current state so `on`/`off`/`show`/`hide`
   are idempotent, and an unknown mode is an error.
   `session.status` flags a per-session agent status on the sidebar row — `args.status` is `idle`|`active`|`completed`|`blocked`
@@ -849,5 +877,5 @@ paths:
   (image/text/color set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
-  examples.md recipes) and the command count there is bumped to 52 to match.
+  examples.md recipes) and the command count there is bumped to 53 to match.
 

@@ -477,6 +477,111 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
                       "should report no such session, got: \(bad)")
     }
 
+    // returning agterm to the foreground on a session that's on screen clears that session's badge — the
+    // same "you've seen it" clear a focus transition does. Reproduced across two windows because re-keying
+    // a window fires the SAME NSWindow.didBecomeKey path as app reactivation, without the flaky
+    // background-the-app dance: open a second window so the seeded session's window loses key, notify the
+    // seeded session so its badge shows, then re-select its window. window.select does NOT re-select the
+    // session, so only the didBecomeKey → onFocusChange clear can drop the badge — a genuine regression
+    // for #155 (the badge used to stay stuck until you switched sessions and back).
+    func testRefocusingWindowClearsOnScreenSessionBadge() throws {
+        let seeded = try activeSessionID()
+
+        // capture the seeded window's id before opening a second one — window.select needs it to re-key
+        // the ORIGINAL window (--target defaults to the active window, which becomes the new one).
+        let windows = try XCTUnwrap(
+            (try sendCommand(#"{"cmd":"window.list"}"#)["result"] as? [String: Any])?["windows"] as? [[String: Any]],
+            "window.list should carry windows")
+        let firstWindow = try XCTUnwrap(windows.first?["id"] as? String, "should have the seeded window id")
+
+        // a second window materializes and takes key, so the seeded session's window is no longer key (its
+        // focused pane keeps first responder per-window, but the window isn't key — the bug's precondition).
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.new"}"#)["ok"] as? Bool, true)
+        let appeared = Date().addingTimeInterval(10)
+        while Date() < appeared, app.windows.count < 2 { usleep(200_000) }
+        XCTAssertGreaterThanOrEqual(app.windows.count, 2, "the second window should materialize and take key")
+
+        // notify (no focus-suppression) bumps the seeded session's badge while its window is unkeyed.
+        let notified = try sendCommand(#"{"cmd":"notify","target":"\#(seeded)","args":{"body":"hi"}}"#)
+        XCTAssertEqual(notified["ok"] as? Bool, true, "notify should succeed: \(notified)")
+        XCTAssertTrue(app.staticTexts["notify-badge"].waitForExistence(timeout: 12),
+                      "the badge should appear on the seeded session's row")
+
+        // re-key the seeded session's window (the cmd-tab / reactivating-click equivalent). No session
+        // switch happens, so a passing clear here can only come from the didBecomeKey → onFocusChange path.
+        // window.select can return before the window is actually key under XCUITest, so wait for it to report
+        // active before asserting the didBecomeKey-driven clear.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.select","target":"\#(firstWindow)"}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(pollWindowActive(firstWindow, timeout: 12), "window 1 should become key again after window.select")
+        XCTAssertTrue(app.staticTexts["notify-badge"].waitForNonExistence(timeout: 12),
+                      "refocusing the window should clear the on-screen session's badge without a session switch")
+    }
+
+    // the refocus clear is gated on liveFocus, so it clears ONLY the focused pane's session — never other
+    // badged sessions in the same window. This is the inverse of testRefocusingWindowClearsOnScreenSessionBadge:
+    // a regression that dropped the liveFocus guard (clearing every session's badge on didBecomeKey) would
+    // still pass the positive test but fail this one. The seeded session holds focus while a SECOND session
+    // carries the badge; refocus lands on the seeded (focused) session, so the second session's pill must
+    // survive. The badged session is deliberately the non-focused one so its badge is tree-verifiable both
+    // before and after the refocus (a focused session in a key window can't hold an unseen badge).
+    func testRefocusingWindowKeepsNonFocusedSessionBadge() throws {
+        let seeded = try activeSessionID()
+        let firstWindow = try XCTUnwrap(
+            ((try sendCommand(#"{"cmd":"window.list"}"#)["result"] as? [String: Any])?["windows"] as? [[String: Any]])?
+                .first?["id"] as? String, "should have the seeded window id")
+
+        // add a second session, then re-select the seeded one so IT holds focus and the second is the
+        // non-focused session whose badge the refocus must leave alone.
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let other = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new returns the new id")
+        XCTAssertTrue(pollSessionCount(2, timeout: 10), "the second session should land")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.select","target":"\#(seeded)"}"#)["ok"] as? Bool, true)
+
+        // badge the NON-focused second session and confirm the badge landed — an unfocused session isn't
+        // "seen", so its badge persists and is readable via the frontmost tree while window 1 is frontmost.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"notify","target":"\#(other)","args":{"body":"hi"}}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(pollUnseen(other, equals: 1, timeout: 12), "the non-focused session should carry a badge before the refocus")
+
+        // a second window materializes and takes key, so window 1 is no longer key.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.new"}"#)["ok"] as? Bool, true)
+        let appeared = Date().addingTimeInterval(10)
+        while Date() < appeared, app.windows.count < 2 { usleep(200_000) }
+        XCTAssertGreaterThanOrEqual(app.windows.count, 2, "the second window should materialize and take key")
+
+        // re-key window 1 (the cmd-tab refocus). Focus lands on the SEEDED session, never the badged one, so
+        // the non-focused session's pill must survive. Wait for the window to actually become key first.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.select","target":"\#(firstWindow)"}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(pollWindowActive(firstWindow, timeout: 12), "window 1 should become key again after window.select")
+        XCTAssertEqual(unseenCount(forSession: other), 1, "a non-focused session's badge must survive the refocus")
+    }
+
+    // polls window.list until the window with `id` reports active (frontmost/key), or times out. Under
+    // XCUITest a window.select response can arrive before the window is actually key, so tests wait on this
+    // before asserting a didBecomeKey-driven effect. Returns true on match, false on timeout.
+    private func pollWindowActive(_ id: String, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let result = (try? sendCommand(#"{"cmd":"window.list"}"#))?["result"] as? [String: Any],
+               let windows = result["windows"] as? [[String: Any]],
+               windows.contains(where: { ($0["id"] as? String)?.lowercased() == id.lowercased() && $0["active"] as? Bool == true }) {
+                return true
+            }
+            usleep(200_000)
+        }
+        return false
+    }
+
+    // polls the frontmost window's tree until the given session's unseen count equals `expected` (nil = the
+    // badge is cleared / omitted), returning true on match or false on timeout.
+    private func pollUnseen(_ id: String, equals expected: Int?, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if unseenCount(forSession: id) == expected { return true }
+            usleep(200_000)
+        }
+        return unseenCount(forSession: id) == expected
+    }
+
     // the unseen badge count reported for a session in the current tree, or nil when omitted (zero).
     private func unseenCount(forSession id: String) -> Int? {
         guard let result = (try? sendCommand(#"{"cmd":"tree"}"#))?["result"] as? [String: Any],

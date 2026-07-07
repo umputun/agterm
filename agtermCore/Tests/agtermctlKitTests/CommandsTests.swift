@@ -587,6 +587,26 @@ struct CommandsTests {
             == ControlRequest(cmd: .sessionOverlayResult, target: "9f3c"))
     }
 
+    @Test func sessionOverlayResizeWithSizePercent() throws {
+        let expected = ControlRequest(cmd: .sessionOverlayResize, target: "9f3c", args: ControlArgs(sizePercent: 40))
+        #expect(try request(["session", "overlay", "resize", "--size-percent", "40", "--target", "9f3c"]) == expected)
+    }
+
+    @Test func sessionOverlayResizeFull() throws {
+        let expected = ControlRequest(cmd: .sessionOverlayResize, target: "active", args: ControlArgs(full: true))
+        #expect(try request(["session", "overlay", "resize", "--full"]) == expected)
+    }
+
+    @Test func sessionOverlayResizeRejectsBadArgs() {
+        // validate() enforces exactly-one-of --size-percent/--full and the 1...100 range at parse time.
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "overlay", "resize"]) }
+        #expect(throws: (any Error).self) {
+            try Agtermctl.parseAsRoot(["session", "overlay", "resize", "--full", "--size-percent", "50"])
+        }
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "overlay", "resize", "--size-percent", "150"]) }
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "overlay", "resize", "--size-percent", "0"]) }
+    }
+
     @Test func sessionOverlayBlockRejectsWait() {
         // validate() enforces the mutually-exclusive flags at parse time (before any connection).
         #expect(throws: (any Error).self) {

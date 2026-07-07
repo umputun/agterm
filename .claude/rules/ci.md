@@ -23,8 +23,12 @@ paths:
   Because the two jobs are different machines, the `test` job rewrites `llvm-cov`'s absolute `SF:` paths
   to repo-relative (strips `$GITHUB_WORKSPACE/`) so the Linux reporter resolves each source file against
   its own checkout; skip that and the reporter matches nothing and prints `🚨 Nothing to report`.
-  The upload step is `continue-on-error`, so a masked failure shows green — verify the actual Coveralls
-  build/API after changing anything here, never trust the check color alone.
+  The entire coverage path is best-effort: the lcov artifact upload (`test` job), the artifact download
+  (`coverage` job), and the Coveralls submit are ALL `continue-on-error`, so a transient GitHub
+  artifact-service timeout or a Coveralls hiccup never reds the build when the tests themselves passed
+  (only the `test` job's `swift test` gates the build).
+  The flip side: a masked failure shows green — verify the actual Coveralls build/API after changing
+  anything here, never trust the check color alone.
 - **CI does NOT run the XCUITests** — it builds the app but never test-runs the app target;
   only the host-free `swift test` runs in CI.
   So the Coveralls badge reflects `agtermCore` coverage ONLY — the app target
