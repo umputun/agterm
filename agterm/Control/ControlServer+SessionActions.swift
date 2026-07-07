@@ -355,7 +355,7 @@ extension ControlServer: ControlActions {
     /// commit (no live preview over the socket). `args.name` (alias `args.light`; both is an error) sets the
     /// light/single slot, keeping any dark slot; `args.dark` sets the dark slot and turns macOS-appearance
     /// syncing ON (the stored value becomes ghostty's dual `light:,dark:`, light side seeded), and the
-    /// reserved `dark == "none"` clears it (syncing off). A nil/empty name selects ghostty's built-in colors
+    /// reserved value `none` (any case) clears it (syncing off). A nil/empty name selects ghostty's built-in colors
     /// ("default ghostty"), NOT the seeded `agterm` app default; any other name must be a bundled theme, else
     /// an error (a typo silently doing nothing is worse than a fail). Echoes the full post-change state
     /// (`theme`/`sync`/`light`/`dark`). App-global: one `SettingsModel`, so no `--window` selector.
@@ -367,7 +367,7 @@ extension ControlServer: ControlActions {
             return ControlResponse(ok: false, error: "theme.set takes either a name or --light, not both")
         }
         let lightSlot = name ?? light
-        let clearDark = dark == "none"
+        let clearDark = dark?.lowercased() == "none"
         let catalog = ThemeCatalog(names: actions.availableThemes())
         for theme in [lightSlot, clearDark ? nil : dark].compactMap({ $0 })
         where !catalog.contains(name: theme) {

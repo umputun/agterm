@@ -387,11 +387,15 @@ final class ControlServer {
         guard let side = trimmed(args?.name), side == "light" || side == "dark" else {
             return ControlResponse(ok: false, error: "debug.appearance requires light|dark")
         }
-        NSApp.appearance = NSAppearance(named: side == "dark" ? .darkAqua : .aqua)
+        // take the validated `side` directly — do NOT re-read `currentIsDark()`, whose
+        // `effectiveAppearance` may not have settled synchronously right after the set (the same
+        // "take the delivered value, never re-read" rule the production `SystemAppearanceObserver` follows).
+        let isDark = side == "dark"
+        NSApp.appearance = NSAppearance(named: isDark ? .darkAqua : .aqua)
         // drive the flip pipeline directly (a duplicate KVO post, if any, is same-side-suppressed).
         NotificationCenter.default.post(name: .agtermSystemAppearanceChanged, object: nil,
-                                        userInfo: ["isDark": GhosttyApp.currentIsDark()])
-        return ControlResponse(ok: true, result: ControlResult(text: GhosttyApp.currentIsDark() ? "dark" : "light"))
+                                        userInfo: ["isDark": isDark])
+        return ControlResponse(ok: true, result: ControlResult(text: isDark ? "dark" : "light"))
     }
 
     /// Clear every open session's saved foreground command (the restore-running-command capture) and

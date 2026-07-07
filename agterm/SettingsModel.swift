@@ -175,8 +175,18 @@ final class SettingsModel {
     }
 
     /// Settings alternate picker (shown only while following): the theme for the OTHER appearance.
+    /// Clearing the dark slot (nil while the alternate IS the dark slot) routes through `setDarkTheme(nil)`
+    /// so following can never be left ON with `darkTheme == nil` — the picker has no such row today, but the
+    /// setter stays consistent regardless of what a future caller passes.
     func setAlternateTheme(_ value: String?) {
-        if rendersDarkSlot { settings.theme = value } else { settings.darkTheme = value }
+        if rendersDarkSlot {
+            settings.theme = value          // the alternate is the LIGHT slot while rendering dark
+        } else if value == nil {
+            setDarkTheme(nil)               // clearing the dark slot turns following off (reuses the tested path)
+            return
+        } else {
+            settings.darkTheme = value
+        }
         persistAndApply()
     }
 

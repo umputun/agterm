@@ -40,5 +40,12 @@ final class ControlAPIThemeUITests: ControlAPITestCase {
         let clearedResult = try XCTUnwrap(cleared["result"] as? [String: Any])
         XCTAssertEqual(clearedResult["sync"] as? Bool, false, "--dark none turns syncing off")
         XCTAssertEqual(clearedResult["theme"] as? String, "Builtin Light", "the light side survives as the theme")
+
+        // the reserved `none` is case-insensitive: re-establish syncing, then clear with `--dark None`.
+        let resynced = try sendCommand(#"{"cmd":"theme.set","args":{"dark":"Dracula"}}"#)
+        XCTAssertEqual(resynced["ok"] as? Bool, true, "re-establishing the dark slot should succeed: \(resynced)")
+        let clearedCaps = try sendCommand(#"{"cmd":"theme.set","args":{"dark":"None"}}"#)
+        let clearedCapsResult = try XCTUnwrap(clearedCaps["result"] as? [String: Any])
+        XCTAssertEqual(clearedCapsResult["sync"] as? Bool, false, "--dark None (any case) also turns syncing off")
     }
 }
