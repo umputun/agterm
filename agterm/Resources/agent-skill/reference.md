@@ -54,7 +54,9 @@ process — what it is running — omitted when the pane sits at its shell promp
 background spec set via `session background` — a `{kind, text?, imagePath?, colorHex?, opacity?, fit?,
 position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set), and `unseen`
 (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session seen` — omitted
-when zero). Workspace nodes carry `id`, `name`, `active`, `sessions`.
+when zero). Workspace nodes carry `id`, `name`, `active`, `sessions`, and `focused` (whether the sidebar
+tree is collapsed to this workspace — the read side of `workspace focus`, distinct from `active` the
+SELECTED workspace; omitted unless this is the focused one, and absent entirely when nothing is focused).
 
 The tree object itself carries three top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow

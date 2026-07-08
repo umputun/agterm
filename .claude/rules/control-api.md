@@ -780,6 +780,9 @@ paths:
   selecting a session outside the focused workspace auto-unfocuses (see the Sidebar section).
   It is the control half of the workspace-row Focus/Unfocus + the `focus-pill` ✕ + `BuiltinAction.focusWorkspace`/`focusActiveWorkspace`
   + the Clear Focus menu/palette item.
+  Its READ side is `ControlWorkspaceNode.focused` on each `tree` workspace node (`workspace.id == focusedWorkspaceID ? true : nil`
+  in the tree builder — DISTINCT from `active`, the selected workspace), so a script can record which
+  workspace is focused and restore it; omitted on the non-focused ones and absent when nothing is focused.
   Four-point keep-in-sync audit: (1) `case workspaceFocus = "workspace.focus"` in `ControlProtocol.swift`
   (reuses `ControlArgs.mode`), (2) the `.workspaceFocus` dispatch arm (`focusWorkspace`) in `ControlServer`,
   (3) the `workspace focus on|off|toggle` subcommand (`Focus`) in `agtermctlKit`,

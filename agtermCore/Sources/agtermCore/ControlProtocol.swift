@@ -317,12 +317,18 @@ public struct ControlWorkspaceNode: Codable, Sendable, Equatable {
     public let id: String
     public let name: String
     public let active: Bool
+    /// Whether this workspace is the one the sidebar tree is FOCUSED (collapsed) to, or nil when it is not
+    /// the focused one / no workspace is focused (omitted from the JSON). Distinct from `active` (the
+    /// SELECTED workspace): focus collapses the sidebar to a single workspace. The read side of the
+    /// write-only `workspace.focus` — so a script can record which workspace is focused and restore it.
+    public let focused: Bool?
     public let sessions: [ControlSessionNode]
 
-    public init(id: String, name: String, active: Bool, sessions: [ControlSessionNode]) {
+    public init(id: String, name: String, active: Bool, focused: Bool? = nil, sessions: [ControlSessionNode]) {
         self.id = id
         self.name = name
         self.active = active
+        self.focused = focused
         self.sessions = sessions
     }
 }

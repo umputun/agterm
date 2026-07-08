@@ -130,7 +130,8 @@ session that has a split — shown or hidden; omitted when there's no split or i
 the read side of `session resize`, record it to restore the exact divider).
 
 **workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom` ·
-`focus [on|off|toggle]` (collapse the sidebar tree to a single workspace).
+`focus [on|off|toggle]` (collapse the sidebar tree to a single workspace; read back which workspace is
+focused from the tree workspace node's `focused` flag).
 
 **session**
 - `new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--name NAME] [--after SID | --before SID]` —

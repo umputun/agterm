@@ -555,6 +555,25 @@ struct ControlProtocolTests {
         #expect(decoded.geometry == nil)
     }
 
+    @Test func workspaceNodeRoundTripsWithFocused() throws {
+        // the read side of workspace.focus: the sidebar-focused workspace is flagged so a script can record
+        // which one is focused and restore it (distinct from `active`, the selected workspace).
+        let ws = ControlWorkspaceNode(id: "w1", name: "work", active: true, focused: true, sessions: [])
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(workspaces: [ws])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.focused == true)
+    }
+
+    @Test func workspaceNodeOmitsFocusedWhenNil() throws {
+        // not the focused workspace (or none focused) — the key must be omitted, not emitted as null.
+        let ws = ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [])
+        let json = String(data: try JSONEncoder().encode(ws), encoding: .utf8) ?? ""
+        #expect(!json.contains("focused"), "a nil focused must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlWorkspaceNode.self, from: Data(json.utf8))
+        #expect(decoded.focused == nil)
+    }
+
     @Test func backgroundWatermarkFitPositionSerializeAsRawStrings() throws {
         // the Fit/Position enums must serialize to ghostty's exact key strings (identical to the former
         // String), so the wire + persisted JSON are unchanged by the enum migration.

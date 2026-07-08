@@ -184,7 +184,9 @@ public final class AppStore {
                                           unseen: session.unseenCount > 0 ? session.unseenCount : nil)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
-                                        active: workspace.id == activeWorkspaceID, sessions: sessions)
+                                        active: workspace.id == activeWorkspaceID,
+                                        focused: workspace.id == focusedWorkspaceID ? true : nil,
+                                        sessions: sessions)
         }
         return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs,
                            sidebarVisible: sidebarVisible)
