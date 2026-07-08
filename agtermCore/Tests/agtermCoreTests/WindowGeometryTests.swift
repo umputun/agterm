@@ -113,16 +113,36 @@ struct WindowGeometryTests {
                                               min: WindowGeometry.Size(width: 640, height: 400),
                                               displayFrame: display())
 
-        expectSize(result.size, 1920, 1080)
+        expectRect(result, 0, 0, 1920, 1080)
     }
 
-    @Test func constrainKeepsOffScreenOriginAtLeastPartiallyVisible() {
+    @Test func constrainFullyContainsOffScreenRightFrame() {
         let frame = WindowGeometry.Rect(origin: WindowGeometry.Point(x: 5000, y: 100),
                                         size: WindowGeometry.Size(width: 800, height: 600))
         let result = WindowGeometry.constrain(frame: frame,
                                               min: WindowGeometry.Size(width: 640, height: 400),
                                               displayFrame: display())
 
-        expectRect(result, 1920 - WindowGeometry.visibleMargin, 100, 800, 600)
+        expectRect(result, 1920 - 800, 100, 800, 600)
+    }
+
+    @Test func constrainFullyContainsFrameAboveDisplaySoTitlebarIsReachable() {
+        let frame = WindowGeometry.Rect(origin: WindowGeometry.Point(x: 100, y: 5000),
+                                        size: WindowGeometry.Size(width: 800, height: 600))
+        let result = WindowGeometry.constrain(frame: frame,
+                                              min: WindowGeometry.Size(width: 640, height: 400),
+                                              displayFrame: display())
+
+        expectRect(result, 100, 1080 - 600, 800, 600)
+    }
+
+    @Test func constrainClampsOriginAgainstShrunkOversizedFrame() {
+        let frame = WindowGeometry.Rect(origin: WindowGeometry.Point(x: 5000, y: 100),
+                                        size: WindowGeometry.Size(width: 5000, height: 4000))
+        let result = WindowGeometry.constrain(frame: frame,
+                                              min: WindowGeometry.Size(width: 640, height: 400),
+                                              displayFrame: display())
+
+        expectRect(result, 0, 0, 1920, 1080)
     }
 }

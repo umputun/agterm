@@ -236,7 +236,7 @@ struct WindowAccessor: NSViewRepresentable {
 
         /// Normalize a persisted frame before restore. A saved `NSRect` may come from a display that is
         /// no longer attached; applying it directly can put the relaunched window entirely off-screen.
-        /// Keep the saved size/position when possible, but clamp it to a visible strip on a current screen.
+        /// Keep the saved size/position when possible, but fully contain it on a current screen.
         private static func constrainedRestoredFrame(_ frame: NSRect, for window: NSWindow) -> NSRect {
             let screens = NSScreen.screens
             guard !screens.isEmpty, let fallback = window.screen ?? NSScreen.main ?? screens.first else { return frame }

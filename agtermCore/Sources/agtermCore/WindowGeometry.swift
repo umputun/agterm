@@ -88,11 +88,17 @@ public enum WindowGeometry {
         return bestArea > 0 ? bestIndex : nil
     }
 
-    /// Constrains a saved window frame to a target display: shrink oversized frames to the display bounds,
-    /// grow undersized frames to the window minimum, then clamp the origin so a visible strip remains.
+    /// Constrains a saved window frame to a target display for automatic restore: shrink oversized frames
+    /// to the display bounds, grow undersized frames to the window minimum, then fully contain the frame so
+    /// a stale above-display coordinate can't restore with only the bottom strip visible and titlebar hidden.
     public static func constrain(frame: Rect, min minSize: Size, displayFrame: Rect) -> Rect {
         let size = clampSize(frame.size, min: minSize, max: displayFrame.size)
-        let origin = clampOrigin(frame.origin, windowSize: size, displayFrame: displayFrame)
+        let displayMinX = displayFrame.origin.x
+        let displayMaxX = displayFrame.origin.x + displayFrame.size.width
+        let displayMinY = displayFrame.origin.y
+        let displayMaxY = displayFrame.origin.y + displayFrame.size.height
+        let origin = Point(x: clamp(frame.origin.x, displayMinX, displayMaxX - size.width),
+                           y: clamp(frame.origin.y, displayMinY, displayMaxY - size.height))
         return Rect(origin: origin, size: size)
     }
 
