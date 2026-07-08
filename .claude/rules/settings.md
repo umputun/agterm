@@ -162,7 +162,7 @@ paths:
   Captions under controls are dropped for self-explanatory controls, which is nearly all of them.
   A caption is kept ONLY when it carries information the label can't — currently just two:
   `Blur needs opacity below 100%` (a functional dependency) and the Ghostty-config edit-path hint.
-  This keeps the busiest tab short enough that the 570-normal window fits every tab without scrolling.
+  This keeps the busiest tab short enough that the 480×590 window fits every tab without scrolling.
   The notification toggle (`AppSettings.notificationsEnabled`, nil = on) is mirrored to `NotificationManager.bannersEnabled`
   by `SettingsModel`; it gates only the OS banner, never the badge, and is NOT a ghostty config key (no
   reload).
