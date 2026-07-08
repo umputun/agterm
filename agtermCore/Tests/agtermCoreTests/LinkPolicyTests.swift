@@ -56,13 +56,21 @@ struct LinkPolicyTests {
         "file://localhost/net/server/share",      // local host but an auto-mount path
         "file:///tmp/../net/server/share",        // dot segments resolve INTO /net — must still ignore
         "file:///NET/server/share",               // auto-mount match is case-insensitive
+        "file:///System/Volumes/Data/home/someone/x.md",  // canonical Data path where auto_home really mounts
     ])
     func autoMountPathsIgnored(_ raw: String) {
         #expect(LinkPolicy.disposition(for: raw, localHosts: Self.localHosts) == .ignore)
     }
 
     /// Sibling names that merely start with an auto-mount root are NOT auto-mount paths — still revealed.
-    @Test(arguments: ["file:///networkx/x.md", "file:///nettools/x.md", "file:///homebrew/x.md"])
+    /// The last case is the boundary that keeps the Data denylist narrow: a normal file on the Data volume
+    /// (`/System/Volumes/Data/Users/…`, where every real file lives) must reveal, not be treated as automount.
+    @Test(arguments: [
+        "file:///networkx/x.md",
+        "file:///nettools/x.md",
+        "file:///homebrew/x.md",
+        "file:///System/Volumes/Data/Users/me/doc.md",
+    ])
     func autoMountLookalikesStillReveal(_ raw: String) {
         guard case .reveal = LinkPolicy.disposition(for: raw, localHosts: Self.localHosts) else {
             Issue.record("expected .reveal for \(raw)"); return

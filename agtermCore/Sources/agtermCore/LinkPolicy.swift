@@ -58,12 +58,20 @@ public enum LinkPolicy {
     }
 
     /// The macOS auto-mount roots where a Finder reveal can trigger an NFS/SMB automount: `/net` (`-hosts`),
-    /// `/Network` (`/Network/Servers`), and `/home` (`auto_home`). Matched against the EXACT root or a
-    /// `<root>/…` child, case-insensitively (the boot volume is case-insensitive, so `/NET/…` mounts too), so
-    /// a sibling like `/networkx` is NOT caught. The path must already be dot-normalized (see `disposition`).
+    /// `/Network` (`/Network/Servers`), and `/home` (`auto_home`), PLUS their canonical Data-volume paths
+    /// under `/System/Volumes/Data/…`. On modern macOS `/home` is a firmlink/symlink and `auto_home` is
+    /// actually mounted at `/System/Volumes/Data/home`, so a LITERAL `/System/Volumes/Data/home/<user>` link
+    /// would otherwise slip past the `/home` entry and still trip the mount. Matched against the EXACT root or
+    /// a `<root>/…` child, case-insensitively (the boot volume is case-insensitive, so `/NET/…` mounts too),
+    /// so a sibling like `/networkx` is NOT caught; the broad Data root `/System/Volumes/Data` itself is
+    /// deliberately NOT listed (it backs every real file, e.g. `/System/Volumes/Data/Users/…`). The path must
+    /// already be dot-normalized (see `disposition`).
     static func isAutomountPath(_ path: String) -> Bool {
         let lower = path.lowercased()
-        return ["/net", "/network", "/home"].contains { lower == $0 || lower.hasPrefix($0 + "/") }
+        return ["/net", "/network", "/home",
+                "/system/volumes/data/home",
+                "/system/volumes/data/net",
+                "/system/volumes/data/network/servers"].contains { lower == $0 || lower.hasPrefix($0 + "/") }
     }
 
     /// Maps a raw terminal link to an action: a permitted web/mail scheme → `.open`; a LOCAL `file://` link
