@@ -173,6 +173,7 @@ public final class AppStore {
                                           cwd: session.effectiveCwd, title: session.oscTitle,
                                           active: session.id == activeID,
                                           split: session.isSplit, overlay: session.overlayActive,
+                                          overlaySizePercent: session.overlayActive ? session.overlaySizePercent : nil,
                                           scratch: session.scratchActive, flagged: session.flagged,
                                           foreground: foreground(session),
                                           splitForeground: splitForeground(session), status: status,

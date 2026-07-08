@@ -39,7 +39,10 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 `agtermctl tree [--json] [--window W]` — the workspace/session tree. Each session node:
 `id`, `name`, `cwd`, `title` (the raw OSC terminal title — e.g. a remote host over SSH — omitted
 when none reported; distinct from `name`, the derived sidebar label), `active` (selected),
-`split` (split shown), `overlay` (overlay shown), `scratch` (scratch shown), `flagged` (in the
+`split` (split shown), `overlay` (overlay shown), `overlaySizePercent` (an open overlay's size — the
+floating panel's percent of the pane, 1–100; omitted = a full-pane overlay or no overlay, so gate on
+`overlay` first; the read side of `session overlay resize`, e.g. record it before switching to `--full`
+to restore the exact size), `scratch` (scratch shown), `flagged` (in the
 flagged working-set), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
 idle), `statusPane` (which pane set that status — `left` (main) | `right` (split) | `scratch` — the
 `--pane` value from `session status`, omitted when unset or idle; gated on the same non-idle condition

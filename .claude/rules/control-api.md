@@ -544,6 +544,10 @@ paths:
   `agtermctlKit`, (4) round-trip in `ControlProtocolTests` + dispatcher routing/validation in `ControlDispatcherTests`
   + `AppStorePaneTests` (resize clamp/switch/no-overlay) + CLI mapping in `CommandsTests` + the e2e
   `testOverlayResizeSwitchesFloatingAndFull` in `ControlOverlaySplitUITests`.
+  The READ side is `ControlSessionNode.overlaySizePercent` on each `tree` node (see the `tree` read-side
+  fields below) — populated in `AppStore.controlTree`, round-tripped by `treeSessionNodeRoundTripsWithOverlaySizePercent`/`…OmitsOverlaySizePercentWhenNil`
+  and `AppStorePaneTests.controlTreeReportsOverlaySizePercent`, and mirrored in the agent-skill `reference.md`
+  tree schema — so a script can record an overlay's size before zooming to `--full` and restore it exactly.
   Mode-bearing commands (`session.split`/`quick`) compute the delta against current state so `on`/`off`/`show`/`hide`
   are idempotent, and an unknown mode is an error.
   `session.status` flags a per-session agent status on the sidebar row — `args.status` is `idle`|`active`|`completed`|`blocked`
@@ -774,6 +778,12 @@ paths:
   is each pane running".
   It ALSO surfaces `background` on each node — the `BackgroundWatermark` spec set via `session.background`
   (omitted when none), the read side of set/clear so a script can query the current watermark.
+  It ALSO surfaces `overlaySizePercent` on each node — an OPEN overlay's size (`session.overlayActive ? session.overlaySizePercent : nil`
+  in the tree builder): nil/omitted = the full-pane overlay OR no overlay (so gate on `overlay` first),
+  else the floating panel's percent (1...100).
+  It is the READ side of `session.overlay.resize` (which had only the write side), so a tmux-style zoom
+  script can record the current size before switching to `--full` and restore the EXACT original on un-zoom
+  (not a guessed default).
   `tree` ALSO carries, at the TOP level (alongside `idleMs`/`autoFollowMs`), `sidebarVisible` — the read
   side of the write-only `sidebar` command (per-window sidebar visibility), populated LIVE from the
   projected window's store in `AppStore.controlTree`.

@@ -319,6 +319,26 @@ struct AppStorePaneTests {
         #expect(session.overlayActive)
     }
 
+    @Test func controlTreeReportsOverlaySizePercent() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        // no overlay: the field is omitted (nil).
+        var node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.overlay == false)
+        #expect(node.overlaySizePercent == nil)
+        // floating overlay: the percent rides the node so a script can record it before zooming.
+        store.openOverlay(session.id, command: "htop", sizePercent: 95)
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.overlay == true)
+        #expect(node.overlaySizePercent == 95)
+        // full-pane overlay: open but no size (nil = full).
+        store.resizeOverlay(session.id, sizePercent: nil)
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.overlay == true)
+        #expect(node.overlaySizePercent == nil)
+    }
+
     @Test func closeOverlayTearsDownAndClears() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

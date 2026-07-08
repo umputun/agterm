@@ -256,6 +256,10 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let active: Bool
     public let split: Bool
     public let overlay: Bool
+    /// For an OPEN overlay (`overlay == true`), its size: nil/omitted = the FULL-pane overlay, else the
+    /// floating panel's percent of the pane (1...100). Absent when no overlay is open. The read side of
+    /// `session.overlay.resize` — record the current size before resizing so a script can restore it exactly.
+    public let overlaySizePercent: Int?
     public let scratch: Bool
     public let flagged: Bool
     /// The LIVE foreground process command (full argv) in the main pane, or nil when the pane is at its
@@ -279,7 +283,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let unseen: Int?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
-                overlay: Bool = false, scratch: Bool = false, flagged: Bool = false,
+                overlay: Bool = false, overlaySizePercent: Int? = nil, scratch: Bool = false, flagged: Bool = false,
                 foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil,
                 statusPane: String? = nil, background: BackgroundWatermark? = nil, unseen: Int? = nil) {
         self.id = id
@@ -289,6 +293,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.active = active
         self.split = split
         self.overlay = overlay
+        self.overlaySizePercent = overlaySizePercent
         self.scratch = scratch
         self.flagged = flagged
         self.foreground = foreground

@@ -444,6 +444,28 @@ struct ControlProtocolTests {
         #expect(decoded.unseen == nil)
     }
 
+    @Test func treeSessionNodeRoundTripsWithOverlaySizePercent() throws {
+        // the read side of session.overlay.resize: a floating overlay's percent rides the tree node so a
+        // script can record it before resizing to full and restore the exact size afterwards.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         overlay: true, overlaySizePercent: 95)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.overlaySizePercent == 95)
+    }
+
+    @Test func treeSessionNodeOmitsOverlaySizePercentWhenNil() throws {
+        // no overlay, or a FULL-pane overlay — the key must be omitted, not emitted as null (so a script
+        // reads absent as "full or no overlay", gating on the `overlay` bool first).
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false, overlay: true)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("overlaySizePercent"), "a nil overlay size must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.overlaySizePercent == nil)
+    }
+
     @Test func treeRoundTripsWithLiveWindowFields() throws {
         // the tree carries the live idle metric + the auto-follow config (both ms) + sidebar visibility.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
