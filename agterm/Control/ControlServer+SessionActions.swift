@@ -594,40 +594,56 @@ extension ControlServer: ControlActions {
     }
 
     /// Inject `text` as literal keystrokes into the frontmost window's quick terminal, the quick-terminal
-    /// twin of `session.type` (input goes where the user is typing when the overlay is up). The quick
-    /// terminal keeps one long-lived surface, so there's no realize-and-select poll like `session.type`:
-    /// it types when a surface exists, and reports `quick terminal not open` when the overlay has never
-    /// been shown (mirroring `session has no scratch terminal`). No open window is an error.
-    func typeQuick(text: String) -> ControlResponse {
+    /// twin of `session.type` (input goes where the user is typing when the overlay is up). `quick show`
+    /// flips `isVisible` before SwiftUI mounts + libghostty realizes the surface, so `quick show; quick
+    /// type` would otherwise race the mount — this polls briefly (like `session.type`'s realize poll) so a
+    /// back-to-back script types reliably. Fails fast with `quick terminal not open` when the overlay has
+    /// never been shown (no surface AND not visible), `quick terminal not realized` if a shown surface
+    /// never comes up within the poll, `no open window` when there is no window.
+    func typeQuick(text: String) async -> ControlResponse {
         guard let controller = QuickTerminalRegistry.shared.controller(for: library.activeWindowID) else {
             return ControlResponse(ok: false, error: "no open window")
         }
-        guard let surface = controller.currentSurface() else {
-            return ControlResponse(ok: false, error: "quick terminal not open")
+        for _ in 0..<12 {
+            if let surface = controller.currentSurface() {
+                // a false inject means the view exists but its libghostty surface isn't realized yet — keep
+                // polling rather than reporting a silent-drop false ok. A shown-then-hidden surface stays
+                // alive and realized (types while hidden, like `--pane scratch`), so it lands here at once.
+                if surface.inject(text: text) {
+                    return ControlResponse(ok: true)
+                }
+            } else if !controller.isVisible {
+                // no surface and not showing → never shown; don't wait out the poll.
+                return ControlResponse(ok: false, error: "quick terminal not open")
+            }
+            try? await Task.sleep(nanoseconds: 30_000_000)
         }
-        // a false inject means the surface exists but its libghostty surface isn't realized yet (the ms
-        // after `quick show`, before layout) — report that rather than a silent-drop false ok.
-        guard surface.inject(text: text) else {
-            return ControlResponse(ok: false, error: "quick terminal not realized")
-        }
-        return ControlResponse(ok: true)
+        return ControlResponse(ok: false, error: "quick terminal not realized")
     }
 
     /// Read the frontmost window's quick-terminal screen as plain text, the quick-terminal twin of
     /// `session.text` — the read-back for `quick.type`. `all` reads the full screen + scrollback, `lines`
-    /// keeps only the last N; the quick terminal has a single surface, so there's no `--pane`. `quick
-    /// terminal not open` when the overlay has never been shown; no open window is an error.
-    func readQuickText(all: Bool, lines: Int?) -> ControlResponse {
+    /// keeps only the last N; the quick terminal has a single surface, so there's no `--pane`. Polls for
+    /// mount + realization like `typeQuick` so `quick show; quick text` doesn't race the mount; fails fast
+    /// with `quick terminal not open` when never shown, `failed to read surface buffer` if a shown surface
+    /// never realizes within the poll, `no open window` when there is no window.
+    func readQuickText(all: Bool, lines: Int?) async -> ControlResponse {
         guard let controller = QuickTerminalRegistry.shared.controller(for: library.activeWindowID) else {
             return ControlResponse(ok: false, error: "no open window")
         }
-        guard let surface = controller.currentSurface() else {
-            return ControlResponse(ok: false, error: "quick terminal not open")
+        for _ in 0..<12 {
+            if let surface = controller.currentSurface() {
+                // readScreenText returns nil only for an unrealized surface ("" for a realized blank
+                // screen), so a non-nil result means the surface is up — return it.
+                if let text = surface.readScreenText(all: all, lines: lines) {
+                    return ControlResponse(ok: true, result: ControlResult(text: text))
+                }
+            } else if !controller.isVisible {
+                return ControlResponse(ok: false, error: "quick terminal not open")
+            }
+            try? await Task.sleep(nanoseconds: 30_000_000)
         }
-        guard let text = surface.readScreenText(all: all, lines: lines) else {
-            return ControlResponse(ok: false, error: "failed to read surface buffer")
-        }
-        return ControlResponse(ok: true, result: ControlResult(text: text))
+        return ControlResponse(ok: false, error: "failed to read surface buffer")
     }
 
     /// Show / hide / toggle the frontmost window's sidebar (the custom split owns visibility, so there's

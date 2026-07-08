@@ -1137,6 +1137,20 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.quickText(all: false, lines: 10)])
     }
 
+    @Test func quickTextRoutesAllFlagOnTheSuccessPath() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextQuickTextResponse = ControlResponse(ok: true, result: ControlResult(text: "full\n"))
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .quickText,
+            args: ControlArgs(all: true)
+        ))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(text: "full\n")))
+        #expect(actions.calls == [.quickText(all: true, lines: nil)])
+    }
+
     @Test func quickTextRejectsInvalidLineOptionsBeforeCallingActions() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -1566,12 +1580,12 @@ private final class MockControlActions: ControlActions {
         return nextQuickResponse
     }
 
-    func typeQuick(text: String) -> ControlResponse {
+    func typeQuick(text: String) async -> ControlResponse {
         calls.append(.quickType(text: text))
         return nextQuickTypeResponse
     }
 
-    func readQuickText(all: Bool, lines: Int?) -> ControlResponse {
+    func readQuickText(all: Bool, lines: Int?) async -> ControlResponse {
         calls.append(.quickText(all: all, lines: lines))
         return nextQuickTextResponse
     }

@@ -36,8 +36,8 @@ public protocol ControlActions {
     func expandSidebar(window: String?) -> ControlResponse
     func collapseSidebar(window: String?) -> ControlResponse
     func setQuickTerminal(mode: String?) -> ControlResponse
-    func typeQuick(text: String) -> ControlResponse
-    func readQuickText(all: Bool, lines: Int?) -> ControlResponse
+    func typeQuick(text: String) async -> ControlResponse
+    func readQuickText(all: Bool, lines: Int?) async -> ControlResponse
     func typeSession(_ target: String?, window: String?, options: ControlSessionTypeOptions) async -> ControlResponse
     func copySessionSelection(_ target: String?, window: String?) -> ControlResponse
     func searchSession(_ target: String?, window: String?,
@@ -138,10 +138,12 @@ public struct ControlDispatcher {
         case .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus:
             return dispatchWorkspaceCommand(request)
-        case .quick, .quickType, .quickText, .fontInc, .fontDec, .fontReset, .keymapReload,
+        case .quick, .fontInc, .fontDec, .fontReset, .keymapReload,
                 .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarExpand,
                 .sidebarCollapse, .restoreClear:
             return dispatchAppCommand(request)
+        case .quickType, .quickText:
+            return await dispatchQuickCommand(request)
         case .windowNew, .windowList, .windowSelect, .windowClose, .windowRename,
                 .windowDelete, .windowResize, .windowMove, .windowZoom, .windowFullscreen:
             return await dispatchWindowCommand(request)
@@ -367,21 +369,6 @@ public struct ControlDispatcher {
             return actions.font(request.target, window: request.args?.window, action: "reset_font_size")
         case .quick:
             return actions.setQuickTerminal(mode: request.args?.mode)
-        case .quickType:
-            guard let text = request.args?.text else {
-                return ControlResponse(ok: false, error: "quick.type requires text")
-            }
-            return actions.typeQuick(text: text)
-        case .quickText:
-            let all = request.args?.all ?? false
-            let lines = request.args?.lines
-            if all, lines != nil {
-                return ControlResponse(ok: false, error: "use either --all or --lines, not both")
-            }
-            if let lines, lines <= 0 {
-                return ControlResponse(ok: false, error: "--lines must be greater than 0")
-            }
-            return actions.readQuickText(all: all, lines: lines)
         case .keymapReload:
             return actions.reloadKeymap()
         case .configReload:
@@ -414,6 +401,31 @@ public struct ControlDispatcher {
             return actions.clearRestoreCommands()
         default:
             preconditionFailure("unexpected app command: \(request.cmd.rawValue)")
+        }
+    }
+
+    /// The quick-terminal input/read commands, `async` because the app side polls briefly for the surface
+    /// to mount + realize after `quick show` (the twin of `session.type`/`session.text`, which are async
+    /// for the same realize-wait reason).
+    private func dispatchQuickCommand(_ request: ControlRequest) async -> ControlResponse {
+        switch request.cmd {
+        case .quickType:
+            guard let text = request.args?.text else {
+                return ControlResponse(ok: false, error: "quick.type requires text")
+            }
+            return await actions.typeQuick(text: text)
+        case .quickText:
+            let all = request.args?.all ?? false
+            let lines = request.args?.lines
+            if all, lines != nil {
+                return ControlResponse(ok: false, error: "use either --all or --lines, not both")
+            }
+            if let lines, lines <= 0 {
+                return ControlResponse(ok: false, error: "--lines must be greater than 0")
+            }
+            return await actions.readQuickText(all: all, lines: lines)
+        default:
+            preconditionFailure("unexpected quick command: \(request.cmd.rawValue)")
         }
     }
 

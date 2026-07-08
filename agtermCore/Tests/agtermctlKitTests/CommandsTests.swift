@@ -633,6 +633,12 @@ struct CommandsTests {
         #expect(command.text == nil)
     }
 
+    @Test func quickTypeWithoutTextOrStdinThrows() {
+        // "provide TEXT or --stdin" is raised in makeRequest (not validate), so it's reached via request(),
+        // which calls makeRequest, rather than parseAsRoot alone.
+        #expect(throws: (any Error).self) { try request(["quick", "type"]) }
+    }
+
     @Test func quickTextDefaultsToVisibleScreen() throws {
         #expect(try request(["quick", "text"]) == ControlRequest(cmd: .quickText, args: ControlArgs()))
     }

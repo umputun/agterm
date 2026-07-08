@@ -232,6 +232,18 @@ struct ControlProtocolTests {
         }
     }
 
+    @Test func quickTypeAndTextCommandsRoundTrip() throws {
+        let cases: [ControlRequest] = [
+            ControlRequest(cmd: .quickType, args: ControlArgs(text: "hello\n")),
+            ControlRequest(cmd: .quickText),
+            ControlRequest(cmd: .quickText, args: ControlArgs(all: true)),
+            ControlRequest(cmd: .quickText, args: ControlArgs(lines: 50)),
+        ]
+        for request in cases {
+            #expect(try roundTrip(request) == request)
+        }
+    }
+
     @Test func sessionScratchRoundTripsWithCommand() throws {
         let request = ControlRequest(cmd: .sessionScratch, target: "active", args: ControlArgs(mode: "on", command: "htop"))
         let decoded = try roundTrip(request)

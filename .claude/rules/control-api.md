@@ -595,11 +595,16 @@ paths:
   `quick.type`/`quick.text` are the input/read-back pair for the quick terminal, the twins of `session.type`/`session.text`
   (the quick terminal is the one typing surface the socket couldn't reach before — issue #170).
   Both are frontmost-window-only (no `--target`/`--window`/`--pane`; the quick terminal is a single per-window surface),
-  dispatcher-owned via `ControlActions.typeQuick(text:)` / `readQuickText(all:lines:)`, and inject/read through the
-  same `GhosttySurfaceView.inject(text:)` / `readScreenText(all:lines:)` primitives the session commands use.
-  Because the quick terminal keeps one long-lived surface there is no realize-and-select poll like `session.type`:
-  they type/read when a surface exists and return `quick terminal not open` when the overlay has never been shown
-  (mirroring `session has no scratch terminal`), `no open window` when there is no window at all.
+  dispatcher-owned via `ControlActions.typeQuick(text:)` / `readQuickText(all:lines:)` (both `async`), and inject/read
+  through the same `GhosttySurfaceView.inject(text:)` / `readScreenText(all:lines:)` primitives the session commands use.
+  They are `async` because `quick show` flips `isVisible` before SwiftUI mounts + libghostty realizes the surface, so
+  a bounded main-actor poll (12×30 ms, the `session.type` realize-poll pattern) waits out the mount — `quick show; quick
+  type` back-to-back is reliable rather than racing.
+  Fast-fail when NOT racing: `quick terminal not open` when the overlay has never been shown (no surface AND not visible,
+  so the poll returns at once), `quick terminal not realized` / `failed to read surface buffer` if a shown surface never
+  comes up within the poll, `no open window` when there is no window.
+  A shown-then-hidden quick terminal keeps its surface alive, so it types/reads while hidden (like `session.type --pane
+  scratch`).
   `quick.text` is the read-back for `quick.type` (there is no NEW tree-node field — you read via the sibling `text`
   command, exactly as `session.text` reads back `session.type`).
   Covered by the `quickType*`/`quickText*` `ControlDispatcherTests` + the e2e `testQuickTypeAndReadText`
