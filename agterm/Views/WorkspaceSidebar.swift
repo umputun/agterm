@@ -10,10 +10,10 @@ let sessionPasteboardType = NSPasteboard.PasteboardType("com.umputun.agterm.sess
 /// drags (within the outline) use this to identify the workspace being reordered.
 let workspacePasteboardType = NSPasteboard.PasteboardType("com.umputun.agterm.workspace")
 
-/// AppKit `NSOutlineView` sidebar (source-list style) hosted in SwiftUI via
-/// `NSViewRepresentable`. Replaces the SwiftUI `List` sidebar so cross-workspace
-/// drag-and-drop works natively: a session row can be dragged onto a different
-/// workspace and the model moves it (same `Session` instance preserved).
+/// AppKit `NSOutlineView` sidebar (`.plain` style + a custom row height and a left content inset that
+/// matches the terminal's ghostty padding) hosted in SwiftUI via `NSViewRepresentable`. Replaces the
+/// SwiftUI `List` sidebar so cross-workspace drag-and-drop works natively: a session row can be dragged
+/// onto a different workspace and the model moves it (same `Session` instance preserved).
 ///
 /// Two-level tree: workspaces (expandable parents, bold) → sessions (children).
 /// Only session rows are selectable detail targets. Inline rename via double-click
@@ -31,14 +31,18 @@ struct WorkspaceSidebar: NSViewRepresentable {
         outline.dataSource = context.coordinator
         outline.delegate = context.coordinator
         outline.headerView = nil
-        outline.rowSizeStyle = .default
+        // .plain style (not .sourceList) so there is no built-in ~10px top inset above the first row (the
+        // sidebar tree runs flush below the titlebar in every toolbar mode); a custom row height restores
+        // the roomy source-list-like row size that .plain's .default would otherwise shrink to ~17px.
+        outline.rowSizeStyle = .custom
+        outline.rowHeight = 28
         outline.floatsGroupRows = false
         outline.indentationPerLevel = 14
         outline.autosaveExpandedItems = false
         outline.target = context.coordinator
         outline.action = #selector(Coordinator.handleSingleClick(_:))
         outline.doubleAction = #selector(Coordinator.handleDoubleClick(_:))
-        if #available(macOS 11.0, *) { outline.style = .sourceList }
+        if #available(macOS 11.0, *) { outline.style = .plain }
         // disable AppKit's own selection drawing: it would paint a gray unemphasized capsule whenever
         // the sidebar isn't first responder (focus normally lives in the terminal). SidebarRowView
         // draws the themed selection pill itself in drawBackground for every state.
@@ -84,8 +88,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         scroll.drawsBackground = false
         scroll.borderType = .noBorder
         context.coordinator.installEmptyState(in: scroll)
-        // in hidden toolbar mode the sidebar must run flush to the window top like the terminal.
-        context.coordinator.applyToolbarModeContentInset(scroll)
+        // inset the tree to match the terminal's ghostty padding so they line up in every toolbar mode.
+        context.coordinator.applySidebarContentInset(scroll)
         return scroll
     }
 
@@ -222,15 +226,16 @@ struct WorkspaceSidebar: NSViewRepresentable {
             outlineView?.appearance = NSAppearance(named: GhosttyApp.shared.terminalThemeIsDark ? .darkAqua : .aqua)
         }
 
-        /// In the hidden toolbar mode the titlebar row collapses to zero and the terminal runs flush to
-        /// the window top; the sidebar's scroll view otherwise reserves the title-bar band as a top
-        /// content inset (the terminal, a plain surface, has none), leaving its first row stranded below
-        /// the terminal. Drop the automatic inset when hidden so the row aligns; normal/compact keep it.
-        func applyToolbarModeContentInset(_ scroll: NSScrollView?) {
+        /// Inset the sidebar tree to line up with the terminal's ghostty padding (agterm/Resources/ghostty-defaults.conf):
+        /// window-padding-x = 8 matches the terminal's left margin, plus a small 2px top nudge so the first
+        /// row's text sits on the terminal's first line. Most of the ~window-padding-y = 6 gap above the text
+        /// comes from the row centering its content (`centerYAnchor`) in a ~28px row; the 2px fine-tunes it (a
+        /// full 6px top inset would double it). The `.plain` outline style adds no insets of its own, so we own
+        /// them (auto-adjust off). Mode-independent — same offset in every toolbar mode.
+        func applySidebarContentInset(_ scroll: NSScrollView?) {
             guard let scroll else { return }
-            let hidden = GhosttyApp.shared.toolbarMode == .hidden
-            scroll.automaticallyAdjustsContentInsets = !hidden
-            if hidden { scroll.contentInsets = NSEdgeInsets() }
+            scroll.automaticallyAdjustsContentInsets = false
+            scroll.contentInsets = NSEdgeInsets(top: 2, left: 8, bottom: 0, right: 0)
         }
 
         @objc private func appearanceChanged() {
@@ -245,7 +250,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
             updateEmptyState()
             // a settings change may have flipped the toolbar mode; realign the scroll view's top inset so
             // hidden mode runs flush (like toolbarMode's other chrome mirrors).
-            applyToolbarModeContentInset(outlineView?.enclosingScrollView)
+            applySidebarContentInset(outlineView?.enclosingScrollView)
         }
 
         /// Re-apply the status glyph on every visible session row so a global agent-status color change

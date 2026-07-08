@@ -538,14 +538,15 @@ struct WindowContentView: View {
     }
 
     /// The window chrome above the terminal: the full custom titlebar row, or — in hidden mode — an
-    /// invisible ~6px top drag strip and nothing else (no row, and `WindowAppearance.sync` also drops the
+    /// invisible ~3px top drag strip and nothing else (no row, and `WindowAppearance.sync` also drops the
     /// traffic lights) so the terminal runs full-bleed while the window stays movable + double-click-zoomable.
     @ViewBuilder private var customTitlebar: some View {
         if toolbarMode == .hidden {
-            // the top ~6px loses click-through (the accepted cost) but keeps the standard title-bar
-            // gestures via the same `WindowControlArea` the full row uses.
+            // only the top ~3px loses click-through (the accepted cost) — kept thin so it doesn't cover the
+            // terminal's first row (window-padding-y = 6), which would otherwise swallow clicks meant to
+            // select it; it still keeps the standard title-bar gestures via the same `WindowControlArea`.
             Color.clear
-                .frame(height: 6)
+                .frame(height: 3)
                 .frame(maxWidth: .infinity)
                 // Color.clear is hit-testable in SwiftUI, so it would swallow the mouseDown before it
                 // reaches the WindowControlArea behind it — opt out (like the titlebarRow spacers) so the
