@@ -351,13 +351,20 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// so unlike `idleMs`/`autoFollowMs` it never omits; the per-window `window.list` copy is nil/omitted
     /// only for a closed window.
     public let sidebarVisible: Bool?
+    /// The projected window's sidebar VIEW mode — `SidebarMode.rawValue` (`tree` = the workspace tree,
+    /// `flagged` = the flat flagged working-set list). LIVE and always present on a `tree` response, like
+    /// `sidebarVisible`. The read side of the write-only `sidebar.mode` command, so a script can record the
+    /// mode and restore it. `tree`-only (not on `window.list`), since a GUI-only flagged-view toggle would
+    /// leave a cached copy stale — read the live tree copy instead.
+    public let sidebarMode: String?
 
     public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
-                sidebarVisible: Bool? = nil) {
+                sidebarVisible: Bool? = nil, sidebarMode: String? = nil) {
         self.workspaces = workspaces
         self.idleMs = idleMs
         self.autoFollowMs = autoFollowMs
         self.sidebarVisible = sidebarVisible
+        self.sidebarMode = sidebarMode
     }
 }
 

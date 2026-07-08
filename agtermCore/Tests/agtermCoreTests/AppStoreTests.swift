@@ -815,6 +815,15 @@ struct AppStoreTests {
         #expect(store.controlTree().workspaces.allSatisfy { $0.focused == nil })
     }
 
+    @Test func controlTreeReportsSidebarMode() {
+        let store = makeStore()
+        #expect(store.controlTree().sidebarMode == "tree") // default: the workspace tree
+        store.setSidebarMode(.flagged)
+        #expect(store.controlTree().sidebarMode == "flagged")
+        store.setSidebarMode(.tree)
+        #expect(store.controlTree().sidebarMode == "tree")
+    }
+
     @Test func setSidebarVisiblePostsChangeNotificationOnlyOnChange() {
         // the app-target ControlServer observes this to refresh window.list's cached sidebarVisible; the
         // post must fire only on an actual change (queue nil so the synchronous post delivers inline).

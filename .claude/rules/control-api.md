@@ -741,6 +741,10 @@ paths:
   It is the control half of the bottom-bar `flagged-view-toggle` + the View-menu Show Flagged/Show All
   + `BuiltinAction.toggleFlaggedView`; the existing `sidebar [show|hide|toggle]` is now the default `sidebar visibility`
   subcommand alongside `sidebar mode`.
+  Its READ side is `ControlTree.sidebarMode` at the tree TOP level (`AppStore.sidebarMode.rawValue`,
+  `tree`|`flagged`), the read side of this write-only command so a script can record and restore the view
+  mode — the sibling of `sidebarVisible`, except `tree`-ONLY (not mirrored onto the cached `window.list`,
+  since the GUI `flagged-view-toggle` bypasses the command path and would leave a cached copy stale).
   Four-point keep-in-sync audit: (1) `case sidebarMode = "sidebar.mode"` in `ControlProtocol.swift` (reuses
   `ControlArgs.mode`), (2) the `.sidebarMode` dispatch arm (`setSidebarViewMode`) in `ControlServer`,
   (3) the `sidebar mode tree|flagged|toggle` subcommand (`Mode`, alongside the `Visibility` default)

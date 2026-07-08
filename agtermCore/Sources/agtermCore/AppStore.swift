@@ -189,7 +189,7 @@ public final class AppStore {
                                         sessions: sessions)
         }
         return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs,
-                           sidebarVisible: sidebarVisible)
+                           sidebarVisible: sidebarVisible, sidebarMode: sidebarMode.rawValue)
     }
 
     /// Creates a workspace and appends it. Clears any active focus so the new (empty)

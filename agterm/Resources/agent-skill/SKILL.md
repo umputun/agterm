@@ -204,8 +204,9 @@ focused from the tree workspace node's `focused` flag).
 
 **quick** — `[show|hide|toggle]` — the window's quick terminal.
 
-**sidebar** — `[show|hide|toggle]` (visibility) · `mode [tree|flagged|toggle]` (flip between the
-workspace tree and the flat flagged working-set list) · `expand [--window W]` (expand every workspace) ·
+**sidebar** — `[show|hide|toggle]` (visibility; read back from the tree's `sidebarVisible`) ·
+`mode [tree|flagged|toggle]` (flip between the workspace tree and the flat flagged working-set list; read
+back from the tree's top-level `sidebarMode`) · `expand [--window W]` (expand every workspace) ·
 `collapse [--window W]` (collapse all workspaces except the active one, which stays expanded).
 Visibility/mode act on the frontmost window; `expand`/`collapse` default to the frontmost but take a
 `--window` selector to target any open window.

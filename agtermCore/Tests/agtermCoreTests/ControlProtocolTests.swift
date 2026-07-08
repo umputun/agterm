@@ -574,6 +574,15 @@ struct ControlProtocolTests {
         #expect(decoded.focused == nil)
     }
 
+    @Test func treeRoundTripsWithSidebarMode() throws {
+        // the read side of sidebar.mode: the sidebar view mode (tree/flagged) rides the tree top level.
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [], sidebarMode: "flagged")))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.sidebarMode == "flagged")
+    }
+
     @Test func backgroundWatermarkFitPositionSerializeAsRawStrings() throws {
         // the Fit/Position enums must serialize to ghostty's exact key strings (identical to the former
         // String), so the wire + persisted JSON are unchanged by the enum migration.
