@@ -16,11 +16,19 @@ paths:
   NO version field — optionality is the forward-compat) + `SettingsStore` (JSON at `<stateDir>/settings.json`,
   `AGTERM_STATE_DIR`-isolated, mirrors `PersistenceStore`).
   Fields: `fontFamily`/`fontSize`/`theme`/`darkTheme`/`followSystemAppearance` + `backgroundOpacity` (0...1) / `backgroundBlur` (CGS radius)
-  + `notificationsEnabled` / `compactToolbar` / `notificationBadgeEnabled` / `attentionButtonEnabled`
+  + `notificationsEnabled` / `toolbarMode` / `notificationBadgeEnabled` / `attentionButtonEnabled`
   + the agent-status glyph colors `activeStatusColorHex`/`blockedStatusColorHex`/`completedStatusColorHex`
   (nil defaults: `notificationsEnabled`/`notificationBadgeEnabled` = on,
-  `compactToolbar` = compact [the app default — `?? true`; an explicit `false` is the tall non-compact
-  bar], `attentionButtonEnabled` = off, the `*ColorHex` = default tint, active `#DBD9E6` + blocked/completed
+  `toolbarMode` = the three-state titlebar chrome `ToolbarMode { normal, compact, hidden }`,
+  stored raw as `String?` (like `newSessionDirectory`/`autoFollowAttention`) for tolerant forward-compat
+  decode — an unknown future value degrades to the default instead of nuking the whole `settings.json`.
+  nil = compact [the app default]; `.normal` adds the cwd subtitle line, `.hidden` drops the titlebar row
+  AND the traffic lights for a full-bleed terminal, leaving only an invisible ~6px top drag strip.
+  Resolved via `effectiveToolbarMode` = `toolbarMode.flatMap(ToolbarMode.init(rawValue:)) ?? (compactToolbar == false ? .normal : .compact)`;
+  `compactToolbar: Bool?` is RETAINED only as a legacy decode shim (the old two-state key: `false` = normal,
+  nil/true = compact) so pre-existing `settings.json` still opens right — writing a mode nils it, so it
+  evaporates on the next save.
+  `attentionButtonEnabled` = off, the `*ColorHex` = default tint, active `#DBD9E6` + blocked/completed
   system orange/green; NOT ghostty keys) + `mouseScrollMultiplier` (ghostty `mouse-scroll-multiplier`)
   + `inactivePaneMuteStrength` (0...10 inactive-split-pane text mute, nil = default 5,
   NOT a ghostty key) + `sidebarBackgroundShift` (0...10 sidebar lighter/darker tint relative to the terminal,
@@ -77,7 +85,7 @@ paths:
   in `GhosttySurfaceView`, this key only decides libghostty's action).
   The Appearance → Panes slider (0...10, default 5) maps 5 back to nil the same way;
   it drives `GhosttyApp.inactivePaneMuteStrength` (mirrored into `WindowContentView` view state on `.agtermAppearanceChanged`,
-  like `compactToolbar`/`notificationBadgeEnabled`), and `ContentView.paneDim` washes the inactive split
+  like `toolbarMode`/`notificationBadgeEnabled`), and `ContentView.paneDim` washes the inactive split
   pane with `terminalColor` at `AppSettings.muteOpacity(strength:)` (host-free,
   unit-tested: 0→0 renders nothing, 5→0.4 = the historical default, 10→0.8) so the inactive pane's TEXT
   mutes toward the background (`bg→bg` unchanged, `text→bg` dimmer) while the background stays put —
@@ -130,7 +138,7 @@ paths:
   `ContentView` mirrors the color into `terminalColor` view state (the quick terminal's opaque backing
   re-renders with the new color) and `TitleProbeView` re-applies the window appearance.
   Without this the chrome only refreshed when the window next re-keyed.
-  UI is the standard SwiftUI `Settings` scene (Cmd+,) with a 5-tab `TabView` (frame 480×550).
+  UI is the standard SwiftUI `Settings` scene (Cmd+,) with a 5-tab `TabView` (frame 480×590).
   An explicit `TabView(selection:)` binding (`@State` default `.general`) suppresses SwiftUI's
   `com_apple_SwiftUI_Settings_selectedTabIndex` auto-persistence, so the window always opens on General
   instead of restoring the last-used tab.
@@ -140,9 +148,10 @@ paths:
   confirm-before-closing-a-session toggle,
   and a **Ghostty Config** section with the inherit-global-config toggle).
   **Appearance** (a **Terminal** section — font/size/theme via `NSFontManager` monospaced families +
-  the bundled `ghostty/themes` dir, `SettingsCatalog` — a **Window** section with the compact-toolbar
-  toggle + background opacity/blur sliders + the Sidebar Tint slider, and a **Panes** section with the
-  inactive-pane-mute slider).
+  the bundled `ghostty/themes` dir, `SettingsCatalog` — a **Window** section with the Normal/Compact/Hidden
+  toolbar-mode dropdown Picker (`settings-toolbar-mode`, bound to `effectiveToolbarMode` via `model.setToolbarMode`,
+  `.compact` mapping back to nil) + background opacity/blur sliders + the Sidebar Tint slider, and a
+  **Panes** section with the inactive-pane-mute slider).
   **Notifications** (a **Notifications** section with the banner / badge / attention-indicator toggles).
   **Agent Status** (a **Colors** section with the three glyph color pickers, a **Sound** section with
   the blocked-sound picker, an **Auto-follow** section with the idle-timeout Picker
@@ -153,14 +162,14 @@ paths:
   Captions under controls are dropped for self-explanatory controls, which is nearly all of them.
   A caption is kept ONLY when it carries information the label can't — currently just two:
   `Blur needs opacity below 100%` (a functional dependency) and the Ghostty-config edit-path hint.
-  This keeps the busiest tab short enough that the 550-tall window fits every tab without scrolling.
+  This keeps the busiest tab short enough that the 570-normal window fits every tab without scrolling.
   The notification toggle (`AppSettings.notificationsEnabled`, nil = on) is mirrored to `NotificationManager.bannersEnabled`
   by `SettingsModel`; it gates only the OS banner, never the badge, and is NOT a ghostty config key (no
   reload).
   The badge toggle (`AppSettings.notificationBadgeEnabled`, nil = on) is mirrored into the non-observable
   `GhosttyApp.notificationBadgeEnabled` flag by `SettingsModel.applyNotificationBadgeEnabled`;
   because that flag isn't `@Observable`, a flip rides the `.agtermAppearanceChanged` notification the
-  same way `compactToolbar` does — the sidebar Coordinator's `appearanceChanged` calls `reconcile()`,
+  same way `toolbarMode` does — the sidebar Coordinator's `appearanceChanged` calls `reconcile()`,
   and the gated `RowContent.unseen` (0 when off via `effectiveUnseen`) reloads the affected badge rows.
   NOT a ghostty config key.
 - **Window translucency (`WindowAppearance.sync`).**
@@ -330,8 +339,8 @@ paths:
   NOT a ghostty key (`writeGhosttyConfig` no-ops, no surface reload).
   It is the non-observable chrome-mirror pattern: `SettingsModel.setAttentionButtonEnabled` saves + `applyAttentionButtonEnabled`
   pushes `settings.attentionButtonEnabled ?? false` into the `GhosttyApp.attentionButtonEnabled` flag
-  (alongside `applyCompactToolbar`/`applyNotificationBadgeEnabled`), so a flip rides `.agtermAppearanceChanged`
-  and `WindowContentView` re-reads the mirror to re-render the titlebar live — exactly like `compactToolbar`/`notificationBadgeEnabled`.
+  (alongside `applyToolbarMode`/`applyNotificationBadgeEnabled`), so a flip rides `.agtermAppearanceChanged`
+  and `WindowContentView` re-reads the mirror to re-render the titlebar live — exactly like `toolbarMode`/`notificationBadgeEnabled`.
   The Notifications tab's Notifications-section `Toggle("Show attention indicator")` uses the default-OFF binding (get
   `?? false`, set `$0 ? true : nil`, mirroring `restoreRunningCommand`/`inheritGlobalGhosttyConfig`,
   NOT `notificationBadgeEnabled`).

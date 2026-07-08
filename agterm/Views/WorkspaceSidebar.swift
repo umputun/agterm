@@ -96,7 +96,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // lets reconcile do a targeted per-row reload for a content change; a touch inside viewFor wouldn't
         // register it. agentIndicator feeds the status-icon reconcile (it renders on every session). the
         // badge-visibility toggle (GhosttyApp.notificationBadgeEnabled) is NOT observable, so it drives a
-        // re-reconcile via the .agtermAppearanceChanged notification (appearanceChanged), like compactToolbar.
+        // re-reconcile via the .agtermAppearanceChanged notification (appearanceChanged), like toolbarMode.
         _ = store.workspaces.map { ($0.id, $0.name, $0.unseenCount, $0.sessions.map { ($0.id, $0.displayName, $0.hasSplit, $0.unseenCount, $0.agentIndicator, $0.flagged) }) }
         _ = store.selectedSessionID
         // sidebarMode flips the whole data source between the tree and the flat flagged list; reading it
