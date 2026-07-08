@@ -164,7 +164,7 @@ final class ControlWindowUITests: ControlAPITestCase {
     }
 
     // A point 14pt below the top edge, horizontally centred: clears the top resize strip, lands inside the
-    // titlebar band (compact 30 / tall 48), and sits in the empty header (a Spacer) — clear of the traffic
+    // titlebar band (compact 30 / normal 48), and sits in the empty header (a Spacer) — clear of the traffic
     // lights on the left and the toolbar buttons on the right, so the click falls through the decorative
     // regions' `.allowsHitTesting(false)` to the `WindowControlArea` layer behind the custom header.
     // Re-resolved at each interaction, so it stays in the header even after a zoom grows the window.

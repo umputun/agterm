@@ -55,13 +55,14 @@ final class GhosttyApp {
     /// `WindowAppearance.sync` reads these, `SettingsModel` writes them. Defaults are opaque.
     private(set) var windowOpacity: Double = 1
     private(set) var windowBlurRadius: Int = 0
-    /// Whether the window chrome uses the compact title bar (single short row, smaller icons, no
-    /// subtitle). NOT ghostty-resolved: `WindowAppearance.sync` reads it, `SettingsModel` writes it.
-    /// Defaults to compact (the app default; `settings.compactToolbar == nil` resolves to `true`).
-    private(set) var compactToolbar: Bool = true
+    /// The custom title bar row state (normal/compact/hidden): normal stacks the cwd subtitle, compact is a
+    /// single short row, hidden drops the row and the traffic lights for a full-bleed terminal. NOT
+    /// ghostty-resolved: `WindowContentView`/`WindowAppearance.sync` read it, `SettingsModel` writes it.
+    /// Defaults to compact (the app default; `settings.toolbarMode == nil` resolves to `.compact`).
+    private(set) var toolbarMode: ToolbarMode = .compact
     /// Whether the sidebar draws the red unseen-notification count badge. NOT ghostty-resolved: the
     /// sidebar Coordinator reads it (gating the count to 0 when off), `SettingsModel` writes it. The
-    /// re-render rides the `.agtermAppearanceChanged` notification, like `compactToolbar`.
+    /// re-render rides the `.agtermAppearanceChanged` notification, like `toolbarMode`.
     private(set) var notificationBadgeEnabled: Bool = true
     /// Whether a restored pane re-runs the command it had in the foreground at the last clean quit
     /// (`AppSettings.restoreRunningCommand`). The surface factories read it to decide whether to feed the
@@ -70,7 +71,7 @@ final class GhosttyApp {
     private(set) var restoreRunningCommand: Bool = false
     /// Whether the window title bar shows the attention bell icon. NOT ghostty-resolved: the title bar
     /// reads it (via `WindowContentView`'s mirrored chrome state), `SettingsModel` writes it. The
-    /// re-render rides the `.agtermAppearanceChanged` notification, like `compactToolbar`. Defaults off.
+    /// re-render rides the `.agtermAppearanceChanged` notification, like `toolbarMode`. Defaults off.
     private(set) var attentionButtonEnabled: Bool = false
     /// Program basenames NOT to re-run on restore — the parsed user-editable `restore-denylist.conf`
     /// (seeded with the terminal multiplexers). The surface factories read it via
@@ -78,12 +79,12 @@ final class GhosttyApp {
     private(set) var restoreDenylist: Set<String> = []
     /// Inactive-split-pane text mute strength on the 0...10 scale. NOT ghostty-resolved: the detail
     /// pane's `paneDim` overlay reads it (via `AppSettings.muteOpacity`), `SettingsModel` writes it. The
-    /// re-render rides the `.agtermAppearanceChanged` notification, like `compactToolbar`.
+    /// re-render rides the `.agtermAppearanceChanged` notification, like `toolbarMode`.
     private(set) var inactivePaneMuteStrength: Int = AppSettings.defaultInactivePaneMuteStrength
     /// How much darker/lighter the sidebar background is than the terminal (0...10, 5 = neutral). NOT
     /// ghostty-resolved: `ContentView` mirrors it into view state and renders the sidebar wash (via
     /// `AppSettings.sidebarShiftAmount`), `SettingsModel` writes it. The re-render rides the
-    /// `.agtermAppearanceChanged` notification, like `compactToolbar`.
+    /// `.agtermAppearanceChanged` notification, like `toolbarMode`.
     private(set) var sidebarBackgroundShift: Int = AppSettings.defaultSidebarBackgroundShift
     /// The agent-status glyph colors (active/blocked/completed). NOT ghostty-resolved: `StatusIconView`
     /// reads them when building the glyph, `SettingsModel` writes them (resolved from the user's hex or
@@ -149,10 +150,10 @@ final class GhosttyApp {
         windowBlurRadius = blurRadius
     }
 
-    /// Set whether the window chrome uses the compact title bar. Called by `SettingsModel` at launch
+    /// Set the custom title bar row state (normal/compact/hidden). Called by `SettingsModel` at launch
     /// and on every change; the window re-sync rides the `.agtermAppearanceChanged` notification.
-    func setCompactToolbar(_ enabled: Bool) {
-        compactToolbar = enabled
+    func setToolbarMode(_ mode: ToolbarMode) {
+        toolbarMode = mode
     }
 
     /// Set whether the sidebar draws the notification count badge. Called by `SettingsModel` at launch

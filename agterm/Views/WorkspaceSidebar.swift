@@ -84,6 +84,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         scroll.drawsBackground = false
         scroll.borderType = .noBorder
         context.coordinator.installEmptyState(in: scroll)
+        // in hidden toolbar mode the sidebar must run flush to the window top like the terminal.
+        context.coordinator.applyToolbarModeContentInset(scroll)
         return scroll
     }
 
@@ -94,7 +96,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // lets reconcile do a targeted per-row reload for a content change; a touch inside viewFor wouldn't
         // register it. agentIndicator feeds the status-icon reconcile (it renders on every session). the
         // badge-visibility toggle (GhosttyApp.notificationBadgeEnabled) is NOT observable, so it drives a
-        // re-reconcile via the .agtermAppearanceChanged notification (appearanceChanged), like compactToolbar.
+        // re-reconcile via the .agtermAppearanceChanged notification (appearanceChanged), like toolbarMode.
         _ = store.workspaces.map { ($0.id, $0.name, $0.unseenCount, $0.sessions.map { ($0.id, $0.displayName, $0.hasSplit, $0.unseenCount, $0.agentIndicator, $0.flagged) }) }
         _ = store.selectedSessionID
         // sidebarMode flips the whole data source between the tree and the flat flagged list; reading it
@@ -220,6 +222,17 @@ struct WorkspaceSidebar: NSViewRepresentable {
             outlineView?.appearance = NSAppearance(named: GhosttyApp.shared.terminalThemeIsDark ? .darkAqua : .aqua)
         }
 
+        /// In the hidden toolbar mode the titlebar row collapses to zero and the terminal runs flush to
+        /// the window top; the sidebar's scroll view otherwise reserves the title-bar band as a top
+        /// content inset (the terminal, a plain surface, has none), leaving its first row stranded below
+        /// the terminal. Drop the automatic inset when hidden so the row aligns; normal/compact keep it.
+        func applyToolbarModeContentInset(_ scroll: NSScrollView?) {
+            guard let scroll else { return }
+            let hidden = GhosttyApp.shared.toolbarMode == .hidden
+            scroll.automaticallyAdjustsContentInsets = !hidden
+            if hidden { scroll.contentInsets = NSEdgeInsets() }
+        }
+
         @objc private func appearanceChanged() {
             refreshSelectionAppearance()
             applyThemeAppearance()
@@ -230,6 +243,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // color change — re-apply every visible glyph so a Settings color edit takes effect live.
             reapplyStatusGlyphs()
             updateEmptyState()
+            // a settings change may have flipped the toolbar mode; realign the scroll view's top inset so
+            // hidden mode runs flush (like toolbarMode's other chrome mirrors).
+            applyToolbarModeContentInset(outlineView?.enclosingScrollView)
         }
 
         /// Re-apply the status glyph on every visible session row so a global agent-status color change

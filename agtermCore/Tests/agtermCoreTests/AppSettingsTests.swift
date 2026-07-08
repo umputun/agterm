@@ -174,12 +174,68 @@ struct AppSettingsTests {
         #expect(AppSettings(blockedStatusSoundName: "Glass").ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
-    @Test func compactToolbarRoundTripsAndIsNotAConfigLine() throws {
-        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(compactToolbar: true)))
-        #expect(decoded.compactToolbar == true)
-        // window-chrome toggle applied at the AppKit level, never a ghostty config key — only the
-        // always-on defaults (scroll + right-click) are emitted.
-        #expect(AppSettings(compactToolbar: true).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    @Test func toolbarModeRoundTripsAndIsNotAConfigLine() throws {
+        for mode in ToolbarMode.allCases {
+            let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(toolbarMode: mode.rawValue)))
+            #expect(decoded.toolbarMode == mode.rawValue)
+            #expect(decoded.effectiveToolbarMode == mode)
+        }
+        // window-chrome mode applied at the AppKit level, never a ghostty config key — only the always-on
+        // defaults (scroll + right-click) are emitted.
+        #expect(AppSettings(toolbarMode: ToolbarMode.hidden.rawValue).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
+
+    @Test func toolbarModeOmittedWhenNil() throws {
+        // nil (default) never serializes, keeping settings.json minimal; the legacy shim is likewise absent.
+        #expect(AppSettings().toolbarMode == nil)
+        let json = String(decoding: try JSONEncoder().encode(AppSettings()), as: UTF8.self)
+        #expect(!json.contains("toolbarMode"))
+        #expect(!json.contains("compactToolbar"))
+        // a set mode serializes its raw value while the (nil) legacy shim stays absent — the write path
+        // that lets the legacy key evaporate on the next save.
+        let withMode = String(decoding: try JSONEncoder().encode(AppSettings(toolbarMode: ToolbarMode.hidden.rawValue)), as: UTF8.self)
+        #expect(withMode.contains("toolbarMode"))
+        #expect(withMode.contains("hidden"))
+        #expect(!withMode.contains("compactToolbar"))
+    }
+
+    @Test func effectiveToolbarModeDefaultsCompact() {
+        // nil toolbarMode + nil legacy shim resolves to compact (the app default).
+        #expect(AppSettings().effectiveToolbarMode == .compact)
+    }
+
+    @Test func effectiveToolbarModeResolvesExplicitModes() {
+        // an explicit mode with no legacy shim resolves to itself, including the compact default.
+        #expect(AppSettings(toolbarMode: ToolbarMode.compact.rawValue).effectiveToolbarMode == .compact)
+        #expect(AppSettings(toolbarMode: ToolbarMode.normal.rawValue).effectiveToolbarMode == .normal)
+        #expect(AppSettings(toolbarMode: ToolbarMode.hidden.rawValue).effectiveToolbarMode == .hidden)
+    }
+
+    @Test func unknownToolbarModePreservesOtherSettings() throws {
+        // a future-written mode must decode tolerantly (the forward-compat rule): it may NOT fail the whole
+        // decode and discard every other field. the unknown raw value falls through to the default.
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "toolbarMode": "floating", "fontSize": 16 }"#.utf8))
+        #expect(decoded.fontSize == 16)
+        #expect(decoded.toolbarMode == "floating")
+        #expect(decoded.effectiveToolbarMode == .compact)
+    }
+
+    @Test func toolbarModeWinsOverLegacyCompactToolbar() {
+        // when both are present, the explicit toolbarMode wins over the legacy shim.
+        #expect(AppSettings(toolbarMode: ToolbarMode.hidden.rawValue, compactToolbar: false).effectiveToolbarMode == .hidden)
+        #expect(AppSettings(toolbarMode: ToolbarMode.normal.rawValue, compactToolbar: true).effectiveToolbarMode == .normal)
+    }
+
+    @Test func legacyCompactToolbarMigratesToMode() throws {
+        // a settings.json written before toolbarMode existed resolves via the compactToolbar shim:
+        // false → normal, true/nil → compact.
+        let normal = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "compactToolbar": false }"#.utf8))
+        #expect(normal.toolbarMode == nil)
+        #expect(normal.effectiveToolbarMode == .normal)
+        let compact = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "compactToolbar": true }"#.utf8))
+        #expect(compact.effectiveToolbarMode == .compact)
+        let legacyAbsent = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(legacyAbsent.effectiveToolbarMode == .compact)
     }
 
     @Test func notificationBadgeEnabledDefaultsNil() {

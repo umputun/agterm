@@ -26,11 +26,12 @@ struct WindowContentView: View {
     /// state and used as the quick terminal's opaque backing, so a settings theme change (posting
     /// `.agtermAppearanceChanged`) re-renders it live.
     @State private var terminalColor: Color = WindowContentView.resolvedTerminalColor()
-    /// Mirror of `GhosttyApp.compactToolbar`: when true the cwd subtitle is dropped so the title bar
-    /// collapses to a single line. Refreshed on `.agtermAppearanceChanged`, like `terminalColor`.
-    @State private var compactToolbar: Bool = WindowContentView.resolvedCompactToolbar()
+    /// Mirror of `GhosttyApp.toolbarMode`: `normal` shows the cwd subtitle, `compact` collapses the title
+    /// bar to a single line, `hidden` drops the row (and the traffic lights) for a full-bleed terminal.
+    /// Refreshed on `.agtermAppearanceChanged`, like `terminalColor`.
+    @State private var toolbarMode: ToolbarMode = WindowContentView.resolvedToolbarMode()
     /// Mirror of `GhosttyApp.inactivePaneMuteStrength` (0...10): how strongly `paneDim` mutes the
-    /// inactive split pane's text. Refreshed on `.agtermAppearanceChanged`, like `compactToolbar`.
+    /// inactive split pane's text. Refreshed on `.agtermAppearanceChanged`, like `toolbarMode`.
     @State private var inactivePaneMute: Int = WindowContentView.resolvedInactivePaneMute()
     /// Mirror of `GhosttyApp.sidebarBackgroundShift` (0...10, 5 = neutral): how much lighter/darker the
     /// sidebar background is than the terminal. Drives `sidebarTintWash`; refreshed on
@@ -41,15 +42,22 @@ struct WindowContentView: View {
     /// on `.agtermAppearanceChanged`, like `terminalColor`.
     @State private var chromeText: Color = WindowContentView.resolvedChromeText()
     /// Mirror of `GhosttyApp.attentionButtonEnabled`: when true the title bar shows the attention bell.
-    /// Refreshed on `.agtermAppearanceChanged`, like `compactToolbar`, so flipping the Settings toggle
+    /// Refreshed on `.agtermAppearanceChanged`, like `toolbarMode`, so flipping the Settings toggle
     /// shows/hides the bell live without a relaunch.
     @State private var attentionButtonEnabled: Bool = WindowContentView.resolvedAttentionButtonEnabled()
     /// Custom sidebar width and show/hide both live on the per-window `AppStore` (`sidebarWidth` /
     /// `sidebarVisible`), persisted in `Snapshot` so they restore on relaunch. The toolbar button, the View
     /// menu, the palette, and the `sidebar` control command share `sidebarVisible`.
-    /// Height of the custom titlebar row: one short line in compact mode, two lines (title + cwd)
-    /// otherwise. The split content is inset by this so it sits below the row.
-    private var titlebarHeight: CGFloat { compactToolbar ? 30 : 48 }
+    /// Height of the custom titlebar row: two lines (title + cwd) when normal, one short line when
+    /// compact, and zero when hidden (the row collapses to an invisible drag strip and the terminal
+    /// runs full-bleed). The split content is inset by this so it sits below the row.
+    private var titlebarHeight: CGFloat {
+        switch toolbarMode {
+        case .normal: return 48
+        case .compact: return 30
+        case .hidden: return 0
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -61,7 +69,7 @@ struct WindowContentView: View {
             // the window overlays (quick terminal / palettes / switcher) sit BELOW the titlebar, inset by
             // its height — NOT as a body-level `.overlay` above EVERYTHING. A full-window overlay's dim
             // scrim composites OVER the transparent custom titlebar (whose AppKit backing is deliberately
-            // hidden for translucency, WindowAppearance), darkening + seaming the tall non-compact titlebar
+            // hidden for translucency, WindowAppearance), darkening + seaming the normal non-compact titlebar
             // (the corruption). Keeping the titlebar at the highest zIndex means a scrim can never cover it.
             windowOverlayLayer
                 .padding(.top, titlebarHeight)
@@ -98,7 +106,7 @@ struct WindowContentView: View {
         // notification to pick up the new terminal color in the quick terminal backing.
         .onReceive(NotificationCenter.default.publisher(for: .agtermAppearanceChanged)) { _ in
             terminalColor = WindowContentView.resolvedTerminalColor()
-            compactToolbar = WindowContentView.resolvedCompactToolbar()
+            toolbarMode = WindowContentView.resolvedToolbarMode()
             chromeText = WindowContentView.resolvedChromeText()
             attentionButtonEnabled = WindowContentView.resolvedAttentionButtonEnabled()
             inactivePaneMute = WindowContentView.resolvedInactivePaneMute()
@@ -468,10 +476,10 @@ struct WindowContentView: View {
             ?? NSColor(srgbRed: 0.157, green: 0.173, blue: 0.204, alpha: 1))
     }
 
-    /// The compact-toolbar flag from the (non-observable) `GhosttyApp`, mirrored into view state so a
-    /// settings change (posting `.agtermAppearanceChanged`) drops/restores the cwd subtitle live.
-    private static func resolvedCompactToolbar() -> Bool {
-        GhosttyApp.shared.compactToolbar
+    /// The toolbar mode from the (non-observable) `GhosttyApp`, mirrored into view state so a settings
+    /// change (posting `.agtermAppearanceChanged`) re-renders the title bar (subtitle / hidden) live.
+    private static func resolvedToolbarMode() -> ToolbarMode {
+        GhosttyApp.shared.toolbarMode
     }
 
     /// The attention-button flag from the (non-observable) `GhosttyApp`, mirrored into view state so a
@@ -511,17 +519,17 @@ struct WindowContentView: View {
 
     /// The titlebar subtitle (second line): the focused pane's `subtitleDetail` — its terminal title for
     /// a remote (SSH) session whose local cwd is stale, else its working directory (the split pane's while
-    /// it's focused, else the primary's). Dropped in compact mode so the title bar is a single short row.
+    /// it's focused, else the primary's). Shown only in normal mode; compact/hidden drop it.
     private var windowSubtitle: String {
-        compactToolbar ? "" : (store.activeSession?.subtitleDetail ?? "")
+        toolbarMode == .normal ? (store.activeSession?.subtitleDetail ?? "") : ""
     }
 
     /// The window title at the terminal's leading edge: the session name, plus the cwd subtitle on a
-    /// second line when not in compact mode (compact drops it for a single short row).
+    /// second line only in normal mode (compact drops it for a single short row).
     private var titleLabel: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(windowTitle).fontWeight(.semibold)
-            if !compactToolbar, !windowSubtitle.isEmpty {
+            if !windowSubtitle.isEmpty {
                 Text(windowSubtitle)
                     .font(.caption)
                     .foregroundStyle(chromeText.opacity(0.6))
@@ -529,11 +537,31 @@ struct WindowContentView: View {
         }
     }
 
+    /// The window chrome above the terminal: the full custom titlebar row, or — in hidden mode — an
+    /// invisible ~6px top drag strip and nothing else (no row, and `WindowAppearance.sync` also drops the
+    /// traffic lights) so the terminal runs full-bleed while the window stays movable + double-click-zoomable.
+    @ViewBuilder private var customTitlebar: some View {
+        if toolbarMode == .hidden {
+            // the top ~6px loses click-through (the accepted cost) but keeps the standard title-bar
+            // gestures via the same `WindowControlArea` the full row uses.
+            Color.clear
+                .frame(height: 6)
+                .frame(maxWidth: .infinity)
+                // Color.clear is hit-testable in SwiftUI, so it would swallow the mouseDown before it
+                // reaches the WindowControlArea behind it — opt out (like the titlebarRow spacers) so the
+                // strip's drag/double-click-zoom gestures fall through to the AppKit view.
+                .allowsHitTesting(false)
+                .background { WindowControlArea() }
+        } else {
+            titlebarRow
+        }
+    }
+
     /// Custom titlebar row replacing the system toolbar: the sidebar toggle pinned to the sidebar's
     /// trailing edge (by the divider), the title at the terminal's start, and the split / quick-terminal
     /// buttons at the trailing edge. Positions track `sidebarWidth`; the left inset clears the system
     /// traffic lights.
-    private var customTitlebar: some View {
+    private var titlebarRow: some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: 78).allowsHitTesting(false) // system traffic lights
             if store.sidebarVisible {
@@ -569,9 +597,9 @@ struct WindowContentView: View {
         // tint the title text and the toolbar buttons with the terminal theme's foreground so the
         // chrome tracks the theme (the cwd subtitle dims itself to 0.6 over this).
         .foregroundStyle(chromeText)
-        // larger icons in the taller non-compact row, smaller in the compact row (imageScale hits the
+        // larger icons in the normal row, smaller in compact (the row isn't drawn in hidden mode; imageScale hits the
         // SF Symbols, not the title text).
-        .imageScale(compactToolbar ? .medium : .large)
+        .imageScale(toolbarMode == .normal ? .large : .medium)
         .frame(height: titlebarHeight)
         .frame(maxWidth: .infinity)
         // make the header behave like a standard title bar: single-click drag moves the window, double-click

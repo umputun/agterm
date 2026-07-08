@@ -57,15 +57,34 @@ final class SettingsUITests: XCTestCase {
                       "turning notifications off should persist notificationsEnabled=false")
     }
 
-    func testCompactToolbarTogglePersists() throws {
-        // type-agnostic match (a grouped-Form Toggle surfaces as a switch/checkbox depending on macOS).
-        // compact is the default (on), so the binding writes nil for on and an explicit false for off;
-        // clicking once turns it off and persists compactToolbar=false.
-        let toggle = settingsControl(tab: "Appearance", control: "settings-compact-toolbar")
-        toggle.click() // turn it off (default on)
+    func testToolbarModePickerPersists() throws {
+        // the Toolbar dropdown offers Normal/Compact/Hidden. compact is the default and maps back to nil;
+        // Normal/Hidden write a stable key.
+        let picker = settingsControl(tab: "Appearance", control: "settings-toolbar-mode")
 
-        XCTAssertTrue(poll { self.settingsBool("compactToolbar") == false },
-                      "turning compact toolbar off should persist compactToolbar=false")
+        // Hidden → toolbarMode="hidden".
+        picker.click()
+        let hidden = app.menuItems["Hidden"]
+        XCTAssertTrue(hidden.waitForExistence(timeout: 5), "the toolbar dropdown should offer a Hidden item")
+        hidden.click()
+        XCTAssertTrue(poll { self.settingsValue("toolbarMode") == "hidden" },
+                      "selecting Hidden should persist toolbarMode=hidden to settings.json")
+
+        // Compact → the default, mapped back to nil, so the key is REMOVED (the nil-mapping branch).
+        picker.click()
+        let compact = app.menuItems["Compact"]
+        XCTAssertTrue(compact.waitForExistence(timeout: 5), "the toolbar dropdown should offer a Compact item")
+        compact.click()
+        XCTAssertTrue(poll { self.settingsValue("toolbarMode") == nil },
+                      "selecting Compact (the default) should remove the toolbarMode key from settings.json")
+
+        // Normal → toolbarMode="normal".
+        picker.click()
+        let normal = app.menuItems["Normal"]
+        XCTAssertTrue(normal.waitForExistence(timeout: 5), "the toolbar dropdown should offer a Normal item")
+        normal.click()
+        XCTAssertTrue(poll { self.settingsValue("toolbarMode") == "normal" },
+                      "selecting Normal should persist toolbarMode=normal to settings.json")
     }
 
     func testRestoreRunningCommandTogglePersists() throws {
