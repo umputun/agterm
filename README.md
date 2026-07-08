@@ -214,7 +214,8 @@ agtermctl sidebar mode flagged                   # show only the flagged session
 agtermctl workspace focus on                     # collapse the sidebar tree to the active workspace (on|off|toggle)
 agtermctl session search "error"                 # open the search bar and highlight matches; prints the "N of M" counter
 agtermctl session search --next                  # step to the next match (--prev steps back, --close hides the bar)
-agtermctl quick toggle                           # toggle the quick terminal
+agtermctl quick toggle                           # toggle the quick terminal (show|hide|toggle)
+agtermctl quick type 'ls -la'$'\n'               # type into the frontmost window's quick terminal (or --stdin); quick text reads it back
 agtermctl font inc                               # increase the active surface's font size
 agtermctl theme set --light "Builtin Light" --dark Dracula  # set the light/dark theme slots (--dark none turns following off)
 ```

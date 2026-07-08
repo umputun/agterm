@@ -113,7 +113,7 @@ you work. For any session-scoped command meant to act on *this* session — `ove
 `type`, `text`, `background`, `status`, `copy`, … — pass `--target "$AGTERM_SESSION_ID"`. Omit it and
 you open overlays / type into whatever the user has selected, not your own session.
 
-## Command summary (53 commands)
+## Command summary (55 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -209,7 +209,10 @@ focused from the tree workspace node's `focused` flag).
 `zoom <id>` (maximize-to-screen toggle, the double-click-header gesture; a plain green-button click does full screen) ·
 `fullscreen <id>` (toggle native macOS full screen, the green-button / ⌃⌘F action).
 
-**quick** — `[show|hide|toggle]` — the window's quick terminal.
+**quick** — `[show|hide|toggle]` (visibility; read back from the tree's `quickVisible`) ·
+`type TEXT` (or `--stdin`) inject keystrokes into the frontmost window's quick terminal ·
+`text [--all] [--lines N]` read its screen back — the twins of `session type`/`session text`,
+frontmost-window-only (no `--target`/`--window`/`--pane`).
 
 **sidebar** — `[show|hide|toggle]` (visibility; read back from the tree's `sidebarVisible`) ·
 `mode [tree|flagged|toggle]` (flip between the workspace tree and the flat flagged working-set list; read

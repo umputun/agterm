@@ -1099,6 +1099,62 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.quick("maybe")])
     }
 
+    @Test func quickTypeRoutesTextAndKeepsActionResponse() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextQuickTypeResponse = ControlResponse(ok: false, error: "quick terminal not open")
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .quickType,
+            args: ControlArgs(text: "hello")
+        ))
+
+        #expect(response == ControlResponse(ok: false, error: "quick terminal not open"))
+        #expect(actions.calls == [.quickType(text: "hello")])
+    }
+
+    @Test func quickTypeRequiresTextBeforeCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .quickType))
+
+        #expect(response == ControlResponse(ok: false, error: "quick.type requires text"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func quickTextRoutesOptionsAndKeepsExactActionResponse() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextQuickTextResponse = ControlResponse(ok: true, result: ControlResult(text: "line\n"))
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .quickText,
+            args: ControlArgs(lines: 10)
+        ))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(text: "line\n")))
+        #expect(actions.calls == [.quickText(all: false, lines: 10)])
+    }
+
+    @Test func quickTextRejectsInvalidLineOptionsBeforeCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let both = await dispatcher.dispatch(ControlRequest(
+            cmd: .quickText,
+            args: ControlArgs(all: true, lines: 5)
+        ))
+        let zero = await dispatcher.dispatch(ControlRequest(
+            cmd: .quickText,
+            args: ControlArgs(lines: 0)
+        ))
+
+        #expect(both == ControlResponse(ok: false, error: "use either --all or --lines, not both"))
+        #expect(zero == ControlResponse(ok: false, error: "--lines must be greater than 0"))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func sessionSearchRoutesRawInputsAndKeepsActionResponse() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -1291,6 +1347,8 @@ private final class MockControlActions: ControlActions {
         case expand(window: String?)
         case collapse(window: String?)
         case quick(String?)
+        case quickType(text: String)
+        case quickText(all: Bool, lines: Int?)
         case sessionType(target: String?, window: String?, ControlSessionTypeOptions)
         case sessionCopy(target: String?, window: String?)
         case sessionSearch(target: String?, window: String?, text: String?, to: String?)
@@ -1327,6 +1385,8 @@ private final class MockControlActions: ControlActions {
     var nextThemeSetResponse = ControlResponse(ok: true)
     var nextThemeListResponse = ControlResponse(ok: true)
     var nextQuickResponse = ControlResponse(ok: true)
+    var nextQuickTypeResponse = ControlResponse(ok: true)
+    var nextQuickTextResponse = ControlResponse(ok: true)
     var nextSessionTypeResponse = ControlResponse(ok: true)
     var nextSessionCopyResponse = ControlResponse(ok: true)
     var nextSessionSearchResponse = ControlResponse(ok: true)
@@ -1504,6 +1564,16 @@ private final class MockControlActions: ControlActions {
     func setQuickTerminal(mode: String?) -> ControlResponse {
         calls.append(.quick(mode))
         return nextQuickResponse
+    }
+
+    func typeQuick(text: String) -> ControlResponse {
+        calls.append(.quickType(text: text))
+        return nextQuickTypeResponse
+    }
+
+    func readQuickText(all: Bool, lines: Int?) -> ControlResponse {
+        calls.append(.quickText(all: all, lines: lines))
+        return nextQuickTextResponse
     }
 
     func typeSession(_ target: String?, window: String?,

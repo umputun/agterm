@@ -1,4 +1,5 @@
 import ArgumentParser
+import Foundation
 import agtermCore
 
 // MARK: - keymap
@@ -97,14 +98,71 @@ struct Theme: ParsableCommand {
 
 // MARK: - quick
 
-struct Quick: RequestCommand {
-    static let configuration = CommandConfiguration(abstract: "Quick terminal (show|hide|toggle).")
-    @Argument(help: "Mode: show, hide, or toggle (default).") var mode: String = "toggle"
-    // the quick terminal is always the frontmost window's, so this carries no `--window` selector.
-    @OptionGroup var options: BasicOptions
+struct Quick: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Quick terminal: visibility, type into it, read its text.",
+        subcommands: [Visibility.self, TypeText.self, Text.self],
+        defaultSubcommand: Visibility.self
+    )
 
-    func makeRequest() throws -> ControlRequest {
-        ControlRequest(cmd: .quick, args: ControlArgs(mode: mode))
+    /// `agtermctl quick [show|hide|toggle]` — the default, so the bare verb keeps working. Shows/hides the
+    /// frontmost window's quick terminal.
+    struct Visibility: RequestCommand {
+        static let configuration = CommandConfiguration(commandName: "visibility", abstract: "Quick terminal visibility (show|hide|toggle).")
+        @Argument(help: "Mode: show, hide, or toggle (default).") var mode: String = "toggle"
+        // the quick terminal is always the frontmost window's, so this carries no `--window` selector.
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .quick, args: ControlArgs(mode: mode))
+        }
+    }
+
+    /// `agtermctl quick type TEXT` — inject literal keystrokes into the frontmost window's quick terminal
+    /// (the quick-terminal twin of `session type`). No `--target`/`--window`: it's always the frontmost
+    /// window's quick terminal.
+    struct TypeText: RequestCommand {
+        static let configuration = CommandConfiguration(commandName: "type", abstract: "Inject text into the quick terminal.")
+        @Argument(help: "Text to inject (omit with --stdin).") var text: String?
+        @Flag(name: .long, help: "Read the text from stdin instead of an argument.") var stdin = false
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest {
+            let payload: String
+            if stdin {
+                // non-UTF8 stdin decodes to nil and injects nothing — terminal input is UTF-8 text.
+                let data = FileHandle.standardInput.readDataToEndOfFile()
+                payload = String(data: data, encoding: .utf8) ?? ""
+            } else if let text {
+                payload = text
+            } else {
+                throw ValidationError("provide TEXT or --stdin")
+            }
+            return ControlRequest(cmd: .quickType, args: ControlArgs(text: payload))
+        }
+    }
+
+    /// `agtermctl quick text` — print the frontmost window's quick-terminal buffer as plain text (the
+    /// read-back for `quick type`; does not touch the system clipboard). No `--pane`: the quick terminal
+    /// has a single surface.
+    struct Text: RequestCommand {
+        static let configuration = CommandConfiguration(commandName: "text", abstract: "Print the quick terminal's buffer as plain text.")
+        @Flag(name: .long, help: "Read the full screen + scrollback instead of just the visible screen.") var all = false
+        @Option(name: .long, help: "Keep only the last N lines of the full buffer.") var lines: Int?
+        @OptionGroup var options: BasicOptions
+
+        func validate() throws {
+            if all, lines != nil {
+                throw ValidationError("use either --all or --lines, not both")
+            }
+            if let lines, lines <= 0 {
+                throw ValidationError("--lines must be greater than 0")
+            }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .quickText, args: ControlArgs(all: all ? true : nil, lines: lines))
+        }
     }
 }
 

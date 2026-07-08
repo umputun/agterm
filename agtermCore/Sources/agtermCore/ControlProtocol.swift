@@ -34,6 +34,8 @@ public enum Command: String, Codable, Sendable {
     case sessionOverlayResize = "session.overlay.resize"
     case sessionOverlayResult = "session.overlay.result"
     case quick
+    case quickType = "quick.type"
+    case quickText = "quick.text"
     case sidebar
     case sidebarMode = "sidebar.mode"
     case sidebarExpand = "sidebar.expand"
@@ -84,7 +86,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// For `session.new` with `workspaceName`: create the named workspace when none exists (idempotent
     /// reuse-or-create). An error without `workspaceName` — there is nothing to create by id.
     public var createWorkspace: Bool?
-    /// Text to inject for `session.type`; the search needle for `session.search`.
+    /// Text to inject for `session.type` / `quick.type`; the search needle for `session.search`.
     public var text: String?
     /// Whether `session.type` may select a never-shown session to realize its surface.
     public var select: Bool?
@@ -123,9 +125,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// pane, negative grows the right (the CLI's `--grow-left`/`--grow-right`). Applied to the session's
     /// current fraction (0.5 when never moved). Mutually exclusive with `ratio`.
     public var ratioDelta: Double?
-    /// For `session.text`: read the full screen + scrollback instead of just the visible screen.
+    /// For `session.text` / `quick.text`: read the full screen + scrollback instead of just the visible screen.
     public var all: Bool?
-    /// For `session.text`: keep only the last N lines of the full buffer.
+    /// For `session.text` / `quick.text`: keep only the last N lines of the full buffer.
     public var lines: Int?
     /// Direction for `session.go` (`next`|`prev`|`previous`|`first`|`last`), for the reorder form of
     /// `session.move` / `workspace.move` (`up`|`down`|`top`|`bottom`), and for `session.search`

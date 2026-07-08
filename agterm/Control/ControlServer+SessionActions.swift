@@ -593,6 +593,43 @@ extension ControlServer: ControlActions {
         return ControlResponse(ok: true)
     }
 
+    /// Inject `text` as literal keystrokes into the frontmost window's quick terminal, the quick-terminal
+    /// twin of `session.type` (input goes where the user is typing when the overlay is up). The quick
+    /// terminal keeps one long-lived surface, so there's no realize-and-select poll like `session.type`:
+    /// it types when a surface exists, and reports `quick terminal not open` when the overlay has never
+    /// been shown (mirroring `session has no scratch terminal`). No open window is an error.
+    func typeQuick(text: String) -> ControlResponse {
+        guard let controller = QuickTerminalRegistry.shared.controller(for: library.activeWindowID) else {
+            return ControlResponse(ok: false, error: "no open window")
+        }
+        guard let surface = controller.currentSurface() else {
+            return ControlResponse(ok: false, error: "quick terminal not open")
+        }
+        // a false inject means the surface exists but its libghostty surface isn't realized yet (the ms
+        // after `quick show`, before layout) — report that rather than a silent-drop false ok.
+        guard surface.inject(text: text) else {
+            return ControlResponse(ok: false, error: "quick terminal not realized")
+        }
+        return ControlResponse(ok: true)
+    }
+
+    /// Read the frontmost window's quick-terminal screen as plain text, the quick-terminal twin of
+    /// `session.text` — the read-back for `quick.type`. `all` reads the full screen + scrollback, `lines`
+    /// keeps only the last N; the quick terminal has a single surface, so there's no `--pane`. `quick
+    /// terminal not open` when the overlay has never been shown; no open window is an error.
+    func readQuickText(all: Bool, lines: Int?) -> ControlResponse {
+        guard let controller = QuickTerminalRegistry.shared.controller(for: library.activeWindowID) else {
+            return ControlResponse(ok: false, error: "no open window")
+        }
+        guard let surface = controller.currentSurface() else {
+            return ControlResponse(ok: false, error: "quick terminal not open")
+        }
+        guard let text = surface.readScreenText(all: all, lines: lines) else {
+            return ControlResponse(ok: false, error: "failed to read surface buffer")
+        }
+        return ControlResponse(ok: true, result: ControlResult(text: text))
+    }
+
     /// Show / hide / toggle the frontmost window's sidebar (the custom split owns visibility, so there's
     /// no system toggle). Flips only when the requested state differs; an unknown mode is an error, and no
     /// open window is an error rather than a silent no-op.

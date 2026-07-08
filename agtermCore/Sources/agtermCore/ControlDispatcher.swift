@@ -36,6 +36,8 @@ public protocol ControlActions {
     func expandSidebar(window: String?) -> ControlResponse
     func collapseSidebar(window: String?) -> ControlResponse
     func setQuickTerminal(mode: String?) -> ControlResponse
+    func typeQuick(text: String) -> ControlResponse
+    func readQuickText(all: Bool, lines: Int?) -> ControlResponse
     func typeSession(_ target: String?, window: String?, options: ControlSessionTypeOptions) async -> ControlResponse
     func copySessionSelection(_ target: String?, window: String?) -> ControlResponse
     func searchSession(_ target: String?, window: String?,
@@ -136,8 +138,8 @@ public struct ControlDispatcher {
         case .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete,
                 .workspaceMove, .workspaceFocus:
             return dispatchWorkspaceCommand(request)
-        case .quick, .fontInc, .fontDec, .fontReset, .keymapReload, .configReload, .notify,
-                .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarExpand,
+        case .quick, .quickType, .quickText, .fontInc, .fontDec, .fontReset, .keymapReload,
+                .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarExpand,
                 .sidebarCollapse, .restoreClear:
             return dispatchAppCommand(request)
         case .windowNew, .windowList, .windowSelect, .windowClose, .windowRename,
@@ -365,6 +367,21 @@ public struct ControlDispatcher {
             return actions.font(request.target, window: request.args?.window, action: "reset_font_size")
         case .quick:
             return actions.setQuickTerminal(mode: request.args?.mode)
+        case .quickType:
+            guard let text = request.args?.text else {
+                return ControlResponse(ok: false, error: "quick.type requires text")
+            }
+            return actions.typeQuick(text: text)
+        case .quickText:
+            let all = request.args?.all ?? false
+            let lines = request.args?.lines
+            if all, lines != nil {
+                return ControlResponse(ok: false, error: "use either --all or --lines, not both")
+            }
+            if let lines, lines <= 0 {
+                return ControlResponse(ok: false, error: "--lines must be greater than 0")
+            }
+            return actions.readQuickText(all: all, lines: lines)
         case .keymapReload:
             return actions.reloadKeymap()
         case .configReload:

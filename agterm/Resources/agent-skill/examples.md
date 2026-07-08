@@ -214,6 +214,20 @@ agtermctl session scratch toggle
 agtermctl session scratch on --command "zsh -lc 'lazygit'"   # run a program instead of a shell (run-once); login-shell wrap so Homebrew's PATH is found (bare "lazygit" exits 127)
 ```
 
+## Drive the quick terminal
+
+The quick terminal is the window's throwaway overlay (not in the session tree). Show it, type into it,
+and read it back — the twins of `session type`/`session text`, but always the frontmost window's quick
+terminal (no `--target`/`--pane`).
+
+```bash
+agtermctl quick show                                 # drop the overlay over whatever is active
+agtermctl quick type 'ls -la'$'\n'                   # inject keystrokes (\n runs it)
+echo "some payload" | agtermctl quick type --stdin   # pipe stdin in (e.g. a paste helper)
+agtermctl quick text --all                           # read its screen + scrollback back
+agtermctl tree | jq .quickVisible                    # is it open right now?
+```
+
 ## Flag a working set and view just the flagged sessions
 
 Flag a few sessions across workspaces, then flip the sidebar to the flat flagged list (each row labeled

@@ -332,7 +332,17 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
 
 `agtermctl quick [show|hide|toggle]` — the frontmost window's quick terminal (a single scratch
 terminal at 90% of the window, not in the tree; its shell stays alive across hides). Errors with
-`no open window` when none is open.
+`no open window` when none is open. Read its visibility back from the tree's top-level `quickVisible`.
+
+`agtermctl quick type TEXT` (or `--stdin`) — inject `TEXT` as literal keystrokes into the frontmost
+window's quick terminal, the quick-terminal twin of `session type`. There is no `--target`/`--window`
+(always the frontmost window's quick terminal) and no `--pane` (a single surface). Errors with
+`quick terminal not open` when the overlay has never been shown, `no open window` when none is open.
+
+`agtermctl quick text [--all] [--lines N]` — print the frontmost window's quick-terminal buffer as
+plain text (the read-back for `quick type`; does not touch the system clipboard). `--all` reads the
+full screen + scrollback, `--lines N` keeps only the last N (mutually exclusive). Same `quick terminal
+not open` / `no open window` errors as `quick type`.
 
 ## sidebar
 
