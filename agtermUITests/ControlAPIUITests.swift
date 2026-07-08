@@ -707,25 +707,26 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertEqual(closed["ok"] as? Bool, false, "quick.type before show should fail: \(closed)")
         XCTAssertEqual(closed["error"] as? String, "quick terminal not open", "should report the closed overlay")
 
+        // show, then IMMEDIATELY type once — no waitForExistence, no retry. The server-side realize poll
+        // must ride out the SwiftUI mount so this first post-show type lands, which is what proves the
+        // show->type race is fixed (a regression that dropped the poll would return "not realized" here).
         let shown = try sendCommand(#"{"cmd":"quick","args":{"mode":"show"}}"#)
         XCTAssertEqual(shown["ok"] as? Bool, true, "quick show should succeed: \(shown)")
-        XCTAssertTrue(quick.waitForExistence(timeout: 10), "quick terminal should appear")
+        let typed = try sendCommand(#"{"cmd":"quick.type","args":{"text":"QUICKPROBE"}}"#)
+        XCTAssertEqual(typed["ok"] as? Bool, true, "a single quick.type right after quick show must land via the realize poll: \(typed)")
 
-        // retype-and-poll: inject a marker and read it back off the quick surface, riding out shell and
-        // libghostty realization readiness (the first injects may report "not realized").
+        // read the typed marker back off the quick surface, polling only for the shell echo to render (a
+        // no-newline marker, so it stays on the prompt line and never executes).
         var readBack: String?
-        outer: for _ in 0..<8 {
-            _ = try sendCommand(#"{"cmd":"quick.type","args":{"text":"QUICKPROBE"}}"#)
-            for _ in 0..<8 {
-                let response = try sendCommand(#"{"cmd":"quick.text","args":{"all":true}}"#)
-                if let text = (response["result"] as? [String: Any])?["text"] as? String, text.contains("QUICKPROBE") {
-                    readBack = text
-                    break outer
-                }
-                RunLoop.current.run(until: Date().addingTimeInterval(0.4))
+        for _ in 0..<20 {
+            let response = try sendCommand(#"{"cmd":"quick.text","args":{"all":true}}"#)
+            if let text = (response["result"] as? [String: Any])?["text"] as? String, text.contains("QUICKPROBE") {
+                readBack = text
+                break
             }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.4))
         }
-        XCTAssertNotNil(readBack, "quick.type should reach the surface and quick.text should read the marker back")
+        XCTAssertNotNil(readBack, "quick.text should read the typed marker back")
     }
 
     // session.select by a UNIQUE prefix of a session id resolves to that session: seed two sessions with

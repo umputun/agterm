@@ -604,7 +604,12 @@ extension ControlServer: ControlActions {
         guard let controller = QuickTerminalRegistry.shared.controller(for: library.activeWindowID) else {
             return ControlResponse(ok: false, error: "no open window")
         }
-        for _ in 0..<12 {
+        // probe first (fast path), then sleep-then-probe up to 12 more times — a probe follows every sleep
+        // so the full ~360ms window is used, matching `session.type`'s realize poll (no wasted trailing sleep).
+        for attempt in 0...12 {
+            if attempt > 0 {
+                try? await Task.sleep(nanoseconds: 30_000_000)
+            }
             if let surface = controller.currentSurface() {
                 // a false inject means the view exists but its libghostty surface isn't realized yet — keep
                 // polling rather than reporting a silent-drop false ok. A shown-then-hidden surface stays
@@ -616,7 +621,6 @@ extension ControlServer: ControlActions {
                 // no surface and not showing → never shown; don't wait out the poll.
                 return ControlResponse(ok: false, error: "quick terminal not open")
             }
-            try? await Task.sleep(nanoseconds: 30_000_000)
         }
         return ControlResponse(ok: false, error: "quick terminal not realized")
     }
@@ -631,7 +635,11 @@ extension ControlServer: ControlActions {
         guard let controller = QuickTerminalRegistry.shared.controller(for: library.activeWindowID) else {
             return ControlResponse(ok: false, error: "no open window")
         }
-        for _ in 0..<12 {
+        // probe first, then sleep-then-probe up to 12 more times (a probe follows every sleep), like `typeQuick`.
+        for attempt in 0...12 {
+            if attempt > 0 {
+                try? await Task.sleep(nanoseconds: 30_000_000)
+            }
             if let surface = controller.currentSurface() {
                 // readScreenText returns nil only for an unrealized surface ("" for a realized blank
                 // screen), so a non-nil result means the surface is up — return it.
@@ -641,7 +649,6 @@ extension ControlServer: ControlActions {
             } else if !controller.isVisible {
                 return ControlResponse(ok: false, error: "quick terminal not open")
             }
-            try? await Task.sleep(nanoseconds: 30_000_000)
         }
         return ControlResponse(ok: false, error: "failed to read surface buffer")
     }
