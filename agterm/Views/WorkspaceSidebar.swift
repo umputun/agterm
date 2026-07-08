@@ -43,6 +43,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
         outline.action = #selector(Coordinator.handleSingleClick(_:))
         outline.doubleAction = #selector(Coordinator.handleDoubleClick(_:))
         if #available(macOS 11.0, *) { outline.style = .plain }
+        // .plain reverts the outline's backgroundColor to an OPAQUE controlBackgroundColor (unlike
+        // .sourceList's translucent source-list material), which would paint over the sidebar tint wash and
+        // the terminal-colored/translucent window backing. Clear it so the transparent column shows through,
+        // matching scroll.drawsBackground = false below.
+        outline.backgroundColor = .clear
         // disable AppKit's own selection drawing: it would paint a gray unemphasized capsule whenever
         // the sidebar isn't first responder (focus normally lives in the terminal). SidebarRowView
         // draws the themed selection pill itself in drawBackground for every state.
@@ -226,8 +231,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
             outlineView?.appearance = NSAppearance(named: GhosttyApp.shared.terminalThemeIsDark ? .darkAqua : .aqua)
         }
 
-        /// Inset the sidebar tree to line up with the terminal's ghostty padding (agterm/Resources/ghostty-defaults.conf):
-        /// window-padding-x = 8 matches the terminal's left margin, plus a small 2px top nudge so the first
+        /// Inset the sidebar tree to line up with the terminal's DEFAULT ghostty padding (agterm/Resources/ghostty-defaults.conf;
+        /// a user window-padding override in ghostty.conf is not tracked here): window-padding-x = 8 matches
+        /// the terminal's left margin, plus a small 2px top nudge so the first
         /// row's text sits on the terminal's first line. Most of the ~window-padding-y = 6 gap above the text
         /// comes from the row centering its content (`centerYAnchor`) in a ~28px row; the 2px fine-tunes it (a
         /// full 6px top inset would double it). The `.plain` outline style adds no insets of its own, so we own
@@ -248,8 +254,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // color change — re-apply every visible glyph so a Settings color edit takes effect live.
             reapplyStatusGlyphs()
             updateEmptyState()
-            // a settings change may have flipped the toolbar mode; realign the scroll view's top inset so
-            // hidden mode runs flush (like toolbarMode's other chrome mirrors).
+            // re-apply the sidebar content inset in case a settings change requires recomputing it (the
+            // inset itself is mode-independent, so this is a cheap re-assert, not a per-mode recalculation).
             applySidebarContentInset(outlineView?.enclosingScrollView)
         }
 
@@ -295,7 +301,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// mean no add/remove/move/reorder, so a row's content change (name/icon/badge) is handled by a
         /// targeted per-row reload instead of a full rebuild. Row TEXT is deliberately NOT here: a
         /// cwd-driven `displayName` change must not trigger a full `reloadData` + re-expand (which
-        /// re-lays-out every source-list row and jitters their labels horizontally).
+        /// re-lays-out every sidebar row and jitters their labels horizontally).
         private struct TreeShape: Equatable {
             let workspaceID: UUID
             let sessionIDs: [UUID]

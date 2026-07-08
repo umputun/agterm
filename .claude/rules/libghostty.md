@@ -92,10 +92,14 @@ paths:
   The triangle color is not accessibility-observable, so this is verified by eye, not a UI test — like
   the cursor solid/hollow case.
 - **Sidebar selection is drawn entirely by `SidebarRowView`, not AppKit.**
-  `outline.selectionHighlightStyle = .none` (set right after `style = .sourceList`,
+  `outline.selectionHighlightStyle = .none` (set right after `style = .plain`,
   which would otherwise reset it) so AppKit draws no selection of its own — otherwise it paints a gray
   *unemphasized* capsule whenever the sidebar isn't first responder (the normal case,
   since focus lives in the terminal), overriding any custom `drawSelection`.
+  The `.plain` style (chosen over `.sourceList` to drop the built-in ~10px top inset above the first row)
+  also reverts the outline's `backgroundColor` to an OPAQUE `controlBackgroundColor`, so
+  `outline.backgroundColor = .clear` is set alongside `scroll.drawsBackground = false` to keep the column
+  transparent over the terminal-colored/translucent window backing.
   The row draws the themed pill in `drawBackground(in:)` for every state,
   and the Coordinator's `refreshSelectionAppearance()` repaints the pills + re-tints the row text on
   selection change (AppKit won't redraw rows on its own with `.none`) and on `.agtermAppearanceChanged`.
@@ -107,7 +111,7 @@ paths:
   **Reconcile splits SHAPE from CONTENT** (`TreeShape` ids/order → full `rebuildAndReload`;
   `RowContent` name/icon/badge → per-row `reloadItem`) so a cwd-driven `displayName` change reloads only
   its row instead of a full `reloadData` + re-expand that re-lays-out and horizontally jitters every
-  source-list row.
+  sidebar row.
   **Inline rename** paints the edit field with the terminal theme's foreground-on-background (the row's
   selection-foreground would be dark-on-dark in the system edit box), and `restore` re-applies the row's
   selection-aware color when editing ends (a same-name commit doesn't reload the row).

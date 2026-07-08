@@ -23,7 +23,8 @@ paths:
   stored raw as `String?` (like `newSessionDirectory`/`autoFollowAttention`) for tolerant forward-compat
   decode — an unknown future value degrades to the default instead of nuking the whole `settings.json`.
   nil = compact [the app default]; `.normal` adds the cwd subtitle line, `.hidden` drops the titlebar row
-  AND the traffic lights for a full-bleed terminal, leaving only an invisible ~6px top drag strip.
+  AND the traffic lights for a full-bleed terminal, leaving only an invisible ~3px top drag strip (thin so
+  it doesn't cover the terminal's first row, which is at window-padding-y = 6).
   Resolved via `effectiveToolbarMode` = `toolbarMode.flatMap(ToolbarMode.init(rawValue:)) ?? (compactToolbar == false ? .normal : .compact)`;
   `compactToolbar: Bool?` is RETAINED only as a legacy decode shim (the old two-state key: `false` = normal,
   nil/true = compact) so pre-existing `settings.json` still opens right — writing a mode nils it, so it

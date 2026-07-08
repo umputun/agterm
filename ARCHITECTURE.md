@@ -40,7 +40,7 @@ See `CLAUDE.md` for the socket lifecycle, addressing, command catalog, and the k
 
 ### Sidebar (NSOutlineView)
 
-`WorkspaceSidebar` is an `NSViewRepresentable` wrapping an `NSOutlineView` (source-list style). It replaces an earlier SwiftUI `List`, which could not do reliable cross-section drag-and-drop. A `@MainActor` `Coordinator` is the data source and delegate, backed by `AppStore`:
+`WorkspaceSidebar` is an `NSViewRepresentable` wrapping an `NSOutlineView` (`.plain` style, with a custom row height and a content inset matching the terminal's ghostty padding). It replaces an earlier SwiftUI `List`, which could not do reliable cross-section drag-and-drop. A `@MainActor` `Coordinator` is the data source and delegate, backed by `AppStore`:
 
 - **Stable item identity.** Outline items are reference-type `SidebarNode`s cached by id and reused across reloads, so `NSOutlineView` keeps expansion and selection state. `updateNSView` reads the observed store (tree + `selectedSessionID`), so model changes reload the outline.
 - **Selection.** Only session rows are selectable; selecting one routes through `AppStore.selectSession`, and `store.selectedSessionID` is reflected back into the outline (guarded against re-entry).
