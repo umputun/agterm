@@ -353,8 +353,9 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// only for a closed window.
     public let sidebarVisible: Bool?
     /// The projected window's sidebar VIEW mode — `SidebarMode.rawValue` (`tree` = the workspace tree,
-    /// `flagged` = the flat flagged working-set list). LIVE and always present on a `tree` response, like
-    /// `sidebarVisible`. The read side of the write-only `sidebar.mode` command, so a script can record the
+    /// `flagged` = the flat flagged working-set list). LIVE and always populated on an app-produced `tree`
+    /// response; the type stays optional at the protocol level (like the other `tree` fields) for
+    /// forward-compat with version skew. The read side of the write-only `sidebar.mode` command, so a script can record the
     /// mode and restore it. `tree`-only (not on `window.list`), since a GUI-only flagged-view toggle would
     /// leave a cached copy stale — read the live tree copy instead.
     public let sidebarMode: String?

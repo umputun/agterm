@@ -127,7 +127,9 @@ final class WindowRegistry {
     /// The window's current frame in the SAME coordinate system `move`/`resize` accept, so `window.list`'s
     /// read-back round-trips back through `window.move`/`window.resize`: `x`/`y` are the top-left relative to
     /// the window's display top-left (y down), `width`/`height` the frame size, `display` the screen index.
-    /// This is the exact inverse of `move`'s forward math (`x = minX - screen.minX`, `y = screen.maxY - maxY`).
+    /// This is the inverse of `move`'s forward math (`x = minX - screen.minX`, `y = screen.maxY - maxY`) to
+    /// integer-point precision: the values round to `Int` since `window.move`/`window.resize` take `Int`, so a
+    /// user-dragged fractional frame restores to the nearest point (which is all those commands accept).
     /// Nil when no window is registered for `id` (closed) or it has no screen. The `window.list` frame source.
     func geometry(for id: WindowInfo.ID) -> ControlWindowFrame? {
         guard let window = windows[id], let screen = window.screen else { return nil }
