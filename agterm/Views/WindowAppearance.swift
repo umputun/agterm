@@ -78,6 +78,12 @@ enum WindowAppearance {
         // opacity, or when .hiddenTitleBar doesn't hold (the XCUITest reopen path), it would otherwise
         // paint a dark strip above the header.
         container.firstDescendant(withClassName: "NSTitlebarBackgroundView")?.isHidden = true
+        // hidden toolbar mode also has to suppress `_NSTitlebarDecorationView` — a separate full-width
+        // titlebar-height sibling of NSTitlebarView that paints a vibrancy material band (macOS 26).
+        // In tall/compact modes the custom row covers it; in hidden mode (traffic lights gone, row
+        // collapsed to the 3px drag strip) it is left exposed as a textured band over the full-bleed
+        // terminal. Hidden only in hidden mode so tall/compact keep AppKit's normal titlebar rendering.
+        container.firstDescendant(withClassName: "_NSTitlebarDecorationView")?.isHidden = hideButtons
     }
 
     /// Keeps the sidebar see-through so the window background shows through it — the opaque terminal
