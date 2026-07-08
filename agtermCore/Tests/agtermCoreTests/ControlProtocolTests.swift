@@ -555,6 +555,28 @@ struct ControlProtocolTests {
         #expect(decoded.geometry == nil)
     }
 
+    @Test func windowNodeRoundTripsWithFullscreenAndZoom() throws {
+        // the read side of window.fullscreen/window.zoom: both live toggle states ride the window node so a
+        // script can make the toggles idempotent (only enter/exit when needed).
+        let node = ControlWindowNode(id: "w1", name: "work", open: true, active: true, fullscreen: true, zoomed: false)
+        let response = ControlResponse(ok: true, result: ControlResult(windows: [node]))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.windows?.first?.fullscreen == true)
+        #expect(decoded.result?.windows?.first?.zoomed == false)
+    }
+
+    @Test func windowNodeOmitsFullscreenAndZoomWhenNil() throws {
+        // a closed window with no live NSWindow — both keys must be omitted, not emitted as null.
+        let node = ControlWindowNode(id: "w1", name: "work", open: false, active: false)
+        let json = String(data: try JSONEncoder().encode(node), encoding: .utf8) ?? ""
+        #expect(!json.contains("fullscreen"), "a nil fullscreen must be omitted from the JSON; got \(json)")
+        #expect(!json.contains("zoomed"), "a nil zoomed must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlWindowNode.self, from: Data(json.utf8))
+        #expect(decoded.fullscreen == nil)
+        #expect(decoded.zoomed == nil)
+    }
+
     @Test func workspaceNodeRoundTripsWithFocused() throws {
         // the read side of workspace.focus: the sidebar-focused workspace is flagged so a script can record
         // which one is focused and restore it (distinct from `active`, the selected workspace).

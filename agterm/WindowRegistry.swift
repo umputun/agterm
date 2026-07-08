@@ -139,6 +139,14 @@ final class WindowRegistry {
                                   width: Int(frame.width.rounded()), height: Int(frame.height.rounded()),
                                   display: display)
     }
+
+    /// Whether the window for `id` is in native full screen and/or zoomed (maximized-to-screen, NOT full
+    /// screen), or nil when no window is registered (closed). The read side of `window.fullscreen`/`window.zoom`
+    /// on `window.list`, so a script can make those toggles idempotent.
+    func windowFlags(for id: WindowInfo.ID) -> (fullscreen: Bool, zoomed: Bool)? {
+        guard let window = windows[id] else { return nil }
+        return (fullscreen: window.styleMask.contains(.fullScreen), zoomed: window.isZoomed)
+    }
 }
 
 // CoreGraphics <-> host-free WindowGeometry conversions, kept app-side: agtermCore stays Foundation-only

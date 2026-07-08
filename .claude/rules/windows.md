@@ -169,6 +169,8 @@ never two bundles in one window.
   The header's decorative parts (the traffic-light spacer, the divider gap, the title text) opt out via
   `.allowsHitTesting(false)` so their region falls through to the layer; the buttons stay in front.
   Requires the window OPEN (closed → the `window not open` error), like `resize`/`move`.
+  Its READ side is `ControlWindowNode.zoomed` on `window.list` (via `WindowRegistry.windowFlags(for:)` →
+  `NSWindow.isZoomed`), so a script can toggle idempotently.
   Four-point keep-in-sync audit: (1) `case windowZoom = "window.zoom"` in `ControlProtocol.swift`,
   (2) the `.windowZoom` dispatch arm (`windowZoom`) in `ControlServer` → `WindowRegistry.shared.zoom`,
   (3) the `window zoom <id>` subcommand in `agtermctlKit`, (4) `.windowZoom` in `windowCommandsRoundTrip`
@@ -196,6 +198,8 @@ never two bundles in one window.
   clobber SwiftUI's dynamic View-menu updates).
   Guarded by the e2e `testViewMenuHasSingleFullScreenItem` in `MenuUITests` (View menu shows Toggle Full
   Screen, NOT the native Enter Full Screen).
+  Its READ side is `ControlWindowNode.fullscreen` on `window.list` (via `WindowRegistry.windowFlags(for:)` →
+  `styleMask.contains(.fullScreen)`), so a script can enter/exit only when needed.
   Four-point keep-in-sync audit: (1) `case windowFullscreen = "window.fullscreen"` in `ControlProtocol.swift`
   + `case toggleFullscreen = "toggle_fullscreen"` (⌃⌘F `defaultChord`) in `BuiltinAction`,
   (2) the `.windowFullscreen` dispatch arm (`windowFullscreen`) in `ControlServer` →
@@ -210,7 +214,9 @@ never two bundles in one window.
   `open`/`active` flag, plus `autoFollowMs` and `sidebarVisible` read from the open window's store, and
   `geometry` — the live NSWindow frame `{x, y, width, height, display}` in `window.move`/`window.resize`'s
   own coordinate system (top-left relative to the display, y down) so a read-back round-trips through them,
-  read app-side via `WindowRegistry.geometry(for:)` — all three omitted for a closed window),
+  read app-side via `WindowRegistry.geometry(for:)` — plus `fullscreen`/`zoomed` (the read side of
+  `window.fullscreen`/`window.zoom`, read via `WindowRegistry.windowFlags(for:)` so a script can make
+  those toggles idempotent) — all omitted for a closed window),
   `window.select` (raise-or-open), `window.close` (`WindowRegistry.close` →
   standard teardown), `window.rename`, `window.delete` (`canRemoveWindow` keep-at-least-one → error,
   not a GUI confirm).

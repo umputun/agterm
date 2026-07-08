@@ -836,6 +836,13 @@ paths:
   the next refresh (there is no LIVE tree copy — geometry is window-scoped, absent from the session tree).
   The host-free plumbing (the closure + node field) is unit-tested (`controlWindowNodesIncludeGeometryFromClosure`,
   the round-trips); the coordinate conversion itself is app-side, build-verified like `window.resize`/`move`.
+  Each `ControlWindowNode` ALSO carries `fullscreen`/`zoomed` — the read side of the write-only
+  `window.fullscreen`/`window.zoom` toggles (so a script can toggle idempotently), filled by a PARALLEL
+  app-side `flags:` closure on `controlWindowNodes` (kept separate from `geometry:` so each stays a clean
+  addition) that `buildWindowList` reads from `WindowRegistry.windowFlags(for:)`
+  (`styleMask.contains(.fullScreen)` / `NSWindow.isZoomed`); both nil/omitted for a closed window, on the
+  cache like `geometry`. The closure plumbing is unit-tested (`controlWindowNodesIncludeFullscreenZoomFromClosure`
+  + the round-trips); the NSWindow reads are app-side, build-verified.
   `restore.clear` clears every open session's saved CAPTURED foreground command (`Session.foregroundCommand`/`splitForegroundCommand`)
   and persists via `library.saveAllOpen()`, so the next restart restores plain shells for those panes instead
   of re-running the captured commands (also closing the force-quit re-fire: the restored command is consumed

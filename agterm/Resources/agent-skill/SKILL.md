@@ -86,10 +86,11 @@ session's local `cwd` is stale because it's connected to a remote. The tree obje
 read-only top-level fields: `idleMs` (ms since the last user input in the window), `autoFollowMs`
 (the Auto-follow timeout in ms, omitted when Disabled), and `sidebarVisible` (whether the window's
 sidebar is currently shown — the read side of the write-only `sidebar` command). List windows with
-`agtermctl window list --json`; each window also reports `autoFollowMs`, `sidebarVisible`, and `geometry`
+`agtermctl window list --json`; each window also reports `autoFollowMs`, `sidebarVisible`, `geometry`
 (the live frame `{x, y, width, height, display}` in the units `window move`/`window resize` take — the
-read side, so record it then restore the exact frame; all omitted for a closed window), but not the live
-`idleMs`, which is `tree`-only.
+read side, so record it then restore the exact frame), and `fullscreen`/`zoomed` (the read side of
+`window fullscreen`/`window zoom`, so a script can make those toggles idempotent) — all omitted for a
+closed window, but not the live `idleMs`, which is `tree`-only.
 
 ## Addressing
 

@@ -409,9 +409,17 @@ public struct ControlWindowNode: Codable, Sendable, Equatable {
     /// resize/move the window, then restore the exact frame. Read live app-side; like `sidebarVisible` it
     /// rides the cache, so it may lag one command behind a hand-drag until the next refresh.
     public let geometry: ControlWindowFrame?
+    /// Whether the window is in native macOS full screen, or nil for a CLOSED window (omitted from the
+    /// JSON). The read side of the write-only `window.fullscreen` toggle, so a script can make the toggle
+    /// idempotent (only enter/exit when needed). Read live app-side; like `geometry` it rides the cache.
+    public let fullscreen: Bool?
+    /// Whether the window is zoomed (maximized-to-screen, NOT full screen), or nil for a CLOSED window
+    /// (omitted from the JSON). The read side of the write-only `window.zoom` toggle. Read live app-side.
+    public let zoomed: Bool?
 
     public init(id: String, name: String, open: Bool, active: Bool, autoFollowMs: Int? = nil,
-                sidebarVisible: Bool? = nil, geometry: ControlWindowFrame? = nil) {
+                sidebarVisible: Bool? = nil, geometry: ControlWindowFrame? = nil,
+                fullscreen: Bool? = nil, zoomed: Bool? = nil) {
         self.id = id
         self.name = name
         self.open = open
@@ -419,6 +427,8 @@ public struct ControlWindowNode: Codable, Sendable, Equatable {
         self.autoFollowMs = autoFollowMs
         self.sidebarVisible = sidebarVisible
         self.geometry = geometry
+        self.fullscreen = fullscreen
+        self.zoomed = zoomed
     }
 }
 
