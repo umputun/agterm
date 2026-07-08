@@ -211,6 +211,23 @@ final class WindowLibraryTests {
         #expect(recent.title == "final")
     }
 
+    @Test func groupedGraceUndoRestoresAllSessionsAndRemovesRecentEntries() {
+        let library = WindowLibrary(directory: directory)
+        let store = try! #require(library.activeStore)
+        let workspace = store.workspaces[0]
+        let first = try! #require(store.addSession(toWorkspace: workspace.id, cwd: "/one", name: "one"))
+        let second = try! #require(store.addSession(toWorkspace: workspace.id, cwd: "/two", name: "two"))
+
+        #expect(store.softCloseSessions([first.id, second.id], grace: 60))
+        #expect(Set(library.recentClosedItems.map(\.title)) == ["one", "two"])
+
+        #expect(store.undoPendingClose())
+
+        #expect(store.session(withID: first.id) === first)
+        #expect(store.session(withID: second.id) === second)
+        #expect(library.recentClosedItems.isEmpty)
+    }
+
     @Test func defaultWindowNameCountsUp() {
         let library = WindowLibrary(directory: directory)
         #expect(library.defaultWindowName == "window 2")

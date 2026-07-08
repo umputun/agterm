@@ -19,6 +19,7 @@ extension AppStore {
             let insertAt = max(0, min(recent.sessionIndex, workspaces[index].sessions.count))
             workspaces[index].sessions.insert(session, at: insertAt)
             selectedSessionID = session.id
+            replaceSidebarSelection(with: selectedSessionID)
             autoUnfocusIfOutsideFocus(selectedSessionID)
             recordRecency()
             save()
@@ -37,6 +38,7 @@ extension AppStore {
             selectedSessionID = recent.selectedSessionID.flatMap { sessionID in
                 workspace.sessions.contains { $0.id == sessionID } ? sessionID : nil
             } ?? workspace.sessions.first?.id
+            replaceSidebarSelection(with: selectedSessionID)
             autoUnfocusIfOutsideFocus(selectedSessionID)
             recordRecency()
             save()
@@ -93,6 +95,8 @@ extension AppStore {
             switch record {
             case .session(let close) where close.session.id == sessionID:
                 return id
+            case .sessions(let close) where close.sessions.contains(where: { $0.session.id == sessionID }):
+                return id
             case .workspace(let close) where close.workspace.sessions.contains(where: { $0.id == sessionID }):
                 return id
             default:
@@ -113,6 +117,8 @@ extension AppStore {
             case .workspace(let close) where close.workspace.id == workspaceID:
                 return id
             case .session(let close) where close.workspaceID == workspaceID && sessionIDs.contains(close.session.id):
+                return id
+            case .sessions(let close) where close.sessions.contains(where: { sessionIDs.contains($0.session.id) }):
                 return id
             default:
                 continue

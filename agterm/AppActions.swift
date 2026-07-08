@@ -164,6 +164,28 @@ final class AppActions {
         closeSessionAfterConfirmation(id, in: store)
     }
 
+    /// Close one or more sidebar-selected sessions in a window-local store, honoring the same confirmation
+    /// and undo-grace settings as the single-session Close command.
+    func closeSessions(_ ids: [UUID], in store: AppStore) {
+        let sessions = ids.compactMap { store.session(withID: $0) }
+        guard !sessions.isEmpty else { return }
+        if sessions.count == 1 {
+            closeSession(sessions[0].id, in: store)
+            return
+        }
+        guard confirmCloseSessions(sessions) else { return }
+        withAnimation(.easeInOut(duration: 0.16)) {
+            if closeGraceUndoEnabled {
+                _ = store.softCloseSessions(sessions.map(\.id))
+            } else {
+                for session in sessions {
+                    store.closeSession(session.id)
+                }
+            }
+        }
+        focusActiveSession()
+    }
+
     /// Undo the latest grace-period session/workspace close in the frontmost window.
     func undoClose() {
         guard let store else { return }
@@ -199,6 +221,19 @@ final class AppActions {
         alert.informativeText = closeGraceUndoEnabled
             ? "The session will close after a short undo window."
             : "The session will close immediately and can be reopened from File > Open Recent."
+        alert.addButton(withTitle: "Close")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    private func confirmCloseSessions(_ sessions: [Session]) -> Bool {
+        guard settingsModel?.settings.confirmCloseSession == true, !ContentView.isUITestLaunch else { return true }
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Close \(sessions.count) Sessions?"
+        alert.informativeText = closeGraceUndoEnabled
+            ? "The sessions will close after a short undo window."
+            : "The sessions will close immediately and can be reopened from File > Open Recent."
         alert.addButton(withTitle: "Close")
         alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn

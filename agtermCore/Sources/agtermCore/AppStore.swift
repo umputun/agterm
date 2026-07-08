@@ -35,6 +35,10 @@ public final class AppStore {
     public var workspaces: [Workspace]
     public var selectedSessionID: UUID?
 
+    /// Transient sidebar multi-selection. Not persisted: it is UI command state, while
+    /// `selectedSessionID` remains the durable active terminal target.
+    public var sidebarSelection = SidebarSelectionController()
+
     /// Whether this window's sidebar is shown. Per-window UI state, persisted in `Snapshot` (restored on
     /// relaunch); the custom split owns visibility, so the toolbar button, the View menu item, the action
     /// palette, and the `sidebar` control command all flip this one flag.
@@ -277,6 +281,7 @@ public final class AppStore {
         if let sessionID, session(withID: sessionID) == nil { return }
         let previous = selectedSessionID
         selectedSessionID = sessionID
+        replaceSidebarSelection(with: sessionID)
         autoUnfocusIfOutsideFocus(sessionID)
         if let sessionID { clearUnseen(sessionID) }
         clearAutoResetIndicator(sessionID) // visit: you've seen it
@@ -365,8 +370,11 @@ public final class AppStore {
         sessionRecency.remove(sessionID)
         if wasActive {
             selectedSessionID = reselectionTarget(after: location)
+            replaceSidebarSelection(with: selectedSessionID)
             autoUnfocusIfOutsideFocus(selectedSessionID) // the neighbor may live outside the focused workspace
             recordRecency()
+        } else {
+            pruneSidebarSelection()
         }
         save()
     }
@@ -400,8 +408,11 @@ public final class AppStore {
             let fallbackIndex = min(index, workspaces.count - 1)
             selectedSessionID = workspaces[fallbackIndex].sessions.first?.id
                 ?? workspaces.first(where: { !$0.sessions.isEmpty })?.sessions.first?.id
+            replaceSidebarSelection(with: selectedSessionID)
             autoUnfocusIfOutsideFocus(selectedSessionID) // the reselected session may live outside the focused workspace
             recordRecency()
+        } else {
+            pruneSidebarSelection()
         }
         save()
     }
@@ -424,6 +435,36 @@ public final class AppStore {
         let destination = max(0, min(index ?? workspaces[targetIndex].sessions.count, workspaces[targetIndex].sessions.count))
         workspaces[targetIndex].sessions.insert(session, at: destination)
         if sessionID == selectedSessionID { autoUnfocusIfOutsideFocus(sessionID) }
+        pruneSidebarSelection()
+        save()
+    }
+
+    /// Moves multiple selected sessions in their current tree order. With `index == nil`, this is the
+    /// context-menu move: append cross-workspace sessions and leave sessions already in the target in
+    /// place. With an explicit `index`, this is a drag drop: remove every dragged session first, then
+    /// insert the dragged block at that post-removal target index.
+    public func moveSessions(_ sessionIDs: [UUID], toWorkspace targetID: UUID, at index: Int? = nil) {
+        guard workspaces.contains(where: { $0.id == targetID }) else { return }
+        var movingIDs = orderedSessionIDs(matching: Set(sessionIDs))
+        if index == nil {
+            movingIDs = movingIDs.filter { workspace(forSession: $0)?.id != targetID }
+        }
+        guard !movingIDs.isEmpty else { return }
+
+        var moving: [Session] = []
+        for id in movingIDs {
+            guard let location = location(ofSession: id) else { continue }
+            moving.append(workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex))
+        }
+        guard let targetIndex = workspaces.firstIndex(where: { $0.id == targetID }), !moving.isEmpty else {
+            pruneSidebarSelection()
+            return
+        }
+        let destination = max(0, min(index ?? workspaces[targetIndex].sessions.count,
+                                     workspaces[targetIndex].sessions.count))
+        workspaces[targetIndex].sessions.insert(contentsOf: moving, at: destination)
+        if let selectedSessionID, movingIDs.contains(selectedSessionID) { autoUnfocusIfOutsideFocus(selectedSessionID) }
+        pruneSidebarSelection()
         save()
     }
 
@@ -565,6 +606,7 @@ public final class AppStore {
     public func setSidebarMode(_ mode: SidebarMode) {
         guard sidebarMode != mode else { return }
         sidebarMode = mode
+        pruneSidebarSelection()
         save()
     }
 
@@ -573,6 +615,7 @@ public final class AppStore {
     public func setFocusedWorkspace(_ id: UUID?) {
         guard focusedWorkspaceID != id else { return }
         focusedWorkspaceID = id
+        pruneSidebarSelection()
         save()
     }
 
@@ -625,7 +668,25 @@ public final class AppStore {
     public func setFlag(_ on: Bool, forSession id: UUID) {
         guard let session = session(withID: id), session.flagged != on else { return }
         session.flagged = on
+        pruneSidebarSelection()
         save()
+    }
+
+    /// Sets (or clears) multiple sessions' flags in one save. Unknown ids are ignored.
+    public func setFlag(_ on: Bool, forSessions ids: [UUID]) {
+        let targetIDs = Set(ids)
+        guard !targetIDs.isEmpty else { return }
+        var changed = false
+        for workspace in workspaces {
+            for session in workspace.sessions where targetIDs.contains(session.id) && session.flagged != on {
+                session.flagged = on
+                changed = true
+            }
+        }
+        if changed {
+            pruneSidebarSelection()
+            save()
+        }
     }
 
     /// Sets (or clears) a session's background watermark and persists it. Clean no-op (no write) for an
@@ -758,6 +819,7 @@ public final class AppStore {
         } else {
             selectedSessionID = snapshot.selectedSessionID
         }
+        replaceSidebarSelection(with: selectedSessionID)
         // re-seed the Ctrl-Tab order from the persisted list (dropping ids not in the restored
         // tree) so the switcher works right after relaunch; the restored selection floats to the
         // front, keeping the "previous session" slot truthful.
@@ -825,13 +887,55 @@ public final class AppStore {
         return nil
     }
 
+    /// Replaces the transient sidebar selection with ids from the current visible sidebar projection.
+    public func setSidebarSelection(_ ids: [UUID]) {
+        sidebarSelection.setSelection(ids, visibleSessionIDs: visibleSidebarSessionIDs)
+    }
+
+    /// Replaces the transient sidebar selection with a single active row.
+    public func replaceSidebarSelection(with sessionID: UUID?) {
+        sidebarSelection.replace(with: sessionID, visibleSessionIDs: visibleSidebarSessionIDs)
+    }
+
+    /// Context-menu target resolution for sidebar session commands.
+    public func sidebarSelectionTargets(forContextSession clickedID: UUID?) -> [UUID] {
+        let selectionIDs = sidebarSelectionIDs
+        if let clickedID, selectionIDs.contains(clickedID) { return selectionIDs }
+        if let clickedID, visibleSidebarSessionIDs.contains(clickedID) { return [clickedID] }
+        if !selectionIDs.isEmpty { return selectionIDs }
+        guard let selectedSessionID, visibleSidebarSessionIDs.contains(selectedSessionID) else { return [] }
+        return [selectedSessionID]
+    }
+
+    /// The selected session ids that are still visible in the current sidebar mode/focus.
+    public var sidebarSelectionIDs: [UUID] {
+        let normalized = SidebarSelectionController.normalized(sidebarSelection.selectedSessionIDs,
+                                                               visibleSessionIDs: visibleSidebarSessionIDs)
+        guard let selectedSessionID else { return [] }
+        return normalized.contains(selectedSessionID) ? normalized : []
+    }
+
+    func pruneSidebarSelection() {
+        sidebarSelection.prune(visibleSessionIDs: visibleSidebarSessionIDs)
+    }
+
+    private var visibleSidebarSessionIDs: [UUID] {
+        navigableSessions.map(\.id)
+    }
+
+    private func orderedSessionIDs(matching ids: Set<UUID>) -> [UUID] {
+        workspaces.flatMap(\.sessions).map(\.id).filter { ids.contains($0) }
+    }
+
     /// Picks the next selection after removing the session at `location`. Prefers
     /// the session that shifted into the removed slot, then the previous one in
     /// that workspace, then the first session of any remaining workspace.
     func reselectionTarget(after location: (workspaceIndex: Int, sessionIndex: Int)) -> UUID? {
         let sessions = workspaces[location.workspaceIndex].sessions
         if location.sessionIndex < sessions.count { return sessions[location.sessionIndex].id }
-        if location.sessionIndex > 0 { return sessions[location.sessionIndex - 1].id }
+        if location.sessionIndex > 0, !sessions.isEmpty {
+            return sessions[min(location.sessionIndex - 1, sessions.count - 1)].id
+        }
         for workspace in workspaces {
             if let first = workspace.sessions.first { return first.id }
         }

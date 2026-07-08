@@ -409,6 +409,97 @@ struct AppStoreTests {
         #expect(store.pendingCloseSummary == nil)
     }
 
+    @Test func softCloseSessionsGroupsUndoAndRestoresEverySession() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let first = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a", name: "alpha"))
+        let second = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b", name: "beta"))
+        let third = try #require(store.addSession(toWorkspace: ws.id, cwd: "/c", name: "gamma"))
+        let firstSurface = SpySurface(); first.surface = firstSurface
+        let secondSurface = SpySurface(); second.surface = secondSurface
+        store.selectSession(second.id)
+
+        #expect(store.softCloseSessions([first.id, second.id], grace: 60))
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [third.id])
+        #expect(store.selectedSessionID == third.id)
+        #expect(firstSurface.teardownCount == 0)
+        #expect(secondSurface.teardownCount == 0)
+        let summary = try #require(store.pendingCloseSummary)
+        #expect(summary.kind == .sessions)
+        #expect(summary.title == "2 sessions")
+
+        #expect(store.undoPendingClose(summary.id))
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [first.id, second.id, third.id])
+        #expect(store.selectedSessionID == second.id)
+        #expect(store.workspaces[0].sessions[0] === first)
+        #expect(store.workspaces[0].sessions[1] === second)
+        #expect(firstSurface.teardownCount == 0)
+        #expect(secondSurface.teardownCount == 0)
+        #expect(store.pendingCloseSummary == nil)
+    }
+
+    @Test func softCloseSessionsSelectsNearestSurvivorAfterActiveClose() throws {
+        let store = makeStore()
+        let firstWorkspace = store.addWorkspace(name: "one")
+        let secondWorkspace = store.addWorkspace(name: "two")
+        let distant = try #require(store.addSession(toWorkspace: firstWorkspace.id, cwd: "/a"))
+        let active = try #require(store.addSession(toWorkspace: secondWorkspace.id, cwd: "/b"))
+        let neighbor = try #require(store.addSession(toWorkspace: secondWorkspace.id, cwd: "/c"))
+        store.selectSession(active.id)
+
+        #expect(store.softCloseSessions([active.id, distant.id], grace: 60))
+
+        #expect(store.selectedSessionID == neighbor.id)
+    }
+
+    @Test func softCloseSessionsAdjustsReselectionForEarlierBatchRemovals() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let first = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let active = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        let neighbor = try #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
+        _ = try #require(store.addSession(toWorkspace: ws.id, cwd: "/d"))
+        store.selectSession(active.id)
+
+        #expect(store.softCloseSessions([first.id, active.id], grace: 60))
+
+        #expect(store.selectedSessionID == neighbor.id)
+    }
+
+    @Test func softCloseSessionsFallsBackWhenActiveWorkspaceIsEmptied() throws {
+        let store = makeStore()
+        let firstWorkspace = store.addWorkspace(name: "one")
+        let secondWorkspace = store.addWorkspace(name: "two")
+        let distant = try #require(store.addSession(toWorkspace: firstWorkspace.id, cwd: "/a"))
+        let active = try #require(store.addSession(toWorkspace: secondWorkspace.id, cwd: "/b"))
+        let sibling = try #require(store.addSession(toWorkspace: secondWorkspace.id, cwd: "/c"))
+        store.selectSession(active.id)
+
+        #expect(store.softCloseSessions([active.id, sibling.id], grace: 60))
+
+        #expect(store.selectedSessionID == distant.id)
+    }
+
+    @Test func finalizedSoftCloseSessionsTearsDownEverySessionAndCannotUndo() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let first = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let second = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        let firstSurface = SpySurface(); first.surface = firstSurface
+        let secondSurface = SpySurface(); second.surface = secondSurface
+
+        #expect(store.softCloseSessions([first.id, second.id], grace: 60))
+        let summary = try #require(store.pendingCloseSummary)
+        store.finalizePendingClose(summary.id)
+
+        #expect(firstSurface.teardownCount == 1)
+        #expect(secondSurface.teardownCount == 1)
+        #expect(!store.undoPendingClose(summary.id))
+        #expect(store.pendingCloseSummary == nil)
+    }
+
     @Test func finalizedSoftCloseSessionTearsDownAndCannotUndo() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

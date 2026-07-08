@@ -3,6 +3,7 @@ import Foundation
 /// The kind of close currently available to undo.
 public enum PendingCloseKind: String, Sendable {
     case session
+    case sessions
     case workspace
 }
 
@@ -21,6 +22,7 @@ public struct PendingCloseSummary: Identifiable, Equatable, Sendable {
 
 enum PendingCloseRecord {
     case session(PendingSessionClose)
+    case sessions(PendingSessionsClose)
     case workspace(PendingWorkspaceClose)
 }
 
@@ -30,6 +32,12 @@ struct PendingSessionClose {
     let workspaceName: String
     let workspaceIndex: Int
     let sessionIndex: Int
+    let recentID: UUID
+}
+
+struct PendingSessionsClose {
+    let sessions: [PendingSessionClose]
+    let selectedSessionID: UUID?
 }
 
 struct PendingWorkspaceClose {
@@ -55,7 +63,8 @@ extension AppStore {
             workspaceID: workspace.id,
             workspaceName: workspace.name,
             workspaceIndex: location.workspaceIndex,
-            sessionIndex: location.sessionIndex
+            sessionIndex: location.sessionIndex,
+            recentID: closeID
         ))
         pendingCloseOrder.append(closeID)
         recordRecentClosedSession(session, workspaceID: workspace.id, workspaceName: workspace.name,
@@ -63,9 +72,78 @@ extension AppStore {
                                   id: closeID)
         if wasActive {
             selectedSessionID = reselectionTarget(after: location)
+            replaceSidebarSelection(with: selectedSessionID)
             autoUnfocusIfOutsideFocus(selectedSessionID)
             recordRecency()
+        } else {
+            pruneSidebarSelection()
         }
+        showPendingCloseSummary(id: closeID)
+        schedulePendingCloseFinalization(id: closeID, grace: grace)
+        cancelPendingSave()
+        return true
+    }
+
+    /// Hide multiple sessions as one undoable operation. The removed sessions keep their surfaces alive
+    /// until the one shared grace timer finalizes, and a single undo restores every session in the group.
+    @discardableResult
+    public func softCloseSessions(_ sessionIDs: [UUID], grace: TimeInterval = AppStore.pendingCloseGraceInterval) -> Bool {
+        let targetIDs = Set(sessionIDs)
+        guard targetIDs.count > 1 else {
+            guard let id = sessionIDs.first else { return false }
+            return softCloseSession(id, grace: grace)
+        }
+
+        var closes: [PendingSessionClose] = []
+        for (workspaceIndex, workspace) in workspaces.enumerated() {
+            for (sessionIndex, session) in workspace.sessions.enumerated() where targetIDs.contains(session.id) {
+                closes.append(PendingSessionClose(
+                    session: session,
+                    workspaceID: workspace.id,
+                    workspaceName: workspace.name,
+                    workspaceIndex: workspaceIndex,
+                    sessionIndex: sessionIndex,
+                    recentID: UUID()
+                ))
+            }
+        }
+        guard !closes.isEmpty else { return false }
+
+        let previousSelection = selectedSessionID
+        let removingActive = previousSelection.map { targetIDs.contains($0) } ?? false
+        for close in closes.sorted(by: pendingSessionRemovalSort) {
+            guard workspaces.indices.contains(close.workspaceIndex),
+                  workspaces[close.workspaceIndex].sessions.indices.contains(close.sessionIndex),
+                  workspaces[close.workspaceIndex].sessions[close.sessionIndex].id == close.session.id else { continue }
+            _ = workspaces[close.workspaceIndex].sessions.remove(at: close.sessionIndex)
+        }
+        for close in closes {
+            recordRecentClosedSession(close.session, workspaceID: close.workspaceID, workspaceName: close.workspaceName,
+                                      workspaceIndex: close.workspaceIndex, sessionIndex: close.sessionIndex,
+                                      id: close.recentID)
+        }
+        if removingActive {
+            let activeClose = previousSelection.flatMap { id in closes.first { $0.session.id == id } }
+            selectedSessionID = activeClose.flatMap { close in
+                let removedBeforeActive = closes.count {
+                    $0.workspaceIndex == close.workspaceIndex && $0.sessionIndex < close.sessionIndex
+                }
+                return reselectionTarget(after: (workspaceIndex: close.workspaceIndex,
+                                                 sessionIndex: close.sessionIndex - removedBeforeActive))
+            } ?? workspaces.first(where: { !$0.sessions.isEmpty })?.sessions.first?.id
+            replaceSidebarSelection(with: selectedSessionID)
+            autoUnfocusIfOutsideFocus(selectedSessionID)
+            recordRecency()
+        } else {
+            pruneSidebarSelection()
+        }
+
+        let closeID = UUID()
+        pendingCloseRecords[closeID] = .sessions(PendingSessionsClose(
+            sessions: closes,
+            selectedSessionID: removingActive ? previousSelection : closes.first?.session.id
+        ))
+        pendingCloseOrder.append(closeID)
         showPendingCloseSummary(id: closeID)
         schedulePendingCloseFinalization(id: closeID, grace: grace)
         cancelPendingSave()
@@ -85,8 +163,11 @@ extension AppStore {
             let fallbackIndex = min(index, workspaces.count - 1)
             selectedSessionID = workspaces[fallbackIndex].sessions.first?.id
                 ?? workspaces.first(where: { !$0.sessions.isEmpty })?.sessions.first?.id
+            replaceSidebarSelection(with: selectedSessionID)
             autoUnfocusIfOutsideFocus(selectedSessionID)
             recordRecency()
+        } else {
+            pruneSidebarSelection()
         }
 
         let closeID = UUID()
@@ -113,10 +194,14 @@ extension AppStore {
         switch record {
         case .session(let close):
             restorePendingSession(close)
+            removeRecentClosedItem(close.recentID)
+        case .sessions(let close):
+            restorePendingSessions(close)
+            for session in close.sessions { removeRecentClosedItem(session.recentID) }
         case .workspace(let close):
             restorePendingWorkspace(close)
+            removeRecentClosedItem(closeID)
         }
-        removeRecentClosedItem(closeID)
         if pendingCloseSummary?.id == closeID { promotePendingCloseSummary() }
         save()
         return true
@@ -129,6 +214,8 @@ extension AppStore {
         switch record {
         case .session(let close):
             hardFinalizePendingSession(close.session)
+        case .sessions(let close):
+            for session in close.sessions { hardFinalizePendingSession(session.session) }
         case .workspace(let close):
             hardFinalizePendingWorkspace(close.workspace)
         }
@@ -159,6 +246,8 @@ extension AppStore {
         switch record {
         case .session(let close):
             return PendingCloseSummary(id: id, kind: .session, title: close.session.displayName)
+        case .sessions(let close):
+            return PendingCloseSummary(id: id, kind: .sessions, title: "\(close.sessions.count) sessions")
         case .workspace(let close):
             return PendingCloseSummary(id: id, kind: .workspace, title: close.workspace.name)
         }
@@ -202,6 +291,8 @@ extension AppStore {
             switch record {
             case .session(let close):
                 held.insert(close.session.id)
+            case .sessions(let close):
+                held.formUnion(close.sessions.map(\.session.id))
             case .workspace(let close):
                 held.formUnion(close.workspace.sessions.map(\.id))
             }
@@ -224,7 +315,7 @@ extension AppStore {
         return Workspace(id: id, name: name)
     }
 
-    private func restorePendingSession(_ close: PendingSessionClose) {
+    private func restorePendingSession(_ close: PendingSessionClose, selectRestored: Bool = true) {
         let workspaceIndex: Int
         if let existing = workspaces.firstIndex(where: { $0.id == close.workspaceID }) {
             workspaceIndex = existing
@@ -235,9 +326,30 @@ extension AppStore {
         }
         let insertAt = max(0, min(close.sessionIndex, workspaces[workspaceIndex].sessions.count))
         workspaces[workspaceIndex].sessions.insert(close.session, at: insertAt)
+        guard selectRestored else { return }
         selectedSessionID = close.session.id
+        replaceSidebarSelection(with: selectedSessionID)
         autoUnfocusIfOutsideFocus(selectedSessionID)
         recordRecency()
+    }
+
+    private func restorePendingSessions(_ close: PendingSessionsClose) {
+        for session in close.sessions {
+            restorePendingSession(session, selectRestored: false)
+        }
+        let target = close.selectedSessionID.flatMap { id in close.sessions.contains { $0.session.id == id } ? id : nil }
+            ?? close.sessions.first?.session.id
+        if let target {
+            selectedSessionID = target
+            replaceSidebarSelection(with: selectedSessionID)
+            autoUnfocusIfOutsideFocus(selectedSessionID)
+            recordRecency()
+        }
+    }
+
+    private func pendingSessionRemovalSort(_ lhs: PendingSessionClose, _ rhs: PendingSessionClose) -> Bool {
+        if lhs.workspaceIndex != rhs.workspaceIndex { return lhs.workspaceIndex > rhs.workspaceIndex }
+        return lhs.sessionIndex > rhs.sessionIndex
     }
 
     private func restorePendingWorkspace(_ close: PendingWorkspaceClose) {
@@ -257,6 +369,7 @@ extension AppStore {
         }
         guard let target = close.selectedSessionID ?? close.workspace.sessions.first?.id else { return }
         selectedSessionID = target
+        replaceSidebarSelection(with: selectedSessionID)
         autoUnfocusIfOutsideFocus(selectedSessionID)
         recordRecency()
     }

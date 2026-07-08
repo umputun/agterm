@@ -14,7 +14,12 @@ extension WorkspaceSidebar.Coordinator {
         let pbItem = NSPasteboardItem()
         switch node.kind {
         case .session:
-            pbItem.setString(node.id.uuidString, forType: sessionPasteboardType)
+            let row = outlineView.row(forItem: item)
+            let selectedIDs = store.sidebarSelectionIDs
+            let draggedIDs = row >= 0 && outlineView.selectedRowIndexes.contains(row) && selectedIDs.contains(node.id)
+                ? selectedIDs
+                : [node.id]
+            pbItem.setString(draggedIDs.map(\.uuidString).joined(separator: "\n"), forType: sessionPasteboardType)
         case .workspace:
             pbItem.setString(node.id.uuidString, forType: workspacePasteboardType)
         }
@@ -47,14 +52,14 @@ extension WorkspaceSidebar.Coordinator {
             return true
         }
         guard let move = resolveSessionMove(from: info, item: item, childIndex: index) else { return false }
-        store.moveSession(move.sessionID, toWorkspace: move.workspace, at: move.destination)
+        store.moveSessions(move.sessionIDs, toWorkspace: move.workspace, at: move.destination)
         return true
     }
 
     /// The resolved session drop. `dropChildIndex` is the PRE-removal slot to highlight; `destination`
-    /// is the POST-removal index `moveSession` expects.
+    /// is the POST-removal index `moveSessions` expects.
     private struct SessionMove {
-        let sessionID: UUID
+        let sessionIDs: [UUID]
         let workspace: UUID
         let dropChildIndex: Int
         let destination: Int
@@ -62,12 +67,12 @@ extension WorkspaceSidebar.Coordinator {
 
     /// Resolves a proposed session drop into the move it would perform, or nil when the drop is
     /// invalid or a no-op (so both `validateDrop` and `acceptDrop` agree exactly). Reads the pasteboard
-    /// + store to map the dragged session and drop-target row to indices, then defers the index
-    /// arithmetic (drop-on-row redirect, post-removal off-by-one, no-op detection) to the host-free
-    /// `SidebarDrop.resolveSession`.
+    /// + store to map the dragged sessions and drop-target row to indices, then defers the index
+    /// arithmetic (drop-on-row redirect, post-removal insertion slot, no-op detection) to the host-free
+    /// `SidebarDrop.resolveSessions`.
     private func resolveSessionMove(from info: NSDraggingInfo, item: Any?, childIndex index: Int) -> SessionMove? {
-        guard let sessionID = draggedSessionID(from: info), let node = item as? SidebarNode,
-              let source = store.sessionLocation(ofSession: sessionID) else { return nil }
+        let sessionIDs = draggedSessionIDs(from: info)
+        guard !sessionIDs.isEmpty, let node = item as? SidebarNode else { return nil }
 
         let target: SidebarDrop.SessionDropTarget
         switch node.kind {
@@ -79,9 +84,14 @@ extension WorkspaceSidebar.Coordinator {
             target = .sessionRow(workspace: drop.workspace, sessionIndex: drop.index, sessionCount: drop.count)
         }
 
-        guard let move = SidebarDrop.resolveSession(sourceWorkspace: source.workspace, sourceIndex: source.index,
-                                                    target: target, childIndex: index) else { return nil }
-        return SessionMove(sessionID: sessionID, workspace: move.workspace,
+        let sources = sessionIDs.compactMap { id -> SidebarDrop.SessionSource? in
+            guard let source = store.sessionLocation(ofSession: id) else { return nil }
+            return SidebarDrop.SessionSource(workspace: source.workspace, index: source.index)
+        }
+        guard sources.count == sessionIDs.count,
+              let move = SidebarDrop.resolveSessions(sources: sources, target: target, childIndex: index)
+        else { return nil }
+        return SessionMove(sessionIDs: sessionIDs, workspace: move.workspace,
                            dropChildIndex: move.dropChildIndex, destination: move.destination)
     }
 
@@ -118,9 +128,19 @@ extension WorkspaceSidebar.Coordinator {
         return UUID(uuidString: string)
     }
 
-    /// Reads the dragged session id from the pasteboard.
-    private func draggedSessionID(from info: NSDraggingInfo) -> UUID? {
-        guard let string = info.draggingPasteboard.string(forType: sessionPasteboardType) else { return nil }
-        return UUID(uuidString: string)
+    /// Reads the dragged session ids from the pasteboard.
+    private func draggedSessionIDs(from info: NSDraggingInfo) -> [UUID] {
+        var result: [UUID] = []
+        var seen = Set<UUID>()
+        let strings = info.draggingPasteboard.pasteboardItems?.compactMap {
+            $0.string(forType: sessionPasteboardType)
+        } ?? info.draggingPasteboard.string(forType: sessionPasteboardType).map { [$0] } ?? []
+        for string in strings {
+            for token in string.split(whereSeparator: { $0.isNewline }) {
+                guard let id = UUID(uuidString: String(token)), seen.insert(id).inserted else { continue }
+                result.append(id)
+            }
+        }
+        return result
     }
 }

@@ -52,6 +52,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // the sidebar isn't first responder (focus normally lives in the terminal). SidebarRowView
         // draws the themed selection pill itself in drawBackground for every state.
         outline.selectionHighlightStyle = .none
+        outline.allowsMultipleSelection = true
+        outline.allowsEmptySelection = false
 
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("main"))
         column.resizingMask = .autoresizingMask
@@ -108,6 +110,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // re-reconcile via the .agtermAppearanceChanged notification (appearanceChanged), like toolbarMode.
         _ = store.workspaces.map { ($0.id, $0.name, $0.unseenCount, $0.sessions.map { ($0.id, $0.displayName, $0.hasSplit, $0.unseenCount, $0.agentIndicator, $0.flagged) }) }
         _ = store.selectedSessionID
+        _ = store.sidebarSelectionIDs
         // sidebarMode flips the whole data source between the tree and the flat flagged list; reading it
         // here registers the observer so a mode change re-invokes updateNSView and reconcile rebuilds.
         _ = store.sidebarMode
@@ -634,10 +637,18 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 outline.expandItem(owner)
                 suppressExpansionPersist = false
             }
+            var rows = IndexSet()
+            let selectedIDs = store.sidebarSelectionIDs.isEmpty ? [selectedID] : store.sidebarSelectionIDs
+            for id in selectedIDs {
+                guard let selectedNode = nodeCache[id], selectedNode.kind == .session else { continue }
+                let selectedRow = outline.row(forItem: selectedNode)
+                if selectedRow >= 0 { rows.insert(selectedRow) }
+            }
             let row = outline.row(forItem: node)
             guard row >= 0 else { return }
-            if outline.selectedRow != row {
-                outline.selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+            if rows.isEmpty { rows.insert(row) }
+            if outline.selectedRowIndexes != rows {
+                outline.selectRowIndexes(rows, byExtendingSelection: false)
             }
             if selectionChanged {
                 outline.scrollRowToVisible(row)
@@ -656,15 +667,28 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // style AppKit won't redraw rows on its own).
             refreshSelectionAppearance()
             guard !applyingSelection, let outline = outlineView else { return }
-            let row = outline.selectedRow
-            guard row >= 0, let node = outline.item(atRow: row) as? SidebarNode, node.kind == .session else {
+            let selectedIDs = outline.selectedRowIndexes.compactMap { row -> UUID? in
+                guard let node = outline.item(atRow: row) as? SidebarNode, node.kind == .session else { return nil }
+                return node.id
+            }
+            let clickedRow = outline.clickedRow
+            let clickedID = (clickedRow >= 0 ? outline.item(atRow: clickedRow) as? SidebarNode : nil).flatMap { node -> UUID? in
+                node.kind == .session ? node.id : nil
+            }
+            let activeID = clickedID.flatMap { id in
+                clickedRow >= 0 && outline.selectedRowIndexes.contains(clickedRow) ? id : nil
+            } ?? store.selectedSessionID.flatMap { id in selectedIDs.contains(id) ? id : nil }
+                ?? selectedIDs.last
+            guard let activeID else {
+                store.setSidebarSelection(selectedIDs)
                 return
             }
             // a genuine user row click (the applyingSelection guard above skips programmatic sync, so
             // auto-follow's own jump never reaches here) counts as activity: it buys the full idle grace
             // before auto-follow can pull the selection back.
             store.noteUserActivity()
-            store.selectSession(node.id)
+            store.selectSession(activeID)
+            store.setSidebarSelection(selectedIDs)
             // land on the selected session's blocked pane when it carries a pane-tagged block (a no-op
             // otherwise), async so it runs after the selection + the sidebar's own focus-restore settle.
             DispatchQueue.main.async { [weak self] in self?.actions.revealActiveBlockedPane() }
@@ -762,8 +786,12 @@ final class SidebarOutlineView: NSOutlineView {
     override func menu(for event: NSEvent) -> NSMenu? {
         let point = convert(event.locationInWindow, from: nil)
         let row = self.row(at: point)
-        // select the right-clicked row so the menu's context matches
-        if row >= 0 { selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false) }
+        // Keep a multi-selection when right-clicking one of its selected rows; narrow to the clicked
+        // session when right-clicking outside the selection, matching standard Mac list behavior.
+        if row >= 0, let node = item(atRow: row) as? SidebarNode, node.kind == .session,
+           !selectedRowIndexes.contains(row) {
+            selectRowIndexes(IndexSet(integer: row), byExtendingSelection: false)
+        }
         return (delegate as? WorkspaceSidebar.Coordinator)?.menu(forRow: row)
     }
 
