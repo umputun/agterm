@@ -131,16 +131,15 @@ final class ControlServer {
         // window.list carries LIVE NSWindow geometry + fullscreen/zoom state, read at cache-build time. A
         // user drag/resize/zoom/fullscreen changes it with NO control command, and a polling window.list is
         // fast-path-served so it never refreshes its own cache — so observe the AppKit window notifications
-        // and refresh the cache for a REGISTERED agterm window. The fullscreen enter/exit notifications fire
-        // AFTER the async transition, so the refreshed cache sees the settled `styleMask`. Cheap (a few
-        // nodes); a drag's didMove/didResize storm just keeps the cache current.
+        // and refresh the cache on each. The fullscreen enter/exit notifications fire AFTER the async
+        // transition, so the refreshed cache sees the settled `styleMask`. The notification is ignored (not
+        // captured — a non-Sendable `Notification` can't cross into the `assumeIsolated` region under Swift 6);
+        // it fires for ANY window, but a non-agterm panel just rebuilds the same cheap agterm nodes, and a
+        // drag's didMove/didResize storm just keeps the cache current.
         for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification,
                      NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification] {
-            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
-                MainActor.assumeIsolated {
-                    guard let window = note.object as? NSWindow, WindowRegistry.shared.contains(window) else { return }
-                    self?.refreshWindowCache()
-                }
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.refreshWindowCache() }
             }
         }
     }

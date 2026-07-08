@@ -836,9 +836,13 @@ paths:
   from the session tree), and since a user drag/resize/zoom/fullscreen changes it with NO control command
   AND a polling `window.list` is fast-path-served (so it never refreshes its own cache), `ControlServer`
   observes the NSWindow `didMove`/`didResize`/`didEnterFullScreen`/`didExitFullScreen` notifications and
-  `refreshWindowCache`s for a registered window (the fullscreen ones fire AFTER the async transition, so
-  the settled `styleMask` is captured) — mirroring the `.agtermSidebarVisibilityChanged` refresh for the
-  GUI-only sidebar toggle, so the read-back stays current.
+  `refreshWindowCache`s on each (the fullscreen ones fire AFTER the async transition, so the settled
+  `styleMask` is captured) — mirroring the `.agtermSidebarVisibilityChanged` refresh for the GUI-only
+  sidebar toggle, so the read-back stays current.
+  The notification is IGNORED, not captured — a non-Sendable `Notification` can't cross into the
+  `MainActor.assumeIsolated` block under Swift 6 strict concurrency (the `sending 'note'` error), so the
+  refresh fires for ANY window rather than filtering to an agterm one; harmless, since a non-agterm panel
+  just rebuilds the same cheap agterm nodes.
   The host-free plumbing (the closure + node field) is unit-tested (`controlWindowNodesIncludeGeometryFromClosure`,
   the round-trips); the coordinate conversion + the NSWindow-notification cache refresh are app-side, build-verified.
   Each `ControlWindowNode` ALSO carries `fullscreen`/`zoomed` — the read side of the write-only

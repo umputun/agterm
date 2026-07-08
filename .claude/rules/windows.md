@@ -230,9 +230,14 @@ never two bundles in one window.
   The node's `geometry`/`fullscreen`/`zoomed` are the SAME problem writ larger — live NSWindow state that a
   user drag/resize/zoom/fullscreen changes with no command, and (unlike `sidebarVisible`) with NO live tree
   copy, so a polling `window.list` would read them stale forever. `ControlServer` therefore observes the
-  NSWindow `didMove`/`didResize`/`didEnterFullScreen`/`didExitFullScreen` notifications (object nil, filtered
-  to `WindowRegistry.contains`) and `refreshWindowCache`s on each — the fullscreen enter/exit fire AFTER the
-  async transition, so the settled `styleMask` is captured; a drag's storm just keeps the cache current.
+  NSWindow `didMove`/`didResize`/`didEnterFullScreen`/`didExitFullScreen` notifications (object nil) and
+  `refreshWindowCache`s on each — the fullscreen enter/exit fire AFTER the async transition, so the settled
+  `styleMask` is captured; a drag's storm just keeps the cache current.
+  The notification is IGNORED (`_ in`), NOT captured: a non-Sendable `Notification` can't cross into the
+  `MainActor.assumeIsolated` region under Swift 6 (the `sending 'note'` error — which a Debug build compiles
+  clean but the Release WMO rejects, so verify app-target concurrency changes with a Release build), so the
+  refresh can't filter to an agterm window by the notification's object; a non-agterm panel firing it just
+  rebuilds the same cheap agterm nodes.
   `window.resize` (`args.width`/`height` → the window's frame size in points) and `window.move` (`args.x`/`y`
   → the top-left relative to display `args.display`, default the window's current display;
   y from the display top, so multiple displays are addressed by index) drive the app-side `WindowRegistry.resize`/`move`
