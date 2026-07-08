@@ -231,7 +231,50 @@ struct WindowAccessor: NSViewRepresentable {
             guard let saved = UserDefaults.standard.string(forKey: Self.frameKey(windowID)) else { return }
             let frame = NSRectFromString(saved)
             guard frame.width > 0, frame.height > 0 else { return }
-            window.setFrame(frame, display: true)
+            window.setFrame(Self.constrainedRestoredFrame(frame, for: window), display: true)
+        }
+
+        /// Normalize a persisted frame before restore. A saved `NSRect` may come from a display that is
+        /// no longer attached; applying it directly can put the relaunched window entirely off-screen.
+        /// Keep the saved size/position when possible, but clamp it to a visible strip on a current screen.
+        private static func constrainedRestoredFrame(_ frame: NSRect, for window: NSWindow) -> NSRect {
+            guard let screen = bestScreen(for: frame, fallback: window.screen ?? NSScreen.main) else { return frame }
+            let maxSize = screen.visibleFrame.size
+            let size = WindowGeometry.clampSize(
+                WindowGeometry.Size(width: Double(frame.width), height: Double(frame.height)),
+                min: WindowGeometry.Size(width: Double(window.minSize.width), height: Double(window.minSize.height)),
+                max: WindowGeometry.Size(width: Double(maxSize.width), height: Double(maxSize.height))
+            )
+            let origin = WindowGeometry.clampOrigin(
+                WindowGeometry.Point(x: Double(frame.origin.x), y: Double(frame.origin.y)),
+                windowSize: size,
+                displayFrame: WindowGeometry.Rect(
+                    origin: WindowGeometry.Point(x: Double(screen.visibleFrame.origin.x),
+                                                 y: Double(screen.visibleFrame.origin.y)),
+                    size: WindowGeometry.Size(width: Double(screen.visibleFrame.width),
+                                              height: Double(screen.visibleFrame.height))
+                )
+            )
+            return NSRect(x: CGFloat(origin.x), y: CGFloat(origin.y),
+                          width: CGFloat(size.width), height: CGFloat(size.height))
+        }
+
+        /// Select the current screen that most likely owns the saved frame. If the frame intersects no
+        /// attached screen, treat it as stale external-display geometry and restore on the fallback screen.
+        private static func bestScreen(for frame: NSRect, fallback: NSScreen?) -> NSScreen? {
+            let screens = NSScreen.screens
+            guard !screens.isEmpty else { return fallback }
+            let best = screens.max { intersectionArea($0.frame, frame) < intersectionArea($1.frame, frame) }
+            guard let best, intersectionArea(best.frame, frame) > 0 else { return fallback ?? screens.first }
+            return best
+        }
+
+        /// Score how much of a saved frame still overlaps a candidate screen; used only to choose the
+        /// restore target, not to decide the final clamped origin.
+        private static func intersectionArea(_ lhs: NSRect, _ rhs: NSRect) -> CGFloat {
+            let intersection = lhs.intersection(rhs)
+            guard !intersection.isNull else { return 0 }
+            return max(0, intersection.width) * max(0, intersection.height)
         }
 
         /// Installs (or re-asserts) the confirm-before-close proxy as the window's delegate, chaining to
