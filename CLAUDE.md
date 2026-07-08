@@ -292,6 +292,19 @@ always in context:
   (The Working-norms bullet above generalizes this to control-native features with no GUI surface.) Genuinely
   meaningless exposure (pure visual chrome with nothing to drive — quit-confirm,
   CLI/skill installers, click-routing `reveal`) is the only exemption, and must be called out as such.
+- **A command that WRITES or sets session state owes a matching READ-BACK on the `tree` node.**
+  The four-point audit above covers only the WRITE path.
+  A command that mutates or sets per-session state must ALSO surface that state on `ControlSessionNode`
+  (or the tree top-level), so a script can query what it just changed: record-then-restore,
+  read-modify-write, and idempotency checks all need the read leg.
+  Every state-mutating command pairs with a read field:
+  `session.background`/`background`, `notify`+`session.seen`/`unseen`,
+  `session.status`/`status`+`statusPane`, `session.flag`/`flagged`, `sidebar`/`sidebarVisible`,
+  `session.overlay.resize`/`overlaySizePercent`.
+  When adding a state-mutating command, ask "how does a script read back what I just set?" and add that
+  field in the SAME change.
+  `session.overlay.resize` shipped write-only and the `overlaySizePercent` read-back was missed until a
+  tmux-zoom script needed record-then-restore, so it went in as a separate follow-up.
 - **The bundled agent skill is the fourth keep-in-sync surface.**
   Whenever you change the Control API (commands/args/returns), the keymap format,
   or the window/workspace/session/pane model, update `agterm/Resources/agent-skill/` (SKILL.md + reference.md

@@ -59,6 +59,20 @@ paths:
   NOT add fresh validation/response logic inline in the `ControlServer` switch.
   (This is the control-channel case of the root `CLAUDE.md` "hoist host-free logic down into `agtermCore`"
   module-boundary rule.)
+- **The four-point audit is the WRITE path; a state-mutating command also owes a READ-BACK field.**
+  Whenever a command SETS or MUTATES per-session state, surface that state on `ControlSessionNode` (or
+  the tree top-level) so a script can query the value it just wrote: record-then-restore, read-modify-write,
+  and idempotency all depend on reading back what a `set`/`resize`/`toggle` changed.
+  The read field is populated in `AppStore.controlTree` and, like the other optionals, omitted from the
+  JSON when nil.
+  Existing pairs to mirror: `session.background`/`background`, `notify`+`session.seen`/`unseen`,
+  `session.status`/`status`+`statusPane`, `session.flag`/`flagged`, `sidebar`/`sidebarVisible` (top-level),
+  `session.overlay.resize`/`overlaySizePercent`.
+  This is a SEPARATE obligation from the four-point audit (Command + arg + CLI + tests) and easy to forget:
+  `session.overlay.resize` shipped write-only and `overlaySizePercent` was added only later, when a
+  tmux-zoom script needed to restore an overlay's exact size.
+  When adding a state-mutating command, add its read-back field in the SAME change and cover it with a
+  `treeSessionNodeRoundTrips…`/`…OmitsWhenNil` round-trip test plus a `controlTree` populate test.
 - **Bundling + install.**
   The `agterm` target's `Bundle agtermctl CLI` postBuildScript (`project.yml`) runs `swift build -c release --product agtermctl`,
   copies it to `agterm.app/Contents/MacOS/agtermctl`, ad-hoc signs the helper,
