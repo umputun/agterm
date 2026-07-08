@@ -84,6 +84,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         scroll.drawsBackground = false
         scroll.borderType = .noBorder
         context.coordinator.installEmptyState(in: scroll)
+        // in hidden toolbar mode the sidebar must run flush to the window top like the terminal.
+        context.coordinator.applyToolbarModeContentInset(scroll)
         return scroll
     }
 
@@ -220,6 +222,17 @@ struct WorkspaceSidebar: NSViewRepresentable {
             outlineView?.appearance = NSAppearance(named: GhosttyApp.shared.terminalThemeIsDark ? .darkAqua : .aqua)
         }
 
+        /// In the hidden toolbar mode the titlebar row collapses to zero and the terminal runs flush to
+        /// the window top; the sidebar's scroll view otherwise reserves the title-bar band as a top
+        /// content inset (the terminal, a plain surface, has none), leaving its first row stranded below
+        /// the terminal. Drop the automatic inset when hidden so the row aligns; normal/compact keep it.
+        func applyToolbarModeContentInset(_ scroll: NSScrollView?) {
+            guard let scroll else { return }
+            let hidden = GhosttyApp.shared.toolbarMode == .hidden
+            scroll.automaticallyAdjustsContentInsets = !hidden
+            if hidden { scroll.contentInsets = NSEdgeInsets() }
+        }
+
         @objc private func appearanceChanged() {
             refreshSelectionAppearance()
             applyThemeAppearance()
@@ -230,6 +243,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // color change — re-apply every visible glyph so a Settings color edit takes effect live.
             reapplyStatusGlyphs()
             updateEmptyState()
+            // a settings change may have flipped the toolbar mode; realign the scroll view's top inset so
+            // hidden mode runs flush (like toolbarMode's other chrome mirrors).
+            applyToolbarModeContentInset(outlineView?.enclosingScrollView)
         }
 
         /// Re-apply the status glyph on every visible session row so a global agent-status color change

@@ -33,7 +33,7 @@ struct SettingsView: View {
                 .tabItem { Label("Key Mapping", systemImage: "keyboard") }
                 .tag(Tab.keyMapping)
         }
-        .frame(width: 480, height: 550)
+        .frame(width: 480, height: 590)
         // keep macOS from saving/restoring the Settings window across launches. Otherwise a
         // process-launch reopen (see agtermApp's FB11763863 workaround) resurrects a stale Settings
         // window on whatever tab it was last on, which steals key focus from the real launch window.
@@ -191,8 +191,8 @@ private struct GeneralSettingsView: View {
 }
 
 /// Appearance tab: a Terminal section (font family, default font size, theme), a Window section
-/// (compact toolbar, background opacity + blur, sidebar tint), and a Panes section (inactive-pane
-/// dimming). Each control persists and live-applies through `SettingsModel`.
+/// (toolbar mode — Normal/Compact/Hidden, background opacity + blur, sidebar tint), and a Panes section
+/// (inactive-pane dimming). Each control persists and live-applies through `SettingsModel`.
 private struct AppearanceSettingsView: View {
     let model: SettingsModel
     private let themes = SettingsCatalog.themeNames()
@@ -236,8 +236,12 @@ private struct AppearanceSettingsView: View {
             }
 
             Section("Window") {
-                Toggle("Compact toolbar", isOn: compactToolbar)
-                    .accessibilityIdentifier("settings-compact-toolbar")
+                Picker("Toolbar", selection: toolbarMode) {
+                    Text("Normal").tag(ToolbarMode.normal)
+                    Text("Compact").tag(ToolbarMode.compact)
+                    Text("Hidden").tag(ToolbarMode.hidden)
+                }
+                .accessibilityIdentifier("settings-toolbar-mode")
 
                 HStack {
                     Text("Background Opacity")
@@ -351,11 +355,11 @@ private struct AppearanceSettingsView: View {
         return offset < 0 ? "Lighter \(-offset)" : "Darker \(offset)"
     }
 
-    /// on (the default = compact) maps to nil so settings.json stays minimal, matching the other
-    /// appearance controls' "unset = default" convention; off writes an explicit false.
-    private var compactToolbar: Binding<Bool> {
-        Binding(get: { model.settings.compactToolbar ?? true },
-                set: { model.setCompactToolbar($0 ? nil : false) })
+    /// `.compact` (the default) maps back to nil so settings.json stays minimal, matching the other
+    /// appearance controls' "unset = default" convention; `.normal`/`.hidden` write an explicit mode.
+    private var toolbarMode: Binding<ToolbarMode> {
+        Binding(get: { model.settings.effectiveToolbarMode },
+                set: { model.setToolbarMode($0 == .compact ? nil : $0) })
     }
 
     /// nil (the default) reads as `defaultInactivePaneMuteStrength`; sliding back to it stores nil so

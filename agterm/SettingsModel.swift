@@ -66,11 +66,11 @@ final class SettingsModel {
         // the first settings change rewrites the conf. Idempotent: writeGhosttyConfig no-ops when the file
         // already matches (e.g. a user with an explicit theme already has it on disk).
         _ = writeGhosttyConfig()
-        // mirror the persisted window translucency + notification toggle + compact toolbar + badge
+        // mirror the persisted window translucency + notification toggle + toolbar mode + badge
         // toggle into their shared channels at launch, before any settings change fires.
         applyWindowTranslucency()
         applyNotificationsEnabled()
-        applyCompactToolbar()
+        applyToolbarMode()
         applyNotificationBadgeEnabled()
         applyInactivePaneMute()
         applySidebarBackgroundShift()
@@ -213,7 +213,9 @@ final class SettingsModel {
     static let defaultLightTheme = "Builtin Light"
 
     func setNotificationsEnabled(_ value: Bool?) { settings.notificationsEnabled = value; persistAndApply() }
-    func setCompactToolbar(_ value: Bool?) { settings.compactToolbar = value; persistAndApply() }
+    /// Set the toolbar row mode (nil = the default = compact). Nils the legacy `compactToolbar` shim so
+    /// it evaporates from `settings.json` on the next save; the Settings Picker maps `.compact` back to nil.
+    func setToolbarMode(_ mode: ToolbarMode?) { settings.toolbarMode = mode?.rawValue; settings.compactToolbar = nil; persistAndApply() }
     func setNotificationBadgeEnabled(_ value: Bool?) { settings.notificationBadgeEnabled = value; persistAndApply() }
     func setMouseScrollMultiplier(_ value: Double?) { settings.mouseScrollMultiplier = value; persistAndApply() }
     // ghostty key (right-click-action): persistAndApply() rewrites the conf and reloads surfaces live.
@@ -620,7 +622,7 @@ final class SettingsModel {
             for surface in liveSurfaces() { surface.reapplyColorBackgroundIfNeeded() }
         }
         applyNotificationsEnabled()
-        applyCompactToolbar()
+        applyToolbarMode()
         applyNotificationBadgeEnabled()
         applyInactivePaneMute()
         applySidebarBackgroundShift()
@@ -642,9 +644,9 @@ final class SettingsModel {
         NotificationManager.shared.bannersEnabled = settings.notificationsEnabled ?? true
     }
 
-    private func applyCompactToolbar() {
-        // nil = the app default = compact (true); an explicit false is non-compact.
-        GhosttyApp.shared.setCompactToolbar(settings.compactToolbar ?? true)
+    private func applyToolbarMode() {
+        // effectiveToolbarMode resolves nil (and the legacy compactToolbar shim) to the concrete mode.
+        GhosttyApp.shared.setToolbarMode(settings.effectiveToolbarMode)
     }
 
     private func applyNotificationBadgeEnabled() {

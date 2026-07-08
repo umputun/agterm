@@ -33,13 +33,13 @@ struct SplitRatioAccessor: NSViewRepresentable {
     }
     func updateNSView(_ nsView: SplitProbeView, context _: Context) {
         nsView.onPersist = onPersist
-        nsView.titlebarHeight = titlebarHeight // re-clip on a compact-toolbar toggle (changes titlebarHeight)
+        nsView.titlebarHeight = titlebarHeight // re-clip on a toolbar-mode change (changes titlebarHeight)
     }
 
     final class SplitProbeView: NSView {
         private let session: Session
         var onPersist: (() -> Void)?
-        /// Top strip (in points) to clip the split's divider out of; updated on a compact-toolbar toggle.
+        /// Top strip (in points) to clip the split's divider out of; updated on a toolbar-mode change.
         var titlebarHeight: CGFloat = 0 { didSet { if titlebarHeight != oldValue { updateDividerClip() } } }
         nonisolated(unsafe) private var resizeObserver: NSObjectProtocol?
         nonisolated(unsafe) private var applyObserver: NSObjectProtocol?
