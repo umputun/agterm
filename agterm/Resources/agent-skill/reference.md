@@ -40,7 +40,8 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
 `id`, `name`, `cwd`, `title` (the raw OSC terminal title — e.g. a remote host over SSH — omitted
 when none reported; distinct from `name`, the derived sidebar label), `active` (selected),
 `split` (split shown), `splitRatio` (the left-pane fraction 0.05–0.95 of a session that HAS a split —
-shown or hidden; omitted when there's no split or the divider is still at the default 0.5 — the read side
+shown or hidden; omitted when there's no split or the ratio was never explicitly set (divider at the
+default 0.5) — the read side
 of `session resize`, record it to restore the exact divider position), `overlay` (overlay shown),
 `overlaySizePercent` (an open overlay's size — the
 floating panel's percent of the pane, 1–100; omitted = a full-pane overlay or no overlay, so gate on
@@ -293,9 +294,10 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
   record it, move/resize, then restore the exact frame), plus `fullscreen` and `zoomed` (whether the
   window is in native full screen / zoomed-to-screen — the read side of `window fullscreen` / `window
   zoom`, so a script can make those toggles idempotent; both omitted for a closed window). The
-  `autoFollowMs`/`geometry`/`fullscreen`/`zoomed` here are served from a cache and reflect the value as of
-  the last refresh, so a just-changed setting or a hand-drag may lag until the next command. Unlike `tree`,
-  `window.list` does NOT carry `idleMs` — the live idle metric would freeze in that cache.
+  `geometry`/`fullscreen`/`zoomed` fields stay current — the cache is refreshed when a window
+  moves/resizes/zooms/enters or exits full screen, so a hand-drag or GUI toggle is reflected without needing
+  another command. (`autoFollowMs` still reflects the last cache refresh, since a settings change is rare;
+  and unlike `tree`, `window.list` does NOT carry `idleMs` — the live idle metric would freeze in the cache.)
 - `window select <id>` — raise it if open, else open it.
 - `window close <id>` — close the on-screen window (the bundle is kept; reopen with select).
 - `window rename <id> <name>`.

@@ -807,7 +807,7 @@ paths:
   (not a guessed default).
   It ALSO surfaces `splitRatio` on each node — the left-pane divider fraction of a session that HAS a split
   (`session.hasSplit ? session.splitRatio : nil` in the tree builder, so shown OR hidden splits report it),
-  nil/omitted when there is no split or the divider is still at the default 0.5 (never moved).
+  nil/omitted when there is no split or the ratio was never explicitly set (divider then at the default 0.5).
   It is the READ side of `session.resize` (whose applied ratio was echoed ONLY on the resize call's own
   `ControlResult.ratio`), so a script can record the current ratio before maximizing a pane and restore the
   exact divider even if the USER dragged it.
@@ -832,10 +832,15 @@ paths:
   Because the frame lives in AppKit (`WindowLibrary` is host-free), `controlWindowNodes` takes an app-side
   `geometry:` closure (default nil for tests) that `ControlServer.buildWindowList` fills from
   `WindowRegistry.geometry(for:)` — the exact inverse of `move`'s forward math.
-  Like `sidebarVisible` it rides the `cachedWindowNodes` cache, so a hand-drag can lag one command until
-  the next refresh (there is no LIVE tree copy — geometry is window-scoped, absent from the session tree).
+  It rides the `cachedWindowNodes` cache (there is no LIVE tree copy — geometry is window-scoped, absent
+  from the session tree), and since a user drag/resize/zoom/fullscreen changes it with NO control command
+  AND a polling `window.list` is fast-path-served (so it never refreshes its own cache), `ControlServer`
+  observes the NSWindow `didMove`/`didResize`/`didEnterFullScreen`/`didExitFullScreen` notifications and
+  `refreshWindowCache`s for a registered window (the fullscreen ones fire AFTER the async transition, so
+  the settled `styleMask` is captured) — mirroring the `.agtermSidebarVisibilityChanged` refresh for the
+  GUI-only sidebar toggle, so the read-back stays current.
   The host-free plumbing (the closure + node field) is unit-tested (`controlWindowNodesIncludeGeometryFromClosure`,
-  the round-trips); the coordinate conversion itself is app-side, build-verified like `window.resize`/`move`.
+  the round-trips); the coordinate conversion + the NSWindow-notification cache refresh are app-side, build-verified.
   Each `ControlWindowNode` ALSO carries `fullscreen`/`zoomed` — the read side of the write-only
   `window.fullscreen`/`window.zoom` toggles (so a script can toggle idempotently), filled by a PARALLEL
   app-side `flags:` closure on `controlWindowNodes` (kept separate from `geometry:` so each stays a clean

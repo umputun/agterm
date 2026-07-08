@@ -256,9 +256,10 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let active: Bool
     public let split: Bool
     /// The left-pane fraction (0.05...0.95) of a session that HAS a split pane (shown or hidden), or nil
-    /// when the session has no split OR the divider is still at the default 0.5 (never moved). The read
-    /// side of `session.resize` — record it before maximizing a pane so a script can restore the exact
-    /// divider position (today the applied ratio is echoed only on the `session.resize` call itself).
+    /// when the session has no split OR the ratio was never explicitly set (via `session.resize` or a
+    /// divider drag), in which case the divider sits at the default 0.5. The read side of `session.resize`
+    /// — record it before maximizing a pane so a script can restore the exact divider position (the applied
+    /// ratio is otherwise echoed only on the `session.resize` call itself).
     public let splitRatio: Double?
     public let overlay: Bool
     /// For an OPEN overlay (`overlay == true`), its size: nil/omitted = the FULL-pane overlay, else the
@@ -406,8 +407,9 @@ public struct ControlWindowNode: Codable, Sendable, Equatable {
     public let sidebarVisible: Bool?
     /// The window's current on-screen frame (position + size + display), or nil for a CLOSED window with no
     /// live NSWindow (omitted from the JSON). The read side of `window.move`/`window.resize` — record it,
-    /// resize/move the window, then restore the exact frame. Read live app-side; like `sidebarVisible` it
-    /// rides the cache, so it may lag one command behind a hand-drag until the next refresh.
+    /// resize/move the window, then restore the exact frame. Read live app-side; it rides the window cache,
+    /// which is refreshed on window move/resize/zoom/fullscreen (`ControlServer` observes the NSWindow
+    /// notifications), so a hand-drag or GUI toggle is reflected without needing another command.
     public let geometry: ControlWindowFrame?
     /// Whether the window is in native macOS full screen, or nil for a CLOSED window (omitted from the
     /// JSON). The read side of the write-only `window.fullscreen` toggle, so a script can make the toggle

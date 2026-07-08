@@ -227,6 +227,12 @@ never two bundles in one window.
   posts `.agtermSidebarVisibilityChanged` and `ControlServer` observes it to `refreshWindowCache`.
   The live, never-cached copy of `sidebarVisible` is on `tree`'s top level (main-actor per request);
   prefer it for read-then-act scripts.
+  The node's `geometry`/`fullscreen`/`zoomed` are the SAME problem writ larger — live NSWindow state that a
+  user drag/resize/zoom/fullscreen changes with no command, and (unlike `sidebarVisible`) with NO live tree
+  copy, so a polling `window.list` would read them stale forever. `ControlServer` therefore observes the
+  NSWindow `didMove`/`didResize`/`didEnterFullScreen`/`didExitFullScreen` notifications (object nil, filtered
+  to `WindowRegistry.contains`) and `refreshWindowCache`s on each — the fullscreen enter/exit fire AFTER the
+  async transition, so the settled `styleMask` is captured; a drag's storm just keeps the cache current.
   `window.resize` (`args.width`/`height` → the window's frame size in points) and `window.move` (`args.x`/`y`
   → the top-left relative to display `args.display`, default the window's current display;
   y from the display top, so multiple displays are addressed by index) drive the app-side `WindowRegistry.resize`/`move`

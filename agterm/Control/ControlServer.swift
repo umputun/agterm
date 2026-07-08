@@ -1,3 +1,4 @@
+import AppKit
 import agtermCore
 import Darwin
 import Foundation
@@ -126,6 +127,21 @@ final class ControlServer {
         // would leave a window where a background window.list fast-path read still sees the stale cache.
         NotificationCenter.default.addObserver(forName: .agtermSidebarVisibilityChanged, object: nil, queue: nil) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshWindowCache() }
+        }
+        // window.list carries LIVE NSWindow geometry + fullscreen/zoom state, read at cache-build time. A
+        // user drag/resize/zoom/fullscreen changes it with NO control command, and a polling window.list is
+        // fast-path-served so it never refreshes its own cache — so observe the AppKit window notifications
+        // and refresh the cache for a REGISTERED agterm window. The fullscreen enter/exit notifications fire
+        // AFTER the async transition, so the refreshed cache sees the settled `styleMask`. Cheap (a few
+        // nodes); a drag's didMove/didResize storm just keeps the cache current.
+        for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification,
+                     NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification] {
+            NotificationCenter.default.addObserver(forName: name, object: nil, queue: .main) { [weak self] note in
+                MainActor.assumeIsolated {
+                    guard let window = note.object as? NSWindow, WindowRegistry.shared.contains(window) else { return }
+                    self?.refreshWindowCache()
+                }
+            }
         }
     }
 

@@ -82,10 +82,11 @@ of the tree).
 Inspect the live tree any time with `agtermctl tree --json` (workspaces → sessions, each with
 `id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `scratch`, `status`, `background`). `title` is the raw OSC
 terminal title (e.g. a remote host over SSH), omitted when none was reported — read it when a
-session's local `cwd` is stale because it's connected to a remote. The tree object also carries three
+session's local `cwd` is stale because it's connected to a remote. The tree object also carries four
 read-only top-level fields: `idleMs` (ms since the last user input in the window), `autoFollowMs`
-(the Auto-follow timeout in ms, omitted when Disabled), and `sidebarVisible` (whether the window's
-sidebar is currently shown — the read side of the write-only `sidebar` command). List windows with
+(the Auto-follow timeout in ms, omitted when Disabled), `sidebarVisible` (whether the window's
+sidebar is currently shown — the read side of the write-only `sidebar` command), and `sidebarMode`
+(`tree` or `flagged` — the read side of `sidebar mode`). List windows with
 `agtermctl window list --json`; each window also reports `autoFollowMs`, `sidebarVisible`, `geometry`
 (the live frame `{x, y, width, height, display}` in the units `window move`/`window resize` take — the
 read side, so record it then restore the exact frame), and `fullscreen`/`zoomed` (the read side of
@@ -127,7 +128,8 @@ spec — image/text watermark or solid color — set via `session background`, o
 seen` — omitted when zero), `overlaySizePercent` (an open overlay's floating-panel percent 1–100,
 omitted for a full-pane overlay or no overlay so gate on `overlay` first; the read side of `overlay
 resize` for a record-then-restore zoom), and `splitRatio` (the left-pane divider fraction 0.05–0.95 of a
-session that has a split — shown or hidden; omitted when there's no split or it's at the default 0.5 —
+session that has a split — shown or hidden; omitted when there's no split or the ratio was never set (at
+the default 0.5) —
 the read side of `session resize`, record it to restore the exact divider).
 
 **workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom` ·
