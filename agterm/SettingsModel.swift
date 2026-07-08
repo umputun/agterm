@@ -39,8 +39,9 @@ final class SettingsModel {
     private let backgroundSaveDebouncer = Debouncer()
     private static let backgroundSaveInterval: TimeInterval = 0.3
 
-    /// Coalesces the `.agtermSystemAppearanceChanged` storm (posted once per deck surface, plus at first
-    /// window attach) into a single re-apply when the macOS light/dark appearance flips.
+    /// Coalesces `.agtermSystemAppearanceChanged` into a single re-apply when the macOS light/dark
+    /// appearance flips. Posted by the app-level KVO observer on `NSApplication.effectiveAppearance`
+    /// (`SystemAppearanceObserver`); the debounce absorbs any rapid repeat post during the transition.
     private let appearanceDebouncer = Debouncer()
     private static let appearanceDebounceInterval: TimeInterval = 0.05
 
@@ -327,14 +328,26 @@ final class SettingsModel {
         apply()
     }
 
-    /// Persist the picker's final theme value — the commit half, called on Enter after one or more
-    /// `previewTheme` applies. The preview already wrote the CURRENT-appearance slot eagerly, so the
-    /// in-memory settings hold the final value and there is nothing to write back. Flushes any pending
-    /// debounced preview first, so the latest previewed theme is live NOW, then writes `settings.json`.
-    /// Save-only: the previewed side is already rendering, so no config reload (and no font-zoom reset)
-    /// fires.
-    func commitTheme() {
+    /// Persist the picker's final theme — the commit half, called on Enter after one or more
+    /// `previewTheme` applies. Only the slot rendering AT ENTER-TIME (the active slot) keeps its browsed
+    /// value; the OTHER slot is restored to `nonActiveOriginal` (its value when the picker opened). Without
+    /// that, a mid-preview appearance flip that browsed a value into the off-screen slot would persist it
+    /// even though it was never confirmed, and it would resurface on the next flip — the commit-side twin
+    /// of the `revertThemePreview` bug. Flushes any pending debounced preview first (so the active slot's
+    /// latest value is live), restores the off-screen slot, re-applies ONLY if that changed the config
+    /// (the flip case — so the dual line on disk matches, and the reverted slot won't resurface), then
+    /// writes `settings.json`. The common no-flip commit stays save-only (nothing to restore, no reload).
+    func commitTheme(nonActiveOriginal: (theme: String?, dark: String?)) {
         previewThemeDebouncer.flush()
+        let restored: Bool
+        if rendersDarkSlot {
+            restored = settings.theme != nonActiveOriginal.theme
+            settings.theme = nonActiveOriginal.theme
+        } else {
+            restored = settings.darkTheme != nonActiveOriginal.dark
+            settings.darkTheme = nonActiveOriginal.dark
+        }
+        if restored { apply() }
         try? settingsStore.save(settings)
         committedTheme = settings.theme
         committedDarkTheme = settings.darkTheme

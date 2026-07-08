@@ -255,11 +255,14 @@ extension AppActions {
 
     /// Persist the previewed theme (Enter/click). Ends the preview so the subsequent palette close can't
     /// revert it. The preview already wrote the current-appearance slot (dark slot while following in
-    /// dark mode, else `theme`), so the commit is save-only — no value to pass back and no dual
-    /// recompose, since the two slots are separate fields and syncing rides `followSystemAppearance`.
+    /// dark mode, else `theme`), so only that slot commits — the captured pair is passed back so the
+    /// OTHER slot is restored to its pre-preview value, otherwise a value browsed into it during a
+    /// mid-preview appearance flip would leak in on commit (the flip-safe twin of `cancelThemePreview`).
     func commitThemePreview() {
         guard themePreviewActive else { return }
-        settingsModel?.commitTheme()
+        if let original = themePreviewOriginal {
+            settingsModel?.commitTheme(nonActiveOriginal: original)
+        }
         themePreviewActive = false
         themePreviewOriginal = nil
     }

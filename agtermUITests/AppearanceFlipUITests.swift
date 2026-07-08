@@ -81,4 +81,62 @@ final class AppearanceFlipUITests: ControlAPITestCase {
         }
         XCTAssertEqual(applied, "dark", "the flip must drive the config reload (last-applied side)")
     }
+
+    /// Regression: committing after a mid-preview appearance flip must NOT persist a value that was only
+    /// ever browsed into the off-screen slot. Open the picker in light while following, preview a theme
+    /// (writes the light slot), flip to dark, preview a DIFFERENT theme (writes the dark slot), Enter. Only
+    /// the dark slot — active at Enter-time — may commit; the light slot must revert to its pre-preview
+    /// value. The commit-side twin of the Esc-revert flip-safety the pair snapshot already covers.
+    func testCommitAfterMidPreviewFlipDoesNotLeakUnconfirmedSlot() throws {
+        // pin a known starting side + a following pair with known slots.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"debug.appearance","args":{"name":"light"}}"#)["ok"] as? Bool, true)
+        let synced = try sendCommand(#"{"cmd":"theme.set","args":{"light":"Builtin Light","dark":"Builtin Dark"}}"#)
+        XCTAssertEqual(synced["ok"] as? Bool, true, "theme.set --light --dark should succeed: \(synced)")
+
+        // browse a theme in LIGHT mode: previews it into the light slot without committing.
+        openThemePicker()
+        previewInPalette("Dracula")
+
+        // flip to dark mid-preview (socket-driven, the picker stays open), then browse a DIFFERENT theme,
+        // which previews into the dark slot. Enter commits.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"debug.appearance","args":{"name":"dark"}}"#)["ok"] as? Bool, true)
+        previewInPalette("Hot Dog", clearFirst: true) // top match: "Hot Dog Stand"
+        app.typeKey(.return, modifierFlags: [])
+
+        // the dark slot (active at Enter) commits its preview; the light slot must be the pre-preview
+        // original, NOT the browsed-but-unconfirmed "Dracula". Poll until the commit lands.
+        var light: String?
+        var dark: String?
+        let deadline = Date().addingTimeInterval(8)
+        while Date() < deadline {
+            let result = try sendCommand(#"{"cmd":"theme.list"}"#)["result"] as? [String: Any]
+            light = result?["light"] as? String
+            dark = result?["dark"] as? String
+            if dark == "Hot Dog Stand" { break }
+            usleep(200_000)
+        }
+        XCTAssertEqual(dark, "Hot Dog Stand", "the dark slot active at Enter-time must commit its preview")
+        XCTAssertEqual(light, "Builtin Light", "a value browsed into the off-screen light slot must not commit")
+    }
+
+    /// Open the live-preview theme picker via View ▸ Select Theme…; it opens on the next runloop tick, so
+    /// wait for the field.
+    private func openThemePicker() {
+        app.menuBars.menuBarItems["View"].click()
+        let item = app.menuItems["Select Theme…"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "View menu should offer Select Theme…")
+        item.click()
+        XCTAssertTrue(app.textFields.firstMatch.waitForExistence(timeout: 5), "the theme picker field should appear")
+    }
+
+    /// Type into the picker's field so the top match previews live. `clearFirst` select-all-clears first,
+    /// for a second preview after the field already holds a query. Clicks the field first, so a flip that
+    /// nudged focus is recovered before typing.
+    private func previewInPalette(_ text: String, clearFirst: Bool = false) {
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "palette search field should appear")
+        field.click()
+        if clearFirst { app.typeKey("a", modifierFlags: .command) }
+        field.typeText(text)
+    }
 }

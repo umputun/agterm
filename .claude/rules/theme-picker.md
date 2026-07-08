@@ -25,8 +25,11 @@ paths:
   `previewTheme` = `SettingsModel.previewTheme` sets `settings.theme = name` immediately but DEBOUNCES
   the live `apply()` (~0.07 s) so a burst of nav/typing previews coalesces to one surface reload — applied
   WITHOUT `settingsStore.save` (`persistAndApply` was split into `save(); apply()` so preview can apply-without-persist).
-  Enter/click commits via `commitThemePreview()` → `SettingsModel.commitTheme()`,
-  which FLUSHES the pending debounced apply (so the latest theme is live NOW) then `save()`s.
+  Enter/click commits via `commitThemePreview()` → `SettingsModel.commitTheme(nonActiveOriginal:)`,
+  which FLUSHES the pending debounced apply (so the active slot's latest value is live NOW), RESTORES the
+  off-screen slot to its captured original (so a value browsed into it during a mid-preview flip can't
+  commit — the commit-side twin of the Esc revert; re-applies only in that flip case so the dual line on
+  disk matches), then `save()`s.
   Any dismiss without a commit — Esc, scrim tap, switch to another palette mode,
   unmount — reverts via `cancelThemePreview()` → `revertThemePreview(theme:darkTheme:)`,
   which CANCELS the pending debounce and restores BOTH slots captured on open SYNCHRONOUSLY (no debounce
@@ -78,7 +81,7 @@ paths:
   Settings UI: picker 1 ("Theme", stable AX id `settings-theme`) edits the current-appearance slot via `setThemeForCurrentAppearance`; a `Toggle("Follow system appearance")` (`settings-follow-appearance`, default OFF) drives `setFollowSystemAppearance` (ON seeds the other slot from the current theme so both start equal; OFF collapses to the on-screen theme, no visual flip); and — only while following — an alternate picker (`settings-theme-dark`, labeled for the OTHER appearance) drives `setAlternateTheme`.
   The primary picker offers the "default ghostty" (nil) row only when NOT following, since a dual conditional needs two named themes.
   A palette PREVIEW writes the CURRENT-appearance slot (`previewTheme` writes the dark slot while following in dark mode, else `theme`), so the on-screen render reflects it and Esc restores the captured slot pair (both slots, snapshotted on open — flip-safe).
-  COMMIT (`AppActions.commitThemePreview` → `SettingsModel.commitTheme()`, save-only) just persists the already-written slot — no dual recompose, since the two slots are separate fields.
+  COMMIT (`AppActions.commitThemePreview` → `SettingsModel.commitTheme(nonActiveOriginal:)`) persists the active (on-screen) slot's browsed value and RESTORES the off-screen slot to its pre-preview original, so a value browsed into the other slot during a mid-preview flip never commits; save-only in the common no-flip case (nothing to restore), one reload in the flip case to rewrite the dual line.
   The picker badges/opens on the EFFECTIVE theme (`activeTheme(isDark:)` — the on-screen slot), so the open-row preview is a config no-op.
 - **Control parity = the commit, not the preview**
   (preview is interactive-only): `theme.set`/`theme.list` (see the Control API catalog for the four-point
