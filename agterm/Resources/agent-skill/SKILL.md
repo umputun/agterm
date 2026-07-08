@@ -120,8 +120,10 @@ via `session status`: `active`|`completed`|`blocked`, omitted when idle), `statu
 that status: `left` (main) | `right` (split) | `scratch`, from `session status --pane`, omitted when
 unset or idle), `background` (the background
 spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear),
-and `unseen` (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session
-seen` — omitted when zero).
+`unseen` (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session
+seen` — omitted when zero), and `overlaySizePercent` (an open overlay's floating-panel percent 1–100,
+omitted for a full-pane overlay or no overlay so gate on `overlay` first; the read side of `overlay
+resize` for a record-then-restore zoom).
 
 **workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom` ·
 `focus [on|off|toggle]` (collapse the sidebar tree to a single workspace).
