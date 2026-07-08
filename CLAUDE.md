@@ -299,8 +299,11 @@ always in context:
   read-modify-write, and idempotency checks all need the read leg.
   Every state-mutating command pairs with a read field:
   `session.background`/`background`, `notify`+`session.seen`/`unseen`,
-  `session.status`/`status`+`statusPane`, `session.flag`/`flagged`, `sidebar`/`sidebarVisible`,
-  `session.overlay.resize`/`overlaySizePercent`.
+  `session.status`/`status`+`statusPane` (+`statusBlink`/`statusColor` for `--blink`/`--color`),
+  `session.flag`/`flagged`, `session.focus`/`splitFocused`, `session.resize`/`splitRatio`,
+  `session.overlay.resize`/`overlaySizePercent`, `sidebar`/`sidebarVisible`, `sidebar.mode`/`sidebarMode`,
+  `workspace.focus`/`focused`, `quick`/`quickVisible`,
+  `window.move`+`window.resize`/`geometry`, `window.fullscreen`+`window.zoom`/`fullscreen`+`zoomed`.
   When adding a state-mutating command, ask "how does a script read back what I just set?" and add that
   field in the SAME change.
   `session.overlay.resize` shipped write-only and the `overlaySizePercent` read-back was missed until a

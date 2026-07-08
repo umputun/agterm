@@ -396,7 +396,8 @@ final class ControlServer {
     func buildTree(in store: AppStore) -> ControlTree {
         let shellBasename = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
         // the projected window owns its quick terminal; find its id by store identity to read the live
-        // QuickTerminalController.isVisible (nil controller = never opened = not visible).
+        // QuickTerminalController.isVisible (a nil controller — never opened, or the window is tearing
+        // down — reads as not visible).
         let windowID = library.openIDs().first { library.store(for: $0) === store }
         return store.controlTree(
             foreground: { session in
