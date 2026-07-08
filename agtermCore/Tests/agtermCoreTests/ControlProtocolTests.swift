@@ -650,6 +650,25 @@ struct ControlProtocolTests {
         #expect(decoded.result?.tree?.sidebarMode == "flagged")
     }
 
+    @Test func treeRoundTripsWithQuickVisible() throws {
+        // the read side of quick: the quick-terminal visibility rides the tree top level so a script can
+        // make the toggle idempotent.
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [], quickVisible: true)))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.quickVisible == true)
+    }
+
+    @Test func treeOmitsQuickVisibleWhenNil() throws {
+        // a host-produced tree with no app closure — the key must be omitted, not emitted as null.
+        let tree = ControlTree(workspaces: [])
+        let json = String(data: try JSONEncoder().encode(tree), encoding: .utf8) ?? ""
+        #expect(!json.contains("quickVisible"), "a nil quickVisible must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlTree.self, from: Data(json.utf8))
+        #expect(decoded.quickVisible == nil)
+    }
+
     @Test func backgroundWatermarkFitPositionSerializeAsRawStrings() throws {
         // the Fit/Position enums must serialize to ghostty's exact key strings (identical to the former
         // String), so the wire + persisted JSON are unchanged by the enum migration.

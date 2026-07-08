@@ -824,6 +824,15 @@ struct AppStoreTests {
         #expect(store.controlTree().sidebarMode == "tree")
     }
 
+    @Test func controlTreeReportsQuickVisibleFromClosure() {
+        let store = makeStore()
+        // no closure (host-free / default): omitted (nil).
+        #expect(store.controlTree().quickVisible == nil)
+        // the app supplies the live QuickTerminalController.isVisible via the closure.
+        #expect(store.controlTree(quickVisible: { true }).quickVisible == true)
+        #expect(store.controlTree(quickVisible: { false }).quickVisible == false)
+    }
+
     @Test func setSidebarVisiblePostsChangeNotificationOnlyOnChange() {
         // the app-target ControlServer observes this to refresh window.list's cached sidebarVisible; the
         // post must fire only on an actual change (queue nil so the synchronous post delivers inline).

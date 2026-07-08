@@ -82,11 +82,12 @@ of the tree).
 Inspect the live tree any time with `agtermctl tree --json` (workspaces → sessions, each with
 `id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `scratch`, `status`, `background`). `title` is the raw OSC
 terminal title (e.g. a remote host over SSH), omitted when none was reported — read it when a
-session's local `cwd` is stale because it's connected to a remote. The tree object also carries four
+session's local `cwd` is stale because it's connected to a remote. The tree object also carries five
 read-only top-level fields: `idleMs` (ms since the last user input in the window), `autoFollowMs`
 (the Auto-follow timeout in ms, omitted when Disabled), `sidebarVisible` (whether the window's
-sidebar is currently shown — the read side of the write-only `sidebar` command), and `sidebarMode`
-(`tree` or `flagged` — the read side of `sidebar mode`). List windows with
+sidebar is currently shown — the read side of the write-only `sidebar` command), `sidebarMode`
+(`tree` or `flagged` — the read side of `sidebar mode`), and `quickVisible` (whether the window's quick
+terminal is shown — the read side of the write-only `quick` command). List windows with
 `agtermctl window list --json`; each window also reports `autoFollowMs`, `sidebarVisible`, `geometry`
 (the live frame `{x, y, width, height, display}` in the units `window move`/`window resize` take — the
 read side, so record it then restore the exact frame), and `fullscreen`/`zoomed` (the read side of

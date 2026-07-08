@@ -161,7 +161,8 @@ public final class AppStore {
     /// Projects this store's workspace/session model into the control-channel `tree` payload. Foreground
     /// command lookup is supplied by the host because live process inspection is platform-specific.
     public func controlTree(foreground: (Session) -> [String]? = { _ in nil },
-                            splitForeground: (Session) -> [String]? = { _ in nil }) -> ControlTree {
+                            splitForeground: (Session) -> [String]? = { _ in nil },
+                            quickVisible: () -> Bool? = { nil }) -> ControlTree {
         let activeID = selectedSessionID
         let activeWorkspaceID = activeID.flatMap { workspace(forSession: $0)?.id }
         let nodes = workspaces.map { workspace in
@@ -192,7 +193,8 @@ public final class AppStore {
                                         sessions: sessions)
         }
         return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs,
-                           sidebarVisible: sidebarVisible, sidebarMode: sidebarMode.rawValue)
+                           sidebarVisible: sidebarVisible, sidebarMode: sidebarMode.rawValue,
+                           quickVisible: quickVisible())
     }
 
     /// Creates a workspace and appends it. Clears any active focus so the new (empty)

@@ -65,15 +65,17 @@ when zero). Workspace nodes carry `id`, `name`, `active`, `sessions`, and `focus
 tree is collapsed to this workspace — the read side of `workspace focus`, distinct from `active` the
 SELECTED workspace; omitted unless this is the focused one, and absent entirely when nothing is focused).
 
-The tree object itself carries four top-level read-only fields: `idleMs` (milliseconds since the last
+The tree object itself carries five top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
 timeout in milliseconds, omitted when the setting is Disabled), `sidebarVisible` (whether the
 window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
 can restore it, e.g. a tmux-style zoom that hides the sidebar and must re-show it only when it was
-visible before), and `sidebarMode` (`tree` or `flagged` — the sidebar view mode, the read side of
-`sidebar mode`). `idleMs` is live and grows while the window is idle, so it is on `tree` only, never
-`window.list`; `sidebarVisible` is on both; `sidebarMode` is `tree`-only (a GUI flagged-view toggle
-would leave a cached copy stale). All four are read-only projections of GUI state.
+visible before), `sidebarMode` (`tree` or `flagged` — the sidebar view mode, the read side of
+`sidebar mode`), and `quickVisible` (whether the window's quick terminal is currently shown — the read
+side of the write-only `quick` command, so a script can make the toggle idempotent). `idleMs` is live
+and grows while the window is idle, so it is on `tree` only, never `window.list`; `sidebarVisible` is on
+both; `sidebarMode` and `quickVisible` are `tree`-only (a GUI toggle would leave a cached copy stale).
+All five are read-only projections of GUI state.
 
 ## workspace
 

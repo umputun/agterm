@@ -374,14 +374,21 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// mode and restore it. `tree`-only (not on `window.list`), since a GUI-only flagged-view toggle would
     /// leave a cached copy stale — read the live tree copy instead.
     public let sidebarMode: String?
+    /// Whether the projected window's quick terminal is currently visible. LIVE — resolved app-side per
+    /// request from the window's `QuickTerminalController` — so a script can make the `quick` toggle
+    /// idempotent (show only when hidden). The read side of the write-only `quick` command. `tree`-only
+    /// (not on `window.list`), since a GUI-only ⌃` toggle bypasses the command path and would leave a
+    /// cached copy stale — read the live tree copy instead. nil in a host-produced tree with no app closure.
+    public let quickVisible: Bool?
 
     public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
-                sidebarVisible: Bool? = nil, sidebarMode: String? = nil) {
+                sidebarVisible: Bool? = nil, sidebarMode: String? = nil, quickVisible: Bool? = nil) {
         self.workspaces = workspaces
         self.idleMs = idleMs
         self.autoFollowMs = autoFollowMs
         self.sidebarVisible = sidebarVisible
         self.sidebarMode = sidebarMode
+        self.quickVisible = quickVisible
     }
 }
 

@@ -566,6 +566,14 @@ paths:
   tree schema — so a script can record an overlay's size before zooming to `--full` and restore it exactly.
   Mode-bearing commands (`session.split`/`quick`) compute the delta against current state so `on`/`off`/`show`/`hide`
   are idempotent, and an unknown mode is an error.
+  `quick`'s visibility reads back on `ControlTree.quickVisible` at the tree TOP level — LIVE, resolved
+  app-side in `buildTree` from the projected window's `QuickTerminalController.isVisible` (the window id
+  found by store identity, `library.openIDs().first { library.store(for:) === store }`, since the quick
+  terminal is per-window); `tree`-only like `sidebarMode` (the GUI ⌃` toggle bypasses the command path, so
+  a cached `window.list` copy would go stale), so a script can make the `quick` toggle idempotent.
+  Threaded as a `quickVisible: () -> Bool?` closure on `AppStore.controlTree` (defaulting nil for host-free
+  tests), covered by `treeRoundTripsWithQuickVisible`/`treeOmitsQuickVisibleWhenNil` +
+  `AppStoreTests.controlTreeReportsQuickVisibleFromClosure`; the app-side `QuickTerminalRegistry` read is build-verified.
   `session.status` flags a per-session agent status on the sidebar row — `args.status` is `idle`|`active`|`completed`|`blocked`
   (`AgentStatus(rawValue:)` → an `invalid status` error on anything else),
   `args.blink` pulses the glyph, and `args.autoReset` (status-agnostic, caller-set,
