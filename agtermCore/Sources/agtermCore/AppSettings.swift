@@ -1,5 +1,17 @@
 import Foundation
 
+/// The window's custom titlebar row state: `normal` stacks the session name over the cwd subtitle,
+/// `compact` is a single short row, `hidden` drops the row and the traffic lights for a full-bleed
+/// terminal. Stored raw so an unknown future value decodes tolerantly (via `effectiveToolbarMode`)
+/// rather than failing the whole decode.
+///
+/// Top-level (unlike the nested sibling mode enums) because the app target references it as a bare `ToolbarMode`.
+public enum ToolbarMode: String, Codable, Sendable, CaseIterable {
+    case normal
+    case compact
+    case hidden
+}
+
 /// User-facing appearance settings, persisted independently of the workspace tree.
 ///
 /// Every field is optional: nil means "use the ghostty default", and a settings file written
@@ -97,10 +109,15 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// unseen count keeps tracking, so turning it back on instantly shows the current counts.
     /// Distinct from `notificationsEnabled`, which gates the OS banner.
     public var notificationBadgeEnabled: Bool?
-    /// Whether the window uses the compact title bar (a single short row with smaller icons) instead
-    /// of the tall default that stacks the session name over the working-directory subtitle. nil
-    /// means the default (off). Applied at the AppKit window level, NOT a ghostty key; in compact
-    /// mode the cwd subtitle is dropped so the bar is a single line.
+    /// The custom titlebar row state, stored as a `ToolbarMode` RAW STRING (`normal`/`compact`/`hidden`) so an
+    /// unknown future value decodes tolerantly to the default (the AppSettings forward-compat rule) instead
+    /// of failing the whole decode and discarding every other setting; nil means the default (compact).
+    /// Resolved through `effectiveToolbarMode`, which also maps a legacy `compactToolbar`. Applied at the
+    /// AppKit window level, NOT a ghostty key. Writing a mode nils `compactToolbar`, so the legacy key evaporates.
+    public var toolbarMode: String?
+    /// Legacy decode shim for the pre-`toolbarMode` two-state toggle: false = the normal bar, true/nil = the
+    /// compact bar. Read only by `effectiveToolbarMode` when `toolbarMode` is unset; nilled on the next
+    /// mode write. Applied at the AppKit window level, NOT a ghostty key.
     public var compactToolbar: Bool?
     /// Hex colors (`#RRGGBB`) for the agent-status glyph's three states; nil for each means the system
     /// default (active = blue, blocked = amber, completed = green). Applied at the AppKit level when the
@@ -184,7 +201,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 darkTheme: String? = nil, followSystemAppearance: Bool? = nil,
                 backgroundOpacity: Double? = nil, backgroundBlur: Int? = nil, notificationsEnabled: Bool? = nil,
-                compactToolbar: Bool? = nil, notificationBadgeEnabled: Bool? = nil,
+                toolbarMode: String? = nil, compactToolbar: Bool? = nil, notificationBadgeEnabled: Bool? = nil,
                 activeStatusColorHex: String? = nil, blockedStatusColorHex: String? = nil,
                 completedStatusColorHex: String? = nil, configDirectory: String? = nil,
                 mouseScrollMultiplier: Double? = nil, inactivePaneMuteStrength: Int? = nil,
@@ -202,6 +219,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.backgroundOpacity = backgroundOpacity
         self.backgroundBlur = backgroundBlur
         self.notificationsEnabled = notificationsEnabled
+        self.toolbarMode = toolbarMode
         self.compactToolbar = compactToolbar
         self.notificationBadgeEnabled = notificationBadgeEnabled
         self.activeStatusColorHex = activeStatusColorHex
@@ -221,6 +239,14 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.confirmCloseSession = confirmCloseSession
         self.autoFollowAttention = autoFollowAttention
         self.autoFollowStayOnActive = autoFollowStayOnActive
+    }
+
+    /// The resolved titlebar row state: the explicit `toolbarMode` when set to a KNOWN raw value, else the
+    /// legacy `compactToolbar` mapping (`false` = `.normal`, `true`/nil = `.compact`). An unknown/nil raw value
+    /// falls through to that default the same way, so a future-written mode never fails the read. The single
+    /// read point the app target uses, so callers never touch the raw shim.
+    public var effectiveToolbarMode: ToolbarMode {
+        toolbarMode.flatMap(ToolbarMode.init(rawValue:)) ?? (compactToolbar == false ? .normal : .compact)
     }
 
     /// The working directory a new session should open in, resolving the `newSessionDirectory` mode
