@@ -10,8 +10,8 @@ let sessionPasteboardType = NSPasteboard.PasteboardType("com.umputun.agterm.sess
 /// drags (within the outline) use this to identify the workspace being reordered.
 let workspacePasteboardType = NSPasteboard.PasteboardType("com.umputun.agterm.workspace")
 
-/// AppKit `NSOutlineView` sidebar (`.plain` style + a custom row height and a left content inset that
-/// matches the terminal's ghostty padding) hosted in SwiftUI via `NSViewRepresentable`. Replaces the
+/// AppKit `NSOutlineView` sidebar (`.plain` style + a custom row height and top/left content insets that
+/// match the terminal's ghostty padding) hosted in SwiftUI via `NSViewRepresentable`. Replaces the
 /// SwiftUI `List` sidebar so cross-workspace drag-and-drop works natively: a session row can be dragged
 /// onto a different workspace and the model moves it (same `Session` instance preserved).
 ///
