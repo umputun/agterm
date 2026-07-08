@@ -534,6 +534,27 @@ struct ControlProtocolTests {
         #expect(decoded.sidebarVisible == nil)
     }
 
+    @Test func windowNodeRoundTripsWithGeometry() throws {
+        // the read side of window.move/window.resize: the live frame rides the window node so a script can
+        // record it, resize/move, then restore the exact frame (fields match the CLI's --x/--y/--width/etc).
+        let node = ControlWindowNode(id: "w1", name: "work", open: true, active: true,
+                                     geometry: ControlWindowFrame(x: 100, y: 40, width: 1200, height: 800, display: 1))
+        let response = ControlResponse(ok: true, result: ControlResult(windows: [node]))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        let frame = try #require(decoded.result?.windows?.first?.geometry)
+        #expect(frame == ControlWindowFrame(x: 100, y: 40, width: 1200, height: 800, display: 1))
+    }
+
+    @Test func windowNodeOmitsGeometryWhenNil() throws {
+        // a closed window with no live NSWindow — the key must be omitted, not emitted as null.
+        let node = ControlWindowNode(id: "w1", name: "work", open: false, active: false)
+        let json = String(data: try JSONEncoder().encode(node), encoding: .utf8) ?? ""
+        #expect(!json.contains("geometry"), "a nil geometry must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlWindowNode.self, from: Data(json.utf8))
+        #expect(decoded.geometry == nil)
+    }
+
     @Test func backgroundWatermarkFitPositionSerializeAsRawStrings() throws {
         // the Fit/Position enums must serialize to ghostty's exact key strings (identical to the former
         // String), so the wire + persisted JSON are unchanged by the enum migration.

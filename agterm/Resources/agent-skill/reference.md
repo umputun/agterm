@@ -283,9 +283,13 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
 - `window list` — `result.windows`, each with `id`, `name`, `open`, `active`, `autoFollowMs` (the
   window's Auto-follow timeout in milliseconds, omitted when the setting is Disabled), and
   `sidebarVisible` (whether that window's sidebar is shown, read from the open window's store — omitted
-  for a closed window with no live store). The `autoFollowMs` here is served from a cache and reflects the
-  value as of the last refresh, so a just-changed setting may lag until the next command. Unlike `tree`,
-  `window.list` does NOT carry `idleMs` — the live idle metric would freeze in that cache.
+  for a closed window with no live store), and `geometry` (the open window's live frame `{x, y, width,
+  height, display}` in the SAME units `window move`/`window resize` take — `x`/`y` top-left relative to
+  `display`, y down — omitted for a closed window; the read side of `window move`/`window resize`, so
+  record it, move/resize, then restore the exact frame). The `autoFollowMs`/`geometry` here are served
+  from a cache and reflect the value as of the last refresh, so a just-changed setting or a hand-drag may
+  lag until the next command. Unlike `tree`, `window.list` does NOT carry `idleMs` — the live idle metric
+  would freeze in that cache.
 - `window select <id>` — raise it if open, else open it.
 - `window close <id>` — close the on-screen window (the bundle is kept; reopen with select).
 - `window rename <id> <name>`.

@@ -135,6 +135,20 @@ final class WindowLibraryTests {
         ])
     }
 
+    @Test func controlWindowNodesIncludeGeometryFromClosure() {
+        let library = WindowLibrary(directory: directory)
+        let first = library.windows[0]
+        let second = library.newWindow(name: "work")
+        // the app-side closure supplies each window's live frame; here a fake maps only the second window.
+        let frame = ControlWindowFrame(x: 10, y: 20, width: 800, height: 600, display: 0)
+        let nodes = library.controlWindowNodes { $0 == second.id ? frame : nil }
+        #expect(nodes[0].id == first.id.uuidString)
+        #expect(nodes[0].geometry == nil)   // no frame supplied for the first window
+        #expect(nodes[1].geometry == frame) // the closure's frame rides the second node
+        // the default (no closure) omits geometry entirely — the host-free / non-AppKit path.
+        #expect(library.controlWindowNodes().allSatisfy { $0.geometry == nil })
+    }
+
     @Test func controlWindowNodesUseActiveWindowFallback() {
         let library = WindowLibrary(directory: directory)
         let first = library.windows[0]

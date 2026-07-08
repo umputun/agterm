@@ -123,6 +123,22 @@ final class WindowRegistry {
         window.toggleFullScreen(nil)
         return true
     }
+
+    /// The window's current frame in the SAME coordinate system `move`/`resize` accept, so `window.list`'s
+    /// read-back round-trips back through `window.move`/`window.resize`: `x`/`y` are the top-left relative to
+    /// the window's display top-left (y down), `width`/`height` the frame size, `display` the screen index.
+    /// This is the exact inverse of `move`'s forward math (`x = minX - screen.minX`, `y = screen.maxY - maxY`).
+    /// Nil when no window is registered for `id` (closed) or it has no screen. The `window.list` frame source.
+    func geometry(for id: WindowInfo.ID) -> ControlWindowFrame? {
+        guard let window = windows[id], let screen = window.screen else { return nil }
+        let frame = window.frame
+        let x = Int((frame.minX - screen.frame.minX).rounded())
+        let y = Int((screen.frame.maxY - frame.maxY).rounded())
+        let display = NSScreen.screens.firstIndex(of: screen) ?? 0
+        return ControlWindowFrame(x: x, y: y,
+                                  width: Int(frame.width.rounded()), height: Int(frame.height.rounded()),
+                                  display: display)
+    }
 }
 
 // CoreGraphics <-> host-free WindowGeometry conversions, kept app-side: agtermCore stays Foundation-only

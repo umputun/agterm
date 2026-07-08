@@ -207,8 +207,11 @@ never two bundles in one window.
   `CommandsTests` + the e2e `testWindowFullscreen` in `ControlWindowUITests`.
 - **`window.*` control additions (eight commands, plus `window.zoom`/`window.fullscreen`).**
   `window.new` (returns the new id + opens its window), `window.list` (returns `windows` with each window's
-  `open`/`active` flag, plus `autoFollowMs` and `sidebarVisible` read from the open window's store — both
-  omitted for a closed window), `window.select` (raise-or-open), `window.close` (`WindowRegistry.close` →
+  `open`/`active` flag, plus `autoFollowMs` and `sidebarVisible` read from the open window's store, and
+  `geometry` — the live NSWindow frame `{x, y, width, height, display}` in `window.move`/`window.resize`'s
+  own coordinate system (top-left relative to the display, y down) so a read-back round-trips through them,
+  read app-side via `WindowRegistry.geometry(for:)` — all three omitted for a closed window),
+  `window.select` (raise-or-open), `window.close` (`WindowRegistry.close` →
   standard teardown), `window.rename`, `window.delete` (`canRemoveWindow` keep-at-least-one → error,
   not a GUI confirm).
   `window.list` is answered from the background-thread `cachedWindowNodes` cache (see the fast-path note

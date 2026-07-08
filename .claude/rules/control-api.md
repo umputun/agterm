@@ -816,6 +816,19 @@ paths:
   A script that reads-then-acts (e.g. the tmux-style zoom that must restore the sidebar only if it was
   visible) should still prefer `tree`'s LIVE `sidebarVisible` over the cached `window.list` one — the tree
   is built on the main actor per request, so it can never lag.
+  Each `ControlWindowNode` ALSO carries `geometry` — the open window's live on-screen frame
+  (`ControlWindowFrame{x, y, width, height, display}`, omitted for a closed window with no NSWindow).
+  It is the READ side of the write-only `window.move`/`window.resize` (which set the frame but nothing
+  reported it), in the SAME coordinate system those accept: `x`/`y` are the top-left relative to `display`
+  (y down), `width`/`height` the frame size, so a read-back round-trips straight back through
+  `window.move`/`window.resize` (record → resize/move → restore the exact frame).
+  Because the frame lives in AppKit (`WindowLibrary` is host-free), `controlWindowNodes` takes an app-side
+  `geometry:` closure (default nil for tests) that `ControlServer.buildWindowList` fills from
+  `WindowRegistry.geometry(for:)` — the exact inverse of `move`'s forward math.
+  Like `sidebarVisible` it rides the `cachedWindowNodes` cache, so a hand-drag can lag one command until
+  the next refresh (there is no LIVE tree copy — geometry is window-scoped, absent from the session tree).
+  The host-free plumbing (the closure + node field) is unit-tested (`controlWindowNodesIncludeGeometryFromClosure`,
+  the round-trips); the coordinate conversion itself is app-side, build-verified like `window.resize`/`move`.
   `restore.clear` clears every open session's saved CAPTURED foreground command (`Session.foregroundCommand`/`splitForegroundCommand`)
   and persists via `library.saveAllOpen()`, so the next restart restores plain shells for those panes instead
   of re-running the captured commands (also closing the force-quit re-fire: the restored command is consumed

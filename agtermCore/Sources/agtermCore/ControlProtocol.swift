@@ -355,6 +355,26 @@ public struct ControlTree: Codable, Sendable, Equatable {
     }
 }
 
+/// An open window's on-screen frame, in the SAME coordinate system `window.move`/`window.resize` accept,
+/// so a read-then-restore round-trips: `x`/`y` are the top-left relative to `display`'s top-left (y down),
+/// `width`/`height` the frame size in points, `display` the index into the screen list. The read side of
+/// the write-only `window.move`/`window.resize`.
+public struct ControlWindowFrame: Codable, Sendable, Equatable {
+    public let x: Int
+    public let y: Int
+    public let width: Int
+    public let height: Int
+    public let display: Int
+
+    public init(x: Int, y: Int, width: Int, height: Int, display: Int) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.display = display
+    }
+}
+
 /// A window as projected into the `window.list` response. `open` is whether its on-screen window is
 /// up; `active` is whether it is the frontmost window.
 public struct ControlWindowNode: Codable, Sendable, Equatable {
@@ -371,15 +391,21 @@ public struct ControlWindowNode: Codable, Sendable, Equatable {
     /// (omitted from the JSON) — read from the open window's store, mirroring `autoFollowMs`. The read side
     /// of the write-only `sidebar` command, per window.
     public let sidebarVisible: Bool?
+    /// The window's current on-screen frame (position + size + display), or nil for a CLOSED window with no
+    /// live NSWindow (omitted from the JSON). The read side of `window.move`/`window.resize` — record it,
+    /// resize/move the window, then restore the exact frame. Read live app-side; like `sidebarVisible` it
+    /// rides the cache, so it may lag one command behind a hand-drag until the next refresh.
+    public let geometry: ControlWindowFrame?
 
     public init(id: String, name: String, open: Bool, active: Bool, autoFollowMs: Int? = nil,
-                sidebarVisible: Bool? = nil) {
+                sidebarVisible: Bool? = nil, geometry: ControlWindowFrame? = nil) {
         self.id = id
         self.name = name
         self.open = open
         self.active = active
         self.autoFollowMs = autoFollowMs
         self.sidebarVisible = sidebarVisible
+        self.geometry = geometry
     }
 }
 
