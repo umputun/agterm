@@ -339,6 +339,30 @@ struct AppStorePaneTests {
         #expect(node.overlaySizePercent == nil)
     }
 
+    @Test func controlTreeReportsSplitRatio() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        // no split: the field is omitted (nil).
+        var node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.split == false)
+        #expect(node.splitRatio == nil)
+        // a split with the divider still at the default (never moved): still nil.
+        store.toggleSplit(session.id)
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.split == true)
+        #expect(node.splitRatio == nil)
+        // moving the divider surfaces the ratio so a script can record and restore it.
+        _ = store.applySplitRatio(0.3, forSession: session.id)
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.splitRatio == 0.3)
+        // a hidden split keeps its ratio readable (gated on hasSplit, not isSplit).
+        store.toggleSplit(session.id)
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.split == false)
+        #expect(node.splitRatio == 0.3)
+    }
+
     @Test func closeOverlayTearsDownAndClears() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

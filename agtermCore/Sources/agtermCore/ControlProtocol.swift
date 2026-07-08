@@ -255,6 +255,11 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let title: String?
     public let active: Bool
     public let split: Bool
+    /// The left-pane fraction (0.05...0.95) of a session that HAS a split pane (shown or hidden), or nil
+    /// when the session has no split OR the divider is still at the default 0.5 (never moved). The read
+    /// side of `session.resize` — record it before maximizing a pane so a script can restore the exact
+    /// divider position (today the applied ratio is echoed only on the `session.resize` call itself).
+    public let splitRatio: Double?
     public let overlay: Bool
     /// For an OPEN overlay (`overlay == true`), its size: nil/omitted = the FULL-pane overlay, else the
     /// floating panel's percent of the pane (1...100). Absent when no overlay is open. The read side of
@@ -283,6 +288,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let unseen: Int?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
+                splitRatio: Double? = nil,
                 overlay: Bool = false, overlaySizePercent: Int? = nil, scratch: Bool = false, flagged: Bool = false,
                 foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil,
                 statusPane: String? = nil, background: BackgroundWatermark? = nil, unseen: Int? = nil) {
@@ -292,6 +298,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.title = title
         self.active = active
         self.split = split
+        self.splitRatio = splitRatio
         self.overlay = overlay
         self.overlaySizePercent = overlaySizePercent
         self.scratch = scratch

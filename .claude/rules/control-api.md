@@ -798,6 +798,12 @@ paths:
   It is the READ side of `session.overlay.resize` (which had only the write side), so a tmux-style zoom
   script can record the current size before switching to `--full` and restore the EXACT original on un-zoom
   (not a guessed default).
+  It ALSO surfaces `splitRatio` on each node — the left-pane divider fraction of a session that HAS a split
+  (`session.hasSplit ? session.splitRatio : nil` in the tree builder, so shown OR hidden splits report it),
+  nil/omitted when there is no split or the divider is still at the default 0.5 (never moved).
+  It is the READ side of `session.resize` (whose applied ratio was echoed ONLY on the resize call's own
+  `ControlResult.ratio`), so a script can record the current ratio before maximizing a pane and restore the
+  exact divider even if the USER dragged it.
   `tree` ALSO carries, at the TOP level (alongside `idleMs`/`autoFollowMs`), `sidebarVisible` — the read
   side of the write-only `sidebar` command (per-window sidebar visibility), populated LIVE from the
   projected window's store in `AppStore.controlTree`.

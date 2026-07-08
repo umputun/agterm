@@ -466,6 +466,26 @@ struct ControlProtocolTests {
         #expect(decoded.overlaySizePercent == nil)
     }
 
+    @Test func treeSessionNodeRoundTripsWithSplitRatio() throws {
+        // the read side of session.resize: the current divider fraction rides the tree node so a script
+        // can record it before maximizing a pane and restore the exact ratio afterwards.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true, splitRatio: 0.35)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.splitRatio == 0.35)
+    }
+
+    @Test func treeSessionNodeOmitsSplitRatioWhenNil() throws {
+        // no split, or a split still at the default 0.5 — the key must be omitted, not emitted as null.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("splitRatio"), "a nil split ratio must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.splitRatio == nil)
+    }
+
     @Test func treeRoundTripsWithLiveWindowFields() throws {
         // the tree carries the live idle metric + the auto-follow config (both ms) + sidebar visibility.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
