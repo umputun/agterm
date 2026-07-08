@@ -486,6 +486,27 @@ struct ControlProtocolTests {
         #expect(decoded.splitRatio == nil)
     }
 
+    @Test func treeSessionNodeRoundTripsWithSplitFocused() throws {
+        // the read side of session.focus: which pane holds focus rides the tree node so a script can record
+        // it and restore focus afterwards. false = the main (left) pane, true = the split (right) pane.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true, splitFocused: false)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.splitFocused == false)
+    }
+
+    @Test func treeSessionNodeOmitsSplitFocusedWhenNil() throws {
+        // no split — the key must be omitted, not emitted as null (a false value IS emitted, since it means
+        // the left pane is focused, distinct from "no split").
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("splitFocused"), "a nil split focus must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.splitFocused == nil)
+    }
+
     @Test func treeRoundTripsWithLiveWindowFields() throws {
         // the tree carries the live idle metric + the auto-follow config (both ms) + sidebar visibility.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)

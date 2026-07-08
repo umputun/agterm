@@ -261,6 +261,11 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// — record it before maximizing a pane so a script can restore the exact divider position (the applied
     /// ratio is otherwise echoed only on the `session.resize` call itself).
     public let splitRatio: Double?
+    /// For a session that HAS a split pane (shown or hidden), which pane holds keyboard focus: `true` = the
+    /// split (right) pane, `false` = the main (left) pane; nil when the session has no split (omitted from
+    /// the JSON). The read side of `session.focus` — record which pane was focused so a script can restore
+    /// it via `session.focus --pane left|right`.
+    public let splitFocused: Bool?
     public let overlay: Bool
     /// For an OPEN overlay (`overlay == true`), its size: nil/omitted = the FULL-pane overlay, else the
     /// floating panel's percent of the pane (1...100). Absent when no overlay is open. The read side of
@@ -289,7 +294,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let unseen: Int?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
-                splitRatio: Double? = nil,
+                splitRatio: Double? = nil, splitFocused: Bool? = nil,
                 overlay: Bool = false, overlaySizePercent: Int? = nil, scratch: Bool = false, flagged: Bool = false,
                 foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil,
                 statusPane: String? = nil, background: BackgroundWatermark? = nil, unseen: Int? = nil) {
@@ -300,6 +305,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.active = active
         self.split = split
         self.splitRatio = splitRatio
+        self.splitFocused = splitFocused
         self.overlay = overlay
         self.overlaySizePercent = overlaySizePercent
         self.scratch = scratch

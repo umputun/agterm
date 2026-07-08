@@ -174,6 +174,7 @@ public final class AppStore {
                                           active: session.id == activeID,
                                           split: session.isSplit,
                                           splitRatio: session.hasSplit ? session.splitRatio : nil,
+                                          splitFocused: session.hasSplit ? session.splitFocused : nil,
                                           overlay: session.overlayActive,
                                           overlaySizePercent: session.overlayActive ? session.overlaySizePercent : nil,
                                           scratch: session.scratchActive, flagged: session.flagged,

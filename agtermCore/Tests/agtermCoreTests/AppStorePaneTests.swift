@@ -363,6 +363,28 @@ struct AppStorePaneTests {
         #expect(node.splitRatio == 0.3)
     }
 
+    @Test func controlTreeReportsSplitFocused() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        // no split: the field is omitted (nil).
+        var node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.splitFocused == nil)
+        // opening a split focuses the new (right) pane.
+        store.toggleSplit(session.id)
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.splitFocused == true)
+        // focusing the main (left) pane surfaces false — distinct from nil (= no split).
+        session.splitFocused = false
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.splitFocused == false)
+        // a hidden split keeps the focus readable (gated on hasSplit, not isSplit).
+        store.toggleSplit(session.id)
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.split == false)
+        #expect(node.splitFocused == false)
+    }
+
     @Test func closeOverlayTearsDownAndClears() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

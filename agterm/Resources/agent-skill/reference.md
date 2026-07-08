@@ -42,7 +42,10 @@ when none reported; distinct from `name`, the derived sidebar label), `active` (
 `split` (split shown), `splitRatio` (the left-pane fraction 0.05–0.95 of a session that HAS a split —
 shown or hidden; omitted when there's no split or the ratio was never explicitly set (divider at the
 default 0.5) — the read side
-of `session resize`, record it to restore the exact divider position), `overlay` (overlay shown),
+of `session resize`, record it to restore the exact divider position),
+`splitFocused` (which pane holds focus in a session that HAS a split — `true` = the split/right pane,
+`false` = the main/left pane; omitted when there's no split; the read side of `session focus`, record it
+to restore focus via `session focus --pane left|right`), `overlay` (overlay shown),
 `overlaySizePercent` (an open overlay's size — the
 floating panel's percent of the pane, 1–100; omitted = a full-pane overlay or no overlay, so gate on
 `overlay` first; the read side of `session overlay resize`, e.g. record it before switching to `--full`

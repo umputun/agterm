@@ -269,6 +269,8 @@ paths:
   shown side-by-side or hidden — when hidden, focusing a pane swaps which one shows maximized),
   drives `AppActions.setSplitFocus(_:of:)`, and is the control half of the ⌘⌥←/→ keyboard nav + the "Focus
   Left/Right Pane" menu/palette items.
+  Its READ side is `ControlSessionNode.splitFocused` (`true`=split/right, `false`=main/left, nil=no split;
+  see the `tree` read-side fields below), so a script can record the focused pane and restore it.
   `session.resize` moves the split DIVIDER — it is control-NATIVE (the divider is otherwise mouse-drag
   only; NO GUI/menu/keymap action, so a key is bound by mapping a `command "agtermctl session resize …"`
   custom action).
@@ -811,6 +813,12 @@ paths:
   It is the READ side of `session.resize` (whose applied ratio was echoed ONLY on the resize call's own
   `ControlResult.ratio`), so a script can record the current ratio before maximizing a pane and restore the
   exact divider even if the USER dragged it.
+  It ALSO surfaces `splitFocused` on each node — which pane holds focus in a session that HAS a split
+  (`session.hasSplit ? session.splitFocused : nil` in the tree builder, so shown OR hidden splits report it):
+  `true` = the split (right) pane, `false` = the main (left) pane, nil/omitted when there is no split.
+  It is the READ side of `session.focus` (write-only), so a script can record which pane was focused and
+  restore it via `session.focus --pane left|right` (a `false` is emitted, distinct from the nil no-split
+  case — the left pane being focused is real state).
   `tree` ALSO carries, at the TOP level (alongside `idleMs`/`autoFollowMs`), `sidebarVisible` — the read
   side of the write-only `sidebar` command (per-window sidebar visibility), populated LIVE from the
   projected window's store in `AppStore.controlTree`.
