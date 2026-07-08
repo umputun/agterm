@@ -1,5 +1,19 @@
 # Changelog
 
+## v0.9.0 - 2026-07-07
+
+### New Features
+
+- native full screen support #160 @umputun
+- resize an open overlay in place via session.overlay.resize #163 @umputun
+- bind shifted-symbol keys in keymaps via shift+<base> #161 @umputun
+- expose sidebar visibility over the control API #159 @umputun
+- preserve split-pane focus when re-showing a hidden split #159 @umputun
+
+### Bug Fixes
+
+- clear the notification badge when refocusing the app on a visible session #164 @umputun
+
 ## v0.8.4 - 2026-07-06
 
 ### Bug Fixes

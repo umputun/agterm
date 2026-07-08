@@ -800,6 +800,30 @@ struct AppStoreTests {
         #expect(store.controlTree().sidebarVisible == true)
     }
 
+    @Test func controlTreeReportsFocusedWorkspace() {
+        let store = makeStore()
+        let ws2 = store.addWorkspace(name: "second")
+        // no focus: no workspace node reports focused.
+        #expect(store.controlTree().workspaces.allSatisfy { $0.focused == nil })
+        // focus the second workspace: ONLY its node reports focused == true (distinct from active).
+        store.setFocusedWorkspace(ws2.id)
+        let nodes = store.controlTree().workspaces
+        #expect(nodes.first { $0.id == ws2.id.uuidString }?.focused == true)
+        #expect(nodes.filter { $0.focused == true }.count == 1)
+        // clearing focus: no node reports focused again.
+        store.setFocusedWorkspace(nil)
+        #expect(store.controlTree().workspaces.allSatisfy { $0.focused == nil })
+    }
+
+    @Test func controlTreeReportsSidebarMode() {
+        let store = makeStore()
+        #expect(store.controlTree().sidebarMode == "tree") // default: the workspace tree
+        store.setSidebarMode(.flagged)
+        #expect(store.controlTree().sidebarMode == "flagged")
+        store.setSidebarMode(.tree)
+        #expect(store.controlTree().sidebarMode == "tree")
+    }
+
     @Test func setSidebarVisiblePostsChangeNotificationOnlyOnChange() {
         // the app-target ControlServer observes this to refresh window.list's cached sidebarVisible; the
         // post must fire only on an actual change (queue nil so the synchronous post delivers inline).

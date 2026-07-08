@@ -17,7 +17,8 @@ extension ControlServer {
     /// Project the window library into the `window.list` response: every window with its open flag and
     /// whether it is the frontmost (active) window.
     func buildWindowList() -> [ControlWindowNode] {
-        library.controlWindowNodes()
+        library.controlWindowNodes(geometry: { WindowRegistry.shared.geometry(for: $0) },
+                                   flags: { WindowRegistry.shared.windowFlags(for: $0) })
     }
 
     func windowList() -> ControlResponse {

@@ -169,6 +169,8 @@ never two bundles in one window.
   The header's decorative parts (the traffic-light spacer, the divider gap, the title text) opt out via
   `.allowsHitTesting(false)` so their region falls through to the layer; the buttons stay in front.
   Requires the window OPEN (closed → the `window not open` error), like `resize`/`move`.
+  Its READ side is `ControlWindowNode.zoomed` on `window.list` (via `WindowRegistry.windowFlags(for:)` →
+  `NSWindow.isZoomed`), so a script can toggle idempotently.
   Four-point keep-in-sync audit: (1) `case windowZoom = "window.zoom"` in `ControlProtocol.swift`,
   (2) the `.windowZoom` dispatch arm (`windowZoom`) in `ControlServer` → `WindowRegistry.shared.zoom`,
   (3) the `window zoom <id>` subcommand in `agtermctlKit`, (4) `.windowZoom` in `windowCommandsRoundTrip`
@@ -196,6 +198,8 @@ never two bundles in one window.
   clobber SwiftUI's dynamic View-menu updates).
   Guarded by the e2e `testViewMenuHasSingleFullScreenItem` in `MenuUITests` (View menu shows Toggle Full
   Screen, NOT the native Enter Full Screen).
+  Its READ side is `ControlWindowNode.fullscreen` on `window.list` (via `WindowRegistry.windowFlags(for:)` →
+  `styleMask.contains(.fullScreen)`), so a script can enter/exit only when needed.
   Four-point keep-in-sync audit: (1) `case windowFullscreen = "window.fullscreen"` in `ControlProtocol.swift`
   + `case toggleFullscreen = "toggle_fullscreen"` (⌃⌘F `defaultChord`) in `BuiltinAction`,
   (2) the `.windowFullscreen` dispatch arm (`windowFullscreen`) in `ControlServer` →
@@ -207,8 +211,13 @@ never two bundles in one window.
   `CommandsTests` + the e2e `testWindowFullscreen` in `ControlWindowUITests`.
 - **`window.*` control additions (eight commands, plus `window.zoom`/`window.fullscreen`).**
   `window.new` (returns the new id + opens its window), `window.list` (returns `windows` with each window's
-  `open`/`active` flag, plus `autoFollowMs` and `sidebarVisible` read from the open window's store — both
-  omitted for a closed window), `window.select` (raise-or-open), `window.close` (`WindowRegistry.close` →
+  `open`/`active` flag, plus `autoFollowMs` and `sidebarVisible` read from the open window's store, and
+  `geometry` — the live NSWindow frame `{x, y, width, height, display}` in `window.move`/`window.resize`'s
+  own coordinate system (top-left relative to the display, y down) so a read-back round-trips through them,
+  read app-side via `WindowRegistry.geometry(for:)` — plus `fullscreen`/`zoomed` (the read side of
+  `window.fullscreen`/`window.zoom`, read via `WindowRegistry.windowFlags(for:)` so a script can make
+  those toggles idempotent) — all omitted for a closed window),
+  `window.select` (raise-or-open), `window.close` (`WindowRegistry.close` →
   standard teardown), `window.rename`, `window.delete` (`canRemoveWindow` keep-at-least-one → error,
   not a GUI confirm).
   `window.list` is answered from the background-thread `cachedWindowNodes` cache (see the fast-path note
@@ -218,6 +227,17 @@ never two bundles in one window.
   posts `.agtermSidebarVisibilityChanged` and `ControlServer` observes it to `refreshWindowCache`.
   The live, never-cached copy of `sidebarVisible` is on `tree`'s top level (main-actor per request);
   prefer it for read-then-act scripts.
+  The node's `geometry`/`fullscreen`/`zoomed` are the SAME problem writ larger — live NSWindow state that a
+  user drag/resize/zoom/fullscreen changes with no command, and (unlike `sidebarVisible`) with NO live tree
+  copy, so a polling `window.list` would read them stale forever. `ControlServer` therefore observes the
+  NSWindow `didMove`/`didResize`/`didEnterFullScreen`/`didExitFullScreen` notifications (object nil) and
+  `refreshWindowCache`s on each — the fullscreen enter/exit fire AFTER the async transition, so the settled
+  `styleMask` is captured; a drag's storm just keeps the cache current.
+  The notification is IGNORED (`_ in`), NOT captured: a non-Sendable `Notification` can't cross into the
+  `MainActor.assumeIsolated` region under Swift 6 (the `sending 'note'` error — which a Debug build compiles
+  clean but the Release WMO rejects, so verify app-target concurrency changes with a Release build), so the
+  refresh can't filter to an agterm window by the notification's object; a non-agterm panel firing it just
+  rebuilds the same cheap agterm nodes.
   `window.resize` (`args.width`/`height` → the window's frame size in points) and `window.move` (`args.x`/`y`
   → the top-left relative to display `args.display`, default the window's current display;
   y from the display top, so multiple displays are addressed by index) drive the app-side `WindowRegistry.resize`/`move`

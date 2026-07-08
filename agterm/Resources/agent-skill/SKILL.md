@@ -82,12 +82,16 @@ of the tree).
 Inspect the live tree any time with `agtermctl tree --json` (workspaces → sessions, each with
 `id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `scratch`, `status`, `background`). `title` is the raw OSC
 terminal title (e.g. a remote host over SSH), omitted when none was reported — read it when a
-session's local `cwd` is stale because it's connected to a remote. The tree object also carries three
+session's local `cwd` is stale because it's connected to a remote. The tree object also carries four
 read-only top-level fields: `idleMs` (ms since the last user input in the window), `autoFollowMs`
-(the Auto-follow timeout in ms, omitted when Disabled), and `sidebarVisible` (whether the window's
-sidebar is currently shown — the read side of the write-only `sidebar` command). List windows with
-`agtermctl window list --json`; each window also reports `autoFollowMs` and `sidebarVisible` (the
-latter omitted for a closed window), but not the live `idleMs`, which is `tree`-only.
+(the Auto-follow timeout in ms, omitted when Disabled), `sidebarVisible` (whether the window's
+sidebar is currently shown — the read side of the write-only `sidebar` command), and `sidebarMode`
+(`tree` or `flagged` — the read side of `sidebar mode`). List windows with
+`agtermctl window list --json`; each window also reports `autoFollowMs`, `sidebarVisible`, `geometry`
+(the live frame `{x, y, width, height, display}` in the units `window move`/`window resize` take — the
+read side, so record it then restore the exact frame), and `fullscreen`/`zoomed` (the read side of
+`window fullscreen`/`window zoom`, so a script can make those toggles idempotent) — all omitted for a
+closed window, but not the live `idleMs`, which is `tree`-only.
 
 ## Addressing
 
@@ -120,11 +124,17 @@ via `session status`: `active`|`completed`|`blocked`, omitted when idle), `statu
 that status: `left` (main) | `right` (split) | `scratch`, from `session status --pane`, omitted when
 unset or idle), `background` (the background
 spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear),
-and `unseen` (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session
-seen` — omitted when zero).
+`unseen` (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session
+seen` — omitted when zero), `overlaySizePercent` (an open overlay's floating-panel percent 1–100,
+omitted for a full-pane overlay or no overlay so gate on `overlay` first; the read side of `overlay
+resize` for a record-then-restore zoom), and `splitRatio` (the left-pane divider fraction 0.05–0.95 of a
+session that has a split — shown or hidden; omitted when there's no split or the ratio was never set (at
+the default 0.5) —
+the read side of `session resize`, record it to restore the exact divider).
 
 **workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom` ·
-`focus [on|off|toggle]` (collapse the sidebar tree to a single workspace).
+`focus [on|off|toggle]` (collapse the sidebar tree to a single workspace; read back which workspace is
+focused from the tree workspace node's `focused` flag).
 
 **session**
 - `new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--name NAME] [--after SID | --before SID]` —
@@ -197,8 +207,9 @@ seen` — omitted when zero).
 
 **quick** — `[show|hide|toggle]` — the window's quick terminal.
 
-**sidebar** — `[show|hide|toggle]` (visibility) · `mode [tree|flagged|toggle]` (flip between the
-workspace tree and the flat flagged working-set list) · `expand [--window W]` (expand every workspace) ·
+**sidebar** — `[show|hide|toggle]` (visibility; read back from the tree's `sidebarVisible`) ·
+`mode [tree|flagged|toggle]` (flip between the workspace tree and the flat flagged working-set list; read
+back from the tree's top-level `sidebarMode`) · `expand [--window W]` (expand every workspace) ·
 `collapse [--window W]` (collapse all workspaces except the active one, which stays expanded).
 Visibility/mode act on the frontmost window; `expand`/`collapse` default to the frontmost but take a
 `--window` selector to target any open window.

@@ -270,7 +270,17 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let title: String?
     public let active: Bool
     public let split: Bool
+    /// The left-pane fraction (0.05...0.95) of a session that HAS a split pane (shown or hidden), or nil
+    /// when the session has no split OR the ratio was never explicitly set (via `session.resize` or a
+    /// divider drag), in which case the divider sits at the default 0.5. The read side of `session.resize`
+    /// — record it before maximizing a pane so a script can restore the exact divider position (the applied
+    /// ratio is otherwise echoed only on the `session.resize` call itself).
+    public let splitRatio: Double?
     public let overlay: Bool
+    /// For an OPEN overlay (`overlay == true`), its size: nil/omitted = the FULL-pane overlay, else the
+    /// floating panel's percent of the pane (1...100). Absent when no overlay is open. The read side of
+    /// `session.overlay.resize` — record the current size before resizing so a script can restore it exactly.
+    public let overlaySizePercent: Int?
     public let scratch: Bool
     public let flagged: Bool
     /// The LIVE foreground process command (full argv) in the main pane, or nil when the pane is at its
@@ -294,7 +304,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let unseen: Int?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
-                overlay: Bool = false, scratch: Bool = false, flagged: Bool = false,
+                splitRatio: Double? = nil,
+                overlay: Bool = false, overlaySizePercent: Int? = nil, scratch: Bool = false, flagged: Bool = false,
                 foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil,
                 statusPane: String? = nil, background: BackgroundWatermark? = nil, unseen: Int? = nil) {
         self.id = id
@@ -303,7 +314,9 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.title = title
         self.active = active
         self.split = split
+        self.splitRatio = splitRatio
         self.overlay = overlay
+        self.overlaySizePercent = overlaySizePercent
         self.scratch = scratch
         self.flagged = flagged
         self.foreground = foreground
@@ -320,12 +333,18 @@ public struct ControlWorkspaceNode: Codable, Sendable, Equatable {
     public let id: String
     public let name: String
     public let active: Bool
+    /// Whether this workspace is the one the sidebar tree is FOCUSED (collapsed) to, or nil when it is not
+    /// the focused one / no workspace is focused (omitted from the JSON). Distinct from `active` (the
+    /// SELECTED workspace): focus collapses the sidebar to a single workspace. The read side of the
+    /// write-only `workspace.focus` — so a script can record which workspace is focused and restore it.
+    public let focused: Bool?
     public let sessions: [ControlSessionNode]
 
-    public init(id: String, name: String, active: Bool, sessions: [ControlSessionNode]) {
+    public init(id: String, name: String, active: Bool, focused: Bool? = nil, sessions: [ControlSessionNode]) {
         self.id = id
         self.name = name
         self.active = active
+        self.focused = focused
         self.sessions = sessions
     }
 }
@@ -348,13 +367,41 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// so unlike `idleMs`/`autoFollowMs` it never omits; the per-window `window.list` copy is nil/omitted
     /// only for a closed window.
     public let sidebarVisible: Bool?
+    /// The projected window's sidebar VIEW mode — `SidebarMode.rawValue` (`tree` = the workspace tree,
+    /// `flagged` = the flat flagged working-set list). LIVE and always populated on an app-produced `tree`
+    /// response; the type stays optional at the protocol level (like the other `tree` fields) for
+    /// forward-compat with version skew. The read side of the write-only `sidebar.mode` command, so a script can record the
+    /// mode and restore it. `tree`-only (not on `window.list`), since a GUI-only flagged-view toggle would
+    /// leave a cached copy stale — read the live tree copy instead.
+    public let sidebarMode: String?
 
     public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
-                sidebarVisible: Bool? = nil) {
+                sidebarVisible: Bool? = nil, sidebarMode: String? = nil) {
         self.workspaces = workspaces
         self.idleMs = idleMs
         self.autoFollowMs = autoFollowMs
         self.sidebarVisible = sidebarVisible
+        self.sidebarMode = sidebarMode
+    }
+}
+
+/// An open window's on-screen frame, in the SAME coordinate system `window.move`/`window.resize` accept,
+/// so a read-then-restore round-trips: `x`/`y` are the top-left relative to `display`'s top-left (y down),
+/// `width`/`height` the frame size in points, `display` the index into the screen list. The read side of
+/// the write-only `window.move`/`window.resize`.
+public struct ControlWindowFrame: Codable, Sendable, Equatable {
+    public let x: Int
+    public let y: Int
+    public let width: Int
+    public let height: Int
+    public let display: Int
+
+    public init(x: Int, y: Int, width: Int, height: Int, display: Int) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.display = display
     }
 }
 
@@ -374,15 +421,32 @@ public struct ControlWindowNode: Codable, Sendable, Equatable {
     /// (omitted from the JSON) — read from the open window's store, mirroring `autoFollowMs`. The read side
     /// of the write-only `sidebar` command, per window.
     public let sidebarVisible: Bool?
+    /// The window's current on-screen frame (position + size + display), or nil for a CLOSED window with no
+    /// live NSWindow (omitted from the JSON). The read side of `window.move`/`window.resize` — record it,
+    /// resize/move the window, then restore the exact frame. Read live app-side; it rides the window cache,
+    /// which is refreshed on window move/resize/zoom/fullscreen (`ControlServer` observes the NSWindow
+    /// notifications), so a hand-drag or GUI toggle is reflected without needing another command.
+    public let geometry: ControlWindowFrame?
+    /// Whether the window is in native macOS full screen, or nil for a CLOSED window (omitted from the
+    /// JSON). The read side of the write-only `window.fullscreen` toggle, so a script can make the toggle
+    /// idempotent (only enter/exit when needed). Read live app-side; like `geometry` it rides the cache.
+    public let fullscreen: Bool?
+    /// Whether the window is zoomed (maximized-to-screen, NOT full screen), or nil for a CLOSED window
+    /// (omitted from the JSON). The read side of the write-only `window.zoom` toggle. Read live app-side.
+    public let zoomed: Bool?
 
     public init(id: String, name: String, open: Bool, active: Bool, autoFollowMs: Int? = nil,
-                sidebarVisible: Bool? = nil) {
+                sidebarVisible: Bool? = nil, geometry: ControlWindowFrame? = nil,
+                fullscreen: Bool? = nil, zoomed: Bool? = nil) {
         self.id = id
         self.name = name
         self.open = open
         self.active = active
         self.autoFollowMs = autoFollowMs
         self.sidebarVisible = sidebarVisible
+        self.geometry = geometry
+        self.fullscreen = fullscreen
+        self.zoomed = zoomed
     }
 }
 

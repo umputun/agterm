@@ -123,6 +123,32 @@ final class WindowRegistry {
         window.toggleFullScreen(nil)
         return true
     }
+
+    /// The window's current frame in the SAME coordinate system `move`/`resize` accept, so `window.list`'s
+    /// read-back round-trips back through `window.move`/`window.resize`: `x`/`y` are the top-left relative to
+    /// the window's display top-left (y down), `width`/`height` the frame size, `display` the screen index.
+    /// This is the inverse of `move`'s forward math (`x = minX - screen.minX`, `y = screen.maxY - maxY`) to
+    /// integer-point precision: the values round to `Int` since `window.move`/`window.resize` take `Int`, so a
+    /// user-dragged fractional frame restores to the nearest point (which is all those commands accept).
+    /// Nil when no window is registered for `id` (closed) or it has no screen. The `window.list` frame source.
+    func geometry(for id: WindowInfo.ID) -> ControlWindowFrame? {
+        guard let window = windows[id], let screen = window.screen else { return nil }
+        let frame = window.frame
+        let x = Int((frame.minX - screen.frame.minX).rounded())
+        let y = Int((screen.frame.maxY - frame.maxY).rounded())
+        let display = NSScreen.screens.firstIndex(of: screen) ?? 0
+        return ControlWindowFrame(x: x, y: y,
+                                  width: Int(frame.width.rounded()), height: Int(frame.height.rounded()),
+                                  display: display)
+    }
+
+    /// Whether the window for `id` is in native full screen and/or zoomed (maximized-to-screen, NOT full
+    /// screen), or nil when no window is registered (closed). The read side of `window.fullscreen`/`window.zoom`
+    /// on `window.list`, so a script can make those toggles idempotent.
+    func windowFlags(for id: WindowInfo.ID) -> (fullscreen: Bool, zoomed: Bool)? {
+        guard let window = windows[id] else { return nil }
+        return (fullscreen: window.styleMask.contains(.fullScreen), zoomed: window.isZoomed)
+    }
 }
 
 // CoreGraphics <-> host-free WindowGeometry conversions, kept app-side: agtermCore stays Foundation-only

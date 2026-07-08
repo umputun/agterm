@@ -444,6 +444,48 @@ struct ControlProtocolTests {
         #expect(decoded.unseen == nil)
     }
 
+    @Test func treeSessionNodeRoundTripsWithOverlaySizePercent() throws {
+        // the read side of session.overlay.resize: a floating overlay's percent rides the tree node so a
+        // script can record it before resizing to full and restore the exact size afterwards.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         overlay: true, overlaySizePercent: 95)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.overlaySizePercent == 95)
+    }
+
+    @Test func treeSessionNodeOmitsOverlaySizePercentWhenNil() throws {
+        // no overlay, or a FULL-pane overlay — the key must be omitted, not emitted as null (so a script
+        // reads absent as "full or no overlay", gating on the `overlay` bool first).
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false, overlay: true)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("overlaySizePercent"), "a nil overlay size must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.overlaySizePercent == nil)
+    }
+
+    @Test func treeSessionNodeRoundTripsWithSplitRatio() throws {
+        // the read side of session.resize: the current divider fraction rides the tree node so a script
+        // can record it before maximizing a pane and restore the exact ratio afterwards.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true, splitRatio: 0.35)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.splitRatio == 0.35)
+    }
+
+    @Test func treeSessionNodeOmitsSplitRatioWhenNil() throws {
+        // no split, or a split still at the default 0.5 — the key must be omitted, not emitted as null.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("splitRatio"), "a nil split ratio must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.splitRatio == nil)
+    }
+
     @Test func treeRoundTripsWithLiveWindowFields() throws {
         // the tree carries the live idle metric + the auto-follow config (both ms) + sidebar visibility.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
@@ -490,6 +532,77 @@ struct ControlProtocolTests {
         let decoded = try JSONDecoder().decode(ControlWindowNode.self, from: Data(json.utf8))
         #expect(decoded.autoFollowMs == nil)
         #expect(decoded.sidebarVisible == nil)
+    }
+
+    @Test func windowNodeRoundTripsWithGeometry() throws {
+        // the read side of window.move/window.resize: the live frame rides the window node so a script can
+        // record it, resize/move, then restore the exact frame (fields match the CLI's --x/--y/--width/etc).
+        let node = ControlWindowNode(id: "w1", name: "work", open: true, active: true,
+                                     geometry: ControlWindowFrame(x: 100, y: 40, width: 1200, height: 800, display: 1))
+        let response = ControlResponse(ok: true, result: ControlResult(windows: [node]))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        let frame = try #require(decoded.result?.windows?.first?.geometry)
+        #expect(frame == ControlWindowFrame(x: 100, y: 40, width: 1200, height: 800, display: 1))
+    }
+
+    @Test func windowNodeOmitsGeometryWhenNil() throws {
+        // a closed window with no live NSWindow — the key must be omitted, not emitted as null.
+        let node = ControlWindowNode(id: "w1", name: "work", open: false, active: false)
+        let json = String(data: try JSONEncoder().encode(node), encoding: .utf8) ?? ""
+        #expect(!json.contains("geometry"), "a nil geometry must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlWindowNode.self, from: Data(json.utf8))
+        #expect(decoded.geometry == nil)
+    }
+
+    @Test func windowNodeRoundTripsWithFullscreenAndZoom() throws {
+        // the read side of window.fullscreen/window.zoom: both live toggle states ride the window node so a
+        // script can make the toggles idempotent (only enter/exit when needed).
+        let node = ControlWindowNode(id: "w1", name: "work", open: true, active: true, fullscreen: true, zoomed: false)
+        let response = ControlResponse(ok: true, result: ControlResult(windows: [node]))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.windows?.first?.fullscreen == true)
+        #expect(decoded.result?.windows?.first?.zoomed == false)
+    }
+
+    @Test func windowNodeOmitsFullscreenAndZoomWhenNil() throws {
+        // a closed window with no live NSWindow — both keys must be omitted, not emitted as null.
+        let node = ControlWindowNode(id: "w1", name: "work", open: false, active: false)
+        let json = String(data: try JSONEncoder().encode(node), encoding: .utf8) ?? ""
+        #expect(!json.contains("fullscreen"), "a nil fullscreen must be omitted from the JSON; got \(json)")
+        #expect(!json.contains("zoomed"), "a nil zoomed must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlWindowNode.self, from: Data(json.utf8))
+        #expect(decoded.fullscreen == nil)
+        #expect(decoded.zoomed == nil)
+    }
+
+    @Test func workspaceNodeRoundTripsWithFocused() throws {
+        // the read side of workspace.focus: the sidebar-focused workspace is flagged so a script can record
+        // which one is focused and restore it (distinct from `active`, the selected workspace).
+        let ws = ControlWorkspaceNode(id: "w1", name: "work", active: true, focused: true, sessions: [])
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(workspaces: [ws])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.focused == true)
+    }
+
+    @Test func workspaceNodeOmitsFocusedWhenNil() throws {
+        // not the focused workspace (or none focused) — the key must be omitted, not emitted as null.
+        let ws = ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [])
+        let json = String(data: try JSONEncoder().encode(ws), encoding: .utf8) ?? ""
+        #expect(!json.contains("focused"), "a nil focused must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlWorkspaceNode.self, from: Data(json.utf8))
+        #expect(decoded.focused == nil)
+    }
+
+    @Test func treeRoundTripsWithSidebarMode() throws {
+        // the read side of sidebar.mode: the sidebar view mode (tree/flagged) rides the tree top level.
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [], sidebarMode: "flagged")))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.sidebarMode == "flagged")
     }
 
     @Test func backgroundWatermarkFitPositionSerializeAsRawStrings() throws {
