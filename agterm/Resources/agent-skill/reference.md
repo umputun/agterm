@@ -53,7 +53,10 @@ to restore the exact size), `scratch` (scratch shown), `flagged` (in the
 flagged working-set), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
 idle), `statusPane` (which pane set that status — `left` (main) | `right` (split) | `scratch` — the
 `--pane` value from `session status`, omitted when unset or idle; gated on the same non-idle condition
-as `status`, so it is never reported without a `status`), `foreground`/`splitForeground` (the live argv of each pane's foreground
+as `status`, so it is never reported without a `status`), `statusBlink` (`true` when the status glyph is
+set to blink — the `--blink` value; omitted when idle or not blinking) and `statusColor` (the `#rrggbb`
+glyph-tint override — the `--color` value; omitted when idle or using the default color),
+`foreground`/`splitForeground` (the live argv of each pane's foreground
 process — what it is running — omitted when the pane sits at its shell prompt), and `background` (the
 background spec set via `session background` — a `{kind, text?, imagePath?, colorHex?, opacity?, fit?,
 position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set), and `unseen`

@@ -122,7 +122,8 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 is at its shell prompt) — i.e. what each pane is currently running — `status` (the agent-status set
 via `session status`: `active`|`completed`|`blocked`, omitted when idle), `statusPane` (which pane set
 that status: `left` (main) | `right` (split) | `scratch`, from `session status --pane`, omitted when
-unset or idle), `background` (the background
+unset or idle), `statusBlink`/`statusColor` (the status glyph's `--blink` flag and `--color` `#rrggbb`
+override from `session status`, omitted when idle / not blinking / default color), `background` (the background
 spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear),
 `unseen` (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session
 seen` — omitted when zero), `overlaySizePercent` (an open overlay's floating-panel percent 1–100,

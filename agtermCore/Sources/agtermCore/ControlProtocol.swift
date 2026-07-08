@@ -285,6 +285,12 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// Which pane set the session's agent status (`"left"|"right"|"scratch"`, `left`=main, `right`=split),
     /// or nil when idle or unspecified (omitted from the JSON). The read side of `session.status --pane`.
     public let statusPane: String?
+    /// Whether the session's agent status glyph is set to blink (pulse for attention), or nil when idle or
+    /// not blinking (omitted from the JSON). The read side of `session.status --blink`.
+    public let statusBlink: Bool?
+    /// The per-call `#rrggbb` glyph-tint override for the session's agent status, or nil when idle or using
+    /// the Settings-configured status color (omitted from the JSON). The read side of `session.status --color`.
+    public let statusColor: String?
     /// The session's background watermark spec, or nil when none is set (omitted from the JSON). The read
     /// side of `session.background` — set/clear/query symmetry, so a script can inspect the current watermark.
     public let background: BackgroundWatermark?
@@ -297,7 +303,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 splitRatio: Double? = nil, splitFocused: Bool? = nil,
                 overlay: Bool = false, overlaySizePercent: Int? = nil, scratch: Bool = false, flagged: Bool = false,
                 foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil,
-                statusPane: String? = nil, background: BackgroundWatermark? = nil, unseen: Int? = nil) {
+                statusPane: String? = nil, statusBlink: Bool? = nil, statusColor: String? = nil,
+                background: BackgroundWatermark? = nil, unseen: Int? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -314,6 +321,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.splitForeground = splitForeground
         self.status = status
         self.statusPane = statusPane
+        self.statusBlink = statusBlink
+        self.statusColor = statusColor
         self.background = background
         self.unseen = unseen
     }

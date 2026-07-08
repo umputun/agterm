@@ -631,6 +631,10 @@ paths:
   (see the Menu/actions rule).
   It reads back on each `tree` node as `ControlSessionNode.statusPane` (omitted when nil, gated on the SAME
   non-idle condition as `status` so an idle node reports neither).
+  The `--blink` flag and `--color` override read back the same way — `ControlSessionNode.statusBlink`
+  (`true` when blinking, omitted otherwise) and `statusColor` (the `#rrggbb`, omitted when using the default
+  color), both populated in the tree builder gated on the SAME non-idle condition — so a script can record
+  the FULL status (state + pane + blink + color) and restore it.
   Four-point keep-in-sync audit for `session.status --pane`: (1) the `StatusPane` enum + `AgentIndicator.statusPane`
   + `AgentIndicator.clearedBy(pane:isEscape:)` + `ControlSessionStatusUpdate.pane` + `ControlSessionNode.statusPane`
   + `SurfaceEnvironment.session(pane:)` (injects `AGTERM_PANE`) in `agtermCore`, plus the dispatcher `StatusPane`

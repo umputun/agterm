@@ -399,6 +399,30 @@ struct ControlProtocolTests {
         #expect(decoded.statusPane == nil)
     }
 
+    @Test func treeSessionNodeRoundTripsWithStatusBlinkAndColor() throws {
+        // the read side of session.status --blink/--color: the status modifiers ride the tree node.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         status: "blocked", statusBlink: true, statusColor: "#ff8800")
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        let node = decoded.result?.tree?.workspaces.first?.sessions.first
+        #expect(node?.statusBlink == true)
+        #expect(node?.statusColor == "#ff8800")
+    }
+
+    @Test func treeSessionNodeOmitsStatusBlinkAndColorWhenNil() throws {
+        // an idle / non-blinking / default-color status — both keys must be omitted, not emitted as null.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false, status: "blocked")
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("statusBlink"), "a nil statusBlink must be omitted; got \(json)")
+        #expect(!json.contains("statusColor"), "a nil statusColor must be omitted; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.statusBlink == nil)
+        #expect(decoded.statusColor == nil)
+    }
+
     @Test func treeSessionNodeRoundTripsWithBackground() throws {
         // the read side of session.background: the watermark spec rides the tree node so a script can query it.
         let watermark = BackgroundWatermark(kind: .text, text: "PROD", colorHex: "#ff0000",

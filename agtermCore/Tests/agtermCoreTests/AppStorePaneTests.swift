@@ -385,6 +385,28 @@ struct AppStorePaneTests {
         #expect(node.splitFocused == false)
     }
 
+    @Test func controlTreeReportsStatusModifiers() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        // idle: no status, so blink/color are omitted.
+        var node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.statusBlink == nil)
+        #expect(node.statusColor == nil)
+        // a blocked status with blink + a color override surfaces both modifiers.
+        store.setAgentIndicator(AgentIndicator(status: .blocked, blink: true, color: "#ff8800"), forSession: session.id)
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.status == "blocked")
+        #expect(node.statusBlink == true)
+        #expect(node.statusColor == "#ff8800")
+        // a status without blink omits statusBlink (false -> nil); without a color override omits statusColor.
+        store.setAgentIndicator(AgentIndicator(status: .active), forSession: session.id)
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.status == "active")
+        #expect(node.statusBlink == nil)
+        #expect(node.statusColor == nil)
+    }
+
     @Test func closeOverlayTearsDownAndClears() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

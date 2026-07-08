@@ -181,6 +181,8 @@ public final class AppStore {
                                           foreground: foreground(session),
                                           splitForeground: splitForeground(session), status: status,
                                           statusPane: statusPane,
+                                          statusBlink: idle ? nil : (session.agentIndicator.blink ? true : nil),
+                                          statusColor: idle ? nil : session.agentIndicator.color,
                                           background: session.backgroundWatermark,
                                           unseen: session.unseenCount > 0 ? session.unseenCount : nil)
             }
