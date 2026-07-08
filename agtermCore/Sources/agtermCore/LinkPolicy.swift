@@ -46,7 +46,10 @@ public enum LinkPolicy {
             let norm = normalizedHost(name)
             guard !norm.isEmpty else { continue }
             out.insert(norm)
-            if norm.hasSuffix(".local") { out.insert(String(norm.dropLast(6))) }   // add the short form too
+            if norm.hasSuffix(".local") {
+                let short = String(norm.dropLast(6))                               // add the short form too,
+                if !short.isEmpty { out.insert(short) }                            // but a bare ".local" → "" is skipped
+            }
         }
         return out
     }
@@ -74,6 +77,21 @@ public enum LinkPolicy {
                 "/system/volumes/data/network/servers"].contains { lower == $0 || lower.hasPrefix($0 + "/") }
     }
 
+    /// Collapse `.`/`..` segments in an ABSOLUTE path with a purely LEXICAL, string-only normalizer — no
+    /// filesystem access (unlike `URL.standardizedFileURL`, which stats the target) and no symlink resolution,
+    /// so the classifier never touches the very automount path it may be about to deny (a `stat` of a path
+    /// inside autofs could itself trigger the mount). A leading `..` at the root is dropped. The caller
+    /// guarantees an absolute input (`hasPrefix("/")`).
+    static func lexicallyNormalizedAbsolutePath(_ path: String) -> String {
+        var out: [Substring] = []
+        for comp in path.split(separator: "/", omittingEmptySubsequences: true) {
+            if comp == "." { continue }
+            if comp == ".." { if !out.isEmpty { out.removeLast() }; continue }
+            out.append(comp)
+        }
+        return "/" + out.joined(separator: "/")
+    }
+
     /// Maps a raw terminal link to an action: a permitted web/mail scheme → `.open`; a LOCAL `file://` link
     /// (empty host, or a host in `localHosts`) → `.reveal` of the HOST-STRIPPED, dot-normalized local path, so
     /// Finder only ever sees a plain `/…` path and never leans on the original authority for host handling; a
@@ -91,10 +109,13 @@ public enum LinkPolicy {
         // a UNC-style `//` path (a remote target hidden in the path where the host check can't see it).
         let rawPath = url.path(percentEncoded: false)
         guard rawPath.hasPrefix("/"), !rawPath.hasPrefix("//") else { return .ignore }
-        // reveal a host-stripped, dot-normalized local path (isDirectory: false keeps it off the filesystem,
-        // so the result is deterministic and never stats the target).
-        let local = URL(fileURLWithPath: rawPath, isDirectory: false).standardizedFileURL
-        guard !isAutomountPath(local.path) else { return .ignore }
-        return .reveal(local)
+        // reveal a host-stripped local path, collapsing `.`/`..` with a purely LEXICAL normalizer (string
+        // only) so `/tmp/../net/x` can't sneak past the automount check AND the classifier never stats — and
+        // so never risks triggering — the automount path it is about to deny. It also never resolves symlinks:
+        // a `/tmp/link -> /net` link reveals the link itself, never the target (do NOT swap in
+        // `standardizedFileURL`/`resolvingSymlinksInPath()`, which touch the filesystem).
+        let normalizedPath = Self.lexicallyNormalizedAbsolutePath(rawPath)
+        guard !isAutomountPath(normalizedPath) else { return .ignore }
+        return .reveal(URL(fileURLWithPath: normalizedPath, isDirectory: false))
     }
 }
