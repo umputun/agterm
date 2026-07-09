@@ -42,6 +42,8 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionRename, target: "active", args: ControlArgs(name: "build")),
             ControlRequest(cmd: .sessionMove, target: "9f3c", args: ControlArgs(workspace: "other")),
             ControlRequest(cmd: .sessionCopy, target: "9f3c"),
+            ControlRequest(cmd: .sessionPaste, target: "9f3c"),
+            ControlRequest(cmd: .sessionSelectAll, target: "9f3c"),
             ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c", args: ControlArgs(cwd: "/b", command: "revdiff")),
             ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c", args: ControlArgs(command: "htop", sizePercent: 70)),
             ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c", args: ControlArgs(command: "revdiff", color: "#2a1a3a")),

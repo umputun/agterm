@@ -27,6 +27,8 @@ public enum Command: String, Codable, Sendable {
     case sessionFocus = "session.focus"
     case sessionResize = "session.resize"
     case sessionCopy = "session.copy"
+    case sessionPaste = "session.paste"
+    case sessionSelectAll = "session.selectall"
     case sessionText = "session.text"
     case sessionSearch = "session.search"
     case sessionOverlayOpen = "session.overlay.open"

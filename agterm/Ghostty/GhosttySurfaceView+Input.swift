@@ -443,3 +443,37 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
         }
     }
 }
+
+// MARK: - Standard Edit menu (responder chain)
+
+/// The stock Edit ▸ Copy/Paste/Select All actions, implemented on the surface so AppKit's automatic menu
+/// enabling routes them to the terminal when it holds first responder — while a focused text field (inline
+/// rename, palette search, Settings) keeps its own `copy:`/`paste:`/`selectAll:` because its field editor
+/// wins the responder chain. This is why agterm keeps the standard SwiftUI Edit menu instead of a custom
+/// Commands group. Each action runs the same libghostty binding ⌘C/⌘V/⌘A use. Cut/Undo/Redo are
+/// deliberately NOT implemented here, so those items stay disabled for the terminal (nothing to cut or undo)
+/// yet still work in text fields.
+extension GhosttySurfaceView: NSMenuItemValidation {
+    @objc func copy(_ sender: Any?) { performBindingAction("copy_to_clipboard") }
+
+    @objc func paste(_ sender: Any?) { performBindingAction("paste_from_clipboard") }
+
+    /// `override` because `selectAll(_:)` is declared on `NSResponder`, unlike `copy:`/`paste:`.
+    override func selectAll(_ sender: Any?) { performBindingAction("select_all") }
+
+    /// Gate the three items on real availability: Copy needs a selection, Paste needs text on the
+    /// clipboard, Select All needs a realized surface. Items we don't own enable by default.
+    func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
+        switch menuItem.action {
+        case #selector(copy(_:)):
+            guard let surface else { return false }
+            return ghostty_surface_has_selection(surface)
+        case #selector(paste(_:)):
+            return NSPasteboard.general.canReadObject(forClasses: [NSString.self], options: nil)
+        case #selector(selectAll(_:)):
+            return surface != nil
+        default:
+            return true
+        }
+    }
+}

@@ -336,6 +336,22 @@ struct CommandsTests {
         #expect(try request(["session", "copy", "--target", "9f3c"]) == ControlRequest(cmd: .sessionCopy, target: "9f3c"))
     }
 
+    @Test func sessionPasteDefaultsActive() throws {
+        #expect(try request(["session", "paste"]) == ControlRequest(cmd: .sessionPaste, target: "active"))
+    }
+
+    @Test func sessionPasteWithTarget() throws {
+        #expect(try request(["session", "paste", "--target", "9f3c"]) == ControlRequest(cmd: .sessionPaste, target: "9f3c"))
+    }
+
+    @Test func sessionSelectAllDefaultsActive() throws {
+        #expect(try request(["session", "select-all"]) == ControlRequest(cmd: .sessionSelectAll, target: "active"))
+    }
+
+    @Test func sessionSelectAllWithTarget() throws {
+        #expect(try request(["session", "select-all", "--target", "9f3c"]) == ControlRequest(cmd: .sessionSelectAll, target: "9f3c"))
+    }
+
     @Test func sessionTextDefaultsActive() throws {
         // bare `session text` reads the visible screen of the focused pane (no args beyond the base bag).
         #expect(try request(["session", "text"]) == ControlRequest(cmd: .sessionText, target: "active", args: ControlArgs()))

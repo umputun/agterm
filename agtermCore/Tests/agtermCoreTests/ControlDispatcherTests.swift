@@ -779,6 +779,30 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.sessionCopy(target: "session", window: nil)])
     }
 
+    @Test func sessionPasteRoutesTargetAndWindow() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSessionPasteResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionPaste, target: "session", args: ControlArgs(window: "win")))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(actions.calls == [.sessionPaste(target: "session", window: "win")])
+    }
+
+    @Test func sessionSelectAllRoutesTargetAndWindow() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSessionSelectAllResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionSelectAll, target: "session", args: ControlArgs(window: "win")))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(actions.calls == [.sessionSelectAll(target: "session", window: "win")])
+    }
+
     @Test func sessionOverlayOpenRejectsInvalidInputsBeforeCallingActions() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -1365,6 +1389,8 @@ private final class MockControlActions: ControlActions {
         case quickText(all: Bool, lines: Int?)
         case sessionType(target: String?, window: String?, ControlSessionTypeOptions)
         case sessionCopy(target: String?, window: String?)
+        case sessionPaste(target: String?, window: String?)
+        case sessionSelectAll(target: String?, window: String?)
         case sessionSearch(target: String?, window: String?, text: String?, to: String?)
         case overlayOpen(target: String?, window: String?, ControlSessionOverlayOpenOptions)
         case overlayClose(target: String?, window: String?)
@@ -1403,6 +1429,8 @@ private final class MockControlActions: ControlActions {
     var nextQuickTextResponse = ControlResponse(ok: true)
     var nextSessionTypeResponse = ControlResponse(ok: true)
     var nextSessionCopyResponse = ControlResponse(ok: true)
+    var nextSessionPasteResponse = ControlResponse(ok: true)
+    var nextSessionSelectAllResponse = ControlResponse(ok: true)
     var nextSessionSearchResponse = ControlResponse(ok: true)
     var nextOverlayOpenResponse = ControlResponse(ok: true)
     var nextOverlayCloseResponse = ControlResponse(ok: true)
@@ -1599,6 +1627,16 @@ private final class MockControlActions: ControlActions {
     func copySessionSelection(_ target: String?, window: String?) -> ControlResponse {
         calls.append(.sessionCopy(target: target, window: window))
         return nextSessionCopyResponse
+    }
+
+    func pasteSession(_ target: String?, window: String?) -> ControlResponse {
+        calls.append(.sessionPaste(target: target, window: window))
+        return nextSessionPasteResponse
+    }
+
+    func selectAllSession(_ target: String?, window: String?) -> ControlResponse {
+        calls.append(.sessionSelectAll(target: target, window: window))
+        return nextSessionSelectAllResponse
     }
 
     func searchSession(_ target: String?, window: String?,

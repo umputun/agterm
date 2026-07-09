@@ -1,3 +1,4 @@
+import AppKit
 import Darwin
 import XCTest
 
@@ -428,6 +429,49 @@ final class ControlAPIUITests: ControlAPITestCase {
         let response = try sendCommand(#"{"cmd":"session.copy","target":"\#(newID)"}"#)
         XCTAssertEqual(response["ok"] as? Bool, false, "copy with no selection should fail: \(response)")
         XCTAssertEqual(response["error"] as? String, "no selection", "should report no selection: \(response)")
+    }
+
+    // session.selectall selects the whole buffer; session.copy is its read-back. Echo a marker onto the
+    // screen (polling until the buffer shows it, riding shell readiness), then selectall + copy should
+    // return a non-empty selection containing the marker — proving select_all created the selection.
+    func testSessionSelectAllThenCopyReturnsBuffer() throws {
+        let id = try activeSessionID()
+        let marker = "SELECTALLMARKER"
+        let onScreen = try pollPaneText(target: id, pane: "left", contains: marker) {
+            _ = try self.sendCommand(self.typeRequest(text: "echo \(marker)\n", target: id, select: false))
+        }
+        XCTAssertNotNil(onScreen, "the echoed marker should appear in the buffer")
+
+        let selected = try sendCommand(#"{"cmd":"session.selectall","target":"\#(id)"}"#)
+        XCTAssertEqual(selected["ok"] as? Bool, true, "session.selectall should succeed: \(selected)")
+
+        let copied = try sendCommand(#"{"cmd":"session.copy","target":"\#(id)"}"#)
+        XCTAssertEqual(copied["ok"] as? Bool, true, "session.copy after select-all should succeed: \(copied)")
+        let text = (copied["result"] as? [String: Any])?["text"] as? String
+        XCTAssertNotNil(text, "copy should return the selected text: \(copied)")
+        XCTAssertTrue(text?.contains(marker) == true, "copied selection should contain the marker, got: \(text ?? "nil")")
+    }
+
+    // session.paste pastes the SYSTEM clipboard into the session (the socket analogue of ⌘V). Put a marker
+    // on NSPasteboard.general (shared across processes), paste it, and read the buffer back until the pasted
+    // text shows at the prompt. Saves/restores the real clipboard so the run doesn't clobber it.
+    func testSessionPasteInsertsClipboardText() throws {
+        let id = try activeSessionID()
+        let marker = "PASTECLIPMARKER"
+        let pb = NSPasteboard.general
+        let saved = pb.string(forType: .string)
+        defer {
+            pb.clearContents()
+            if let saved { pb.setString(saved, forType: .string) }
+        }
+        pb.clearContents()
+        pb.setString(marker, forType: .string)
+
+        let found = try pollPaneText(target: id, pane: "left", contains: marker) {
+            let pasted = try self.sendCommand(#"{"cmd":"session.paste","target":"\#(id)"}"#)
+            XCTAssertEqual(pasted["ok"] as? Bool, true, "session.paste should succeed: \(pasted)")
+        }
+        XCTAssertNotNil(found, "the pasted clipboard marker should appear in the buffer")
     }
 
     // session.search over the active session's scrollback: seed the screen with repeated needle text via
