@@ -221,6 +221,40 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(afterValue, sessionTtyValue, "focus should return to the SAME session terminal, not be lost")
     }
 
+    // an overlay is modal within its session: a sidebar click restores keyboard focus to the terminal
+    // (so the sidebar never keeps it), but it must restore focus to the overlay ON TOP, not to the pane
+    // BEHIND it. clicking the overlaid session's own row otherwise hands first responder to the covered
+    // pane and the overlay program silently stops receiving input.
+    func testSidebarClickKeepsFocusOnOverlayNotPaneBehind() throws {
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let root = try XCTUnwrap(treeResult["tree"] as? [String: Any], "result should carry a tree")
+        let workspaces = try XCTUnwrap(root["workspaces"] as? [[String: Any]], "tree should list workspaces")
+        let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
+        let id = try XCTUnwrap(sessions.first?["id"] as? String, "should have a seeded session id")
+
+        // the overlay shell captures one keyboard line then stays alive (cat), so the marker records who
+        // held first responder when the line was typed.
+        let ovlMarker = markerDir.appendingPathComponent("floating-overlay-keys")
+        let ovlCmd = "sh -c 'IFS= read -r x; printf %s \"$x\" > \(ovlMarker.path); cat'"
+        let ovlJSON = try! JSONSerialization.data(withJSONObject:
+            ["cmd": "session.overlay.open", "target": id, "args": ["command": ovlCmd, "sizePercent": 50]])
+        let open = try sendCommand(String(data: ovlJSON, encoding: .utf8)!)
+        XCTAssertEqual(open["ok"] as? Bool, true, "floating overlay open should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the floating overlay should be up")
+        usleep(800_000) // let the overlay surface attach, grab focus, and the shell reach `read`
+
+        // click the overlaid session's own sidebar row: selection is a no-op, but the sidebar's
+        // focus-restore runs and must land on the overlay, not the pane it covers.
+        app.staticTexts["session-row"].firstMatch.click()
+        usleep(500_000)
+
+        app.typeText("OVLCLICK")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertEqual(pollMarker(ovlMarker, timeout: 12), "OVLCLICK",
+                       "a sidebar click must restore focus to the overlay, not the pane behind it")
+    }
+
     // a FULL overlay opened in a BACKGROUND (non-selected) session must NOT steal keyboard first responder.
     // the overlay's auto-focus is gated on its deck slot being active (deckActive), so typing reaches the
     // still-visible active session, not the hidden overlay. guards the focus-steal bug where a revdiff overlay
