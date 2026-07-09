@@ -654,9 +654,10 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// materializing), so retry on the run loop until it is, with a bounded cap.
         /// Skipped while a rename field is the first responder or an edit is in progress.
         ///
-        /// Restores to `topmostSurface`, never the main pane: an overlay or scratch covers the pane(s),
-        /// so focusing the pane would hand keystrokes to a surface the user cannot see and leave the
-        /// overlay program silently starved of input.
+        /// Targets `topmostSurface` (overlay, else scratch, else the active pane) rather than the main
+        /// `surface`: while a cover is up it owns the keyboard, so focusing a pane instead would starve the
+        /// overlay/scratch program of input — and a full overlay or scratch also hides the pane, so the
+        /// keystrokes would land on a surface the user cannot see.
         func focusActiveTerminal(attempt: Int = 0) {
             // never steal focus from an in-progress rename.
             if renameController.isEditing { return }

@@ -221,38 +221,69 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(afterValue, sessionTtyValue, "focus should return to the SAME session terminal, not be lost")
     }
 
-    // an overlay is modal within its session: a sidebar click restores keyboard focus to the terminal
-    // (so the sidebar never keeps it), but it must restore focus to the overlay ON TOP, not to the pane
-    // BEHIND it. clicking the overlaid session's own row otherwise hands first responder to the covered
-    // pane and the overlay program silently stops receiving input.
+    // a cover (overlay or scratch) is modal within its session: a sidebar click restores keyboard focus to
+    // the terminal (so the sidebar never keeps it), but it must restore focus to the cover ON TOP, not to
+    // the pane BEHIND it. clicking the covered session's own row otherwise hands first responder to the
+    // pane and the cover's program silently stops receiving input.
+    //
+    // each test captures TWO keyboard lines: the first, typed BEFORE the click, proves the cover already
+    // holds first responder (so the cover's own bounded auto-focus retry — 40 x 0.05s — has finished and
+    // cannot re-grab focus later and mask a steal). the second, typed after the click, is the assertion.
+    // without the pre-click line the test can pass on a buggy build: the click steals focus to the pane,
+    // then an auto-focus retry still in flight takes it back before the line is typed.
     func testSidebarClickKeepsFocusOnOverlayNotPaneBehind() throws {
-        let tree = try sendCommand(#"{"cmd":"tree"}"#)
-        let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
-        let root = try XCTUnwrap(treeResult["tree"] as? [String: Any], "result should carry a tree")
-        let workspaces = try XCTUnwrap(root["workspaces"] as? [[String: Any]], "tree should list workspaces")
-        let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
-        let id = try XCTUnwrap(sessions.first?["id"] as? String, "should have a seeded session id")
-
-        // the overlay shell captures one keyboard line then stays alive (cat), so the marker records who
-        // held first responder when the line was typed.
-        let ovlMarker = markerDir.appendingPathComponent("floating-overlay-keys")
-        let ovlCmd = "sh -c 'IFS= read -r x; printf %s \"$x\" > \(ovlMarker.path); cat'"
+        let id = try activeSessionID()
+        let pre = markerDir.appendingPathComponent("overlay-pre-click")
+        let post = markerDir.appendingPathComponent("overlay-post-click")
+        // two blocking reads then `cat` to hold the shell; retyping is NOT idempotent (each `read`
+        // consumes exactly one line), so the markers are polled rather than re-typed.
+        let ovlCmd = "sh -c 'IFS= read -r a; printf %s \"$a\" > \(pre.path); " +
+            "IFS= read -r b; printf %s \"$b\" > \(post.path); cat'"
         let ovlJSON = try! JSONSerialization.data(withJSONObject:
             ["cmd": "session.overlay.open", "target": id, "args": ["command": ovlCmd, "sizePercent": 50]])
         let open = try sendCommand(String(data: ovlJSON, encoding: .utf8)!)
         XCTAssertEqual(open["ok"] as? Bool, true, "floating overlay open should succeed: \(open)")
         XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the floating overlay should be up")
-        usleep(800_000) // let the overlay surface attach, grab focus, and the shell reach `read`
+        usleep(800_000) // let the overlay surface attach, grab focus, and the shell reach the first `read`
 
-        // click the overlaid session's own sidebar row: selection is a no-op, but the sidebar's
-        // focus-restore runs and must land on the overlay, not the pane it covers.
-        app.staticTexts["session-row"].firstMatch.click()
-        usleep(500_000)
+        assertSidebarClickKeepsFocusOnCover(pre: pre, post: post, cover: "overlay")
+    }
+
+    // the scratch terminal is the other `topmostSurface` branch (scratchActive -> scratchSurface) and is
+    // full-coverage, so a sidebar click landing on the pane would type into a shell that is not even visible.
+    func testSidebarClickKeepsFocusOnScratchNotPaneBehind() throws {
+        let pre = markerDir.appendingPathComponent("scratch-pre-click")
+        let post = markerDir.appendingPathComponent("scratch-post-click")
+        let cmd = "sh -c 'IFS= read -r a; printf %s \"$a\" > \(pre.path); " +
+            "IFS= read -r b; printf %s \"$b\" > \(post.path); cat'"
+        let json = try! JSONSerialization.data(withJSONObject:
+            ["cmd": "session.scratch", "target": "active", "args": ["mode": "on", "command": cmd]])
+        let show = try sendCommand(String(data: json, encoding: .utf8)!)
+        XCTAssertEqual(show["ok"] as? Bool, true, "showing the scratch should succeed: \(show)")
+        XCTAssertTrue(pollActiveSessionScratch(true, timeout: 10), "the scratch should be up")
+        usleep(800_000) // let the scratch surface attach, grab focus, and the shell reach the first `read`
+
+        assertSidebarClickKeepsFocusOnCover(pre: pre, post: post, cover: "scratch")
+    }
+
+    /// Shared body of the two sidebar-click focus tests: prove the cover holds focus, click the covered
+    /// session's own sidebar row (selection is a no-op, but the sidebar's focus-restore runs), then prove
+    /// the keyboard still reaches the cover rather than the pane it sits on.
+    private func assertSidebarClickKeepsFocusOnCover(pre: URL, post: URL, cover: String) {
+        app.typeText("PRECLICK")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertEqual(pollMarker(pre, timeout: 12), "PRECLICK",
+                       "the \(cover) must hold keyboard focus before the click (else this test can't assert a steal)")
+
+        let row = app.staticTexts["session-row"].firstMatch
+        XCTAssertTrue(row.isHittable, "the covered session's sidebar row should be clickable")
+        row.click()
+        usleep(500_000) // the sidebar's focus-restore runs off the click; no observable signal to poll on
 
         app.typeText("OVLCLICK")
         app.typeKey(.return, modifierFlags: [])
-        XCTAssertEqual(pollMarker(ovlMarker, timeout: 12), "OVLCLICK",
-                       "a sidebar click must restore focus to the overlay, not the pane behind it")
+        XCTAssertEqual(pollMarker(post, timeout: 12), "OVLCLICK",
+                       "a sidebar click must restore focus to the \(cover), not the pane behind it")
     }
 
     // a FULL overlay opened in a BACKGROUND (non-selected) session must NOT steal keyboard first responder.

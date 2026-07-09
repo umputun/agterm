@@ -308,10 +308,11 @@ public final class Session: Identifiable {
     /// pointed at the same surface.
     public var addressableSurface: (any TerminalSurface)? { surface ?? splitSurface }
 
-    /// The surface currently on top and owning keyboard focus: a full overlay, else the scratch, else
-    /// the active pane. Both the overlay and the scratch are full-coverage layers (panes hidden beneath
-    /// them), and the overlay renders above the scratch — so every focus path routes through this to keep
-    /// first responder on the visible top surface and never on a covered pane/scratch.
+    /// The surface currently on top and owning keyboard focus: an active overlay (full OR floating), else
+    /// the scratch, else the active pane. The overlay renders above the scratch, and a full overlay or the
+    /// scratch hides the pane(s) beneath it — so the session-focus helpers route through this to keep first
+    /// responder on the top surface and never on a covered pane/scratch. (`TerminalView.focusIfNeeded` is
+    /// the exception: it targets its own deck slot, which a cover already gates off via `isActive`.)
     public var topmostSurface: (any TerminalSurface)? {
         if overlayActive { return overlaySurface }
         if scratchActive { return scratchSurface }
