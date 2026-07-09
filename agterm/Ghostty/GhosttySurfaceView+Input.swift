@@ -466,13 +466,14 @@ extension GhosttySurfaceView: NSMenuItemValidation {
     /// since `performBindingAction` no-ops without one. Items we don't own enable by default (AppKit only
     /// consults this on the responder that implements the action, so `cut:`/`undo:`/`redo:` never reach it).
     ///
-    /// Paste asks `GhosttyCallbacks.hasPasteboardText()`, which mirrors the branches of `pasteboardText` —
+    /// Paste asks `GhosttyCallbacks.hasPasteboardText()`, which runs the same branches as `pasteboardText` —
     /// the SAME reader `paste_from_clipboard` ends up using — rather than probing for a plain string. The
     /// clipboard may hold a file/web URL with no string representation (a Finder copy), which that reader
     /// turns into a shell-escaped path: probing for `NSString` alone reports "nothing to paste" while ⌘V
     /// happily pastes the path, which is exactly the menu-vs-keyboard divergence these responder methods
-    /// exist to remove. It is a type probe, not a read: this runs on every menu open and key-equivalent
-    /// lookup, so it must not shell-escape a pasteboard full of URLs to answer yes/no.
+    /// exist to remove. A bare `canReadObject([NSURL])` TYPE probe is wrong the other way, enabling Paste for a
+    /// pasteboard that only declares a URL type. The gate short-circuits on the first usable URL, so it never
+    /// escapes and joins a whole Finder copy just to answer yes/no.
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
         case #selector(copy(_:)):

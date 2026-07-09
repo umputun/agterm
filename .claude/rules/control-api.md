@@ -422,15 +422,21 @@ paths:
   the surface, since `performBindingAction` no-ops without one) — while a focused text field (rename/palette/Settings)
   keeps its own editing (its field editor wins the responder chain), and Cut/Undo/Redo stay disabled for
   the terminal (deliberately NOT implemented) yet work in text fields.
-  **Paste MUST validate with the same branches the paste path reads**, not a `canReadObject([NSString])` probe:
-  a Finder file copy puts a file URL with NO string representation on the clipboard, which `pasteboardText`
-  turns into a shell-escaped path — probing for `NSString` greys the item out while ⌘V pastes the path anyway,
-  reintroducing the very menu-vs-keyboard divergence these responders remove (caught in review; pinned by
-  `EditMenuUITests.testEditMenuEnablesPasteForFileURLClipboard`).
-  It must also be a TYPE PROBE, not a read: `hasPasteboardText` mirrors `pasteboardText`'s two branches without
-  materializing the payload, because validation runs on every menu open AND every ⌘C/⌘V/⌘A key-equivalent
-  lookup — calling `readPasteboardText()` there would shell-escape every URL on the clipboard each time.
-  **Keep the predicate and the reader in step; this invariant has NO automated test.**
+  **Paste MUST validate with the same branches the paste path reads**, and must agree with it in BOTH
+  directions.
+  Two ways to get this wrong, both found in review:
+  a `canReadObject([NSString])` probe greys the item out for a Finder file copy (a file URL with NO string
+  representation, which `pasteboardText` turns into a shell-escaped path) while ⌘V pastes the path anyway;
+  and a `canReadObject([NSURL])` probe is a TYPE check, so a pasteboard merely DECLARING `public.file-url`
+  with no usable value enables Paste while the reader returns nil and the paste inserts nothing.
+  Either direction reintroduces the menu-vs-keyboard divergence these responders exist to remove.
+  So `hasPasteboardText` runs the reader's own URL branch, short-circuiting on the first usable URL
+  (`contains(where:)`) instead of mapping/escaping/joining the whole clipboard — validation fires on every
+  menu open and every ⌘V key-equivalent lookup, so it must not materialize a Finder copy of thousands of files.
+  Both share the single `urlText` helper so they cannot drift.
+  **Keep the predicate and the reader in step; this invariant has NO automated test** (verified instead with a
+  named-pasteboard probe across the empty / plain-text / empty-string / whitespace / file-url / web-url /
+  multi-url / declared-without-data shapes).
   The file-URL case is NOT XCUITest-able: the runner is sandboxed (`com.apple.security.app-sandbox`), so a file
   URL it writes to `NSPasteboard.general` never becomes visible to the app — instrumenting `hasPasteboardText`
   showed the app reading `types=[]` for a full 8 s poll while the runner's own `canReadObject([NSURL])` returned
