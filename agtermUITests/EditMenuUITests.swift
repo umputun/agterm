@@ -8,6 +8,16 @@ import XCTest
 ///
 /// Subclasses `ControlAPITestCase` for the isolated state dir + control socket, which is what lets a test
 /// create a real terminal selection (`session.selectall`) without synthesizing a mouse drag over the grid.
+///
+/// **Pasteboard state must be POLLED, never read once.** The app process observes `NSPasteboard.general`
+/// through its own cache: instrumenting `hasPasteboardText` showed the app validating the menu at a
+/// `changeCount` behind the runner's, seeing the empty instant between `clearContents()` and the write.
+/// That is a test-harness race, not app behavior (a user copies in Finder and opens the menu long after).
+/// So every clipboard-dependent assertion polls until the app catches up, and each "disabled" expectation is
+/// entered from a known-enabled state so a stale read cannot satisfy it.
+///
+/// The runner is also SANDBOXED, which bounds what can be seeded at all — see the note above
+/// `testEditMenuLeavesCutAndUndoDisabledForTerminal`.
 @MainActor
 final class EditMenuUITests: ControlAPITestCase {
     /// Open the Edit menu, run `body` against it, then dismiss. Menu validation runs on open, so the
@@ -17,6 +27,21 @@ final class EditMenuUITests: ControlAPITestCase {
         XCTAssertTrue(app.menuItems["Copy"].waitForExistence(timeout: 5), "Edit menu should offer Copy")
         try body()
         app.typeKey(.escape, modifierFlags: [])
+    }
+
+    /// Re-open the Edit menu until `title` reaches `expected`, or the deadline passes. Returns the final
+    /// observed state, so the caller still asserts the real condition — a gate that never reaches `expected`
+    /// fails, it does not silently pass.
+    @discardableResult
+    private func pollEditMenuItem(_ title: String, isEnabled expected: Bool, timeout: TimeInterval = 8) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        var observed = !expected
+        repeat {
+            withEditMenu { observed = app.menuItems[title].isEnabled }
+            if observed == expected { return observed }
+            usleep(200_000)
+        } while Date() < deadline
+        return observed
     }
 
     // Copy is gated on ghostty_surface_has_selection: disabled on a fresh session, enabled once
@@ -33,40 +58,29 @@ final class EditMenuUITests: ControlAPITestCase {
         let selected = try sendCommand(#"{"cmd":"session.selectall","target":"\#(id)"}"#)
         XCTAssertEqual(selected["ok"] as? Bool, true, "session.selectall should succeed: \(selected)")
 
-        withEditMenu {
-            XCTAssertTrue(app.menuItems["Copy"].isEnabled, "Copy should enable once the buffer is selected")
-        }
+        XCTAssertTrue(pollEditMenuItem("Copy", isEnabled: true),
+                      "Copy should enable once the buffer is selected")
     }
 
-    // Paste is gated on the clipboard holding something the paste path can insert.
+    // Paste is gated on the clipboard holding something the paste path can insert. Seeded text FIRST, so the
+    // later empty-clipboard expectation starts from a confirmed-enabled state and cannot pass on a stale read.
     func testEditMenuGatesPasteOnClipboardText() throws {
-        seedPasteboard { _ in }  // deliberately empty
-        withEditMenu {
-            XCTAssertFalse(app.menuItems["Paste"].isEnabled, "Paste should be disabled with an empty clipboard")
-        }
-
         seedPasteboard { $0.setString("pasteable", forType: .string) }
-        withEditMenu {
-            XCTAssertTrue(app.menuItems["Paste"].isEnabled, "Paste should enable when the clipboard holds text")
-        }
+        XCTAssertTrue(pollEditMenuItem("Paste", isEnabled: true),
+                      "Paste should enable when the clipboard holds text")
+
+        seedPasteboard { _ in }  // deliberately empty
+        XCTAssertFalse(pollEditMenuItem("Paste", isEnabled: false),
+                       "Paste should disable once the clipboard is emptied")
     }
 
-    // Regression: the clipboard may hold a file URL with NO string representation (a Finder copy), which the
-    // paste path (GhosttyCallbacks.pasteboardText) turns into a shell-escaped path. Validating with a plain
-    // `canReadObject(forClasses: [NSString.self])` probe reported "nothing to paste" and greyed the item out
-    // while ⌘V pasted the path anyway — exactly the menu-vs-keyboard divergence these responders remove.
-    func testEditMenuEnablesPasteForFileURLClipboard() throws {
-        seedPasteboard { pb in
-            pb.writeObjects([URL(fileURLWithPath: "/tmp/agterm-paste-probe.txt") as NSURL])
-        }
-        XCTAssertFalse(NSPasteboard.general.canReadObject(forClasses: [NSString.self], options: nil),
-                       "precondition: a file-URL pasteboard carries no NSString representation")
-
-        withEditMenu {
-            XCTAssertTrue(app.menuItems["Paste"].isEnabled,
-                          "Paste must enable for a file-URL clipboard, since the paste path inserts its path")
-        }
-    }
+    // NOTE: the file-URL Paste case (a Finder copy, which carries no string representation) is NOT covered
+    // here and cannot be. The XCUITest runner is sandboxed (`com.apple.security.app-sandbox`), so a file URL
+    // it writes to `NSPasteboard.general` never becomes visible to the app process — instrumenting
+    // `hasPasteboardText` showed the app reading `types=[]` for the full 8 s of polling while the runner's own
+    // `canReadObject([NSURL])` returned true from its in-process cache. Such a test exercises the sandbox, not
+    // `validateMenuItem`. The invariant it would have pinned lives in the code instead: `hasPasteboardText`
+    // must mirror `pasteboardText`'s branches. See the Control API rule.
 
     // Cut/Undo/Redo are deliberately NOT implemented on the surface, so AppKit leaves them disabled for the
     // terminal. (They still work in a focused text field, whose field editor implements them.)

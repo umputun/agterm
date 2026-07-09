@@ -430,7 +430,17 @@ paths:
   It must also be a TYPE PROBE, not a read: `hasPasteboardText` mirrors `pasteboardText`'s two branches without
   materializing the payload, because validation runs on every menu open AND every ⌘C/⌘V/⌘A key-equivalent
   lookup — calling `readPasteboardText()` there would shell-escape every URL on the clipboard each time.
-  Keep the predicate and the reader in step.
+  **Keep the predicate and the reader in step; this invariant has NO automated test.**
+  The file-URL case is NOT XCUITest-able: the runner is sandboxed (`com.apple.security.app-sandbox`), so a file
+  URL it writes to `NSPasteboard.general` never becomes visible to the app — instrumenting `hasPasteboardText`
+  showed the app reading `types=[]` for a full 8 s poll while the runner's own `canReadObject([NSURL])` returned
+  true from its in-process cache.
+  Such a test exercises the sandbox, not `validateMenuItem`, so it was removed rather than left red (verified
+  instead with a cross-process probe outside the runner).
+  Do not re-add it without an app-target `bundle.unit-test` (the project has only `bundle.ui-testing` today),
+  which could exercise `hasPasteboardText` against a NAMED pasteboard in-process.
+  A `NSPasteboard.general` read in the app also LAGS a writer process's `changeCount`, so any UI test that seeds
+  the clipboard must POLL rather than read once.
   ⌘C/⌘V/⌘A therefore route through the Edit menu (fixed standard shortcuts, NOT rebindable — the maintainer's
   call); the `ghostty-defaults.conf` `super+key_c`/`super+key_v`/`super+key_a` binds stay as a non-Latin-layout
   backup.
