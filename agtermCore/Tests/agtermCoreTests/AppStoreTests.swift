@@ -409,6 +409,23 @@ struct AppStoreTests {
         #expect(store.pendingCloseSummary == nil)
     }
 
+    @Test func softCloseSessionsWithOneTargetKeepsSingleSessionSummary() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let first = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a", name: "alpha"))
+        let second = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b", name: "beta"))
+
+        #expect(store.softCloseSessions([first.id], grace: 60))
+
+        let summary = try #require(store.pendingCloseSummary)
+        #expect(summary.kind == .session)
+        #expect(summary.title == "alpha")
+
+        #expect(store.undoPendingClose(summary.id))
+        #expect(store.workspaces[0].sessions.map(\.id) == [first.id, second.id])
+        #expect(store.selectedSessionID == first.id)
+    }
+
     @Test func softCloseSessionsGroupsUndoAndRestoresEverySession() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

@@ -93,8 +93,6 @@ extension AppStore {
         for id in pendingCloseOrder.reversed() {
             guard let record = pendingCloseRecords[id] else { continue }
             switch record {
-            case .session(let close) where close.session.id == sessionID:
-                return id
             // A grace-period reopen restores the grouped batch close as one undo record, matching
             // workspace close behavior while the record is still pending.
             case .sessions(let close) where close.sessions.contains(where: { $0.session.id == sessionID }):
@@ -118,9 +116,11 @@ extension AppStore {
             switch record {
             case .workspace(let close) where close.workspace.id == workspaceID:
                 return id
-            case .session(let close) where close.workspaceID == workspaceID && sessionIDs.contains(close.session.id):
-                return id
-            case .sessions(let close) where close.sessions.contains(where: { sessionIDs.contains($0.session.id) }):
+            // a grouped member qualifies only when it was closed FROM this workspace — the same
+            // workspace-scoping as the singular record; undoing it restores its whole group.
+            case .sessions(let close) where close.sessions.contains(where: {
+                $0.workspaceID == workspaceID && sessionIDs.contains($0.session.id)
+            }):
                 return id
             default:
                 continue
