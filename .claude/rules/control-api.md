@@ -120,7 +120,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 55-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 57-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -190,10 +190,10 @@ paths:
   exact `uuidString` (case-insensitive), or a git-style unique prefix.
   Zero prefix hits → `notFound` error, ≥2 → `ambiguous` error listing the candidates.
   `--target` defaults to `active`, so scripts rarely type an id and never for "the current one".
-- **Command catalog (55 commands):**
+- **Command catalog (57 commands):**
   - `tree`
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`
-  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.resize`/`session.overlay.result`
+  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.paste`/`session.selectall`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.resize`/`session.overlay.result`
   - `quick`/`quick.type`/`quick.text`
   - `sidebar`/`sidebar.mode`/`sidebar.expand`/`sidebar.collapse`
   - `notify`
@@ -216,7 +216,7 @@ paths:
   Setting echoes the resulting effective side in `result.text`; the BARE form (no name) reads the side
   the last config feed applied (`SettingsModel.lastAppliedIsDark`), which the test polls to prove the
   flip actually drove the reload.
-  `AppearanceFlipUITests` is its only consumer; the public command count stays 55.
+  `AppearanceFlipUITests` is its only consumer; the public command count stays 57.
 
   `workspace.delete` honors keep-at-least-one and returns an error instead of the GUI confirm alert (nothing
   blocks on a modal).
@@ -405,6 +405,34 @@ paths:
   — it does NOT touch the system clipboard (automation pipes the returned text into another `session.type`);
   selection is surface state independent of focus, so any realized session can be read,
   and no/empty selection is a `no selection` error.
+  `session.paste` pastes the SYSTEM clipboard (`NSPasteboard.general`) into the target session's MAIN
+  surface — the socket analogue of ⌘V / Edit ▸ Paste.
+  `session.selectall` selects the target's ENTIRE terminal buffer (main surface) — the analogue of ⌘A /
+  Edit ▸ Select All.
+  Both run a libghostty binding action on the resolved surface — `paste_from_clipboard` /
+  `select_all` — through the SAME `ControlServer+SurfaceIO.surfaceBindingAction` helper the `font.*` arms
+  use (resolve session → guard the surface is realized, `session not realized` otherwise → `performBindingAction`
+  → return the id), so paste takes the normal libghostty paste path (bracketed paste, PASTE requests are
+  ungated so no OSC-52 prompt) and select_all covers the whole grid.
+  They are the control half of the GUI Edit menu: agterm keeps the STANDARD SwiftUI Edit menu and
+  implements `copy:`/`paste:`/`selectAll:` + `validateMenuItem:` on `GhosttySurfaceView` (`+Input.swift`,
+  conforming to `NSMenuItemValidation`) so AppKit's automatic menu enabling routes Copy/Paste/Select All
+  to the terminal when it holds first responder — Copy enabled on `ghostty_surface_has_selection`, Paste
+  on a clipboard string, Select All on a realized surface — while a focused text field (rename/palette/Settings)
+  keeps its own editing (its field editor wins the responder chain), and Cut/Undo/Redo stay disabled for
+  the terminal (deliberately NOT implemented) yet work in text fields.
+  ⌘C/⌘V/⌘A therefore route through the Edit menu (fixed standard shortcuts, NOT rebindable — the maintainer's
+  call); the `ghostty-defaults.conf` `super+key_c`/`super+key_v` binds stay as a non-Latin-layout backup.
+  READ-BACK: neither adds a `ControlSessionNode` field — `session.selectall`'s read-back is `session.copy`
+  (reads the resulting selection) and `session.paste`'s is `session.text` (reads the inserted buffer), the
+  sibling-command pattern (like `quick.type`↔`quick.text`).
+  Four-point keep-in-sync audit: (1) `case sessionPaste = "session.paste"` + `case sessionSelectAll = "session.selectall"`
+  in `ControlProtocol.swift` (no new args/fields), (2) the `.sessionPaste`/`.sessionSelectAll` arms in
+  `ControlDispatcher.dispatchSessionSurfaceCommand` → `ControlActions.pasteSession`/`selectAllSession`
+  (app-side `ControlServer+SurfaceIO`), (3) the `session paste` / `session select-all` subcommands in
+  `agtermctlKit`, (4) round-trip in `ControlProtocolTests` + dispatcher routing in `ControlDispatcherTests`
+  + CLI mapping in `CommandsTests` + the e2e `testSessionSelectAllThenCopyReturnsBuffer` /
+  `testSessionPasteInsertsClipboardText` in `ControlAPIUITests`.
   `session.text` reads the target surface's screen buffer as PLAIN TEXT (no ANSI) via `GhosttySurfaceView.readScreenText(all:lines:)`
   (a `ghostty_selection_s` spanning VIEWPORT top-left→bottom-right by default,
   SCREEN when `args.all || args.lines != nil`, `rectangle = false`;
@@ -984,5 +1012,5 @@ paths:
   (image/text/color set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
-  examples.md recipes) and the command count there is bumped to 55 to match.
+  examples.md recipes) and the command count there is bumped to 57 to match.
 

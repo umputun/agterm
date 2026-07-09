@@ -2,4 +2,5 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://agterm.com/</loc><lastmod>2026-07-03</lastmod><priority>1.0</priority></url>
   <url><loc>https://agterm.com/docs</loc><lastmod>2026-07-03</lastmod><priority>0.8</priority></url>
+  <url><loc>https://agterm.com/commands</loc><lastmod>2026-07-08</lastmod><priority>0.7</priority></url>
 </urlset>

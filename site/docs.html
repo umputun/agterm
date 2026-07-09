@@ -113,6 +113,7 @@
             "
           >
             <a href="/" style="color: #949ba4; padding: 8px 12px; border-radius: 7px" class="hv1">← home</a>
+            <a href="/commands" style="color: #949ba4; padding: 8px 12px; border-radius: 7px" class="hv1">commands</a>
             <a
               href="https://github.com/umputun/agterm"
               style="
@@ -161,6 +162,7 @@
             <div style="height: 16px"></div>
             <span style="color: #4a5158; font-size: 11px; letter-spacing: 0.12em; padding: 4px 12px">SCRIPTING</span>
             <a href="#agtermctl" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">agtermctl reference</a>
+            <a href="/commands" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Command reference ↗</a>
             <a href="#keymap" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Customizing keys</a>
             <a href="#ghostty" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Ghostty config</a>
             <a href="#status" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Agent status</a>
@@ -983,6 +985,21 @@
             >
               agtermctl reference
             </h2>
+            <div
+              style="
+                background: #22272b;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-left: 3px solid #6d82f3;
+                border-radius: 11px;
+                padding: 16px 20px;
+                margin: 0 0 20px;
+              "
+            >
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0">
+                Looking for the full list? All 57 commands, with every argument, return value, and error, live on the
+                <a href="/commands" style="color: #6d82f3; font-weight: 500">Command reference →</a>
+              </p>
+            </div>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               agterm can be driven from a script over a local unix-domain socket through the companion CLI,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span>. This is for
@@ -1086,7 +1103,9 @@
               <span style="color: #f2b45c">$'echo hi\n'</span><br /><br /><span style="color: #6b727a"
                 ># read a pane's selection (does not touch the clipboard) or its output</span
               ><br /><span style="color: #6d82f3">sel</span>=$(agtermctl session copy --target 9f3c)<br />agtermctl session text
-              --pane scratch --target 9f3c
+              --pane scratch --target 9f3c<br /><br /><span style="color: #6b727a"
+                ># paste the system clipboard (⌘V), or select the whole buffer (⌘A) then copy it</span
+              ><br />agtermctl session paste --target 9f3c<br />agtermctl session select-all --target 9f3c
             </div>
 
             <h3

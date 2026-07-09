@@ -150,6 +150,13 @@ All five are read-only projections of GUI state.
 - `session copy [--target] [--window W]` — returns `result.text` with the session's current selection.
   Does NOT touch the system clipboard (pipe the returned text into another `session type`). No/empty
   selection → `no selection` error. Selection is readable on any realized session regardless of focus.
+- `session paste [--target] [--window W]` — paste the system clipboard (`NSPasteboard.general`) into the
+  session's main pane, the socket analogue of ⌘V / Edit ▸ Paste. Runs libghostty's `paste_from_clipboard`
+  (bracketed paste, no prompt), so the text lands at the prompt without auto-submitting. Read it back with
+  `session text`. A never-shown session → `session not realized`.
+- `session select-all [--target] [--window W]` — select the session's entire terminal buffer (main pane),
+  the socket analogue of ⌘A / Edit ▸ Select All (libghostty `select_all`). Read the resulting selection
+  back with `session copy`. A never-shown session → `session not realized`.
 - `session text [--all] [--lines N] [--pane left|right|scratch] [--target] [--window W]` — returns `result.text`
   with the session's terminal buffer as PLAIN TEXT (no ANSI/color). By default it reads the VISIBLE
   SCREEN of the on-screen pane. `--all` reads the whole buffer including scrollback; `--lines N` reads the

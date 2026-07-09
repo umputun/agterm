@@ -288,6 +288,20 @@ sel=$(agtermctl session copy --json | jq -r '.result.text')
 agtermctl session type "$sel" --target "$other"
 ```
 
+`session select-all` selects the whole buffer, then `session copy` reads it back (or use `session text --all`):
+
+```bash
+agtermctl session select-all --target "$other"
+buf=$(agtermctl session copy --target "$other" --json | jq -r '.result.text')
+```
+
+`session paste` pastes the system clipboard into a session — the socket analogue of ⌘V:
+
+```bash
+printf 'deploy staging' | pbcopy
+agtermctl session paste --target "$other"   # lands at the prompt, not submitted
+```
+
 ## Read a session's buffer as text
 
 `session text` returns the terminal buffer as plain text in `result.text` — the visible screen by

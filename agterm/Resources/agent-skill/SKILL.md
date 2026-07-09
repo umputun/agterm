@@ -14,7 +14,7 @@ description: >
   feature request / question as a GitHub Discussion.
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
-  session.split, session.scratch, session.focus, session.resize, session.go, session.copy, session.text, session.search, session.status,
+  session.split, session.scratch, session.focus, session.resize, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
   session.flag, session.seen, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
   theme.set, theme.list, select theme, edit keymap, show an image, display an image inline, show-image,
@@ -113,7 +113,7 @@ you work. For any session-scoped command meant to act on *this* session — `ove
 `type`, `text`, `background`, `status`, `copy`, … — pass `--target "$AGTERM_SESSION_ID"`. Omit it and
 you open overlays / type into whatever the user has selected, not your own session.
 
-## Command summary (55 commands)
+## Command summary (57 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -161,6 +161,10 @@ focused from the tree workspace node's `focused` flag).
   with `--pane scratch`. Pass `--target "$AGTERM_SESSION_ID"` to type into YOUR session, not the user's
   active one (see Addressing).
 - `copy` — print the session's selected text (does NOT touch the system clipboard).
+- `paste` — paste the system clipboard into the session (the socket analogue of ⌘V; read it back with
+  `session text`).
+- `select-all` — select the session's entire terminal buffer (the socket analogue of ⌘A; read the
+  selection back with `session copy`).
 - `text [--all] [--lines N] [--pane left|right|scratch]` — print the session buffer as plain text. Default
   is the visible screen of the focused pane; `--pane scratch` reads the scratch terminal even while hidden;
   `--all` adds scrollback; `--lines N` keeps the last N lines.
