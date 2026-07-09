@@ -82,12 +82,28 @@ final class EditMenuUITests: ControlAPITestCase {
     // `validateMenuItem`. The invariant it would have pinned lives in the code instead: `hasPasteboardText`
     // must mirror `pasteboardText`'s branches. See the Control API rule.
 
-    // Cut/Undo/Redo are deliberately NOT implemented on the surface, so AppKit leaves them disabled for the
-    // terminal. (They still work in a focused text field, whose field editor implements them.)
-    func testEditMenuLeavesCutAndUndoDisabledForTerminal() throws {
+    // Cut is deliberately NOT implemented on the surface, so AppKit leaves it disabled for the terminal.
+    // (It still works in a focused text field, whose field editor implements `cut:`.) It cannot be removed
+    // on its own: it shares SwiftUI's `.pasteboard` group with Copy/Paste/Select All.
+    func testEditMenuLeavesCutDisabledForTerminal() throws {
         withEditMenu {
             XCTAssertFalse(app.menuItems["Cut"].isEnabled, "Cut should stay disabled for the terminal")
-            XCTAssertFalse(app.menuItems["Undo"].isEnabled, "Undo should stay disabled for the terminal")
         }
+    }
+
+    // Undo/Redo are removed outright (`CommandGroup(replacing: .undoRedo) {}`): agterm has no undo manager,
+    // and their ⌘Z is already owned by File ▸ Reopen Closed Item. Asserting NON-EXISTENCE rather than
+    // `isEnabled == false` matters — `isEnabled` on a missing element is also false, so a disabled-check
+    // would keep passing if the items ever came back.
+    func testEditMenuHasNoUndoOrRedoItems() throws {
+        withEditMenu {
+            XCTAssertFalse(app.menuItems["Undo"].exists, "Undo should be gone from the Edit menu")
+            XCTAssertFalse(app.menuItems["Redo"].exists, "Redo should be gone from the Edit menu")
+        }
+        // ⌘Z belongs to File ▸ Reopen Closed Item, and nothing in Edit competes for it any more.
+        app.menuBars.menuBarItems["File"].click()
+        XCTAssertTrue(app.menuItems["Reopen Closed Item"].waitForExistence(timeout: 5),
+                      "File should still own the ⌘Z action")
+        app.typeKey(.escape, modifierFlags: [])
     }
 }

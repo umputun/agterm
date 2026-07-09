@@ -420,8 +420,19 @@ paths:
   to the terminal when it holds first responder — Copy enabled on `ghostty_surface_has_selection`, Paste
   on `GhosttyCallbacks.hasPasteboardText()`, Select All on a realized surface (all three also require
   the surface, since `performBindingAction` no-ops without one) — while a focused text field (rename/palette/Settings)
-  keeps its own editing (its field editor wins the responder chain), and Cut/Undo/Redo stay disabled for
-  the terminal (deliberately NOT implemented) yet work in text fields.
+  keeps its own editing (its field editor wins the responder chain), and Cut stays disabled for the terminal
+  (deliberately NOT implemented) yet works in text fields.
+  **Cut cannot be dropped on its own** — SwiftUI puts Cut/Copy/Paste/Delete/Select All in ONE `.pasteboard`
+  `CommandGroup`, and replacing that group is what would take ⌘C/⌘V/⌘A away from the rename/palette/Settings
+  fields.
+  **Undo/Redo ARE dropped** (`CommandGroup(replacing: .undoRedo) {}` in `agtermApp+Menus.swift`): they are
+  their own group, agterm registers no `NSUndoManager`, and their advertised ⌘Z is already owned by File ▸
+  Reopen Closed Item (`BuiltinAction.undoClose`), whose menu precedes Edit and wins the key-equivalent search —
+  so Edit ▸ Undo could only ever be CLICKED, never invoked by its own shortcut.
+  AppKit did enable it for the sidebar's inline rename field (whose field editor supplies an undo manager),
+  but a permanently-greyed item that duplicates another menu's shortcut for one narrow case is worse than no
+  item; `EditMenuUITests.testEditMenuHasNoUndoOrRedoItems` asserts NON-EXISTENCE (an `isEnabled == false`
+  check would pass vacuously on a missing element).
   **Paste MUST validate with the same branches the paste path reads**, and must agree with it in BOTH
   directions.
   Two ways to get this wrong, both found in review:

@@ -62,6 +62,15 @@ extension agtermApp {
             CommandGroup(replacing: .appInfo) {
                 Button("About Agterm") { showAboutPanel() }
             }
+            // Edit: drop SwiftUI's stock Undo/Redo. agterm registers no NSUndoManager, so they are dead for
+            // the terminal, and the ⌘Z they advertise is already owned by File ▸ Reopen Closed Item
+            // (`BuiltinAction.undoClose`), whose menu precedes Edit and wins the key-equivalent search — the
+            // Undo item could only ever be CLICKED, never invoked by its own shortcut. The one place AppKit
+            // enabled it was the sidebar's inline rename field (its field editor supplies an undo manager),
+            // too narrow to justify a permanently-greyed item that duplicates another menu's shortcut.
+            // The rest of the Edit menu stays stock: Cut/Copy/Paste/Delete/Select All share the `.pasteboard`
+            // group, and replacing that would take ⌘C/⌘V/⌘A away from the text fields that need them.
+            CommandGroup(replacing: .undoRedo) {}
             // File: replace the default "New" group with all of agterm's creation/management actions,
             // grouped by entity into three sections — Window, then Workspace, then Session. The
             // system Close / Close All commands stay below in their own group.

@@ -66,9 +66,10 @@ The **Edit menu** owns them first: its stock Copy/Paste/Select All items carry �
 equivalents, which AppKit matches against the character the layout produces. An enabled item consumes the
 key before the terminal sees it. The items enable only when the terminal can service them — Copy needs a
 selection, Paste needs something pasteable on the clipboard (text, or a file/web URL, which pastes as a
-shell-escaped path), Select All needs a live surface. Cut/Undo/Redo stay disabled for the terminal (they
-still work in a text field, such as the inline rename or a palette's search box). Because these are
-standard menu shortcuts, ⌘C/⌘V/⌘A are NOT rebindable through `ghostty.conf`.
+shell-escaped path), Select All needs a live surface. Cut stays disabled for the terminal (it still works in
+a text field, such as the inline rename or a palette's search box). Undo and Redo are not in the menu at all:
+agterm has no undo, and ⌘Z belongs to File ▸ Reopen Closed Item. Because these are standard menu shortcuts,
+⌘C/⌘V/⌘A are NOT rebindable through `ghostty.conf`.
 
 agterm's bundled ghostty defaults are the **fallback**, binding all three to the physical key POSITIONS
 (`super+key_c`/`super+key_v`/`super+key_a`), matched by keycode regardless of the character the layout

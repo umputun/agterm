@@ -450,9 +450,10 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
 /// enabling routes them to the terminal when it holds first responder — while a focused text field (inline
 /// rename, palette search, Settings) keeps its own `copy:`/`paste:`/`selectAll:` because its field editor
 /// wins the responder chain. This is why agterm keeps the standard SwiftUI Edit menu instead of a custom
-/// Commands group. Each action runs the same libghostty binding ⌘C/⌘V/⌘A use. Cut/Undo/Redo are
-/// deliberately NOT implemented here, so those items stay disabled for the terminal (nothing to cut or undo)
-/// yet still work in text fields.
+/// Commands group. Each action runs the same libghostty binding ⌘C/⌘V/⌘A use. Cut is deliberately NOT
+/// implemented here, so it stays disabled for the terminal (nothing to cut) yet still works in text fields;
+/// it cannot be dropped on its own, sharing SwiftUI's `.pasteboard` group with Copy/Paste/Select All.
+/// Undo/Redo are removed from the menu entirely (`CommandGroup(replacing: .undoRedo)` in `agtermApp+Menus`).
 extension GhosttySurfaceView: NSMenuItemValidation {
     @objc func copy(_ sender: Any?) { performBindingAction("copy_to_clipboard") }
 
@@ -464,7 +465,7 @@ extension GhosttySurfaceView: NSMenuItemValidation {
     /// Gate the three items on real availability: Copy needs a selection, Paste needs something the paste
     /// path can actually insert, Select All needs a realized surface. All three require a realized surface,
     /// since `performBindingAction` no-ops without one. Items we don't own enable by default (AppKit only
-    /// consults this on the responder that implements the action, so `cut:`/`undo:`/`redo:` never reach it).
+    /// consults this on the responder that implements the action, so `cut:` never reaches it).
     ///
     /// Paste asks `GhosttyCallbacks.hasPasteboardText()`, which runs the same branches as `pasteboardText` —
     /// the SAME reader `paste_from_clipboard` ends up using — rather than probing for a plain string. The
