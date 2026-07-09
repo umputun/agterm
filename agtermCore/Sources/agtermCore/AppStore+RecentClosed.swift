@@ -48,7 +48,7 @@ extension AppStore {
 
     private func restoreOrSelectExistingRecentSession(_ recent: RecentClosedSession) -> Bool {
         if let pendingID = pendingCloseID(containingSessionID: recent.snapshot.id) {
-            return undoPendingClose(pendingID)
+            return undoPendingClose(pendingID, selecting: recent.snapshot.id)
         }
         guard session(withID: recent.snapshot.id) != nil else { return false }
         selectSession(recent.snapshot.id)

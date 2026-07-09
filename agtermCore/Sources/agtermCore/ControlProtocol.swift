@@ -496,6 +496,9 @@ public struct ControlResult: Codable, Sendable, Equatable {
     /// attribution), and the total match count for `session.search` (whose "N of M" display string rides
     /// in `text`).
     public var count: Int?
+    /// Number of sessions actually changed by a batch mutation (`session.close` or `session.move`).
+    /// Kept separate from `count`, whose CLI rendering is specific to diagnostics/search results.
+    public var affected: Int?
     /// The current/affected theme name for `theme.set` (echo) and `theme.list` (current); nil =
     /// ghostty's built-in colors ("default ghostty"), distinct from the seeded `agterm` app default.
     public var theme: String?
@@ -514,6 +517,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
+                affected: Int? = nil,
                 theme: String? = nil, themes: [String]? = nil, ratio: Double? = nil,
                 sync: Bool? = nil, light: String? = nil, dark: String? = nil) {
         self.id = id
@@ -522,6 +526,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
         self.windows = windows
         self.exitCode = exitCode
         self.count = count
+        self.affected = affected
         self.theme = theme
         self.themes = themes
         self.ratio = ratio

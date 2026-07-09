@@ -130,7 +130,7 @@ struct CommandsTests {
     }
 
     @Test func sessionCloseMultipleTargets() throws {
-        let expected = ControlRequest(cmd: .sessionClose, target: "active", args: ControlArgs(targets: ["a", "b"]))
+        let expected = ControlRequest(cmd: .sessionClose, target: "a", args: ControlArgs(targets: ["a", "b"]))
         #expect(try request(["session", "close", "--target", "a", "--target", "b"]) == expected)
     }
 
@@ -158,7 +158,7 @@ struct CommandsTests {
     }
 
     @Test func sessionMoveMultipleTargetsToWorkspace() throws {
-        let expected = ControlRequest(cmd: .sessionMove, target: "active",
+        let expected = ControlRequest(cmd: .sessionMove, target: "s1",
                                       args: ControlArgs(targets: ["s1", "s2"], workspace: "ws2"))
         #expect(try request(["session", "move", "ws2", "--target", "s1", "--target", "s2"]) == expected)
     }
@@ -189,7 +189,7 @@ struct CommandsTests {
     }
 
     @Test func sessionMoveAfterMultipleTargets() throws {
-        let expected = ControlRequest(cmd: .sessionMove, target: "active",
+        let expected = ControlRequest(cmd: .sessionMove, target: "s1",
                                       args: ControlArgs(targets: ["s1", "s2"], after: "s3"))
         #expect(try request(["session", "move", "--after", "s3", "--target", "s1", "--target", "s2"]) == expected)
     }

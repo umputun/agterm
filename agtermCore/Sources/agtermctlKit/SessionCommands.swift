@@ -69,7 +69,7 @@ struct Session: ParsableCommand {
         func makeRequest() throws -> ControlRequest {
             let batchArgs = target.batchTargets.map { ControlArgs(targets: $0) }
             let args = options.withWindow(batchArgs)
-            return ControlRequest(cmd: .sessionClose, target: target.singleTarget ?? "active", args: args)
+            return ControlRequest(cmd: .sessionClose, target: target.targets.first ?? "active", args: args)
         }
     }
 
@@ -155,7 +155,7 @@ struct Session: ParsableCommand {
             }
             var withTargets = args
             withTargets.targets = target.batchTargets
-            return ControlRequest(cmd: .sessionMove, target: target.singleTarget ?? "active",
+            return ControlRequest(cmd: .sessionMove, target: target.targets.first ?? "active",
                                   args: options.withWindow(withTargets))
         }
     }

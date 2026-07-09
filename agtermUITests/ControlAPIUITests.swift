@@ -250,13 +250,38 @@ final class ControlAPIUITests: ControlAPITestCase {
 
         let closed = try sendCommand(#"{"cmd":"session.close","args":{"targets":["\#(secondID.uuidString)","\#(thirdID.uuidString)"]}}"#)
         XCTAssertEqual(closed["ok"] as? Bool, true, "batch session.close should succeed: \(closed)")
-        XCTAssertEqual((closed["result"] as? [String: Any])?["count"] as? Int, 2, "batch close should report the closed count")
+        XCTAssertEqual((closed["result"] as? [String: Any])?["affected"] as? Int, 2,
+                       "batch close should report affected sessions separately from diagnostic counts")
+        XCTAssertTrue(pollSessionCount(3, timeout: 1), "grace-enabled close must defer the persisted removal")
 
         let tree = try sendCommand(#"{"cmd":"tree"}"#)
         let node = try XCTUnwrap(sessionNode(tree, id: firstID.uuidString), "the first session should remain")
         XCTAssertEqual(node["id"] as? String, firstID.uuidString)
         XCTAssertNil(sessionNode(tree, id: secondID.uuidString), "the second session should be hidden by the grouped close")
         XCTAssertNil(sessionNode(tree, id: thirdID.uuidString), "the third session should be hidden by the grouped close")
+    }
+
+    // The control surface follows the GUI's grace setting. With grace disabled, batch close tears down and
+    // persists immediately instead of leaving the pre-close snapshot on disk for the undo window.
+    func testSessionCloseMultipleTargetsHonorsDisabledGraceUndo() throws {
+        let firstID = UUID(uuidString: "AB100000-0000-0000-0000-000000000001")!
+        let secondID = UUID(uuidString: "AB200000-0000-0000-0000-000000000002")!
+        let thirdID = UUID(uuidString: "AB300000-0000-0000-0000-000000000003")!
+        let snapshot = """
+        {"version":1,"selectedSessionID":"\(firstID.uuidString)","workspaces":[\
+        {"id":"\(UUID().uuidString)","name":"workspace 1","sessions":[\
+        {"id":"\(firstID.uuidString)","customName":null,"cwd":"\(NSHomeDirectory())"},\
+        {"id":"\(secondID.uuidString)","customName":null,"cwd":"\(NSHomeDirectory())"},\
+        {"id":"\(thirdID.uuidString)","customName":null,"cwd":"\(NSHomeDirectory())"}]}]}
+        """
+        try relaunch(withSnapshot: snapshot)
+        try relaunch(withSettings: #"{"closeGraceUndoEnabled":false}"#)
+
+        let closed = try sendCommand(#"{"cmd":"session.close","args":{"targets":["\#(secondID.uuidString)","\#(thirdID.uuidString)"]}}"#)
+
+        XCTAssertEqual(closed["ok"] as? Bool, true, "immediate batch session.close should succeed: \(closed)")
+        XCTAssertEqual((closed["result"] as? [String: Any])?["affected"] as? Int, 2)
+        XCTAssertTrue(pollSessionCount(1, timeout: 2), "grace-disabled close must persist both removals immediately")
     }
 
     // session.new --command runs the command AS the session's process (no shell echo): create a session
@@ -1012,9 +1037,43 @@ final class ControlAPIUITests: ControlAPITestCase {
 
         let moved = try sendCommand(#"{"cmd":"session.move","args":{"targets":["\#(firstID.uuidString)","\#(secondID.uuidString)"],"before":"\#(fifthID.uuidString)"}}"#)
         XCTAssertEqual(moved["ok"] as? Bool, true, "batch session.move --before should succeed: \(moved)")
-        XCTAssertEqual((moved["result"] as? [String: Any])?["count"] as? Int, 2, "batch move should report the moved count")
+        XCTAssertEqual((moved["result"] as? [String: Any])?["affected"] as? Int, 2,
+                       "batch move should report the sessions actually moved")
         XCTAssertTrue(pollSessionOrder([thirdID, fourthID, firstID, secondID, fifthID], timeout: 10),
                       "the batch should land before fifth after removing both moved rows first")
+    }
+
+    // A destination member in a multi-target request stays in place and is not counted. A one-element
+    // args.targets request remains wire-equivalent to singular move and appends within the same workspace.
+    func testSessionMoveBatchReportsActualAffectedAndNormalizesOneTarget() throws {
+        let wsOneID = UUID(uuidString: "BC100000-0000-0000-0000-000000000001")!
+        let wsTwoID = UUID(uuidString: "BC200000-0000-0000-0000-000000000002")!
+        let aID = UUID(uuidString: "BC300000-0000-0000-0000-000000000003")!
+        let bID = UUID(uuidString: "BC400000-0000-0000-0000-000000000004")!
+        let cID = UUID(uuidString: "BC500000-0000-0000-0000-000000000005")!
+        let snapshot = """
+        {"version":1,"selectedSessionID":"\(aID.uuidString)","workspaces":[\
+        {"id":"\(wsOneID.uuidString)","name":"one","sessions":[\
+        {"id":"\(aID.uuidString)","customName":null,"cwd":"\(NSHomeDirectory())"}]},\
+        {"id":"\(wsTwoID.uuidString)","name":"two","sessions":[\
+        {"id":"\(bID.uuidString)","customName":null,"cwd":"\(NSHomeDirectory())"},\
+        {"id":"\(cID.uuidString)","customName":null,"cwd":"\(NSHomeDirectory())"}]}]}
+        """
+        try relaunch(withSnapshot: snapshot)
+
+        let batch = try sendCommand(#"{"cmd":"session.move","args":{"targets":["\#(aID.uuidString)","\#(bID.uuidString)"],"workspace":"\#(wsTwoID.uuidString)"}}"#)
+        XCTAssertEqual(batch["ok"] as? Bool, true, "mixed batch move should succeed: \(batch)")
+        XCTAssertEqual((batch["result"] as? [String: Any])?["affected"] as? Int, 1,
+                       "only the cross-workspace session should count as affected")
+        XCTAssertTrue(pollSessionOrder(inWorkspace: 1, equals: [bID, cID, aID], timeout: 10))
+
+        let oneTarget = try sendCommand(#"{"cmd":"session.move","args":{"targets":["\#(bID.uuidString)"],"workspace":"\#(wsTwoID.uuidString)"}}"#)
+        XCTAssertEqual(oneTarget["ok"] as? Bool, true, "one-target array move should succeed: \(oneTarget)")
+        XCTAssertEqual((oneTarget["result"] as? [String: Any])?["id"] as? String, bID.uuidString,
+                       "one-target args.targets should return the singular response shape")
+        XCTAssertNil((oneTarget["result"] as? [String: Any])?["affected"])
+        XCTAssertTrue(pollSessionOrder(inWorkspace: 1, equals: [cID, aID, bID], timeout: 10),
+                      "one-target args.targets should append like singular session.move")
     }
 
     // session.move --after with an anchor in ANOTHER workspace relocates the session to the anchor's

@@ -411,6 +411,27 @@ struct ControlDispatcherTests {
         ])
     }
 
+    @Test func sessionMoveNormalizesOneArrayTargetToSingularAction() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let workspace = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            args: ControlArgs(targets: ["a"], workspace: "dest", window: "win")
+        ))
+        let after = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            args: ControlArgs(targets: ["b"], after: "anchor")
+        ))
+
+        #expect(workspace == ControlResponse(ok: true))
+        #expect(after == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .sessionMove(target: "a", window: "win", .workspace("dest")),
+            .sessionMove(target: "b", window: nil, .place(anchor: "anchor", after: true)),
+        ])
+    }
+
     @Test func sessionMoveRejectsInvalidForms() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

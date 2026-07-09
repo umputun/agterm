@@ -214,7 +214,8 @@ final class AppActions {
     /// Returns whether to proceed with the close: true immediately (no prompt) when the setting is off, or
     /// under an XCUITest launch (a modal would hang the test, like the clear-flagged/quit confirms).
     private func confirmCloseSession(_ session: Session) -> Bool {
-        guard settingsModel?.settings.confirmCloseSession == true, !ContentView.isUITestLaunch else { return true }
+        guard settingsModel?.settings.confirmCloseSession == true,
+              !ContentView.shouldBypassCloseConfirmation else { return true }
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Close “\(session.displayName)”?"
@@ -227,7 +228,8 @@ final class AppActions {
     }
 
     private func confirmCloseSessions(_ sessions: [Session]) -> Bool {
-        guard settingsModel?.settings.confirmCloseSession == true, !ContentView.isUITestLaunch else { return true }
+        guard settingsModel?.settings.confirmCloseSession == true,
+              !ContentView.shouldBypassCloseConfirmation else { return true }
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Close \(sessions.count) Sessions?"

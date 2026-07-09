@@ -37,7 +37,7 @@ public final class AppStore {
 
     /// Transient sidebar multi-selection. Not persisted: it is UI command state, while
     /// `selectedSessionID` remains the durable active terminal target.
-    public var sidebarSelection = SidebarSelectionController()
+    private var sidebarSelectionRaw: [UUID] = []
 
     /// Whether this window's sidebar is shown. Per-window UI state, persisted in `Snapshot` (restored on
     /// relaunch); the custom split owns visibility, so the toolbar button, the View menu item, the action
@@ -443,17 +443,21 @@ public final class AppStore {
         save()
     }
 
-    /// Moves multiple selected sessions in their current tree order. With `index == nil`, this is the
-    /// context-menu move: append cross-workspace sessions and leave sessions already in the target in
-    /// place. With an explicit `index`, this is a drag drop: remove every dragged session first, then
-    /// insert the dragged block at that post-removal target index.
-    public func moveSessions(_ sessionIDs: [UUID], toWorkspace targetID: UUID, at index: Int? = nil) {
-        guard workspaces.contains(where: { $0.id == targetID }) else { return }
+    /// Moves selected sessions in their current tree order. With `index == nil`, a multi-session context
+    /// move appends cross-workspace sessions and leaves sessions already in the target in place; a
+    /// one-session call matches `moveSession` and appends even within that workspace. With an explicit
+    /// `index`, this is a drag drop: remove every dragged session first, then insert the dragged block at
+    /// that post-removal target index. Returns the number of sessions actually moved.
+    @discardableResult
+    public func moveSessions(_ sessionIDs: [UUID], toWorkspace targetID: UUID, at index: Int? = nil) -> Int {
+        guard workspaces.contains(where: { $0.id == targetID }) else { return 0 }
         var movingIDs = orderedSessionIDs(matching: Set(sessionIDs))
-        if index == nil {
+        // A one-element batch is wire-equivalent to `moveSession`: even within the destination
+        // workspace it moves to the end. Multi-selection context moves leave existing members in place.
+        if index == nil, movingIDs.count > 1 {
             movingIDs = movingIDs.filter { workspace(forSession: $0)?.id != targetID }
         }
-        guard !movingIDs.isEmpty else { return }
+        guard !movingIDs.isEmpty else { return 0 }
 
         var moving: [Session] = []
         for id in movingIDs {
@@ -462,7 +466,7 @@ public final class AppStore {
         }
         guard let targetIndex = workspaces.firstIndex(where: { $0.id == targetID }), !moving.isEmpty else {
             pruneSidebarSelection()
-            return
+            return 0
         }
         let destination = max(0, min(index ?? workspaces[targetIndex].sessions.count,
                                      workspaces[targetIndex].sessions.count))
@@ -470,6 +474,7 @@ public final class AppStore {
         if let selectedSessionID, movingIDs.contains(selectedSessionID) { autoUnfocusIfOutsideFocus(selectedSessionID) }
         pruneSidebarSelection()
         save()
+        return moving.count
     }
 
     /// Reorders a session one relative step within its own workspace (`up`/`down`/`top`/`bottom`),
@@ -896,12 +901,12 @@ public final class AppStore {
 
     /// Replaces the transient sidebar selection with ids from the current visible sidebar projection.
     public func setSidebarSelection(_ ids: [UUID]) {
-        sidebarSelection.setSelection(ids, visibleSessionIDs: visibleSidebarSessionIDs)
+        sidebarSelectionRaw = ids
     }
 
     /// Replaces the transient sidebar selection with a single active row.
     public func replaceSidebarSelection(with sessionID: UUID?) {
-        sidebarSelection.replace(with: sessionID, visibleSessionIDs: visibleSidebarSessionIDs)
+        sidebarSelectionRaw = sessionID.map { [$0] } ?? []
     }
 
     /// Context-menu target resolution for sidebar session commands.
@@ -916,14 +921,14 @@ public final class AppStore {
 
     /// The selected session ids that are still visible in the current sidebar mode/focus.
     public var sidebarSelectionIDs: [UUID] {
-        let normalized = SidebarSelectionController.normalized(sidebarSelection.selectedSessionIDs,
-                                                               visibleSessionIDs: visibleSidebarSessionIDs)
+        let requested = Set(sidebarSelectionRaw)
+        let normalized = visibleSidebarSessionIDs.filter { requested.contains($0) }
         guard let selectedSessionID else { return [] }
         return normalized.contains(selectedSessionID) ? normalized : []
     }
 
     func pruneSidebarSelection() {
-        sidebarSelection.prune(visibleSessionIDs: visibleSidebarSessionIDs)
+        sidebarSelectionRaw = sidebarSelectionIDs
     }
 
     private var visibleSidebarSessionIDs: [UUID] {

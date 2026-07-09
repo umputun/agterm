@@ -76,7 +76,6 @@ struct BatchTargetOptions: ParsableArguments {
     @Option(name: .customLong("target"), help: "Target session id, prefix, or 'active'. Repeat for a batch.")
     var targets: [String] = []
 
-    var singleTarget: String? { targets.count == 1 ? targets[0] : nil }
     var batchTargets: [String]? { targets.count > 1 ? targets : nil }
 }
 

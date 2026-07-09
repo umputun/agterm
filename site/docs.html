@@ -1016,7 +1016,11 @@
                 >--target</span
               >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--workspace</span> take an id, a
               prefix, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> — never a
-              name. Mutating commands print the affected id; add
+              name. Mutating commands normally print the affected id; batch
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session close</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session move</span> accept repeated
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--target</span> options and print the
+              number of sessions actually changed. Add
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--json</span> for the raw response,
               or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--socket PATH</span> to override
               the socket. The exit code is zero on success, non-zero on error.

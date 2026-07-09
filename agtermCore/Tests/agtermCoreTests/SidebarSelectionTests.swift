@@ -116,6 +116,8 @@ struct SidebarSelectionTests {
         store.clearFlags()
 
         #expect(store.sidebarSelectionIDs == [])
+        store.setFlag(true, forSessions: [a.id, b.id])
+        #expect(store.sidebarSelectionIDs == [], "cleared rows must not re-enter selection when visible again")
     }
 
     @Test func batchFlagSetsEverySelectedSessionInOneCommand() {
@@ -138,10 +140,36 @@ struct SidebarSelectionTests {
         let b = try! #require(store.addSession(toWorkspace: ws1.id, cwd: "/b"))
         let c = try! #require(store.addSession(toWorkspace: ws2.id, cwd: "/c"))
 
-        store.moveSessions([c.id, b.id, a.id], toWorkspace: ws2.id)
+        let affected = store.moveSessions([c.id, b.id, a.id], toWorkspace: ws2.id)
 
+        #expect(affected == 2)
         #expect(store.workspaces[0].sessions.map(\.id) == [])
         #expect(store.workspaces[1].sessions.map(\.id) == [c.id, a.id, b.id])
+    }
+
+    @Test func oneElementBatchMoveWithinWorkspaceMatchesSingularAppend() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        let c = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
+
+        let affected = store.moveSessions([a.id], toWorkspace: ws.id)
+
+        #expect(affected == 1)
+        #expect(store.workspaces[0].sessions.map(\.id) == [b.id, c.id, a.id])
+    }
+
+    @Test func multiElementBatchMoveAlreadyInTargetReportsZeroAndKeepsOrder() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+
+        let affected = store.moveSessions([a.id, b.id], toWorkspace: ws.id)
+
+        #expect(affected == 0)
+        #expect(store.workspaces[0].sessions.map(\.id) == [a.id, b.id])
     }
 
     @Test func batchMoveInsertsCrossWorkspaceSessionsAtDropIndex() {

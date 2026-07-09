@@ -936,6 +936,14 @@ struct ControlProtocolTests {
         #expect(decoded.result?.count == 3)
     }
 
+    @Test func responseOkWithAffectedRoundTrips() throws {
+        let response = ControlResponse(ok: true, result: ControlResult(affected: 2))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.affected == 2)
+        #expect(decoded.result?.count == nil)
+    }
+
     @Test func themeSetRequestRoundTrips() throws {
         let request = ControlRequest(cmd: .themeSet, args: ControlArgs(name: "Dracula"))
         let decoded = try roundTrip(request)

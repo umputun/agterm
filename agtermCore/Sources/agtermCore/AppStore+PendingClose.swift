@@ -189,14 +189,14 @@ extension AppStore {
 
     /// Undo the latest pending close, or a specific pending-close record when `id` is supplied.
     @discardableResult
-    public func undoPendingClose(_ id: UUID? = nil) -> Bool {
+    public func undoPendingClose(_ id: UUID? = nil, selecting sessionID: UUID? = nil) -> Bool {
         let closeID = id ?? pendingCloseSummary?.id
         guard let closeID, let record = pendingCloseRecords.removeValue(forKey: closeID) else { return false }
         pendingCloseTasks.removeValue(forKey: closeID)?.cancel()
         pendingCloseOrder.removeAll { $0 == closeID }
         switch record {
         case .sessions(let close):
-            restorePendingSessions(close)
+            restorePendingSessions(close, selecting: sessionID)
             for session in close.sessions { removeRecentClosedItem(session.recentID) }
         case .workspace(let close):
             restorePendingWorkspace(close)
@@ -325,11 +325,12 @@ extension AppStore {
         workspaces[workspaceIndex].sessions.insert(close.session, at: insertAt)
     }
 
-    private func restorePendingSessions(_ close: PendingSessionsClose) {
+    private func restorePendingSessions(_ close: PendingSessionsClose, selecting requestedSessionID: UUID?) {
         for session in close.sessions {
             restorePendingSession(session)
         }
-        let target = close.selectedSessionID.flatMap { id in close.sessions.contains { $0.session.id == id } ? id : nil }
+        let target = requestedSessionID.flatMap { id in close.sessions.contains { $0.session.id == id } ? id : nil }
+            ?? close.selectedSessionID.flatMap { id in close.sessions.contains { $0.session.id == id } ? id : nil }
             ?? close.sessions.first?.session.id
         if let target {
             selectedSessionID = target

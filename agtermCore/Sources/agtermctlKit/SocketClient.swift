@@ -142,6 +142,9 @@ struct SocketClient {
         if let exitCode = response.result?.exitCode {
             return "exit \(exitCode)"
         }
+        if let affected = response.result?.affected {
+            return affected == 1 ? "1 session" : "\(affected) sessions"
+        }
         if let count = response.result?.count {
             // keymap.reload reports its parse-diagnostic count; 0 reads as a clean reload.
             return count == 0 ? "ok" : "\(count) diagnostic(s)"

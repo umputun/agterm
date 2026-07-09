@@ -89,8 +89,8 @@ paths:
   so UI tests match `edit-field` by identifier across element types.
 - **Sidebar multi-selection.**
   `AppStore.selectedSessionID` remains the durable active terminal. The broader sidebar selection is
-  transient host-free state in `SidebarSelectionController`, always normalized to the current visible
-  session order (`visibleSidebarSessionIDs`) so batch actions are deterministic in tree and flagged modes.
+  a private transient array in host-free `AppStore`, exposed through `sidebarSelectionIDs` normalized to
+  the current visible session order so batch actions are deterministic in tree and flagged modes.
   AppKit Shift-click and Command-click update the outline selection; `outlineViewSelectionDidChange`
   mirrors it through `AppStore.setSidebarSelection(_:)`. `allowsEmptySelection` stays TRUE because a
   focused workspace can intentionally hide the active session and `syncSelection` must be able to

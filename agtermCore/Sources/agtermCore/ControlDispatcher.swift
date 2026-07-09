@@ -223,10 +223,7 @@ public struct ControlDispatcher {
                 }
                 let move = ControlSessionMove.place(anchor: anchor, after: args?.after != nil)
                 if let targets = args?.targets {
-                    guard !targets.isEmpty else {
-                        return ControlResponse(ok: false, error: "session.move requires at least one --target")
-                    }
-                    return actions.moveSessions(targets, window: args?.window, move: move)
+                    return dispatchSessionMove(targets: targets, window: args?.window, move: move)
                 }
                 return actions.moveSession(request.target, window: args?.window, move: move)
             }
@@ -247,10 +244,7 @@ public struct ControlDispatcher {
             }
             let move = ControlSessionMove.workspace(workspace)
             if let targets = args?.targets {
-                guard !targets.isEmpty else {
-                    return ControlResponse(ok: false, error: "session.move requires at least one --target")
-                }
-                return actions.moveSessions(targets, window: args?.window, move: move)
+                return dispatchSessionMove(targets: targets, window: args?.window, move: move)
             }
             return actions.moveSession(request.target, window: args?.window, move: move)
         case .sessionFlag:
@@ -278,6 +272,16 @@ public struct ControlDispatcher {
         default:
             preconditionFailure("unexpected session command: \(request.cmd.rawValue)")
         }
+    }
+
+    private func dispatchSessionMove(targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse {
+        guard let first = targets.first else {
+            return ControlResponse(ok: false, error: "session.move requires at least one --target")
+        }
+        if targets.count == 1 {
+            return actions.moveSession(first, window: window, move: move)
+        }
+        return actions.moveSessions(targets, window: window, move: move)
     }
 
     private func dispatchWorkspaceCommand(_ request: ControlRequest) -> ControlResponse {

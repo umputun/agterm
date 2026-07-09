@@ -9,12 +9,14 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
   bound; agtermctl resolves the same rendezvous: `<AGTERM_STATE_DIR>/agterm.sock`, else
   `<$HOME>/Library/Application Support/agterm/agterm.sock`. Passing `--socket "$AGTERM_SOCKET"` is the
   safe explicit form.
-- **`--json`**: prints the raw response object. Without it, mutations print `ok` and `tree`/`window
-  list` print a human listing. Use `--json` when you need to read ids or values back.
+- **`--json`**: prints the raw response object. Without it, ordinary mutations print `ok`, batch
+  close/move prints the affected session count, and `tree`/`window list` print a human listing. Use
+  `--json` when you need to read ids or values back.
 - **Response shape**: `{"ok": true, "result": {…}}` or `{"ok": false, "error": "<message>"}`.
   `result` carries one of: `id` (affected/new session/workspace/window), `text` (session copy/text),
-  `exitCode` (overlay result), `count` (keymap diagnostics), `tree` (the tree), `windows` (window
-  list). The process exit code is non-zero when `ok` is false.
+  `exitCode` (overlay result), `count` (diagnostics/search), `affected` (sessions actually changed by a
+  batch close/move), `tree` (the tree), `windows` (window list). The process exit code is non-zero when
+  `ok` is false.
 - **Options go after the subcommand**: `agtermctl session type "ls" --target active`, never before it.
 
 ## Addressing
@@ -122,8 +124,8 @@ All five are read-only projections of GUI state.
   already picks the workspace). `agtermctl session new --after active` is the headline case: create
   right after the current session in one round-trip.
 - `session close [--target T ...] [--window W]` — close one session, or repeat `--target` to close
-  several sessions in the same window/store. A repeated-target close uses the same grace-period path as
-  GUI batch close: one undo/reopen record and `result.count`.
+  several sessions in the same window/store. Batch close honors the GUI grace-undo setting: one grouped
+  undo/reopen record when enabled, immediate close when disabled. Returns `result.affected`.
 - `session select [--target] [--window W]`.
 - `session rename <name> [--target] [--window W]`.
 - `session go --to next|prev|first|last|next-attention|prev-attention [--window W]` — move the
@@ -142,7 +144,8 @@ All five are read-only projections of GUI state.
   and with a destination workspace (the anchor already names the workspace).
   Repeat `--target` for a batch move with the workspace and after/before placement forms; the sessions
   move as one ordered block after all sources are removed. Repeated `--target` is rejected with
-  `--to up|down|top|bottom` because relative reorder is per-session.
+  `--to up|down|top|bottom` because relative reorder is per-session. Batch moves return `result.affected`,
+  counting only sessions whose position/workspace changed.
 - `session type <text> [--stdin] [--select] [--pane left|right|scratch] [--target] [--window W]` — inject text
   as real keystrokes (printable runs plus Return for each newline; no bracketed-paste markers).
   `--stdin` reads the text from stdin instead of the argument. `--select` selects (and realizes) a

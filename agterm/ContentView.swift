@@ -53,6 +53,12 @@ struct ContentView: View {
             && process.environment["AGTERM_UITEST_FORCE_SIDEBAR_VISIBLE"] != nil
     }
 
+    /// Close confirmation is normally suppressed in UI tests so unrelated close flows cannot hang on a
+    /// modal alert. One focused regression test opts back in without disabling the other UI-test guards.
+    static var shouldBypassCloseConfirmation: Bool {
+        isUITestLaunch && ProcessInfo.processInfo.environment["AGTERM_UITEST_ALLOW_CLOSE_CONFIRMATION"] == nil
+    }
+
     var body: some View {
         Group {
             if let store, let resolvedID {

@@ -185,12 +185,20 @@ extension ControlServer: ControlActions {
                 store.closeSession(id)
                 return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
             }
-            // Batch close intentionally uses the grace/undo path: that is the GUI behavior this API
-            // makes scriptable, and looping single hard closes cannot produce one grouped undo record.
-            guard store.softCloseSessions(ids) else {
-                return ControlResponse(ok: false, error: "no sessions closed")
+            let affected: Int
+            if settingsModel.settings.closeGraceUndoEnabled ?? true {
+                // One grouped grace record is the batch behavior scripts cannot reproduce by looping.
+                affected = store.softCloseSessions(ids) ? ids.count : 0
+            } else {
+                // Match the GUI's immediate batch-close path when grace undo is disabled.
+                affected = ids.reduce(into: 0) { count, id in
+                    guard store.session(withID: id) != nil else { return }
+                    store.closeSession(id)
+                    count += 1
+                }
             }
-            return ControlResponse(ok: true, result: ControlResult(count: ids.count))
+            guard affected > 0 else { return ControlResponse(ok: false, error: "no sessions closed") }
+            return ControlResponse(ok: true, result: ControlResult(affected: affected))
         }
     }
 
@@ -534,8 +542,8 @@ extension ControlServer: ControlActions {
             return resolveBatchSessions(targets, window: window) { store, ids in
                 resolver.resolve(workspace, candidates: store.workspaces.map(\.id),
                         active: store.currentWorkspaceID, noun: "workspace") { workspaceID in
-                    store.moveSessions(ids, toWorkspace: workspaceID)
-                    return ControlResponse(ok: true, result: ControlResult(count: ids.count))
+                    let affected = store.moveSessions(ids, toWorkspace: workspaceID)
+                    return ControlResponse(ok: true, result: ControlResult(affected: affected))
                 }
             }
         case .place(let anchor, let after):
@@ -580,14 +588,18 @@ extension ControlServer: ControlActions {
                 let target = SidebarDrop.SessionDropTarget.sessionRow(workspace: anchorLoc.workspace,
                                                                       sessionIndex: anchorLoc.index,
                                                                       sessionCount: anchorLoc.count)
+                let affected: Int
                 if let resolution = SidebarDrop.resolveSessions(
                     sources: sources,
                     target: target,
                     childIndex: after ? SidebarDrop.onItemIndex : anchorLoc.index
                 ) {
-                    store.moveSessions(ids, toWorkspace: resolution.workspace, at: resolution.destination)
+                    affected = store.moveSessions(ids, toWorkspace: resolution.workspace,
+                                                  at: resolution.destination)
+                } else {
+                    affected = 0
                 }
-                return ControlResponse(ok: true, result: ControlResult(count: ids.count))
+                return ControlResponse(ok: true, result: ControlResult(affected: affected))
             }
         }
     }
