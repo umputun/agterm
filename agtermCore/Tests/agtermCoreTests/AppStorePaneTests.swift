@@ -108,6 +108,33 @@ struct AppStorePaneTests {
         #expect(session.splitRatio == nil)                // promoted to single, so a later split opens even
         #expect(session.currentCwd == "/var/log")         // the survivor's cwd is promoted
         #expect(session.initialCommand == nil)            // the command pane is gone; a restart must NOT resurrect it
+        // the session-scoped control arms (session.copy/paste/selectall, font.*) must still reach the live
+        // shell: `surface` is nil here, so resolving through it alone would report "session not realized"
+        // for a session the user is actively typing in.
+        #expect(session.addressableSurface === split)
+    }
+
+    @Test func addressableSurfaceIsTheMainPaneUntilThePrimaryExits() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let primary = SpySurface(); session.surface = primary
+        #expect(session.addressableSurface === primary)   // plain session
+
+        let split = SpySurface(); session.splitSurface = split
+        session.isSplit = true
+        session.hasSplit = true
+        #expect(session.addressableSurface === primary)   // split shown, main pane still addressed
+
+        session.splitFocused = true
+        #expect(session.addressableSurface === primary)   // NOT focus-aware: selectall + copy stay paired
+    }
+
+    @Test func addressableSurfaceIsNilWhenNoPaneIsRealized() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        #expect(session.addressableSurface == nil)        // never-shown session still errors "session not realized"
     }
 
     @Test func closePrimaryPaneWithoutSplitClosesSession() {

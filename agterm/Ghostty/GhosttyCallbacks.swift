@@ -199,6 +199,17 @@ final class GhosttyCallbacks: @unchecked Sendable {
     /// Pasted text from the general clipboard (the libghostty paste callback).
     static func readPasteboardText() -> String? { pasteboardText(.general) }
 
+    /// Whether `pasteboardText` would return something, WITHOUT materializing it. Menu validation runs on
+    /// every Edit-menu open and on every ⌘C/⌘V/⌘A key-equivalent lookup, so the Paste item's gate must not
+    /// read and shell-escape a pasteboard full of file URLs just to answer yes/no. Mirrors `pasteboardText`'s
+    /// two branches exactly: a URL-bearing pasteboard (which becomes a shell-escaped path), else a non-empty
+    /// plain string. Keep the two in step — a gate that disagrees with the reader is the menu-vs-keyboard
+    /// divergence the Edit-menu responders exist to remove.
+    static func hasPasteboardText(_ pb: NSPasteboard = .general) -> Bool {
+        if pb.canReadObject(forClasses: [NSURL.self], options: nil) { return true }
+        return pb.string(forType: .string).map { !$0.isEmpty } ?? false
+    }
+
     func confirmReadClipboard(ud: UnsafeMutableRawPointer?, content: UnsafePointer<CChar>?, state: UnsafeMutableRawPointer?,
                               request: ghostty_clipboard_request_e) {
         // only a real OSC 52 read (a program reading the system clipboard into the terminal stream) is

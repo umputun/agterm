@@ -418,21 +418,37 @@ paths:
   implements `copy:`/`paste:`/`selectAll:` + `validateMenuItem:` on `GhosttySurfaceView` (`+Input.swift`,
   conforming to `NSMenuItemValidation`) so AppKit's automatic menu enabling routes Copy/Paste/Select All
   to the terminal when it holds first responder — Copy enabled on `ghostty_surface_has_selection`, Paste
-  on `GhosttyCallbacks.readPasteboardText() != nil`, Select All on a realized surface (all three also require
+  on `GhosttyCallbacks.hasPasteboardText()`, Select All on a realized surface (all three also require
   the surface, since `performBindingAction` no-ops without one) — while a focused text field (rename/palette/Settings)
   keeps its own editing (its field editor wins the responder chain), and Cut/Undo/Redo stay disabled for
   the terminal (deliberately NOT implemented) yet work in text fields.
-  **Paste MUST validate with the same reader the paste path uses**, not a `canReadObject([NSString])` probe:
+  **Paste MUST validate with the same branches the paste path reads**, not a `canReadObject([NSString])` probe:
   a Finder file copy puts a file URL with NO string representation on the clipboard, which `pasteboardText`
   turns into a shell-escaped path — probing for `NSString` greys the item out while ⌘V pastes the path anyway,
   reintroducing the very menu-vs-keyboard divergence these responders remove (caught in review; pinned by
   `EditMenuUITests.testEditMenuEnablesPasteForFileURLClipboard`).
+  It must also be a TYPE PROBE, not a read: `hasPasteboardText` mirrors `pasteboardText`'s two branches without
+  materializing the payload, because validation runs on every menu open AND every ⌘C/⌘V/⌘A key-equivalent
+  lookup — calling `readPasteboardText()` there would shell-escape every URL on the clipboard each time.
+  Keep the predicate and the reader in step.
   ⌘C/⌘V/⌘A therefore route through the Edit menu (fixed standard shortcuts, NOT rebindable — the maintainer's
-  call); the `ghostty-defaults.conf` `super+key_c`/`super+key_v` binds stay as a non-Latin-layout backup.
+  call); the `ghostty-defaults.conf` `super+key_c`/`super+key_v`/`super+key_a` binds stay as a non-Latin-layout
+  backup.
   The mechanism is that AppKit matches a menu key equivalent against the character the layout PRODUCES: on a
   Cyrillic layout ⌘C yields `с`, no equivalent matches, the event reaches `keyDown` and the keycode-triggered
   `super+key_c` fires. (A DISABLED item likewise doesn't consume its equivalent, so ⌘C with no selection also
   falls through.) There is no AppKit "Latin fallback" doing this — the binds are load-bearing, not dead code.
+  **`super+key_a=select_all` is one of them**: without it ⌘A silently does nothing on a Cyrillic/Greek layout,
+  since libghostty's built-in `super+a` is character-matched too (found in review — the fallback set must cover
+  every shortcut the Edit menu owns, not just copy/paste).
+  **The session-scoped surface arms resolve `Session.addressableSurface`, not `Session.surface`.**
+  `session.copy`/`session.paste`/`session.selectall`/`font.*` act on "the session" rather than a named `--pane`,
+  and `addressableSurface` is `surface ?? splitSurface`: identical to `surface` for every ordinary or split
+  session, but falling back to a PROMOTED SPLIT SURVIVOR whose primary shell exited (`closePrimaryPane` nils
+  `surface` and keeps the live shell in `splitSurface`, asserted by `AppStorePaneTests`).
+  Resolving through `surface` alone returned `session not realized` for a session the user was actively typing
+  in. It is deliberately NOT focus-aware (unlike `activeSurface`) — a shown split keeps addressing the main
+  pane, which is what keeps `session.selectall` and its `session.copy` read-back on the SAME surface.
   READ-BACK: neither adds a `ControlSessionNode` field — `session.selectall`'s read-back is `session.copy`
   (reads the resulting selection) and `session.paste`'s is `session.text` (reads the inserted buffer), the
   sibling-command pattern (like `quick.type`↔`quick.text`).

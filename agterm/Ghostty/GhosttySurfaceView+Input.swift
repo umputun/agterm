@@ -466,18 +466,20 @@ extension GhosttySurfaceView: NSMenuItemValidation {
     /// since `performBindingAction` no-ops without one. Items we don't own enable by default (AppKit only
     /// consults this on the responder that implements the action, so `cut:`/`undo:`/`redo:` never reach it).
     ///
-    /// Paste asks `GhosttyCallbacks.pasteboardText` — the SAME reader `paste_from_clipboard` ends up using —
-    /// rather than probing for a plain string. The clipboard may hold a file/web URL with no string
-    /// representation (a Finder copy), which that reader turns into a shell-escaped path: probing for
-    /// `NSString` alone reports "nothing to paste" while ⌘V happily pastes the path, which is exactly the
-    /// menu-vs-keyboard divergence these responder methods exist to remove.
+    /// Paste asks `GhosttyCallbacks.hasPasteboardText()`, which mirrors the branches of `pasteboardText` —
+    /// the SAME reader `paste_from_clipboard` ends up using — rather than probing for a plain string. The
+    /// clipboard may hold a file/web URL with no string representation (a Finder copy), which that reader
+    /// turns into a shell-escaped path: probing for `NSString` alone reports "nothing to paste" while ⌘V
+    /// happily pastes the path, which is exactly the menu-vs-keyboard divergence these responder methods
+    /// exist to remove. It is a type probe, not a read: this runs on every menu open and key-equivalent
+    /// lookup, so it must not shell-escape a pasteboard full of URLs to answer yes/no.
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
         case #selector(copy(_:)):
             guard let surface else { return false }
             return ghostty_surface_has_selection(surface)
         case #selector(paste(_:)):
-            return surface != nil && GhosttyCallbacks.readPasteboardText() != nil
+            return surface != nil && GhosttyCallbacks.hasPasteboardText()
         case #selector(selectAll(_:)):
             return surface != nil
         default:

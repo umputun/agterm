@@ -5,13 +5,15 @@ import agtermCore
 /// in-terminal search, and text injection. These reach into the live `GhosttySurfaceView`, so they own the
 /// surface-touching half of the dispatch. Split out of `ControlServer.swift` for the swiftlint size limit.
 extension ControlServer {
-    /// Resolve the target session and run a libghostty binding action on its MAIN surface (targets a
+    /// Resolve the target session and run a libghostty binding action on its addressable surface (targets a
     /// specific surface, unlike the menu path which only hits the focused one). Shared by the font arms
-    /// and the clipboard/selection arms (`session.paste`/`session.selectall`). A never-shown session has
-    /// no surface yet → error.
+    /// and the clipboard/selection arms (`session.paste`/`session.selectall`). `addressableSurface` is the
+    /// main pane, falling back to a promoted split survivor whose primary shell exited (which nils
+    /// `surface`) — otherwise a session the user is actively typing in would report "session not realized".
+    /// A never-shown session has no surface at all → error.
     private func surfaceBindingAction(_ target: String?, window: String?, action: String) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
-            guard let surface = store.session(withID: id)?.surface as? GhosttySurfaceView else {
+            guard let surface = store.session(withID: id)?.addressableSurface as? GhosttySurfaceView else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
             surface.performBindingAction(action)
@@ -43,7 +45,9 @@ extension ControlServer {
     /// never-shown session has no surface yet → error; an empty or absent selection → "no selection".
     func copySelection(_ target: String?, window: String?) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
-            guard let surface = store.session(withID: id)?.surface as? GhosttySurfaceView else {
+            // `addressableSurface`, not `surface`: it must resolve the SAME pane `session.selectall` acted on,
+            // including a promoted split survivor, or the documented selectall -> copy read-back breaks.
+            guard let surface = store.session(withID: id)?.addressableSurface as? GhosttySurfaceView else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
             guard let text = surface.readSelection() else {
