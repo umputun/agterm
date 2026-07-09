@@ -1,3 +1,4 @@
+import AppKit
 import Darwin
 import XCTest
 
@@ -136,6 +137,33 @@ class ControlAPITestCase: XCTestCase {
         if let target { obj["target"] = target }
         let data = try! JSONSerialization.data(withJSONObject: obj)
         return String(data: data, encoding: .utf8)!
+    }
+
+    /// Seed the SYSTEM pasteboard for one test, restoring its FULL prior contents afterwards.
+    ///
+    /// `NSPasteboard.general` is a machine-wide resource the app process reads, so a test that seeds it must
+    /// put back exactly what the user had — every representation (RTF, image, file URL, custom UTIs), not
+    /// just `.string`, since `clearContents()` destroys them all. The restore rides `addTeardownBlock`, which
+    /// XCTest runs even when an assertion fails; a `defer` would not, because `continueAfterFailure = false`
+    /// unwinds through an Objective-C exception that skips Swift defer blocks. Pass an empty closure to seed
+    /// a deliberately EMPTY clipboard.
+    func seedPasteboard(_ seed: (NSPasteboard) -> Void) {
+        let pb = NSPasteboard.general
+        // deep-copy each item: the originals are invalidated by clearContents().
+        let saved: [NSPasteboardItem] = (pb.pasteboardItems ?? []).map { item in
+            let copy = NSPasteboardItem()
+            for type in item.types {
+                if let data = item.data(forType: type) { copy.setData(data, forType: type) }
+            }
+            return copy
+        }
+        addTeardownBlock {
+            let general = NSPasteboard.general
+            general.clearContents()
+            if !saved.isEmpty { general.writeObjects(saved) }
+        }
+        pb.clearContents()
+        seed(pb)
     }
 
     /// Polls `file` until its (trimmed) contents are non-empty, returning them, or nil on timeout.

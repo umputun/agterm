@@ -461,15 +461,23 @@ extension GhosttySurfaceView: NSMenuItemValidation {
     /// `override` because `selectAll(_:)` is declared on `NSResponder`, unlike `copy:`/`paste:`.
     override func selectAll(_ sender: Any?) { performBindingAction("select_all") }
 
-    /// Gate the three items on real availability: Copy needs a selection, Paste needs text on the
-    /// clipboard, Select All needs a realized surface. Items we don't own enable by default.
+    /// Gate the three items on real availability: Copy needs a selection, Paste needs something the paste
+    /// path can actually insert, Select All needs a realized surface. All three require a realized surface,
+    /// since `performBindingAction` no-ops without one. Items we don't own enable by default (AppKit only
+    /// consults this on the responder that implements the action, so `cut:`/`undo:`/`redo:` never reach it).
+    ///
+    /// Paste asks `GhosttyCallbacks.pasteboardText` — the SAME reader `paste_from_clipboard` ends up using —
+    /// rather than probing for a plain string. The clipboard may hold a file/web URL with no string
+    /// representation (a Finder copy), which that reader turns into a shell-escaped path: probing for
+    /// `NSString` alone reports "nothing to paste" while ⌘V happily pastes the path, which is exactly the
+    /// menu-vs-keyboard divergence these responder methods exist to remove.
     func validateMenuItem(_ menuItem: NSMenuItem) -> Bool {
         switch menuItem.action {
         case #selector(copy(_:)):
             guard let surface else { return false }
             return ghostty_surface_has_selection(surface)
         case #selector(paste(_:)):
-            return NSPasteboard.general.canReadObject(forClasses: [NSString.self], options: nil)
+            return surface != nil && GhosttyCallbacks.readPasteboardText() != nil
         case #selector(selectAll(_:)):
             return surface != nil
         default:

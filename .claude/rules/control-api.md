@@ -418,11 +418,21 @@ paths:
   implements `copy:`/`paste:`/`selectAll:` + `validateMenuItem:` on `GhosttySurfaceView` (`+Input.swift`,
   conforming to `NSMenuItemValidation`) so AppKit's automatic menu enabling routes Copy/Paste/Select All
   to the terminal when it holds first responder — Copy enabled on `ghostty_surface_has_selection`, Paste
-  on a clipboard string, Select All on a realized surface — while a focused text field (rename/palette/Settings)
+  on `GhosttyCallbacks.readPasteboardText() != nil`, Select All on a realized surface (all three also require
+  the surface, since `performBindingAction` no-ops without one) — while a focused text field (rename/palette/Settings)
   keeps its own editing (its field editor wins the responder chain), and Cut/Undo/Redo stay disabled for
   the terminal (deliberately NOT implemented) yet work in text fields.
+  **Paste MUST validate with the same reader the paste path uses**, not a `canReadObject([NSString])` probe:
+  a Finder file copy puts a file URL with NO string representation on the clipboard, which `pasteboardText`
+  turns into a shell-escaped path — probing for `NSString` greys the item out while ⌘V pastes the path anyway,
+  reintroducing the very menu-vs-keyboard divergence these responders remove (caught in review; pinned by
+  `EditMenuUITests.testEditMenuEnablesPasteForFileURLClipboard`).
   ⌘C/⌘V/⌘A therefore route through the Edit menu (fixed standard shortcuts, NOT rebindable — the maintainer's
   call); the `ghostty-defaults.conf` `super+key_c`/`super+key_v` binds stay as a non-Latin-layout backup.
+  The mechanism is that AppKit matches a menu key equivalent against the character the layout PRODUCES: on a
+  Cyrillic layout ⌘C yields `с`, no equivalent matches, the event reaches `keyDown` and the keycode-triggered
+  `super+key_c` fires. (A DISABLED item likewise doesn't consume its equivalent, so ⌘C with no selection also
+  falls through.) There is no AppKit "Latin fallback" doing this — the binds are load-bearing, not dead code.
   READ-BACK: neither adds a `ControlSessionNode` field — `session.selectall`'s read-back is `session.copy`
   (reads the resulting selection) and `session.paste`'s is `session.text` (reads the inserted buffer), the
   sibling-command pattern (like `quick.type`↔`quick.text`).
