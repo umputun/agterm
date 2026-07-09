@@ -471,7 +471,15 @@ struct AppStoreTests {
         session.surface = surface
 
         #expect(store.softCloseSession(session.id, grace: 0.01))
-        try await Task.sleep(nanoseconds: 30_000_000)
+        // poll for the scheduled finalize rather than racing one fixed sleep. the suites run in parallel, so
+        // the 10 ms grace timer can land well past a flat 30 ms window under load (reproduced: ~1 run in 6).
+        // poll the TEARDOWN, not `session(withID:)`: softCloseSession removes the session from its workspace
+        // synchronously and only defers the teardown to the timer, so a session-lookup poll exits immediately
+        // and proves nothing. bounded at ~1 s, so a finalize that never fires fails the expectations below.
+        for _ in 0..<200 {
+            if surface.teardownCount == 1 { break }
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
 
         #expect(store.session(withID: session.id) == nil)
         #expect(surface.teardownCount == 1)
