@@ -266,6 +266,47 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         assertSidebarClickKeepsFocusOnCover(pre: pre, post: post, cover: "scratch")
     }
 
+    // a pane's shell exiting collapses the split and re-hosts the survivor, so its `onExit` re-grabs first
+    // responder. while a cover is up that grab must land on the cover, not on the surviving pane underneath
+    // it — otherwise finishing a command in a background pane silently steals the keyboard from the overlay.
+    func testPaneExitUnderOverlayKeepsFocusOnOverlay() throws {
+        let id = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "opening the split should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the split should be up")
+
+        let pre = markerDir.appendingPathComponent("paneexit-pre")
+        let post = markerDir.appendingPathComponent("paneexit-post")
+        let ovlCmd = "sh -c 'IFS= read -r a; printf %s \"$a\" > \(pre.path); " +
+            "IFS= read -r b; printf %s \"$b\" > \(post.path); cat'"
+        let ovlJSON = try! JSONSerialization.data(withJSONObject:
+            ["cmd": "session.overlay.open", "target": id, "args": ["command": ovlCmd, "sizePercent": 50]])
+        XCTAssertEqual(try sendCommand(String(data: ovlJSON, encoding: .utf8)!)["ok"] as? Bool, true,
+                       "floating overlay open should succeed")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the overlay should be up")
+        usleep(800_000) // let the overlay attach, grab focus, and its shell reach the first `read`
+
+        // prove the overlay owns the keyboard before the exit, so a later steal is attributable to onExit.
+        app.typeText("PRECLICK")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertEqual(pollMarker(pre, timeout: 12), "PRECLICK", "the overlay must hold keyboard focus before the exit")
+
+        // exit the MAIN pane's shell by injecting into its surface directly (injection is focus-independent,
+        // so this drives closePrimaryPane -> onExit without touching first responder).
+        let typeJSON = try! JSONSerialization.data(withJSONObject:
+            ["cmd": "session.type", "target": id, "args": ["text": "exit\n", "pane": "left"]])
+        XCTAssertEqual(try sendCommand(String(data: typeJSON, encoding: .utf8)!)["ok"] as? Bool, true,
+                       "typing exit into the main pane should succeed")
+        // the split pane is promoted to the sole pane, so the session stops reporting a split.
+        XCTAssertTrue(pollActiveSessionSplit(false, timeout: 12), "the main pane's exit should collapse the split")
+        usleep(500_000) // onExit's focusAfterReparent retries; no observable signal to poll on
+
+        app.typeText("OVLCLICK")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertEqual(pollMarker(post, timeout: 12), "OVLCLICK",
+                       "a pane exit under an overlay must leave focus on the overlay, not the surviving pane")
+    }
+
     /// Shared body of the two sidebar-click focus tests: prove the cover holds focus, click the covered
     /// session's own sidebar row (selection is a no-op, but the sidebar's focus-restore runs), then prove
     /// the keyboard still reaches the cover rather than the pane it sits on.
