@@ -729,11 +729,21 @@ public final class AppStore {
     /// skips `save()` for that reason). If the persisted `selectedSessionID` points
     /// at a session that no longer exists, it is cleared to keep selection valid.
     public func restore(from snapshot: Snapshot) {
-        workspaces = snapshot.workspaces.map { workspaceSnapshot in
-            let sessions = workspaceSnapshot.sessions.map(session(from:))
+        // fold workspaces sharing an id into the first occurrence, and keep only the first snapshot of any
+        // repeated session id, wherever it sits: a file written by a build that could duplicate either
+        // stays unreachable past the first match otherwise, and re-saves the corruption.
+        var seenSessionIDs: Set<UUID> = []
+        workspaces = snapshot.workspaces.reduce(into: [Workspace]()) { restored, workspaceSnapshot in
+            let sessions = workspaceSnapshot.sessions
+                .filter { seenSessionIDs.insert($0.id).inserted }
+                .map(session(from:))
+            if let existing = restored.firstIndex(where: { $0.id == workspaceSnapshot.id }) {
+                restored[existing].sessions.append(contentsOf: sessions)
+                return
+            }
             // absent/nil collapsed → expanded (back-compat with snapshots written before the field existed).
-            return Workspace(id: workspaceSnapshot.id, name: workspaceSnapshot.name, sessions: sessions,
-                             isExpanded: !(workspaceSnapshot.collapsed ?? false))
+            restored.append(Workspace(id: workspaceSnapshot.id, name: workspaceSnapshot.name, sessions: sessions,
+                                      isExpanded: !(workspaceSnapshot.collapsed ?? false)))
         }
         // clamp on restore (not just nil-default) so a corrupt or hand-edited snapshot can't drive an
         // out-of-range frame width; the drag path clamps to the same bounds.

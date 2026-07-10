@@ -889,6 +889,67 @@ struct AppStoreTests {
         #expect(store.workspaces.flatMap(\.sessions).contains { $0 === moved })
     }
 
+    @Test func restoreDropsASessionRepeatedInsideOneWorkspace() {
+        let store = makeStore()
+        let repeated = UUID()
+        store.restore(from: Snapshot(workspaces: [
+            WorkspaceSnapshot(id: UUID(), name: "one", sessions: [
+                SessionSnapshot(id: repeated, customName: "a", cwd: "/a"),
+                SessionSnapshot(id: repeated, customName: "a-again", cwd: "/b"),
+            ]),
+        ]))
+
+        #expect(store.workspaces.flatMap(\.sessions).count { $0.id == repeated } == 1)
+        #expect(store.workspaces[0].sessions[0].customName == "a")
+    }
+
+    @Test func restoreDropsASessionRepeatedAcrossWorkspacesWithDifferentIDs() {
+        let store = makeStore()
+        let repeated = UUID()
+        store.restore(from: Snapshot(workspaces: [
+            WorkspaceSnapshot(id: UUID(), name: "one", sessions: [SessionSnapshot(id: repeated, customName: "a", cwd: "/a")]),
+            WorkspaceSnapshot(id: UUID(), name: "two", sessions: [SessionSnapshot(id: repeated, customName: "a-again", cwd: "/b")]),
+        ]))
+
+        #expect(store.workspaces.count == 2)
+        #expect(store.workspaces.flatMap(\.sessions).count { $0.id == repeated } == 1)
+        #expect(store.workspaces[1].sessions.isEmpty)
+    }
+
+    @Test func restoreFoldsWorkspacesSharingAnIDIntoOne() throws {
+        let store = makeStore()
+        let shared = UUID()
+        let firstID = UUID()
+        let secondID = UUID()
+        let snapshot = Snapshot(workspaces: [
+            WorkspaceSnapshot(id: shared, name: "one", sessions: [SessionSnapshot(id: firstID, customName: "a", cwd: "/a")]),
+            WorkspaceSnapshot(id: shared, name: "dupe", sessions: [SessionSnapshot(id: secondID, customName: "b", cwd: "/b")]),
+        ])
+
+        store.restore(from: snapshot)
+
+        #expect(store.workspaces.count == 1)
+        #expect(store.workspaces[0].name == "one")
+        #expect(store.workspaces[0].sessions.map(\.id) == [firstID, secondID])
+        #expect(store.session(withID: secondID) != nil)
+    }
+
+    @Test func restoreDropsASessionRepeatedAcrossWorkspacesSharingAnID() throws {
+        let store = makeStore()
+        let shared = UUID()
+        let repeated = UUID()
+        let snapshot = Snapshot(workspaces: [
+            WorkspaceSnapshot(id: shared, name: "one", sessions: [SessionSnapshot(id: repeated, customName: "a", cwd: "/a")]),
+            WorkspaceSnapshot(id: shared, name: "dupe", sessions: [SessionSnapshot(id: repeated, customName: "a-again", cwd: "/b")]),
+        ])
+
+        store.restore(from: snapshot)
+
+        #expect(store.workspaces.count == 1)
+        #expect(store.workspaces[0].sessions.map(\.id) == [repeated])
+        #expect(store.workspaces[0].sessions[0].customName == "a")
+    }
+
     @Test func finalizedSoftRemoveWorkspaceTearsDownSessions() throws {
         let store = makeStore()
         _ = store.addWorkspace(name: "keep")
