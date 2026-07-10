@@ -138,9 +138,16 @@ paths:
   `active` clears ONLY on an interrupt keystroke — Escape (`keyCode == 53`) or a bare Ctrl-C —
   so ordinary typing while the agent works does NOT wipe the "working" glyph,
   but cancelling a prompt does; `idle` has no glyph.
-  `isInterruptKeystroke` (app target, `keyDown`) computes the flag: Esc, or `.control` held with the
-  base letter `c` and no command/option (Claude Code and most TUIs treat Ctrl-C as Esc for dismissing a
-  pending prompt); the host-free side just takes the bool.
+  The host-free `InterruptKeystroke.isInterrupt(keyCode:character:modifiers:)` (agtermCore) computes the
+  flag from primitives — Esc (`keyCode == 53`), or a bare Ctrl-C: `.control` held with no
+  command/option/shift and the base letter `c` OR the physical `c` key (`keyCode == 8`).
+  The keyCode fallback is load-bearing for non-Latin layouts: on a Cyrillic/Greek layout the physical C
+  key produces a non-Latin char (`с`), so character matching alone misses it — the same reason the
+  `super+key_c` binds are keycode-based (see [[libghostty]]).
+  The character check still covers Dvorak, where the `c` letter sits at a different physical key.
+  `.shift` is excluded so a copy-style Ctrl-Shift-C does not clear a working glyph.
+  `GhosttySurfaceView.isInterruptKeystroke` (app target, `keyDown`) is a thin `NSEvent` adapter over it;
+  the full truth table, including the negatives, is unit-tested host-free in `InterruptKeystrokeTests`.
   This is the ONE input-driven clear (status is otherwise control-driven).
   Because the clear is pane-SCOPED, a tag whose owning pane's shell EXITS would otherwise strand a glyph
   no surviving surface can match, so `AppStore.closeSplit`/`closePrimaryPane`/`closeScratch` reconcile the

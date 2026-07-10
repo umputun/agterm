@@ -31,16 +31,18 @@ extension GhosttySurfaceView {
 
     // MARK: - Keyboard
 
-    private static let escapeKeyCode: UInt16 = 53
-
-    /// Whether a keystroke interrupts the agent — Escape, or a bare Ctrl-C (no command/option). Both
-    /// dismiss a pending prompt in Claude Code and most TUIs, so both clear a stale `active` glyph.
-    /// `charactersIgnoringModifiers` reads the base letter, so a non-US layout's C key still matches.
+    /// Reduce an `NSEvent` to the host-free `InterruptKeystroke` classifier — Escape or a bare Ctrl-C
+    /// clears a stale `active` glyph. The classification (and its negatives) is unit-tested in `agtermCore`.
     private func isInterruptKeystroke(_ event: NSEvent) -> Bool {
-        if event.keyCode == Self.escapeKeyCode { return true }
         let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
-        guard flags.contains(.control), !flags.contains(.command), !flags.contains(.option) else { return false }
-        return event.charactersIgnoringModifiers?.lowercased() == "c"
+        var modifiers: KeyModifiers = []
+        if flags.contains(.control) { modifiers.insert(.control) }
+        if flags.contains(.command) { modifiers.insert(.command) }
+        if flags.contains(.option) { modifiers.insert(.option) }
+        if flags.contains(.shift) { modifiers.insert(.shift) }
+        return InterruptKeystroke.isInterrupt(keyCode: event.keyCode,
+                                              character: event.charactersIgnoringModifiers,
+                                              modifiers: modifiers)
     }
 
     override func keyDown(with event: NSEvent) {
