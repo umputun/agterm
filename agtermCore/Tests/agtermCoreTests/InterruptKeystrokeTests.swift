@@ -20,6 +20,14 @@ struct InterruptKeystrokeTests {
         #expect(InterruptKeystroke.isInterrupt(keyCode: Self.dvorakCKey, character: "c", modifiers: [.control]))
         // cyrillic: the physical C key produces "с" (U+0441), caught by the keyCode fallback
         #expect(InterruptKeystroke.isInterrupt(keyCode: Self.cKey, character: "с", modifiers: [.control]))
+        // no base char available: trust the physical key position
+        #expect(InterruptKeystroke.isInterrupt(keyCode: Self.cKey, character: nil, modifiers: [.control]))
+    }
+
+    @Test func dvorakControlJDoesNotInterrupt() {
+        // dvorak: the physical C key (keyCode 8) produces "j"; the keyCode fallback must NOT fire for a
+        // latin letter other than "c", so ctrl-j is not a false interrupt
+        #expect(!InterruptKeystroke.isInterrupt(keyCode: Self.cKey, character: "j", modifiers: [.control]))
     }
 
     @Test func nonInterruptKeystrokesDoNotClear() {

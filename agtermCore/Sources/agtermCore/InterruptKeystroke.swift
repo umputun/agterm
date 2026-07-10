@@ -25,17 +25,28 @@ public enum InterruptKeystroke {
 
     /// Whether the keystroke interrupts the agent. `character` is the layout's base letter for the key
     /// (`NSEvent.charactersIgnoringModifiers`); matching it covers Latin layouts including Dvorak, where
-    /// the C letter sits at a non-`cKeyCode` physical key, while `cKeyCode` covers non-Latin layouts
+    /// the C letter sits at a non-`cKeyCode` physical key. The `cKeyCode` fallback covers non-Latin layouts
     /// (Cyrillic, Greek) where that physical key produces a non-Latin character rather than "c" — the same
-    /// layout-independent fallback the built-in `super+key_c` binds use. Escape interrupts under any
-    /// modifiers; Ctrl-C must be bare (control only, no command/option/shift) so a copy-style chord like
-    /// Ctrl-Shift-C does not clear a glyph while the agent is still working.
+    /// layout-independent fallback the built-in `super+key_c` binds use — but only when the produced base
+    /// is non-Latin or unavailable: a remapped Latin layout where `cKeyCode` yields a Latin letter other
+    /// than "c" (Dvorak's "j") is left alone, so Ctrl-J there is not a false interrupt. Escape interrupts
+    /// under any modifiers; Ctrl-C must be bare (control only, no command/option/shift) so a copy-style
+    /// chord like Ctrl-Shift-C does not clear a glyph while the agent is still working.
     public static func isInterrupt(keyCode: UInt16, character: String?, modifiers: KeyModifiers) -> Bool {
         if keyCode == escapeKeyCode { return true }
         guard modifiers.contains(.control),
               !modifiers.contains(.command), !modifiers.contains(.option), !modifiers.contains(.shift) else {
             return false
         }
-        return character?.lowercased() == "c" || keyCode == cKeyCode
+        let base = character?.lowercased()
+        if base == "c" { return true }
+        return keyCode == cKeyCode && !isLatinLetter(base)
+    }
+
+    /// Whether `base` is a single basic-Latin letter (a lowercased a-z). Used to keep the `cKeyCode`
+    /// fallback off remapped Latin layouts, where the physical C key produces a Latin letter that isn't "c".
+    private static func isLatinLetter(_ base: String?) -> Bool {
+        guard let base, base.count == 1, let scalar = base.unicodeScalars.first else { return false }
+        return scalar.value >= 0x61 && scalar.value <= 0x7A
     }
 }
