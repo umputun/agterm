@@ -511,6 +511,384 @@ struct AppStoreTests {
         #expect(surface.teardownCount == 0)
     }
 
+    @Test func undoingPendingSessionCloseThenWorkspaceCloseKeepsOneWorkspace() throws {
+        let store = makeStore()
+        let doomed = store.addWorkspace(name: "doomed")
+        _ = store.addWorkspace(name: "keep")
+        let first = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/a"))
+        let second = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/b"))
+        let firstSurface = SpySurface()
+        let secondSurface = SpySurface()
+        first.surface = firstSurface
+        second.surface = secondSurface
+
+        #expect(store.softCloseSession(first.id, grace: 60))
+        let sessionClose = try #require(store.pendingCloseSummary?.id)
+        #expect(store.softRemoveWorkspace(doomed.id, grace: 60))
+        let workspaceClose = try #require(store.pendingCloseSummary?.id)
+
+        // undoing the session first recreates the workspace shell; the workspace undo must merge into it
+        #expect(store.undoPendingClose(sessionClose))
+        #expect(store.undoPendingClose(workspaceClose))
+
+        #expect(store.workspaces.count(where: { $0.id == doomed.id }) == 1)
+        let restored = try #require(store.workspaces.first { $0.id == doomed.id })
+        #expect(restored.sessions.map(\.id) == [first.id, second.id])
+        #expect(restored.sessions[0] === first)
+        #expect(restored.sessions[1] === second)
+        #expect(store.selectedSessionID == second.id)
+        #expect(firstSurface.teardownCount == 0)
+        #expect(secondSurface.teardownCount == 0)
+    }
+
+    @Test func undoingWorkspaceCloseThenSessionCloseKeepsOneWorkspace() throws {
+        let store = makeStore()
+        let doomed = store.addWorkspace(name: "doomed")
+        _ = store.addWorkspace(name: "keep")
+        let first = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/a"))
+        let second = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/b"))
+
+        #expect(store.softCloseSession(first.id, grace: 60))
+        let sessionClose = try #require(store.pendingCloseSummary?.id)
+        #expect(store.softRemoveWorkspace(doomed.id, grace: 60))
+        let workspaceClose = try #require(store.pendingCloseSummary?.id)
+
+        // the reverse order takes the insert branch, then restorePendingSession finds the workspace
+        #expect(store.undoPendingClose(workspaceClose))
+        #expect(store.undoPendingClose(sessionClose))
+
+        #expect(store.workspaces.count(where: { $0.id == doomed.id }) == 1)
+        let restored = try #require(store.workspaces.first { $0.id == doomed.id })
+        #expect(restored.sessions.map(\.id) == [first.id, second.id])
+    }
+
+    @Test func rebuiltShellSeedsNameAndExpansionFromPendingWorkspaceClose() throws {
+        let store = makeStore()
+        let doomed = store.addWorkspace(name: "old")
+        _ = store.addWorkspace(name: "keep")
+        let first = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/a"))
+        _ = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/b"))
+
+        #expect(store.softCloseSession(first.id, grace: 60))
+        let sessionClose = try #require(store.pendingCloseSummary?.id)
+        // rename and collapse after the session close, so the session record's captured name is stale
+        store.renameWorkspace(doomed.id, to: "renamed")
+        store.setWorkspaceExpanded(doomed.id, expanded: false)
+        #expect(store.softRemoveWorkspace(doomed.id, grace: 60))
+        let workspaceClose = try #require(store.pendingCloseSummary?.id)
+
+        #expect(store.undoPendingClose(sessionClose))
+        // the shell is seeded from the still-pending workspace record, not the stale session record
+        let shell = try #require(store.workspaces.first { $0.id == doomed.id })
+        #expect(shell.name == "renamed")
+        #expect(shell.isExpanded == false)
+
+        #expect(store.undoPendingClose(workspaceClose))
+        let restored = try #require(store.workspaces.first { $0.id == doomed.id })
+        #expect(restored.name == "renamed")
+        #expect(restored.isExpanded == false)
+    }
+
+    @Test func workspaceUndoKeepsEditsMadeToTheRebuiltShell() throws {
+        let store = makeStore()
+        let doomed = store.addWorkspace(name: "old")
+        _ = store.addWorkspace(name: "keep")
+        let first = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/a"))
+        _ = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/b"))
+
+        #expect(store.softCloseSession(first.id, grace: 60))
+        let sessionClose = try #require(store.pendingCloseSummary?.id)
+        #expect(store.softRemoveWorkspace(doomed.id, grace: 60))
+        let workspaceClose = try #require(store.pendingCloseSummary?.id)
+
+        #expect(store.undoPendingClose(sessionClose))
+        // edits to the rebuilt shell are newer than the pending record and must survive the merge
+        store.renameWorkspace(doomed.id, to: "new")
+        store.setWorkspaceExpanded(doomed.id, expanded: false)
+        #expect(store.undoPendingClose(workspaceClose))
+
+        let restored = try #require(store.workspaces.first { $0.id == doomed.id })
+        #expect(restored.name == "new")
+        #expect(restored.isExpanded == false)
+    }
+
+    @Test func restoringRecentSessionThenUndoingWorkspaceCloseKeepsOneWorkspace() throws {
+        let store = makeStore()
+        let doomed = store.addWorkspace(name: "doomed")
+        _ = store.addWorkspace(name: "keep")
+        let first = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/a"))
+        let second = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/b"))
+
+        #expect(store.softCloseSession(first.id, grace: 60))
+        let sessionClose = try #require(store.pendingCloseSummary?.id)
+        store.finalizePendingClose(sessionClose)
+        #expect(store.softRemoveWorkspace(doomed.id, grace: 60))
+        let workspaceClose = try #require(store.pendingCloseSummary?.id)
+
+        // a finalized session reopens from Open Recent, which rebuilds the workspace shell on its own
+        let recent = RecentClosedItem(
+            kind: .session, title: "a", subtitle: "doomed",
+            session: RecentClosedSession(workspaceID: doomed.id, workspaceName: "doomed",
+                                         workspaceIndex: 0, sessionIndex: 0,
+                                         snapshot: store.sessionSnapshot(first))
+        )
+        #expect(store.restoreRecentClosed(recent))
+        #expect(store.undoPendingClose(workspaceClose))
+
+        #expect(store.workspaces.count(where: { $0.id == doomed.id }) == 1)
+        let restored = try #require(store.workspaces.first { $0.id == doomed.id })
+        #expect(Set(restored.sessions.map(\.id)) == Set([first.id, second.id]))
+        #expect(restored.sessions.count == 2)
+        #expect(store.selectedSessionID == second.id)
+        // the reopened session is rebuilt from its snapshot, so it is a fresh object; the merged-in
+        // one is the live object the pending record held
+        #expect(restored.sessions.contains { $0 === second })
+        #expect(restored.sessions.allSatisfy { $0 !== first })
+    }
+
+    @Test func undoingWorkspaceCloseMergesDisjointSessionsIntoRebuiltShell() throws {
+        let store = makeStore()
+        let doomed = store.addWorkspace(name: "doomed")
+        _ = store.addWorkspace(name: "keep")
+        let first = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/a"))
+        let second = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/b"))
+
+        // close the second session, so the workspace snapshot carries only the first
+        #expect(store.softCloseSession(second.id, grace: 60))
+        let sessionClose = try #require(store.pendingCloseSummary?.id)
+        #expect(store.softRemoveWorkspace(doomed.id, grace: 60))
+        let workspaceClose = try #require(store.pendingCloseSummary?.id)
+
+        #expect(store.undoPendingClose(sessionClose))
+        #expect(store.undoPendingClose(workspaceClose))
+
+        #expect(store.workspaces.count(where: { $0.id == doomed.id }) == 1)
+        let restored = try #require(store.workspaces.first { $0.id == doomed.id })
+        // the shell keeps its slot, so the merged order trails the shell's session
+        #expect(restored.sessions.map(\.id) == [second.id, first.id])
+        #expect(restored.sessions.contains { $0 === first })
+        #expect(restored.sessions.contains { $0 === second })
+    }
+
+    @Test func reopeningRecentWorkspaceMergesMissingSessionsIntoRebuiltShell() throws {
+        let (store, _, persistence) = makeStoreWithRecentClosed()
+        let doomed = store.addWorkspace(name: "doomed")
+        _ = store.addWorkspace(name: "keep")
+        let first = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/a"))
+        let second = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/b"))
+        let firstSnapshot = store.sessionSnapshot(first)
+        // snapshot the workspace while it still holds both, so it overlaps the shell the session restore
+        // rebuilds. a disjoint snapshot would merge cleanly even without the live-session filter.
+        let workspaceSnapshot = store.workspaceSnapshot(try #require(store.workspaces.first { $0.id == doomed.id }))
+
+        // both closes finalize, so only the recent snapshots remain
+        #expect(store.softCloseSession(first.id, grace: 60))
+        store.finalizePendingClose(try #require(store.pendingCloseSummary?.id))
+        #expect(store.softRemoveWorkspace(doomed.id, grace: 60))
+        store.finalizePendingClose(try #require(store.pendingCloseSummary?.id))
+
+        // reopening the session rebuilds the workspace as a shell holding only that session
+        let recentSession = RecentClosedItem(
+            kind: .session, title: "a", subtitle: "doomed",
+            session: RecentClosedSession(workspaceID: doomed.id, workspaceName: "doomed",
+                                         workspaceIndex: 0, sessionIndex: 0, snapshot: firstSnapshot)
+        )
+        #expect(store.restoreRecentClosed(recentSession))
+
+        // reopening the workspace must bring back the session the shell doesn't hold
+        let recentWorkspace = RecentClosedItem(
+            kind: .workspace, title: "doomed", subtitle: "2 sessions",
+            workspace: RecentClosedWorkspace(snapshot: workspaceSnapshot, selectedSessionID: second.id)
+        )
+        #expect(store.restoreRecentClosed(recentWorkspace))
+
+        let restored = try #require(store.workspaces.first { $0.id == doomed.id })
+        // count, not just the id set: the shell already holds `first`, and a merge that skips the
+        // live-session filter appends a second copy of it under the same id
+        #expect(restored.sessions.count == 2)
+        #expect(Set(restored.sessions.map(\.id)) == Set([first.id, second.id]))
+        #expect(store.session(withID: second.id) != nil)
+        #expect(store.selectedSessionID == second.id)
+        // the merge persists immediately, ahead of the debounced selection save
+        #expect(persistence.load().workspaces.first { $0.id == doomed.id }?.sessions.count == 2)
+    }
+
+    @Test func reopeningRecentWorkspaceRestoresSessionsHeldByAPendingSessionClose() throws {
+        let store = makeStore()
+        let doomed = store.addWorkspace(name: "doomed")
+        _ = store.addWorkspace(name: "keep")
+        let first = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/a"))
+        let second = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/b"))
+        let firstSnapshot = store.sessionSnapshot(first)
+        let workspaceSnapshot = store.workspaceSnapshot(try #require(store.workspaces.first { $0.id == doomed.id }))
+
+        #expect(store.softRemoveWorkspace(doomed.id, grace: 60))
+        store.finalizePendingClose(try #require(store.pendingCloseSummary?.id))
+
+        // reopen `first` alone, rebuilding the workspace as a shell, then soft-close it again so a
+        // pending session close holds it while the workspace's recent entry still lists both sessions
+        let recentSession = RecentClosedItem(
+            kind: .session, title: "a", subtitle: "doomed",
+            session: RecentClosedSession(workspaceID: doomed.id, workspaceName: "doomed",
+                                         workspaceIndex: 0, sessionIndex: 0, snapshot: firstSnapshot)
+        )
+        #expect(store.restoreRecentClosed(recentSession))
+        let rebuiltFirst = try #require(store.workspaces.first { $0.id == doomed.id }?.sessions.first)
+        #expect(store.softCloseSession(rebuiltFirst.id, grace: 60))
+
+        // the pending session close matches the workspace's recent entry, but undoing it restores only
+        // `first`. the workspace restore must still rebuild `second`, which nothing else holds.
+        let recentWorkspace = RecentClosedItem(
+            kind: .workspace, title: "doomed", subtitle: "2 sessions",
+            workspace: RecentClosedWorkspace(snapshot: workspaceSnapshot, selectedSessionID: second.id)
+        )
+        #expect(store.restoreRecentClosed(recentWorkspace))
+
+        let restored = try #require(store.workspaces.first { $0.id == doomed.id })
+        #expect(restored.sessions.count == 2)
+        #expect(Set(restored.sessions.map(\.id)) == Set([first.id, second.id]))
+        #expect(store.session(withID: second.id) != nil)
+    }
+
+    @Test func reopeningRecentWorkspaceDrainsEveryPendingSessionClose() throws {
+        let store = makeStore()
+        let doomed = store.addWorkspace(name: "doomed")
+        _ = store.addWorkspace(name: "keep")
+        let first = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/a"))
+        let second = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/b"))
+        let firstSurface = SpySurface()
+        first.surface = firstSurface
+        let workspaceSnapshot = store.workspaceSnapshot(try #require(store.workspaces.first { $0.id == doomed.id }))
+
+        // both sessions are held by their own pending close, so neither is live when the workspace's
+        // recent entry is reopened
+        #expect(store.softCloseSession(first.id, grace: 60))
+        let firstClose = try #require(store.pendingCloseSummary?.id)
+        #expect(store.softCloseSession(second.id, grace: 60))
+
+        let recentWorkspace = RecentClosedItem(
+            kind: .workspace, title: "doomed", subtitle: "2 sessions",
+            workspace: RecentClosedWorkspace(snapshot: workspaceSnapshot, selectedSessionID: first.id)
+        )
+        #expect(store.restoreRecentClosed(recentWorkspace))
+
+        let restored = try #require(store.workspaces.first { $0.id == doomed.id })
+        // the live originals come back, not snapshot rebuilds sharing their ids
+        #expect(restored.sessions.count == 2)
+        #expect(restored.sessions.contains { $0 === first })
+        #expect(restored.sessions.contains { $0 === second })
+        // no pending record still holds a session the tree now shows: undoing one would duplicate its id,
+        // finalizing one would tear down the surfaces of a session the user can see
+        #expect(store.pendingCloseRecords.isEmpty)
+        #expect(store.undoPendingClose(firstClose) == false)
+        #expect(store.workspaces.flatMap(\.sessions).count { $0.id == first.id } == 1)
+        #expect(firstSurface.teardownCount == 0)
+    }
+
+    @Test func closingARebuiltShellFoldsIntoTheStillPendingWorkspaceClose() throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        let doomed = store.addWorkspace(name: "doomed")
+        _ = store.addWorkspace(name: "keep")
+        let first = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/a"))
+        let second = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/b"))
+
+        // close `first`, then the workspace holding `second`, then undo `first` so it lands in a rebuilt
+        // shell. closing that shell must not leave a second pending record sharing the workspace id:
+        // both would key one Open Recent entry, and the newer snapshot evicts the older one's sessions.
+        #expect(store.softCloseSession(first.id, grace: 60))
+        let sessionClose = try #require(store.pendingCloseSummary?.id)
+        #expect(store.softRemoveWorkspace(doomed.id, grace: 60))
+        let firstWorkspaceClose = try #require(store.pendingCloseSummary?.id)
+        #expect(store.undoPendingClose(sessionClose))
+        #expect(store.softRemoveWorkspace(doomed.id, grace: 60))
+        let foldedClose = try #require(store.pendingCloseSummary?.id)
+
+        #expect(foldedClose != firstWorkspaceClose)
+        #expect(store.pendingCloseRecords.count == 1)
+        // the superseded record is gone with its timer, so finalizing it cannot tear down the folded one
+        store.finalizePendingClose(firstWorkspaceClose)
+        #expect(store.pendingCloseRecords.count == 1)
+
+        #expect(store.undoPendingClose(foldedClose))
+        let restored = try #require(store.workspaces.first { $0.id == doomed.id })
+        #expect(restored.sessions.map(\.id) == [first.id, second.id])
+        #expect(recentClosed.load().isEmpty)
+    }
+
+    @Test func finalizedShellSeedsNameAndExpansionFromTheRecentWorkspaceSnapshot() throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        _ = store.addWorkspace(name: "keep")
+        let workspaceID = UUID()
+        let sessionSnapshot = SessionSnapshot(id: UUID(), customName: "a", cwd: "/a")
+        // nothing pending describes the workspace, so its newest surviving description is the Open Recent
+        // snapshot, taken after the rename and collapse. the session entry's `workspaceName` predates both.
+        recentClosed.record(RecentClosedItem(
+            kind: .workspace, title: "renamed", subtitle: "1 session",
+            workspace: RecentClosedWorkspace(
+                snapshot: WorkspaceSnapshot(id: workspaceID, name: "renamed", sessions: [sessionSnapshot], collapsed: true),
+                selectedSessionID: nil)
+        ))
+
+        let recentSession = RecentClosedItem(
+            kind: .session, title: "a", subtitle: "old",
+            session: RecentClosedSession(workspaceID: workspaceID, workspaceName: "old",
+                                         workspaceIndex: 0, sessionIndex: 0, snapshot: sessionSnapshot)
+        )
+        #expect(store.restoreRecentClosed(recentSession))
+
+        let shell = try #require(store.workspaces.first { $0.id == workspaceID })
+        #expect(shell.name == "renamed")
+        #expect(!shell.isExpanded)
+    }
+
+    @Test func reopeningRecentWorkspaceLeavesAForeignPendingWorkspaceCloseAlone() throws {
+        let store = makeStore()
+        let wsW = store.addWorkspace(name: "W")
+        let wsV = store.addWorkspace(name: "V")
+        let moved = try #require(store.addSession(toWorkspace: wsW.id, cwd: "/moved"))
+        let staleSnapshot = store.workspaceSnapshot(try #require(store.workspaces.first { $0.id == wsW.id }))
+
+        // the session moves to V, then the user closes V deliberately. W's recent entry still lists it.
+        store.moveSession(moved.id, toWorkspace: wsV.id)
+        #expect(store.softRemoveWorkspace(wsV.id, grace: 60))
+
+        let recentW = RecentClosedItem(kind: .workspace, title: "W", subtitle: "1 session",
+                                       workspace: RecentClosedWorkspace(snapshot: staleSnapshot, selectedSessionID: moved.id))
+        _ = store.restoreRecentClosed(recentW)
+
+        // reopening W must not resurrect V, and must not rebuild `moved` beside the original V still holds
+        #expect(store.workspaces.contains { $0.id == wsV.id } == false)
+        #expect(store.pendingCloseRecords.count == 1)
+        #expect(store.workspaces.flatMap(\.sessions).count { $0.id == moved.id } == 0)
+    }
+
+    @Test func reopeningRecentWorkspaceNeverRebuildsASessionAForeignPendingCloseHolds() throws {
+        let store = makeStore()
+        let wsW = store.addWorkspace(name: "W")
+        let wsV = store.addWorkspace(name: "V")
+        _ = store.addWorkspace(name: "keep")
+        _ = store.addSession(toWorkspace: wsV.id, cwd: "/anchor")
+        let moved = try #require(store.addSession(toWorkspace: wsW.id, cwd: "/moved"))
+        let staleSnapshot = store.workspaceSnapshot(try #require(store.workspaces.first { $0.id == wsW.id }))
+
+        store.moveSession(moved.id, toWorkspace: wsV.id)
+        // W is gone for good, so reopening it rebuilds the workspace wholesale
+        #expect(store.softRemoveWorkspace(wsW.id, grace: 60))
+        store.finalizePendingClose(try #require(store.pendingCloseSummary?.id))
+        #expect(store.softRemoveWorkspace(wsV.id, grace: 60))
+        let vClose = try #require(store.pendingCloseSummary?.id)
+
+        let recentW = RecentClosedItem(kind: .workspace, title: "W", subtitle: "1 session",
+                                       workspace: RecentClosedWorkspace(snapshot: staleSnapshot, selectedSessionID: moved.id))
+        _ = store.restoreRecentClosed(recentW)
+        #expect(store.pendingCloseRecords[vClose] != nil)
+
+        // undoing V returns the original `moved`; the rebuilt W must not have made a second one
+        #expect(store.undoPendingClose(vClose))
+        #expect(store.workspaces.flatMap(\.sessions).count { $0.id == moved.id } == 1)
+        #expect(store.workspaces.flatMap(\.sessions).contains { $0 === moved })
+    }
+
     @Test func finalizedSoftRemoveWorkspaceTearsDownSessions() throws {
         let store = makeStore()
         _ = store.addWorkspace(name: "keep")

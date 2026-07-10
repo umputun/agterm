@@ -77,7 +77,7 @@ extension AppStore {
     @discardableResult
     public func softRemoveWorkspace(_ workspaceID: UUID, grace: TimeInterval = AppStore.pendingCloseGraceInterval) -> Bool {
         guard canRemoveWorkspace, let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return false }
-        let workspace = workspaces.remove(at: index)
+        let workspace = foldingPendingCloses(of: workspaces.remove(at: index))
         let removingActive = selectedSessionID.map { id in workspace.sessions.contains { $0.id == id } } ?? false
         let restoringSelection = removingActive ? selectedSessionID : nil
         if focusedWorkspaceID == workspaceID { focusedWorkspaceID = nil }
@@ -173,13 +173,64 @@ extension AppStore {
         }
     }
 
+    /// Absorb any pending close of the same workspace into the copy being closed now, dropping the
+    /// superseded record. Undoing a session close rebuilds a missing workspace as a shell, so closing that
+    /// shell while the earlier record still waits out its grace would leave two pending records sharing a
+    /// workspace id. Both key one Open Recent entry by that id (`RecentClosedStore.record` dedupes on it),
+    /// so the newer snapshot would evict the older one and its sessions would survive nowhere once both
+    /// records finalize. The copy closed now is the newer state, so its name, expansion and session order
+    /// lead; the superseded record's sessions follow.
+    private func foldingPendingCloses(of workspace: Workspace) -> Workspace {
+        var folded = workspace
+        for closeID in pendingCloseOrder {
+            guard case .workspace(let close)? = pendingCloseRecords[closeID], close.workspace.id == workspace.id else { continue }
+            pendingCloseRecords.removeValue(forKey: closeID)
+            pendingCloseTasks.removeValue(forKey: closeID)?.cancel()
+            let present = Set(folded.sessions.map(\.id))
+            folded.sessions.append(contentsOf: close.workspace.sessions.filter { !present.contains($0.id) })
+        }
+        pendingCloseOrder.removeAll { pendingCloseRecords[$0] == nil }
+        return folded
+    }
+
+    /// Session ids a pending close still holds. They are absent from the tree, but their live objects are
+    /// intact and an undo reinserts them, so a restore that rebuilt one from a snapshot would put two
+    /// objects under a single id. Callers union this with the tree's ids to decide what is already taken.
+    func pendingHeldSessionIDs() -> Set<UUID> {
+        var held: Set<UUID> = []
+        for record in pendingCloseRecords.values {
+            switch record {
+            case .session(let close):
+                held.insert(close.session.id)
+            case .workspace(let close):
+                held.formUnion(close.workspace.sessions.map(\.id))
+            }
+        }
+        return held
+    }
+
+    /// A workspace to stand in for one a restore needs but the tree no longer holds. Prefer the newest
+    /// description of it: a pending close of that same workspace carries its live name and expansion state,
+    /// and once those finalize an Open Recent snapshot still does. `name` is the caller's older copy, used
+    /// only when neither describes the workspace.
+    func rebuiltWorkspaceShell(id: UUID, name: String) -> Workspace {
+        for closeID in pendingCloseOrder.reversed() {
+            guard case .workspace(let close)? = pendingCloseRecords[closeID], close.workspace.id == id else { continue }
+            return Workspace(id: id, name: close.workspace.name, isExpanded: close.workspace.isExpanded)
+        }
+        if let snapshot = recentClosedStore?.load().compactMap(\.workspace).first(where: { $0.snapshot.id == id })?.snapshot {
+            return Workspace(id: id, name: snapshot.name, isExpanded: !(snapshot.collapsed ?? false))
+        }
+        return Workspace(id: id, name: name)
+    }
+
     private func restorePendingSession(_ close: PendingSessionClose) {
         let workspaceIndex: Int
         if let existing = workspaces.firstIndex(where: { $0.id == close.workspaceID }) {
             workspaceIndex = existing
         } else {
             let insertAt = max(0, min(close.workspaceIndex, workspaces.count))
-            workspaces.insert(Workspace(id: close.workspaceID, name: close.workspaceName), at: insertAt)
+            workspaces.insert(rebuiltWorkspaceShell(id: close.workspaceID, name: close.workspaceName), at: insertAt)
             workspaceIndex = insertAt
         }
         let insertAt = max(0, min(close.sessionIndex, workspaces[workspaceIndex].sessions.count))
@@ -190,13 +241,24 @@ extension AppStore {
     }
 
     private func restorePendingWorkspace(_ close: PendingWorkspaceClose) {
-        let insertAt = max(0, min(close.workspaceIndex, workspaces.count))
-        workspaces.insert(close.workspace, at: insertAt)
-        if let target = close.selectedSessionID ?? close.workspace.sessions.first?.id {
-            selectedSessionID = target
-            autoUnfocusIfOutsideFocus(selectedSessionID)
-            recordRecency()
+        // an undone session close, or an Open Recent restore, rebuilds a missing workspace by id as a
+        // shell holding just that session. merge into the shell instead of inserting a second workspace
+        // sharing its id: every id-keyed lookup resolves the first match, so a duplicate would strand the
+        // other copy's sessions. the shell was seeded from this record, and anything the user changed on
+        // it since is newer, so its name and expansion state stand. the shell also keeps its slot, so
+        // `workspaceIndex` and this record's session order are not honored. the filter is defensive: a
+        // session held by this record cannot already be live elsewhere.
+        if let existing = workspaces.firstIndex(where: { $0.id == close.workspace.id }) {
+            let live = Set(workspaces.flatMap(\.sessions).map(\.id))
+            workspaces[existing].sessions.append(contentsOf: close.workspace.sessions.filter { !live.contains($0.id) })
+        } else {
+            let insertAt = max(0, min(close.workspaceIndex, workspaces.count))
+            workspaces.insert(close.workspace, at: insertAt)
         }
+        guard let target = close.selectedSessionID ?? close.workspace.sessions.first?.id else { return }
+        selectedSessionID = target
+        autoUnfocusIfOutsideFocus(selectedSessionID)
+        recordRecency()
     }
 
     private func hardFinalizePendingSession(_ session: Session) {
