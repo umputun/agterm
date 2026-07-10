@@ -12,15 +12,16 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
 
     /// Whether a keystroke in the session's terminal should clear this glyph back to idle. `blocked` and
     /// `completed` clear on ANY key (you've engaged with the prompt / the finished result); `active`
-    /// clears ONLY on Escape — the interrupt key — so ordinary typing while the agent works does NOT wipe
-    /// the "working" glyph, but cancelling (Esc) a prompt the agent is showing does. This is what covers
-    /// the quick-Esc case: a pending question can still read `active` when you cancel it (Claude Code's
-    /// `blocked` notification lands seconds later), and the Esc-interrupt itself fires no hook, so this
+    /// clears ONLY on an interrupt keystroke (Escape or Ctrl-C) — so ordinary typing while the agent works
+    /// does NOT wipe the "working" glyph, but cancelling a prompt the agent is showing does. Both keys
+    /// interrupt: Claude Code (like most TUIs) treats Ctrl-C as Esc for dismissing a pending prompt. This
+    /// covers the quick-cancel case: a pending question can still read `active` when you cancel it (Claude
+    /// Code's `blocked` notification lands seconds later), and the interrupt itself fires no hook, so this
     /// keystroke clear is the only signal that drops the stale `active`. `idle` has no glyph to clear.
-    func clearedByKeystroke(isEscape: Bool) -> Bool {
+    func clearedByKeystroke(isInterrupt: Bool) -> Bool {
         switch self {
         case .blocked, .completed: return true
-        case .active: return isEscape
+        case .active: return isInterrupt
         case .idle: return false
         }
     }
@@ -101,7 +102,7 @@ public struct AgentIndicator: Equatable, Sendable {
     /// clears only when the keystroke's own pane owns the current status (a nil `statusPane` is treated
     /// as `.left`) AND the status itself is clearable by that keystroke (`AgentStatus.clearedByKeystroke`).
     /// This keeps foreground typing from wiping a status set by a background pane.
-    public func clearedBy(pane: StatusPane, isEscape: Bool) -> Bool {
-        (statusPane ?? .left) == pane && status.clearedByKeystroke(isEscape: isEscape)
+    public func clearedBy(pane: StatusPane, isInterrupt: Bool) -> Bool {
+        (statusPane ?? .left) == pane && status.clearedByKeystroke(isInterrupt: isInterrupt)
     }
 }

@@ -394,6 +394,31 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         }
     }
 
+    // an `active` glyph clears ONLY on an interrupt keystroke. Ctrl-C is an interrupt just like Esc — Claude
+    // Code and most TUIs treat it as Esc for dismissing a pending prompt — so it must drop the stale glyph
+    // where ordinary typing (host-free tested) does not. covers the app-side `isInterruptKeystroke` wiring
+    // the host-free `clearedByKeystroke` cannot reach.
+    func testCtrlCClearsActiveStatus() throws {
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let root = try XCTUnwrap(treeResult["tree"] as? [String: Any], "result should carry a tree")
+        let workspaces = try XCTUnwrap(root["workspaces"] as? [[String: Any]], "tree should list workspaces")
+        let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
+        let seeded = try XCTUnwrap(sessions.first?["id"] as? String, "should have a seeded session id")
+
+        let set = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"active"}}"#)
+        XCTAssertEqual(set["ok"] as? Bool, true, "session.status active should succeed: \(set)")
+        XCTAssertTrue(app.staticTexts["agent-status"].waitForExistence(timeout: 12),
+                      "active should show the agent-status glyph")
+
+        // Ctrl-C into the focused terminal must clear it. keyboard focus return can be async, so retry.
+        for _ in 0..<8 {
+            app.typeKey("c", modifierFlags: .control)
+            if app.staticTexts["agent-status"].waitForNonExistence(timeout: 2) { return }
+        }
+        XCTFail("Ctrl-C into an active session should clear its glyph")
+    }
+
     // the General → "Show notification badges" toggle gates the red count pill's RENDERING (the count
     // keeps tracking either way): fire a notification on a non-selected session so notify-badge shows,
     // toggle the setting off → the badge hides, toggle on → it reappears with the same count.

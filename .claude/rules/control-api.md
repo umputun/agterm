@@ -743,7 +743,7 @@ paths:
   (nil/omitted is treated as `left` = the main pane).
   It drives two consumers.
   (1) Pane-scoped keystroke-clear: the main/split/scratch surface factories each wire `onUserInputClearsStatus`
-  to a closure that clears only when the host-free `AgentIndicator.clearedBy(pane:isEscape:)` says the keystroke's
+  to a closure that clears only when the host-free `AgentIndicator.clearedBy(pane:isInterrupt:)` says the keystroke's
   OWN pane owns the current status, so a `right`- or `scratch`-tagged block SURVIVES foreground typing in the
   main pane (see the Notifications rule).
   (2) Pane-aware attention navigation: auto-follow and the GUI attention-nav (⌃⌥↑/⌃⌥↓, menu, palette) reveal
@@ -760,7 +760,7 @@ paths:
   color), both populated in the tree builder gated on the SAME non-idle condition — so a script can record
   the FULL status (state + pane + blink + color) and restore it.
   Four-point keep-in-sync audit for `session.status --pane`: (1) the `StatusPane` enum + `AgentIndicator.statusPane`
-  + `AgentIndicator.clearedBy(pane:isEscape:)` + `ControlSessionStatusUpdate.pane` + `ControlSessionNode.statusPane`
+  + `AgentIndicator.clearedBy(pane:isInterrupt:)` + `ControlSessionStatusUpdate.pane` + `ControlSessionNode.statusPane`
   + `SurfaceEnvironment.session(pane:)` (injects `AGTERM_PANE`) in `agtermCore`, plus the dispatcher `StatusPane`
   parse/validation, (2) the `.sessionStatus` arm threading `update.pane` into the indicator + the per-factory
   `AGTERM_PANE` env + the pane-scoped keystroke-clear closures + the `revealActiveBlockedPane` nav step,

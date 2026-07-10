@@ -93,14 +93,15 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// responder, so the app can track which split pane is active. Set by the factory.
     var onFocusChange: ((Bool) -> Void)?
 
-    /// Called on the main actor on EVERY keystroke into this surface, carrying whether the key was Escape.
-    /// The factory's closure owns the pane-scoped decision (via `AgentIndicator.clearedBy(pane:isEscape:)`):
-    /// it clears the glyph to idle only when THIS surface's pane owns a clearable status — `blocked`/`completed`
-    /// on any key (you've engaged with the prompt / finished result), `active` only on Escape (the interrupt
-    /// key). Typing in a foreground pane therefore no longer wipes a background pane's block. Passing the
-    /// pane in the closure (not reading `view.session`) is what lets the scratch surface — which has no
-    /// `view.session` — self-clear its own block. The status is otherwise control-driven; this is the one
-    /// input-driven clear, covering the decline case Claude Code fires no hook for.
+    /// Called on the main actor on EVERY keystroke into this surface, carrying whether the key interrupts
+    /// the agent (Escape or Ctrl-C). The factory's closure owns the pane-scoped decision (via
+    /// `AgentIndicator.clearedBy(pane:isInterrupt:)`): it clears the glyph to idle only when THIS surface's
+    /// pane owns a clearable status — `blocked`/`completed` on any key (you've engaged with the prompt /
+    /// finished result), `active` only on an interrupt keystroke. Typing in a foreground pane therefore no
+    /// longer wipes a background pane's block. Passing the pane in the closure (not reading `view.session`)
+    /// is what lets the scratch surface — which has no `view.session` — self-clear its own block. The status
+    /// is otherwise control-driven; this is the one input-driven clear, covering the decline case Claude
+    /// Code fires no hook for.
     var onUserInputClearsStatus: ((Bool) -> Void)?
 
     /// Called on the main actor on EVERY keystroke into this surface, so the app can stamp user activity

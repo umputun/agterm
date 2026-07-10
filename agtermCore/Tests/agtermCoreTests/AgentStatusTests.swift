@@ -26,18 +26,18 @@ struct AgentStatusTests {
         #expect(!AgentStatus.active.needsAttention)
     }
 
-    @Test func clearedByKeystrokeClearsAttentionAlwaysAndActiveOnlyOnEscape() {
+    @Test func clearedByKeystrokeClearsAttentionAlwaysAndActiveOnlyOnInterrupt() {
         // blocked/completed clear on ANY key — you've engaged with the prompt / finished result
-        #expect(AgentStatus.blocked.clearedByKeystroke(isEscape: false))
-        #expect(AgentStatus.blocked.clearedByKeystroke(isEscape: true))
-        #expect(AgentStatus.completed.clearedByKeystroke(isEscape: false))
-        #expect(AgentStatus.completed.clearedByKeystroke(isEscape: true))
-        // active clears ONLY on Escape (the interrupt key); ordinary typing leaves the working glyph
-        #expect(!AgentStatus.active.clearedByKeystroke(isEscape: false))
-        #expect(AgentStatus.active.clearedByKeystroke(isEscape: true))
+        #expect(AgentStatus.blocked.clearedByKeystroke(isInterrupt: false))
+        #expect(AgentStatus.blocked.clearedByKeystroke(isInterrupt: true))
+        #expect(AgentStatus.completed.clearedByKeystroke(isInterrupt: false))
+        #expect(AgentStatus.completed.clearedByKeystroke(isInterrupt: true))
+        // active clears ONLY on an interrupt keystroke (Esc or Ctrl-C); ordinary typing leaves the glyph
+        #expect(!AgentStatus.active.clearedByKeystroke(isInterrupt: false))
+        #expect(AgentStatus.active.clearedByKeystroke(isInterrupt: true))
         // idle has no glyph to clear
-        #expect(!AgentStatus.idle.clearedByKeystroke(isEscape: false))
-        #expect(!AgentStatus.idle.clearedByKeystroke(isEscape: true))
+        #expect(!AgentStatus.idle.clearedByKeystroke(isInterrupt: false))
+        #expect(!AgentStatus.idle.clearedByKeystroke(isInterrupt: true))
     }
 
     @Test func indicatorDefaults() {
@@ -80,31 +80,31 @@ struct AgentStatusTests {
 
     @Test func clearedByMatchingPaneFollowsClearedByKeystroke() {
         // matching pane clears iff the status itself is clearable by that keystroke
-        #expect(AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .right, isEscape: false))
-        #expect(AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .right, isEscape: true))
-        #expect(AgentIndicator(status: .completed, statusPane: .scratch).clearedBy(pane: .scratch, isEscape: false))
-        // active clears only on Escape, and only for its own pane
-        #expect(!AgentIndicator(status: .active, statusPane: .right).clearedBy(pane: .right, isEscape: false))
-        #expect(AgentIndicator(status: .active, statusPane: .right).clearedBy(pane: .right, isEscape: true))
+        #expect(AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .right, isInterrupt: false))
+        #expect(AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .right, isInterrupt: true))
+        #expect(AgentIndicator(status: .completed, statusPane: .scratch).clearedBy(pane: .scratch, isInterrupt: false))
+        // active clears only on an interrupt keystroke, and only for its own pane
+        #expect(!AgentIndicator(status: .active, statusPane: .right).clearedBy(pane: .right, isInterrupt: false))
+        #expect(AgentIndicator(status: .active, statusPane: .right).clearedBy(pane: .right, isInterrupt: true))
         // idle never clears
-        #expect(!AgentIndicator(status: .idle, statusPane: .right).clearedBy(pane: .right, isEscape: true))
+        #expect(!AgentIndicator(status: .idle, statusPane: .right).clearedBy(pane: .right, isInterrupt: true))
     }
 
     @Test func clearedByNonMatchingPaneNeverClears() {
         // a keystroke from a different pane must never clear a background block
-        #expect(!AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .left, isEscape: false))
-        #expect(!AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .left, isEscape: true))
-        #expect(!AgentIndicator(status: .blocked, statusPane: .scratch).clearedBy(pane: .left, isEscape: false))
-        #expect(!AgentIndicator(status: .active, statusPane: .scratch).clearedBy(pane: .right, isEscape: true))
+        #expect(!AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .left, isInterrupt: false))
+        #expect(!AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .left, isInterrupt: true))
+        #expect(!AgentIndicator(status: .blocked, statusPane: .scratch).clearedBy(pane: .left, isInterrupt: false))
+        #expect(!AgentIndicator(status: .active, statusPane: .scratch).clearedBy(pane: .right, isInterrupt: true))
     }
 
     @Test func clearedByNilStatusPaneTreatedAsLeft() {
         // nil statusPane behaves as .left (main): a left keystroke clears, right/scratch do not
-        #expect(AgentIndicator(status: .blocked).clearedBy(pane: .left, isEscape: false))
-        #expect(!AgentIndicator(status: .blocked).clearedBy(pane: .right, isEscape: false))
-        #expect(!AgentIndicator(status: .blocked).clearedBy(pane: .scratch, isEscape: true))
-        #expect(AgentIndicator(status: .active).clearedBy(pane: .left, isEscape: true))
-        #expect(!AgentIndicator(status: .active).clearedBy(pane: .left, isEscape: false))
+        #expect(AgentIndicator(status: .blocked).clearedBy(pane: .left, isInterrupt: false))
+        #expect(!AgentIndicator(status: .blocked).clearedBy(pane: .right, isInterrupt: false))
+        #expect(!AgentIndicator(status: .blocked).clearedBy(pane: .scratch, isInterrupt: true))
+        #expect(AgentIndicator(status: .active).clearedBy(pane: .left, isInterrupt: true))
+        #expect(!AgentIndicator(status: .active).clearedBy(pane: .left, isInterrupt: false))
     }
 
     @Test func indicatorEquatableEqual() {
