@@ -137,7 +137,9 @@ the default 0.5) —
 the read side of `session resize`, record it to restore the exact divider), `splitFocused`
 (which pane holds focus in a session that has a split — `true` = split/right, `false` = main/left; omitted
 when there's no split; the read side of `session focus`, record it to restore focus), and `surfaces`
-(`id`, `kind`, `active`, `visible`) for `surface zoom`.
+(`id`, `kind`, `active`, `visible`) for `surface zoom`. The tree top level carries `zoomedSurface`
+(the control id of the currently zoomed surface, omitted when nothing is zoomed — the read side of
+`surface zoom`, so a script can check the zoom state and record-then-restore).
 
 **workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom` ·
 `focus [on|off|toggle]` (collapse the sidebar tree to a single workspace; read back which workspace is

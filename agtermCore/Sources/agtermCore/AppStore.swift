@@ -179,7 +179,8 @@ public final class AppStore {
                             fontSize: (Session) -> Double? = { _ in nil },
                             splitFontSize: (Session) -> Double? = { _ in nil },
                             scratchFontSize: (Session) -> Double? = { _ in nil },
-                            quickVisible: () -> Bool? = { nil }) -> ControlTree {
+                            quickVisible: () -> Bool? = { nil },
+                            zoomedSurface: () -> String? = { nil }) -> ControlTree {
         let activeID = selectedSessionID
         let activeWorkspaceID = activeID.flatMap { workspace(forSession: $0)?.id }
         let nodes = workspaces.map { workspace in
@@ -222,7 +223,7 @@ public final class AppStore {
         }
         return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs,
                            sidebarVisible: sidebarVisible, sidebarMode: sidebarMode.rawValue,
-                           quickVisible: quickVisible())
+                           quickVisible: quickVisible(), zoomedSurface: zoomedSurface())
     }
 
     /// Creates a workspace and appends it. Clears any active focus so the new (empty)

@@ -85,6 +85,53 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
                       "hiding the zoomed quick terminal should exit zoom")
     }
 
+    func testZoomedSurfaceTreeReadBackAndScopedErrorPaths() throws {
+        // unzoomed: the tree must OMIT zoomedSurface (nil closure result → key absent, not null).
+        XCTAssertNil(try treeZoomedSurface(), "zoomedSurface should be absent while nothing is zoomed")
+
+        // zoom the active session's left surface and read the SAME id back from the tree top level —
+        // the record-then-restore leg of the write-only surface.zoom command.
+        let leftSurface = try activeSurfaceID(kind: "left")
+        let zoom = try sendCommand(#"{"cmd":"surface.zoom","target":"\#(leftSurface)","args":{"mode":"show"}}"#)
+        XCTAssertEqual(zoom["ok"] as? Bool, true, "surface zoom show should succeed: \(zoom)")
+        XCTAssertEqual(try treeZoomedSurface(), leftSurface,
+                       "the tree's zoomedSurface must echo the zoomed surface's control id")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"surface.zoom","args":{"mode":"hide"}}"#)["ok"] as? Bool, true,
+                       "zoom hide should succeed")
+        XCTAssertNil(try treeZoomedSurface(), "zoomedSurface should clear on zoom exit")
+
+        // error paths. a well-formed id whose session exists nowhere → no such surface.
+        let ghost = "surface:00000000-0000-0000-0000-000000000000:left"
+        let noSuch = try sendCommand(#"{"cmd":"surface.zoom","target":"\#(ghost)","args":{"mode":"show"}}"#)
+        XCTAssertEqual(noSuch["ok"] as? Bool, false, "zooming an unknown surface should fail: \(noSuch)")
+        XCTAssertEqual(noSuch["error"] as? String, "no such surface: \(ghost)")
+
+        // a malformed target → invalid surface.
+        let invalid = try sendCommand(#"{"cmd":"surface.zoom","target":"not-a-surface","args":{"mode":"show"}}"#)
+        XCTAssertEqual(invalid["ok"] as? Bool, false, "a malformed target should fail: \(invalid)")
+        XCTAssertEqual(invalid["error"] as? String, "invalid surface: not-a-surface")
+
+        // a real surface addressed through a --window that does not own it → no such surface (scoped).
+        let created = try sendCommand(#"{"cmd":"window.new","args":{"name":"zoom-err"}}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true, "window.new should succeed: \(created)")
+        let otherWindow = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String,
+                                        "window.new should return the new window id")
+        let wrongWindow = try sendCommand(
+            #"{"cmd":"surface.zoom","target":"\#(leftSurface)","args":{"mode":"show","window":"\#(otherWindow)"}}"#)
+        XCTAssertEqual(wrongWindow["ok"] as? Bool, false,
+                       "zooming a surface through a window that does not own it should fail: \(wrongWindow)")
+        XCTAssertEqual(wrongWindow["error"] as? String, "no such surface: \(leftSurface)")
+
+        // a known-but-CLOSED window → window not open (the resolver knows the id; there is no live store).
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.close","target":"\#(otherWindow)"}"#)["ok"] as? Bool, true,
+                       "closing the helper window should succeed")
+        let closed = try sendCommand(
+            #"{"cmd":"surface.zoom","args":{"mode":"show","window":"\#(otherWindow)"}}"#)
+        XCTAssertEqual(closed["ok"] as? Bool, false, "zooming in a closed window should fail: \(closed)")
+        XCTAssertEqual(closed["error"] as? String, "window not open — window.select it first")
+    }
+
     func testZoomingBackgroundTargetEndsItsSearch() throws {
         // open search on session A (session.search selects its target, so A is active with the bar up).
         let sessionA = try activeSessionID()
@@ -124,6 +171,14 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         }
         return false
+    }
+
+    /// The tree's top-level `zoomedSurface`, or nil when omitted (nothing zoomed).
+    private func treeZoomedSurface() throws -> String? {
+        let treeResponse = try sendCommand(#"{"cmd":"tree"}"#)
+        let result = try XCTUnwrap(treeResponse["result"] as? [String: Any], "tree should carry a result")
+        let tree = try XCTUnwrap(result["tree"] as? [String: Any], "result should carry a tree")
+        return tree["zoomedSurface"] as? String
     }
 
     private func activeSurfaceID(kind: String) throws -> String {

@@ -266,6 +266,10 @@ public struct ControlRequest: Codable, Sendable, Equatable {
 
 /// A terminal surface as projected into the `tree` response. `id` is the stable control address to pass
 /// to `surface.zoom`; `kind` is the user-facing surface name (`left`, `right`, `scratch`, `overlay`).
+/// `active`/`visible` are derived from the session's own flags (overlay/scratch/splitFocused), NOT from
+/// terminal zoom — and `visible` reads false for a pane behind a FLOATING overlay even though that pane
+/// is visually on screen (the derivation treats any open overlay as covering). Address by `id`/`kind`,
+/// not by these flags; read the window's zoom state from the tree's top-level `zoomedSurface`.
 public struct ControlSurfaceNode: Codable, Sendable, Equatable {
     public let id: String
     public let kind: String
@@ -440,15 +444,24 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// (not on `window.list`), since a GUI-only ⌃` toggle bypasses the command path and would leave a
     /// cached copy stale — read the live tree copy instead. nil in a host-produced tree with no app closure.
     public let quickVisible: Bool?
+    /// The control id of the surface terminal zoom currently fills the projected window with —
+    /// `surface:<session-id>:<kind>` for a session surface, `quick` for the quick terminal — or
+    /// nil/omitted when nothing is zoomed. LIVE — resolved app-side per request from the window's
+    /// `TerminalZoomController` — the read side of the write-only `surface.zoom` command, so a script
+    /// can check "is it already zoomed" and record-then-restore. `tree`-only (not on `window.list`),
+    /// like `quickVisible`: the GUI toggle bypasses the command path and would leave a cached copy stale.
+    public let zoomedSurface: String?
 
     public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
-                sidebarVisible: Bool? = nil, sidebarMode: String? = nil, quickVisible: Bool? = nil) {
+                sidebarVisible: Bool? = nil, sidebarMode: String? = nil, quickVisible: Bool? = nil,
+                zoomedSurface: String? = nil) {
         self.workspaces = workspaces
         self.idleMs = idleMs
         self.autoFollowMs = autoFollowMs
         self.sidebarVisible = sidebarVisible
         self.sidebarMode = sidebarMode
         self.quickVisible = quickVisible
+        self.zoomedSurface = zoomedSurface
     }
 }
 

@@ -736,6 +736,25 @@ struct ControlProtocolTests {
         #expect(decoded.quickVisible == nil)
     }
 
+    @Test func treeRoundTripsWithZoomedSurface() throws {
+        // the read side of surface.zoom: the zoomed surface's control id rides the tree top level so a
+        // script can check "is it already zoomed" and record-then-restore.
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [], zoomedSurface: "surface:5E5B1C5B-75C5-49E6-8806-2C61D8D6BBA9:right")))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.zoomedSurface == "surface:5E5B1C5B-75C5-49E6-8806-2C61D8D6BBA9:right")
+    }
+
+    @Test func treeOmitsZoomedSurfaceWhenNil() throws {
+        // nothing zoomed (or a host-produced tree with no app closure) — the key must be omitted, not null.
+        let tree = ControlTree(workspaces: [])
+        let json = String(data: try JSONEncoder().encode(tree), encoding: .utf8) ?? ""
+        #expect(!json.contains("zoomedSurface"), "a nil zoomedSurface must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlTree.self, from: Data(json.utf8))
+        #expect(decoded.zoomedSurface == nil)
+    }
+
     @Test func backgroundWatermarkFitPositionSerializeAsRawStrings() throws {
         // the Fit/Position enums must serialize to ghostty's exact key strings (identical to the former
         // String), so the wire + persisted JSON are unchanged by the enum migration.

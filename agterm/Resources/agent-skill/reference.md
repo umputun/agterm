@@ -68,22 +68,30 @@ default/left target (the main pane, or the promoted split survivor once the prim
 promoted survivor are live-only — read them back here rather than from the snapshot), and `surfaces` (array
 of `{id, kind, active, visible}` where `kind` is `left`|`right`|`scratch`|`overlay`).
 The surface `id` is the address for `surface zoom`; hidden-but-alive split/scratch surfaces are included
-so a script can zoom them without changing split/scratch visibility first. Workspace nodes carry
+so a script can zoom them without changing split/scratch visibility first. Caveat: `active`/`visible`
+derive from the session's own flags, not from zoom — and `visible` reads false for a pane behind a
+FLOATING overlay even though it is visually on screen; address by `id`/`kind`, and read the zoom state
+from the top-level `zoomedSurface`. Workspace nodes carry
 `id`, `name`, `active`, `sessions`, and `focused` (whether the sidebar
 tree is collapsed to this workspace — the read side of `workspace focus`, distinct from `active` the
 SELECTED workspace; omitted unless this is the focused one, and absent entirely when nothing is focused).
 
-The tree object itself carries five top-level read-only fields: `idleMs` (milliseconds since the last
+The tree object itself carries six top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
 timeout in milliseconds, omitted when the setting is Disabled), `sidebarVisible` (whether the
 window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
 can restore it, e.g. a tmux-style zoom that hides the sidebar and must re-show it only when it was
 visible before), `sidebarMode` (`tree` or `flagged` — the sidebar view mode, the read side of
-`sidebar mode`), and `quickVisible` (whether the window's quick terminal is currently shown — the read
-side of the write-only `quick` command, so a script can make the toggle idempotent). `idleMs` is live
+`sidebar mode`), `quickVisible` (whether the window's quick terminal is currently shown — the read
+side of the write-only `quick` command, so a script can make the toggle idempotent), and
+`zoomedSurface` (the control id of the surface terminal zoom currently fills the window with —
+`surface:<session-id>:<kind>` or `quick`; omitted when nothing is zoomed — the read side of the
+write-only `surface zoom` command, so a script can check "is it already zoomed" and
+record-then-restore). `idleMs` is live
 and grows while the window is idle, so it is on `tree` only, never `window.list`; `sidebarVisible` is on
-both; `sidebarMode` and `quickVisible` are `tree`-only (a GUI toggle would leave a cached copy stale).
-All five are read-only projections of GUI state.
+both; `sidebarMode`, `quickVisible`, and `zoomedSurface` are `tree`-only (a GUI toggle would leave a
+cached copy stale).
+All six are read-only projections of GUI state.
 
 ## workspace
 
@@ -355,7 +363,9 @@ returns when the quick terminal is the zoom target).
 
 `show` is idempotent; `hide` exits zoom and is idempotent too (when an explicit id is provided, it
 only clears that same zoom target, and succeeds as a no-op even if that surface has since vanished);
-`toggle` enters when unzoomed and exits when that surface is already zoomed. This is NOT
+`toggle` enters when unzoomed and exits when that surface is already zoomed. Read the current zoom
+back from the tree's top-level `zoomedSurface` (the zoomed surface's control id, omitted when nothing
+is zoomed). This is NOT
 `window zoom`: it does not change the macOS window frame and it must not mutate split ratios, focus,
 sidebar state, or split/scratch visibility. Entering zoom does close the window's transient chrome —
 an open command palette, an active in-terminal search, and (for a session-surface zoom) a visible

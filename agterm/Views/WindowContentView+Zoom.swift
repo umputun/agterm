@@ -124,7 +124,9 @@ extension WindowContentView {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(terminalColor)
+        // no opaque backing: the deck behind is already at opacity 0, so the window backing shows
+        // through and zoom keeps the un-zoomed terminal's translucency (an opaque color here flipped
+        // a translucent window solid on zoom and back).
         .accessibilityIdentifier("terminal-zoom")
     }
 

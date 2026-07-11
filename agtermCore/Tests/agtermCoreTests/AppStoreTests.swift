@@ -1433,6 +1433,17 @@ struct AppStoreTests {
         #expect(store.controlTree(quickVisible: { false }).quickVisible == false)
     }
 
+    @Test func controlTreeReportsZoomedSurfaceFromClosure() {
+        let store = makeStore()
+        // no closure (host-free / default) or nothing zoomed: omitted (nil).
+        #expect(store.controlTree().zoomedSurface == nil)
+        #expect(store.controlTree(zoomedSurface: { nil }).zoomedSurface == nil)
+        // the app supplies the live TerminalZoomController.target?.controlID via the closure.
+        let id = "surface:\(UUID().uuidString):left"
+        #expect(store.controlTree(zoomedSurface: { id }).zoomedSurface == id)
+        #expect(store.controlTree(zoomedSurface: { "quick" }).zoomedSurface == "quick")
+    }
+
     @Test func setSidebarVisiblePostsChangeNotificationOnlyOnChange() {
         // the app-target ControlServer observes this to refresh window.list's cached sidebarVisible; the
         // post must fire only on an actual change (queue nil so the synchronous post delivers inline).

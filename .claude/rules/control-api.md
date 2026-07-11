@@ -695,10 +695,21 @@ paths:
   idempotent (a zoomed quick terminal un-zooms first, so a script can always dismiss it), and an
   explicit-target `surface.zoom hide` skips the availability check so hide is idempotent even after
   the surface vanished.
+  The READ side is `ControlTree.zoomedSurface` at the tree TOP level — the zoomed surface's control id
+  (`surface:<session-id>:<kind>` or `quick`), nil/omitted when nothing is zoomed — LIVE, resolved
+  app-side in `buildTree` from the projected window's `TerminalZoomController.target?.controlID` and
+  threaded as a `zoomedSurface: () -> String?` closure on `AppStore.controlTree` (the `quickVisible`
+  seam), `tree`-only for the same staleness reason; so a script can check "is it already zoomed" and
+  record-then-restore. The per-session `surfaces` nodes are the ADDRESSING list, not the state read-back:
+  `ControlSurfaceNode.active`/`visible` derive from session flags (overlay/scratch/splitFocused), are
+  identical zoomed or not, and `visible` reads false for a pane behind a FLOATING overlay even though
+  that pane is visually on screen — documented as a caveat on the node type and in the skill.
   Four-point keep-in-sync audit: (1) `case surfaceZoom = "surface.zoom"` + `ControlSurfaceNode`/`ControlSessionNode.surfaces`
-  in `ControlProtocol.swift`, (2) the `.surfaceZoom` arm (`setSurfaceZoom`) in `ControlServer+SessionActions.swift`
-  + the `surfaces` population in `AppStore.controlTree`, (3) the `surface zoom` subcommand in `agtermctlKit`,
-  (4) round-trip in `ControlProtocolTests` + `TerminalZoomTests` + the e2e `ControlSurfaceZoomUITests`.
+  + `ControlTree.zoomedSurface` in `ControlProtocol.swift`, (2) the `.surfaceZoom` arm (`setSurfaceZoom`) in `ControlServer+SessionActions.swift`
+  + the `surfaces`/`zoomedSurface` population in `AppStore.controlTree`/`buildTree`, (3) the `surface zoom` subcommand in `agtermctlKit`,
+  (4) round-trip in `ControlProtocolTests` (incl. `treeRoundTripsWithZoomedSurface`/`…OmitsZoomedSurfaceWhenNil`)
+  + `TerminalZoomTests` + the e2e `ControlSurfaceZoomUITests` (incl. the tree read-back and the
+  `--window`-scoped error paths).
   Mode-bearing commands (`session.split`/`quick`) compute the delta against current state so `on`/`off`/`show`/`hide`
   are idempotent, and an unknown mode is an error.
   `quick`'s visibility reads back on `ControlTree.quickVisible` at the tree TOP level — LIVE, resolved

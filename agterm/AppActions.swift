@@ -197,6 +197,7 @@ final class AppActions {
 
     /// Undo the latest grace-period session/workspace close in the frontmost window.
     func undoClose() {
+        guard uiActionsEnabled else { return }
         guard let store else { return }
         let restored = withAnimation(.easeInOut(duration: 0.16)) {
             store.undoPendingClose()
@@ -206,11 +207,13 @@ final class AppActions {
     }
 
     func openRecentClosed(_ id: RecentClosedItem.ID) {
+        guard uiActionsEnabled else { return }
         guard library.reopenRecentClosed(id) else { return }
         focusActiveSession()
     }
 
     func openLatestRecentClosed() {
+        guard uiActionsEnabled else { return }
         guard library.reopenLatestRecentClosed() else { return }
         focusActiveSession()
     }

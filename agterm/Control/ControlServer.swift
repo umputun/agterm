@@ -450,7 +450,8 @@ final class ControlServer {
             fontSize: { ($0.addressableSurface as? GhosttySurfaceView)?.currentFontSize() },
             splitFontSize: { ($0.splitSurface as? GhosttySurfaceView)?.currentFontSize() },
             scratchFontSize: { ($0.scratchSurface as? GhosttySurfaceView)?.currentFontSize() },
-            quickVisible: { windowID.flatMap { QuickTerminalRegistry.shared.controller(for: $0)?.isVisible } ?? false }
+            quickVisible: { windowID.flatMap { QuickTerminalRegistry.shared.controller(for: $0)?.isVisible } ?? false },
+            zoomedSurface: { windowID.flatMap { TerminalZoomRegistry.shared.controller(for: $0)?.target?.controlID } }
         )
     }
 

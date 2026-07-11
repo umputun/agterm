@@ -400,6 +400,9 @@ surface=$(agtermctl tree --json |
     | .id')
 agtermctl surface zoom show --target "$surface"
 agtermctl surface zoom hide --target "$surface"
+
+# Read the current zoom back (the zoomed surface's control id; null when nothing is zoomed).
+agtermctl tree --json | jq -r '.result.tree.zoomedSurface'
 ```
 
 `surface zoom` is not `window zoom`: it does not move/resize the macOS window and must not change split
