@@ -77,6 +77,15 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// background); below 5 lightens it, above 5 darkens it.
     public static let defaultSidebarBackgroundShift = 5
 
+    /// The out-of-the-box sidebar row-text point size, used when `sidebarFontSize` is nil. Matches the
+    /// macOS `.body` text style (13pt) the sidebar rows used before the size became configurable, so a
+    /// fresh install renders exactly as it always did.
+    public static let defaultSidebarFontSize: Double = 13
+
+    /// The allowed sidebar row-text point-size range (the Settings stepper bounds). Kept modest so the
+    /// fixed-size row icons and status glyphs stay visually balanced against the text at either end.
+    public static let sidebarFontSizeRange: ClosedRange<Double> = 9 ... 20
+
     /// Terminal font family name (e.g. `SF Mono`), or nil for the ghostty default.
     public var fontFamily: String?
     /// Default terminal font size in points, or nil for the ghostty default.
@@ -200,6 +209,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// blocked one. nil/false means the default (off — auto-follow always pulls to blocked). Only meaningful
     /// when `autoFollowAttention` is set. An app-level flag, NOT a ghostty key.
     public var autoFollowStayOnActive: Bool?
+    /// The sidebar row-text point size, or nil for the default (`defaultSidebarFontSize`). The row height
+    /// scales with it (`sidebarRowHeight(fontSize:)`); the row icons and status glyphs keep their fixed
+    /// sizes. Applied at the AppKit level when the sidebar draws, NOT a ghostty key — it never appears in
+    /// `ghosttyConfigLines()`.
+    public var sidebarFontSize: Double?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 darkTheme: String? = nil, followSystemAppearance: Bool? = nil,
@@ -214,7 +228,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 newSessionDirectory: String? = nil, newSessionCustomDirectory: String? = nil,
                 confirmCloseSession: Bool? = nil, closeGraceUndoEnabled: Bool? = nil,
                 autoFollowAttention: String? = nil,
-                autoFollowStayOnActive: Bool? = nil) {
+                autoFollowStayOnActive: Bool? = nil, sidebarFontSize: Double? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -244,6 +258,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.closeGraceUndoEnabled = closeGraceUndoEnabled
         self.autoFollowAttention = autoFollowAttention
         self.autoFollowStayOnActive = autoFollowStayOnActive
+        self.sidebarFontSize = sidebarFontSize
     }
 
     /// The resolved titlebar row state: the explicit `toolbarMode` when set to a KNOWN raw value, else the
@@ -287,6 +302,19 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// background is what the app target's sidebar tint does (`WindowContentView.sidebarTintWash`).
     public static func sidebarShiftAmount(strength: Int) -> Double {
         Double(min(10, max(0, strength)) - 5) * 0.06
+    }
+
+    /// The clamped sidebar row-text point size for a raw value: bounded to `sidebarFontSizeRange` so a
+    /// stray persisted or out-of-range value can't produce a degenerate row.
+    public static func clampSidebarFontSize(_ size: Double) -> Double {
+        min(sidebarFontSizeRange.upperBound, max(sidebarFontSizeRange.lowerBound, size))
+    }
+
+    /// The outline row height for a given sidebar font size: the clamped point size plus a fixed 15pt of
+    /// vertical padding, so the default 13pt maps to the historical 28pt row and larger text gets a
+    /// proportionally taller row. The row icon and status glyph keep their fixed sizes.
+    public static func sidebarRowHeight(fontSize: Double) -> Double {
+        clampSidebarFontSize(fontSize).rounded() + 15
     }
 
     /// The theme name that renders for the given appearance: when following, the dark slot in dark mode

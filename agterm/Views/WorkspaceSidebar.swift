@@ -35,7 +35,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // sidebar tree runs flush below the titlebar in every toolbar mode); a custom row height restores
         // the roomy source-list-like row size that .plain's .default would otherwise shrink to ~17px.
         outline.rowSizeStyle = .custom
-        outline.rowHeight = 28
+        outline.rowHeight = AppSettings.sidebarRowHeight(fontSize: GhosttyApp.shared.sidebarFontSize)
         outline.floatsGroupRows = false
         outline.indentationPerLevel = 14
         outline.autosaveExpandedItems = false
@@ -179,6 +179,12 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// reconcile reloads only the rows whose content changed. An absent key ≠ any real content.
         private var lastRowContent: [UUID: RowContent] = [:]
 
+        /// The sidebar font size last applied to the outline (row height + row fonts). `.agtermAppearanceChanged`
+        /// fires for every settings change (theme, colors, toggles), but the font size isn't part of the
+        /// per-row content diff, so `appearanceChanged` compares against this and only rebuilds when it
+        /// actually changed — avoiding a full reload on every unrelated appearance change.
+        private var lastSidebarFontSize: CGFloat = CGFloat(AppSettings.defaultSidebarFontSize)
+
         /// Centered hint shown over the (empty) outline in flagged mode when nothing is flagged. Floats in
         /// the scroll view above the document, hidden otherwise.
         private weak var emptyStateLabel: NSTextField?
@@ -188,6 +194,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
             self.actions = actions
             self.renameController = SidebarRenameController(store: store)
             super.init()
+            // seed from the live mirror (SettingsModel applied the persisted size at launch, before any
+            // window's sidebar is built) so the first appearanceChanged doesn't rebuild for no change.
+            lastSidebarFontSize = GhosttyApp.shared.sidebarFontSize
             renameController.onRenameEnded = { [weak self] in self?.focusActiveTerminal() }
             // the menu/palette can't reach the inline editor directly, so they post a
             // notification and this coordinator starts the edit on the selected row.
@@ -245,6 +254,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
         }
 
         @objc private func appearanceChanged() {
+            applySidebarFontSizeIfChanged()
             refreshSelectionAppearance()
             applyThemeAppearance()
             // a settings change may have flipped the badge-visibility toggle; reconcile so the gated
@@ -257,6 +267,19 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // re-apply the sidebar content inset in case a settings change requires recomputing it (the
             // inset itself is mode-independent, so this is a cheap re-assert, not a per-mode recalculation).
             applySidebarContentInset(outlineView?.enclosingScrollView)
+        }
+
+        /// Re-apply the sidebar row height + fonts when the sidebar font-size setting changed. The font size
+        /// isn't part of the per-row content diff `reconcile` uses, so a change needs an explicit row-height
+        /// update and a full `rebuildAndReload` (which re-runs the cell builder, re-setting each row's font).
+        /// Guarded on the tracked value so an unrelated appearance change (theme/color/toggle) doesn't force
+        /// a needless full reload.
+        private func applySidebarFontSizeIfChanged() {
+            let size = GhosttyApp.shared.sidebarFontSize
+            guard size != lastSidebarFontSize else { return }
+            lastSidebarFontSize = size
+            outlineView?.rowHeight = AppSettings.sidebarRowHeight(fontSize: size)
+            rebuildAndReload()
         }
 
         /// Re-apply the status glyph on every visible session row so a global agent-status color change

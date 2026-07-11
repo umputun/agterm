@@ -74,6 +74,7 @@ final class SettingsModel {
         applyNotificationBadgeEnabled()
         applyInactivePaneMute()
         applySidebarBackgroundShift()
+        applySidebarFontSize()
         applyAgentStatusColors()
         applyRestoreRunningCommand()
         applyAttentionButtonEnabled()
@@ -222,6 +223,7 @@ final class SettingsModel {
     func setRightClickPaste(_ value: Bool?) { settings.rightClickPaste = value; persistAndApply() }
     func setInactivePaneMuteStrength(_ value: Int?) { settings.inactivePaneMuteStrength = value; persistAndApply() }
     func setSidebarBackgroundShift(_ value: Int?) { settings.sidebarBackgroundShift = value; persistAndApply() }
+    func setSidebarFontSize(_ value: Double?) { settings.sidebarFontSize = value; persistAndApply() }
     // not a ghostty key, so persistAndApply()'s writeGhosttyConfig() no-ops and no surface reload fires.
     func setRestoreRunningCommand(_ value: Bool?) { settings.restoreRunningCommand = value; persistAndApply() }
     // chrome flag, not a ghostty key: persistAndApply() no-ops the config but rides .agtermAppearanceChanged.
@@ -628,6 +630,7 @@ final class SettingsModel {
         applyNotificationBadgeEnabled()
         applyInactivePaneMute()
         applySidebarBackgroundShift()
+        applySidebarFontSize()
         applyAgentStatusColors()
         applyRestoreRunningCommand()
         applyAttentionButtonEnabled()
@@ -690,6 +693,10 @@ final class SettingsModel {
     private func applySidebarBackgroundShift() {
         GhosttyApp.shared.setSidebarBackgroundShift(
             settings.sidebarBackgroundShift ?? AppSettings.defaultSidebarBackgroundShift)
+    }
+
+    private func applySidebarFontSize() {
+        GhosttyApp.shared.setSidebarFontSize(settings.sidebarFontSize ?? AppSettings.defaultSidebarFontSize)
     }
 
     private func applyAgentStatusColors() {

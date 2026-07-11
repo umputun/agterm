@@ -86,6 +86,11 @@ final class GhosttyApp {
     /// `AppSettings.sidebarShiftAmount`), `SettingsModel` writes it. The re-render rides the
     /// `.agtermAppearanceChanged` notification, like `toolbarMode`.
     private(set) var sidebarBackgroundShift: Int = AppSettings.defaultSidebarBackgroundShift
+    /// The sidebar row-text point size. NOT ghostty-resolved: the sidebar Coordinator reads it when
+    /// building each row's font and deriving the row height (via `AppSettings.sidebarRowHeight`),
+    /// `SettingsModel` writes it. The re-render rides the `.agtermAppearanceChanged` notification, like
+    /// `toolbarMode`.
+    private(set) var sidebarFontSize: CGFloat = CGFloat(AppSettings.defaultSidebarFontSize)
     /// The agent-status glyph colors (active/blocked/completed). NOT ghostty-resolved: `StatusIconView`
     /// reads them when building the glyph, `SettingsModel` writes them (resolved from the user's hex or
     /// the default). The sidebar re-render rides the `.agtermAppearanceChanged` notification. The active
@@ -190,6 +195,12 @@ final class GhosttyApp {
     /// every change; the window re-sync rides the `.agtermAppearanceChanged` notification.
     func setSidebarBackgroundShift(_ strength: Int) {
         sidebarBackgroundShift = strength
+    }
+
+    /// Set the sidebar row-text point size. Called by `SettingsModel` at launch and on every change; the
+    /// sidebar re-render (fonts + row height) rides the `.agtermAppearanceChanged` notification.
+    func setSidebarFontSize(_ size: Double) {
+        sidebarFontSize = CGFloat(size)
     }
 
     /// Set the agent-status glyph colors from the user's hex settings (nil/malformed → the system

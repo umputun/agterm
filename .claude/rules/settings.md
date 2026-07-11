@@ -34,6 +34,10 @@ paths:
   + `inactivePaneMuteStrength` (0...10 inactive-split-pane text mute, nil = default 5,
   NOT a ghostty key) + `sidebarBackgroundShift` (0...10 sidebar lighter/darker tint relative to the terminal,
   nil = default 5 = neutral, NOT a ghostty key)
+  + `sidebarFontSize` (sidebar row-text point size, nil = default 13 = the historical `.body` size;
+  the row height scales with it via `AppSettings.sidebarRowHeight(fontSize:)` [clamped point size + 15pt
+  padding, so 13 → the historical 28pt row], the row icons/status glyphs keep their fixed sizes;
+  clamped to `AppSettings.sidebarFontSizeRange` [9...20], NOT a ghostty key)
   + `rightClickPaste` (ghostty `right-click-action`, nil = on)
   + `newSessionDirectory`/`newSessionCustomDirectory` (where a new ⌘T session opens: nil = home default,
   else the current session's cwd or a fixed custom dir; NOT ghostty keys)
@@ -151,8 +155,11 @@ paths:
   **Appearance** (a **Terminal** section — font/size/theme via `NSFontManager` monospaced families +
   the bundled `ghostty/themes` dir, `SettingsCatalog` — a **Window** section with the Normal/Compact/Hidden
   toolbar-mode dropdown Picker (`settings-toolbar-mode`, bound to `effectiveToolbarMode` via `model.setToolbarMode`,
-  `.compact` mapping back to nil) + background opacity/blur sliders + the Sidebar Tint slider, and a
-  **Panes** section with the inactive-pane-mute slider).
+  `.compact` mapping back to nil) + background opacity/blur sliders + the Sidebar Tint slider + the Sidebar
+  Font Size stepper (`settings-sidebar-font-size`, 9...20, `AppSettings.defaultSidebarFontSize` 13 mapping
+  back to nil, matching the terminal font-size stepper's style) + the inactive-pane-mute slider.
+  The formerly-separate **Panes** section was folded into **Window** so the tab still fits 480×590 without
+  scrolling after adding the font-size stepper).
   **Notifications** (a **Notifications** section with the banner / badge / attention-indicator toggles).
   **Agent Status** (a **Colors** section with the three glyph color pickers, a **Sound** section with
   the blocked-sound picker, an **Auto-follow** section with the idle-timeout Picker

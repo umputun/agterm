@@ -318,6 +318,36 @@ struct AppSettingsTests {
         #expect(AppSettings.defaultSidebarBackgroundShift == 5)
     }
 
+    @Test func sidebarFontSizeRoundTripsAndIsNotAConfigLine() throws {
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(sidebarFontSize: 16)))
+        #expect(decoded.sidebarFontSize == 16)
+        // AppKit-level sidebar font applied in the app target, never a ghostty config key.
+        #expect(AppSettings(sidebarFontSize: 16).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
+
+    @Test func sidebarFontSizeDefaultsNilAndOmitsFromJSON() throws {
+        #expect(AppSettings().sidebarFontSize == nil)
+        let json = String(decoding: try JSONEncoder().encode(AppSettings()), as: UTF8.self)
+        #expect(!json.contains("sidebarFontSize"))
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(decoded.sidebarFontSize == nil)
+    }
+
+    @Test func sidebarFontSizeClampsToRange() {
+        #expect(AppSettings.defaultSidebarFontSize == 13)
+        #expect(AppSettings.clampSidebarFontSize(13) == 13)
+        #expect(AppSettings.clampSidebarFontSize(2) == AppSettings.sidebarFontSizeRange.lowerBound)
+        #expect(AppSettings.clampSidebarFontSize(99) == AppSettings.sidebarFontSizeRange.upperBound)
+    }
+
+    @Test func sidebarRowHeightScalesWithFontSize() {
+        #expect(AppSettings.sidebarRowHeight(fontSize: 13) == 28) // the historical default row
+        #expect(AppSettings.sidebarRowHeight(fontSize: 18) == 33)
+        // out-of-range sizes clamp before the padding is added.
+        #expect(AppSettings.sidebarRowHeight(fontSize: 2) == AppSettings.sidebarFontSizeRange.lowerBound.rounded() + 15)
+        #expect(AppSettings.sidebarRowHeight(fontSize: 99) == AppSettings.sidebarFontSizeRange.upperBound.rounded() + 15)
+    }
+
     @Test func defaultThemeIsAgtermButNotBakedIntoAppSettings() {
         #expect(AppSettings.defaultTheme == "agterm")
         // the seed lives in SettingsStore.load, NOT the memberwise default — AppSettings() stays

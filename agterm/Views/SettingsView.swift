@@ -198,9 +198,9 @@ private struct GeneralSettingsView: View {
     }
 }
 
-/// Appearance tab: a Terminal section (font family, default font size, theme), a Window section
-/// (toolbar mode — Normal/Compact/Hidden, background opacity + blur, sidebar tint), and a Panes section
-/// (inactive-pane dimming). Each control persists and live-applies through `SettingsModel`.
+/// Appearance tab: a Terminal section (font family, default font size, theme) and a Window section
+/// (toolbar mode — Normal/Compact/Hidden, background opacity + blur, sidebar tint, sidebar font size,
+/// inactive-pane dimming). Each control persists and live-applies through `SettingsModel`.
 private struct AppearanceSettingsView: View {
     let model: SettingsModel
     private let themes = SettingsCatalog.themeNames()
@@ -281,9 +281,12 @@ private struct AppearanceSettingsView: View {
                         .monospacedDigit()
                         .frame(width: 64, alignment: .trailing)
                 }
-            }
 
-            Section("Panes") {
+                Stepper(value: sidebarFontSize, in: AppSettings.sidebarFontSizeRange, step: 1) {
+                    Text("Sidebar font size: \(Int(model.settings.sidebarFontSize ?? AppSettings.defaultSidebarFontSize))")
+                }
+                .accessibilityIdentifier("settings-sidebar-font-size")
+
                 HStack {
                     Text("Inactive pane mute")
                     Slider(value: inactivePaneMuteStrength, in: 0 ... 10, step: 1)
@@ -304,6 +307,12 @@ private struct AppearanceSettingsView: View {
 
     private var fontSize: Binding<Double> {
         Binding(get: { model.settings.fontSize ?? 13 }, set: { model.setFontSize($0) })
+    }
+
+    /// The sidebar row-text size; the default maps back to nil so `settings.json` stays minimal.
+    private var sidebarFontSize: Binding<Double> {
+        Binding(get: { model.settings.sidebarFontSize ?? AppSettings.defaultSidebarFontSize },
+                set: { model.setSidebarFontSize($0 == AppSettings.defaultSidebarFontSize ? nil : $0) })
     }
 
     /// Whether the terminal follows the macOS appearance — reveals the alternate picker.

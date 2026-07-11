@@ -44,7 +44,7 @@ extension WorkspaceSidebar.Coordinator {
         case .workspace:
             let workspace = store.workspaces.first(where: { $0.id == node.id })
             field.stringValue = workspace?.name ?? ""
-            field.font = .systemFont(ofSize: NSFont.preferredFont(forTextStyle: .body).pointSize, weight: .medium)
+            field.font = .systemFont(ofSize: GhosttyApp.shared.sidebarFontSize, weight: .medium)
             field.setAccessibilityIdentifier("workspace-row")
             // expose the workspace name so app.staticTexts["workspace 1"] resolves
             field.setAccessibilityLabel(workspace?.name ?? "")
@@ -55,7 +55,7 @@ extension WorkspaceSidebar.Coordinator {
             cell.imageView?.setAccessibilityIdentifier("workspace-icon")
         case .session:
             field.stringValue = rowLabel(forSession: node.id)
-            field.font = .preferredFont(forTextStyle: .body)
+            field.font = .systemFont(ofSize: GhosttyApp.shared.sidebarFontSize)
             field.setAccessibilityIdentifier("session-row")
             field.setAccessibilityLabel(nil)
             let session = store.session(withID: node.id)
