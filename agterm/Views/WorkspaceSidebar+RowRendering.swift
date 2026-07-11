@@ -72,7 +72,10 @@ extension WorkspaceSidebar.Coordinator {
             cell.imageView?.setAccessibilityIdentifier("session-icon")
         }
         // text/icon colors track the terminal theme; a selected row uses the selection foreground.
-        // refreshSelectionAppearance re-runs this for all rows on selection and theme changes.
+        // this build-time tint is a first guess — row(forItem:) can miss (-1) while the row map is in
+        // flux during a reload or expand/collapse animation. SidebarRowView.didAddSubview re-asserts
+        // the tint from the row's live isSelected when the cell attaches, and its isSelected didSet
+        // keeps it in step afterwards; refreshSelectionAppearance re-runs it on theme changes.
         let selected = outlineView.selectedRowIndexes.contains(outlineView.row(forItem: item))
         cell.setColors(selected: selected)
         return cell

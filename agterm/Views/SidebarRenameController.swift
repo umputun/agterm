@@ -128,10 +128,12 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
         field.setAccessibilityIdentifier(kind == .workspace ? "workspace-row" : "session-row")
         // beginEditing painted the field with the theme fg-on-bg for the edit box; restore the row's
         // selection-aware themed color so a commit that didn't change the name (no reload) doesn't
-        // leave the edit color stuck on the row.
-        if let outline = outlineView, let cell = field.superview as? SidebarCellView {
-            let row = outline.row(for: field)
-            cell.setColors(selected: row >= 0 && outline.selectedRowIndexes.contains(row))
+        // leave the edit color stuck on the row. read the hosting row view's live isSelected (the
+        // state the selection pill draws from) rather than recomputing via row(for:), which can miss
+        // if the row was reloaded during the edit — a stale tint here is invisible text on themes
+        // where foreground == selection-background.
+        if let cell = field.superview as? SidebarCellView {
+            cell.setColors(selected: (cell.superview as? NSTableRowView)?.isSelected ?? false)
         }
     }
 }
