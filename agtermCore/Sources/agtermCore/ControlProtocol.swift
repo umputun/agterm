@@ -317,9 +317,10 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// side of the notification badge: `notify` (and terminal OSC 9/777) raise it, `session.seen` clears it.
     /// Ephemeral like `status` — never persisted, so it resets to nil on restart.
     public let unseen: Int?
-    /// The MAIN pane's live font size in points, or nil when its surface isn't realized (omitted from the
-    /// JSON). The read side of `font --pane left` (and the default). Reflects the live cmd +/- value; only
-    /// the main pane's size is persisted across relaunch.
+    /// The default/left pane's live font size in points, resolved via `addressableSurface`: the main pane,
+    /// or the promoted split survivor once the primary has exited (the same pane `font --pane left`, and the
+    /// default, writes). Nil when that pane isn't realized (omitted from the JSON). Reflects the live cmd
+    /// +/- value; the main pane's size is persisted across relaunch, but a promoted survivor's is live-only.
     public let fontSize: Double?
     /// The split (right) pane's live font size in points, or nil when the session has no realized split pane
     /// (omitted). The read side of `font --pane right` — the split's font is otherwise unobservable, being

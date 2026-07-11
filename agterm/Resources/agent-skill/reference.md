@@ -62,9 +62,10 @@ background spec set via `session background` — a `{kind, text?, imagePath?, co
 position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set), `unseen`
 (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session seen` — omitted
 when zero), and `fontSize`/`splitFontSize`/`scratchFontSize` (the LIVE font size in points of each pane —
-the read side of `font --pane`; each omitted when that pane's surface isn't realized. Only `fontSize` (the
-main pane) survives a relaunch; the split/scratch sizes are live-only, so read them back here rather than
-from the snapshot). Workspace nodes carry `id`, `name`, `active`, `sessions`, and `focused` (whether the sidebar
+the read side of `font --pane`; each omitted when that pane isn't realized. `fontSize` tracks the
+default/left target (the main pane, or the promoted split survivor once the primary exits — the same pane
+`font --pane left` writes); only the main pane's size survives a relaunch, so the split/scratch sizes and a
+promoted survivor are live-only — read them back here rather than from the snapshot). Workspace nodes carry `id`, `name`, `active`, `sessions`, and `focused` (whether the sidebar
 tree is collapsed to this workspace — the read side of `workspace focus`, distinct from `active` the
 SELECTED workspace; omitted unless this is the focused one, and absent entirely when nothing is focused).
 
