@@ -341,6 +341,16 @@ public final class AppStore {
     /// unknown id. Not persisted (the indicator is ephemeral), so it never triggers a `save()`.
     public func setAgentIndicator(_ indicator: AgentIndicator, forSession id: UUID) {
         guard let session = session(withID: id) else { return }
+        var indicator = indicator
+        // normalize a `.right` tag to `.left` when the session has NO live split pane. A promoted survivor's
+        // shell keeps its baked `AGTERM_PANE=right`, so the agent-status hook re-emits `--pane right` after
+        // promotion even though there is no right pane — left unnormalized that re-creates the
+        // `split:false` + `statusPane:"right"` contradiction the round-3 re-tag fixed, and the sole
+        // (`.left`-role-aware) pane could never keystroke-clear it. A hidden-but-LIVE split keeps its
+        // `splitSurface`, so `.right` stays valid there. `.left`/`.scratch` are untouched.
+        if indicator.statusPane == .right, session.splitSurface == nil {
+            indicator.statusPane = .left
+        }
         session.agentIndicator = indicator
         session.statusChangedAt = indicator.status == .idle ? nil : Date()
     }

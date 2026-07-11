@@ -785,6 +785,34 @@ struct AppStorePaneTests {
         #expect(session.agentIndicator.statusPane == .left)  // re-tagged to the (now sole) main pane
     }
 
+    @Test func setAgentIndicatorCoercesRightToLeftWithoutLiveSplit() {
+        // a promoted survivor's shell keeps its baked `AGTERM_PANE=right`, so the agent-status hook re-emits
+        // `--pane right` on every status AFTER promotion — but there is no right pane. `setAgentIndicator`
+        // coerces `.right` to `.left` when the session has no live `splitSurface`, so a post-promotion status
+        // can't re-create the `split:false` + `statusPane:"right"` contradiction and the sole `.left`-role-aware
+        // pane can still keystroke-clear it. (Drives what the agent-status wrapper does; host-free, CI-covered.)
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        // an actual PROMOTED SURVIVOR: split, exit the primary (survivor promotes), then the still-.right-baked
+        // hook fires the next status — the reviewer's exact scenario.
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.surface = SpySurface(); session.splitSurface = SpySurface()
+        session.isSplit = true; session.hasSplit = true
+        store.closePrimaryPane(session.id) // primary exits → survivor promoted, splitSurface == nil
+        store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: session.id)
+        #expect(session.agentIndicator.statusPane == .left)                      // coerced — no live split
+        #expect(session.agentIndicator.clearedBy(pane: .left, isInterrupt: false))  // the sole (left) pane clears it
+        // and the tree agrees: split:false with statusPane "left", never the contradictory "right".
+        let node = store.controlTree().workspaces[0].sessions.first
+        #expect(node?.split == false)
+        #expect(node?.statusPane == "left")
+        // a session with a LIVE split keeps `.right` — the right pane really exists (incl. a hidden-but-live split).
+        let split = store.addSession(toWorkspace: ws.id, cwd: "/b")!
+        split.splitSurface = SpySurface()
+        store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: split.id)
+        #expect(split.agentIndicator.statusPane == .right)                    // kept — a live split owns it
+    }
+
     @Test func closeScratchClearsScratchTaggedStatus() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

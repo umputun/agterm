@@ -1459,6 +1459,7 @@ struct AppStoreTests {
         b.oscTitle = "remote:~/b"
         b.isSplit = true
         b.hasSplit = true
+        b.splitSurface = SpySurface() // a live split pane, so the `.right` status below stays valid
         b.overlayActive = true
         b.scratchActive = true
         b.flagged = true
@@ -1597,6 +1598,7 @@ struct AppStoreTests {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        session.splitSurface = SpySurface() // a live split, so a `.right` status is valid (not coerced to `.left`)
         store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: session.id)
 
         let node = try #require(store.controlTree().workspaces[0].sessions.first)
