@@ -400,8 +400,12 @@ attention list, the title-bar bell, and attention navigation (`session go --to n
 
 ## font
 
-`agtermctl font inc|dec|reset [--target] [--window W]` — increase / decrease / reset the font size on
-the focused surface.
+`agtermctl font inc|dec|reset [--pane left|right|scratch] [--target] [--window W]` — increase / decrease /
+reset the font size of a session pane. `--pane` picks which surface's font to change, like `session type`
+and `session text`: omitted or `left` is the main pane, `right` the split pane (errors with `session has
+no split pane` when the session has no split), `scratch` the session's scratch terminal (settable even
+while hidden). No `other` value. Only the MAIN pane's size is persisted across relaunch; a split/scratch
+pane's font change is live-only, matching a GUI cmd +/- on those panes.
 
 ## keymap
 
