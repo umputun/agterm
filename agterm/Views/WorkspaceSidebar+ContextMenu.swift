@@ -51,32 +51,39 @@ extension WorkspaceSidebar.Coordinator {
         // manage enabled state explicitly (the Delete item is disabled at the last workspace)
         // rather than via the responder-chain auto-enabling.
         menu.autoenablesItems = false
+        let sessionTargets = node.kind == .session ? store.sidebarSelectionTargets(forContextSession: node.id) : []
+        let sessionCount = sessionTargets.count
 
         // "Clear Status" sits first for a session row that has a status to clear (same effect as
         // `agtermctl session status idle`).
-        if node.kind == .session, store.session(withID: node.id)?.agentIndicator.status != .idle {
-            let clearStatus = NSMenuItem(title: "Clear Status", action: #selector(menuClearStatus(_:)), keyEquivalent: "")
+        if node.kind == .session, sessionTargets.contains(where: { store.session(withID: $0)?.agentIndicator.status != .idle }) {
+            let clearStatus = NSMenuItem(title: sessionCount == 1 ? "Clear Status" : "Clear Statuses",
+                                         action: #selector(menuClearStatus(_:)), keyEquivalent: "")
             clearStatus.target = self
-            clearStatus.representedObject = node
+            clearStatus.representedObject = SessionBatchRequest(sessionIDs: sessionTargets)
             menu.addItem(clearStatus)
             menu.addItem(.separator())
         }
 
-        let rename = NSMenuItem(title: "Rename", action: #selector(menuRename(_:)), keyEquivalent: "")
-        rename.target = self
-        rename.representedObject = node
-        menu.addItem(rename)
+        if node.kind == .workspace || sessionCount <= 1 {
+            let rename = NSMenuItem(title: "Rename", action: #selector(menuRename(_:)), keyEquivalent: "")
+            rename.target = self
+            rename.representedObject = node
+            menu.addItem(rename)
+        }
 
         switch node.kind {
         case .session:
-            let targets = store.workspaces.filter { $0.id != ownerWorkspaceID(ofSession: node.id) }
+            let targets = store.workspaces.filter { workspace in
+                sessionTargets.contains { ownerWorkspaceID(ofSession: $0) != workspace.id }
+            }
             if !targets.isEmpty {
                 let moveTo = NSMenuItem(title: "Move to", action: nil, keyEquivalent: "")
                 let submenu = NSMenu()
                 for target in targets {
                     let item = NSMenuItem(title: target.name, action: #selector(menuMove(_:)), keyEquivalent: "")
                     item.target = self
-                    item.representedObject = MoveRequest(sessionID: node.id, targetID: target.id)
+                    item.representedObject = SessionBatchRequest(sessionIDs: sessionTargets, targetID: target.id)
                     submenu.addItem(item)
                 }
                 moveTo.submenu = submenu
@@ -84,14 +91,21 @@ extension WorkspaceSidebar.Coordinator {
             }
             // "Flag"/"Unflag" toggles the session's flagged working-set membership; the label
             // reflects the current state.
-            let flagged = store.session(withID: node.id)?.flagged == true
-            let flag = NSMenuItem(title: flagged ? "Unflag" : "Flag", action: #selector(menuToggleFlag(_:)), keyEquivalent: "")
+            let allFlagged = !sessionTargets.isEmpty && sessionTargets.allSatisfy { store.session(withID: $0)?.flagged == true }
+            let flagTitle: String
+            if sessionCount == 1 {
+                flagTitle = allFlagged ? "Unflag" : "Flag"
+            } else {
+                flagTitle = allFlagged ? "Unflag Sessions" : "Flag Sessions"
+            }
+            let flag = NSMenuItem(title: flagTitle, action: #selector(menuToggleFlag(_:)), keyEquivalent: "")
             flag.target = self
-            flag.representedObject = node
+            flag.representedObject = SessionBatchRequest(sessionIDs: sessionTargets)
             menu.addItem(flag)
-            let close = NSMenuItem(title: "Close Session", action: #selector(menuClose(_:)), keyEquivalent: "")
+            let closeTitle = sessionCount == 1 ? "Close Session" : "Close \(sessionCount) Sessions"
+            let close = NSMenuItem(title: closeTitle, action: #selector(menuClose(_:)), keyEquivalent: "")
             close.target = self
-            close.representedObject = node
+            close.representedObject = SessionBatchRequest(sessionIDs: sessionTargets)
             menu.addItem(close)
         case .workspace:
             let newSession = NSMenuItem(title: "New Session", action: #selector(menuNewSession(_:)), keyEquivalent: "")
@@ -123,12 +137,12 @@ extension WorkspaceSidebar.Coordinator {
         store.workspaces.first(where: { ws in ws.sessions.contains(where: { $0.id == id }) })?.id
     }
 
-    /// Wraps a move command so a `Move to ▸ <ws>` item can carry both ids.
-    private final class MoveRequest {
-        let sessionID: UUID
-        let targetID: UUID
-        init(sessionID: UUID, targetID: UUID) {
-            self.sessionID = sessionID
+    /// Wraps session batch commands so menu items can carry both the selected ids and a target workspace.
+    private final class SessionBatchRequest {
+        let sessionIDs: [UUID]
+        let targetID: UUID?
+        init(sessionIDs: [UUID], targetID: UUID? = nil) {
+            self.sessionIDs = sessionIDs
             self.targetID = targetID
         }
     }
@@ -139,25 +153,25 @@ extension WorkspaceSidebar.Coordinator {
     }
 
     @objc private func menuMove(_ sender: NSMenuItem) {
-        guard let request = sender.representedObject as? MoveRequest else { return }
-        store.moveSession(request.sessionID, toWorkspace: request.targetID)
+        guard let request = sender.representedObject as? SessionBatchRequest, let targetID = request.targetID else { return }
+        store.moveSessions(request.sessionIDs, toWorkspace: targetID)
     }
 
     @objc private func menuClose(_ sender: NSMenuItem) {
-        guard let node = sender.representedObject as? SidebarNode else { return }
+        guard let request = sender.representedObject as? SessionBatchRequest else { return }
         // pass THIS sidebar's window-local store — a background window's Close must target its own
         // session, not the frontmost window's (which `AppActions.store` would resolve to).
-        actions.closeSession(node.id, in: store)
+        actions.closeSessions(request.sessionIDs, in: store)
     }
 
     @objc private func menuClearStatus(_ sender: NSMenuItem) {
-        guard let node = sender.representedObject as? SidebarNode else { return }
-        store.setAgentIndicator(AgentIndicator(), forSession: node.id)
+        guard let request = sender.representedObject as? SessionBatchRequest else { return }
+        for id in request.sessionIDs { store.setAgentIndicator(AgentIndicator(), forSession: id) }
     }
 
     @objc private func menuToggleFlag(_ sender: NSMenuItem) {
-        guard let node = sender.representedObject as? SidebarNode else { return }
-        actions.toggleFlag(node.id)
+        guard let request = sender.representedObject as? SessionBatchRequest else { return }
+        actions.toggleFlags(request.sessionIDs, in: store)
     }
 
     @objc private func menuNewSession(_ sender: NSMenuItem) {

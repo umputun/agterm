@@ -80,6 +80,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var name: String?
     /// Working directory for `session.new`.
     public var cwd: String?
+    /// Additional session targets for batch-capable commands (`session.close`, `session.move`). When set,
+    /// the command uses this ordered list instead of the top-level single `target`.
+    public var targets: [String]?
     /// Target workspace for `session.new` (the workspace to add to) and `session.move` (the destination).
     /// Resolved by id / unique prefix / `active`, never by name — use `workspaceName` for name targeting.
     public var workspace: String?
@@ -194,7 +197,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var light: String?
     public var dark: String?
 
-    public init(name: String? = nil, cwd: String? = nil, workspace: String? = nil, workspaceName: String? = nil,
+    public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
+                workspace: String? = nil, workspaceName: String? = nil,
                 createWorkspace: Bool? = nil, text: String? = nil, select: Bool? = nil, mode: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
                 follow: Bool? = nil, window: String? = nil,
@@ -208,6 +212,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 light: String? = nil, dark: String? = nil) {
         self.name = name
         self.cwd = cwd
+        self.targets = targets
         self.workspace = workspace
         self.workspaceName = workspaceName
         self.createWorkspace = createWorkspace
@@ -545,6 +550,9 @@ public struct ControlResult: Codable, Sendable, Equatable {
     /// attribution), and the total match count for `session.search` (whose "N of M" display string rides
     /// in `text`).
     public var count: Int?
+    /// Number of sessions actually changed by a batch mutation (`session.close` or `session.move`).
+    /// Kept separate from `count`, whose CLI rendering is specific to diagnostics/search results.
+    public var affected: Int?
     /// The current/affected theme name for `theme.set` (echo) and `theme.list` (current); nil =
     /// ghostty's built-in colors ("default ghostty"), distinct from the seeded `agterm` app default.
     public var theme: String?
@@ -563,6 +571,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
+                affected: Int? = nil,
                 theme: String? = nil, themes: [String]? = nil, ratio: Double? = nil,
                 sync: Bool? = nil, light: String? = nil, dark: String? = nil) {
         self.id = id
@@ -571,6 +580,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
         self.windows = windows
         self.exitCode = exitCode
         self.count = count
+        self.affected = affected
         self.theme = theme
         self.themes = themes
         self.ratio = ratio

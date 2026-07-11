@@ -63,11 +63,13 @@ struct Session: ParsableCommand {
 
     struct Close: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Close a session.")
-        @OptionGroup var target: TargetOptions
+        @OptionGroup var target: BatchTargetOptions
         @OptionGroup var options: ClientOptions
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .sessionClose, target: target.target, args: options.withWindow())
+            let batchArgs = target.batchTargets.map { ControlArgs(targets: $0) }
+            let args = options.withWindow(batchArgs)
+            return ControlRequest(cmd: .sessionClose, target: target.targets.first ?? "active", args: args)
         }
     }
 
@@ -110,7 +112,7 @@ struct Session: ParsableCommand {
         @Option(name: .long, help: "Reorder within the workspace: up, down, top, or bottom.") var to: String?
         @Option(name: .long, help: "Place right AFTER this anchor session (id/prefix/active); the anchor carries its own workspace (relocates + positions in one shot).") var after: String?
         @Option(name: .long, help: "Place right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?
-        @OptionGroup var target: TargetOptions
+        @OptionGroup var target: BatchTargetOptions
         @OptionGroup var options: ClientOptions
 
         // exactly one placement intent among {workspace positional (relocate), --to (reorder),
@@ -130,6 +132,9 @@ struct Session: ParsableCommand {
                 }
                 return
             }
+            if target.targets.count > 1, to != nil {
+                throw ValidationError("session.move --target can be repeated only with a workspace or --after/--before")
+            }
             switch (workspace, to) {
             case (nil, nil): throw ValidationError("provide a destination workspace, --to, or --after/--before")
             case (.some, .some): throw ValidationError("provide a destination workspace or --to, not both")
@@ -148,7 +153,10 @@ struct Session: ParsableCommand {
             } else {
                 args = ControlArgs(to: to)
             }
-            return ControlRequest(cmd: .sessionMove, target: target.target, args: options.withWindow(args))
+            var withTargets = args
+            withTargets.targets = target.batchTargets
+            return ControlRequest(cmd: .sessionMove, target: target.targets.first ?? "active",
+                                  args: options.withWindow(withTargets))
         }
     }
 

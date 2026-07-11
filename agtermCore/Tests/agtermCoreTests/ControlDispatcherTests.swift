@@ -268,6 +268,26 @@ struct ControlDispatcherTests {
         ])
     }
 
+    @Test func sessionCloseRoutesBatchTargets() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let closed = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionClose,
+            args: ControlArgs(targets: ["a", "b"], window: "win")
+        ))
+        let empty = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionClose,
+            args: ControlArgs(targets: [])
+        ))
+
+        #expect(closed == ControlResponse(ok: true))
+        #expect(empty == ControlResponse(ok: false, error: "session.close requires at least one --target"))
+        #expect(actions.calls == [
+            .sessionCloseBatch(targets: ["a", "b"], window: "win")
+        ])
+    }
+
     @Test func sessionGoAndRenameRejectInvalidInputsWithoutCallingActions() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -359,6 +379,56 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [
             .sessionMove(target: "session", window: "win", .reorder(.top)),
             .sessionMove(target: "session", window: nil, .workspace("dest"))
+        ])
+    }
+
+    @Test func sessionMoveRoutesBatchWorkspaceAndPlacementForms() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let workspace = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            args: ControlArgs(targets: ["a", "b"], workspace: "dest", window: "win")
+        ))
+        let after = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            args: ControlArgs(targets: ["a", "b"], after: "anchor")
+        ))
+        let reorder = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            args: ControlArgs(targets: ["a", "b"], to: "up")
+        ))
+
+        #expect(workspace == ControlResponse(ok: true))
+        #expect(after == ControlResponse(ok: true))
+        #expect(reorder == ControlResponse(
+            ok: false,
+            error: "session.move --target can be repeated only with a workspace or --after/--before"
+        ))
+        #expect(actions.calls == [
+            .sessionMoveBatch(targets: ["a", "b"], window: "win", .workspace("dest")),
+            .sessionMoveBatch(targets: ["a", "b"], window: nil, .place(anchor: "anchor", after: true))
+        ])
+    }
+
+    @Test func sessionMoveNormalizesOneArrayTargetToSingularAction() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let workspace = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            args: ControlArgs(targets: ["a"], workspace: "dest", window: "win")
+        ))
+        let after = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionMove,
+            args: ControlArgs(targets: ["b"], after: "anchor")
+        ))
+
+        #expect(workspace == ControlResponse(ok: true))
+        #expect(after == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .sessionMove(target: "a", window: "win", .workspace("dest")),
+            .sessionMove(target: "b", window: nil, .place(anchor: "anchor", after: true)),
         ])
     }
 
@@ -1412,12 +1482,14 @@ private final class MockControlActions: ControlActions {
         case sessionSelect(target: String?, window: String?)
         case sessionGo(window: String?, SessionNavigation)
         case sessionClose(target: String?, window: String?)
+        case sessionCloseBatch(targets: [String], window: String?)
         case sessionRename(target: String?, window: String?, String)
         case workspaceNew(window: String?, String?)
         case workspaceSelect(target: String?, window: String?)
         case workspaceRename(target: String?, window: String?, String)
         case workspaceDelete(target: String?, window: String?)
         case sessionMove(target: String?, window: String?, ControlSessionMove)
+        case sessionMoveBatch(targets: [String], window: String?, ControlSessionMove)
         case workspaceMove(target: String?, window: String?, ReorderDirection)
         case workspaceFocus(target: String?, window: String?, String?)
         case sessionFlag(target: String?, window: String?, String?)
@@ -1530,6 +1602,11 @@ private final class MockControlActions: ControlActions {
         return ControlResponse(ok: true)
     }
 
+    func closeSessions(_ targets: [String], window: String?) -> ControlResponse {
+        calls.append(.sessionCloseBatch(targets: targets, window: window))
+        return ControlResponse(ok: true)
+    }
+
     func renameSession(_ target: String?, window: String?, name: String) -> ControlResponse {
         calls.append(.sessionRename(target: target, window: window, name))
         return ControlResponse(ok: true)
@@ -1557,6 +1634,11 @@ private final class MockControlActions: ControlActions {
 
     func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse {
         calls.append(.sessionMove(target: target, window: window, move))
+        return ControlResponse(ok: true)
+    }
+
+    func moveSessions(_ targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse {
+        calls.append(.sessionMoveBatch(targets: targets, window: window, move))
         return ControlResponse(ok: true)
     }
 

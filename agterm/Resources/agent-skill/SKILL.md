@@ -65,10 +65,11 @@ is not on PATH, the user can install it, or you invoke it by absolute path.
   `--socket "$AGTERM_SOCKET"`.
 - `--socket` and other options go **after** the subcommand: `agtermctl tree --json`, not
   `agtermctl --json tree`.
-- Add `--json` to any command to get the raw JSON response (machine-readable). Without it, mutations
-  print `ok` and `tree`/`list` print a human listing.
-- One request per invocation. Mutating commands return the affected/new id; create commands
-  (`session new`, `workspace new`, `window new`) print the new id.
+- Add `--json` to any command to get the raw JSON response (machine-readable). Without it, ordinary
+  mutations print `ok`, batch close/move prints the affected session count, and `tree`/`list` print a
+  human listing.
+- One request per invocation. Mutating commands return the affected/new id; batch session mutations return
+  the number actually changed. Create commands (`session new`, `workspace new`, `window new`) print the new id.
 
 ## The model
 
@@ -156,11 +157,15 @@ focused from the tree workspace node's `focused` flag).
   after/before an anchor session (id/prefix/`active`) instead of appending — the anchor carries its own
   workspace, so it's mutually exclusive with `--workspace`/`--workspace-name`. `new --after active` =
   create right after the current session.
-- `close` · `select` · `rename <name>`.
+- `close [--target T ...]` — close one session, or repeat `--target` to close a batch with one
+  grace-period undo.
+- `select` · `rename <name>`.
 - `go --to next|prev|first|last|next-attention|prev-attention` — move the selection between sessions.
 - `move <workspace>` (relocate) or `move --to up|down|top|bottom` (reorder within the workspace) or
   `move --after SID | --before SID` (place after/before an anchor session; the anchor carries its own
-  workspace, so this relocates + positions in one shot, even cross-workspace).
+  workspace, so this relocates + positions in one shot, even cross-workspace). For workspace and
+  after/before placement, repeat `--target` to move several sessions as one ordered block. Do not repeat
+  `--target` with `--to up|down|top|bottom`.
 - `type <text> [--stdin] [--select] [--pane left|right|scratch]` — inject keystrokes (real typing, Enter
   included) into the main pane, the split pane with `--pane right`, or the scratch terminal (even hidden)
   with `--pane scratch`. Pass `--target "$AGTERM_SESSION_ID"` to type into YOUR session, not the user's
@@ -289,7 +294,7 @@ Full detail, templates, and the exact `gh` commands are in **troubleshooting.md*
 ## Reference files
 
 - **reference.md** — full per-command detail: every flag, the JSON return shapes
-  (`result.id`/`text`/`exitCode`/`count`/`tree`/`windows`), error strings, the scratch/overlay/split
+  (`result.id`/`text`/`exitCode`/`count`/`affected`/`tree`/`windows`), error strings, the scratch/overlay/split
   lifecycle, and the keymap.conf format (`map` / `command`, chords, leaders, `{AGT_X}` tokens).
 - **examples.md** — copy-paste agtermctl recipes for common tasks (build a layout, run a program in a
   blocking overlay and read its status, type into a fresh session, notify, inspect the tree).

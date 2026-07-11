@@ -26,11 +26,11 @@ final class ReorderUITests: XCTestCase {
     }
 
     // Drag a session UP onto a higher sibling and confirm the persisted order changed through the
-    // full sidebar drop path (validateDrop → acceptDrop → moveSession). Three sessions are renamed
-    // aaa/bbb/ccc so the persisted `customName` order is an unambiguous oracle. Dropping ccc ON
+    // full sidebar drop path (validateDrop → acceptDrop → moveSessions). Three sessions are seeded with
+    // aaa/bbb/ccc custom names so the persisted order is an unambiguous oracle. Dropping ccc ON
     // aaa's row inserts ccc just after aaa: [aaa, bbb, ccc] → [aaa, ccc, bbb].
     func testReorderSessionUp() throws {
-        seedSessions(["aaa", "bbb", "ccc"])
+        try relaunchWithSessions(["aaa", "bbb", "ccc"])
         dragRow(named: "ccc", onto: "aaa")
         XCTAssertTrue(pollSessionNames(["aaa", "ccc", "bbb"], timeout: 10),
                       "dragging ccc up onto aaa should reorder to [aaa, ccc, bbb]")
@@ -41,7 +41,7 @@ final class ReorderUITests: XCTestCase {
     // `childIndex - 1` post-removal adjustment in `acceptDrop` (sourceIndex 1 < dropChildIndex 3)
     // that the up-move does not.
     func testReorderSessionDown() throws {
-        seedSessions(["aaa", "bbb", "ccc"])
+        try relaunchWithSessions(["aaa", "bbb", "ccc"])
         dragRow(named: "bbb", onto: "ccc")
         XCTAssertTrue(pollSessionNames(["aaa", "ccc", "bbb"], timeout: 10),
                       "dragging bbb down onto ccc should reorder to [aaa, ccc, bbb]")
@@ -53,10 +53,94 @@ final class ReorderUITests: XCTestCase {
     // index 2 ([bbb, ccc, aaa, ddd]); WITHOUT it the append-clamp would push it to the END
     // ([bbb, ccc, ddd, aaa]) — the two outcomes differ only because the drop is NOT onto the last row.
     func testReorderSessionDownPastMiddle() throws {
-        seedSessions(["aaa", "bbb", "ccc", "ddd"])
+        try relaunchWithSessions(["aaa", "bbb", "ccc", "ddd"])
         dragRow(named: "aaa", onto: "ccc")
         XCTAssertTrue(pollSessionNames(["bbb", "ccc", "aaa", "ddd"], timeout: 10),
                       "dragging aaa down onto the middle row ccc should land it between ccc and ddd")
+    }
+
+    // Shift-click creates a range, Command-click toggles one row out, and right-clicking inside the
+    // remaining multi-selection must keep it for batch context-menu actions. Right-clicking outside the
+    // selection should narrow to that clicked row. The oracle is the persisted flag state because AppKit's
+    // transient outline multi-selection is not serialized.
+    func testMultiSelectContextMenuKeepsAndNarrowsSelection() throws {
+        try relaunchWithSessions(["aaa", "bbb", "ccc", "ddd"])
+
+        sessionRow(named: "aaa").click()
+        modifiedClick(sessionRow(named: "ccc"), modifiers: .shift)
+        modifiedClick(sessionRow(named: "bbb"), modifiers: .command)
+
+        sessionRow(named: "aaa").rightClick()
+        let flagSessions = presentedMenuItem("Flag Sessions")
+        XCTAssertTrue(flagSessions.waitForExistence(timeout: 5), "multi-selection context menu should offer Flag Sessions")
+        flagSessions.click()
+        XCTAssertTrue(pollFlagged(["aaa": true, "bbb": false, "ccc": true, "ddd": false], timeout: 8),
+                      "batch flag should affect the Shift/Cmd-click multi-selection only")
+
+        sessionRow(named: "ddd").rightClick()
+        let flag = presentedMenuItem("Flag")
+        XCTAssertTrue(flag.waitForExistence(timeout: 5), "right-click outside the selection should narrow to one row")
+        flag.click()
+        XCTAssertTrue(pollFlagged(["aaa": true, "bbb": false, "ccc": true, "ddd": true], timeout: 8),
+                      "outside right-click should flag only the clicked row")
+    }
+
+    // Dragging from any selected row should move the whole selected block, not just the row under the
+    // pointer. Dropping bbb/ccc onto ddd inserts the block after ddd:
+    // [aaa, bbb, ccc, ddd, eee] -> [aaa, ddd, bbb, ccc, eee].
+    func testDragSelectedSessionsMovesBlock() throws {
+        try relaunchWithSessions(["aaa", "bbb", "ccc", "ddd", "eee"])
+        sessionRow(named: "bbb").click()
+        modifiedClick(sessionRow(named: "ccc"), modifiers: .shift)
+
+        dragSelectedRow(named: "bbb", onto: "ddd")
+        XCTAssertTrue(pollSessionNames(["aaa", "ddd", "bbb", "ccc", "eee"], timeout: 10),
+                      "dragging a selected block onto ddd should move bbb+ccc together after ddd")
+    }
+
+    // The primary batch-drag workflow is cross-workspace: the AppKit pasteboard must carry every selected
+    // id, resolve the destination row's owning workspace, and persist the ordered block there.
+    func testDragSelectedSessionsAcrossWorkspacesMovesBlock() throws {
+        try relaunchWithWorkspaces([
+            (name: "one", sessions: ["aaa", "bbb"]),
+            (name: "two", sessions: ["ccc", "ddd"]),
+        ])
+        sessionRow(named: "aaa").click()
+        modifiedClick(sessionRow(named: "bbb"), modifiers: .shift)
+        sessionRow(named: "aaa").rightClick()
+        XCTAssertTrue(presentedMenuItem("Close 2 Sessions").waitForExistence(timeout: 5),
+                      "the source rows must remain multi-selected before dragging")
+        app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
+
+        dragSelectedRow(named: "aaa", onto: "ccc")
+
+        XCTAssertTrue(pollWorkspaceSessionNames([
+            "one": [],
+            "two": ["ccc", "aaa", "bbb", "ddd"],
+        ], timeout: 10), "the selected block should move after ccc in workspace two")
+    }
+
+    // Confirmation is normally bypassed in XCUITests. This test opts in narrowly and verifies the exact
+    // batch-close regression: one alert names the selected count, and Cancel leaves every session intact.
+    func testMultiSessionCloseRequiresOneConfirmation() throws {
+        try relaunchWithWorkspaces([
+            (name: "workspace 1", sessions: ["aaa", "bbb", "ccc"]),
+        ], confirmClose: true)
+        sessionRow(named: "aaa").click()
+        modifiedClick(sessionRow(named: "ccc"), modifiers: .shift)
+
+        sessionRow(named: "aaa").rightClick()
+        let close = presentedMenuItem("Close 3 Sessions")
+        XCTAssertTrue(close.waitForExistence(timeout: 5), "batch context menu should offer one close command")
+        close.click()
+
+        let alert = app.dialogs.firstMatch
+        XCTAssertTrue(alert.waitForExistence(timeout: 5), "batch close should present a confirmation alert")
+        XCTAssertTrue(alert.staticTexts["Close 3 Sessions?"].exists, "the alert should report the batch size")
+        XCTAssertEqual(app.dialogs.count, 1, "batch close should present exactly one confirmation")
+        alert.buttons["Cancel"].firstMatch.click()
+        XCTAssertTrue(pollSessionNames(["aaa", "bbb", "ccc"], timeout: 5),
+                      "cancelling the batch confirmation must leave every session open")
     }
 
     // Drag a workspace UP above a higher sibling and confirm the persisted order changed through the
@@ -85,20 +169,48 @@ final class ReorderUITests: XCTestCase {
 
     // MARK: - Fixture
 
-    /// Renames the seeded session to `names[0]` and adds one more renamed row per remaining name,
-    /// leaving the single workspace holding `names` in order. Each rename targets the only freshly-added
-    /// (default-named) row, which stays unique at that step. Callers pass [aaa, bbb, ccc] (three) or
-    /// [aaa, bbb, ccc, ddd] (four, so a downward drag can target a MIDDLE row rather than the last).
-    private func seedSessions(_ names: [String]) {
-        XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
-        let defaultName = (sessionRow().value as? String) ?? ""
-        XCTAssertFalse(defaultName.isEmpty, "seeded session should expose a default name")
-        for (i, name) in names.enumerated() {
-            if i > 0 { addSession() }
-            rename(rowNamed: defaultName, to: name)
+    /// Relaunches with a prewritten window snapshot so tests that specifically exercise selection/drag
+    /// gestures don't depend on the slower inline-rename fixture.
+    private func relaunchWithSessions(_ names: [String]) throws {
+        try relaunchWithWorkspaces([(name: "workspace 1", sessions: names)])
+    }
+
+    /// Relaunches with named workspaces and sessions. `confirmClose` opts one focused test back into the
+    /// close modal that ordinary XCUITest launches suppress to avoid hanging unrelated close flows.
+    private func relaunchWithWorkspaces(_ fixtures: [(name: String, sessions: [String])], confirmClose: Bool = false) throws {
+        let snapshotFile = stateDir.windowSnapshotFile()
+        app.terminate()
+
+        var firstSessionID: String?
+        let workspaces = fixtures.map { fixture -> [String: Any] in
+            let sessions = fixture.sessions.map { name -> [String: Any] in
+                let id = UUID().uuidString
+                if firstSessionID == nil { firstSessionID = id }
+                return ["id": id, "customName": name, "cwd": NSHomeDirectory()]
+            }
+            return ["id": UUID().uuidString, "name": fixture.name, "sessions": sessions]
         }
-        XCTAssertTrue(pollSessionNames(names, timeout: 10),
-                      "the renamed sessions should persist in creation order")
+        let selectedSessionID = try XCTUnwrap(firstSessionID, "the fixture must contain at least one session")
+        let snapshot: [String: Any] = [
+            "version": 1,
+            "selectedSessionID": selectedSessionID,
+            "workspaces": workspaces,
+            "sidebarVisible": true,
+        ]
+        let data = try JSONSerialization.data(withJSONObject: snapshot, options: [.prettyPrinted, .sortedKeys])
+        try data.write(to: snapshotFile, options: .atomic)
+        if confirmClose {
+            try Data(#"{"confirmCloseSession":true}"#.utf8)
+                .write(to: stateDir.appendingPathComponent("settings.json"), options: .atomic)
+        }
+
+        app = XCUIApplication()
+        app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
+        if confirmClose { app.launchEnvironment["AGTERM_UITEST_ALLOW_CLOSE_CONFIRMATION"] = "1" }
+        app.launchForUITest()
+        for name in fixtures.flatMap(\.sessions) {
+            XCTAssertTrue(sessionRow(named: name).waitForExistence(timeout: 10), "seeded session \(name) should be visible")
+        }
     }
 
     /// Adds two more workspaces to the seeded one, leaving the tree holding
@@ -192,33 +304,30 @@ final class ReorderUITests: XCTestCase {
         start.click(forDuration: 0.7, thenDragTo: end, withVelocity: 180, thenHoldForDuration: 0.25)
     }
 
-    /// Adds a new session to the current workspace via the bottom-bar add-session menu.
-    private func addSession() {
-        let add = app.descendants(matching: .any).matching(identifier: "add-session").firstMatch
-        XCTAssertTrue(add.waitForExistence(timeout: 10), "bottom-bar add-session menu should exist")
-        add.click()
-        let newItem = presentedMenuItem("New Session")
-        XCTAssertTrue(newItem.waitForExistence(timeout: 5), "New Session menu item should appear")
-        newItem.click()
+    /// Drags from a row that is already part of the current selection. Unlike `dragRow`, this must not
+    /// click the source first: a plain click would collapse the multi-selection before the drag begins.
+    private func dragSelectedRow(named source: String, onto target: String) {
+        let from = sessionRow(named: source)
+        let to = sessionRow(named: target)
+        XCTAssertTrue(from.waitForHittable(timeout: 10), "\(source) row should be hittable to drag")
+        XCTAssertTrue(to.waitForHittable(timeout: 10), "\(target) row should be hittable as a drop target")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        let start = from.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = to.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.click(forDuration: 0.7, thenDragTo: end, withVelocity: 180, thenHoldForDuration: 0.25)
     }
 
-    /// Renames the session row currently showing `currentName` to `newName`. Uses a double-click
-    /// to start the inline rename (the outline's `doubleAction`) — far more reliable than the
-    /// context-menu path when a bottom-bar menu was just dismissed. `currentName` must be unique
-    /// among the rows at the time of the call.
-    private func rename(rowNamed currentName: String, to newName: String) {
-        let row = sessionRow(named: currentName)
-        XCTAssertTrue(row.waitForHittable(timeout: 10), "a session row named \(currentName) to rename should be hittable")
-        let field = app.descendants(matching: .any).matching(identifier: "edit-field").firstMatch
-        var editing = false
-        for _ in 0..<5 {
-            row.doubleClick()
-            if field.waitForExistence(timeout: 2) { editing = true; break }
+    /// Xcode's macOS XCUIElement has no modifier-click overload, so apply XCTest key modifiers
+    /// around a coordinate click to exercise AppKit's normal Shift/Cmd selection path.
+    private func modifiedClick(_ element: XCUIElement, modifiers: XCUIElement.KeyModifierFlags) {
+        XCTAssertTrue(element.waitForHittable(timeout: 10), "row should be hittable for modified click")
+        app.activate()
+        RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        let coordinate = element.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        XCUIElement.perform(withKeyModifiers: modifiers) {
+            coordinate.click()
         }
-        XCTAssertTrue(editing, "rename did not enter edit mode for \(currentName) (field never appeared)")
-        app.typeKey("a", modifierFlags: .command)
-        app.typeText("\(newName)\r")
-        XCTAssertTrue(sessionRow(named: newName).waitForExistence(timeout: 5), "renamed session row should appear")
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
     }
 
     /// The on-screen (hittable) menu item with `title`, filtering out the closed menu-bar twin.
@@ -239,6 +348,35 @@ final class ReorderUITests: XCTestCase {
             guard let workspaces = obj["workspaces"] as? [[String: Any]],
                   let sessions = workspaces.first?["sessions"] as? [[String: Any]] else { return nil }
             return sessions.compactMap { $0["customName"] as? String }
+        }
+    }
+
+    /// Polls every named workspace's persisted session labels, preserving each workspace's session order.
+    private func pollWorkspaceSessionNames(_ expected: [String: [String]], timeout: TimeInterval) -> Bool {
+        stateDir.pollSnapshot(equals: expected, timeout: timeout) { obj in
+            guard let workspaces = obj["workspaces"] as? [[String: Any]] else { return nil }
+            var result: [String: [String]] = [:]
+            for workspace in workspaces {
+                guard let name = workspace["name"] as? String,
+                      expected.keys.contains(name),
+                      let sessions = workspace["sessions"] as? [[String: Any]] else { continue }
+                result[name] = sessions.compactMap { $0["customName"] as? String }
+            }
+            return result.count == expected.count ? result : nil
+        }
+    }
+
+    /// Polls the seeded workspace until every named session's persisted `flagged` field matches.
+    private func pollFlagged(_ expected: [String: Bool], timeout: TimeInterval) -> Bool {
+        stateDir.pollSnapshot(equals: expected, timeout: timeout) { obj in
+            guard let workspaces = obj["workspaces"] as? [[String: Any]],
+                  let sessions = workspaces.first?["sessions"] as? [[String: Any]] else { return nil }
+            var result: [String: Bool] = [:]
+            for session in sessions {
+                guard let name = session["customName"] as? String, expected.keys.contains(name) else { continue }
+                result[name] = session["flagged"] as? Bool ?? false
+            }
+            return result.count == expected.count ? result : nil
         }
     }
 

@@ -100,6 +100,70 @@ struct SidebarDropTests {
         #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsB, dropChildIndex: Self.onItem, destination: 2))
     }
 
+    // MARK: - Batch session drag
+
+    @Test func batchSessionCrossWorkspaceInsertAtMiddleSlot() {
+        let move = SidebarDrop.resolveSessions(
+            sources: [
+                SidebarDrop.SessionSource(workspace: Self.wsA, index: 0),
+                SidebarDrop.SessionSource(workspace: Self.wsA, index: 1)
+            ],
+            target: .workspaceRow(id: Self.wsB, sessionCount: 3), childIndex: 2)
+
+        #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsB, dropChildIndex: 2, destination: 2))
+    }
+
+    @Test func batchSessionSameWorkspaceDownAdjustsForEveryRemovedSourceBeforeDrop() {
+        // [a, b, c, d, e]; drag [a, b] into the slot before e (childIndex 4). Removing a+b first leaves
+        // [c, d, e], so the block lands at post-removal index 2.
+        let move = SidebarDrop.resolveSessions(
+            sources: [
+                SidebarDrop.SessionSource(workspace: Self.wsA, index: 0),
+                SidebarDrop.SessionSource(workspace: Self.wsA, index: 1)
+            ],
+            target: .workspaceRow(id: Self.wsA, sessionCount: 5), childIndex: 4)
+
+        #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsA, dropChildIndex: 4, destination: 2))
+    }
+
+    @Test func batchSessionSameWorkspaceContiguousDropInsideSelectionIsNoOp() {
+        // [a, b, c, d]; dragging contiguous [b, c] into any slot inside its own block leaves order unchanged.
+        let move = SidebarDrop.resolveSessions(
+            sources: [
+                SidebarDrop.SessionSource(workspace: Self.wsA, index: 1),
+                SidebarDrop.SessionSource(workspace: Self.wsA, index: 2)
+            ],
+            target: .workspaceRow(id: Self.wsA, sessionCount: 4), childIndex: 2)
+
+        #expect(move == nil)
+    }
+
+    @Test func batchSessionSameWorkspaceNonContiguousDropAtFirstSourceCanStillMove() {
+        // [a, b, c, d, e]; dragging non-contiguous [b, d] before b compacts the selection to [b, d],
+        // so it is a real reorder even though the insertion slot is the first selected index.
+        let move = SidebarDrop.resolveSessions(
+            sources: [
+                SidebarDrop.SessionSource(workspace: Self.wsA, index: 1),
+                SidebarDrop.SessionSource(workspace: Self.wsA, index: 3)
+            ],
+            target: .workspaceRow(id: Self.wsA, sessionCount: 5), childIndex: 1)
+
+        #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsA, dropChildIndex: 1, destination: 1))
+    }
+
+    @Test func batchSessionMixedTargetAdjustsForMovedRowsAlreadyInTarget() {
+        // target wsB = [x, y, z]; dragging [a-from-wsA, x-from-wsB] before z removes x first, so the
+        // post-removal insertion index shifts from 2 to 1.
+        let move = SidebarDrop.resolveSessions(
+            sources: [
+                SidebarDrop.SessionSource(workspace: Self.wsA, index: 0),
+                SidebarDrop.SessionSource(workspace: Self.wsB, index: 0)
+            ],
+            target: .workspaceRow(id: Self.wsB, sessionCount: 3), childIndex: 2)
+
+        #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsB, dropChildIndex: 2, destination: 1))
+    }
+
     // MARK: - Anchor-relative placement (control --after/--before)
 
     @Test func relativeSameWorkspaceAfterAnchor() {

@@ -38,9 +38,12 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionNew, args: ControlArgs(name: "myhost", command: "ssh host")),
             ControlRequest(cmd: .sessionNew, args: ControlArgs(workspaceName: "servers", createWorkspace: true)),
             ControlRequest(cmd: .sessionClose, target: "9f3c"),
+            ControlRequest(cmd: .sessionClose, args: ControlArgs(targets: ["9f3c", "abcd"])),
             ControlRequest(cmd: .sessionSelect, target: "9f3c"),
             ControlRequest(cmd: .sessionRename, target: "active", args: ControlArgs(name: "build")),
             ControlRequest(cmd: .sessionMove, target: "9f3c", args: ControlArgs(workspace: "other")),
+            ControlRequest(cmd: .sessionMove, args: ControlArgs(targets: ["9f3c", "abcd"], workspace: "other")),
+            ControlRequest(cmd: .sessionMove, args: ControlArgs(targets: ["9f3c", "abcd"], after: "anchor")),
             ControlRequest(cmd: .sessionCopy, target: "9f3c"),
             ControlRequest(cmd: .sessionPaste, target: "9f3c"),
             ControlRequest(cmd: .sessionSelectAll, target: "9f3c"),
@@ -57,6 +60,17 @@ struct ControlProtocolTests {
         for request in cases {
             #expect(try roundTrip(request) == request)
         }
+    }
+
+    @Test func sessionBatchTargetsOmitWhenNilAndRoundTripWhenSet() throws {
+        let single = ControlRequest(cmd: .sessionClose, target: "9f3c")
+        let singleJSON = String(data: try JSONEncoder().encode(single), encoding: .utf8) ?? ""
+        #expect(!singleJSON.contains("targets"), "nil targets must be omitted from single-target JSON; got \(singleJSON)")
+
+        let batch = ControlRequest(cmd: .sessionClose, args: ControlArgs(targets: ["a", "b"]))
+        let decoded = try roundTrip(batch)
+        #expect(decoded == batch)
+        #expect(decoded.args?.targets == ["a", "b"])
     }
 
     @Test func sessionOverlayResizeOmitsFullWhenNil() throws {
@@ -992,6 +1006,14 @@ struct ControlProtocolTests {
         let decoded = try roundTrip(response)
         #expect(decoded == response)
         #expect(decoded.result?.count == 3)
+    }
+
+    @Test func responseOkWithAffectedRoundTrips() throws {
+        let response = ControlResponse(ok: true, result: ControlResult(affected: 2))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.affected == 2)
+        #expect(decoded.result?.count == nil)
     }
 
     @Test func themeSetRequestRoundTrips() throws {

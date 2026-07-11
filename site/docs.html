@@ -554,7 +554,8 @@
                   "
                   >›</span
                 >Add workspaces and sessions from a two-icon bar at the bottom of the sidebar. Rename inline (double-click a row).
-                Move a session between workspaces by dragging — it keeps running, shell and scrollback intact.
+                Shift-click and ⌘-click select multiple sessions for batch flag, close, move, and drag. Dragged sessions keep
+                running, shell and scrollback intact.
               </li>
               <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
@@ -1032,7 +1033,11 @@
                 >--target</span
               >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--workspace</span> take an id, a
               prefix, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> — never a
-              name. Mutating commands print the affected id; add
+              name. Mutating commands normally print the affected id; batch
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session close</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session move</span> accept repeated
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--target</span> options and print the
+              number of sessions actually changed. Add
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--json</span> for the raw response,
               or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--socket PATH</span> to override
               the socket. The exit code is zero on success, non-zero on error.
@@ -1079,6 +1084,10 @@
               ><br />agtermctl session new --after active
               <span style="color: #6b727a">&nbsp;&nbsp;# create right after the current session (--before to precede)</span><br />agtermctl session move --after
               <span style="color: #f2b45c">9f3c</span> <span style="color: #6b727a">&nbsp;&nbsp;# place after an anchor (its workspace is used; relocates cross-workspace)</span
+              ><br />agtermctl session move <span style="color: #f2b45c">"$ws"</span> --target 9f3c --target abcd
+              <span style="color: #6b727a">&nbsp;&nbsp;# move a batch as one ordered block</span
+              ><br />agtermctl session close --target 9f3c --target abcd
+              <span style="color: #6b727a">&nbsp;&nbsp;# one grace-period undo for the batch</span
               ><br />agtermctl workspace move --to top
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# reorder a workspace</span><br />agtermctl workspace focus on
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# collapse tree to active ws (on|off|toggle)</span>

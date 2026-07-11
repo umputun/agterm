@@ -20,11 +20,11 @@ paths:
   Outline items are cached reference-type `SidebarNode`s, reused across reloads for stable identity (expansion/selection
   survive `reloadData`).
 - **Drag reorder (sessions AND workspaces).**
-  The Coordinator's `validateDrop`/`acceptDrop` now HONOR `proposedChildIndex` (via the shared `resolveSessionMove`/`resolveWorkspaceMove`
-  helpers that compute target + insert index + no-op detection in ONE place so validate and accept agree
-  exactly) instead of force-retargeting every drop to `NSOutlineViewDropOnItemIndex` — enabling intra-workspace
-  SESSION reorder (drop between rows for a precise slot) AND precise cross-workspace placement (a cross-workspace
-  drag now lands at the drop position, no longer always-append).
+  The Coordinator's `validateDrop`/`acceptDrop` now HONOR `proposedChildIndex` for sessions and feed the
+  host-free `SidebarDrop` helpers so validate and accept agree exactly instead of force-retargeting every
+  drop to `NSOutlineViewDropOnItemIndex` — enabling intra-workspace SESSION reorder (drop between rows for
+  a precise slot) AND precise cross-workspace placement (a cross-workspace drag now lands at the drop
+  position, no longer always-append).
   Workspace ROWS are draggable too: a second pasteboard type `com.umputun.agterm.workspace` is added
   to `registerForDraggedTypes` (LOAD-BEARING — without it AppKit never delivers validate/accept for workspace
   drags) and `pasteboardWriterForItem` emits it (carrying the workspace UUID) for workspace nodes.
@@ -42,16 +42,20 @@ paths:
   Covered by `ReorderUITests.testReorderWorkspaceOntoSessionRow` (drag a workspace onto a session row
   — the case the `proposedItem == nil` gate broke).
   The session helper still HONORS `proposedChildIndex` (sessions are real same-level siblings,
-  so the outline proposes precise between-rows slots).
-  Both feed `SidebarDrop`, which applies the same-parent downward `childIndex - 1` post-removal adjustment
-  (only when `sourceIndex < childIndex`), since `moveSession`/`moveWorkspace` remove-then-insert so `at:`
-  is a POST-removal index while the fed insert slot is PRE-removal.
-  The PURE index arithmetic (drop-on-row `sessionIndex + 1` redirect, the downward `-1`,
-  cross-workspace vs same-parent index spaces, and a CLAMPED same-workspace no-op check that also catches
-  re-appending an already-last element) lives host-free in `agtermCore.SidebarDrop` (`resolveSession`/`resolveWorkspace`),
-  table-tested in `SidebarDropTests`; the two Coordinator helpers only do the AppKit/store glue (read
-  the pasteboard, resolve ids → indices via `AppStore.sessionLocation(ofSession:)`) and feed `SidebarDrop`,
-  so the trickiest part is unit-covered without the fragile XCUITest drag.
+  so the outline proposes precise between-rows slots). It supports single-row and multi-row drags:
+  dragging from a selected session writes the full `sidebarSelectionIDs` block to the pasteboard in visual
+  order; dragging an unselected session writes just that row.
+  Both session and workspace drops feed `SidebarDrop`. For a single session, `resolveSession` applies the
+  same-parent downward `childIndex - 1` post-removal adjustment (only when `sourceIndex < childIndex`).
+  For a multi-selection, `resolveSessions` removes every dragged session first and inserts the whole block
+  at the post-removal slot, preserving the selected visual order and handling same-workspace / cross-workspace
+  mixes atomically. Workspace reorders use `resolveWorkspace` with the same remove-then-insert convention.
+  The PURE index arithmetic (drop-on-row `sessionIndex + 1` redirect, source-removal adjustment,
+  cross-workspace vs same-parent index spaces, batch block insertion, and no-op checks) lives host-free in
+  `agtermCore.SidebarDrop` (`resolveSession`/`resolveSessions`/`resolveWorkspace`), table-tested in
+  `SidebarDropTests`; the Coordinator helpers only do the AppKit/store glue (read the pasteboard, resolve
+  ids → indices via `AppStore.sessionLocation(ofSession:)`) and feed `SidebarDrop`, so the trickiest part
+  is unit-covered without the fragile XCUITest drag.
 - Add affordances live in a bottom bar in `WindowContentView`: a workspace button and a session menu (New Session
   / Open Directory…).
   The two session actions are also on each workspace row's right-click menu.
@@ -83,6 +87,20 @@ paths:
   and `add-session` back the XCUITests.
   Note the rename field surfaces as a `TextField` for sessions and a `StaticText` for workspaces,
   so UI tests match `edit-field` by identifier across element types.
+- **Sidebar multi-selection.**
+  `AppStore.selectedSessionID` remains the durable active terminal. The broader sidebar selection is
+  a private transient array in host-free `AppStore`, exposed through `sidebarSelectionIDs` normalized to
+  the current visible session order so batch actions are deterministic in tree and flagged modes.
+  AppKit Shift-click and Command-click update the outline selection; `outlineViewSelectionDidChange`
+  mirrors it through `AppStore.setSidebarSelection(_:)`. `allowsEmptySelection` stays TRUE because a
+  focused workspace can intentionally hide the active session and `syncSelection` must be able to
+  `deselectAll(nil)` in that state.
+  Right-click follows standard Mac list behavior: inside the current multi-selection it keeps the whole
+  selection for the context menu, outside it narrows to the clicked row. Context menu target resolution
+  is `AppStore.sidebarSelectionTargets(forContextSession:)`, which filters through the visible projection.
+  Batch row actions: move uses `AppStore.moveSessions`, close uses `AppActions.closeSessions(_:in:)` →
+  `AppStore.softCloseSessions`, flag uses `AppActions.toggleFlags(_:in:)` → `setFlag(_:forSessions:)`,
+  and clear-status loops `setAgentIndicator` once per selected session (loop-equivalent to `session status idle`).
 - **Flagged working-set view (`AppStore.sidebarMode` `.tree`/`.flagged`).**
   `SidebarMode` (`agtermCore/SidebarMode.swift`, `String`-backed `Codable`/`Sendable`) drives a per-window
   MODE toggle between the normal two-level tree and a FLAT list of just the flagged sessions.
@@ -102,11 +120,12 @@ paths:
   An empty flagged set shows a centered, non-scrolling empty-state hint ("No flagged sessions. / Right-click
   a session → Flag.") overlaid in the scroll view, re-tinted on `.agtermAppearanceChanged` and toggled
   by `updateEmptyStateHint` (visible only in `.flagged` with `flaggedSessions.isEmpty`).
-  Mutators: `AppStore.setFlag(_:forSession:)` (clean no-op + no save on unknown id or unchanged value),
-  `clearFlags()` (single save), `setSidebarMode(_:)` (save).
+  Mutators: `AppStore.setFlag(_:forSession:)` / `setFlag(_:forSessions:)` (clean no-op + no save on
+  unknown ids or unchanged values, prune the transient selection when the current sidebar mode hides the
+  changed rows), `clearFlags()` (single save + prune), `setSidebarMode(_:)` (save).
   GUI half: the bottom-bar `flagged-view-toggle` button (right of the trailing `Spacer()`,
   2-state flag/checkmark glyph, tinted `chromeText`, flips `sidebarMode` and animates via `WindowContentView`'s
-  `.animation(value:)`), the row context-menu Flag/Unflag → `AppActions.toggleFlag(_:)`,
+  `.animation(value:)`), the row context-menu Flag/Unflag → `AppActions.toggleFlags(_:in:)`,
   the View-menu Show Flagged/Show All + Flag Session + Clear Flagged, the ⌃⇧P palette entries,
   and the two `BuiltinAction`s `toggleFlaggedView`/`toggleFlag` (expressible/keyless).
   **Clear Flagged** is a plain menu/palette item (NOT a `BuiltinAction`,
@@ -232,4 +251,3 @@ paths:
   Round-trips + legacy-decode (incl. explicit `collapsed:false`) covered in `PersistenceTests`,
   per-workspace + whole-tree mutators / no-op-no-write in `AppStoreOrganizationTests`, and the
   collapse-survives-relaunch + reveal-does-not-repersist end-to-end cases in `SidebarUITests`.
-

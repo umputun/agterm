@@ -71,6 +71,14 @@ struct TargetOptions: ParsableArguments {
     var target: String = "active"
 }
 
+/// Options for batch-capable session commands. Repeating `--target` preserves CLI order on the wire.
+struct BatchTargetOptions: ParsableArguments {
+    @Option(name: .customLong("target"), help: "Target session id, prefix, or 'active'. Repeat for a batch.")
+    var targets: [String] = []
+
+    var batchTargets: [String]? { targets.count > 1 ? targets : nil }
+}
+
 /// Options for commands that address an individual terminal surface from `tree`.
 struct SurfaceTargetOptions: ParsableArguments {
     @Option(name: .long, help: "Target surface id from tree, 'quick' (the quick terminal), or 'active'.")

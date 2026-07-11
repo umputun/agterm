@@ -93,10 +93,18 @@ wherever the anchor lives, even in another workspace — in one shot, with no vi
 # move the current session to sit right after another (cross-workspace if the anchor is elsewhere)
 agtermctl session move --after 3f2a --target active
 agtermctl session move --before "$logs" --target "$server"
+
+# move several sessions together as one ordered block
+agtermctl session move "$ws" --target "$server" --target "$logs"
+agtermctl session move --after "$anchor" --target "$server" --target "$logs"
+
+# close several sessions with one grace-period undo
+agtermctl session close --target "$server" --target "$logs"
 ```
 
 `--after`/`--before` are mutually exclusive with each other, with `--to`, and with a destination
-workspace — the anchor already picks the workspace.
+workspace — the anchor already picks the workspace. Repeated `--target` is only for workspace and
+after/before placement, not `--to up|down|top|bottom`.
 
 ## Resize the split divider from a keybinding
 

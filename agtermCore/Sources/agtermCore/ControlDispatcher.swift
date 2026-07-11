@@ -10,12 +10,14 @@ public protocol ControlActions {
     func selectSession(_ target: String?, window: String?) -> ControlResponse
     func goSession(window: String?, direction: SessionNavigation) -> ControlResponse
     func closeSession(_ target: String?, window: String?) -> ControlResponse
+    func closeSessions(_ targets: [String], window: String?) -> ControlResponse
     func renameSession(_ target: String?, window: String?, name: String) -> ControlResponse
     func createWorkspace(window: String?, name: String?) -> ControlResponse
     func selectWorkspace(_ target: String?, window: String?) -> ControlResponse
     func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse
     func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse
     func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse
+    func moveSessions(_ targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse
     func moveWorkspace(_ target: String?, window: String?, direction: ReorderDirection) -> ControlResponse
     func focusWorkspace(_ target: String?, window: String?, mode: String?) -> ControlResponse
     func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse
@@ -194,6 +196,12 @@ public struct ControlDispatcher {
             }
             return actions.goSession(window: request.args?.window, direction: dir)
         case .sessionClose:
+            if let targets = request.args?.targets {
+                guard !targets.isEmpty else {
+                    return ControlResponse(ok: false, error: "session.close requires at least one --target")
+                }
+                return actions.closeSessions(targets, window: request.args?.window)
+            }
             return actions.closeSession(request.target, window: request.args?.window)
         case .sessionRename:
             guard let name = request.args?.name else {
@@ -214,8 +222,11 @@ public struct ControlDispatcher {
                 if args?.workspace != nil {
                     return ControlResponse(ok: false, error: "session.move takes --after/--before or a workspace, not both")
                 }
-                return actions.moveSession(request.target, window: args?.window,
-                                           move: .place(anchor: anchor, after: args?.after != nil))
+                let move = ControlSessionMove.place(anchor: anchor, after: args?.after != nil)
+                if let targets = args?.targets {
+                    return dispatchSessionMove(targets: targets, window: args?.window, move: move)
+                }
+                return actions.moveSession(request.target, window: args?.window, move: move)
             }
             if args?.to != nil && args?.workspace != nil {
                 return ControlResponse(ok: false, error: "session.move takes either --to or a workspace, not both")
@@ -224,12 +235,19 @@ public struct ControlDispatcher {
                 guard let direction = ReorderDirection(rawValue: to) else {
                     return ControlResponse(ok: false, error: "session.move --to must be up|down|top|bottom")
                 }
+                if args?.targets != nil {
+                    return ControlResponse(ok: false, error: "session.move --target can be repeated only with a workspace or --after/--before")
+                }
                 return actions.moveSession(request.target, window: args?.window, move: .reorder(direction))
             }
             guard let workspace = args?.workspace else {
                 return ControlResponse(ok: false, error: "session.move requires --to or a workspace")
             }
-            return actions.moveSession(request.target, window: args?.window, move: .workspace(workspace))
+            let move = ControlSessionMove.workspace(workspace)
+            if let targets = args?.targets {
+                return dispatchSessionMove(targets: targets, window: args?.window, move: move)
+            }
+            return actions.moveSession(request.target, window: args?.window, move: move)
         case .sessionFlag:
             return actions.setSessionFlag(request.target, window: request.args?.window, mode: request.args?.mode)
         case .sessionSeen:
@@ -255,6 +273,16 @@ public struct ControlDispatcher {
         default:
             preconditionFailure("unexpected session command: \(request.cmd.rawValue)")
         }
+    }
+
+    private func dispatchSessionMove(targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse {
+        guard let first = targets.first else {
+            return ControlResponse(ok: false, error: "session.move requires at least one --target")
+        }
+        if targets.count == 1 {
+            return actions.moveSession(first, window: window, move: move)
+        }
+        return actions.moveSessions(targets, window: window, move: move)
     }
 
     private func dispatchWorkspaceCommand(_ request: ControlRequest) -> ControlResponse {

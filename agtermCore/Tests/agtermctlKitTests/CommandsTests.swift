@@ -129,6 +129,11 @@ struct CommandsTests {
         #expect(try request(["session", "close", "--target", "x"]) == ControlRequest(cmd: .sessionClose, target: "x"))
     }
 
+    @Test func sessionCloseMultipleTargets() throws {
+        let expected = ControlRequest(cmd: .sessionClose, target: "a", args: ControlArgs(targets: ["a", "b"]))
+        #expect(try request(["session", "close", "--target", "a", "--target", "b"]) == expected)
+    }
+
     @Test func sessionSelectDefaultsActive() throws {
         #expect(try request(["session", "select"]) == ControlRequest(cmd: .sessionSelect, target: "active"))
     }
@@ -152,6 +157,12 @@ struct CommandsTests {
         #expect(try request(["session", "move", "ws2", "--target", "s1"]) == expected)
     }
 
+    @Test func sessionMoveMultipleTargetsToWorkspace() throws {
+        let expected = ControlRequest(cmd: .sessionMove, target: "s1",
+                                      args: ControlArgs(targets: ["s1", "s2"], workspace: "ws2"))
+        #expect(try request(["session", "move", "ws2", "--target", "s1", "--target", "s2"]) == expected)
+    }
+
     @Test func sessionMoveReorder() throws {
         let expected = ControlRequest(cmd: .sessionMove, target: "active", args: ControlArgs(to: "up"))
         #expect(try request(["session", "move", "--to", "up"]) == expected)
@@ -167,9 +178,20 @@ struct CommandsTests {
         #expect(validationMessage(["session", "move", "ws2", "--to", "up"]) == "provide a destination workspace or --to, not both")
     }
 
+    @Test func sessionMoveRejectsMultipleTargetsWithReorder() {
+        #expect(validationMessage(["session", "move", "--to", "up", "--target", "s1", "--target", "s2"])
+            == "session.move --target can be repeated only with a workspace or --after/--before")
+    }
+
     @Test func sessionMoveAfter() throws {
         let expected = ControlRequest(cmd: .sessionMove, target: "s1", args: ControlArgs(after: "s2"))
         #expect(try request(["session", "move", "--after", "s2", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionMoveAfterMultipleTargets() throws {
+        let expected = ControlRequest(cmd: .sessionMove, target: "s1",
+                                      args: ControlArgs(targets: ["s1", "s2"], after: "s3"))
+        #expect(try request(["session", "move", "--after", "s3", "--target", "s1", "--target", "s2"]) == expected)
     }
 
     @Test func sessionMoveBefore() throws {

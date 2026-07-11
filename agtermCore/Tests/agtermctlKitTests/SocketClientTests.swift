@@ -209,6 +209,12 @@ struct SocketClientTests {
         #expect(SocketClient.formatResponse(response, json: false) == "3 diagnostic(s)")
     }
 
+    @Test(arguments: [(1, "1 session"), (2, "2 sessions"), (0, "0 sessions")])
+    func formatResponseAffectedSessions(_ affected: Int, _ expected: String) {
+        let response = ControlResponse(ok: true, result: ControlResult(affected: affected))
+        #expect(SocketClient.formatResponse(response, json: false) == expected)
+    }
+
     @Test func formatResponseError() {
         #expect(SocketClient.formatResponse(ControlResponse(ok: false, error: "boom"), json: false) == "error: boom")
     }

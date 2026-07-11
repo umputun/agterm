@@ -409,6 +409,114 @@ struct AppStoreTests {
         #expect(store.pendingCloseSummary == nil)
     }
 
+    @Test func softCloseSessionsWithOneTargetKeepsSingleSessionSummary() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let first = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a", name: "alpha"))
+        let second = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b", name: "beta"))
+
+        #expect(store.softCloseSessions([first.id], grace: 60))
+
+        let summary = try #require(store.pendingCloseSummary)
+        #expect(summary.kind == .session)
+        #expect(summary.title == "alpha")
+
+        #expect(store.undoPendingClose(summary.id))
+        #expect(store.workspaces[0].sessions.map(\.id) == [first.id, second.id])
+        #expect(store.selectedSessionID == first.id)
+    }
+
+    @Test func softCloseSessionsGroupsUndoAndRestoresEverySession() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let first = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a", name: "alpha"))
+        let second = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b", name: "beta"))
+        let third = try #require(store.addSession(toWorkspace: ws.id, cwd: "/c", name: "gamma"))
+        let firstSurface = SpySurface(); first.surface = firstSurface
+        let secondSurface = SpySurface(); second.surface = secondSurface
+        store.selectSession(second.id)
+
+        #expect(store.softCloseSessions([first.id, second.id], grace: 60))
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [third.id])
+        #expect(store.selectedSessionID == third.id)
+        #expect(firstSurface.teardownCount == 0)
+        #expect(secondSurface.teardownCount == 0)
+        let summary = try #require(store.pendingCloseSummary)
+        #expect(summary.kind == .sessions)
+        #expect(summary.title == "2 sessions")
+
+        #expect(store.undoPendingClose(summary.id))
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [first.id, second.id, third.id])
+        #expect(store.selectedSessionID == second.id)
+        #expect(store.workspaces[0].sessions[0] === first)
+        #expect(store.workspaces[0].sessions[1] === second)
+        #expect(firstSurface.teardownCount == 0)
+        #expect(secondSurface.teardownCount == 0)
+        #expect(store.pendingCloseSummary == nil)
+    }
+
+    @Test func softCloseSessionsSelectsNearestSurvivorAfterActiveClose() throws {
+        let store = makeStore()
+        let firstWorkspace = store.addWorkspace(name: "one")
+        let secondWorkspace = store.addWorkspace(name: "two")
+        let distant = try #require(store.addSession(toWorkspace: firstWorkspace.id, cwd: "/a"))
+        let active = try #require(store.addSession(toWorkspace: secondWorkspace.id, cwd: "/b"))
+        let neighbor = try #require(store.addSession(toWorkspace: secondWorkspace.id, cwd: "/c"))
+        store.selectSession(active.id)
+
+        #expect(store.softCloseSessions([active.id, distant.id], grace: 60))
+
+        #expect(store.selectedSessionID == neighbor.id)
+    }
+
+    @Test func softCloseSessionsAdjustsReselectionForEarlierBatchRemovals() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let first = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let active = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        let neighbor = try #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
+        _ = try #require(store.addSession(toWorkspace: ws.id, cwd: "/d"))
+        store.selectSession(active.id)
+
+        #expect(store.softCloseSessions([first.id, active.id], grace: 60))
+
+        #expect(store.selectedSessionID == neighbor.id)
+    }
+
+    @Test func softCloseSessionsFallsBackWhenActiveWorkspaceIsEmptied() throws {
+        let store = makeStore()
+        let firstWorkspace = store.addWorkspace(name: "one")
+        let secondWorkspace = store.addWorkspace(name: "two")
+        let distant = try #require(store.addSession(toWorkspace: firstWorkspace.id, cwd: "/a"))
+        let active = try #require(store.addSession(toWorkspace: secondWorkspace.id, cwd: "/b"))
+        let sibling = try #require(store.addSession(toWorkspace: secondWorkspace.id, cwd: "/c"))
+        store.selectSession(active.id)
+
+        #expect(store.softCloseSessions([active.id, sibling.id], grace: 60))
+
+        #expect(store.selectedSessionID == distant.id)
+    }
+
+    @Test func finalizedSoftCloseSessionsTearsDownEverySessionAndCannotUndo() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let first = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let second = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        let firstSurface = SpySurface(); first.surface = firstSurface
+        let secondSurface = SpySurface(); second.surface = secondSurface
+
+        #expect(store.softCloseSessions([first.id, second.id], grace: 60))
+        let summary = try #require(store.pendingCloseSummary)
+        store.finalizePendingClose(summary.id)
+
+        #expect(firstSurface.teardownCount == 1)
+        #expect(secondSurface.teardownCount == 1)
+        #expect(!store.undoPendingClose(summary.id))
+        #expect(store.pendingCloseSummary == nil)
+    }
+
     @Test func finalizedSoftCloseSessionTearsDownAndCannotUndo() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
@@ -1540,5 +1648,274 @@ struct AppStoreTests {
         #expect(tree.workspaces[0].sessions[0].splitForeground == nil)
         #expect(tree.workspaces[0].sessions[1].foreground == nil)
         #expect(tree.workspaces[0].sessions[1].splitForeground == ["tail", "-f", "app.log"])
+    }
+}
+
+// MARK: - Sidebar multi-selection (the transient selection model)
+
+extension AppStoreTests {
+    @Test func contextTargetsUseFullSelectionOnlyWhenClickedRowIsSelected() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        let c = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
+        store.selectSession(a.id)
+        store.setSidebarSelection([b.id, a.id])
+
+        #expect(store.sidebarSelectionIDs == [a.id, b.id])
+        #expect(store.sidebarSelectionTargets(forContextSession: a.id) == [a.id, b.id])
+        #expect(store.sidebarSelectionTargets(forContextSession: c.id) == [c.id])
+        #expect(store.sidebarSelectionTargets(forContextSession: nil) == [a.id, b.id])
+    }
+
+    @Test func selectingSessionResetsTransientSidebarSelection() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+
+        store.setSidebarSelection([a.id, b.id])
+        #expect(store.sidebarSelectionIDs == [a.id, b.id])
+
+        store.selectSession(b.id)
+        #expect(store.selectedSessionID == b.id)
+        #expect(store.sidebarSelectionIDs == [b.id])
+    }
+
+    @Test func selectingSessionCanPreserveTransientSidebarSelection() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        let c = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
+
+        store.selectSession(c.id, sidebarSelection: [a.id, c.id])
+
+        #expect(store.selectedSessionID == c.id)
+        #expect(store.sidebarSelectionIDs == [a.id, c.id])
+        #expect(store.sidebarSelectionTargets(forContextSession: a.id) == [a.id, c.id])
+        #expect(store.sidebarSelectionTargets(forContextSession: b.id) == [b.id])
+    }
+
+    @Test func sidebarSelectionFallsBackToActiveWhenStoredSelectionIsStale() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        store.setSidebarSelection([a.id, b.id])
+
+        let c = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
+
+        #expect(store.selectedSessionID == c.id)
+        #expect(store.sidebarSelectionIDs == [])
+        #expect(store.sidebarSelectionTargets(forContextSession: nil) == [c.id])
+        #expect(store.sidebarSelectionTargets(forContextSession: a.id) == [a.id])
+    }
+
+    @Test func sidebarTargetsDropRowsHiddenByModeOrFocus() {
+        let store = makeStore()
+        let ws1 = store.addWorkspace(name: "one")
+        let ws2 = store.addWorkspace(name: "two")
+        let a = try! #require(store.addSession(toWorkspace: ws1.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws1.id, cwd: "/b"))
+        let c = try! #require(store.addSession(toWorkspace: ws2.id, cwd: "/c"))
+        store.setFlag(true, forSession: a.id)
+
+        store.selectSession(a.id)
+        store.setSidebarSelection([a.id, b.id, c.id])
+        store.setSidebarMode(.flagged)
+
+        #expect(store.sidebarSelectionIDs == [a.id])
+        #expect(store.sidebarSelectionTargets(forContextSession: a.id) == [a.id])
+
+        store.setSidebarMode(.tree)
+        store.selectSession(a.id)
+        store.setSidebarSelection([a.id, c.id])
+        store.setFocusedWorkspace(ws1.id)
+
+        #expect(store.sidebarSelectionIDs == [a.id])
+        #expect(store.sidebarSelectionTargets(forContextSession: a.id) == [a.id])
+    }
+
+    // The prune-guard tests below all share one shape: hide selected rows (assert), then RE-SHOW them
+    // and assert a second time. `sidebarSelectionIDs` filters on read, so the first assert passes
+    // whether or not the raw list was pruned — only the second step catches a missing prune.
+    @Test func modeChangePrunesRowsHiddenInFlaggedMode() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        store.setFlag(true, forSession: b.id)
+        store.setSidebarSelection([a.id, b.id])
+
+        store.setSidebarMode(.flagged)
+
+        #expect(store.sidebarSelectionIDs == [b.id])
+        store.setSidebarMode(.tree)
+        #expect(store.sidebarSelectionIDs == [b.id],
+                "rows hidden by the mode switch must not re-enter the selection when visible again")
+    }
+
+    @Test func workspaceFocusPrunesRowsOutsideFocusedWorkspace() {
+        let store = makeStore()
+        let ws1 = store.addWorkspace(name: "one")
+        let ws2 = store.addWorkspace(name: "two")
+        let a = try! #require(store.addSession(toWorkspace: ws1.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws2.id, cwd: "/b"))
+        store.setSidebarSelection([a.id, b.id])
+
+        store.setFocusedWorkspace(ws2.id)
+
+        #expect(store.sidebarSelectionIDs == [b.id])
+        store.setFocusedWorkspace(nil)
+        #expect(store.sidebarSelectionIDs == [b.id],
+                "rows hidden by the focus filter must not re-enter the selection when unfocused")
+    }
+
+    @Test func singleFlagChangePrunesRowHiddenInFlaggedMode() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        store.setFlag(true, forSessions: [a.id, b.id])
+        store.setSidebarMode(.flagged)
+        store.setSidebarSelection([a.id, b.id])
+
+        store.setFlag(false, forSession: a.id)
+
+        #expect(store.sidebarSelectionIDs == [b.id])
+        store.setFlag(true, forSession: a.id)
+        #expect(store.sidebarSelectionIDs == [b.id],
+                "an unflagged row must not re-enter the selection when re-flagged")
+    }
+
+    @Test func batchFlagChangePrunesRowsHiddenInFlaggedMode() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        store.setFlag(true, forSessions: [a.id, b.id])
+        store.setSidebarMode(.flagged)
+        store.setSidebarSelection([a.id, b.id])
+
+        store.setFlag(false, forSessions: [a.id, b.id])
+
+        #expect(store.sidebarSelectionIDs == [])
+        store.setFlag(true, forSessions: [a.id, b.id])
+        #expect(store.sidebarSelectionIDs == [])
+    }
+
+    @Test func clearFlagsPrunesRowsHiddenInFlaggedMode() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        store.setFlag(true, forSessions: [a.id, b.id])
+        store.setSidebarMode(.flagged)
+        store.setSidebarSelection([a.id, b.id])
+
+        store.clearFlags()
+
+        #expect(store.sidebarSelectionIDs == [])
+        store.setFlag(true, forSessions: [a.id, b.id])
+        #expect(store.sidebarSelectionIDs == [], "cleared rows must not re-enter selection when visible again")
+    }
+
+    @Test func batchFlagSetsEverySelectedSessionInOneCommand() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+
+        store.setFlag(true, forSessions: [a.id, b.id])
+
+        #expect(a.flagged)
+        #expect(b.flagged)
+    }
+
+    @Test func batchMoveAppendsCrossWorkspaceSessionsAndLeavesTargetSessionsInPlace() {
+        let store = makeStore()
+        let ws1 = store.addWorkspace(name: "one")
+        let ws2 = store.addWorkspace(name: "two")
+        let a = try! #require(store.addSession(toWorkspace: ws1.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws1.id, cwd: "/b"))
+        let c = try! #require(store.addSession(toWorkspace: ws2.id, cwd: "/c"))
+
+        let affected = store.moveSessions([c.id, b.id, a.id], toWorkspace: ws2.id)
+
+        #expect(affected == 2)
+        #expect(store.workspaces[0].sessions.map(\.id) == [])
+        #expect(store.workspaces[1].sessions.map(\.id) == [c.id, a.id, b.id])
+    }
+
+    @Test func oneElementBatchMoveWithinWorkspaceMatchesSingularAppend() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        let c = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
+
+        let affected = store.moveSessions([a.id], toWorkspace: ws.id)
+
+        #expect(affected == 1)
+        #expect(store.workspaces[0].sessions.map(\.id) == [b.id, c.id, a.id])
+    }
+
+    @Test func multiElementBatchMoveAlreadyInTargetReportsZeroAndKeepsOrder() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+
+        let affected = store.moveSessions([a.id, b.id], toWorkspace: ws.id)
+
+        #expect(affected == 0)
+        #expect(store.workspaces[0].sessions.map(\.id) == [a.id, b.id])
+    }
+
+    @Test func batchMoveInsertsCrossWorkspaceSessionsAtDropIndex() {
+        let store = makeStore()
+        let ws1 = store.addWorkspace(name: "one")
+        let ws2 = store.addWorkspace(name: "two")
+        let a = try! #require(store.addSession(toWorkspace: ws1.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws1.id, cwd: "/b"))
+        let c = try! #require(store.addSession(toWorkspace: ws2.id, cwd: "/c"))
+        let d = try! #require(store.addSession(toWorkspace: ws2.id, cwd: "/d"))
+        let e = try! #require(store.addSession(toWorkspace: ws2.id, cwd: "/e"))
+
+        store.moveSessions([a.id, b.id], toWorkspace: ws2.id, at: 1)
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [])
+        #expect(store.workspaces[1].sessions.map(\.id) == [c.id, a.id, b.id, d.id, e.id])
+    }
+
+    @Test func batchMoveReordersSameWorkspaceAtDropIndex() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        let c = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
+        let d = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/d"))
+        let e = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/e"))
+
+        store.moveSessions([a.id, b.id], toWorkspace: ws.id, at: 2)
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [c.id, d.id, a.id, b.id, e.id])
+    }
+
+    @Test func batchMoveMixedSelectionAdjustsTargetInsertionAfterRemoval() {
+        let store = makeStore()
+        let ws1 = store.addWorkspace(name: "one")
+        let ws2 = store.addWorkspace(name: "two")
+        let a = try! #require(store.addSession(toWorkspace: ws1.id, cwd: "/a"))
+        let b = try! #require(store.addSession(toWorkspace: ws2.id, cwd: "/b"))
+        let c = try! #require(store.addSession(toWorkspace: ws2.id, cwd: "/c"))
+        let d = try! #require(store.addSession(toWorkspace: ws2.id, cwd: "/d"))
+
+        store.moveSessions([a.id, b.id], toWorkspace: ws2.id, at: 1)
+
+        #expect(store.workspaces[0].sessions.map(\.id) == [])
+        #expect(store.workspaces[1].sessions.map(\.id) == [c.id, a.id, b.id, d.id])
     }
 }

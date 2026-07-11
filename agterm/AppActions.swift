@@ -226,7 +226,8 @@ final class AppActions {
     /// Returns whether to proceed with the close: true immediately (no prompt) when the setting is off, or
     /// under an XCUITest launch (a modal would hang the test, like the clear-flagged/quit confirms).
     private func confirmCloseSession(_ session: Session) -> Bool {
-        guard settingsModel?.settings.confirmCloseSession == true, !ContentView.isUITestLaunch else { return true }
+        guard settingsModel?.settings.confirmCloseSession == true,
+              !ContentView.shouldBypassCloseConfirmation else { return true }
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Close “\(session.displayName)”?"
@@ -238,7 +239,7 @@ final class AppActions {
         return alert.runModal() == .alertFirstButtonReturn
     }
 
-    private var closeGraceUndoEnabled: Bool {
+    var closeGraceUndoEnabled: Bool {
         settingsModel?.settings.closeGraceUndoEnabled ?? true
     }
 
@@ -502,6 +503,7 @@ final class AppActions {
         store.setFlag(!session.flagged, forSession: sessionID)
     }
 
+    /// Toggle one or more session flags in a specific window-local store. This mirrors `closeSessions`:
     /// Toggle the active session's flag — used by the menu bar and the action palette, which have no
     /// clicked row. No-op when nothing is selected.
     func toggleFlagActiveSession() {
