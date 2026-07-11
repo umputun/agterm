@@ -66,6 +66,20 @@ final class FontPaneUITests: ControlAPITestCase {
         XCTAssertEqual(response["error"] as? String, "session has no split pane", "should report no split pane: \(response)")
     }
 
+    // font --pane scratch on a session with no scratch terminal opened errors. The scratch is lazily
+    // spawned on first show, so a fresh session's scratchSurface is nil — deterministic, mirroring
+    // testFontPaneRightWithoutSplitErrors. This is the only e2e over the font scratch arm (the success
+    // path shares fontUntilOk's realized-surface proof with the split case).
+    func testFontPaneScratchWithoutScratchErrors() throws {
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let newID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return the new id")
+
+        let response = try sendCommand(fontRequest(cmd: "font.dec", target: newID, pane: "scratch"))
+        XCTAssertEqual(response["ok"] as? Bool, false, "font --pane scratch with no scratch should fail: \(response)")
+        XCTAssertEqual(response["error"] as? String, "session has no scratch terminal",
+                       "should report no scratch terminal: \(response)")
+    }
+
     // pane validation is enforced SERVER-SIDE, not only in the CLI `validate()`: a raw socket client bypasses
     // the CLI, so an unknown pane value must error here too (sendCommand is that raw client).
     func testFontRejectsInvalidPaneServerSide() throws {

@@ -642,10 +642,13 @@ struct ControlDispatcherTests {
                                                      args: ControlArgs(pane: "right")))
         _ = await dispatcher.dispatch(ControlRequest(cmd: .fontInc, target: "session",
                                                      args: ControlArgs(window: "win", pane: "scratch")))
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .fontReset, target: "session",
+                                                     args: ControlArgs(pane: "left")))
 
         #expect(actions.calls == [
             .font(target: "session", window: nil, pane: "right", "decrease_font_size:1"),
-            .font(target: "session", window: "win", pane: "scratch", "increase_font_size:1")
+            .font(target: "session", window: "win", pane: "scratch", "increase_font_size:1"),
+            .font(target: "session", window: nil, pane: "left", "reset_font_size")
         ])
     }
 

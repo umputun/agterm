@@ -501,10 +501,15 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
     /// Triggers a libghostty keybind action on this surface (e.g. `increase_font_size:1`,
     /// `decrease_font_size:1`, `reset_font_size`), so a menu item can drive the same behavior
-    /// as the built-in keybind. A font change rides the usual CELL_SIZE → persist path.
-    func performBindingAction(_ action: String) {
-        guard let surface else { return }
+    /// as the built-in keybind. A font change rides the usual CELL_SIZE → persist path. Returns
+    /// whether the action ran: `false` when the libghostty surface isn't realized yet (the view
+    /// exists but its inner `surface` is nil), so a control caller can report `session not realized`
+    /// instead of a false ok. `@discardableResult` keeps the GUI/menu callers unchanged.
+    @discardableResult
+    func performBindingAction(_ action: String) -> Bool {
+        guard let surface else { return false }
         _ = ghostty_surface_binding_action(surface, action, UInt(action.utf8.count))
+        return true
     }
 
     /// The direction `navigateSearch` steps the selection. The pure enum (with its libghostty mapping)

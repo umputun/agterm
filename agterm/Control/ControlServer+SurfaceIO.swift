@@ -29,8 +29,11 @@ extension ControlServer {
     /// without one); `scratch` is the session's scratch terminal (`session has no scratch terminal` when none
     /// has been opened), whose surface is kept alive so its font is settable even while hidden. An unknown
     /// value is an `invalid pane` error — validated here (mirroring the CLI `validate()`) so a raw socket
-    /// client can't bypass it. Only the main pane's size persists: the split/scratch surfaces' `onFontSizeChange`
-    /// is deliberately unwired, so their cmd +/- changes aren't saved (matching a GUI font change on them).
+    /// client can't bypass it. A resolved pane whose libghostty surface isn't realized yet returns `session
+    /// not realized` (the `performBindingAction` Bool), so a split/scratch font request in the layout beat
+    /// after the pane is shown never silently no-ops. Only the main pane's size persists: the split/scratch
+    /// surfaces' `onFontSizeChange` is deliberately unwired, so their cmd +/- changes aren't saved (matching
+    /// a GUI font change on them).
     func font(_ target: String?, window: String?, pane: String?, action: String) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             // resolveSession already resolved `id` from this store, so `session(withID:)` is non-nil.
@@ -57,7 +60,12 @@ extension ControlServer {
             guard let surface = chosen as? GhosttySurfaceView else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
-            surface.performBindingAction(action)
+            // a false return = the view exists but its libghostty surface isn't realized yet (a split or
+            // scratch pane in the layout beat right after it's shown); report that instead of a false ok,
+            // matching session.type's inject() Bool contract so the action is never silently dropped.
+            guard surface.performBindingAction(action) else {
+                return ControlResponse(ok: false, error: "session not realized")
+            }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
