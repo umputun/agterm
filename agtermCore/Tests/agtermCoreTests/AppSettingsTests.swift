@@ -343,6 +343,7 @@ struct AppSettingsTests {
     @Test func sidebarRowHeightScalesWithFontSize() {
         #expect(AppSettings.sidebarRowHeight(fontSize: 13) == 28) // the historical default row
         #expect(AppSettings.sidebarRowHeight(fontSize: 18) == 33)
+        #expect(AppSettings.sidebarRowHeight(fontSize: 14.6) == 30) // fractional in-range rounds (14.6 -> 15, +15)
         // out-of-range sizes clamp before the padding is added.
         #expect(AppSettings.sidebarRowHeight(fontSize: 2) == AppSettings.sidebarFontSizeRange.lowerBound.rounded() + 15)
         #expect(AppSettings.sidebarRowHeight(fontSize: 99) == AppSettings.sidebarFontSizeRange.upperBound.rounded() + 15)

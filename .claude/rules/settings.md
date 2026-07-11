@@ -88,7 +88,7 @@ paths:
   → `persistAndApply` rewrites the conf and reloads surfaces live); GUI-only and keep-in-sync EXEMPT (only
   `theme.set`/`config.reload` touch settings over the socket — the right-click FORWARDING itself is unconditional
   in `GhosttySurfaceView`, this key only decides libghostty's action).
-  The Appearance → Panes slider (0...10, default 5) maps 5 back to nil the same way;
+  The Appearance → Window inactive-pane-mute slider (0...10, default 5) maps 5 back to nil the same way;
   it drives `GhosttyApp.inactivePaneMuteStrength` (mirrored into `WindowContentView` view state on `.agtermAppearanceChanged`,
   like `toolbarMode`/`notificationBadgeEnabled`), and `ContentView.paneDim` washes the inactive split
   pane with `terminalColor` at `AppSettings.muteOpacity(strength:)` (host-free,

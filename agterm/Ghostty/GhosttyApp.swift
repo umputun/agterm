@@ -200,7 +200,10 @@ final class GhosttyApp {
     /// Set the sidebar row-text point size. Called by `SettingsModel` at launch and on every change; the
     /// sidebar re-render (fonts + row height) rides the `.agtermAppearanceChanged` notification.
     func setSidebarFontSize(_ size: Double) {
-        sidebarFontSize = CGFloat(size)
+        // clamp here so both readers (the row font AND the row height) see an in-range value. the Settings
+        // stepper already bounds 9...20, but a hand-edited or future-range settings.json must not render a
+        // giant font inside the clamped row (sidebarRowHeight clamps its own copy for the height).
+        sidebarFontSize = CGFloat(AppSettings.clampSidebarFontSize(size))
     }
 
     /// Set the agent-status glyph colors from the user's hex settings (nil/malformed → the system
