@@ -144,6 +144,8 @@ All six are read-only projections of GUI state.
   undo/reopen record when enabled, immediate close when disabled. Returns `result.affected`.
 - `session select [--target] [--window W]`.
 - `session rename <name> [--target] [--window W]`.
+- `session reveal [--target] [--window W]` — select the target session's focused-pane working
+  directory in Finder. Errors when that directory no longer exists.
 - `session go --to next|prev|first|last|next-attention|prev-attention [--window W]` — move the
   selection relative to the CURRENT one (no `--target`). Operates over the VISIBLE/FILTERED set: the
   flagged sessions in flagged mode, the focused workspace's sessions when a workspace is focused, else

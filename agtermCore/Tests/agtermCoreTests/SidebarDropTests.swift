@@ -7,6 +7,32 @@ struct SidebarDropTests {
     private static let wsB = UUID()
     private static let onItem = SidebarDrop.onItemIndex
 
+    // MARK: - Finder directory import
+
+    @Test func directoryDropTargetsExplicitRowWorkspace() {
+        #expect(SidebarDrop.resolveDirectoryWorkspace(
+            sidebarMode: .tree, rowWorkspaceID: Self.wsB,
+            focusedWorkspaceID: Self.wsA, currentWorkspaceID: Self.wsA) == Self.wsB)
+    }
+
+    @Test func emptyDirectoryDropPrefersFocusedWorkspace() {
+        #expect(SidebarDrop.resolveDirectoryWorkspace(
+            sidebarMode: .tree, rowWorkspaceID: nil,
+            focusedWorkspaceID: Self.wsB, currentWorkspaceID: Self.wsA) == Self.wsB)
+    }
+
+    @Test func emptyDirectoryDropFallsBackToCurrentWorkspace() {
+        #expect(SidebarDrop.resolveDirectoryWorkspace(
+            sidebarMode: .tree, rowWorkspaceID: nil,
+            focusedWorkspaceID: nil, currentWorkspaceID: Self.wsA) == Self.wsA)
+    }
+
+    @Test func directoryDropIsRejectedInFlaggedMode() {
+        #expect(SidebarDrop.resolveDirectoryWorkspace(
+            sidebarMode: .flagged, rowWorkspaceID: Self.wsB,
+            focusedWorkspaceID: nil, currentWorkspaceID: Self.wsA) == nil)
+    }
+
     // MARK: - Session, same workspace
 
     @Test func sessionSameWorkspaceUpDropOnRow() {

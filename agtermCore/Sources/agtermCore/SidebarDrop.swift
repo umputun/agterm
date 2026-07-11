@@ -8,6 +8,16 @@ import Foundation
 public enum SidebarDrop {
     /// Mirrors AppKit's `NSOutlineViewDropOnItemIndex`: a drop landing ON a row rather than between rows.
     public static let onItemIndex = -1
+    /// Prevents an accidental Finder multi-selection from spawning an unbounded number of shells.
+    public static let maximumDirectoryImportCount = 20
+
+    /// Resolves the workspace for a Finder directory drop. Folder import is a tree-only affordance;
+    /// empty-space drops prefer the focused workspace so adding a session cannot silently leave focus mode.
+    public static func resolveDirectoryWorkspace(sidebarMode: SidebarMode, rowWorkspaceID: UUID?,
+                                                 focusedWorkspaceID: UUID?, currentWorkspaceID: UUID?) -> UUID? {
+        guard sidebarMode == .tree else { return nil }
+        return rowWorkspaceID ?? focusedWorkspaceID ?? currentWorkspaceID
+    }
 
     /// The destination of a dragged session, or nil when the drop is a no-op (would leave order
     /// unchanged). `destination` is the POST-removal index `AppStore.moveSession` expects; `dropChildIndex`

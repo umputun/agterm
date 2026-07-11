@@ -10,14 +10,6 @@ let sessionPasteboardType = NSPasteboard.PasteboardType("com.umputun.agterm.sess
 /// drags (within the outline) use this to identify the workspace being reordered.
 let workspacePasteboardType = NSPasteboard.PasteboardType("com.umputun.agterm.workspace")
 
-/// Explicit public plain-text UTI for external drag destinations that don't negotiate AppKit's legacy
-/// `.string` pasteboard type when accepting text drops (Messages is one of the picky ones).
-let plainTextPasteboardType = NSPasteboard.PasteboardType("public.utf8-plain-text")
-
-/// Broad public text UTI for drag destinations that ask for `public.text` instead of a concrete text
-/// representation. Keeping this alongside `.string` makes sidebar drags more cooperative with other apps.
-let publicTextPasteboardType = NSPasteboard.PasteboardType("public.text")
-
 /// AppKit `NSOutlineView` sidebar (`.plain` style + a custom row height and top/left content insets that
 /// match the terminal's ghostty padding) hosted in SwiftUI via `NSViewRepresentable`. Replaces the
 /// SwiftUI `List` sidebar so cross-workspace drag-and-drop works natively: a session row can be dragged
@@ -73,11 +65,10 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // Registering BOTH private types is load-bearing — without the workspace type AppKit never
         // delivers validate/accept for a workspace drag.
         outline.registerForDraggedTypes([sessionPasteboardType, workspacePasteboardType, .fileURL])
-        // Local sidebar drops still choose .move; terminals/text targets can choose .copy from the public
-        // text representation. External drags are copy-only so rows can be dragged out without exporting
-        // agterm's private move semantics to other apps.
-        outline.setDraggingSourceOperationMask([.move, .copy], forLocal: true)
-        outline.setDraggingSourceOperationMask(.copy, forLocal: false)
+        // Sidebar rows are app-private move sources. Finder folder import is independent: Finder owns
+        // that external source and supplies `.fileURL`, while agterm rows export no public representation.
+        outline.setDraggingSourceOperationMask(.move, forLocal: true)
+        outline.setDraggingSourceOperationMask([], forLocal: false)
 
         context.coordinator.outlineView = outline
         context.coordinator.renameController.outlineView = outline
@@ -184,6 +175,12 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// Scheduled spring-loaded workspace expand while a drag hovers over a collapsed workspace row.
         /// View-only like selection reveal: it opens the target for this drag without persisting expansion.
         var pendingSpringLoadedExpansion: (workspaceID: UUID, workItem: DispatchWorkItem)?
+        /// A workspace actually opened by spring-loading during the current drag. Finder-style spring
+        /// navigation is transient: leaving/cancelling collapses this row back to its pre-drag state.
+        var springLoadedWorkspaceID: UUID?
+        /// Finder file URLs resolved for the current AppKit dragging sequence. Validation runs on every
+        /// mouse move, so caching keeps network-volume metadata checks out of the hot path.
+        var cachedDirectoryDrop: (sequenceNumber: Int, urls: [URL], exceedsLimit: Bool)?
 
         /// Stable pseudo-workspace id for the flat flagged group's `TreeShape`, so within flagged mode only
         /// a change to the flagged session list (not a per-call fresh id) triggers a rebuild.
@@ -802,7 +799,7 @@ final class SidebarOutlineView: NSOutlineView {
 
     override func draggingExited(_ sender: NSDraggingInfo?) {
         super.draggingExited(sender)
-        (delegate as? WorkspaceSidebar.Coordinator)?.cancelSpringLoadedExpansion()
+        (delegate as? WorkspaceSidebar.Coordinator)?.finishDraggingSequence()
     }
 
     override func menu(for event: NSEvent) -> NSMenu? {

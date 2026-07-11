@@ -567,6 +567,19 @@
                     font-family: &quot;JetBrains Mono&quot;, monospace;
                   "
                   >›</span
+                >Drag up to 20 folders from Finder onto the tree to open sessions there. Collapsed workspaces spring open while
+                hovering and close again on cancel. Reveal a session's focused-pane directory in Finder from its context menu.
+              </li>
+              <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
+                <span
+                  style="
+                    position: absolute;
+                    left: 0;
+                    top: 2px;
+                    color: #6d82f3;
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                  "
+                  >›</span
                 >Narrow a crowded sidebar two ways: <strong style="color: #e6e1d7">flag</strong> sessions across workspaces into a
                 flat working-set view (a flag is durable and survives a move), or <strong style="color: #e6e1d7">focus</strong> a
                 single workspace to collapse the tree to just its sessions. The two are independent.
@@ -1014,7 +1027,7 @@
               "
             >
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0">
-                Looking for the full list? All 58 commands, with every argument, return value, and error, live on the
+                Looking for the full list? All 59 commands, with every argument, return value, and error, live on the
                 <a href="/commands" style="color: #6d82f3; font-weight: 500">Command reference →</a>
               </p>
             </div>
@@ -1091,6 +1104,8 @@
               ><br />agtermctl workspace move --to top
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# reorder a workspace</span><br />agtermctl workspace focus on
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# collapse tree to active ws (on|off|toggle)</span>
+              <br />agtermctl session reveal --target <span style="color: #f2b45c">9f3c</span>
+              <span style="color: #6b727a">&nbsp;# reveal the focused pane's cwd in Finder</span>
             </div>
 
             <h3

@@ -996,6 +996,11 @@ struct CommandsTests {
         #expect(try request(["session", "rename", "build", "--window", "w1"]) == expected)
     }
 
+    @Test func sessionRevealWithWindow() throws {
+        let expected = ControlRequest(cmd: .sessionReveal, target: "s1", args: ControlArgs(window: "w1"))
+        #expect(try request(["session", "reveal", "--target", "s1", "--window", "w1"]) == expected)
+    }
+
     @Test func sessionCloseWithWindow() throws {
         #expect(try request(["session", "close", "--target", "x", "--window", "w1"])
             == ControlRequest(cmd: .sessionClose, target: "x", args: ControlArgs(window: "w1")))

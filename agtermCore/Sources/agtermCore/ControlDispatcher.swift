@@ -12,6 +12,7 @@ public protocol ControlActions {
     func closeSession(_ target: String?, window: String?) -> ControlResponse
     func closeSessions(_ targets: [String], window: String?) -> ControlResponse
     func renameSession(_ target: String?, window: String?, name: String) -> ControlResponse
+    func revealSession(_ target: String?, window: String?) -> ControlResponse
     func createWorkspace(window: String?, name: String?) -> ControlResponse
     func selectWorkspace(_ target: String?, window: String?) -> ControlResponse
     func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse
@@ -133,7 +134,7 @@ public struct ControlDispatcher {
         switch request.cmd {
         case .tree:
             return actions.controlTree(window: request.args?.window)
-        case .sessionNew, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
+        case .sessionNew, .sessionSelect, .sessionGo, .sessionClose, .sessionRename, .sessionReveal,
                 .sessionMove, .sessionFlag, .sessionSeen, .sessionStatus:
             return dispatchSessionCommand(request)
         case .sessionSplit, .sessionScratch, .sessionFocus, .sessionResize, .surfaceZoom, .sessionType,
@@ -208,6 +209,8 @@ public struct ControlDispatcher {
                 return ControlResponse(ok: false, error: "session.rename requires a name")
             }
             return actions.renameSession(request.target, window: request.args?.window, name: name)
+        case .sessionReveal:
+            return actions.revealSession(request.target, window: request.args?.window)
         case .sessionMove:
             let args = request.args
             if args?.after != nil, args?.before != nil {

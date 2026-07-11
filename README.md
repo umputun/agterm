@@ -156,6 +156,8 @@ agterm arranges terminals into a small hierarchy. These are the only terms you n
 
 Sidebar session rows support Shift-click range selection and Cmd-click toggling for batch work. Right-clicking inside a multi-selection keeps the batch for Flag/Unflag, Close, and Move to; right-clicking outside narrows to the clicked row. Dragging from a selected row moves the selected sessions as one ordered block.
 
+**Finder integration.** In the tree view, drag folders from Finder onto a workspace or session row to open one session per folder there; drop on empty sidebar space to use the focused/current workspace. Collapsed workspaces spring open while you hover and close again if you cancel. Dropping more than 20 folders at once is rejected. **Reveal in Finder** in the session context menu or main menu selects the focused pane's current directory (and is disabled if that directory no longer exists). Folder-picking panels also start in the focused pane's directory when it is available.
+
 **Notifications.** A program in any session can raise a desktop notification (via OSC 9 / 777, or the control API). It shows as a banner and a count badge on the session's row; clicking the banner jumps to the exact pane that raised it. The badge clears when you visit the session, or headlessly with `agtermctl session seen` — so an orchestrator driving a session over the socket can acknowledge its notifications without pulling focus to it (`agtermctl tree --json` reports each session's `unseen` count). For a coding agent that just needs to say it is waiting on you, [Agent status](#agent-status) is usually the better fit.
 
 **Agent status.** A coding agent in a session can report its state (active, blocked, completed) onto that session's row, so a screen of concurrent agents shows which one needs you. See [Agent status](#agent-status) for wiring it up.
@@ -180,7 +182,7 @@ The theme picker (View ▸ Select Theme…, or the action palette) previews each
 
 `agterm` can be driven from a script over a local unix-domain socket through a companion CLI, `agtermctl`. This is for personal scripting — fire-and-forget commands that manage workspaces and sessions, inject text, and invoke control actions. There is no terminal-output streaming and no event subscription.
 
-The sections below cover the common cases. All 58 commands, with every argument, return value, and error, are documented in the **[Command reference](https://agterm.com/commands)**.
+The sections below cover the common cases. All 59 commands, with every argument, return value, and error, are documented in the **[Command reference](https://agterm.com/commands)**.
 
 The app bundles `agtermctl` inside `agterm.app`. The easiest way to put it on your PATH is **Help ▸ Install Command Line Tool…**, which symlinks the bundled binary into `/usr/local/bin` (the first entry in macOS's default PATH). When that directory is user-writable it installs silently; otherwise it asks once for an administrator password.
 
@@ -219,6 +221,7 @@ agtermctl session split toggle                   # split the active session
 agtermctl session resize --split-ratio 0.7       # set the split divider (left-pane fraction); or --grow-left/--grow-right D
 agtermctl session scratch toggle                 # show/hide the active session's scratch terminal (on|off|toggle)
 agtermctl session flag on                        # flag the active session for the flagged working-set view (on|off|toggle|clear)
+agtermctl session reveal --target 9f3c           # reveal the focused pane's cwd in Finder
 agtermctl session seen --target 9f3c             # clear a session's unseen-notification badge without visiting it (focus-free)
 agtermctl sidebar mode flagged                   # show only the flagged sessions as a flat list (tree|flagged|toggle)
 agtermctl workspace focus on                     # collapse the sidebar tree to the active workspace (on|off|toggle)

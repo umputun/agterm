@@ -210,6 +210,15 @@ extension ControlServer: ControlActions {
         }
     }
 
+    func revealSession(_ target: String?, window: String?) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { store, id in
+            guard actions.revealSessionInFinder(id, in: store) else {
+                return ControlResponse(ok: false, error: "session cwd is not an existing directory")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
     func createWorkspace(window: String?, name: String?) -> ControlResponse {
         // placement target: the window's frontmost store (or `args.window`'s). name defaults to
         // the auto-generated workspace name when none is given.

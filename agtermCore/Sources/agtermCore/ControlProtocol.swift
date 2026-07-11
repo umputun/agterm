@@ -14,6 +14,7 @@ public enum Command: String, Codable, Sendable {
     case sessionSelect = "session.select"
     case sessionGo = "session.go"
     case sessionRename = "session.rename"
+    case sessionReveal = "session.reveal"
     case sessionMove = "session.move"
     case workspaceMove = "workspace.move"
     case workspaceFocus = "workspace.focus"

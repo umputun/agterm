@@ -138,6 +138,21 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertEqual(resp["ok"] as? Bool, true, "restore.clear should succeed: \(resp)")
     }
 
+    // session.reveal resolves the active session and drives the same focused-cwd Finder action as the
+    // main/context menus. Finder itself is outside the app's AX tree; success plus the returned id proves
+    // the command reached the platform action, while a missing target proves normal resolver errors remain.
+    func testSessionRevealSucceedsAndResolvesTargets() throws {
+        let activeID = try activeSessionID()
+        let revealed = try sendCommand(#"{"cmd":"session.reveal","target":"active"}"#)
+        XCTAssertEqual(revealed["ok"] as? Bool, true, "session.reveal should succeed: \(revealed)")
+        let result = try XCTUnwrap(revealed["result"] as? [String: Any])
+        XCTAssertEqual((result["id"] as? String)?.lowercased(), activeID.lowercased())
+
+        let missing = try sendCommand(#"{"cmd":"session.reveal","target":"ffffffff"}"#)
+        XCTAssertEqual(missing["ok"] as? Bool, false, "an unknown target should fail")
+        XCTAssertTrue((missing["error"] as? String)?.contains("no such session") == true)
+    }
+
     // session.background sets a text watermark and clears it; bad input (missing image, invalid fit) is
     // rejected and the server stays alive. The actual pixels are not AX-observable (Metal surface), so this
     // covers the control round-trip + validation, like the other surface-state commands.

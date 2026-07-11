@@ -41,6 +41,7 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionClose, args: ControlArgs(targets: ["9f3c", "abcd"])),
             ControlRequest(cmd: .sessionSelect, target: "9f3c"),
             ControlRequest(cmd: .sessionRename, target: "active", args: ControlArgs(name: "build")),
+            ControlRequest(cmd: .sessionReveal, target: "active"),
             ControlRequest(cmd: .sessionMove, target: "9f3c", args: ControlArgs(workspace: "other")),
             ControlRequest(cmd: .sessionMove, args: ControlArgs(targets: ["9f3c", "abcd"], workspace: "other")),
             ControlRequest(cmd: .sessionMove, args: ControlArgs(targets: ["9f3c", "abcd"], after: "anchor")),

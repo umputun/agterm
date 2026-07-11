@@ -165,14 +165,25 @@ final class AppActions {
         revealSessionInFinder(id, in: store)
     }
 
+    var canRevealActiveSessionInFinder: Bool {
+        guard let store, let id = store.selectedSessionID else { return false }
+        return canRevealSessionInFinder(id, in: store)
+    }
+
+    func canRevealSessionInFinder(_ id: UUID, in store: AppStore) -> Bool {
+        guard let session = store.session(withID: id) else { return false }
+        return DirectoryPanelDefaults.existingDirectoryURL(for: session.focusedCwd) != nil
+    }
+
     /// Reveal a specific session's focused-pane cwd in Finder, scoped to the caller's store so a sidebar
     /// context menu in a background window still acts on the clicked row in that window.
-    func revealSessionInFinder(_ id: UUID, in store: AppStore) {
-        guard let session = store.session(withID: id) else { return }
-        let url = URL(fileURLWithPath: session.focusedCwd, isDirectory: true)
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), isDirectory.boolValue else { return }
+    @discardableResult
+    func revealSessionInFinder(_ id: UUID, in store: AppStore) -> Bool {
+        guard let session = store.session(withID: id),
+              let url = DirectoryPanelDefaults.existingDirectoryURL(for: session.focusedCwd)
+        else { return false }
         NSWorkspace.shared.activateFileViewerSelecting([url])
+        return true
     }
 
     // closes the active session, or dismisses a focus-stealing cover on top of it. returns whether it

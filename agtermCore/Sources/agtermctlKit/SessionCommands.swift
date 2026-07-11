@@ -18,7 +18,7 @@ func validatePaneArgument(_ pane: String?) throws {
 struct Session: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Session commands.",
-        subcommands: [New.self, Close.self, Select.self, Go.self, Rename.self, Move.self, TypeText.self,
+        subcommands: [New.self, Close.self, Select.self, Go.self, Rename.self, Reveal.self, Move.self, TypeText.self,
                       Split.self, Scratch.self, Focus.self, Resize.self, Copy.self, Paste.self, SelectAll.self,
                       Text.self, Status.self, FlagCommand.self,
                       Seen.self, Search.self, Background.self, Overlay.self]
@@ -102,6 +102,16 @@ struct Session: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionRename, target: target.target, args: options.withWindow(ControlArgs(name: name)))
+        }
+    }
+
+    struct Reveal: RequestCommand {
+        static let configuration = CommandConfiguration(abstract: "Reveal a session's focused working directory in Finder.")
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sessionReveal, target: target.target, args: options.withWindow())
         }
     }
 

@@ -106,6 +106,7 @@ extension WorkspaceSidebar.Coordinator {
                 let reveal = NSMenuItem(title: "Reveal in Finder", action: #selector(menuRevealInFinder(_:)), keyEquivalent: "")
                 reveal.target = self
                 reveal.representedObject = node
+                reveal.isEnabled = actions.canRevealSessionInFinder(node.id, in: store)
                 menu.addItem(reveal)
             }
             let closeTitle = sessionCount == 1 ? "Close Session" : "Close \(sessionCount) Sessions"

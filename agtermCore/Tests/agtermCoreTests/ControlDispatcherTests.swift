@@ -255,16 +255,23 @@ struct ControlDispatcherTests {
             target: "session",
             args: ControlArgs(name: "api")
         ))
+        let revealed = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionReveal,
+            target: "session",
+            args: ControlArgs(window: "win")
+        ))
 
         #expect(selected == ControlResponse(ok: true))
         #expect(navigated == ControlResponse(ok: true))
         #expect(closed == ControlResponse(ok: true))
         #expect(renamed == ControlResponse(ok: true))
+        #expect(revealed == ControlResponse(ok: true))
         #expect(actions.calls == [
             .sessionSelect(target: "session", window: "win"),
             .sessionGo(window: "win", .nextAttention),
             .sessionClose(target: "session", window: nil),
-            .sessionRename(target: "session", window: nil, "api")
+            .sessionRename(target: "session", window: nil, "api"),
+            .sessionReveal(target: "session", window: "win")
         ])
     }
 
@@ -1484,6 +1491,7 @@ private final class MockControlActions: ControlActions {
         case sessionClose(target: String?, window: String?)
         case sessionCloseBatch(targets: [String], window: String?)
         case sessionRename(target: String?, window: String?, String)
+        case sessionReveal(target: String?, window: String?)
         case workspaceNew(window: String?, String?)
         case workspaceSelect(target: String?, window: String?)
         case workspaceRename(target: String?, window: String?, String)
@@ -1609,6 +1617,11 @@ private final class MockControlActions: ControlActions {
 
     func renameSession(_ target: String?, window: String?, name: String) -> ControlResponse {
         calls.append(.sessionRename(target: target, window: window, name))
+        return ControlResponse(ok: true)
+    }
+
+    func revealSession(_ target: String?, window: String?) -> ControlResponse {
+        calls.append(.sessionReveal(target: target, window: window))
         return ControlResponse(ok: true)
     }
 
