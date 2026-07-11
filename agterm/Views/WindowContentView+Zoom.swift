@@ -77,7 +77,11 @@ extension WindowContentView {
                 // isVisible onChange handles the focus return otherwise.
                 if quickTerminal.isVisible { quickTerminal.focus() }
             case .session:
-                actions.focusActiveSession()
+                // scoped to THIS window, like the palette close above: `focusActiveSession` targets the
+                // FRONTMOST window, so a background window's zoom exit (its zoomed overlay/scratch
+                // exiting on its own, or a control-driven `surface zoom hide --window`) must not grab
+                // first responder there — e.g. out of an open ⌘F search field the user is typing into.
+                if library.activeWindowID == windowID { actions.focusActiveSession() }
             }
         }
     }

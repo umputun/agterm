@@ -159,6 +159,73 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
                       "zooming a background session's surface must end that session's search")
     }
 
+    func testBackgroundWindowZoomExitDoesNotStealFrontmostFocus() throws {
+        // zoom window A's left surface, then open window B on top: A becomes a BACKGROUND zoomed window.
+        let windows = try XCTUnwrap(
+            (try sendCommand(#"{"cmd":"window.list"}"#)["result"] as? [String: Any])?["windows"] as? [[String: Any]],
+            "window.list should carry windows")
+        let windowA = try XCTUnwrap(windows.first?["id"] as? String, "should have the seeded window id")
+        let surfaceA = try activeSurfaceID(kind: "left")
+        let zoom = try sendCommand(#"{"cmd":"surface.zoom","target":"\#(surfaceA)","args":{"mode":"show"}}"#)
+        XCTAssertEqual(zoom["ok"] as? Bool, true, "surface zoom show should succeed: \(zoom)")
+
+        let created = try sendCommand(#"{"cmd":"window.new","args":{"name":"zoom-focus"}}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true, "window.new should succeed: \(created)")
+        let windowB = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String,
+                                    "window.new should return the new window id")
+        // wait for the second window to MATERIALIZE in the AX tree before driving it — a control-created
+        // window can lag its window.list "active" flag (the multi-window suites' count-poll pattern).
+        let appeared = Date().addingTimeInterval(10)
+        while Date() < appeared, app.windows.count < 2 { usleep(200_000) }
+        XCTAssertGreaterThanOrEqual(app.windows.count, 2, "the second window should materialize and take key")
+        XCTAssertTrue(pollWindowActive(windowB, timeout: 12), "the new window should take key")
+
+        // put the keyboard into window B's search field and prove it owns the keystrokes.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.search"}"#)["ok"] as? Bool, true,
+                       "opening search in the frontmost window should succeed")
+        let searchField = app.textFields["search-field"]
+        XCTAssertTrue(searchField.waitForExistence(timeout: 10), "the search bar should be up in window B")
+        searchField.click()
+        app.typeText("ab")
+        XCTAssertTrue(pollFieldValue(searchField, equals: "ab", timeout: 8),
+                      "the search field should own the keyboard before the background unzoom")
+
+        // un-zoom BACKGROUND window A over the socket. Its zoom-exit focus return is scoped to window A,
+        // so window B's field keeps the keyboard — a frontmost-targeted restore would steal it (the
+        // regression this pins). Give a stray restore its full retry window before typing on.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"surface.zoom","args":{"mode":"hide","window":"\#(windowA)"}}"#)["ok"] as? Bool,
+                       true, "hiding the background window's zoom should succeed")
+        RunLoop.current.run(until: Date().addingTimeInterval(1.0))
+        app.typeText("cd")
+        XCTAssertTrue(pollFieldValue(searchField, equals: "abcd", timeout: 8),
+                      "a background window's zoom exit must not steal the frontmost window's keyboard focus")
+    }
+
+    /// Polls `window.list` until the window with `id` reports active (frontmost/key) — a window.new/select
+    /// response can arrive before the window is actually key under XCUITest (the pollWindowActive shape).
+    private func pollWindowActive(_ id: String, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let result = (try? sendCommand(#"{"cmd":"window.list"}"#))?["result"] as? [String: Any],
+               let windows = result["windows"] as? [[String: Any]],
+               windows.contains(where: { ($0["id"] as? String)?.lowercased() == id.lowercased() && $0["active"] as? Bool == true }) {
+                return true
+            }
+            usleep(200_000)
+        }
+        return false
+    }
+
+    /// Polls the field's AX value until it equals `expected` — typed keystrokes land asynchronously.
+    private func pollFieldValue(_ field: XCUIElement, equals expected: String, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if field.value as? String == expected { return true }
+            usleep(200_000)
+        }
+        return field.value as? String == expected
+    }
+
     /// Polls `session.text --pane scratch` until it succeeds — the control-observable proof that the
     /// scratch surface realized and its shell spawned (an unrealized scratch errors instead).
     private func pollScratchReadable(timeout: TimeInterval) -> Bool {
