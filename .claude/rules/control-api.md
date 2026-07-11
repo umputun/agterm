@@ -233,7 +233,13 @@ paths:
   behavior). Repeated `--target` / `args.targets` is the GUI-equivalent batch close: it resolves all targets
   in one store and honors `closeGraceUndoEnabled`. When enabled it calls `AppStore.softCloseSessions`,
   producing one grace timer and one grouped undo/reopen record; when disabled it immediately hard-closes
-  each resolved session like the GUI. Both return the number actually closed in `result.affected`.
+  each resolved session like the GUI. Both return the number actually closed in `result.affected`
+  (`ok` with the count — never an error for an empty result, matching the batch `session.move` shape).
+  Batch target resolution (`resolveBatchSessions`) is all-or-nothing and deduplicating: any unknown or
+  ambiguous target fails the WHOLE request before anything mutates
+  (`ControlAPIUITests.testSessionCloseBatchIsAllOrNothing`), and a batch that deduplicates to a single
+  session (e.g. `--target a --target a`) takes the single-target path — for close that is the legacy
+  HARD close (no grace window), consistent with the one-element `session.move` routing.
   During the grace window, reopening any member restores the whole group but selects the specific Recent
   item the user chose, matching workspace close grouping without losing selection intent. Keep-in-sync: `ControlArgs.targets`, the
   `.sessionClose` dispatcher batch arm, `ControlActions.closeSessions`, `agtermctl session close --target`
@@ -273,8 +279,14 @@ paths:
   Batch keep-in-sync additionally includes `ControlArgs.targets`, `ControlActions.moveSessions`,
   `agtermctl session move --target` repeat support, and `ControlAPIUITests.testSessionMoveMultipleTargetsWithinWorkspaceBeforeAnchor`.
   Keep-in-sync exemptions for sidebar batch actions: Flag/Unflag is loop-equivalent to repeated
-  `session.flag on|off|toggle --target <id>` (plural store API only saves once); Clear Status is
-  loop-equivalent to repeated `session.status idle --target <id>` and intentionally adds no batch command.
+  `session.flag on|off --target <id>` (the plural store API only saves once).
+  The GUI's multi-select toggle is NOT a `toggle` loop: `AppActions.toggleFlags` computes ONE uniform
+  value for the whole set (`allSatisfy(\.flagged)` — flag all unless every target is already flagged)
+  and applies it, so on a mixed selection a per-row `session.flag toggle` loop diverges from the GUI.
+  A script wanting the GUI semantics reads `flagged` off `tree`, computes the uniform value, and loops
+  `on`/`off`.
+  Clear Status is loop-equivalent to repeated `session.status idle --target <id>` and intentionally adds
+  no batch command.
   `workspace.move` is the workspace REORDER (control-native, no separate verb):
   `args.to` (`up`|`down`|`top`|`bottom`) resolves the workspace target via the shared `resolveWorkspace`
   (honoring the global `--window` selector like other workspace commands),

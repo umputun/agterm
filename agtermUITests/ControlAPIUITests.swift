@@ -284,6 +284,36 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertTrue(pollSessionCount(1, timeout: 2), "grace-disabled close must persist both removals immediately")
     }
 
+    // Batch target resolution is all-or-nothing: a request naming a valid session alongside an unknown
+    // or ambiguous target must fail WHOLE, without closing the valid member — resolveBatchSessions
+    // errors before anything mutates.
+    func testSessionCloseBatchIsAllOrNothing() throws {
+        let firstID = UUID(uuidString: "ABCD1111-0000-0000-0000-000000000001")!
+        let secondID = UUID(uuidString: "ABCD2222-0000-0000-0000-000000000002")!
+        let thirdID = UUID(uuidString: "AC330000-0000-0000-0000-000000000003")!
+        let snapshot = """
+        {"version":1,"selectedSessionID":"\(firstID.uuidString)","workspaces":[\
+        {"id":"\(UUID().uuidString)","name":"workspace 1","sessions":[\
+        {"id":"\(firstID.uuidString)","customName":null,"cwd":"\(NSHomeDirectory())"},\
+        {"id":"\(secondID.uuidString)","customName":null,"cwd":"\(NSHomeDirectory())"},\
+        {"id":"\(thirdID.uuidString)","customName":null,"cwd":"\(NSHomeDirectory())"}]}]}
+        """
+        try relaunch(withSnapshot: snapshot)
+
+        let unknown = try sendCommand(#"{"cmd":"session.close","args":{"targets":["\#(thirdID.uuidString)","eeee"]}}"#)
+        XCTAssertEqual(unknown["ok"] as? Bool, false, "an unknown target must fail the whole batch")
+        XCTAssertEqual(unknown["error"] as? String, "no such session: eeee")
+
+        let ambiguous = try sendCommand(#"{"cmd":"session.close","args":{"targets":["\#(thirdID.uuidString)","abcd"]}}"#)
+        XCTAssertEqual(ambiguous["ok"] as? Bool, false, "an ambiguous prefix must fail the whole batch")
+        XCTAssertEqual(ambiguous["error"] as? String, "ambiguous session prefix 'abcd' → ABCD1111, ABCD2222")
+
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        XCTAssertNotNil(sessionNode(tree, id: firstID.uuidString), "no session may close when batch resolution fails")
+        XCTAssertNotNil(sessionNode(tree, id: secondID.uuidString), "no session may close when batch resolution fails")
+        XCTAssertNotNil(sessionNode(tree, id: thirdID.uuidString), "the valid batch member must stay open")
+    }
+
     // session.new --command runs the command AS the session's process (no shell echo): create a session
     // whose command writes a marker file, then read it back — proof the command ran as the process, not
     // typed into a shell. The session closes when the command exits (kitty-style).

@@ -197,7 +197,8 @@ extension ControlServer: ControlActions {
                     count += 1
                 }
             }
-            guard affected > 0 else { return ControlResponse(ok: false, error: "no sessions closed") }
+            // `ok` with the count (0 included) mirrors `placeSessions` — every id already resolved, so
+            // an error arm here would be dead code.
             return ControlResponse(ok: true, result: ControlResult(affected: affected))
         }
     }
