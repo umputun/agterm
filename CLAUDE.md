@@ -214,11 +214,14 @@ The app must build, `swift test` must stay green, and `make lint` must pass afte
 ## GhosttyKit.xcframework
 
 - Source: **built from upstream `ghostty-org/ghostty` source** by `scripts/setup.sh`,
-  pinned to the `GHOSTTY_REV` SHA (`zig build -Demit-xcframework=true -Dxcframework-target=native …`
+  pinned to the `GHOSTTY_REV` SHA (`zig build -Demit-xcframework=true -Dxcframework-target=universal …`
   with zig 0.15.2).
   Self-owned: the only inputs are upstream ghostty at a pinned commit and the zig/Metal toolchains —
   no third-party fork, no daily-build release that can be pruned.
   Bump `GHOSTTY_REV` deliberately when adopting a newer libghostty.
+  The `universal` target emits a fat `macos-arm64_x86_64` slice (plus iOS slices agterm never links),
+  so the app builds universal (`ARCHS: $(ARCHS_STANDARD)`) and Release/dist run on Apple Silicon and Intel;
+  zig cross-compiles the non-native slice from either arch of build machine.
 - **The pin is a pre-regression commit on purpose.**
   A libghostty `main` renderer regression introduced after `4dcb09ada` (2026-04-30) blanks the scrollback
   on a font-size *increase* (decrease is fine); it is NOT an agterm bug and no app-side change fixes

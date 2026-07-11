@@ -16,7 +16,10 @@ settings:
     SWIFT_VERSION: "6.0"
     SDKROOT: macosx
     MACOSX_DEPLOYMENT_TARGET: "14.0"
-    ARCHS: arm64
+    # Universal app (arm64 + x86_64), matching the universal GhosttyKit.xcframework
+    # scripts/setup.sh builds. Debug stays fast: ONLY_ACTIVE_ARCH=YES builds just the
+    # machine's own arch; Release/dist emit both slices.
+    ARCHS: "$(ARCHS_STANDARD)"
     ONLY_ACTIVE_ARCH: NO
     SWIFT_STRICT_CONCURRENCY: complete
     DEAD_CODE_STRIPPING: YES
@@ -127,8 +130,19 @@ targets:
           # otherwise trip the re-seal below.
           rm -rf "$CODESIGNING_FOLDER_PATH/Contents/Resources/AppIcon.icon"
           core="$SRCROOT/agtermCore"
-          swift build --package-path "$core" -c release --product agtermctl
-          src="$(swift build --package-path "$core" -c release --product agtermctl --show-bin-path)/agtermctl"
+          # build agtermctl for the same arch set as the app: both slices when the app is
+          # universal (Release), just the native arch for ONLY_ACTIVE_ARCH (Debug) builds.
+          # --arch flags must match between the build and --show-bin-path calls — SwiftPM
+          # puts --arch builds under .build/apple/Products, not .build/release.
+          if [[ "$ONLY_ACTIVE_ARCH" == "YES" ]]; then
+            cli_archs="$NATIVE_ARCH_ACTUAL"
+          else
+            cli_archs="$ARCHS"
+          fi
+          arch_flags=""
+          for a in $cli_archs; do arch_flags="$arch_flags --arch $a"; done
+          swift build --package-path "$core" -c release $arch_flags --product agtermctl
+          src="$(swift build --package-path "$core" -c release $arch_flags --product agtermctl --show-bin-path)/agtermctl"
           dest="$CODESIGNING_FOLDER_PATH/Contents/MacOS/agtermctl"
           mkdir -p "$(dirname "$dest")"
           cp -f "$src" "$dest"

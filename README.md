@@ -67,7 +67,7 @@ A file open in the quick terminal, the window's shared scratch overlay:
 
 ## Install
 
-Pre-built releases are for **Apple Silicon (arm64) Macs running macOS 14 or later**.
+Pre-built releases are **universal binaries (Apple Silicon + Intel) for macOS 14 or later**.
 
 Releases are signed with a Developer ID certificate and notarized by Apple, so macOS Gatekeeper opens them with no extra steps.
 
@@ -107,7 +107,7 @@ The app's **Help** menu has three one-time installers. None are needed to use ag
 
 Requirements:
 
-- macOS 14 or later.
+- macOS 14 or later, Apple Silicon or Intel (the build produces a universal binary).
 - Xcode 26 with `xcodegen` on `PATH`, plus its Metal Toolchain (auto-downloaded on first setup).
 - Homebrew, for the `zig@0.15` formula `scripts/setup.sh` builds libghostty with.
 

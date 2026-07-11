@@ -67,7 +67,7 @@ notarize() {
 }
 
 # build the GitHub release body: the matching CHANGELOG.md section followed by a
-# short install note (signed + notarized; Apple Silicon only, macOS 14+).
+# short install note (signed + notarized; universal arm64 + x86_64, macOS 14+).
 release_notes() {
   local section
   section="$(awk -v ver="v$VERSION" '
@@ -85,7 +85,7 @@ release_notes() {
   cat <<EOF
 ---
 
-Signed with a Developer ID certificate and notarized by Apple, so macOS Gatekeeper opens it with no extra steps. Apple Silicon (arm64) only, macOS 14 or later.
+Signed with a Developer ID certificate and notarized by Apple, so macOS Gatekeeper opens it with no extra steps. Universal binary (Apple Silicon + Intel), macOS 14 or later.
 
 - **Homebrew:** \`brew install --cask umputun/apps/agterm\`
 - **Direct download:** open the \`.dmg\` and drag \`agterm.app\` into \`/Applications\`.

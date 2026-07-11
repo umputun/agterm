@@ -4,6 +4,8 @@
 # We build from source rather than downloading a prebuilt artifact so the toolchain is fully
 # self-owned: the only inputs are upstream ghostty-org/ghostty at a pinned SHA, zig 0.15.2, and
 # Xcode's Metal Toolchain. No third-party fork, no daily-build release that can be pruned.
+# The xcframework is built universal (arm64 + x86_64) so Release/dist builds produce a universal
+# app; zig cross-compiles the non-native slice, so this works from either arch of build machine.
 #
 # The pin is DELIBERATELY a pre-regression commit: a libghostty renderer regression introduced on
 # main after this SHA blanks the terminal scrollback on a font-size increase.
@@ -65,8 +67,8 @@ git -C "$BUILD_DIR" remote add origin "$GHOSTTY_REPO"
 git -C "$BUILD_DIR" fetch -q --depth 1 origin "$GHOSTTY_REV"
 git -C "$BUILD_DIR" -c advice.detachedHead=false checkout -q FETCH_HEAD
 
-echo "building GhosttyKit.xcframework with zig 0.15.2 (a few minutes)..."
-( cd "$BUILD_DIR" && "$ZIG" build -Doptimize=ReleaseFast -Demit-xcframework=true -Dxcframework-target=native -Demit-macos-app=false )
+echo "building GhosttyKit.xcframework with zig 0.15.2 (universal, both arches — several minutes)..."
+( cd "$BUILD_DIR" && "$ZIG" build -Doptimize=ReleaseFast -Demit-xcframework=true -Dxcframework-target=universal -Demit-macos-app=false )
 
 if $need_xc; then
   echo "staging GhosttyKit.xcframework..."
