@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.11.0 - 2026-07-11
+
+### New Features
+
+- multi-select sessions in the sidebar to batch close, move, flag/unflag, or clear status, and drag selected groups between workspaces #179 @melonamin
+- terminal zoom: `cmd+shift+return` renders the active surface full-window over the sidebar and chrome, also driveable over the control API with `surface.zoom` / `agtermctl surface zoom` #158 @melonamin
+- Edit menu Copy/Paste/Select All now work when the terminal has focus, with `session.paste` and `session.selectall` added to the control API #181 @umputun
+- configurable sidebar font size in Settings > Appearance > Window #187 @umputun
+
+### Improvements
+
+- drop the "Closed <name> / Reopen" toast; the undo window is unchanged (cmd-Z during the grace period, File > Reopen Last Closed Item after) cf43d5f @umputun
+
+### Bug Fixes
+
+- re-tint sidebar row text from the row view's live selection state so multi-selected rows stay legible #189 @melonamin
+- let `agtermctl font` target a split or scratch pane #188 @umputun
+- clear the active agent-status glyph on Ctrl-C, not just Escape #185 @umputun
+- keep workspace and session ids unique across close, undo, and reopen #184 @umputun
+- keep keyboard focus on the overlay/scratch, not the pane behind it #182 @umputun
+
 ## v0.10.2 - 2026-07-08
 
 ### Bug Fixes
