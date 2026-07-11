@@ -57,11 +57,14 @@ as `status`, so it is never reported without a `status`), `statusBlink` (`true` 
 set to blink — the `--blink` value; omitted when idle or not blinking) and `statusColor` (the `#rrggbb`
 glyph-tint override — the `--color` value; omitted when idle or using the default color),
 `foreground`/`splitForeground` (the live argv of each pane's foreground
-process — what it is running — omitted when the pane sits at its shell prompt), and `background` (the
+process — what it is running — omitted when the pane sits at its shell prompt), `background` (the
 background spec set via `session background` — a `{kind, text?, imagePath?, colorHex?, opacity?, fit?,
-position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set), and `unseen`
+position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set), `unseen`
 (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session seen` — omitted
-when zero). Workspace nodes carry `id`, `name`, `active`, `sessions`, and `focused` (whether the sidebar
+when zero), and `fontSize`/`splitFontSize`/`scratchFontSize` (the LIVE font size in points of each pane —
+the read side of `font --pane`; each omitted when that pane's surface isn't realized. Only `fontSize` (the
+main pane) survives a relaunch; the split/scratch sizes are live-only, so read them back here rather than
+from the snapshot). Workspace nodes carry `id`, `name`, `active`, `sessions`, and `focused` (whether the sidebar
 tree is collapsed to this workspace — the read side of `workspace focus`, distinct from `active` the
 SELECTED workspace; omitted unless this is the focused one, and absent entirely when nothing is focused).
 
@@ -405,7 +408,9 @@ reset the font size of a session pane. `--pane` picks which surface's font to ch
 and `session text`: omitted or `left` is the main pane, `right` the split pane (errors with `session has
 no split pane` when the session has no split), `scratch` the session's scratch terminal (settable even
 while hidden). No `other` value. Only the MAIN pane's size is persisted across relaunch; a split/scratch
-pane's font change is live-only, matching a GUI cmd +/- on those panes.
+pane's font change is live-only, matching a GUI cmd +/- on those panes. Read the resulting size back from
+`tree` — `fontSize` (main), `splitFontSize`, `scratchFontSize`, each in points and omitted when that pane
+isn't realized.
 
 ## keymap
 

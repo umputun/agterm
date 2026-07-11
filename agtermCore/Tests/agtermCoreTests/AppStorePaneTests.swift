@@ -390,6 +390,23 @@ struct AppStorePaneTests {
         #expect(node.splitRatio == 0.3)
     }
 
+    @Test func controlTreeThreadsFontSizesFromClosures() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        _ = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        // default closures: the font-size fields are omitted (nil), like foreground.
+        var node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.fontSize == nil)
+        #expect(node.splitFontSize == nil)
+        #expect(node.scratchFontSize == nil)
+        // the host supplies live per-pane sizes via closures (the app reads them off the surfaces).
+        node = try #require(store.controlTree(fontSize: { _ in 13 }, splitFontSize: { _ in 9.5 },
+                                              scratchFontSize: { _ in 11 }).workspaces[0].sessions.first)
+        #expect(node.fontSize == 13)
+        #expect(node.splitFontSize == 9.5)
+        #expect(node.scratchFontSize == 11)
+    }
+
     @Test func controlTreeReportsSplitFocused() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

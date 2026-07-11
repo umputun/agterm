@@ -176,6 +176,9 @@ public final class AppStore {
     /// command lookup is supplied by the host because live process inspection is platform-specific.
     public func controlTree(foreground: (Session) -> [String]? = { _ in nil },
                             splitForeground: (Session) -> [String]? = { _ in nil },
+                            fontSize: (Session) -> Double? = { _ in nil },
+                            splitFontSize: (Session) -> Double? = { _ in nil },
+                            scratchFontSize: (Session) -> Double? = { _ in nil },
                             quickVisible: () -> Bool? = { nil }) -> ControlTree {
         let activeID = selectedSessionID
         let activeWorkspaceID = activeID.flatMap { workspace(forSession: $0)?.id }
@@ -199,7 +202,10 @@ public final class AppStore {
                                           statusBlink: idle ? nil : (session.agentIndicator.blink ? true : nil),
                                           statusColor: idle ? nil : session.agentIndicator.color,
                                           background: session.backgroundWatermark,
-                                          unseen: session.unseenCount > 0 ? session.unseenCount : nil)
+                                          unseen: session.unseenCount > 0 ? session.unseenCount : nil,
+                                          fontSize: fontSize(session),
+                                          splitFontSize: splitFontSize(session),
+                                          scratchFontSize: scratchFontSize(session))
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,

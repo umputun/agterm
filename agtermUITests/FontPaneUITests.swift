@@ -10,10 +10,11 @@ import XCTest
 // subclass like `SessionTypePaneUITests`, reusing the shared harness.
 @MainActor
 final class FontPaneUITests: ControlAPITestCase {
-    // font dec --pane right decrements the split surface, NOT the main/left one (the reported bug). The main
-    // pane's persisted size is the only readable font oracle, so the proof is: --pane right returns ok
-    // (the split surface exists and got the action) while the main pane's size stays put, and the default
-    // font dec then DOES shrink the main pane — so the two panes are addressed independently.
+    // font dec --pane right decrements the split surface, NOT the main/left one (the reported bug). Two
+    // oracles: the split pane's live font (read back via tree's splitFontSize) must DROP, proving the
+    // action landed on the split; and the main pane's persisted size must stay put, proving it didn't leak
+    // to the main. The default font dec then DOES shrink the main pane — so the panes are addressed
+    // independently.
     func testFontPaneRightTargetsSplitNotMain() throws {
         let split = try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"on"}}"#)
         XCTAssertEqual(split["ok"] as? Bool, true, "split on should succeed: \(split)")
@@ -24,6 +25,9 @@ final class FontPaneUITests: ControlAPITestCase {
         // settled — its point size doesn't change with pane width, so this stays constant hereafter.
         let baseline = try XCTUnwrap(pollFirstSessionFontSize(timeout: 10),
                                      "the main pane should report a persisted font size on launch")
+        // the split pane's live font baseline, read back from the tree once the split surface realizes.
+        let splitBaseline = try XCTUnwrap(pollSplitFontSize(target: id, timeout: 10),
+                                          "the split pane should report a live font size once realized")
 
         // ride out split-surface realization: a freshly shown split may not be realized for the first
         // request, which returns "session not realized" (continueAfterFailure = false forbids asserting in
@@ -35,6 +39,12 @@ final class FontPaneUITests: ControlAPITestCase {
             let response = try sendCommand(fontRequest(cmd: "font.dec", target: id, pane: "right"))
             XCTAssertEqual(response["ok"] as? Bool, true, "font dec --pane right should stay ok: \(response)")
         }
+
+        // POSITIVE proof the action landed on the split: its live font (tree read-back) dropped below its
+        // baseline. This is what the main-pane-only oracle couldn't show.
+        let splitAfter = try XCTUnwrap(pollSplitFontSize(target: id, below: splitBaseline - 0.5, timeout: 8),
+                                       "font --pane right should shrink the split pane's live font size")
+        XCTAssertLessThan(splitAfter, splitBaseline)
 
         // the main pane's persisted size must be untouched by the split-pane changes — the bug was that
         // font always hit the main/left surface. Wait past the debounced save, then assert no drift (a
@@ -117,6 +127,34 @@ final class FontPaneUITests: ControlAPITestCase {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
             if let size = firstSessionFontSize(), size < threshold { return size }
+            usleep(200_000)
+        }
+        return nil
+    }
+
+    /// Reads session `id`'s `splitFontSize` from the current control tree, or nil when absent (the split
+    /// surface isn't realized) — the read-back for `font --pane right`.
+    private func splitFontSize(target id: String) throws -> Double? {
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        guard let result = tree["result"] as? [String: Any],
+              let t = result["tree"] as? [String: Any],
+              let workspaces = t["workspaces"] as? [[String: Any]] else { return nil }
+        for ws in workspaces {
+            for session in (ws["sessions"] as? [[String: Any]] ?? [])
+            where (session["id"] as? String)?.lowercased() == id.lowercased() {
+                return session["splitFontSize"] as? Double
+            }
+        }
+        return nil
+    }
+
+    /// Polls the tree until session `id`'s `splitFontSize` is present (and below `threshold` when given),
+    /// returning it, or nil on timeout.
+    private func pollSplitFontSize(target id: String, below threshold: Double? = nil,
+                                   timeout: TimeInterval) throws -> Double? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let size = try splitFontSize(target: id), threshold.map({ size < $0 }) ?? true { return size }
             usleep(200_000)
         }
         return nil

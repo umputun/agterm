@@ -375,6 +375,26 @@ struct ControlProtocolTests {
         #expect(!json.contains("foreground"), "a nil foreground must be omitted from the JSON; got \(json)")
     }
 
+    @Test func treeSessionNodeRoundTripsWithFontSizes() throws {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true,
+                                         fontSize: 13, splitFontSize: 9.5, scratchFontSize: 11)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        let node = decoded.result?.tree?.workspaces.first?.sessions.first
+        #expect(node?.fontSize == 13)
+        #expect(node?.splitFontSize == 9.5)
+        #expect(node?.scratchFontSize == 11)
+    }
+
+    @Test func treeSessionNodeOmitsFontSizesWhenNil() throws {
+        // an unrealized pane has no live font size — the keys must be omitted, not emitted as null.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("fontSize"), "nil font sizes must be omitted from the JSON; got \(json)")
+    }
+
     @Test func treeSessionNodeRoundTripsWithStatus() throws {
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false, status: "blocked")
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(

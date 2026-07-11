@@ -611,13 +611,21 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         ownedConfigs = [config]
     }
 
+    /// The surface's live font size in points (post cmd +/-), read from `inherited_config`; nil when the
+    /// libghostty surface isn't realized yet or hasn't resolved a size. The read side of `font.*` — the
+    /// control `tree` reads it per pane so a script can query what a font change set (the split/scratch
+    /// panes' sizes are otherwise unobservable, being live-only).
+    func currentFontSize() -> Double? {
+        guard let surface else { return nil }
+        let size = Double(ghostty_surface_inherited_config(surface, GHOSTTY_SURFACE_CONTEXT_WINDOW).font_size)
+        return size > 0 ? size : nil
+    }
+
     func reportFontSize() {
         // Already on the main actor (the CELL_SIZE callback hops via DispatchQueue.main.async).
-        // inherited_config carries the surface's live font size (post cmd +/-); a zero means
-        // libghostty hasn't resolved one yet, so skip it. The store no-ops a same-value write.
-        guard let surface else { return }
-        let size = Double(ghostty_surface_inherited_config(surface, GHOSTTY_SURFACE_CONTEXT_WINDOW).font_size)
-        guard size > 0 else { return }
+        // currentFontSize reads the surface's live font size; nil means libghostty hasn't resolved one
+        // yet, so skip it. The store no-ops a same-value write.
+        guard let size = currentFontSize() else { return }
         onFontSizeChange?(size)
     }
 

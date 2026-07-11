@@ -70,6 +70,9 @@ paths:
   `session.flag`/`flagged`, `session.focus`/`splitFocused`, `session.resize`/`splitRatio`,
   `session.overlay.resize`/`overlaySizePercent`, `sidebar`/`sidebarVisible` (top-level),
   `sidebar.mode`/`sidebarMode`, `workspace.focus`/`focused` (workspace node), `quick`/`quickVisible` (top-level),
+  `font.*`/`fontSize`+`splitFontSize`+`scratchFontSize` (the per-pane LIVE font size — the split/scratch
+  panes' fonts are otherwise unobservable, being live-only; supplied to `controlTree` by app-side closures
+  reading `GhosttySurfaceView.currentFontSize()`, since the host-free tree can't read a surface),
   `window.move`+`window.resize`/`geometry`, `window.fullscreen`+`window.zoom`/`fullscreen`+`zoomed`
   (the last three on `window.list`).
   This is a SEPARATE obligation from the four-point audit (Command + arg + CLI + tests) and easy to forget:
