@@ -392,7 +392,10 @@ struct ControlProtocolTests {
         // an unrealized pane has no live font size — the keys must be omitted, not emitted as null.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
-        #expect(!json.contains("fontSize"), "nil font sizes must be omitted from the JSON; got \(json)")
+        // contains is case-sensitive: "fontSize" catches only the main key, "FontSize" catches the
+        // suffixed splitFontSize/scratchFontSize keys — assert both so all three omissions are covered.
+        #expect(!json.contains("fontSize"), "the main fontSize key must be omitted when nil; got \(json)")
+        #expect(!json.contains("FontSize"), "splitFontSize/scratchFontSize must be omitted when nil; got \(json)")
     }
 
     @Test func treeSessionNodeRoundTripsWithStatus() throws {

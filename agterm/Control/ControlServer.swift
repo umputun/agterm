@@ -447,7 +447,7 @@ final class ControlServer {
                     ForegroundProcess.command(for: $0, shellBasename: shellBasename)
                 }
             },
-            fontSize: { ($0.surface as? GhosttySurfaceView)?.currentFontSize() },
+            fontSize: { ($0.addressableSurface as? GhosttySurfaceView)?.currentFontSize() },
             splitFontSize: { ($0.splitSurface as? GhosttySurfaceView)?.currentFontSize() },
             scratchFontSize: { ($0.scratchSurface as? GhosttySurfaceView)?.currentFontSize() },
             quickVisible: { windowID.flatMap { QuickTerminalRegistry.shared.controller(for: $0)?.isVisible } ?? false }

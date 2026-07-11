@@ -407,6 +407,29 @@ struct AppStorePaneTests {
         #expect(node.scratchFontSize == 11)
     }
 
+    @Test func controlTreeFontSizeReadsPromotedSurvivorViaAddressableSurface() throws {
+        // regression: after the primary pane exits, the fontSize read-back must resolve through
+        // addressableSurface (the promoted split survivor) — the same surface the font default/left
+        // WRITE path targets — not bare `surface`, which is nil in that state. A closure over `surface`
+        // would report nothing for a session the user is actively typing in.
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.surface = SpySurface()
+        session.splitSurface = SpySurface()
+        session.isSplit = true
+        session.hasSplit = true
+        store.closePrimaryPane(session.id)                 // primary exits -> surface nil, survivor promoted
+        #expect(session.surface == nil)
+        #expect(session.addressableSurface != nil)
+        // the app wires fontSize off addressableSurface: it reports the survivor's size here...
+        let viaAddressable = store.controlTree(fontSize: { $0.addressableSurface != nil ? 13 : nil })
+        #expect(viaAddressable.workspaces[0].sessions.first?.fontSize == 13)
+        // ...whereas the old wiring over the (now nil) `surface` would report nothing.
+        let viaSurface = store.controlTree(fontSize: { $0.surface != nil ? 13 : nil })
+        #expect(viaSurface.workspaces[0].sessions.first?.fontSize == nil)
+    }
+
     @Test func controlTreeReportsSplitFocused() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
