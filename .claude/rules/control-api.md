@@ -70,6 +70,9 @@ paths:
   `session.flag`/`flagged`, `session.focus`/`splitFocused`, `session.resize`/`splitRatio`,
   `session.overlay.resize`/`overlaySizePercent`, `sidebar`/`sidebarVisible` (top-level),
   `sidebar.mode`/`sidebarMode`, `workspace.focus`/`focused` (workspace node), `quick`/`quickVisible` (top-level),
+  `font.*`/`fontSize`+`splitFontSize`+`scratchFontSize` (the per-pane LIVE font size — the split/scratch
+  panes' fonts are otherwise unobservable, being live-only; supplied to `controlTree` by app-side closures
+  reading `GhosttySurfaceView.currentFontSize()`, since the host-free tree can't read a surface),
   `window.move`+`window.resize`/`geometry`, `window.fullscreen`+`window.zoom`/`fullscreen`+`zoomed`
   (the last three on `window.list`).
   This is a SEPARATE obligation from the four-point audit (Command + arg + CLI + tests) and easy to forget:
@@ -120,7 +123,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 57-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 58-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -198,10 +201,11 @@ paths:
   rules, then remaining targets resolve inside that same store so one command never mutates multiple windows.
   The top-level `target` also carries the first explicit batch target so a new CLI talking to a still-running
   pre-batch server degrades to a named session instead of accidentally acting on `active`.
-- **Command catalog (57 commands):**
+- **Command catalog (58 commands):**
   - `tree`
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`
   - `session.new`/`session.close`/`session.select`/`session.rename`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.paste`/`session.selectall`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.resize`/`session.overlay.result`
+  - `surface.zoom`
   - `quick`/`quick.type`/`quick.text`
   - `sidebar`/`sidebar.mode`/`sidebar.expand`/`sidebar.collapse`
   - `notify`
@@ -224,7 +228,7 @@ paths:
   Setting echoes the resulting effective side in `result.text`; the BARE form (no name) reads the side
   the last config feed applied (`SettingsModel.lastAppliedIsDark`), which the test polls to prove the
   flip actually drove the reload.
-  `AppearanceFlipUITests` is its only consumer; the public command count stays 57.
+  `AppearanceFlipUITests` is its only consumer; the public command count stays 58.
 
   `workspace.delete` honors keep-at-least-one and returns an error instead of the GUI confirm alert (nothing
   blocks on a modal).
@@ -455,8 +459,8 @@ paths:
   `session.selectall` selects the target's ENTIRE terminal buffer (main surface) — the analogue of ⌘A /
   Edit ▸ Select All.
   Both run a libghostty binding action on the resolved surface — `paste_from_clipboard` /
-  `select_all` — through the SAME `ControlServer+SurfaceIO.surfaceBindingAction` helper the `font.*` arms
-  use (resolve session → guard the surface is realized, `session not realized` otherwise → `performBindingAction`
+  `select_all` — through the shared `ControlServer+SurfaceIO.surfaceBindingAction` helper
+  (resolve session → guard the surface is realized, `session not realized` otherwise → `performBindingAction`
   → return the id), so paste takes the normal libghostty paste path (bracketed paste, PASTE requests are
   ungated so no OSC-52 prompt) and select_all covers the whole grid.
   They are the control half of the GUI Edit menu: agterm keeps the STANDARD SwiftUI Edit menu and
@@ -514,7 +518,9 @@ paths:
   since libghostty's built-in `super+a` is character-matched too (found in review — the fallback set must cover
   every shortcut the Edit menu owns, not just copy/paste).
   **The session-scoped surface arms resolve `Session.addressableSurface`, not `Session.surface`.**
-  `session.copy`/`session.paste`/`session.selectall`/`font.*` act on "the session" rather than a named `--pane`,
+  `session.copy`/`session.paste`/`session.selectall` act on "the session" rather than a named `--pane`
+  (and so does `font.*`'s omitted/`left` default — its `right`/`scratch` panes resolve `splitSurface`/`scratchSurface`
+  instead, via its own pane switch rather than `surfaceBindingAction`),
   and `addressableSurface` is `surface ?? splitSurface`: identical to `surface` for every ordinary or split
   session, but falling back to a PROMOTED SPLIT SURVIVOR whose primary shell exited (`closePrimaryPane` nils
   `surface` and keeps the live shell in `splitSurface`, asserted by `AppStorePaneTests`).
@@ -708,6 +714,47 @@ paths:
   fields below) — populated in `AppStore.controlTree`, round-tripped by `treeSessionNodeRoundTripsWithOverlaySizePercent`/`…OmitsOverlaySizePercentWhenNil`
   and `AppStorePaneTests.controlTreeReportsOverlaySizePercent`, and mirrored in the agent-skill `reference.md`
   tree schema — so a script can record an overlay's size before zooming to `--full` and restore it exactly.
+  `surface.zoom` (mode `show`|`hide`|`toggle`) fills the target window with ONE terminal surface,
+  hiding the sidebar and collapsing the title bar to a slim strip (traffic lights + an exit button;
+  the zoomed terminal is inset below `titlebarHeight`, NOT borderless) — the control half of
+  ⌘⇧Return / View ▸ Toggle Terminal Zoom (`BuiltinAction.toggleTerminalZoom`) and the title-bar exit button.
+  Targets: omitted/`active` resolves the active surface (quick terminal first, else the active session's
+  overlay > scratch > focused-split > primary via `TerminalZoomController.resolveTarget`, which derives the
+  precedence from `TerminalZoomSurface.isActive`); an explicit `surface:<session-id>:<left|right|scratch|overlay>`
+  id (from `tree`'s `surfaces` nodes) zooms that surface — hidden-but-alive splits/scratches included — and
+  `quick` addresses a quick-terminal zoom (the API accepts the id it emits).
+  State lives in the per-window, host-free `TerminalZoomController` (`agtermCore/TerminalZoom.swift`,
+  registered in `TerminalZoomRegistry`); the app-side arm (`setSurfaceZoom`/`setActiveSurfaceZoom`) only
+  resolves the target and shapes the response — ALL mode-vs-state semantics stay in `TerminalZoomController.set`,
+  shared with the GUI toggle, so the three callers can't drift.
+  Zoom is a VIEW mode with hard invariants: it must not mutate split ratios, focus, sidebar state, or
+  split/scratch visibility (the zoom host mounts with `reportsFocusChange: false` → `suppressFocusChange`
+  on ALL `onFocusChange` paths, incl. `clearUnseenOnRefocus`), and the zoomed session's deck entry stays
+  mounted with a CONSTANT shape — only the zoom-owned slot swaps to its `deckHostsSurface` placeholder —
+  so control-opened split/scratch/overlay surfaces still realize and run behind the zoom layer.
+  Entering zoom closes the window's transient chrome (the palette — frontmost window only, it is
+  app-global — an active ⌘F search, and, for a session zoom, a visible quick terminal); a
+  notification-banner reveal exits zoom first; ⌘W exits zoom (the topmost cover, stepwise like the
+  quick/overlay/scratch dismissal); font commands stay live (they act on the focused = zoomed surface).
+  While zoomed, `quick show` and `session.search` (except `close`) are rejected; `quick hide` stays
+  idempotent (a zoomed quick terminal un-zooms first, so a script can always dismiss it), and an
+  explicit-target `surface.zoom hide` skips the availability check so hide is idempotent even after
+  the surface vanished.
+  The READ side is `ControlTree.zoomedSurface` at the tree TOP level — the zoomed surface's control id
+  (`surface:<session-id>:<kind>` or `quick`), nil/omitted when nothing is zoomed — LIVE, resolved
+  app-side in `buildTree` from the projected window's `TerminalZoomController.target?.controlID` and
+  threaded as a `zoomedSurface: () -> String?` closure on `AppStore.controlTree` (the `quickVisible`
+  seam), `tree`-only for the same staleness reason; so a script can check "is it already zoomed" and
+  record-then-restore. The per-session `surfaces` nodes are the ADDRESSING list, not the state read-back:
+  `ControlSurfaceNode.active`/`visible` derive from session flags (overlay/scratch/splitFocused), are
+  identical zoomed or not, and `visible` reads false for a pane behind a FLOATING overlay even though
+  that pane is visually on screen — documented as a caveat on the node type and in the skill.
+  Four-point keep-in-sync audit: (1) `case surfaceZoom = "surface.zoom"` + `ControlSurfaceNode`/`ControlSessionNode.surfaces`
+  + `ControlTree.zoomedSurface` in `ControlProtocol.swift`, (2) the `.surfaceZoom` arm (`setSurfaceZoom`) in `ControlServer+SessionActions.swift`
+  + the `surfaces`/`zoomedSurface` population in `AppStore.controlTree`/`buildTree`, (3) the `surface zoom` subcommand in `agtermctlKit`,
+  (4) round-trip in `ControlProtocolTests` (incl. `treeRoundTripsWithZoomedSurface`/`…OmitsZoomedSurfaceWhenNil`)
+  + `TerminalZoomTests` + the e2e `ControlSurfaceZoomUITests` (incl. the tree read-back and the
+  `--window`-scoped error paths).
   Mode-bearing commands (`session.split`/`quick`) compute the delta against current state so `on`/`off`/`show`/`hide`
   are idempotent, and an unknown mode is an error.
   `quick`'s visibility reads back on `ControlTree.quickVisible` at the tree TOP level — LIVE, resolved
@@ -1110,4 +1157,4 @@ paths:
   (image/text/color set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
-  examples.md recipes) and the command count there is bumped to 57 to match.
+  examples.md recipes) and the command count there is bumped to 58 to match.

@@ -6,11 +6,11 @@ import agtermCore
 /// surface-touching half of the dispatch. Split out of `ControlServer.swift` for the swiftlint size limit.
 extension ControlServer {
     /// Resolve the target session and run a libghostty binding action on its addressable surface (targets a
-    /// specific surface, unlike the menu path which only hits the focused one). Shared by the font arms
-    /// and the clipboard/selection arms (`session.paste`/`session.selectall`). `addressableSurface` is the
-    /// main pane, falling back to a promoted split survivor whose primary shell exited (which nils
-    /// `surface`) — otherwise a session the user is actively typing in would report "session not realized".
-    /// A never-shown session has no surface at all → error.
+    /// specific surface, unlike the menu path which only hits the focused one). Shared by the clipboard /
+    /// selection arms (`session.paste`/`session.selectall`). `addressableSurface` is the main pane, falling
+    /// back to a promoted split survivor whose primary shell exited (which nils `surface`) — otherwise a
+    /// session the user is actively typing in would report "session not realized". A never-shown session has
+    /// no surface at all → error.
     private func surfaceBindingAction(_ target: String?, window: String?, action: String) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             guard let surface = store.session(withID: id)?.addressableSurface as? GhosttySurfaceView else {
@@ -21,10 +21,53 @@ extension ControlServer {
         }
     }
 
-    /// Run a font binding action (`font.inc`/`font.dec`/`font.reset`) on the target session's surface. A
-    /// menu-driven font change rides the same CELL_SIZE → persist path as the keybind.
-    func font(_ target: String?, window: String?, action: String) -> ControlResponse {
-        surfaceBindingAction(target, window: window, action: action)
+    /// Run a font binding action (`font.inc`/`font.dec`/`font.reset`) on a pane of the target session. A
+    /// menu-driven font change rides the same CELL_SIZE → persist path as the keybind. `pane` picks the
+    /// surface like `session.type`/`session.text` (`left`|`right`|`scratch`, no `other`): omitted/`left` is
+    /// the main pane (`addressableSurface`, so a promoted split survivor whose primary shell exited is still
+    /// reached — preserving the pre-pane behavior); `right` is the split pane (`session has no split pane`
+    /// without one); `scratch` is the session's scratch terminal (`session has no scratch terminal` when none
+    /// has been opened), whose surface is kept alive so its font is settable even while hidden. An unknown
+    /// value is an `invalid pane` error — validated here (mirroring the CLI `validate()`) so a raw socket
+    /// client can't bypass it. A resolved pane whose libghostty surface isn't realized yet returns `session
+    /// not realized` (the `performBindingAction` Bool), so a split/scratch font request in the layout beat
+    /// after the pane is shown never silently no-ops. Only the main pane's size persists: the split/scratch
+    /// surfaces' `onFontSizeChange` is deliberately unwired, so their cmd +/- changes aren't saved (matching
+    /// a GUI font change on them).
+    func font(_ target: String?, window: String?, pane: String?, action: String) -> ControlResponse {
+        return resolver.resolveSession(target, window: window) { store, id in
+            // resolveSession already resolved `id` from this store, so `session(withID:)` is non-nil.
+            guard let session = store.session(withID: id) else {
+                return ControlResponse(ok: false, error: "session not realized")
+            }
+            let chosen: (any TerminalSurface)?
+            switch pane {
+            case nil, "left":
+                chosen = session.addressableSurface
+            case "right":
+                guard let split = session.splitSurface else {
+                    return ControlResponse(ok: false, error: "session has no split pane")
+                }
+                chosen = split
+            case "scratch":
+                guard let scratch = session.scratchSurface else {
+                    return ControlResponse(ok: false, error: "session has no scratch terminal")
+                }
+                chosen = scratch
+            case .some(let value):
+                return ControlResponse(ok: false, error: "invalid pane: \(value)")
+            }
+            guard let surface = chosen as? GhosttySurfaceView else {
+                return ControlResponse(ok: false, error: "session not realized")
+            }
+            // a false return = the view exists but its libghostty surface isn't realized yet (a split or
+            // scratch pane in the layout beat right after it's shown); report that instead of a false ok,
+            // matching session.type's inject() Bool contract so the action is never silently dropped.
+            guard surface.performBindingAction(action) else {
+                return ControlResponse(ok: false, error: "session not realized")
+            }
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
     }
 
     /// Paste the system clipboard into the target session's surface (`session.paste`, the control analogue
@@ -200,6 +243,10 @@ extension ControlServer {
         if to == "close" {
             (session.searchSurface as? GhosttySurfaceView)?.endSearch()
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+        if let windowID = library.windowID(forSession: id),
+           TerminalZoomRegistry.shared.controller(for: windowID)?.target != nil {
+            return ControlResponse(ok: false, error: "terminal zoom active")
         }
 
         // open/needle/navigate need the bar + highlights visible, so select the target (also realizes a

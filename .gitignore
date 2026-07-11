@@ -1,7 +1,8 @@
 # downloaded prebuilt libghostty (never committed — see scripts/setup.sh)
-GhosttyKit.xcframework/
-agterm/Resources/ghostty/
-agterm/Resources/terminfo/
+# no trailing slash so the symlink form (worktree setup) is ignored too, not just the dir
+GhosttyKit.xcframework
+agterm/Resources/ghostty
+agterm/Resources/terminfo
 *.tar.gz
 
 # build artifacts

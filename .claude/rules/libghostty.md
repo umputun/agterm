@@ -103,6 +103,20 @@ paths:
   The row draws the themed pill in `drawBackground(in:)` for every state,
   and the Coordinator's `refreshSelectionAppearance()` repaints the pills + re-tints the row text on
   selection change (AppKit won't redraw rows on its own with `.none`) and on `.agtermAppearanceChanged`.
+  **The row view is the single source of truth for the cell's selection tint.**
+  The pill reads `isSelected` live at draw time, but the text/icon color is applied imperatively
+  (`SidebarCellView.setColors`), so the two can desync when a re-tint event is missed —
+  the cell builder's `row(forItem:)` can return -1 mid-reload/expand-collapse animation
+  (the constant OSC-title `reloadItem` ticks make this window easy to hit),
+  and on the ~1/3 of themes using the inverted-selection idiom (`selection-background == foreground`,
+  e.g. `Ghostty Default Style Dark`) a stale tint renders the row text fully INVISIBLE
+  (white-on-white pill, plus the previously-selected row dark-on-dark).
+  `SidebarRowView` therefore re-asserts `setColors` from its own live `isSelected`:
+  its `didSet` re-tints the hosted cell on every selection flip,
+  and `didAddSubview` tints a cell the moment it attaches (superseding the builder's build-time guess).
+  Rename `restore` reads the same row-view `isSelected` instead of recomputing via `row(for:)`.
+  Text color is not accessibility-observable, so this is verified by eye — like the disclosure-triangle
+  and cursor solid/hollow cases.
   **`SidebarOutlineView.acceptsFirstResponder` is `false`** so a mouse click selects without stealing
   first responder from the terminal — that responder bounce (terminal → outline → terminal,
   via `mouseDown`'s `focusActiveTerminal`) otherwise makes AppKit re-set `SidebarRowView.isEmphasized`,

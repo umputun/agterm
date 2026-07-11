@@ -92,6 +92,14 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// Called on the main actor when this surface gains (`true`) or loses (`false`) first
     /// responder, so the app can track which split pane is active. Set by the factory.
     var onFocusChange: ((Bool) -> Void)?
+    /// Rehosting for terminal zoom must update libghostty focus without changing app model state such as
+    /// the focused split pane. `TerminalView` flips this while the surface is hosted in the zoom layer.
+    var suppressFocusChange = false
+    /// Called on the main actor to clear the session's unseen badge + delivered banners WITHOUT the
+    /// `splitFocused` write that rides `onFocusChange(true)` — the refocus-clear path for a zoom-hosted
+    /// surface, where the focus report is suppressed but the user is demonstrably looking at the session.
+    /// Set by the main/split factories alongside `onFocusChange`.
+    var onClearUnseen: (() -> Void)?
 
     /// Called on the main actor on EVERY keystroke into this surface, carrying whether the key interrupts
     /// the agent (Escape or Ctrl-C). The factory's closure owns the pane-scoped decision (via
@@ -281,9 +289,18 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// the now-key window, never a background one. Reuses `onFocusChange`, so it clears exactly for the
     /// main/split panes that already clear on a focus transition (a scratch/overlay has no `onFocusChange`
     /// and doesn't clear on focus either), and no-ops after teardown (the closure is nil'd).
+    /// Honors `suppressFocusChange` like the first-responder call sites: a zoom-hosted surface is first
+    /// responder of the key window, so `onFocusChange?(true)` here would mutate `splitFocused` on every
+    /// window-key regain — the model change the zoom host suppresses on the other two paths. The unseen
+    /// badge must still clear, though (the user is looking at exactly this surface), so the suppressed
+    /// branch takes the focus-free `onClearUnseen` path instead of dropping the clear.
     private func clearUnseenOnRefocus() {
         guard liveFocus else { return }
-        onFocusChange?(true)
+        if suppressFocusChange {
+            onClearUnseen?()
+        } else {
+            onFocusChange?(true)
+        }
     }
 
     /// The cursor-focus state to report to libghostty: solid only when this surface is the first responder
@@ -501,10 +518,15 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
     /// Triggers a libghostty keybind action on this surface (e.g. `increase_font_size:1`,
     /// `decrease_font_size:1`, `reset_font_size`), so a menu item can drive the same behavior
-    /// as the built-in keybind. A font change rides the usual CELL_SIZE → persist path.
-    func performBindingAction(_ action: String) {
-        guard let surface else { return }
+    /// as the built-in keybind. A font change rides the usual CELL_SIZE → persist path. Returns
+    /// whether the action ran: `false` when the libghostty surface isn't realized yet (the view
+    /// exists but its inner `surface` is nil), so a control caller can report `session not realized`
+    /// instead of a false ok. `@discardableResult` keeps the GUI/menu callers unchanged.
+    @discardableResult
+    func performBindingAction(_ action: String) -> Bool {
+        guard let surface else { return false }
         _ = ghostty_surface_binding_action(surface, action, UInt(action.utf8.count))
+        return true
     }
 
     /// The direction `navigateSearch` steps the selection. The pure enum (with its libghostty mapping)
@@ -606,13 +628,21 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         ownedConfigs = [config]
     }
 
+    /// The surface's live font size in points (post cmd +/-), read from `inherited_config`; nil when the
+    /// libghostty surface isn't realized yet or hasn't resolved a size. The read side of `font.*` — the
+    /// control `tree` reads it per pane so a script can query what a font change set (the split/scratch
+    /// panes' sizes are otherwise unobservable, being live-only).
+    func currentFontSize() -> Double? {
+        guard let surface else { return nil }
+        let size = Double(ghostty_surface_inherited_config(surface, GHOSTTY_SURFACE_CONTEXT_WINDOW).font_size)
+        return size > 0 ? size : nil
+    }
+
     func reportFontSize() {
         // Already on the main actor (the CELL_SIZE callback hops via DispatchQueue.main.async).
-        // inherited_config carries the surface's live font size (post cmd +/-); a zero means
-        // libghostty hasn't resolved one yet, so skip it. The store no-ops a same-value write.
-        guard let surface else { return }
-        let size = Double(ghostty_surface_inherited_config(surface, GHOSTTY_SURFACE_CONTEXT_WINDOW).font_size)
-        guard size > 0 else { return }
+        // currentFontSize reads the surface's live font size; nil means libghostty hasn't resolved one
+        // yet, so skip it. The store no-ops a same-value write.
+        guard let size = currentFontSize() else { return }
         onFontSizeChange?(size)
     }
 
@@ -829,6 +859,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         onExit = nil
         onExitCodeCaptured = nil
         onFocusChange = nil
+        onClearUnseen = nil
         onUserInputClearsStatus = nil
         onUserInput = nil
         onFontSizeChange = nil
@@ -935,7 +966,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
             // inside this call, so `liveFocus` would read stale. onFocusChange (split-pane tracking) is
             // independent of key state.
             ghostty_surface_set_focus(surface, window?.isKeyWindow ?? false)
-            onFocusChange?(true)
+            if !suppressFocusChange { onFocusChange?(true) }
         }
         return result
     }
@@ -944,7 +975,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         let result = super.resignFirstResponder()
         if result, let surface {
             ghostty_surface_set_focus(surface, false)
-            onFocusChange?(false)
+            if !suppressFocusChange { onFocusChange?(false) }
         }
         return result
     }

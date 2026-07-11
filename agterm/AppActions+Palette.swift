@@ -42,6 +42,7 @@ extension AppActions {
     }
 
     private func runPaletteCommand(_ command: PaletteCommand) {
+        guard uiActionsEnabled || command == .toggleTerminalZoom else { return }
         switch command {
         case .newSession: newSession()
         case .newWorkspace: newWorkspace()
@@ -61,6 +62,7 @@ extension AppActions {
         case .showAttention: openAttentionPalette()
         case .toggleSplit: toggleSplit()
         case .toggleScratch: toggleScratch()
+        case .toggleTerminalZoom: toggleTerminalZoom()
         case .toggleSidebar: toggleSidebar()
         case .toggleFlag: toggleFlagActiveSession()
         case .focusWorkspace: focusActiveWorkspace()
@@ -129,6 +131,7 @@ extension AppActions {
             PaletteItem(id: "custom-\(command.id)", title: command.name,
                         shortcut: command.shortcut.isEmpty ? nil : command.shortcut,
                         badge: badge) { [weak self] in
+                guard self?.uiActionsEnabled == true else { return }
                 self?.customCommandRunner?.run(command)
             }
         }
@@ -172,6 +175,7 @@ extension AppActions {
         let subtitle = "\(workspaceName) · \(session.subtitleDetail)"
         return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: subtitle,
                            status: status, statusColor: statusColor) { [weak self] in
+            guard self?.uiActionsEnabled == true else { return }
             // picking a session from the ⌃P / attention palette is a user-initiated selection: note activity
             // so it buys the full idle grace before auto-follow can pull the selection back.
             store.noteUserActivity()
@@ -187,7 +191,25 @@ extension AppActions {
     /// icon — none of these route through the action palette's `runItem`, so a synchronous toggle is
     /// correct. The ⌃⇧P launcher uses `openAttentionPalette()` instead (it must reopen async).
     func toggleAttentionPalette() {
+        guard !terminalZoomActive else { return }
         palette?.toggle(.attention)
+    }
+
+    /// Menu/keymap palette launchers route through actions, not direct `palette.toggle`, so terminal zoom's
+    /// modal UI guard is applied consistently to the keyboard shortcut and menu paths.
+    func toggleSessionPalette() {
+        guard !terminalZoomActive else { return }
+        palette?.toggle(.sessions)
+    }
+
+    func toggleActionPalette() {
+        guard !terminalZoomActive else { return }
+        palette?.toggle(.actions)
+    }
+
+    func toggleCustomCommandPalette() {
+        guard !terminalZoomActive else { return }
+        palette?.toggle(.customCommands)
     }
 
     /// Open the `.attention` command palette from the action-palette "Show Attention" launcher. Opened on
@@ -196,7 +218,11 @@ extension AppActions {
     /// `toggle` would be undone by that close. The async `open` lets `.attention` reopen a tick later as a
     /// fresh view that survives the close.
     func openAttentionPalette() {
-        DispatchQueue.main.async { [weak self] in self?.palette?.open(.attention) }
+        guard !terminalZoomActive else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.terminalZoomActive else { return }
+            self.palette?.open(.attention)
+        }
     }
 
     // MARK: - Theme picker
@@ -207,7 +233,11 @@ extension AppActions {
     /// this returns, so reopening async lets `.themes` survive the close (the rename actions reopen the
     /// same way).
     func openThemePalette() {
-        DispatchQueue.main.async { [weak self] in self?.palette?.open(.themes) }
+        guard !terminalZoomActive else { return }
+        DispatchQueue.main.async { [weak self] in
+            guard let self, !self.terminalZoomActive else { return }
+            self.palette?.open(.themes)
+        }
     }
 
     /// Theme rows for the `.themes` palette: a leading "Default" entry plus one per bundled theme,

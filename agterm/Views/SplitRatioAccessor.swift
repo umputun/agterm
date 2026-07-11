@@ -23,17 +23,20 @@ import SwiftUI
 struct SplitRatioAccessor: NSViewRepresentable {
     let session: Session
     let titlebarHeight: CGFloat
+    let suspended: Bool
     let onPersist: () -> Void
 
     func makeNSView(context _: Context) -> SplitProbeView {
         let view = SplitProbeView(session: session)
         view.onPersist = onPersist
         view.titlebarHeight = titlebarHeight
+        view.suspended = suspended
         return view
     }
     func updateNSView(_ nsView: SplitProbeView, context _: Context) {
         nsView.onPersist = onPersist
         nsView.titlebarHeight = titlebarHeight // re-clip on a toolbar-mode change (changes titlebarHeight)
+        nsView.suspended = suspended
     }
 
     final class SplitProbeView: NSView {
@@ -41,6 +44,14 @@ struct SplitRatioAccessor: NSViewRepresentable {
         var onPersist: (() -> Void)?
         /// Top strip (in points) to clip the split's divider out of; updated on a toolbar-mode change.
         var titlebarHeight: CGFloat = 0 { didSet { if titlebarHeight != oldValue { updateDividerClip() } } }
+        var suspended: Bool = false {
+            didSet {
+                guard suspended != oldValue else { return }
+                saveWorkItem?.cancel()
+                if !suspended { restored = false }
+                needsLayout = true
+            }
+        }
         nonisolated(unsafe) private var resizeObserver: NSObjectProtocol?
         nonisolated(unsafe) private var applyObserver: NSObjectProtocol?
         nonisolated(unsafe) private var saveWorkItem: DispatchWorkItem?
@@ -60,6 +71,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
             super.layout()
             attachIfNeeded()
             updateDividerClip() // keep the titlebar-strip clip sized to the current split bounds
+            guard !suspended else { return }
             guard !restored, let split = splitView else { return }
             if let ratio = session.splitRatio {
                 let total = split.bounds.width
@@ -92,6 +104,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
         /// it posts `.agtermApplySplitRatio`). The follow-on `didResizeSubviews` → `capture()` is a no-op:
         /// the captured fraction equals the value we just set, so `capture()`'s near-equal guard skips it.
         private func applyRatio() {
+            guard !suspended else { restored = false; return }
             guard let split = splitView, let ratio = session.splitRatio else { return }
             let total = split.bounds.width
             // no real width yet (mid-relayout): re-arm the one-shot `layout()` restore so it applies the
@@ -140,6 +153,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
         /// Record the current left-pane fraction onto the session, skipping no-op and degenerate values so a
         /// window resize that keeps the ratio doesn't churn it.
         private func capture() {
+            guard !suspended else { return }
             guard restored, let split = splitView, let first = split.arrangedSubviews.first else { return }
             let total = split.bounds.width
             guard total > 1 else { return }

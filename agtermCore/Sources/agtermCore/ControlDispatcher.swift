@@ -27,7 +27,8 @@ public protocol ControlActions {
     func scratchSession(_ target: String?, window: String?, mode: String?, command: String?) -> ControlResponse
     func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse
     func resizeSplit(_ target: String?, window: String?, resize: ControlSplitResize) -> ControlResponse
-    func font(_ target: String?, window: String?, action: String) -> ControlResponse
+    func setSurfaceZoom(_ target: String?, window: String?, mode: ControlToggleMode) -> ControlResponse
+    func font(_ target: String?, window: String?, pane: String?, action: String) -> ControlResponse
     func reloadKeymap() -> ControlResponse
     func reloadGhosttyConfig() -> ControlResponse
     func sendNotification(_ target: String?, window: String?, title: String?, body: String) -> ControlResponse
@@ -135,7 +136,7 @@ public struct ControlDispatcher {
         case .sessionNew, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
                 .sessionMove, .sessionFlag, .sessionSeen, .sessionStatus:
             return dispatchSessionCommand(request)
-        case .sessionSplit, .sessionScratch, .sessionFocus, .sessionResize, .sessionType,
+        case .sessionSplit, .sessionScratch, .sessionFocus, .sessionResize, .surfaceZoom, .sessionType,
                 .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayOpen,
                 .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult, .sessionBackground,
                 .sessionText:
@@ -332,6 +333,11 @@ public struct ControlDispatcher {
             case (nil, .some(let delta)):
                 return actions.resizeSplit(request.target, window: request.args?.window, resize: .delta(delta))
             }
+        case .surfaceZoom:
+            guard let mode = ControlToggleMode.parse(request.args?.mode, on: "show", off: "hide") else {
+                return ControlResponse(ok: false, error: "invalid surface zoom mode: \(request.args?.mode ?? "toggle")")
+            }
+            return actions.setSurfaceZoom(request.target, window: request.args?.window, mode: mode)
         case .sessionType:
             guard let text = request.args?.text else {
                 return ControlResponse(ok: false, error: "session.type requires text")
@@ -397,11 +403,14 @@ public struct ControlDispatcher {
     private func dispatchAppCommand(_ request: ControlRequest) -> ControlResponse {
         switch request.cmd {
         case .fontInc:
-            return actions.font(request.target, window: request.args?.window, action: "increase_font_size:1")
+            return actions.font(request.target, window: request.args?.window,
+                                pane: request.args?.pane, action: "increase_font_size:1")
         case .fontDec:
-            return actions.font(request.target, window: request.args?.window, action: "decrease_font_size:1")
+            return actions.font(request.target, window: request.args?.window,
+                                pane: request.args?.pane, action: "decrease_font_size:1")
         case .fontReset:
-            return actions.font(request.target, window: request.args?.window, action: "reset_font_size")
+            return actions.font(request.target, window: request.args?.window,
+                                pane: request.args?.pane, action: "reset_font_size")
         case .quick:
             return actions.setQuickTerminal(mode: request.args?.mode)
         case .keymapReload:

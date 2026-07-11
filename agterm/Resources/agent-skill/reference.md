@@ -59,25 +59,41 @@ as `status`, so it is never reported without a `status`), `statusBlink` (`true` 
 set to blink — the `--blink` value; omitted when idle or not blinking) and `statusColor` (the `#rrggbb`
 glyph-tint override — the `--color` value; omitted when idle or using the default color),
 `foreground`/`splitForeground` (the live argv of each pane's foreground
-process — what it is running — omitted when the pane sits at its shell prompt), and `background` (the
+process — what it is running — omitted when the pane sits at its shell prompt), `background` (the
 background spec set via `session background` — a `{kind, text?, imagePath?, colorHex?, opacity?, fit?,
-position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set), and `unseen`
+position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set), `unseen`
 (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session seen` — omitted
-when zero). Workspace nodes carry `id`, `name`, `active`, `sessions`, and `focused` (whether the sidebar
+when zero), `fontSize`/`splitFontSize`/`scratchFontSize` (the LIVE font size in points of each pane —
+the read side of `font --pane`; each omitted when that pane isn't realized. `fontSize` tracks the
+default/left target (the main pane, or the promoted split survivor once the primary exits — the same pane
+`font --pane left` writes); only the main pane's size survives a relaunch, so the split/scratch sizes and a
+promoted survivor are live-only — read them back here rather than from the snapshot), and `surfaces` (array
+of `{id, kind, active, visible}` where `kind` is `left`|`right`|`scratch`|`overlay`).
+The surface `id` is the address for `surface zoom`; hidden-but-alive split/scratch surfaces are included
+so a script can zoom them without changing split/scratch visibility first. Caveat: `active`/`visible`
+derive from the session's own flags, not from zoom — and `visible` reads false for a pane behind a
+FLOATING overlay even though it is visually on screen; address by `id`/`kind`, and read the zoom state
+from the top-level `zoomedSurface`. Workspace nodes carry
+`id`, `name`, `active`, `sessions`, and `focused` (whether the sidebar
 tree is collapsed to this workspace — the read side of `workspace focus`, distinct from `active` the
 SELECTED workspace; omitted unless this is the focused one, and absent entirely when nothing is focused).
 
-The tree object itself carries five top-level read-only fields: `idleMs` (milliseconds since the last
+The tree object itself carries six top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
 timeout in milliseconds, omitted when the setting is Disabled), `sidebarVisible` (whether the
 window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
 can restore it, e.g. a tmux-style zoom that hides the sidebar and must re-show it only when it was
 visible before), `sidebarMode` (`tree` or `flagged` — the sidebar view mode, the read side of
-`sidebar mode`), and `quickVisible` (whether the window's quick terminal is currently shown — the read
-side of the write-only `quick` command, so a script can make the toggle idempotent). `idleMs` is live
+`sidebar mode`), `quickVisible` (whether the window's quick terminal is currently shown — the read
+side of the write-only `quick` command, so a script can make the toggle idempotent), and
+`zoomedSurface` (the control id of the surface terminal zoom currently fills the window with —
+`surface:<session-id>:<kind>` or `quick`; omitted when nothing is zoomed — the read side of the
+write-only `surface zoom` command, so a script can check "is it already zoomed" and
+record-then-restore). `idleMs` is live
 and grows while the window is idle, so it is on `tree` only, never `window.list`; `sidebarVisible` is on
-both; `sidebarMode` and `quickVisible` are `tree`-only (a GUI toggle would leave a cached copy stale).
-All five are read-only projections of GUI state.
+both; `sidebarMode`, `quickVisible`, and `zoomedSurface` are `tree`-only (a GUI toggle would leave a
+cached copy stale).
+All six are read-only projections of GUI state.
 
 ## workspace
 
@@ -343,11 +359,36 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
 
 `window resize`/`move` are control-native (no GUI equivalent — the title bar already drags-to-resize).
 
+## surface
+
+`agtermctl surface zoom [show|hide|toggle] [--target SURFACE_ID|active|quick] [--window W]` — zoom one
+terminal surface to fill the window, hiding the sidebar (a slim title-bar strip with the traffic
+lights and an exit button remains). `SURFACE_ID` comes from
+`agtermctl tree --json` at `.result.tree.workspaces[].sessions[].surfaces[].id`, for example
+`surface:<session-id>:right`. Omit `--target` (or pass `active`) to act on the active surface in the
+frontmost or `--window` window; `quick` addresses a quick-terminal zoom (the id the command itself
+returns when the quick terminal is the zoom target).
+
+`show` is idempotent; `hide` exits zoom and is idempotent too (when an explicit id is provided, it
+only clears that same zoom target, and succeeds as a no-op even if that surface has since vanished);
+`toggle` enters when unzoomed and exits when that surface is already zoomed. Read the current zoom
+back from the tree's top-level `zoomedSurface` (the zoomed surface's control id, omitted when nothing
+is zoomed). This is NOT
+`window zoom`: it does not change the macOS window frame and it must not mutate split ratios, focus,
+sidebar state, or split/scratch visibility. Entering zoom does close the window's transient chrome —
+an open command palette, an active in-terminal search, and (for a session-surface zoom) a visible
+quick terminal. While zoomed, the hidden deck keeps running: `session.split`/`session.scratch`/overlay
+opens on the zoomed session still spawn their shells behind the zoom layer. A notification-banner
+click exits zoom before revealing its session. Use `surface zoom` when the user/agent needs a pane
+fullscreen inside agterm; use `window zoom` only to maximize the whole window on screen.
+
 ## quick
 
 `agtermctl quick [show|hide|toggle]` — the frontmost window's quick terminal (a single scratch
 terminal at 90% of the window, not in the tree; its shell stays alive across hides). Errors with
 `no open window` when none is open. Read its visibility back from the tree's top-level `quickVisible`.
+While terminal zoom is active, `show` errors with `terminal zoom active`; `hide` always succeeds (a
+zoomed quick terminal exits its zoom first), so cleanup scripts can dismiss it unconditionally.
 
 `agtermctl quick type TEXT` (or `--stdin`) — inject `TEXT` as literal keystrokes into the frontmost
 window's quick terminal, the quick-terminal twin of `session type`. There is no `--target`/`--window`
@@ -408,8 +449,14 @@ attention list, the title-bar bell, and attention navigation (`session go --to n
 
 ## font
 
-`agtermctl font inc|dec|reset [--target] [--window W]` — increase / decrease / reset the font size on
-the focused surface.
+`agtermctl font inc|dec|reset [--pane left|right|scratch] [--target] [--window W]` — increase / decrease /
+reset the font size of a session pane. `--pane` picks which surface's font to change, like `session type`
+and `session text`: omitted or `left` is the main pane, `right` the split pane (errors with `session has
+no split pane` when the session has no split), `scratch` the session's scratch terminal (settable even
+while hidden). No `other` value. Only the MAIN pane's size is persisted across relaunch; a split/scratch
+pane's font change is live-only, matching a GUI cmd +/- on those panes. Read the resulting size back from
+`tree` — `fontSize` (main), `splitFontSize`, `scratchFontSize`, each in points and omitted when that pane
+isn't realized.
 
 ## keymap
 

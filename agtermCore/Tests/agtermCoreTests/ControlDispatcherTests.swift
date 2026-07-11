@@ -697,9 +697,28 @@ struct ControlDispatcherTests {
         #expect(dec == ControlResponse(ok: true, result: ControlResult(id: "session")))
         #expect(reset == ControlResponse(ok: true, result: ControlResult(id: "session")))
         #expect(actions.calls == [
-            .font(target: "session", window: "win", "increase_font_size:1"),
-            .font(target: "session", window: nil, "decrease_font_size:1"),
-            .font(target: "session", window: nil, "reset_font_size")
+            .font(target: "session", window: "win", pane: nil, "increase_font_size:1"),
+            .font(target: "session", window: nil, pane: nil, "decrease_font_size:1"),
+            .font(target: "session", window: nil, pane: nil, "reset_font_size")
+        ])
+    }
+
+    @Test func fontCommandsThreadPane() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextFontResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .fontDec, target: "session",
+                                                     args: ControlArgs(pane: "right")))
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .fontInc, target: "session",
+                                                     args: ControlArgs(window: "win", pane: "scratch")))
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .fontReset, target: "session",
+                                                     args: ControlArgs(pane: "left")))
+
+        #expect(actions.calls == [
+            .font(target: "session", window: nil, pane: "right", "decrease_font_size:1"),
+            .font(target: "session", window: "win", pane: "scratch", "increase_font_size:1"),
+            .font(target: "session", window: nil, pane: "left", "reset_font_size")
         ])
     }
 
@@ -1263,6 +1282,40 @@ struct ControlDispatcherTests {
         #expect(actions.calls.isEmpty)
     }
 
+    @Test func surfaceZoomParsesModeAndRoutesTargetWindow() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSurfaceZoomResponse = ControlResponse(ok: true, result: ControlResult(id: "surface:s1:right"))
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .surfaceZoom,
+            target: "surface:s1:right",
+            args: ControlArgs(mode: "show", window: "win")
+        ))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(id: "surface:s1:right")))
+        #expect(actions.calls == [.surfaceZoom(target: "surface:s1:right", window: "win", .on)])
+    }
+
+    @Test func surfaceZoomDefaultsToToggle() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .surfaceZoom))
+
+        #expect(actions.calls == [.surfaceZoom(target: nil, window: nil, .toggle)])
+    }
+
+    @Test func surfaceZoomRejectsInvalidModeWithoutCallingActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .surfaceZoom, args: ControlArgs(mode: "zoom")))
+
+        #expect(response == ControlResponse(ok: false, error: "invalid surface zoom mode: zoom"))
+        #expect(actions.calls.isEmpty)
+    }
+
     @Test func sessionSearchRoutesRawInputsAndKeepsActionResponse() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -1446,7 +1499,8 @@ private final class MockControlActions: ControlActions {
         case sessionScratch(target: String?, window: String?, String?, command: String?)
         case sessionFocus(target: String?, window: String?, String?)
         case sessionResize(target: String?, window: String?, ControlSplitResize)
-        case font(target: String?, window: String?, String)
+        case surfaceZoom(target: String?, window: String?, ControlToggleMode)
+        case font(target: String?, window: String?, pane: String?, String)
         case keymapReload
         case configReload
         case notify(target: String?, window: String?, title: String?, body: String)
@@ -1510,6 +1564,7 @@ private final class MockControlActions: ControlActions {
     var nextOverlayResultResponse = ControlResponse(ok: true)
     var nextSessionBackgroundResponse = ControlResponse(ok: true)
     var nextSessionTextResponse = ControlResponse(ok: true)
+    var nextSurfaceZoomResponse = ControlResponse(ok: true)
     var nextWindowNewResponse = ControlResponse(ok: true)
     var nextWindowListResponse = ControlResponse(ok: true)
     var nextWindowSelectResponse = ControlResponse(ok: true)
@@ -1634,8 +1689,13 @@ private final class MockControlActions: ControlActions {
         return ControlResponse(ok: true)
     }
 
-    func font(_ target: String?, window: String?, action: String) -> ControlResponse {
-        calls.append(.font(target: target, window: window, action))
+    func setSurfaceZoom(_ target: String?, window: String?, mode: ControlToggleMode) -> ControlResponse {
+        calls.append(.surfaceZoom(target: target, window: window, mode))
+        return nextSurfaceZoomResponse
+    }
+
+    func font(_ target: String?, window: String?, pane: String?, action: String) -> ControlResponse {
+        calls.append(.font(target: target, window: window, pane: pane, action))
         return nextFontResponse
     }
 

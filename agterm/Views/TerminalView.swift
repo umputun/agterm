@@ -30,6 +30,9 @@ struct TerminalView: NSViewRepresentable {
     /// Drives `GhosttySurfaceView`'s drag-type (un)registration so a file drop can't land on an invisible
     /// background surface.
     var deckVisible = true
+    /// False for the terminal-zoom host: zoom reparenting/focus must not mutate session state such as
+    /// `splitFocused`, but libghostty should still receive normal focus updates.
+    var reportsFocusChange = true
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -40,6 +43,7 @@ struct TerminalView: NSViewRepresentable {
         // session's overlay can't grab first responder during its initial createSurface.
         view.deckActive = isActive
         view.deckVisible = deckVisible
+        view.suppressFocusChange = !reportsFocusChange
         return view
     }
 
@@ -48,6 +52,7 @@ struct TerminalView: NSViewRepresentable {
         // auto-focus) so a background slot never starts the focus-grab retry.
         nsView.deckActive = isActive
         nsView.deckVisible = deckVisible
+        nsView.suppressFocusChange = !reportsFocusChange
         // makeNSView may have run before the view had a sized window; createSurface is idempotent
         // (guards surface == nil and a non-zero backing size), so calling it here is safe. Synchronous
         // on purpose: a deferred next-tick create races the layout and gives the surface a stale size.

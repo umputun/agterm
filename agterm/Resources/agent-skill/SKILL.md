@@ -14,7 +14,7 @@ description: >
   feature request / question as a GitHub Discussion.
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
-  session.split, session.scratch, session.focus, session.resize, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
+  session.split, session.scratch, session.focus, session.resize, surface.zoom, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
   session.flag, session.seen, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
   theme.set, theme.list, select theme, edit keymap, show an image, display an image inline, show-image,
@@ -81,9 +81,11 @@ Separately, each window has one **quick terminal** (a scratch overlay at 90% of 
 of the tree).
 
 Inspect the live tree any time with `agtermctl tree --json` (workspaces → sessions, each with
-`id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `scratch`, `status`, `background`). `title` is the raw OSC
+`id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `scratch`, `status`, `background`, `surfaces`). `title` is the raw OSC
 terminal title (e.g. a remote host over SSH), omitted when none was reported — read it when a
-session's local `cwd` is stale because it's connected to a remote. The tree object also carries five
+session's local `cwd` is stale because it's connected to a remote. `surfaces[].id` is the
+control address for `surface zoom` (`left`, `right`, `scratch`, or `overlay`), including
+hidden-but-alive split/scratch surfaces. The tree object also carries five
 read-only top-level fields: `idleMs` (ms since the last user input in the window), `autoFollowMs`
 (the Auto-follow timeout in ms, omitted when Disabled), `sidebarVisible` (whether the window's
 sidebar is currently shown — the read side of the write-only `sidebar` command), `sidebarMode`
@@ -114,7 +116,7 @@ you work. For any session-scoped command meant to act on *this* session — `ove
 `type`, `text`, `background`, `status`, `copy`, … — pass `--target "$AGTERM_SESSION_ID"`. Omit it and
 you open overlays / type into whatever the user has selected, not your own session.
 
-## Command summary (57 commands)
+## Command summary (58 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -133,9 +135,12 @@ omitted for a full-pane overlay or no overlay so gate on `overlay` first; the re
 resize` for a record-then-restore zoom), `splitRatio` (the left-pane divider fraction 0.05–0.95 of a
 session that has a split — shown or hidden; omitted when there's no split or the ratio was never set (at
 the default 0.5) —
-the read side of `session resize`, record it to restore the exact divider), and `splitFocused`
+the read side of `session resize`, record it to restore the exact divider), `splitFocused`
 (which pane holds focus in a session that has a split — `true` = split/right, `false` = main/left; omitted
-when there's no split; the read side of `session focus`, record it to restore focus).
+when there's no split; the read side of `session focus`, record it to restore focus), and `surfaces`
+(`id`, `kind`, `active`, `visible`) for `surface zoom`. The tree top level carries `zoomedSurface`
+(the control id of the currently zoomed surface, omitted when nothing is zoomed — the read side of
+`surface zoom`, so a script can check the zoom state and record-then-restore).
 
 **workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom` ·
 `focus [on|off|toggle]` (collapse the sidebar tree to a single workspace; read back which workspace is
@@ -218,6 +223,13 @@ focused from the tree workspace node's `focused` flag).
 `zoom <id>` (maximize-to-screen toggle, the double-click-header gesture; a plain green-button click does full screen) ·
 `fullscreen <id>` (toggle native macOS full screen, the green-button / ⌃⌘F action).
 
+**surface** — `zoom [show|hide|toggle] [--target surface:<session-id>:left|right|scratch|overlay|quick] [--window W]`
+— zoom a terminal surface to fill the window (sidebar hidden; a slim title-bar strip with an exit
+button remains). Omit `--target` to use the active surface;
+copy an explicit surface id from `tree --json` to address a hidden split/scratch or a background
+session (`quick` is the id returned for a quick-terminal zoom). `hide` exits zoom; `toggle`
+enters/exits only this zoom mode, not macOS window zoom.
+
 **quick** — `[show|hide|toggle]` (visibility; read back from the tree's `quickVisible`) ·
 `type TEXT` (or `--stdin`) inject keystrokes into the frontmost window's quick terminal ·
 `text [--all] [--lines N]` read its screen back — the twins of `session type`/`session text`,
@@ -232,7 +244,7 @@ Visibility/mode act on the frontmost window; `expand`/`collapse` default to the 
 
 **notify** — `notify <body> [--title T]` — post a desktop notification attributed to a session. To signal that you need the user, prefer `session status` (`blocked`/`completed`), a persistent typed attention state rather than a one-shot banner; keep `notify` for a one-off nudge.
 
-**font** — `font inc|dec|reset` — font size on the focused surface.
+**font** — `font inc|dec|reset [--pane left|right|scratch]` — change a session pane's font size (omitted/`left` = main pane, `right` = the split pane, `scratch` = the scratch terminal). Read the resulting size back from `tree` (`fontSize`/`splitFontSize`/`scratchFontSize` per pane).
 
 **keymap** — `keymap reload` — re-read `keymap.conf` (prints the parse-diagnostic count).
 

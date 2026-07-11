@@ -16,6 +16,7 @@ final class SessionSwitcher {
     /// per-window switcher tracking each window's own MRU is a later concern — for now it follows
     /// the frontmost window, matching the single-window behavior.)
     private let library: WindowLibrary
+    private let canSwitch: () -> Bool
     private var store: AppStore? { library.activeStore }
     private(set) var isActive = false
     private(set) var candidates: [UUID] = []
@@ -30,7 +31,10 @@ final class SessionSwitcher {
     /// (the ⌃P fuzzy palette covers everything). The recency STORE keeps its full 100-item history.
     private static let maxCandidates = 10
 
-    init(library: WindowLibrary) { self.library = library }
+    init(library: WindowLibrary, canSwitch: @escaping () -> Bool) {
+        self.library = library
+        self.canSwitch = canSwitch
+    }
 
     /// Install the local monitors once: `.keyDown` for Ctrl+Tab / Ctrl+Shift+Tab / Esc, and
     /// `.flagsChanged` to detect Ctrl being released (the commit).
@@ -49,6 +53,10 @@ final class SessionSwitcher {
 
     private func handleKeyDown(_ event: NSEvent) -> Bool {
         if event.keyCode == Self.tabKey, event.modifierFlags.contains(.control) {
+            guard canSwitch() else {
+                reset()
+                return true
+            }
             if isActive { advance(reverse: event.modifierFlags.contains(.shift)) } else { begin() }
             return true
         }
@@ -60,6 +68,10 @@ final class SessionSwitcher {
     }
 
     private func handleFlagsChanged(_ event: NSEvent) {
+        guard canSwitch() else {
+            reset()
+            return
+        }
         if isActive, !event.modifierFlags.contains(.control) { commit() }
     }
 

@@ -37,7 +37,7 @@ public final class AppStore {
 
     /// Transient sidebar multi-selection. Not persisted: it is UI command state, while
     /// `selectedSessionID` remains the durable active terminal target.
-    private var sidebarSelectionRaw: [UUID] = []
+    var sidebarSelectionRaw: [UUID] = []
 
     /// Whether this window's sidebar is shown. Per-window UI state, persisted in `Snapshot` (restored on
     /// relaunch); the custom split owns visibility, so the toolbar button, the View menu item, the action
@@ -180,7 +180,11 @@ public final class AppStore {
     /// command lookup is supplied by the host because live process inspection is platform-specific.
     public func controlTree(foreground: (Session) -> [String]? = { _ in nil },
                             splitForeground: (Session) -> [String]? = { _ in nil },
-                            quickVisible: () -> Bool? = { nil }) -> ControlTree {
+                            fontSize: (Session) -> Double? = { _ in nil },
+                            splitFontSize: (Session) -> Double? = { _ in nil },
+                            scratchFontSize: (Session) -> Double? = { _ in nil },
+                            quickVisible: () -> Bool? = { nil },
+                            zoomedSurface: () -> String? = { nil }) -> ControlTree {
         let activeID = selectedSessionID
         let activeWorkspaceID = activeID.flatMap { workspace(forSession: $0)?.id }
         let nodes = workspaces.map { workspace in
@@ -188,6 +192,13 @@ public final class AppStore {
                 let idle = session.agentIndicator.status == .idle
                 let status = idle ? nil : session.agentIndicator.status.rawValue
                 let statusPane = idle ? nil : session.agentIndicator.statusPane?.rawValue
+                let surfaces = TerminalZoomSurface.allCases.compactMap { surface -> ControlSurfaceNode? in
+                    guard surface.isAvailable(in: session) else { return nil }
+                    let id = TerminalSurfaceID(sessionID: session.id, surface: surface).rawValue
+                    return ControlSurfaceNode(id: id, kind: surface.rawValue,
+                                              active: surface.isActive(in: session),
+                                              visible: surface.isVisible(in: session))
+                }
                 return ControlSessionNode(id: session.id.uuidString, name: session.displayName,
                                           cwd: session.effectiveCwd, title: session.oscTitle,
                                           active: session.id == activeID,
@@ -203,7 +214,11 @@ public final class AppStore {
                                           statusBlink: idle ? nil : (session.agentIndicator.blink ? true : nil),
                                           statusColor: idle ? nil : session.agentIndicator.color,
                                           background: session.backgroundWatermark,
-                                          unseen: session.unseenCount > 0 ? session.unseenCount : nil)
+                                          unseen: session.unseenCount > 0 ? session.unseenCount : nil,
+                                          fontSize: fontSize(session),
+                                          splitFontSize: splitFontSize(session),
+                                          scratchFontSize: scratchFontSize(session),
+                                          surfaces: surfaces)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,
@@ -212,7 +227,7 @@ public final class AppStore {
         }
         return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs,
                            sidebarVisible: sidebarVisible, sidebarMode: sidebarMode.rawValue,
-                           quickVisible: quickVisible())
+                           quickVisible: quickVisible(), zoomedSurface: zoomedSurface())
     }
 
     /// Creates a workspace and appends it. Clears any active focus so the new (empty)
@@ -897,42 +912,6 @@ public final class AppStore {
             if let si = workspace.sessions.firstIndex(where: { $0.id == sessionID }) { return (wi, si) }
         }
         return nil
-    }
-
-    /// Replaces the transient sidebar selection with ids from the current visible sidebar projection.
-    public func setSidebarSelection(_ ids: [UUID]) {
-        sidebarSelectionRaw = ids
-    }
-
-    /// Replaces the transient sidebar selection with a single active row.
-    public func replaceSidebarSelection(with sessionID: UUID?) {
-        sidebarSelectionRaw = sessionID.map { [$0] } ?? []
-    }
-
-    /// Context-menu target resolution for sidebar session commands.
-    public func sidebarSelectionTargets(forContextSession clickedID: UUID?) -> [UUID] {
-        let selectionIDs = sidebarSelectionIDs
-        if let clickedID, selectionIDs.contains(clickedID) { return selectionIDs }
-        if let clickedID, visibleSidebarSessionIDs.contains(clickedID) { return [clickedID] }
-        if !selectionIDs.isEmpty { return selectionIDs }
-        guard let selectedSessionID, visibleSidebarSessionIDs.contains(selectedSessionID) else { return [] }
-        return [selectedSessionID]
-    }
-
-    /// The selected session ids that are still visible in the current sidebar mode/focus.
-    public var sidebarSelectionIDs: [UUID] {
-        let requested = Set(sidebarSelectionRaw)
-        let normalized = visibleSidebarSessionIDs.filter { requested.contains($0) }
-        guard let selectedSessionID else { return [] }
-        return normalized.contains(selectedSessionID) ? normalized : []
-    }
-
-    func pruneSidebarSelection() {
-        sidebarSelectionRaw = sidebarSelectionIDs
-    }
-
-    private var visibleSidebarSessionIDs: [UUID] {
-        navigableSessions.map(\.id)
     }
 
     private func orderedSessionIDs(matching ids: Set<UUID>) -> [UUID] {

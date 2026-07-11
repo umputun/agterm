@@ -697,6 +697,23 @@ struct CommandsTests {
         #expect(validationMessage(["quick", "text", "--lines", "0"]) == "--lines must be greater than 0")
     }
 
+    @Test func surfaceZoomDefaultsToggleActive() throws {
+        #expect(try request(["surface", "zoom"]) ==
+            ControlRequest(cmd: .surfaceZoom, target: "active", args: ControlArgs(mode: "toggle")))
+    }
+
+    @Test func surfaceZoomTargetsSurfaceID() throws {
+        let id = "surface:5E5B1C5B-75C5-49E6-8806-2C61D8D6BBA9:right"
+
+        #expect(try request(["surface", "zoom", "show", "--target", id]) ==
+            ControlRequest(cmd: .surfaceZoom, target: id, args: ControlArgs(mode: "show")))
+    }
+
+    @Test func surfaceZoomTargetsWindow() throws {
+        #expect(try request(["surface", "zoom", "hide", "--window", "win"]) ==
+            ControlRequest(cmd: .surfaceZoom, target: "active", args: ControlArgs(mode: "hide", window: "win")))
+    }
+
     @Test func sidebarDefaultsToggle() throws {
         #expect(try request(["sidebar"]) == ControlRequest(cmd: .sidebar, args: ControlArgs(mode: "toggle")))
     }
@@ -762,6 +779,25 @@ struct CommandsTests {
 
     @Test func fontReset() throws {
         #expect(try request(["font", "reset"]) == ControlRequest(cmd: .fontReset, target: "active"))
+    }
+
+    @Test func fontIncWithPane() throws {
+        #expect(try request(["font", "inc", "--pane", "right", "--target", "s1"])
+            == ControlRequest(cmd: .fontInc, target: "s1", args: ControlArgs(pane: "right")))
+    }
+
+    @Test func fontDecWithPaneScratch() throws {
+        #expect(try request(["font", "dec", "--pane", "scratch"])
+            == ControlRequest(cmd: .fontDec, target: "active", args: ControlArgs(pane: "scratch")))
+    }
+
+    @Test func fontResetWithPaneAndWindow() throws {
+        #expect(try request(["font", "reset", "--pane", "left", "--window", "w1"])
+            == ControlRequest(cmd: .fontReset, target: "active", args: ControlArgs(window: "w1", pane: "left")))
+    }
+
+    @Test func fontRejectsInvalidPane() throws {
+        #expect(validationMessage(["font", "inc", "--pane", "other"]) == "--pane must be left, right, or scratch")
     }
 
     @Test func keymapReload() throws {

@@ -17,8 +17,9 @@ final class SidebarCellView: NSTableCellView {
     /// Color the row text/icon from the terminal theme: a selected row pairs with the selection
     /// foreground (over the selection-background pill the row draws), or white over the soft wash when
     /// the theme exposes no selection color; an unselected row uses the theme foreground, icons dimmed.
-    /// Driven by the coordinator from the real selection state (not `backgroundStyle`, which AppKit only
-    /// flips while the table is first responder).
+    /// Driven from the real selection state (not `backgroundStyle`, which AppKit only flips while the
+    /// table is first responder): the hosting `SidebarRowView` re-asserts it from its live `isSelected`
+    /// on attach and on every selection flip, and the coordinator re-runs it on theme changes.
     func setColors(selected: Bool) {
         let app = GhosttyApp.shared
         let color = selected
@@ -163,6 +164,13 @@ final class StatusIconView: NSImageView {
 /// whenever the sidebar isn't first responder (the normal case, since focus lives in the terminal),
 /// which would override a custom `drawSelection`. `isEmphasized` is overridden so the row redraws when
 /// the window's key state changes (the brightness dims for a background window).
+///
+/// The row view is the single source of truth for the cell's selection tint: `isSelected` (the same
+/// live state the pill draws from) re-tints the hosted `SidebarCellView` whenever AppKit updates it,
+/// and `didAddSubview` tints a cell the moment it attaches. Without this, the pill (drawn live) and
+/// the text color (applied imperatively at cell build) can desync — and on the many themes where
+/// `foreground == selection-background` (the inverted-selection idiom), a stale tint renders the row
+/// text fully invisible.
 final class SidebarRowView: NSTableRowView {
     /// White-wash fallback opacity (themes with no selection color): brighter for the key window,
     /// dimmer for a background one.
@@ -174,6 +182,28 @@ final class SidebarRowView: NSTableRowView {
         // isEmphasized is derived from the window's key state; the setter only triggers a redraw.
         // swiftlint:disable:next unused_setter_value
         set { needsDisplay = true }
+    }
+
+    override var isSelected: Bool {
+        didSet {
+            guard isSelected != oldValue else { return }
+            // the pill follows isSelected at draw time; re-tint the cell from the same state so the
+            // text/icon can never keep the other state's color (white-on-white on inverted-selection
+            // themes). AppKit won't redraw on its own with selectionHighlightStyle == .none.
+            needsDisplay = true
+            retintCellViews()
+        }
+    }
+
+    override func didAddSubview(_ subview: NSView) {
+        super.didAddSubview(subview)
+        // a cell materialized into an already-selected row (reload/expand row-map flux can make the
+        // cell builder's own selection lookup miss) picks up the row's live state on attach.
+        (subview as? SidebarCellView)?.setColors(selected: isSelected)
+    }
+
+    private func retintCellViews() {
+        for case let cell as SidebarCellView in subviews { cell.setColors(selected: isSelected) }
     }
 
     override func drawBackground(in dirtyRect: NSRect) {

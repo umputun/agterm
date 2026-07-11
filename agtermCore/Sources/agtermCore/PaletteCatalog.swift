@@ -39,7 +39,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case renameSession, renameWorkspace, closeSession, reopenRecent, undoClose, clearStatus
     case previousSession, nextSession, previousAttentionSession, nextAttentionSession
     case firstSession, lastSession, showAttention
-    case toggleSplit, toggleScratch, toggleSidebar, toggleFlag, focusWorkspace
+    case toggleSplit, toggleScratch, toggleTerminalZoom, toggleSidebar, toggleFlag, focusWorkspace
     case find, quickTerminal, toggleFullscreen
     case increaseFontSize, decreaseFontSize, resetFontSize, selectTheme
     case editKeymap, reloadKeymap, editGhosttyConfig, reloadConfig
@@ -93,6 +93,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .showAttention: return "Show Attention"
         case .toggleSplit: return "Toggle Split"
         case .toggleScratch: return "Toggle Scratch"
+        case .toggleTerminalZoom: return "Toggle Terminal Zoom"
         case .toggleSidebar: return "Toggle Sidebar"
         case .toggleFlag: return context.activeSessionFlagged ? "Unflag Session" : "Flag Session"
         case .focusWorkspace: return "Focus Workspace"
@@ -138,6 +139,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .showAttention: return .showAttention
         case .toggleSplit: return .toggleSplit
         case .toggleScratch: return .toggleScratch
+        case .toggleTerminalZoom: return .toggleTerminalZoom
         case .toggleSidebar: return .toggleSidebar
         case .toggleFlag: return .toggleFlag
         case .focusWorkspace: return .focusWorkspace
