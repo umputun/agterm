@@ -397,16 +397,16 @@ override + reapply; record `controller.appliedFontSize`. On close, clear the ove
 
 ### Task 13: Verify acceptance criteria
 
-- [ ] max 9 cells, `ceil(sqrt)` grid; `>9` capped with reported drop; explicit ids only; `--window` honored
+- [x] max 9 cells, `ceil(sqrt)` grid; `>9` capped with reported drop; explicit ids only; `--window` honored
       (default frontmost); unresolved ids reported; duplicate ids deduped
-- [ ] view-only: no cell takes first responder or hits; arrows navigate (incl. ragged); Enter jumps in; Esc
+- [x] view-only: no cell takes first responder or hits; arrows navigate (incl. ragged); Enter jumps in; Esc
       closes + restores focus; palette/search/quick/switcher closed + auto-follow paused on open
-- [ ] members resolve via `addressableSurface` (promoted survivor shows the live shell, not a new one)
-- [ ] font: `--font-size`/`--auto-size` (relative to Settings base, nil→ghostty default) apply via the
+- [x] members resolve via `addressableSurface` (promoted survivor shows the live shell, not a new one)
+- [x] font: `--font-size`/`--auto-size` (relative to Settings base, nil→ghostty default) apply via the
       transient override; both-flags/non-positive/`--close`+flags → error; reload while open doesn't strand;
       restored on close; never persisted to `session.fontSize`
-- [ ] `tree` reports members/highlighted/font/mode; zoom ↔ dashboard mutually exclusive both ways
-- [ ] run full suite: `cd agtermCore && swift test`, `make build`, the e2e scheme, `make lint` (zero findings)
+- [x] `tree` reports members/highlighted/font/mode; zoom ↔ dashboard mutually exclusive both ways
+- [x] run full suite: `cd agtermCore && swift test`, `make build`, the e2e scheme, `make lint` (zero findings)
 
 ### Task 14: Finalize documentation and archive plan
 
