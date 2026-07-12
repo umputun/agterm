@@ -16,6 +16,9 @@ public struct Snapshot: Codable, Equatable, Sendable {
     /// The window's sidebar width in points, or nil for the default. Optional so a snapshot already on
     /// disk before this field was added still decodes, like the SessionSnapshot fields below.
     public var sidebarWidth: Double?
+    /// The window's file-tree panel width in points, or nil for the default. Optional so a snapshot already
+    /// on disk before this field was added still decodes, like the fields around it.
+    public var fileTreeWidth: Double?
     /// Whether the window's sidebar is shown, or nil for the default (shown). Optional for forward-compat.
     public var sidebarVisible: Bool?
     /// Which view the sidebar renders (tree or flagged flat list), or nil for the default (`.tree`).
@@ -32,12 +35,14 @@ public struct Snapshot: Codable, Equatable, Sendable {
     public var sessionRecency: [UUID]?
 
     public init(version: Int = Snapshot.currentVersion, selectedSessionID: UUID? = nil,
-                workspaces: [WorkspaceSnapshot] = [], sidebarWidth: Double? = nil, sidebarVisible: Bool? = nil,
+                workspaces: [WorkspaceSnapshot] = [], sidebarWidth: Double? = nil, fileTreeWidth: Double? = nil,
+                sidebarVisible: Bool? = nil,
                 sidebarMode: SidebarMode? = nil, focusedWorkspaceID: UUID? = nil, sessionRecency: [UUID]? = nil) {
         self.version = version
         self.selectedSessionID = selectedSessionID
         self.workspaces = workspaces
         self.sidebarWidth = sidebarWidth
+        self.fileTreeWidth = fileTreeWidth
         self.sidebarVisible = sidebarVisible
         self.sidebarMode = sidebarMode
         self.focusedWorkspaceID = focusedWorkspaceID
@@ -45,7 +50,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case version, selectedSessionID, workspaces, sidebarWidth, sidebarVisible, sidebarMode
+        case version, selectedSessionID, workspaces, sidebarWidth, fileTreeWidth, sidebarVisible, sidebarMode
         case focusedWorkspaceID, sessionRecency
     }
 
@@ -61,6 +66,7 @@ public struct Snapshot: Codable, Equatable, Sendable {
         selectedSessionID = try c.decodeIfPresent(UUID.self, forKey: .selectedSessionID)
         workspaces = try c.decode([WorkspaceSnapshot].self, forKey: .workspaces)
         sidebarWidth = try c.decodeIfPresent(Double.self, forKey: .sidebarWidth)
+        fileTreeWidth = try c.decodeIfPresent(Double.self, forKey: .fileTreeWidth)
         sidebarVisible = try c.decodeIfPresent(Bool.self, forKey: .sidebarVisible)
         sidebarMode = try c.decodeIfPresent(SidebarMode.self, forKey: .sidebarMode)
         focusedWorkspaceID = try c.decodeIfPresent(UUID.self, forKey: .focusedWorkspaceID)
@@ -117,6 +123,11 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     /// this field was added still decodes (as nil → not flagged) instead of failing the load and wiping
     /// the saved tree, like the fields above.
     public var flagged: Bool?
+    /// Whether the session's file-tree panel was shown. Optional so a snapshot already on disk before this
+    /// field was added still decodes (as nil → hidden) instead of failing the load and wiping the saved
+    /// tree, like the fields above. Only visibility is persisted; the panel's root re-derives from the
+    /// restored cwd (see `Session.fileTreeRoot`).
+    public var fileTreeVisible: Bool?
     /// The main pane's foreground command (full argv) at the last clean quit, re-run on restore when
     /// `AppSettings.restoreRunningCommand` is on. nil when the pane was at its shell prompt (nothing to
     /// restore) or the feature was off. Optional for forward-compat like the fields above.
@@ -137,7 +148,8 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     public init(id: UUID, customName: String?, cwd: String, isSplit: Bool? = nil, fontSize: Double? = nil,
                 splitCwd: String? = nil, splitRatio: Double? = nil, flagged: Bool? = nil,
                 foregroundCommand: [String]? = nil, splitForegroundCommand: [String]? = nil,
-                initialCommand: String? = nil, backgroundWatermark: BackgroundWatermark? = nil) {
+                initialCommand: String? = nil, backgroundWatermark: BackgroundWatermark? = nil,
+                fileTreeVisible: Bool? = nil) {
         self.id = id
         self.customName = customName
         self.cwd = cwd
@@ -150,11 +162,12 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         self.splitForegroundCommand = splitForegroundCommand
         self.initialCommand = initialCommand
         self.backgroundWatermark = backgroundWatermark
+        self.fileTreeVisible = fileTreeVisible
     }
 
     enum CodingKeys: String, CodingKey {
         case id, customName, cwd, isSplit, fontSize, splitCwd, splitRatio, flagged
-        case foregroundCommand, splitForegroundCommand, initialCommand, backgroundWatermark
+        case foregroundCommand, splitForegroundCommand, initialCommand, backgroundWatermark, fileTreeVisible
     }
 
     /// Custom decode so `backgroundWatermark` is LOSSY: a present-but-invalid spec (an unknown
@@ -177,5 +190,6 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         splitForegroundCommand = try c.decodeIfPresent([String].self, forKey: .splitForegroundCommand)
         initialCommand = try c.decodeIfPresent(String.self, forKey: .initialCommand)
         backgroundWatermark = (try? c.decodeIfPresent(BackgroundWatermark.self, forKey: .backgroundWatermark)) ?? nil
+        fileTreeVisible = try c.decodeIfPresent(Bool.self, forKey: .fileTreeVisible)
     }
 }

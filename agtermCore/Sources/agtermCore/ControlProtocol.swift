@@ -25,6 +25,7 @@ public enum Command: String, Codable, Sendable {
     case sessionBackground = "session.background"
     case sessionSplit = "session.split"
     case sessionScratch = "session.scratch"
+    case sessionFileTree = "session.filetree"
     case sessionFocus = "session.focus"
     case sessionResize = "session.resize"
     case surfaceZoom = "surface.zoom"
@@ -102,7 +103,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// `session.flag` (`on|off|toggle|clear`), `sidebar.mode` (`tree|flagged|toggle`),
     /// `workspace.focus` (`on|off|toggle`), and `session.background` (`image|text|color|clear`).
     public var mode: String?
-    /// The image file path for `session.background` mode `image` (PNG or JPEG).
+    /// The image file path for `session.background` mode `image` (PNG or JPEG); also the target directory
+    /// for `session.filetree` mode `reroot` (re-roots the panel at an arbitrary path instead of the cwd).
     public var path: String?
     /// The color (`#rrggbb`) for `session.background`: the text tint for mode `text` (nil = the terminal
     /// foreground), or the solid background color for mode `color` (required). Mode `color` takes no
@@ -320,6 +322,13 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let overlaySizePercent: Int?
     public let scratch: Bool
     public let flagged: Bool
+    /// Whether the session's file-tree panel is shown, or nil when hidden (omitted from the JSON). The read
+    /// side of `session.filetree` — so a script can record and restore each session's panel state.
+    public let fileTreeVisible: Bool?
+    /// The directory the session's file-tree panel is rooted at, or nil when the panel is hidden (omitted
+    /// from the JSON). The read side of `session.filetree reroot` — so a script can record where each panel
+    /// points and restore it (gated on visibility, like `fileTreeVisible`).
+    public let fileTreeRoot: String?
     /// The LIVE foreground process command (full argv) in the main pane, or nil when the pane is at its
     /// shell prompt (omitted from the JSON). The same capture the restore-running-command feature uses,
     /// surfaced for introspection ("what is each pane running").
@@ -366,6 +375,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 splitRatio: Double? = nil, splitFocused: Bool? = nil,
                 overlay: Bool = false, overlaySizePercent: Int? = nil, scratch: Bool = false, flagged: Bool = false,
+                fileTreeVisible: Bool? = nil, fileTreeRoot: String? = nil,
                 foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil,
                 statusPane: String? = nil, statusBlink: Bool? = nil, statusColor: String? = nil,
                 background: BackgroundWatermark? = nil, unseen: Int? = nil,
@@ -383,6 +393,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.overlaySizePercent = overlaySizePercent
         self.scratch = scratch
         self.flagged = flagged
+        self.fileTreeVisible = fileTreeVisible
+        self.fileTreeRoot = fileTreeRoot
         self.foreground = foreground
         self.splitForeground = splitForeground
         self.status = status

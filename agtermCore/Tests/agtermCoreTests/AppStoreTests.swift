@@ -1215,6 +1215,34 @@ struct AppStoreTests {
         #expect(store.sidebarWidth == AppStore.sidebarWidthMin)
     }
 
+    @Test func fileTreeWidthRoundTripsThroughSnapshot() {
+        let store = makeStore()
+        _ = store.addWorkspace(name: "work")
+        store.fileTreeWidth = 333
+        let snap = store.snapshot()
+        #expect(snap.fileTreeWidth == 333)
+        let restored = makeStore()
+        restored.restore(from: snap)
+        #expect(restored.fileTreeWidth == 333)
+    }
+
+    @Test func fileTreeWidthDefaultsWhenSnapshotOmitsIt() {
+        // a snapshot written before this field existed decodes it as nil; restore falls back to the default.
+        let store = makeStore()
+        store.fileTreeWidth = 400
+        store.restore(from: Snapshot(workspaces: []))
+        #expect(store.fileTreeWidth == AppStore.fileTreeWidthDefault)
+    }
+
+    @Test func restoreClampsOutOfRangeFileTreeWidth() {
+        // a corrupt or hand-edited snapshot must not drive an out-of-range file-tree frame; restore clamps it.
+        let store = makeStore()
+        store.restore(from: Snapshot(workspaces: [], fileTreeWidth: 9999))
+        #expect(store.fileTreeWidth == AppStore.fileTreeWidthMax)
+        store.restore(from: Snapshot(workspaces: [], fileTreeWidth: 10))
+        #expect(store.fileTreeWidth == AppStore.fileTreeWidthMin)
+    }
+
     @Test func restoreClampsOutOfRangeSplitRatio() {
         // a corrupt snapshot ratio must not feed an out-of-range fraction into NSSplitView.setPosition.
         let store = makeStore()
@@ -1591,6 +1619,51 @@ struct AppStoreTests {
         let node = try #require(store.controlTree().workspaces[0].sessions.first)
 
         #expect(node.unseen == nil) // zero reads as "no badge", omitted from the wire
+    }
+
+    @Test func controlTreeReportsFileTreeVisibleWhenShown() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        store.setFileTreeVisible(true, forSession: session.id)
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        #expect(node.fileTreeVisible == true)
+    }
+
+    @Test func controlTreeOmitsFileTreeVisibleWhenHidden() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        _ = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        #expect(node.fileTreeVisible == nil) // hidden reads as omitted from the wire
+    }
+
+    @Test func controlTreeReportsFileTreeRootWhenShown() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        store.rerootFileTree(session.id, to: "/repo/src")
+        store.setFileTreeVisible(true, forSession: session.id)
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        // setFileTreeVisible re-seeds the root from effectiveCwd on the show edge, so the visible root is the cwd.
+        #expect(node.fileTreeRoot == "/repo")
+    }
+
+    @Test func controlTreeOmitsFileTreeRootWhenHidden() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        store.rerootFileTree(session.id, to: "/repo/src") // sets a root but the panel stays hidden
+
+        let node = try #require(store.controlTree().workspaces[0].sessions.first)
+
+        #expect(node.fileTreeRoot == nil) // gated on visibility, like fileTreeVisible
     }
 
     @Test func controlTreeReportsStatusPaneForNonIdleSession() throws {

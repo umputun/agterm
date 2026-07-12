@@ -14,7 +14,7 @@ description: >
   feature request / question as a GitHub Discussion.
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
-  session.split, session.scratch, session.focus, session.resize, surface.zoom, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
+  session.split, session.scratch, session.filetree, session.focus, session.resize, surface.zoom, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
   session.flag, session.seen, session.reveal, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
   theme.set, theme.list, select theme, edit keymap, show an image, display an image inline, show-image,
@@ -116,7 +116,7 @@ you work. For any session-scoped command meant to act on *this* session — `ove
 `type`, `text`, `background`, `status`, `copy`, … — pass `--target "$AGTERM_SESSION_ID"`. Omit it and
 you open overlays / type into whatever the user has selected, not your own session.
 
-## Command summary (59 commands)
+## Command summary (60 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -137,8 +137,11 @@ session that has a split — shown or hidden; omitted when there's no split or t
 the default 0.5) —
 the read side of `session resize`, record it to restore the exact divider), `splitFocused`
 (which pane holds focus in a session that has a split — `true` = split/right, `false` = main/left; omitted
-when there's no split; the read side of `session focus`, record it to restore focus), and `surfaces`
-(`id`, `kind`, `active`, `visible`) for `surface zoom`. The tree top level carries `zoomedSurface`
+when there's no split; the read side of `session focus`, record it to restore focus), `fileTreeVisible` (whether the
+session's file-tree panel is shown — the read side of `session filetree`), `fileTreeRoot` (the
+directory the panel is currently rooted at — set by `session filetree reroot <path>` (or `refresh`,
+which roots at the cwd); omitted when the panel is hidden — the read side of `session filetree reroot`),
+and `surfaces` (`id`, `kind`, `active`, `visible`) for `surface zoom`. The tree top level carries `zoomedSurface`
 (the control id of the currently zoomed surface, omitted when nothing is zoomed — the read side of
 `surface zoom`, so a script can check the zoom state and record-then-restore).
 
@@ -184,6 +187,7 @@ focused from the tree workspace node's `focused` flag).
   recreates). `--command` (when showing) runs a program instead of a shell, run-once like `session new
   --command` (respawns the scratch if one is open). Target your own session with
   `--target "$AGTERM_SESSION_ID"` (see Addressing).
+- `filetree [on|off|toggle|refresh|reroot <path>]` — show/hide the session's file-tree panel (`refresh` re-roots it to the session's current cwd and re-reads it; `reroot <path>` re-roots it to an arbitrary directory instead).
 - `focus [left|right|other]` — move focus between split panes.
 - `resize --split-ratio R | --grow-left D | --grow-right D` — move the split divider (no GUI/keymap
   equivalent — bind it via a `command "agtermctl session resize …"` custom action). `--split-ratio` sets

@@ -1,5 +1,6 @@
 import agtermCore
 import AppKit
+import Quartz
 import SwiftUI
 
 /// The user-facing actions shared by the toolbar / bottom-bar buttons (`ContentView`) and the
@@ -158,34 +159,6 @@ final class AppActions {
         focusActiveSession()
     }
 
-    /// Reveal the active session's focused-pane cwd in Finder. Finder gets the directory itself selected
-    /// (rather than opening arbitrary terminal output), matching "Reveal in Finder" behavior elsewhere on Mac.
-    func revealActiveSessionInFinder() {
-        guard let store, let id = store.selectedSessionID else { return }
-        revealSessionInFinder(id, in: store)
-    }
-
-    var canRevealActiveSessionInFinder: Bool {
-        guard let store, let id = store.selectedSessionID else { return false }
-        return canRevealSessionInFinder(id, in: store)
-    }
-
-    func canRevealSessionInFinder(_ id: UUID, in store: AppStore) -> Bool {
-        guard let session = store.session(withID: id) else { return false }
-        return DirectoryPanelDefaults.existingDirectoryURL(for: session.focusedCwd) != nil
-    }
-
-    /// Reveal a specific session's focused-pane cwd in Finder, scoped to the caller's store so a sidebar
-    /// context menu in a background window still acts on the clicked row in that window.
-    @discardableResult
-    func revealSessionInFinder(_ id: UUID, in store: AppStore) -> Bool {
-        guard let session = store.session(withID: id),
-              let url = DirectoryPanelDefaults.existingDirectoryURL(for: session.focusedCwd)
-        else { return false }
-        NSWorkspace.shared.activateFileViewerSelecting([url])
-        return true
-    }
-
     // closes the active session, or dismisses a focus-stealing cover on top of it. returns whether it
     // handled the keystroke, so the ⌘W menu item falls back to closing the window only when nothing was
     // dismissed or closed (no cover, no session). precedence follows the z-order: the quick terminal is
@@ -199,6 +172,14 @@ final class AppActions {
         // (stepwise — a zoomed quick terminal un-zooms first, the next ⌘W hides it) rather than
         // swallowing the keystroke, and still never mutates hidden session/window state behind it.
         if terminalZoomActive { frontmostTerminalZoom?.clear(); return true }
+        // a shown Quick Look preview (file tree) is its own floating panel — ⌘W closes IT first (the Finder
+        // gesture), not the session underneath. Gate on the panel being the KEY window so ⌘W in ANOTHER
+        // window doesn't swallow a preview opened over a different window's tree (QLPreviewPanel is app-global).
+        if QLPreviewPanel.sharedPreviewPanelExists(), let panel = QLPreviewPanel.shared(),
+           panel.isVisible, panel.isKeyWindow {
+            panel.orderOut(nil)
+            return true
+        }
         if let quick = frontmostQuickTerminal, quick.isVisible { quick.hide(); return true }
         guard let store, let session = store.activeSession else { return false }
         if session.overlayActive { store.closeOverlay(session.id); return true }

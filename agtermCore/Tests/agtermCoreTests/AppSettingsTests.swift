@@ -412,6 +412,19 @@ struct AppSettingsTests {
         #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
+    @Test func editorAppRoundTripsAndIsNotAConfigLine() throws {
+        let original = AppSettings(editorApp: "/Applications/Foo.app")
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
+        #expect(decoded == original)
+        #expect(decoded.editorApp == "/Applications/Foo.app")
+        // absent in a legacy file decodes to nil (the system-default open).
+        #expect(AppSettings().editorApp == nil)
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(legacy.editorApp == nil)
+        // an app-level path, never a ghostty config key — only the always-on defaults are emitted.
+        #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
+
     @Test func resolveNewSessionCwdHomeIsDefault() {
         // nil mode (default) and an explicit "home" both resolve to home, ignoring the session cwd.
         #expect(AppSettings().resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")

@@ -26,6 +26,7 @@ public protocol ControlActions {
     func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) -> ControlResponse
     func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse
     func scratchSession(_ target: String?, window: String?, mode: String?, command: String?) -> ControlResponse
+    func fileTreeSession(_ target: String?, window: String?, mode: String?, path: String?) -> ControlResponse
     func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse
     func resizeSplit(_ target: String?, window: String?, resize: ControlSplitResize) -> ControlResponse
     func setSurfaceZoom(_ target: String?, window: String?, mode: ControlToggleMode) -> ControlResponse
@@ -137,7 +138,8 @@ public struct ControlDispatcher {
         case .sessionNew, .sessionSelect, .sessionGo, .sessionClose, .sessionRename, .sessionReveal,
                 .sessionMove, .sessionFlag, .sessionSeen, .sessionStatus:
             return dispatchSessionCommand(request)
-        case .sessionSplit, .sessionScratch, .sessionFocus, .sessionResize, .surfaceZoom, .sessionType,
+        case .sessionSplit, .sessionScratch, .sessionFileTree, .sessionFocus, .sessionResize, .surfaceZoom,
+                .sessionType,
                 .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayOpen,
                 .sessionOverlayClose, .sessionOverlayResize, .sessionOverlayResult, .sessionBackground,
                 .sessionText:
@@ -323,6 +325,9 @@ public struct ControlDispatcher {
         case .sessionScratch:
             return actions.scratchSession(request.target, window: request.args?.window, mode: request.args?.mode,
                                           command: request.args?.command)
+        case .sessionFileTree:
+            return actions.fileTreeSession(request.target, window: request.args?.window, mode: request.args?.mode,
+                                           path: request.args?.path)
         case .sessionFocus:
             return actions.focusSessionPane(request.target, window: request.args?.window, pane: request.args?.pane)
         case .sessionResize:

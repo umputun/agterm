@@ -214,6 +214,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// sizes. Applied at the AppKit level when the sidebar draws, NOT a ghostty key — it never appears in
     /// `ghosttyConfigLines()`.
     public var sidebarFontSize: Double?
+    /// The .app bundle path files from the tree open in (double-click / the Open menu); nil means the
+    /// system default (`NSWorkspace.shared.open(url)`). An app-level path read on demand when opening a
+    /// file, NOT a ghostty key — it never appears in `ghosttyConfigLines()`. A stale path (app deleted)
+    /// falls back to the system default at open time.
+    public var editorApp: String?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 darkTheme: String? = nil, followSystemAppearance: Bool? = nil,
@@ -228,7 +233,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 newSessionDirectory: String? = nil, newSessionCustomDirectory: String? = nil,
                 confirmCloseSession: Bool? = nil, closeGraceUndoEnabled: Bool? = nil,
                 autoFollowAttention: String? = nil,
-                autoFollowStayOnActive: Bool? = nil, sidebarFontSize: Double? = nil) {
+                autoFollowStayOnActive: Bool? = nil, sidebarFontSize: Double? = nil,
+                editorApp: String? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -259,6 +265,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.autoFollowAttention = autoFollowAttention
         self.autoFollowStayOnActive = autoFollowStayOnActive
         self.sidebarFontSize = sidebarFontSize
+        self.editorApp = editorApp
     }
 
     /// The resolved titlebar row state: the explicit `toolbarMode` when set to a KNOWN raw value, else the

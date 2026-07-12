@@ -19,8 +19,8 @@ struct Session: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Session commands.",
         subcommands: [New.self, Close.self, Select.self, Go.self, Rename.self, Reveal.self, Move.self, TypeText.self,
-                      Split.self, Scratch.self, Focus.self, Resize.self, Copy.self, Paste.self, SelectAll.self,
-                      Text.self, Status.self, FlagCommand.self,
+                      Split.self, Scratch.self, FileTree.self, Focus.self, Resize.self, Copy.self, Paste.self,
+                      SelectAll.self, Text.self, Status.self, FlagCommand.self,
                       Seen.self, Search.self, Background.self, Overlay.self]
     )
 
@@ -217,6 +217,32 @@ struct Session: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionScratch, target: target.target, args: options.withWindow(ControlArgs(mode: mode, command: command)))
+        }
+    }
+
+    struct FileTree: RequestCommand {
+        static let configuration = CommandConfiguration(commandName: "filetree",
+            abstract: "Show, hide, refresh, or re-root a session file-tree panel (on|off|toggle|refresh|reroot <path>).")
+        @Argument(help: "Mode: on (show), off (hide), toggle (default), refresh (re-read in place), or reroot (point at <path>). Opens rooted at the session's cwd.") var mode: String = "toggle"
+        @Argument(help: "For reroot: the directory to re-root the panel at (required for reroot, invalid otherwise).") var path: String?
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        // reroot needs a directory; every other mode takes none. Reject the mismatch at parse time so it's a
+        // clean usage error, unit-testable without a socket (mirrors Resize.validate).
+        func validate() throws {
+            if mode == "reroot" {
+                guard let path, !path.isEmpty else {
+                    throw ValidationError("session filetree reroot requires a <path>")
+                }
+            } else if path != nil {
+                throw ValidationError("a <path> is only valid with the reroot mode")
+            }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            ControlRequest(cmd: .sessionFileTree, target: target.target,
+                           args: options.withWindow(ControlArgs(mode: mode, path: mode == "reroot" ? path : nil)))
         }
     }
 

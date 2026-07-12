@@ -235,6 +235,10 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionScratch, target: "active", args: ControlArgs(mode: "toggle")),
             ControlRequest(cmd: .sessionScratch, target: "9f3c", args: ControlArgs(mode: "on")),
             ControlRequest(cmd: .sessionScratch, target: "active", args: ControlArgs(mode: "on", command: "htop")),
+            ControlRequest(cmd: .sessionFileTree, target: "active", args: ControlArgs(mode: "toggle")),
+            ControlRequest(cmd: .sessionFileTree, target: "9f3c", args: ControlArgs(mode: "on")),
+            ControlRequest(cmd: .sessionFileTree, target: "active", args: ControlArgs(mode: "off")),
+            ControlRequest(cmd: .sessionFileTree, target: "active", args: ControlArgs(mode: "refresh")),
             ControlRequest(cmd: .quick, args: ControlArgs(mode: "show")),
             ControlRequest(cmd: .sidebar, args: ControlArgs(mode: "hide")),
             ControlRequest(cmd: .sessionFlag, target: "active", args: ControlArgs(mode: "toggle")),
@@ -352,6 +356,44 @@ struct ControlProtocolTests {
         let decoded = try roundTrip(response)
         #expect(decoded == response)
         #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.flagged == true)
+    }
+
+    @Test func treeSessionNodeRoundTripsWithFileTreeVisible() throws {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         fileTreeVisible: true)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.fileTreeVisible == true)
+    }
+
+    @Test func treeSessionNodeOmitsFileTreeVisibleWhenNil() throws {
+        // a hidden file-tree panel must omit the key entirely (backward-compatible + lean), not emit null.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("fileTreeVisible"), "a nil fileTreeVisible must be omitted; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.fileTreeVisible == nil)
+    }
+
+    @Test func treeSessionNodeRoundTripsWithFileTreeRoot() throws {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         fileTreeVisible: true, fileTreeRoot: "/proj/src")
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.fileTreeRoot == "/proj/src")
+    }
+
+    @Test func treeSessionNodeOmitsFileTreeRootWhenNil() throws {
+        // a hidden file-tree panel reports no root — the key is omitted entirely (lean + backward-compatible).
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("fileTreeRoot"), "a nil fileTreeRoot must be omitted; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.fileTreeRoot == nil)
     }
 
     @Test func treeSessionNodeRoundTripsWithTitle() throws {

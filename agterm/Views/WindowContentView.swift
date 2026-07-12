@@ -188,28 +188,49 @@ struct WindowContentView: View {
     /// doesn't impose the Liquid-Glass sidebar chrome (inset panel, toggle capsule) or couple it to the
     /// toolbar style. A plain `HStack` gives the sidebar tree + a themed draggable divider + the terminal.
     @ViewBuilder private var splitRoot: some View {
-        HStack(spacing: 0) {
-            if store.sidebarVisible {
-                sidebarColumn
-                    .frame(width: CGFloat(store.sidebarWidth))
-                sidebarDivider
-                    // draw/hit above the terminal: the divider is the middle HStack child, so without this
-                    // the detail column (drawn last) shadows the right half of the grab handle, leaving only
-                    // a few points grabbable. zIndex lifts the whole handle on top so the full strip works.
-                    .zIndex(1)
+        // GeometryReader wraps the split so the RIGHT-anchored file-tree divider can resolve its panel
+        // width from the absolute cursor X: the panel hugs the window's right edge, so its width is
+        // `totalWidth - cursor.x` — the inverse of the left-anchored sidebar's `width = cursor.x`.
+        GeometryReader { geo in
+            HStack(spacing: 0) {
+                if store.sidebarVisible {
+                    sidebarColumn
+                        .frame(width: CGFloat(store.sidebarWidth))
+                    sidebarDivider
+                        // draw/hit above the terminal: the divider is the middle HStack child, so without this
+                        // the detail column (drawn last) shadows the right half of the grab handle, leaving only
+                        // a few points grabbable. zIndex lifts the whole handle on top so the full strip works.
+                        .zIndex(1)
+                }
+                detailColumn
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                // the per-session file-tree panel, on the RIGHT of the terminal. Shown only for the active
+                // session and only when it has toggled the panel on. Like the sidebar, its show/hide is an
+                // INSTANT HStack child add/remove — NEVER animate its width (the same eager-deck reason below).
+                // Unlike the sidebar (per-window), its gate is `activeSession`, which flips INSIDE the
+                // `withAnimation` transactions of session close / undo-close / delete-workspace — so the column
+                // insert/remove must opt OUT of that ambient animation, else it interpolates the detail column's
+                // width (and reflows every ghostty surface) per frame for the transaction's duration.
+                if let session = store.activeSession, session.fileTreeVisible {
+                    fileTreeDivider(totalWidth: geo.size.width)
+                        .zIndex(1)
+                        .transaction { $0.animation = nil }
+                    fileTreeColumn(for: session)
+                        .frame(width: CGFloat(store.fileTreeWidth))
+                        .transaction { $0.animation = nil }
+                }
             }
-            detailColumn
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .frame(width: geo.size.width, height: geo.size.height)
+            // deliberately NOT animated on visibility: animating the split width interpolates the detail
+            // column's frame every display frame, and detailPane is the EAGER deck (a ZStack over EVERY
+            // session's surface, all mounted). so an animated collapse/expand resizes every ghostty surface
+            // each frame — each resize reflows the grid (set_size) AND force-repaints (refresh), even hidden
+            // opacity-0 panes — a cost that scales with total session count and janks on a window with many
+            // sessions. an instant toggle reflows each surface exactly once. DO NOT re-add the width animation.
+            // the mode switch below is safe to animate — it swaps sidebar CONTENT, not the split width, so
+            // the detail column (and the deck) never resize.
+            .animation(.easeInOut(duration: 0.15), value: store.sidebarMode)
         }
-        // deliberately NOT animated on visibility: animating the split width interpolates the detail
-        // column's frame every display frame, and detailPane is the EAGER deck (a ZStack over EVERY
-        // session's surface, all mounted). so an animated collapse/expand resizes every ghostty surface
-        // each frame — each resize reflows the grid (set_size) AND force-repaints (refresh), even hidden
-        // opacity-0 panes — a cost that scales with total session count and janks on a window with many
-        // sessions. an instant toggle reflows each surface exactly once. DO NOT re-add the width animation.
-        // the mode switch below is safe to animate — it swaps sidebar CONTENT, not the split width, so
-        // the detail column (and the deck) never resize.
-        .animation(.easeInOut(duration: 0.15), value: store.sidebarMode)
     }
 
     private var sidebarColumn: some View {
@@ -236,7 +257,7 @@ struct WindowContentView: View {
     /// at the shift's magnitude, composited over the window background. Compositing this over the window
     /// background equals blending the terminal color toward black/white, and works the same over an
     /// opaque or a translucent+blurred backdrop. Neutral (`amount == 0`) renders nothing.
-    @ViewBuilder private var sidebarTintWash: some View {
+    @ViewBuilder var sidebarTintWash: some View {
         let amount = AppSettings.sidebarShiftAmount(strength: sidebarShift)
         if amount != 0 {
             Color(white: amount > 0 ? 0 : 1).opacity(abs(amount))

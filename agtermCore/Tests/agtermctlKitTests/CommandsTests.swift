@@ -281,6 +281,35 @@ struct CommandsTests {
         #expect(try request(["session", "scratch", "off"]) == expected)
     }
 
+    @Test func sessionFileTreeDefaultsToggle() throws {
+        let expected = ControlRequest(cmd: .sessionFileTree, target: "active", args: ControlArgs(mode: "toggle"))
+        #expect(try request(["session", "filetree"]) == expected)
+    }
+
+    @Test func sessionFileTreeOn() throws {
+        let expected = ControlRequest(cmd: .sessionFileTree, target: "active", args: ControlArgs(mode: "on"))
+        #expect(try request(["session", "filetree", "on"]) == expected)
+    }
+
+    @Test func sessionFileTreeRefresh() throws {
+        let expected = ControlRequest(cmd: .sessionFileTree, target: "active", args: ControlArgs(mode: "refresh"))
+        #expect(try request(["session", "filetree", "refresh"]) == expected)
+    }
+
+    @Test func sessionFileTreeReroot() throws {
+        let expected = ControlRequest(cmd: .sessionFileTree, target: "active",
+                                      args: ControlArgs(mode: "reroot", path: "/some/dir"))
+        #expect(try request(["session", "filetree", "reroot", "/some/dir"]) == expected)
+    }
+
+    @Test func sessionFileTreeRerootRequiresPath() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "filetree", "reroot"]) }
+    }
+
+    @Test func sessionFileTreePathWithoutRerootRejected() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "filetree", "on", "/some/dir"]) }
+    }
+
     @Test func sessionFocusDefaultsOther() throws {
         let expected = ControlRequest(cmd: .sessionFocus, target: "active", args: ControlArgs(pane: "other"))
         #expect(try request(["session", "focus"]) == expected)

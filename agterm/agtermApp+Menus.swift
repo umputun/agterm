@@ -264,6 +264,14 @@ extension agtermApp {
                 }
                 .keyboardShortcut(shortcut(for: .toggleScratch))
                 .disabled(library.activeStore?.activeSession == nil || zoomed)
+                // per-session file-tree panel on the right of the terminal. State shown by the label text,
+                // like Split/Scratch; ⌃⌘E default (rebindable via toggle_file_tree).
+                let fileTreeShown = library.activeStore?.activeSession?.fileTreeVisible == true
+                Button { actions.toggleFileTree() } label: {
+                    Label(fileTreeShown ? "Hide File Tree" : "Show File Tree", systemImage: "sidebar.right")
+                }
+                .keyboardShortcut(shortcut(for: .toggleFileTree))
+                .disabled(library.activeStore?.activeSession == nil)
                 // search the focused terminal's scrollback. data-driven shortcut (⌘F default) like the
                 // toggles above — no hardcoded literal; the bar's open/close toggle lives in onSearchStart.
                 Button { actions.toggleSearch() } label: { Label("Find…", systemImage: "magnifyingglass") }

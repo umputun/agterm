@@ -27,7 +27,8 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.reopenRecent.rawValue == "reopen_recent")
         #expect(BuiltinAction.undoClose.rawValue == "undo_close")
         #expect(BuiltinAction.toggleFullscreen.rawValue == "toggle_fullscreen")
-        #expect(BuiltinAction.allCases.count == 39)
+        #expect(BuiltinAction.toggleFileTree.rawValue == "toggle_file_tree")
+        #expect(BuiltinAction.allCases.count == 40)
     }
 
     @Test func rejectsUnknownName() {
@@ -77,6 +78,7 @@ struct BuiltinActionTests {
             .toggleTerminalZoom: Chord(mods: [.command, .shift], key: "return"),
             .toggleSearch: Chord(mods: [.command], key: "f"),
             .toggleSidebar: Chord(mods: [.command, .control], key: "s"),
+            .toggleFileTree: Chord(mods: [.command, .control], key: "e"),
             .toggleFullscreen: Chord(mods: [.command, .control], key: "f"),
             .selectTheme: nil,      // keyless — gains a key only when the user maps one
             .toggleFlaggedView: nil, // keyless — gains a key only when the user maps one

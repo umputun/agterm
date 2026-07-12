@@ -1,6 +1,7 @@
 import agtermCore
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// The Settings window (Cmd+,): five tabs — General (mouse, sessions, ghostty config),
 /// Appearance (font/theme + window translucency + pane dimming), Notifications (banner / badge /
@@ -118,6 +119,22 @@ private struct GeneralSettingsView: View {
                     .accessibilityIdentifier("settings-close-grace-undo")
             }
 
+            Section("Files") {
+                HStack {
+                    Text("Open files with")
+                    Spacer()
+                    Text(editorAppLabel)
+                        .foregroundStyle(model.settings.editorApp == nil ? .secondary : .primary)
+                        .accessibilityIdentifier("settings-editor-app")
+                    Button("Choose…") { chooseEditorApp() }
+                        .accessibilityIdentifier("settings-editor-choose")
+                    if model.settings.editorApp != nil {
+                        Button("System Default") { model.setEditorApp(nil) }
+                            .accessibilityIdentifier("settings-editor-default")
+                    }
+                }
+            }
+
             Section("Ghostty Config") {
                 Toggle("Use my global Ghostty config", isOn: inheritGlobalGhosttyConfig)
                     .accessibilityIdentifier("settings-inherit-global-ghostty")
@@ -182,6 +199,26 @@ private struct GeneralSettingsView: View {
     private var newSessionDirectory: Binding<AppSettings.NewSessionDirectory> {
         Binding(get: { AppSettings.NewSessionDirectory(rawValue: model.settings.newSessionDirectory ?? "") ?? .home },
                 set: { model.setNewSessionDirectory($0 == .home ? nil : $0.rawValue) })
+    }
+
+    /// The editor app's display name — the chosen .app's base name, or "System Default" when unset.
+    private var editorAppLabel: String {
+        guard let path = model.settings.editorApp else { return "System Default" }
+        return URL(fileURLWithPath: path).deletingPathExtension().lastPathComponent
+    }
+
+    /// Pick a GUI .app to open file-tree files with (Applications, apps only), then persist its path.
+    private func chooseEditorApp() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.application]
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.prompt = "Choose"
+        panel.message = "Choose an app to open files with"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        model.setEditorApp(url.path)
     }
 
     /// Pick the fixed directory for the `custom` new-session mode with the standard open panel

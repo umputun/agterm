@@ -62,6 +62,10 @@ public final class AppStore {
     /// sidebar divider drag (clamped to `sidebarWidthMin...sidebarWidthMax`); restored on relaunch.
     public var sidebarWidth: Double = AppStore.sidebarWidthDefault
 
+    /// This window's file-tree panel width in points. Per-window UI state, persisted in `Snapshot`. Driven by
+    /// the file-tree divider drag (clamped to `fileTreeWidthMin...fileTreeWidthMax`); restored on relaunch.
+    public var fileTreeWidth: Double = AppStore.fileTreeWidthDefault
+
     /// The sidebar width default and drag/restore bounds, shared by the view's divider drag and the
     /// `restore()` clamp so the two can't drift (and a hand-edited snapshot can't drive an out-of-range frame).
     public static let sidebarWidthDefault: Double = 220
@@ -208,6 +212,8 @@ public final class AppStore {
                                           overlay: session.overlayActive,
                                           overlaySizePercent: session.overlayActive ? session.overlaySizePercent : nil,
                                           scratch: session.scratchActive, flagged: session.flagged,
+                                          fileTreeVisible: session.fileTreeVisible ? true : nil,
+                                          fileTreeRoot: session.fileTreeVisible ? session.fileTreeRoot : nil,
                                           foreground: foreground(session),
                                           splitForeground: splitForeground(session), status: status,
                                           statusPane: statusPane,
@@ -804,7 +810,8 @@ public final class AppStore {
                                      collapsed: workspace.isExpanded ? nil : true)
         }
         return Snapshot(selectedSessionID: selectedSessionID, workspaces: workspaceSnapshots,
-                        sidebarWidth: sidebarWidth, sidebarVisible: sidebarVisible, sidebarMode: sidebarMode,
+                        sidebarWidth: sidebarWidth, fileTreeWidth: fileTreeWidth,
+                        sidebarVisible: sidebarVisible, sidebarMode: sidebarMode,
                         focusedWorkspaceID: focusedWorkspaceID, sessionRecency: sessionRecency.items)
     }
 
@@ -836,6 +843,7 @@ public final class AppStore {
         // clamp on restore (not just nil-default) so a corrupt or hand-edited snapshot can't drive an
         // out-of-range frame width; the drag path clamps to the same bounds.
         sidebarWidth = min(AppStore.sidebarWidthMax, max(AppStore.sidebarWidthMin, snapshot.sidebarWidth ?? AppStore.sidebarWidthDefault))
+        fileTreeWidth = min(AppStore.fileTreeWidthMax, max(AppStore.fileTreeWidthMin, snapshot.fileTreeWidth ?? AppStore.fileTreeWidthDefault))
         sidebarVisible = snapshot.sidebarVisible ?? true
         sidebarMode = snapshot.sidebarMode ?? .tree
         // a stale focus id (its workspace not in the restored tree) is harmless — `visibleWorkspaces`
@@ -941,7 +949,8 @@ public final class AppStore {
                         foregroundCommand: session.foregroundCommand,
                         splitForegroundCommand: session.splitForegroundCommand,
                         initialCommand: session.initialCommand,
-                        backgroundWatermark: session.backgroundWatermark)
+                        backgroundWatermark: session.backgroundWatermark,
+                        fileTreeVisible: session.fileTreeVisible ? true : nil)
     }
 
     func workspaceSnapshot(_ workspace: Workspace) -> WorkspaceSnapshot {
@@ -962,6 +971,12 @@ public final class AppStore {
         session.initialCommand = snapshot.initialCommand
         session.wasRestored = true
         session.backgroundWatermark = snapshot.backgroundWatermark
+        session.fileTreeVisible = snapshot.fileTreeVisible ?? false
+        // A restored-visible panel has no "first show" edge to seed its root, and the view falls back to the
+        // LIVE effectiveCwd whenever fileTreeRoot is nil — which would make the tree chase every cd (and lose
+        // expansion/scroll on each). So pin the root to the restored cwd here; a hidden panel stays nil and
+        // seeds on its first show as usual.
+        if session.fileTreeVisible { session.fileTreeRoot = snapshot.cwd }
         return session
     }
 

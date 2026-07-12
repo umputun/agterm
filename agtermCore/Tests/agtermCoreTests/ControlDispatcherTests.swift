@@ -643,6 +643,16 @@ struct ControlDispatcherTests {
             target: "session",
             args: ControlArgs(mode: "on", command: "htop")
         ))
+        let fileTree = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionFileTree,
+            target: "session",
+            args: ControlArgs(mode: "toggle", window: "win")
+        ))
+        let fileTreeReroot = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionFileTree,
+            target: "session",
+            args: ControlArgs(mode: "reroot", window: "win", path: "/some/dir")
+        ))
         let focus = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionFocus,
             target: "session",
@@ -656,11 +666,15 @@ struct ControlDispatcherTests {
 
         #expect(split == ControlResponse(ok: true))
         #expect(scratch == ControlResponse(ok: true))
+        #expect(fileTree == ControlResponse(ok: true))
+        #expect(fileTreeReroot == ControlResponse(ok: true))
         #expect(focus == ControlResponse(ok: true))
         #expect(resize == ControlResponse(ok: true))
         #expect(actions.calls == [
             .sessionSplit(target: "session", window: "win", "off"),
             .sessionScratch(target: "session", window: nil, "on", command: "htop"),
+            .sessionFileTree(target: "session", window: "win", "toggle", path: nil),
+            .sessionFileTree(target: "session", window: "win", "reroot", path: "/some/dir"),
             .sessionFocus(target: "session", window: nil, "right"),
             .sessionResize(target: "session", window: "win", .delta(-0.1))
         ])
@@ -1505,6 +1519,7 @@ private final class MockControlActions: ControlActions {
         case sessionStatus(target: String?, window: String?, ControlSessionStatusUpdate)
         case sessionSplit(target: String?, window: String?, String?)
         case sessionScratch(target: String?, window: String?, String?, command: String?)
+        case sessionFileTree(target: String?, window: String?, String?, path: String?)
         case sessionFocus(target: String?, window: String?, String?)
         case sessionResize(target: String?, window: String?, ControlSplitResize)
         case surfaceZoom(target: String?, window: String?, ControlToggleMode)
@@ -1689,6 +1704,11 @@ private final class MockControlActions: ControlActions {
     func scratchSession(_ target: String?, window: String?, mode: String?,
                         command: String?) -> ControlResponse {
         calls.append(.sessionScratch(target: target, window: window, mode, command: command))
+        return ControlResponse(ok: true)
+    }
+
+    func fileTreeSession(_ target: String?, window: String?, mode: String?, path: String?) -> ControlResponse {
+        calls.append(.sessionFileTree(target: target, window: window, mode, path: path))
         return ControlResponse(ok: true)
     }
 

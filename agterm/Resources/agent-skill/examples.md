@@ -222,6 +222,20 @@ agtermctl session scratch toggle
 agtermctl session scratch on --command "zsh -lc 'lazygit'"   # run a program instead of a shell (run-once); login-shell wrap so Homebrew's PATH is found (bare "lazygit" exits 127)
 ```
 
+## Toggle, refresh, or re-root the file-tree panel
+
+Show, hide, refresh, or re-root the session's file-tree panel. `refresh` re-roots the file tree to the
+session's current cwd and re-reads it; `reroot <path>` re-roots it to an arbitrary directory instead
+(a missing/non-directory path errors). Neither changes visibility. Read the current root back from the
+tree node's `fileTreeRoot`.
+
+```bash
+agtermctl session filetree on              # show the file-tree panel (roots at the session cwd)
+agtermctl session filetree refresh         # re-root the tree to the session's current cwd (and re-read)
+agtermctl session filetree reroot /some/dir # re-root the tree to an arbitrary directory
+agtermctl session filetree toggle          # on|off|toggle|refresh|reroot <path>
+```
+
 ## Drive the quick terminal
 
 The quick terminal is the window's throwaway overlay (not in the session tree). Show it, type into it,

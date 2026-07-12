@@ -51,7 +51,11 @@ to restore focus via `session focus --pane left|right`), `overlay` (overlay show
 `overlaySizePercent` (an open overlay's size — the
 floating panel's percent of the pane, 1–100; omitted = a full-pane overlay or no overlay, so gate on
 `overlay` first; the read side of `session overlay resize`, e.g. record it before switching to `--full`
-to restore the exact size), `scratch` (scratch shown), `flagged` (in the
+to restore the exact size), `scratch` (scratch shown), `fileTreeVisible` (whether the file-tree panel
+is shown — the read side of `session filetree`), `fileTreeRoot` (the directory the file-tree panel is
+currently rooted at — set by `session filetree reroot <path>` or `refresh` (which roots at the cwd);
+omitted when the panel is hidden, so gate on `fileTreeVisible` first — the read side of `session
+filetree reroot`), `flagged` (in the
 flagged working-set), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
 idle), `statusPane` (which pane set that status — `left` (main) | `right` (split) | `scratch` — the
 `--pane` value from `session status`, omitted when unset or idle; gated on the same non-idle condition
@@ -216,6 +220,7 @@ All six are read-only projections of GUI state.
   absolute path) and RUN-ONCE like `session new --command` (after it exits, the next `on` is a plain
   shell). A scratch is expendable, so passing `--command` while one is already open respawns it. Not
   persisted. Unknown mode errors. The tree's `scratch` flag tracks visibility.
+- `session filetree [on|off|toggle|refresh|reroot <path>] [--target] [--window W]` — show/hide the file-tree panel (`refresh` re-roots it to the session's current cwd and re-reads it, visibility unchanged; `reroot <path>` re-roots it to an arbitrary directory instead of the cwd — a missing/non-directory path errors). Read the current root back from the tree node's `fileTreeRoot`.
 - `session focus [left|right|other] [--target] [--window W]` — move keyboard focus between the two
   split panes (`other` toggles, the default). Errors when the session has no split. Works whether the
   split is shown side-by-side or hidden (maximized) — when hidden, focusing a pane swaps which one shows.

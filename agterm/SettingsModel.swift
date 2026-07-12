@@ -255,6 +255,9 @@ final class SettingsModel {
     func setNewSessionDirectory(_ value: String?) { settings.newSessionDirectory = value; try? settingsStore.save(settings) }
     /// Persist the fixed directory used when `newSessionDirectory` is `custom` (nil/empty falls back to home).
     func setNewSessionCustomDirectory(_ value: String?) { settings.newSessionCustomDirectory = value; try? settingsStore.save(settings) }
+    /// Persist the .app the file tree opens files with (nil = the macOS system default). Not a ghostty key
+    /// and nothing renders it continuously — the file tree reads it on demand at open time — so it just saves.
+    func setEditorApp(_ value: String?) { settings.editorApp = value; try? settingsStore.save(settings) }
     /// Persist whether closing a session from the GUI first asks for confirmation (nil = off). Not a ghostty
     /// key and nothing renders it continuously — `AppActions` reads it on demand at close time — so it just saves.
     func setConfirmCloseSession(_ value: Bool?) { settings.confirmCloseSession = value; try? settingsStore.save(settings) }

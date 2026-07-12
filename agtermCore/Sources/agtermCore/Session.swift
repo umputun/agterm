@@ -56,6 +56,25 @@ public final class Session: Identifiable {
     /// so it survives a relaunch (and a workspace move — the flag travels with the session).
     public var flagged: Bool = false
 
+    /// Whether this session's file-tree panel (a right-hand `NSOutlineView` browsing `fileTreeRoot`) is
+    /// shown. Per-session and hidden by default: each session independently toggles its own panel. Observed,
+    /// so the detail column shows/hides the panel when it flips. Persisted via `SessionSnapshot.fileTreeVisible`,
+    /// so a shown panel survives a relaunch (the root re-derives from the restored cwd — see `fileTreeRoot`).
+    public var fileTreeVisible: Bool = false
+
+    /// The directory the file-tree panel is rooted at — captured from `effectiveCwd` when the panel is
+    /// first shown and then held fixed, so it does NOT chase every `cd` (the panel is a stable browser, not
+    /// a live cwd mirror; a re-root action snaps it back to the current cwd). Observed, so the panel rebuilds
+    /// when it changes. In-memory only (NOT captured by `snapshot()`): a restored session with the panel
+    /// VISIBLE re-pins it to the restored cwd (`AppStore.session(from:)`) so it stays fixed instead of
+    /// chasing the live cwd; a hidden one leaves it nil and seeds on first show.
+    public var fileTreeRoot: String?
+
+    /// Bumped by `AppStore.rerootFileTree` to force the file-tree panel to re-read its current root from
+    /// disk even when the root PATH is unchanged (a manual refresh — picks up files created/deleted since
+    /// the panel opened, since there is no live FS watch yet). Observed so the panel reacts; in-memory only.
+    public var fileTreeRefreshToken: Int = 0
+
     /// The app-side surface (a `GhosttySurfaceView`). Lazily created on first
     /// display and owned here so it survives sidebar/detail view churn.
     @ObservationIgnored public var surface: (any TerminalSurface)?
