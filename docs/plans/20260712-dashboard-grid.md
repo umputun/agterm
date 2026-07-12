@@ -191,12 +191,12 @@ override + reapply; record `controller.appliedFontSize`. On close, clear the ove
 - Create: `agtermCore/Sources/agtermCore/DashboardLayout.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/DashboardLayoutTests.swift`
 
-- [ ] `grid(count:)`, `cell(index:cols:)`, `move(from:direction:cols:count:)`, `dashboardFontSize(cols:rows:base:)`
+- [x] `grid(count:)`, `cell(index:cols:)`, `move(from:direction:cols:count:)`, `dashboardFontSize(cols:rows:base:)`
       — pure, `Int`/`Double` only, tunable factor/floor constants + the direction type
-- [ ] tests: grid table `n=1…9` + cell placement
-- [ ] tests: `move` clamp every direction incl. ragged last row (`n=3,5,7,8`) and full grids (`n=2,4,9`)
-- [ ] tests: `dashboardFontSize` factors × base (13, 16) + floor at small base
-- [ ] run `cd agtermCore && swift test` + `make lint` — pass before Task 2
+- [x] tests: grid table `n=1…9` + cell placement
+- [x] tests: `move` clamp every direction incl. ragged last row (`n=3,5,7,8`) and full grids (`n=2,4,9`)
+- [x] tests: `dashboardFontSize` factors × base (13, 16) + floor at small base
+- [x] run `cd agtermCore && swift test` + `make lint` — pass before Task 2
 
 ### Task 2: DashboardController + registry — host-free observable state
 
