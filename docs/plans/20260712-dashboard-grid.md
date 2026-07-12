@@ -234,14 +234,14 @@ override + reapply; record `controller.appliedFontSize`. On close, clear the ove
 - Modify: `agtermCore/Sources/agtermCore/ControlDispatcher.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherTests.swift`
 
-- [ ] add `setDashboard(targets:window:close:fontMode:) -> ControlResponse` to the `ControlActions` protocol
+- [x] add `setDashboard(targets:window:close:fontMode:) -> ControlResponse` to the `ControlActions` protocol
       (**note**: this leaves the app target non-building until Task 6 implements it — Tasks 4–5 gate on
       `swift test` only; the first `make build` is Task 6)
-- [ ] `dashboard` dispatch arm: reject empty-targets-without-`--close`, both font flags, non-positive
+- [x] `dashboard` dispatch arm: reject empty-targets-without-`--close`, both font flags, non-positive
       `--font-size`, `--close`+ids/font; cap `>9` with a reported drop; build `fontMode`; route to `setDashboard`
-- [ ] tests (mock `ControlActions`): each rejection, the cap-with-drop, and that a valid open/close routes to
+- [x] tests (mock `ControlActions`): each rejection, the cap-with-drop, and that a valid open/close routes to
       `setDashboard` with the right args incl. `window`
-- [ ] run `cd agtermCore && swift test` + `make lint` — pass before Task 5
+- [x] run `cd agtermCore && swift test` + `make lint` — pass before Task 5
 
 ### Task 5: agtermctl — dashboard CLI subcommand
 

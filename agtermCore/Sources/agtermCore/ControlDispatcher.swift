@@ -29,6 +29,8 @@ public protocol ControlActions {
     func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse
     func resizeSplit(_ target: String?, window: String?, resize: ControlSplitResize) -> ControlResponse
     func setSurfaceZoom(_ target: String?, window: String?, mode: ControlToggleMode) -> ControlResponse
+    func setDashboard(targets: [String], window: String?, close: Bool,
+                      fontMode: DashboardFontMode) -> ControlResponse
     func font(_ target: String?, window: String?, pane: String?, action: String) -> ControlResponse
     func reloadKeymap() -> ControlResponse
     func reloadGhosttyConfig() -> ControlResponse
@@ -155,9 +157,7 @@ public struct ControlDispatcher {
                 .windowDelete, .windowResize, .windowMove, .windowZoom, .windowFullscreen:
             return await dispatchWindowCommand(request)
         case .dashboard:
-            // not yet dispatcher-owned: Task 4 adds the validation arm + `ControlActions.setDashboard`;
-            // until then it falls through to `ControlServer`, mirroring the not-yet-migrated pattern.
-            return nil
+            return dispatchDashboard(request)
         case .debugAppearance:
             // UI-test-only seam handled app-side in `ControlServer` (needs AppKit + `ContentView.isUITestLaunch`).
             return nil
@@ -590,5 +590,45 @@ public struct ControlDispatcher {
         default:
             preconditionFailure("unexpected window command: \(request.cmd.rawValue)")
         }
+    }
+
+    /// The dashboard overlay is host-free-validated here. The open path needs at least one id and at most
+    /// one font flag; `--close` takes no id or font flag; a `--font-size` must be finite and positive; and
+    /// more than `maxCells` ids are capped to the first `maxCells`, with the dropped count reported in
+    /// `result.text`. Target resolution, the surface reparent, and the per-window controller stay app-side
+    /// behind `ControlActions.setDashboard`.
+    private func dispatchDashboard(_ request: ControlRequest) -> ControlResponse {
+        let args = request.args
+        let targets = args?.targets ?? []
+        let fontSize = args?.fontSize
+        let autoSize = args?.autoSize ?? false
+
+        if args?.close == true {
+            guard targets.isEmpty, fontSize == nil, !autoSize else {
+                return ControlResponse(ok: false, error: "dashboard --close takes no ids or font options")
+            }
+            return actions.setDashboard(targets: [], window: args?.window, close: true, fontMode: .untouched)
+        }
+
+        if fontSize != nil, autoSize {
+            return ControlResponse(ok: false, error: "dashboard: --font-size is mutually exclusive with --auto-size")
+        }
+        if let fontSize, !fontSize.isFinite || fontSize <= 0 {
+            return ControlResponse(ok: false, error: "dashboard --font-size must be a positive number")
+        }
+        guard !targets.isEmpty else {
+            return ControlResponse(ok: false, error: "dashboard requires at least one session id")
+        }
+
+        let capped = Array(targets.prefix(DashboardLayout.maxCells))
+        let dropped = targets.count - capped.count
+        let fontMode: DashboardFontMode = autoSize ? .auto : (fontSize.map(DashboardFontMode.fixed) ?? .untouched)
+        var response = actions.setDashboard(targets: capped, window: args?.window, close: false, fontMode: fontMode)
+        if dropped > 0, response.ok {
+            var result = response.result ?? ControlResult()
+            result.text = "dropped \(dropped) beyond the \(DashboardLayout.maxCells)-session dashboard limit"
+            response.result = result
+        }
+        return response
     }
 }
