@@ -542,10 +542,11 @@ paths:
   (and so does `font.*`'s omitted/`left` default — its `right`/`scratch` panes resolve `splitSurface`/`scratchSurface`
   instead, via its own pane switch rather than `surfaceBindingAction`),
   and `addressableSurface` is `surface ?? splitSurface`: identical to `surface` for every ordinary or split
-  session, but falling back to a PROMOTED SPLIT SURVIVOR whose primary shell exited (`closePrimaryPane` nils
-  `surface` and keeps the live shell in `splitSurface`, asserted by `AppStorePaneTests`).
-  Resolving through `surface` alone returned `session not realized` for a session the user was actively typing
-  in. It is deliberately NOT focus-aware (unlike `activeSurface`) — a shown split keeps addressing the main
+  session — including a PROMOTED SPLIT SURVIVOR, which `closePrimaryPane` moves into the main slot
+  (`AppStorePaneTests` asserts `splitSurface == nil` after promotion).
+  The `?? splitSurface` term is a defensive fallback only, kept so the arms answer (instead of
+  `session not realized`) should `surface` ever be nil while a split shell is still alive.
+  It is deliberately NOT focus-aware (unlike `activeSurface`) — a shown split keeps addressing the main
   pane, which is what keeps `session.selectall` and its `session.copy` read-back on the SAME surface.
   READ-BACK: neither adds a `ControlSessionNode` field — `session.selectall`'s read-back is `session.copy`
   (reads the resulting selection) and `session.paste`'s is `session.text` (reads the inserted buffer), the

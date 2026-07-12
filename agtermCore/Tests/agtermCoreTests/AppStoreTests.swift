@@ -1598,6 +1598,7 @@ struct AppStoreTests {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
+        session.hasSplit = true
         session.splitSurface = SpySurface() // a live split, so a `.right` status is valid (not coerced to `.left`)
         store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: session.id)
 

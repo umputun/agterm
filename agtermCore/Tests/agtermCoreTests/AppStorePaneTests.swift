@@ -788,9 +788,10 @@ struct AppStorePaneTests {
     @Test func setAgentIndicatorCoercesRightToLeftWithoutLiveSplit() {
         // a promoted survivor's shell keeps its baked `AGTERM_PANE=right`, so the agent-status hook re-emits
         // `--pane right` on every status AFTER promotion — but there is no right pane. `setAgentIndicator`
-        // coerces `.right` to `.left` when the session has no live `splitSurface`, so a post-promotion status
-        // can't re-create the `split:false` + `statusPane:"right"` contradiction and the sole `.left`-role-aware
-        // pane can still keystroke-clear it. (Drives what the agent-status wrapper does; host-free, CI-covered.)
+        // coerces `.right` to `.left` when the session has no split (`hasSplit` false), so a post-promotion
+        // status can't re-create the `split:false` + `statusPane:"right"` contradiction and the sole
+        // `.left`-role-aware pane can still keystroke-clear it. (Drives what the agent-status wrapper does;
+        // host-free, CI-covered.)
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         // an actual PROMOTED SURVIVOR: split, exit the primary (survivor promotes), then the still-.right-baked
@@ -798,7 +799,7 @@ struct AppStorePaneTests {
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         session.surface = SpySurface(); session.splitSurface = SpySurface()
         session.isSplit = true; session.hasSplit = true
-        store.closePrimaryPane(session.id) // primary exits → survivor promoted, splitSurface == nil
+        store.closePrimaryPane(session.id) // primary exits → survivor promoted, hasSplit/splitSurface cleared
         store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: session.id)
         #expect(session.agentIndicator.statusPane == .left)                      // coerced — no live split
         #expect(session.agentIndicator.clearedBy(pane: .left, isInterrupt: false))  // the sole (left) pane clears it
@@ -808,9 +809,34 @@ struct AppStorePaneTests {
         #expect(node?.statusPane == "left")
         // a session with a LIVE split keeps `.right` — the right pane really exists (incl. a hidden-but-live split).
         let split = store.addSession(toWorkspace: ws.id, cwd: "/b")!
-        split.splitSurface = SpySurface()
+        split.hasSplit = true; split.splitSurface = SpySurface()
         store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: split.id)
         #expect(split.agentIndicator.statusPane == .right)                    // kept — a live split owns it
+    }
+
+    @Test func setAgentIndicatorKeepsRightDuringSplitRealization() {
+        // the realization window: `toggleSplit` sets `hasSplit` synchronously while the deck creates
+        // `splitSurface` a render pass later — so a scripted `session.split` + immediate
+        // `session.status --pane right` arrives with `hasSplit == true` but `splitSurface == nil`.
+        // `.right` is the correct forward tag there and must NOT be coerced to `.left`, or the realized
+        // split reports `split:true` + `statusPane:"left"` and only the LEFT pane could clear a block the
+        // RIGHT pane owns — the mirror of the promoted-survivor bug. Guards the `!hasSplit` predicate:
+        // the old `splitSurface == nil` gate rewrites this tag and fails the test.
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.surface = SpySurface()
+        store.toggleSplit(session.id) // hasSplit set synchronously; splitSurface not yet realized
+        #expect(session.hasSplit == true)
+        #expect(session.splitSurface == nil)
+        store.setAgentIndicator(AgentIndicator(status: .blocked, statusPane: .right), forSession: session.id)
+        #expect(session.agentIndicator.statusPane == .right)                  // kept — the split is coming up
+        // once the deck realizes the surface, the block is exactly where the right pane can clear it.
+        session.splitSurface = SpySurface()
+        #expect(session.agentIndicator.clearedBy(pane: .right, isInterrupt: false))
+        let node = store.controlTree().workspaces[0].sessions.first
+        #expect(node?.split == true)
+        #expect(node?.statusPane == "right")
     }
 
     @Test func closeScratchClearsScratchTaggedStatus() {

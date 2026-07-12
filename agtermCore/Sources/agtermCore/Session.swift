@@ -302,11 +302,11 @@ public final class Session: Identifiable {
 
     /// The session's one addressable pane for the control arms that act on "the session" rather than on a
     /// named `--pane`: `session.copy`, `session.paste`, `session.selectall`, and `font.*`. Normally the main
-    /// pane, and IDENTICAL to `surface` for every ordinary or split session. It differs only for a promoted
-    /// split survivor: when the primary pane's shell exits, `closePrimaryPane` tears that surface down and
-    /// nils `surface`, leaving the session's only live shell in `splitSurface`. Resolving through `surface`
-    /// alone reports `session not realized` for a session the user is actively typing in, so those arms fall
-    /// back to the survivor. Deliberately NOT focus-aware (unlike `activeSurface`): a shown split keeps
+    /// pane, and IDENTICAL to `surface` for every ordinary or split session — including a promoted split
+    /// survivor, which `closePrimaryPane` moves INTO the main slot (`surface`) and whose `splitSurface` it
+    /// nils. The `?? splitSurface` term is a defensive fallback only: it keeps the arms answering (instead
+    /// of `session not realized`) should `surface` ever be nil while a split shell is still alive.
+    /// Deliberately NOT focus-aware (unlike `activeSurface`): a shown split keeps
     /// addressing the main pane, which is what keeps `session.selectall` and its `session.copy` read-back
     /// pointed at the same surface.
     public var addressableSurface: (any TerminalSurface)? { surface ?? splitSurface }
