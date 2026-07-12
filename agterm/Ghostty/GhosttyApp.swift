@@ -91,6 +91,11 @@ final class GhosttyApp {
     /// `SettingsModel` writes it. The re-render rides the `.agtermAppearanceChanged` notification, like
     /// `toolbarMode`.
     private(set) var sidebarFontSize: CGFloat = CGFloat(AppSettings.defaultSidebarFontSize)
+    /// The base terminal font size in points (the Settings default; nil → the ghostty built-in). NOT a
+    /// value the renderer reads — it is the size a session whose `session.fontSize` is nil reverts to,
+    /// which the dashboard font-override clear needs to recognize its own async CELL_SIZE report (see
+    /// `GhosttySurfaceView.pendingFontRestore`). `SettingsModel` writes it at launch and on every change.
+    private(set) var baseFontSize: Double = DashboardLayout.ghosttyDefaultFontSize
     /// The agent-status glyph colors (active/blocked/completed). NOT ghostty-resolved: `StatusIconView`
     /// reads them when building the glyph, `SettingsModel` writes them (resolved from the user's hex or
     /// the default). The sidebar re-render rides the `.agtermAppearanceChanged` notification. The active
@@ -195,6 +200,13 @@ final class GhosttyApp {
     /// every change; the window re-sync rides the `.agtermAppearanceChanged` notification.
     func setSidebarBackgroundShift(_ strength: Int) {
         sidebarBackgroundShift = strength
+    }
+
+    /// Set the base terminal font size (the Settings default; nil → the ghostty built-in). Called by
+    /// `SettingsModel` at launch and on every change, so the dashboard font-override clear can compute the
+    /// size a default-following session reverts to.
+    func setBaseFontSize(_ size: Double?) {
+        baseFontSize = size ?? DashboardLayout.ghosttyDefaultFontSize
     }
 
     /// Set the sidebar row-text point size. Called by `SettingsModel` at launch and on every change; the

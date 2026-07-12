@@ -75,6 +75,7 @@ final class SettingsModel {
         applyInactivePaneMute()
         applySidebarBackgroundShift()
         applySidebarFontSize()
+        applyBaseFontSize()
         applyAgentStatusColors()
         applyRestoreRunningCommand()
         applyAttentionButtonEnabled()
@@ -635,6 +636,7 @@ final class SettingsModel {
         applyInactivePaneMute()
         applySidebarBackgroundShift()
         applySidebarFontSize()
+        applyBaseFontSize()
         applyAgentStatusColors()
         applyRestoreRunningCommand()
         applyAttentionButtonEnabled()
@@ -701,6 +703,10 @@ final class SettingsModel {
 
     private func applySidebarFontSize() {
         GhosttyApp.shared.setSidebarFontSize(settings.sidebarFontSize ?? AppSettings.defaultSidebarFontSize)
+    }
+
+    private func applyBaseFontSize() {
+        GhosttyApp.shared.setBaseFontSize(settings.fontSize)
     }
 
     private func applyAgentStatusColors() {
