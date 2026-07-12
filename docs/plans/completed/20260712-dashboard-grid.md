@@ -443,6 +443,33 @@ override + reapply; record `controller.appliedFontSize`. On close, clear the ove
 **Release-time (not part of this plan):**
 - Bump `softwareVersion` in `site/index.html` JSON-LD when the release carrying this ships.
 
+## Completion addendum
+
+Delivered on branch `dashboard-grid-impl` (22 commits, 42 files, +3175/-259). All original tasks complete.
+
+Additions beyond the original plan:
+- **`dashboard --mru`** — a flag that populates the grid from the target window's most-recently-used
+  sessions (up to 9, fewer if fewer) via a host-free `AppStore.recentSessions(limit:)` (in
+  `AppStore+Recency.swift`), with full four-point keep-in-sync (`ControlArgs.mru`, dispatcher validation +
+  routing, `ControlActions.setDashboard(mru:)`, CLI `--mru` flag, round-trip/dispatcher/CLI/e2e tests, docs).
+  A `ctrl+a>d` custom command (`agtermctl dashboard --mru --auto-size`) was added to the maintainer's
+  `keymap.conf`.
+- **Rebased onto master** (#121 promote-split-survivor-into-main-pane, #200 focus-flicker generation
+  counter). Reconciled the `focusSplitPane` `dashboardActive(for:)` guard with #200's `focusGeneration`
+  counter, and `Session.addressableSurfaceKind` / `DashboardFontKey` / slot-specific dashboard cell ids with
+  #121's promote-into-`surface` semantics.
+- **`AppActions` split** into `AppActions+Focus.swift` (maintainer-approved) to make room, under the
+  1000-line cap, for the key-leak guard.
+
+Review outcome: comprehensive review (3 critical iterations) + smells + 3 codex iterations + phase-4
+critical, all resolved. Key bugs caught and fixed: a no-op font-report suppression latch (replaced with a
+gap-surviving `pendingFontRestore`), a `focusSplitPane` non-member first-responder key-leak, a stale
+`appliedFontSize` read-back race, and `addressableSurfaceKind` mis-selecting the split slot for an
+unrealized session. Two sub-MINOR font cosmetics remain (a promoted-survivor cell or a not-yet-realized
+member can briefly show the default font instead of the dashboard font — no crash/corruption/keep-in-sync
+impact). Final gates: 1494 host-free unit tests, `make build`, `make lint --strict` clean, 7 `DashboardUITests`
+e2e — all green. Manual dev-instance verification (above) still recommended before release.
+
 ---
 Smells pre-check: skipped — non-Go project
 Plan-review (auto): 12 findings addressed (registry Tasks 2/6/9, host-free `AppStore.controlTree` + populate
