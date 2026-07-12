@@ -121,6 +121,114 @@ struct AgentHooksInstallTests {
         #expect(events(result.json).count == 4)
     }
 
+    @Test func codexHooksBlockContainsAllSixEvents() {
+        let block = AgentHooksInstall.codexHooksBlock(scriptDir: scriptDir)
+        for event in ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest", "Stop"] {
+            #expect(block.contains("[[hooks.\(event)]]"))
+            #expect(block.contains("[[hooks.\(event).hooks]]"))
+        }
+        #expect(block.contains("type = \"command\""))
+    }
+
+    @Test func codexHooksBlockMapsStatesAndBakesWrapperPath() {
+        let block = AgentHooksInstall.codexHooksBlock(scriptDir: scriptDir)
+        let wrapper = AgentHooksInstall.wrapperPath(scriptDir: scriptDir)
+        // every command bakes the shell-quoted absolute wrapper path inside a TOML basic string
+        #expect(block.contains("command = \"'\(wrapper)' idle\""))
+        #expect(block.contains("command = \"'\(wrapper)' active --blink\""))
+        // blocked does NOT blink, matching the Claude Code hook set (only active blinks)
+        #expect(block.contains("command = \"'\(wrapper)' blocked\""))
+        #expect(!block.contains("blocked --blink"))
+        // Stop always clears on visit; completed never appears without --auto-reset
+        #expect(block.contains("command = \"'\(wrapper)' completed --auto-reset\""))
+        #expect(!block.contains("completed\""))
+    }
+
+    @Test func codexHooksBlockShellQuotesPathWithSpace() {
+        let dir = "/Users/my name/.config/agterm/agent-status"
+        let block = AgentHooksInstall.codexHooksBlock(scriptDir: dir)
+        // the path keeps its space as ONE shell token via single-quoting inside the TOML value
+        #expect(block.contains("command = \"'\(dir)/agterm-agent-status.sh' idle\""))
+    }
+
+    @Test func codexHooksBlockEscapesApostropheInPath() {
+        // a username with an apostrophe: shellQuote emits '\'' (a backslash), which the TOML basic
+        // string must escape as \\ so the parsed value is a valid /bin/sh command again
+        let block = AgentHooksInstall.codexHooksBlock(scriptDir: "/Users/O'Brien/agent-status")
+        #expect(block.contains("'/Users/O'\\\\''Brien/agent-status/agterm-agent-status.sh' idle"))
+    }
+
+    // extract the written contents from a `.merged` outcome, failing the test otherwise.
+    private func mergedContents(_ outcome: AgentHooksInstall.CodexMergeOutcome) -> String {
+        guard case .merged(let contents) = outcome else {
+            Issue.record("expected .merged, got \(outcome)")
+            return ""
+        }
+        return contents
+    }
+
+    @Test func mergeCodexConfigAppendsHooksToEmpty() {
+        let contents = mergedContents(AgentHooksInstall.mergeCodexConfig(existing: "", scriptDir: scriptDir))
+        #expect(contents.contains(AgentHooksInstall.rcMarkerBegin))
+        #expect(contents.contains(AgentHooksInstall.rcMarkerEnd))
+        for event in ["SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "PermissionRequest", "Stop"] {
+            #expect(contents.contains("[[hooks.\(event)]]"))
+        }
+    }
+
+    @Test func mergeCodexConfigIsIdempotent() {
+        let first = mergedContents(AgentHooksInstall.mergeCodexConfig(existing: "model = \"gpt-5\"\n", scriptDir: scriptDir))
+        // second run sees our marker → .unchanged (checked before the hooks-present probe)
+        #expect(AgentHooksInstall.mergeCodexConfig(existing: first, scriptDir: scriptDir) == .unchanged)
+        #expect(first.components(separatedBy: AgentHooksInstall.rcMarkerBegin).count - 1 == 1)
+    }
+
+    @Test func mergeCodexConfigStripsLegacyNotifyLine() {
+        let existing = "notify = [\"/Users/me/.config/agterm/agent-status/codex-notify.sh\"]\n"
+        let contents = mergedContents(AgentHooksInstall.mergeCodexConfig(existing: existing, scriptDir: scriptDir))
+        #expect(!contents.contains("codex-notify.sh")) // the retired notify line is removed
+        #expect(contents.contains("[[hooks.Stop]]"))
+    }
+
+    @Test func mergeCodexConfigPreservesCommentsAndOtherNotify() {
+        let existing = """
+        # my codex config
+        model = "gpt-5"
+        notify = ["/home/me/my-own-notify.sh"]
+        """
+        let contents = mergedContents(AgentHooksInstall.mergeCodexConfig(existing: existing, scriptDir: scriptDir))
+        #expect(contents.contains("# my codex config")) // comments preserved (surgical append, no reserialize)
+        #expect(contents.contains("model = \"gpt-5\""))
+        #expect(contents.contains("notify = [\"/home/me/my-own-notify.sh\"]")) // user's own notify kept
+        #expect(contents.contains("[[hooks.PermissionRequest]]"))
+        #expect(contents.contains("my-own-notify.sh\"]\n\n\(AgentHooksInstall.rcMarkerBegin)"))
+    }
+
+    @Test func mergeCodexConfigKeepsNotifyWhenCodexNameOnlyInComment() {
+        // over-match guard: the notify VALUE is a custom program; codex-notify.sh appears only in a
+        // comment, so the parsed value has no codex-notify.sh and the line must be KEPT
+        let existing = "notify = [\"/home/me/custom.sh\"] # replaces codex-notify.sh\n"
+        let contents = mergedContents(AgentHooksInstall.mergeCodexConfig(existing: existing, scriptDir: scriptDir))
+        #expect(contents.contains("notify = [\"/home/me/custom.sh\"]")) // user's notify survives
+    }
+
+    @Test func mergeCodexConfigSkipsWhenUserHasOwnHooks() {
+        // a config that already defines hooks (its own array-of-tables) must NOT be appended to — that
+        // would duplicate/break them; the merge reports .hooksExist so the caller prints the block
+        let existing = """
+        [[hooks.Stop]]
+        [[hooks.Stop.hooks]]
+        type = "command"
+        command = "echo done"
+        """
+        #expect(AgentHooksInstall.mergeCodexConfig(existing: existing, scriptDir: scriptDir) == .hooksExist)
+    }
+
+    @Test func mergeCodexConfigReportsUnparseable() {
+        // a file that is not valid TOML must be left untouched, not rewritten
+        #expect(AgentHooksInstall.mergeCodexConfig(existing: "this = is = not = toml\n", scriptDir: scriptDir) == .unparseable)
+    }
+
     @Test func appendShellRCAddsLineAndMarkersOnce() {
         let result = AgentHooksInstall.appendShellRC(existing: "export FOO=1\n", scriptDir: scriptDir)
         #expect(result.changed)

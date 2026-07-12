@@ -10,9 +10,10 @@ let package = Package(
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.3.0"),
+        .package(url: "https://github.com/dduan/TOMLDecoder", from: "0.4.5"),
     ],
     targets: [
-        .target(name: "agtermCore"),
+        .target(name: "agtermCore", dependencies: [.product(name: "TOMLDecoder", package: "TOMLDecoder")]),
         .testTarget(name: "agtermCoreTests", dependencies: ["agtermCore"]),
         .target(
             name: "agtermctlKit",

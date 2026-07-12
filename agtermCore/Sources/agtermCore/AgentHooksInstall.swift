@@ -1,6 +1,7 @@
 import Foundation
+import TOMLDecoder
 
-/// Host-free helpers for installing the agent-status hooks package. Most are testable string/JSON
+/// Host-free helpers for installing the agent-status hooks package. Most are testable string/JSON/TOML
 /// transforms — given the current file contents and the installed script directory they return the new
 /// contents plus a `changed` flag, all idempotent. It also provides a small mode-preserving file write
 /// (`writeFile`/`posixMode`) so rewriting a restrictive-mode file (e.g. a chmod-600 `settings.json`)
@@ -34,6 +35,22 @@ public enum AgentHooksInstall {
         ("PostToolUse", nil, "active --blink"),
         ("Stop", nil, "completed --auto-reset"),
         ("Notification", "permission_prompt", "blocked"),
+    ]
+
+    /// The Codex lifecycle hook events, paired with the agent state (plus any flags) each maps to.
+    /// Codex's finer per-turn events replace the old `notify` keyword-inference: `PermissionRequest`
+    /// fires the moment Codex asks for approval (so `blocked` shows when it matters, not after the turn),
+    /// and `Stop` always sets `completed` regardless of the final message text. `SessionStart` clears the
+    /// indicator on a new session; the three `active` events (a new prompt, before a tool, after a tool)
+    /// hold `active` across an answered approval — `PostToolUse` re-asserts it once the approved tool
+    /// finishes, mirroring the Claude Code set.
+    static let codexHooks: [(event: String, state: String)] = [
+        ("SessionStart", "idle"),
+        ("UserPromptSubmit", "active --blink"),
+        ("PreToolUse", "active --blink"),
+        ("PostToolUse", "active --blink"),
+        ("PermissionRequest", "blocked"),
+        ("Stop", "completed --auto-reset"),
     ]
 
     /// Thrown by `mergeClaudeSettings` when the existing `settings.json` is non-empty but not a valid
@@ -94,6 +111,111 @@ public enum AgentHooksInstall {
         return (prefix + block, true)
     }
 
+    /// The result of merging the Codex hooks into `~/.codex/config.toml`, decided by parsing the existing
+    /// file with `TOMLDecoder` before touching it.
+    public enum CodexMergeOutcome: Equatable {
+        /// The hooks block was added (and any stale `codex-notify.sh` notify line removed) — write `contents`.
+        case merged(contents: String)
+        /// The file already carries the agterm hooks block (marker present) — nothing to do.
+        case unchanged
+        /// The file already defines its OWN `hooks` — auto-appending ours would duplicate (array-of-tables
+        /// form) or break (compact form) them, so the merge is skipped; surface `codexHooksBlock` for a
+        /// manual merge.
+        case hooksExist
+        /// The existing file is not valid TOML — leave it untouched and surface the block for a manual add.
+        case unparseable
+    }
+
+    /// merge the Codex lifecycle-status hooks into an existing `~/.codex/config.toml`.
+    ///
+    /// `existing` is the file's current contents (empty = no file yet); `scriptDir` is the installed
+    /// script directory. The decision is made by PARSING `existing` with `TOMLDecoder` (a pure-Swift,
+    /// spec-compliant parser) rather than string-matching, which is what keeps the merge safe:
+    /// - marker already present → `.unchanged` (idempotent; checked first, since our own appended block
+    ///   would otherwise read as pre-existing hooks);
+    /// - the file does not parse as TOML → `.unparseable` (never rewrite a file we can't understand);
+    /// - the file already defines `hooks` → `.hooksExist` (appending ours would duplicate or break them);
+    /// - otherwise → `.merged`, appending the marker-guarded `[[hooks.*]]` block (a new array-of-tables at
+    ///   end-of-file, valid because we verified the file has no existing `hooks`) and removing a stale
+    ///   top-level `notify` ONLY when its PARSED value points at the retired `codex-notify.sh` (so a
+    ///   comment merely naming the file, or the user's own notifier, is never touched). The surgical
+    ///   append/removal preserves the user's comments and layout.
+    public static func mergeCodexConfig(existing: String, scriptDir: String) -> CodexMergeOutcome {
+        // marker present → we already installed; nothing to do (checked before the hooks-present probe,
+        // since our own block defines hooks and would otherwise read as the user's).
+        if existing.contains(rcMarkerBegin) {
+            return .unchanged
+        }
+
+        // a genuinely empty/whitespace file has no TOML to parse — start fresh.
+        if existing.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            return .merged(contents: appendCodexBlock(to: existing, scriptDir: scriptDir))
+        }
+
+        // parse to make the merge decisions structurally; a parse failure means don't rewrite it.
+        guard let probe = try? TOMLDecoder().decode(CodexConfigProbe.self, from: existing) else {
+            return .unparseable
+        }
+        if probe.hooksPresent {
+            return .hooksExist
+        }
+
+        // strip a stale top-level `notify` ONLY when its PARSED value points at the retired codex-notify.sh.
+        var text = existing
+        if probe.notify.contains(where: { $0.contains("codex-notify.sh") }) {
+            text = removeLegacyCodexNotify(from: text)
+        }
+        return .merged(contents: appendCodexBlock(to: text, scriptDir: scriptDir))
+    }
+
+    // the two top-level keys the merge cares about, decoded from an arbitrary config (Codable ignores
+    // every other key). `hooksPresent` is a pure presence check across any hooks shape; `notify` is the
+    // top-level notify program (array-of-argv, or a bare string) so the retired codex-notify.sh entry is
+    // recognized by its PARSED value, not a fragile line match.
+    private struct CodexConfigProbe: Decodable {
+        let hooksPresent: Bool
+        let notify: [String]
+
+        private enum CodingKeys: String, CodingKey { case hooks, notify }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            hooksPresent = container.contains(.hooks)
+            if let array = try? container.decodeIfPresent([String].self, forKey: .notify) {
+                notify = array
+            } else if let single = try? container.decodeIfPresent(String.self, forKey: .notify) {
+                notify = [single]
+            } else {
+                notify = []
+            }
+        }
+    }
+
+    // append the marker-guarded Codex hooks block, one blank line after any prior content.
+    private static func appendCodexBlock(to text: String, scriptDir: String) -> String {
+        let block = rcMarkerBegin + "\n" + codexHooksBlock(scriptDir: scriptDir) + "\n" + rcMarkerEnd + "\n"
+        if text.isEmpty { return block }
+        var prefix = text
+        if !prefix.hasSuffix("\n") { prefix += "\n" }
+        return prefix + "\n" + block
+    }
+
+    // remove the retired single-line `notify = [...codex-notify.sh...]` assignment (only ever written by
+    // the old installer in the single-line form). Restricted to the TOP-LEVEL region (above the first
+    // table header) so a table-scoped notify is never touched, and to a line carrying codex-notify.sh in
+    // its VALUE so a hand-authored multi-line array is left intact rather than half-removed (the caller
+    // already confirmed via the parsed value that the stale entry exists).
+    private static func removeLegacyCodexNotify(from text: String) -> String {
+        var lines = text.components(separatedBy: "\n")
+        let limit = lines.firstIndex { $0.trimmingCharacters(in: .whitespaces).hasPrefix("[") } ?? lines.count
+        guard let idx = lines[..<limit].firstIndex(where: { line in
+            guard line.contains("codex-notify.sh"), let eq = line.firstIndex(of: "=") else { return false }
+            return line[..<eq].trimmingCharacters(in: .whitespaces) == "notify"
+        }) else { return text }
+        lines.remove(at: idx)
+        return lines.joined(separator: "\n")
+    }
+
     /// derive a backup path for a file by appending `.bak` to its full path. `settings.json` →
     /// `settings.json.bak`; the extension is left intact (the `.bak` is appended to the whole name).
     public static func backupPath(for path: String) -> String {
@@ -104,6 +226,23 @@ public enum AgentHooksInstall {
     /// hook entry. e.g. `<scriptDir>/agterm-agent-status.sh`.
     public static func wrapperPath(scriptDir: String) -> String {
         scriptDir + "/" + wrapperName
+    }
+
+    /// render the `~/.codex/config.toml` `[[hooks.*]]` block the installer merges into the user's config
+    /// (or surfaces for a manual add when the file already has hooks or doesn't parse), wiring Codex's
+    /// lifecycle events to the indicator. `scriptDir` is the installed script directory; the wrapper's
+    /// absolute path is baked into each command — shell-quoted (so a path with spaces is one token)
+    /// inside a TOML basic string — so the hook fires without the CLI on PATH.
+    public static func codexHooksBlock(scriptDir: String) -> String {
+        let wrapper = shellQuote(wrapperPath(scriptDir: scriptDir))
+        return codexHooks.map { hook in
+            """
+            [[hooks.\(hook.event)]]
+            [[hooks.\(hook.event).hooks]]
+            type = "command"
+            command = \(tomlBasicString(wrapper + " " + hook.state))
+            """
+        }.joined(separator: "\n\n")
     }
 
     /// the POSIX permission bits of the file at `path`, or nil when the file is absent or its
@@ -172,5 +311,13 @@ public enum AgentHooksInstall {
     // single-quote a string for safe embedding in a /bin/sh command (mirrors CLIInstall.shellQuote).
     public static func shellQuote(_ value: String) -> String {
         "'" + value.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    // quote a string as a TOML basic (double-quoted) string: escape backslash then double-quote so an
+    // arbitrary shell command embeds safely as a config.toml value (the Codex hook `command` field).
+    private static func tomlBasicString(_ value: String) -> String {
+        "\"" + value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"") + "\""
     }
 }

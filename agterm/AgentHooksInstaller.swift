@@ -3,13 +3,14 @@ import agtermCore
 
 /// Installs the bundled agent-status hooks package into the user's home: copies the scripts from the
 /// app bundle into `~/.config/agterm/agent-status/`, bakes the bundled `agtermctl`'s absolute path
-/// into the wrapper, appends a marker-guarded `source` line to `~/.zshrc`, `~/.bashrc`, and `~/.config/fish/config.fish`, and merges
-/// the three Claude Code hooks into `~/.claude/settings.json` (writing a `.bak` first). The Codex
-/// `~/.codex/config.toml` line is printed for the user to add manually — never auto-edited. The
-/// host-free string/JSON transforms live in `agtermCore.AgentHooksInstall`; this type owns the
-/// AppKit filesystem glue. Idempotent and re-runnable: re-running refreshes the baked `agtermctl`
-/// path (healing a moved/reinstalled bundle) and is a clean no-op for already-present rc/settings
-/// entries.
+/// into the wrapper, appends a marker-guarded `source` line to `~/.zshrc`, `~/.bashrc`, and `~/.config/fish/config.fish`, merges
+/// the four Claude Code hooks into `~/.claude/settings.json`, and merges the six Codex lifecycle hooks
+/// into `~/.codex/config.toml` (both writing a `.bak` first; the Codex step is gated on `~/.codex`
+/// existing, PARSES the config with `TOMLDecoder` to decide, and falls back to surfacing the block for a
+/// manual add when the file already has hooks or doesn't parse). The host-free string/JSON/TOML
+/// transforms live in `agtermCore.AgentHooksInstall`; this type owns the AppKit filesystem glue.
+/// Idempotent and re-runnable: re-running refreshes the baked `agtermctl` path (healing a
+/// moved/reinstalled bundle) and is a clean no-op for already-present rc/settings/config entries.
 @MainActor
 enum AgentHooksInstaller {
     private struct InstallError: Error { let message: String }
@@ -29,13 +30,28 @@ enum AgentHooksInstaller {
             .appendingPathComponent(".config/agterm/agent-status")
     }
 
+    // the outcome of the Codex config.toml merge, decided by parsing the existing file.
+    private enum CodexResult {
+        case merged, alreadyConfigured, hooksExist, unparseable, unreadable, noCodex
+
+        // a warning-level outcome: agterm could not auto-merge and the user must act (add the block by
+        // hand, or fix/inspect their config). merged/already/noCodex are informational.
+        var isWarning: Bool {
+            switch self {
+            case .hooksExist, .unparseable, .unreadable: return true
+            case .merged, .alreadyConfigured, .noCodex: return false
+            }
+        }
+    }
+
     /// Run the install and show a result alert.
     static func run() {
         do {
-            let settingsSkipped = try install()
-            present(style: settingsSkipped ? .warning : .informational,
-                    title: settingsSkipped ? "Agent Status Hooks Installed — with a warning" : "Agent Status Hooks Installed",
-                    text: successText(settingsSkipped: settingsSkipped))
+            let outcome = try install()
+            let warned = outcome.settingsSkipped || outcome.codex.isWarning
+            present(style: warned ? .warning : .informational,
+                    title: warned ? "Agent Status Hooks Installed — with a warning" : "Agent Status Hooks Installed",
+                    text: successText(settingsSkipped: outcome.settingsSkipped, codex: outcome.codex))
         } catch let error as InstallError {
             present(style: .warning, title: "Install Failed", text: error.message)
         } catch {
@@ -43,15 +59,16 @@ enum AgentHooksInstaller {
         }
     }
 
-    // returns true if the Claude settings merge was SKIPPED because ~/.claude/settings.json isn't valid
-    // JSON (it is left untouched); every other step still runs.
-    private static func install() throws -> Bool {
+    // settingsSkipped is true when the Claude settings merge was SKIPPED because ~/.claude/settings.json
+    // isn't valid JSON or couldn't be read (it is left untouched); codex reports how the config.toml merge
+    // went. Every step still runs regardless.
+    private static func install() throws -> (settingsSkipped: Bool, codex: CodexResult) {
         try copyBundledFolder()
         try bakeAgtermctlPath()
         let settingsSkipped = try mergeClaudeSettings()
         try appendShellRC()
-        print("agterm agent-status: add this to ~/.codex/config.toml:\n\(codexNotifyLine)")
-        return settingsSkipped
+        let codex = try mergeCodexConfig()
+        return (settingsSkipped, codex)
     }
 
     // copy the bundled agent-status folder into ~/.config/agterm/agent-status, overwriting any prior
@@ -125,13 +142,32 @@ enum AgentHooksInstaller {
         return url.resolvingSymlinksInPath()
     }
 
-    // merge the three Claude Code hooks into ~/.claude/settings.json, writing a .bak first when the
+    // read an existing config file's contents. Returns nil when the file is ABSENT (a fresh install);
+    // the raw contents when present and readable; and THROWS `UnreadableExisting` when the file EXISTS
+    // but cannot be read (permission / non-UTF8), so callers leave it untouched instead of clobbering it
+    // with no backup — the destructive path that `(try? String(contentsOf:)) ?? ""` silently took.
+    private struct UnreadableExisting: Error {}
+    private static func readExistingConfig(at url: URL) throws -> String? {
+        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        do {
+            return try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            throw UnreadableExisting()
+        }
+    }
+
+    // merge the four Claude Code hooks into ~/.claude/settings.json, writing a .bak first when the
     // merge changes anything. returns true if the merge was SKIPPED because the existing file is not
-    // valid JSON (it is left untouched rather than overwritten).
+    // valid JSON, or exists but can't be read (it is left untouched rather than overwritten).
     private static func mergeClaudeSettings() throws -> Bool {
         let claudeDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".claude")
         let settings = claudeDir.appendingPathComponent("settings.json")
-        let existing = try? String(contentsOf: settings, encoding: .utf8)
+        let existing: String?
+        do {
+            existing = try readExistingConfig(at: settings)
+        } catch {
+            return true // exists but unreadable: leave it untouched rather than clobber it with no backup
+        }
         let merged: (json: String, changed: Bool)
         do {
             merged = try AgentHooksInstall.mergeClaudeSettings(existing: existing, scriptDir: destinationFolder.path)
@@ -173,27 +209,83 @@ enum AgentHooksInstaller {
         }
     }
 
-    // the `notify` line the user adds to ~/.codex/config.toml to wire Codex into the indicator.
-    private static var codexNotifyLine: String {
-        "notify = [\"\(destinationFolder.appendingPathComponent("codex-notify.sh").path)\"]"
+    // merge the Codex lifecycle hooks into ~/.codex/config.toml, writing a .bak first when the merge
+    // changes anything. Gated on ~/.codex existing (like the fish rc gate) so a non-Codex user's home
+    // isn't seeded with a config.toml. The host-free `AgentHooksInstall.mergeCodexConfig` PARSES the file
+    // to decide the outcome; this method only reads/writes and maps the outcome to a `CodexResult`.
+    private static func mergeCodexConfig() throws -> CodexResult {
+        let codexDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex")
+        guard FileManager.default.fileExists(atPath: codexDir.path) else { return .noCodex }
+        let config = codexDir.appendingPathComponent("config.toml")
+        let existing: String?
+        do {
+            existing = try readExistingConfig(at: config)
+        } catch {
+            return .unreadable // exists but unreadable: leave it untouched rather than clobber it
+        }
+        switch AgentHooksInstall.mergeCodexConfig(existing: existing ?? "", scriptDir: destinationFolder.path) {
+        case .unchanged:
+            return .alreadyConfigured
+        case .hooksExist:
+            return .hooksExist
+        case .unparseable:
+            return .unparseable
+        case .merged(let contents):
+            // resolve the symlink target FIRST (so a dotfiles-managed config.toml link survives) and read
+            // its mode once, so the rewrite AND the .bak inherit the original mode instead of widening it.
+            let target = symlinkTarget(of: config) ?? config
+            let mode = AgentHooksInstall.posixMode(ofFile: target.path)
+            if let existing, !existing.isEmpty { // back up the prior file before overwriting it
+                let backup = AgentHooksInstall.backupPath(for: config.path)
+                try AgentHooksInstall.writeFile(existing, toPath: backup, posixMode: mode)
+            }
+            try writePreservingSymlink(contents, to: config, posixMode: mode)
+            return .merged
+        }
     }
 
-    // the success-alert text, including the Codex config.toml line to add manually. When the Claude
-    // settings merge was skipped (invalid settings.json), explain that the file was left untouched.
-    private static func successText(settingsSkipped: Bool) -> String {
+    // the success-alert text. Explains what was left out when the Claude settings merge was skipped, or
+    // when the Codex merge couldn't proceed (existing hooks / unparseable / unreadable / no Codex).
+    private static func successText(settingsSkipped: Bool, codex: CodexResult) -> String {
         let claudeLine = settingsSkipped
-            ? "Your ~/.claude/settings.json isn't valid JSON, so the Claude Code hooks were NOT added (the file was left untouched). Fix the JSON and run this again, or add the hooks manually."
+            ? "Your ~/.claude/settings.json isn't valid JSON (or couldn't be read), so the Claude Code hooks were NOT added "
+              + "(the file was left untouched). Fix it and run this again, or add the hooks manually."
             : "Claude Code hooks merged into ~/.claude/settings.json."
         return """
         Scripts installed to \(destinationFolder.path).
         \(claudeLine)
+        \(codexText(codex))
         The source line was added to ~/.zshrc, ~/.bashrc (and ~/.config/fish/config.fish if fish is installed).
-
-        For Codex, add this line to ~/.codex/config.toml manually:
-        \(codexNotifyLine)
 
         Open a new terminal for the shell integration to take effect.
         """
+    }
+
+    // the Codex portion of the alert, per merge outcome. The hooks-exist and unparseable cases include
+    // the block so the user can add it by hand.
+    private static func codexText(_ codex: CodexResult) -> String {
+        let approve = "Run /hooks in Codex to review and approve them before they take effect."
+        switch codex {
+        case .merged:
+            return "Codex lifecycle hooks merged into ~/.codex/config.toml (any old codex-notify.sh notify line was removed). " + approve
+        case .alreadyConfigured:
+            return "Codex lifecycle hooks are already present in ~/.codex/config.toml. " + approve
+        case .hooksExist:
+            return "Your ~/.codex/config.toml already defines its own hooks, so agterm left it untouched. "
+                + "Add these lifecycle hooks yourself, then run /hooks in Codex:\n\n" + codexBlock
+        case .unparseable:
+            return "Your ~/.codex/config.toml isn't valid TOML, so agterm left it untouched. "
+                + "Fix it, or add these lifecycle hooks yourself, then run /hooks in Codex:\n\n" + codexBlock
+        case .unreadable:
+            return "Your ~/.codex/config.toml exists but couldn't be read, so agterm left it untouched."
+        case .noCodex:
+            return "No ~/.codex found, so Codex hooks were skipped. Install Codex, then run this again."
+        }
+    }
+
+    // the Codex lifecycle-hooks block, for the alert's manual-add fallback cases.
+    private static var codexBlock: String {
+        AgentHooksInstall.codexHooksBlock(scriptDir: destinationFolder.path)
     }
 
     private static func present(style: NSAlert.Style, title: String, text: String) {

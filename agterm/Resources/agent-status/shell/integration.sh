@@ -4,10 +4,12 @@
 # Source this from your ~/.zshrc and/or ~/.bashrc.
 #
 # Which commands count as agents is a regex, override before sourcing to taste:
-#   export AGTERM_AGENT_RE='^(codex|gemini|cursor-agent|my-agent)([[:space:]]|$)'
+#   export AGTERM_AGENT_RE='^(gemini|cursor-agent|my-agent)([[:space:]]|$)'
 #
-# Claude Code is intentionally NOT in the default list — its own hooks drive
-# finer per-turn state. Add it here if you only use the shell integration.
+# Claude Code and Codex are intentionally NOT in the default list — their own
+# hooks drive finer per-turn state, which the coarse process-level active/idle
+# here would only fight. Add either here if you rely on the shell integration
+# alone for it.
 #
 # Every entry point is best-effort and a clean no-op outside agterm (guarded by
 # $AGTERM_SESSION_ID), so sourcing it from a non-agterm shell does nothing.
@@ -24,7 +26,7 @@ else
   _ags_dir="$(cd "$(dirname "$_ags_self")/.." >/dev/null 2>&1 && pwd)"
 fi
 : "${AGTERM_AGENT_BIN:=$_ags_dir/agterm-agent-status.sh}"
-: "${AGTERM_AGENT_RE:=^(codex|gemini|cursor-agent|aider|opencode|crush|goose)([[:space:]]|$)}"
+: "${AGTERM_AGENT_RE:=^(gemini|cursor-agent|aider|opencode|crush|goose)([[:space:]]|$)}"
 
 if [ -n "${ZSH_VERSION:-}" ]; then
   autoload -Uz add-zsh-hook
