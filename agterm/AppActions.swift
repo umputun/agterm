@@ -842,10 +842,11 @@ final class AppActions {
     /// `focusActiveSession`: a SHOWN (side-by-side) split's deck re-render churns first responder onto the
     /// main pane, whose `onFocusChange` writes `splitFocused = false`, and a follow-the-flag focus target
     /// then chases the wrong pane; re-asserting the split surface directly wins the race (its `onFocusChange`
-    /// re-sets `splitFocused = true`). The gate is `splitSurface != nil` (NOT `hasSplit`), so it still covers
-    /// a promoted split survivor (primary exited, survivor in `splitSurface`, `hasSplit` false — still
-    /// focused), while a STALE `right` tag on a genuinely single-pane session (a manual `session.status
-    /// --pane right`, or after the split collapsed) falls through to `focusActiveSession` instead of setting
+    /// re-sets `splitFocused = true`). The gate is `splitSurface != nil` (NOT `hasSplit`). A promoted split
+    /// survivor is NOT covered here — promotion moves it into `surface` with `splitSurface == nil` and re-tags
+    /// its `.right` status to `.left`, so it falls through to `focusActiveSession` as the session's sole main
+    /// pane (correct). A STALE `right` tag on a genuinely single-pane session (a manual `session.status
+    /// --pane right`, or after the split collapsed) likewise falls through instead of setting
     /// `splitFocused = true` with no split surface (the `splitFocused` invariant is "true only while the
     /// split pane exists"). `.scratch` shows the
     /// scratch only when hidden (a show-if-hidden guard, never a bare toggle that could HIDE a shown one) so

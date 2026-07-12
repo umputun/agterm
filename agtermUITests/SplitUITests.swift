@@ -274,6 +274,64 @@ final class SplitUITests: XCTestCase {
         XCTAssertEqual(survivorTTY, rightTTY, "after exiting the primary, the surviving right pane is focused")
     }
 
+    // promote → re-split → exit-main: the round-1 zombie scenario, driven through the REAL pane-exit
+    // routing (typing `exit`, not calling closePrimaryPane directly like the host-free test). After the
+    // primary exits, the right pane promotes into the sole/main slot; a fresh split then opens a new right
+    // pane; exiting the promoted MAIN pane must route through closePrimaryPane (dispatched on the surface's
+    // LIVE role, now primary) and collapse onto the FRESH right pane — not through the survivor's stale
+    // split onExit, which would tear the fresh right down and strand the dead main. The tell: the final
+    // command reaches the fresh right shell. This is the only test that guards the role-aware dispatch;
+    // reverting it strands the session, failing the last assertion.
+    func testPromoteThenResplitThenExitMainCollapsesToFreshSplit() throws {
+        let row = app.staticTexts["session-row"]
+        XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
+        row.click()
+        usleep(800_000)
+
+        let splitButton = app.buttons["split-toggle"]
+        XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
+
+        // open the split, focus the right pane, record its tty — this is the survivor that promotes.
+        splitButton.click()
+        usleep(800_000)
+        app.typeKey(.rightArrow, modifierFlags: [.command, .option])
+        usleep(500_000)
+        let promotedTTY = ttyAfterCommand(named: "promoted")
+        XCTAssertNotNil(promotedTTY, "right shell should write its tty")
+
+        // exit the primary (left) shell → the right pane promotes into the sole/main pane and holds focus.
+        app.typeKey(.leftArrow, modifierFlags: [.command, .option])
+        usleep(500_000)
+        app.typeText("exit")
+        app.typeKey(.return, modifierFlags: [])
+        usleep(1_500_000) // shell exit + promotion + auto-focus retry
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "exiting the primary must keep the session (promoted survivor)")
+        XCTAssertEqual(ttyAfterCommand(named: "after-promote"), promotedTTY,
+                       "the promoted survivor is the session's sole pane and holds focus")
+
+        // split AGAIN → a fresh right pane opens and takes focus (a separate shell from the promoted main).
+        splitButton.click()
+        usleep(800_000)
+        let freshRightTTY = ttyAfterCommand(named: "fresh-right")
+        XCTAssertNotNil(freshRightTTY, "the re-split's fresh right shell should write its tty")
+        XCTAssertNotEqual(freshRightTTY, promotedTTY, "re-split opens a fresh right pane, distinct from the promoted main")
+
+        // focus the promoted MAIN (left) pane and exit its shell. Its exit must route through
+        // closePrimaryPane (live role = primary after promotion) and collapse onto the FRESH right pane —
+        // NOT closeSplitPane, which would tear the fresh right down and strand the dead main (round-1 bug).
+        app.typeKey(.leftArrow, modifierFlags: [.command, .option])
+        usleep(500_000)
+        app.typeText("exit")
+        app.typeKey(.return, modifierFlags: [])
+        usleep(1_500_000)
+
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "exiting the promoted main pane must keep the session")
+        // type WITHOUT focusing — the fresh right pane must be the survivor and hold focus, so the command
+        // reaches its shell (a torn-down fresh right / stranded dead main would fail this).
+        XCTAssertEqual(ttyAfterCommand(named: "final"), freshRightTTY,
+                       "exiting the promoted main collapses onto the fresh right pane, not tears it down")
+    }
+
     // mirror of the above for exiting the split (right) pane: the session survives, collapsed to the
     // primary, and the primary holds focus.
     func testExitSplitPaneKeepsSessionAndFocusesSurvivor() throws {

@@ -59,11 +59,12 @@ paths:
   (`splitSurface === focusedSurface`), the palette path from `session.splitFocused` —
   so a script can feed it back as `agtermctl session type --pane "$AGT_PANE"` to type into the very
   pane the shortcut was pressed in.
-  It reflects the pane's PHYSICAL surface slot, not `hasSplit`: a promoted split survivor (the primary
-  pane exited and the split pane took over) reports `right` even though the session no longer shows a
-  split, because that survivor still lives in the `splitSurface` slot — which is exactly where
-  `session.type --pane right` reaches it, so the round-trip stays correct (a `left` there would name a
-  pane `session.type` can't type into, since the promoted session's `surface` slot is nil).
+  It reflects the pane's physical surface slot: `left` for any single-pane session, including a promoted
+  split survivor.
+  When the primary pane's shell exits, `closePrimaryPane` MOVES the surviving split pane from
+  `splitSurface` into the `surface` (main) slot and flips its `isSplitPane` flag off, so a
+  collapsed-to-single session reports `left` and `session.type --pane left` reaches it —
+  the survivor is no longer addressable as `right`, and a later split opens a fresh right pane beside it.
 - **Built-in override resolution is ORDER-INDEPENDENT, decided against the FINAL state (`resolveBuiltinOverrides`).**
   Overrides are NOT folded incrementally against a partially-built map (that was order-sensitive — it
   would reject `map cmd+d new_session` when toggle_split still owned cmd+d "so far",

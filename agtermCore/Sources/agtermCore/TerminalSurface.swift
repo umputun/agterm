@@ -12,6 +12,14 @@ public protocol TerminalSurface: AnyObject {
     /// Frees the underlying libghostty surface and shell. Called when the
     /// owning session is closed.
     func teardown()
+
+    /// Reassigns this surface from the split (right) pane role to the primary pane, so its live
+    /// pwd/title reports flow to the session's main fields (`currentCwd`/`oscTitle`) instead of the
+    /// split fields (`splitCwd`/`splitTitle`). Called by `closePrimaryPane` when the primary pane's
+    /// shell exits and the surviving split pane is promoted to the session's sole pane. A hard
+    /// requirement (no default) like `teardown()`: a conformer that routes pwd/title by role MUST
+    /// reassign here, so a future surface fails to compile rather than silently mis-reporting.
+    func promoteToPrimaryPane()
 }
 
 /// The direction the search selection steps, in agterm's natural convention:

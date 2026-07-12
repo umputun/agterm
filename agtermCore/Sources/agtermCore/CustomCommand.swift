@@ -43,13 +43,13 @@ public struct CommandContext: Equatable, Sendable {
     public var workspaceName: String
     public var windowID: String
     public var windowName: String
-    /// The pane that had focus at fire time — `.left` (main) or `.right` (split). Reflects the pane's
-    /// physical surface slot: a session that has only ever had a main pane reports `.left`, but a promoted
-    /// split survivor (the primary pane exited and the split pane took over) reports `.right`, since that
-    /// surface still lives in the `splitSurface` slot and is where `session.type --pane` reaches it. Typed
-    /// (not a raw `String`) so `rawValue` can only be `left`/`right`; it is consumed as the `$AGT_PANE` env
-    /// var a script feeds back through `session type --pane` (re-validated CLI- AND server-side — the enum
-    /// pins the token this emits, not the shell round-trip).
+    /// The pane that had focus at fire time — `.left` (main) or `.right` (split). `.left` for any
+    /// single-pane session, including a promoted split survivor: when the primary pane exits,
+    /// `closePrimaryPane` moves the surviving split pane into the main slot, so it reports `.left` and
+    /// `session.type --pane left` reaches it. Typed (not a raw `String`) so `rawValue` can only be
+    /// `left`/`right`; it is consumed as the `$AGT_PANE` env var a script feeds back through
+    /// `session type --pane` (re-validated CLI- AND server-side — the enum pins the token this emits,
+    /// not the shell round-trip).
     public var pane: Pane
     public var selection: String
     public var socket: String

@@ -96,6 +96,22 @@ struct SessionTests {
         #expect(session.subtitleDetail == "user@web1: ~")
     }
 
+    @Test func promotedSurvivorTitleNotMaskedByStaleSplitFocused() {
+        // regression: a promoted survivor can momentarily carry `splitFocused == true` while it is the
+        // session's SOLE pane (`splitSurface == nil`, split fields cleared) — the split factory's focus
+        // callback keeps firing on it. The focus-aware readers must ignore that stale flag and surface the
+        // MIGRATED main-pane title/cwd, not the nil'd split fields (which would drop the SSH title).
+        let session = Session(initialCwd: "/Users/user", customName: "web1")
+        session.currentCwd = "/Users/user"
+        session.oscTitle = "user@web1: ~" // migrated up from the split on promotion
+        session.splitFocused = true        // stale — no split exists
+        session.splitSurface = nil
+        session.splitTitle = nil
+        session.splitCwd = nil
+        #expect(session.subtitleDetail == "user@web1: ~") // the migrated title, not the cwd
+        #expect(session.focusedCwd == "/Users/user")       // the main cwd, not an initialCwd fallback
+    }
+
     @Test func subtitleDetailUsesCwdForNamedSessionWithoutTitle() {
         // named local session: local auto-title is suppressed so oscTitle is nil; the second line is the cwd.
         let session = Session(initialCwd: "/Users/user/dev/foo", customName: "build")
@@ -138,6 +154,7 @@ struct SessionTests {
         // title (the split pane's while it has focus, else the primary's).
         let session = Session(initialCwd: "/repo", customName: "build")
         session.isSplit = true
+        session.splitSurface = FakeSurface() // a focused split always has a live split surface
         session.oscTitle = "primary-title"
         session.splitTitle = "split-title"
         #expect(session.subtitleDetail == "primary-title")
@@ -162,6 +179,7 @@ struct SessionTests {
         let session = Session(initialCwd: "/Users/user/dev/foo")
         session.currentCwd = "/Users/user/dev/foo"
         session.isSplit = true
+        session.splitSurface = FakeSurface() // a focused split always has a live split surface
         session.splitCwd = "/var/log"
         // split not focused: the primary pane drives name + cwd.
         #expect(session.displayName == "foo")
@@ -175,6 +193,7 @@ struct SessionTests {
     @Test func focusedPaneTitleWins() {
         let session = Session(initialCwd: "/repo")
         session.isSplit = true
+        session.splitSurface = FakeSurface() // a focused split always has a live split surface
         session.oscTitle = "primary-title"
         session.splitTitle = "split-title"
         #expect(session.displayName == "primary-title")
@@ -205,10 +224,13 @@ struct SessionTests {
     }
 
     @Test func focusedCwdFallsBackUntilSplitReports() {
-        // split focused but the split pane hasn't reported a cwd yet: fall back to the primary's.
+        // split focused and ALIVE, but the split pane hasn't reported a cwd yet: fall back to the primary's.
+        // splitSurface must be set (else the split-existence guard alone short-circuits) so this exercises
+        // the `let cwd = splitCwd` nil-fallback branch, not the missing-surface one.
         let session = Session(initialCwd: "/repo")
         session.currentCwd = "/repo/primary"
         session.isSplit = true
+        session.splitSurface = FakeSurface()
         session.splitFocused = true
         #expect(session.focusedCwd == "/repo/primary")
         #expect(session.displayName == "primary")
@@ -399,4 +421,5 @@ struct SessionTests {
 
 private final class FakeSurface: TerminalSurface {
     func teardown() {}
+    func promoteToPrimaryPane() {}
 }

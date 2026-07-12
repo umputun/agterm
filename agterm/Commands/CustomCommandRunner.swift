@@ -186,8 +186,9 @@ final class CustomCommandRunner {
         // EXISTING (the `Session.onScreenSurface` idiom, `splitFocused && splitSurface != nil`): in the
         // window right after `session split on`, `splitFocused` is already true while `splitSurface` is
         // still nil, so a bare flag would report `.right` (and read the selection from the nil split
-        // surface) when `session.type --pane right` still errors "no split pane". A promoted survivor keeps
-        // `splitSurface` non-nil, so it still reports `.right` — the pane `--pane right` reaches.
+        // surface) when `session.type --pane right` still errors "no split pane". A promoted survivor now
+        // lives in the `surface` slot with `splitSurface == nil` and `splitFocused == false`, so `onSplit`
+        // is false and it reports `.left` — the pane `--pane left` reaches.
         let onSplit = session.splitFocused && session.splitSurface != nil
         let selectionSurface = (onSplit ? session.splitSurface : session.surface) as? GhosttySurfaceView
         let context = self.context(for: session, in: store, selectionSurface: selectionSurface,

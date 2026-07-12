@@ -419,7 +419,8 @@ paths:
   re-runs on restore (through the same `config.command` exec path) when the **restore-running-command** opt-in
   is on — gated via the transient `Session.wasRestored` so a fresh session always runs its command while a
   restored one honors the toggle (default off → a restored session is a plain shell); a live captured
-  foreground preempts it, and `closePrimaryPane` clears it when a command pane exits into a promoted split.
+  foreground preempts it, and `closePrimaryPane` clears it when a command pane exits and its split
+  survivor is promoted to the session's single pane.
   The arm threads `request.args?.command` into `AppStore.addSession(…, command:)`,
   which `makeSurface` passes to `GhosttySurfaceView(command:)` → `config.command` RAW (`strdup`,
   NO wrapper). libghostty tokenizes it into argv (shell-like word-splitting that RESPECTS quotes) and
@@ -541,10 +542,11 @@ paths:
   (and so does `font.*`'s omitted/`left` default — its `right`/`scratch` panes resolve `splitSurface`/`scratchSurface`
   instead, via its own pane switch rather than `surfaceBindingAction`),
   and `addressableSurface` is `surface ?? splitSurface`: identical to `surface` for every ordinary or split
-  session, but falling back to a PROMOTED SPLIT SURVIVOR whose primary shell exited (`closePrimaryPane` nils
-  `surface` and keeps the live shell in `splitSurface`, asserted by `AppStorePaneTests`).
-  Resolving through `surface` alone returned `session not realized` for a session the user was actively typing
-  in. It is deliberately NOT focus-aware (unlike `activeSurface`) — a shown split keeps addressing the main
+  session — including a PROMOTED SPLIT SURVIVOR, which `closePrimaryPane` moves into the main slot
+  (`AppStorePaneTests` asserts `splitSurface == nil` after promotion).
+  The `?? splitSurface` term is a defensive fallback only, kept so the arms answer (instead of
+  `session not realized`) should `surface` ever be nil while a split shell is still alive.
+  It is deliberately NOT focus-aware (unlike `activeSurface`) — a shown split keeps addressing the main
   pane, which is what keeps `session.selectall` and its `session.copy` read-back on the SAME surface.
   READ-BACK: neither adds a `ControlSessionNode` field — `session.selectall`'s read-back is `session.copy`
   (reads the resulting selection) and `session.paste`'s is `session.text` (reads the inserted buffer), the

@@ -69,42 +69,84 @@ extension AppStore {
         save()
     }
 
-    /// The primary pane's shell exited. If a split pane is alive it becomes the session's single
-    /// (non-split) pane and the session survives; otherwise the session is closed. The survivor stays
-    /// in the `splitSurface` slot, shown maximized via `splitFocused`, and its cwd is promoted to the
-    /// session's so a restart restores the single session in the right directory. Called by the primary
-    /// surface's `onExit`.
+    /// The primary pane's shell exited. If a split pane is alive it is PROMOTED into the primary slot
+    /// and the session survives as a single (non-split) pane; otherwise the session is closed. The
+    /// survivor MOVES from `splitSurface` into `surface` (its surface, cwd, title, and foreground command
+    /// migrate to the main fields, and its split-role reporting is turned off via `promoteToPrimaryPane`),
+    /// so the session becomes indistinguishable from a fresh single pane: `surface != nil`,
+    /// `splitSurface == nil`, `hasSplit == false`, `splitFocused == false`. That is what makes the
+    /// promoted pane addressable as the MAIN/left pane everywhere — `session.type`/`session.text --pane
+    /// left` (and omitted) reach it, `{AGT_PANE}` reports `left`, and a later `session.split` opens a
+    /// fresh RIGHT pane instead of displacing the survivor. Called by the primary surface's `onExit`.
     public func closePrimaryPane(_ sessionID: UUID) {
         guard let session = session(withID: sessionID) else { return }
-        guard session.splitSurface != nil else {
+        guard let survivor = session.splitSurface else {
             closeSession(sessionID)
             return
         }
-        session.surface?.teardown()
-        session.surface = nil
+        let priorPrimary = session.surface // the exiting pane, torn down below; scopes the search reset
+        priorPrimary?.teardown()
+        // promote the surviving split pane into the primary slot. `promoteToPrimaryPane` flips the
+        // surface's split-role flag so its future pwd/title reports write to the main fields.
+        survivor.promoteToPrimaryPane()
+        session.surface = survivor
+        session.splitSurface = nil
         session.isSplit = false
         session.hasSplit = false
-        session.splitFocused = true
+        session.splitFocused = false
         session.splitRatio = nil // promoted to a single pane; a later split should open even, not stale
         // the command pane is gone — the promoted survivor is a plain shell, so drop the creation command
         // or a restart would resurrect the exited command instead of restoring the promoted shell.
         session.initialCommand = nil
-        if let cwd = session.splitCwd { session.currentCwd = cwd }
-        // the primary surface (possibly the search owner) is torn down while the session survives as the
-        // promoted split, so reset search rather than leave a stuck bar pinned to the gone primary.
-        session.clearSearch()
-        // the gone primary owned any `.left`/nil-tagged block; the promoted (right-wired) survivor can never
-        // keystroke-clear a `.left` tag, so clear it here (a `.right` tag stays — the survivor still owns it).
-        clearIndicatorOwnedByPane(.left, of: session)
+        // migrate the split pane's live/persisted metadata up to the session (main) fields, then clear the
+        // now-meaningless split fields so nothing still describes a pane that no longer exists.
+        // cwd prefers the split's live PWD, then its restore-seed (`initialSplitCwd`, set for a restored
+        // split whose shell hasn't emitted OSC yet), and only falls back to the exited primary's cwd when
+        // the split has none at all (a fresh split seeds its cwd from the primary anyway). title is replaced
+        // OUTRIGHT from the split's (nil clears it) so the dead primary's title can never linger on the
+        // survivor — likewise foregroundCommand, so the exited primary's captured command can't either.
+        session.currentCwd = session.splitCwd ?? session.initialSplitCwd ?? session.currentCwd
+        session.oscTitle = session.splitTitle
+        session.foregroundCommand = session.splitForegroundCommand
+        session.splitCwd = nil
+        session.splitTitle = nil
+        session.initialSplitCwd = nil
+        session.splitForegroundCommand = nil
+        // reset search only if the torn-down primary owned the bar (or the weak ref already dangled), so a
+        // search owned by the SURVIVING pane stays valid across promotion — matching closeScratch's
+        // identity guard rather than clearing unconditionally and dropping a still-valid search.
+        if session.searchSurface == nil || session.searchSurface === priorPrimary {
+            session.clearSearch()
+        }
+        // migrate the agent-status identity like the cwd/title above: the exited primary owned any
+        // `.left`/nil-tagged block, which dies with it (clear); a `.right`-tagged block belonged to the
+        // promoted survivor and FOLLOWS it into the main slot — re-tag to `.left` so the `tree` (which now
+        // reports `split:false`) and the survivor's now-`.left`-role-aware keystroke-clear agree, instead of
+        // a self-contradictory `split:false` + `statusPane:"right"`. A `.scratch` block is untouched.
+        if session.agentIndicator.status != .idle {
+            switch session.agentIndicator.statusPane ?? .left {
+            case .left: setAgentIndicator(AgentIndicator(), forSession: session.id)
+            case .right:
+                var promoted = session.agentIndicator
+                promoted.statusPane = .left
+                setAgentIndicator(promoted, forSession: session.id)
+            case .scratch: break
+            }
+        }
         save()
     }
 
-    /// The split pane's shell exited. If the primary is alive the split collapses to it (`closeSplit`);
-    /// otherwise the primary already exited, so this was the last pane and the session is closed. Called
-    /// by the split surface's `onExit`.
+    /// The split pane's shell exited. It collapses to the primary (`closeSplit`) ONLY when a genuine
+    /// two-pane split is live — BOTH `surface` and `splitSurface` set. Otherwise this was the session's
+    /// last pane and the session is closed: the surface has been PROMOTED into the primary slot
+    /// (`splitSurface == nil`) — a promoted survivor keeps the split pane's `onExit`, so its own exit still
+    /// routes here, and closing (not collapsing a split that no longer exists) is what keeps it from
+    /// leaving a zombie session. (The `surface == nil` half of the guard is defensive: `closePrimaryPane`
+    /// now always promotes the survivor INTO `surface`, so a live `splitSurface` implies a live `surface`.)
+    /// Called by the split surface's `onExit`.
     public func closeSplitPane(_ sessionID: UUID) {
         guard let session = session(withID: sessionID) else { return }
-        guard session.surface != nil else {
+        guard session.surface != nil, session.splitSurface != nil else {
             closeSession(sessionID)
             return
         }
