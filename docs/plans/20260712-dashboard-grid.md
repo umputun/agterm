@@ -278,14 +278,14 @@ override + reapply; record `controller.appliedFontSize`. On close, clear the ove
 - Modify: `agterm/Ghostty/GhosttySurfaceView.swift`
 - Modify: `agterm/Ghostty/GhosttyApp.swift` (if `reapplySessionConfigIfNeeded` lives there / needs the override)
 
-- [ ] add `dashboardFontOverride: Double?`; the per-surface config composer uses `dashboardFontOverride ??
+- [x] add `dashboardFontOverride: Double?`; the per-surface config composer uses `dashboardFontOverride ??
       session.fontSize`
-- [ ] `reapplySessionConfigIfNeeded` reasserts the override (its guard also fires when the override is set)
-- [ ] `reportFontSize` does not call `onFontSizeChange` while the override is set (so CELL_SIZE can't persist
+- [x] `reapplySessionConfigIfNeeded` reasserts the override (its guard also fires when the override is set)
+- [x] `reportFontSize` does not call `onFontSizeChange` while the override is set (so CELL_SIZE can't persist
       the dashboard size into `session.fontSize`); clearing the override rebuilds from the session model
-- [ ] correctness asserted by the Task 11 font e2e (auto-size + explicit reload while open + close-restore);
+- [x] correctness asserted by the Task 11 font e2e (auto-size + explicit reload while open + close-restore);
       gate on `make build` + `make lint`
-- [ ] run `make build` + `make lint` — pass before Task 8
+- [x] run `make build` + `make lint` — pass before Task 8
 
 ### Task 8: DashboardView — grid overlay, cells, key-catcher
 
