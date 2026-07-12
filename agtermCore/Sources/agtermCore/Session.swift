@@ -312,9 +312,11 @@ public final class Session: Identifiable {
     public var addressableSurface: (any TerminalSurface)? { surface ?? splitSurface }
 
     /// The `TerminalZoomSurface` slot that backs `addressableSurface`: `.primary` when the main shell is
-    /// live, else `.split` for a promoted split survivor. The single source for "which slot is the live
-    /// shell" — the dashboard's host-exclusion check and its cell key-path selection both consume it rather
-    /// than re-deriving `surface != nil ? .primary : .split` inline.
+    /// live — including a promoted split survivor, which `closePrimaryPane` moves INTO `surface` (nilling
+    /// `splitSurface`) — else `.split`, the `?? splitSurface` defensive-fallback state where `surface` is
+    /// nil while a split shell is still alive. The single source for "which slot is the live shell" — the
+    /// dashboard's host-exclusion check and its cell key-path selection both consume it rather than
+    /// re-deriving `surface != nil ? .primary : .split` inline.
     public var addressableSurfaceKind: TerminalZoomSurface { surface != nil ? .primary : .split }
 
     /// The surface currently on top and owning keyboard focus: an active overlay (full OR floating), else
