@@ -250,13 +250,13 @@ override + reapply; record `controller.appliedFontSize`. On close, clear the ove
 - Modify: `agtermCore/Sources/agtermctlKit/Commands.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/CommandsTests.swift`
 
-- [ ] add a `dashboard` `ParsableCommand` in `MiscCommands.swift` (family-grouped): `dashboard <ids…>
+- [x] add a `dashboard` `ParsableCommand` in `MiscCommands.swift` (family-grouped): `dashboard <ids…>
       [--font-size <pt>] [--auto-size] [--window <id>]` and `dashboard --close [--window <id>]`
-- [ ] map to `ControlArgs`; reject `--font-size`+`--auto-size`, non-positive `--font-size`, and `--close`+ids/font
+- [x] map to `ControlArgs`; reject `--font-size`+`--auto-size`, non-positive `--font-size`, and `--close`+ids/font
       at the CLI layer; help text covers open/close/font/window
-- [ ] register in the root tree (`Commands.swift`)
-- [ ] tests in `CommandsTests.swift` for each form + the invalid-arg rejections
-- [ ] run `cd agtermCore && swift test` + `make lint` — pass before Task 6
+- [x] register in the root tree (`Commands.swift`)
+- [x] tests in `CommandsTests.swift` for each form + the invalid-arg rejections
+- [x] run `cd agtermCore && swift test` + `make lint` — pass before Task 6
 
 ### Task 6: ControlServer — setDashboard side effect + tree read-back closures
 

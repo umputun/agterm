@@ -187,6 +187,56 @@ struct Surface: ParsableCommand {
     }
 }
 
+// MARK: - dashboard
+
+/// `agtermctl dashboard <ids…> [--font-size N | --auto-size] [--window W]` opens a view-only grid of the
+/// named sessions (max 9); `agtermctl dashboard --close [--window W]` closes the open one. The positional
+/// ids map to `ControlArgs.targets`; the dispatcher caps them at 9, dedups, and reports any drop. The CLI
+/// re-checks the flag combinations `validate()`-style so a bad invocation is a clean usage error without a
+/// socket round-trip (the dispatcher enforces the same rules server-side).
+struct Dashboard: RequestCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Open a view-only grid of live sessions, or --close the open one.",
+        discussion: """
+        dashboard S1 S2 S3                 open a grid of the named sessions (ids or unique prefixes, max 9)
+        dashboard S1 S2 --font-size 12     open with an absolute cell font size (points)
+        dashboard S1 S2 --auto-size        open sizing cells relative to the Settings default font
+        dashboard S1 --window W            open in a specific window (defaults to the frontmost)
+        dashboard --close                  close the open dashboard
+        """)
+    @Argument(help: "Session ids (or unique prefixes) to show, max 9. Omit only with --close.") var ids: [String] = []
+    @Option(name: .customLong("font-size"), help: "Absolute cell font size in points (mutually exclusive with --auto-size).") var fontSize: Double?
+    @Flag(name: .long, help: "Size cells relative to the Settings default font, shrinking as the grid grows.") var autoSize = false
+    @Flag(name: .long, help: "Close the open dashboard (takes no ids or font options).") var close = false
+    @OptionGroup var options: ClientOptions
+
+    // reject the invalid flag combinations at parse time (before any connection) so they are clean usage
+    // errors, unit-testable without a socket; the dispatcher re-checks the same rules server-side.
+    func validate() throws {
+        if close {
+            guard ids.isEmpty, fontSize == nil, !autoSize else {
+                throw ValidationError("--close takes no ids or font options")
+            }
+            return
+        }
+        if fontSize != nil, autoSize {
+            throw ValidationError("--font-size is mutually exclusive with --auto-size")
+        }
+        // nan/inf parse as Double but aren't a valid size; reject non-finite/non-positive here with a clean error.
+        if let fontSize, !fontSize.isFinite || fontSize <= 0 {
+            throw ValidationError("--font-size must be a positive number")
+        }
+    }
+
+    func makeRequest() throws -> ControlRequest {
+        let args = ControlArgs(targets: ids.isEmpty ? nil : ids,
+                               close: close ? true : nil,
+                               fontSize: fontSize,
+                               autoSize: autoSize ? true : nil)
+        return ControlRequest(cmd: .dashboard, args: options.withWindow(args))
+    }
+}
+
 // MARK: - sidebar
 
 struct Sidebar: ParsableCommand {

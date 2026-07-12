@@ -714,6 +714,40 @@ struct CommandsTests {
             ControlRequest(cmd: .surfaceZoom, target: "active", args: ControlArgs(mode: "hide", window: "win")))
     }
 
+    // MARK: - dashboard
+
+    @Test func dashboardOpenWithIdsAndFontSize() throws {
+        let expected = ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ["s1", "s2"], fontSize: 12))
+        #expect(try request(["dashboard", "s1", "s2", "--font-size", "12"]) == expected)
+    }
+
+    @Test func dashboardOpenWithAutoSize() throws {
+        let expected = ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ["s1", "s2"], autoSize: true))
+        #expect(try request(["dashboard", "s1", "s2", "--auto-size"]) == expected)
+    }
+
+    @Test func dashboardOpenTargetsWindow() throws {
+        let expected = ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ["s1"], window: "win"))
+        #expect(try request(["dashboard", "s1", "--window", "win"]) == expected)
+    }
+
+    @Test func dashboardClose() throws {
+        #expect(try request(["dashboard", "--close"]) == ControlRequest(cmd: .dashboard, args: ControlArgs(close: true)))
+    }
+
+    @Test func dashboardRejectsFontSizeWithAutoSize() {
+        #expect(validationMessage(["dashboard", "s1", "--font-size", "12", "--auto-size"])
+            == "--font-size is mutually exclusive with --auto-size")
+    }
+
+    @Test func dashboardRejectsNonPositiveFontSize() {
+        #expect(validationMessage(["dashboard", "s1", "--font-size", "0"]) == "--font-size must be a positive number")
+    }
+
+    @Test func dashboardRejectsCloseWithIds() {
+        #expect(validationMessage(["dashboard", "s1", "--close"]) == "--close takes no ids or font options")
+    }
+
     @Test func sidebarDefaultsToggle() throws {
         #expect(try request(["sidebar"]) == ControlRequest(cmd: .sidebar, args: ControlArgs(mode: "toggle")))
     }
