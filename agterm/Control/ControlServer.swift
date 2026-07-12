@@ -470,6 +470,13 @@ final class ControlServer {
             // zoom and dashboard are mutually exclusive: drop any active zoom for this window on open.
             TerminalZoomRegistry.shared.controller(for: windowID)?.clear()
             controller.open(members: members, fontMode: fontMode)
+            // set the applied font size SYNCHRONOUSLY so the `dashboardFontSize` tree read-back is
+            // authoritative at command return: the SwiftUI onChange that applies the surface overrides runs a
+            // runloop turn later, and open() never resets appliedFontSize — an untouched re-open would
+            // otherwise leak the prior fixed/auto size. Idempotent with the wiring, which resolves the same
+            // (base, members, mode) through the shared DashboardFontMode.appliedFontSize seam.
+            let base = settingsModel.settings.fontSize ?? DashboardLayout.ghosttyDefaultFontSize
+            controller.setAppliedFontSize(fontMode.appliedFontSize(memberCount: members.count, base: base))
             guard !unresolved.isEmpty else { return ControlResponse(ok: true) }
             return ControlResponse(ok: true,
                                    result: ControlResult(text: "unresolved: \(unresolved.joined(separator: ", "))"))

@@ -160,6 +160,20 @@ struct DashboardControllerTests {
         #expect(controller.appliedFontSize == nil)
     }
 
+    @Test func appliedFontSizeResolvesPerMode() {
+        // .untouched → nil regardless of grid; .fixed → its exact value; .auto → the grid-derived size.
+        #expect(DashboardFontMode.untouched.appliedFontSize(memberCount: 4, base: 13) == nil)
+        #expect(DashboardFontMode.fixed(20).appliedFontSize(memberCount: 9, base: 13) == 20)
+
+        // .auto matches DashboardLayout.dashboardFontSize for the count's grid (4 → 2×2, 9 → 3×3).
+        let (c4, r4) = DashboardLayout.grid(count: 4)
+        #expect(DashboardFontMode.auto.appliedFontSize(memberCount: 4, base: 16)
+            == DashboardLayout.dashboardFontSize(cols: c4, rows: r4, base: 16))
+        let (c9, r9) = DashboardLayout.grid(count: 9)
+        #expect(DashboardFontMode.auto.appliedFontSize(memberCount: 9, base: 13)
+            == DashboardLayout.dashboardFontSize(cols: c9, rows: r9, base: 13))
+    }
+
     @Test func registryRegistersLooksUpAndUnregisters() {
         let registry = DashboardControllerRegistry.shared
         let id = UUID() // unique key keeps this hermetic under parallel tests on the shared singleton

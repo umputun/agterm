@@ -2,19 +2,26 @@ import agtermCore
 import AppKit
 import SwiftUI
 
-/// The font-relevant dashboard state — the member set AND the font mode. A change to EITHER re-applies the
-/// per-member override, so a same-members re-open with a DIFFERENT font mode (`dashboard A B` then
-/// `dashboard A B --font-size 20`) still re-sizes; keying the apply off `members` alone missed it, because
-/// SwiftUI suppresses `.onChange(of: members)` when the array is Equatable-equal.
+/// The font-relevant dashboard state — the member set, each member's live surface SLOT, AND the font mode.
+/// A change to ANY re-applies the per-member override. Two cases the `members`-only key missed (SwiftUI
+/// suppresses `.onChange` when the whole key is Equatable-equal): a same-members re-open with a DIFFERENT
+/// font mode (`dashboard A B` then `dashboard A B --font-size 20`) must re-size; and when a member's primary
+/// shell exits and its split is promoted (`addressableSurfaceKind` flips `.primary` → `.split`) the cell
+/// rehosts the newly-addressable surface, which must inherit the override — keying off members+mode alone
+/// left the promoted survivor at the default font while the tree still reported the override size.
 struct DashboardFontKey: Equatable {
     let members: [UUID]
+    let kinds: [TerminalZoomSurface]
     let mode: DashboardFontMode
 }
 
 extension WindowContentView {
-    /// The composite key the font apply reacts to (see `DashboardFontKey`).
+    /// The composite key the font apply reacts to (see `DashboardFontKey`). `kinds` is each member's live
+    /// `addressableSurfaceKind`, so a primary→split promotion flips the key and re-applies the override to
+    /// the surface the cell now hosts.
     var dashboardFontKey: DashboardFontKey {
-        DashboardFontKey(members: dashboard.members, mode: dashboard.fontMode)
+        let kinds = dashboard.members.map { store.session(withID: $0)?.addressableSurfaceKind ?? .primary }
+        return DashboardFontKey(members: dashboard.members, kinds: kinds, mode: dashboard.fontMode)
     }
 
     /// Every session id currently in this window's store, in tree order — the reconcile key: when a member
@@ -88,8 +95,9 @@ extension WindowContentView {
 
     /// The font-key change (the body's `.onChange(of: dashboardFontKey)`): clears every prior override, then
     /// re-applies the font mode to the current members and records the applied size on the controller. Fires
-    /// on open ([] → members), retarget (members → new set), a same-members font-mode change, and close
-    /// (members → []), so a de-membered surface never keeps a stale shrunk font and a re-open always re-sizes.
+    /// on open ([] → members), retarget (members → new set), a same-members font-mode change, a member's
+    /// surface-slot promotion (`.primary` → `.split`), and close (members → []), so a de-membered surface
+    /// never keeps a stale shrunk font, a re-open always re-sizes, and a promoted survivor inherits the override.
     func handleDashboardFontChange() {
         clearDashboardFontOverrides()
         guard dashboard.isOpen else {
@@ -136,19 +144,14 @@ extension WindowContentView {
     }
 
     /// The absolute font size to apply to every member surface for the current mode, or nil for `.untouched`
-    /// (leave each surface at its own `session.fontSize`). `.auto` derives it from the grid via
-    /// `DashboardLayout.dashboardFontSize`, based on the Settings font size (nil → the ghostty default).
+    /// (leave each surface at its own `session.fontSize`). Resolves through the SAME host-free
+    /// `DashboardFontMode.appliedFontSize` seam `ControlServer.setDashboard` uses, so the surface overrides
+    /// and the controller's synchronous read-back land on the identical value (the onChange re-apply is a
+    /// no-op re-write). `.auto` derives it from the grid, based on the Settings font size (nil → the ghostty
+    /// default).
     private func dashboardTargetFontSize(memberCount: Int) -> Double? {
-        switch dashboard.fontMode {
-        case .untouched:
-            return nil
-        case let .fixed(value):
-            return value
-        case .auto:
-            let (cols, rows) = DashboardLayout.grid(count: memberCount)
-            let base = actions.settingsModel?.settings.fontSize ?? DashboardLayout.ghosttyDefaultFontSize
-            return DashboardLayout.dashboardFontSize(cols: cols, rows: rows, base: base)
-        }
+        let base = actions.settingsModel?.settings.fontSize ?? DashboardLayout.ghosttyDefaultFontSize
+        return dashboard.fontMode.appliedFontSize(memberCount: memberCount, base: base)
     }
 
     /// Clear the transient dashboard font override on every surface that currently carries one, restoring its

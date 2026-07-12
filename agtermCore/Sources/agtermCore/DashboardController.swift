@@ -9,6 +9,24 @@ public enum DashboardFontMode: Equatable, Sendable {
     case untouched
     case fixed(Double)
     case auto
+
+    /// appliedFontSize resolves the absolute font size (points) the wiring applies to every member surface
+    /// for this mode over `memberCount` cells, or nil for `.untouched` (each surface keeps its own
+    /// `session.fontSize`). `.auto` derives it from the grid via `DashboardLayout`; `.fixed` returns its
+    /// value. Shared by the app-side font wiring and `ControlServer.setDashboard`, so the controller's
+    /// `appliedFontSize` (the `dashboardFontSize` tree read-back) is authoritative at command return — not
+    /// only after SwiftUI's onChange applies the surface overrides a runloop turn later.
+    public func appliedFontSize(memberCount: Int, base: Double) -> Double? {
+        switch self {
+        case .untouched:
+            return nil
+        case let .fixed(value):
+            return value
+        case .auto:
+            let (cols, rows) = DashboardLayout.grid(count: memberCount)
+            return DashboardLayout.dashboardFontSize(cols: cols, rows: rows, base: base)
+        }
+    }
 }
 
 /// Per-window dashboard state — the picked member sessions, the keyboard highlight, and the font mode.
