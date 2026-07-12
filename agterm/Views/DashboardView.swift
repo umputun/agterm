@@ -9,7 +9,7 @@ import SwiftUI
 /// keyboard highlight between cells; Enter jumps into the highlighted session, Esc closes. A transparent
 /// hit target over each cell single-click-highlights and double-click-enters (mouse is secondary).
 ///
-/// The view is purely presentational and closure-driven: `WindowContentView` (Task 9 wiring) mounts it in
+/// The view is purely presentational and closure-driven: `WindowContentView` mounts it in
 /// `windowOverlayLayer` while `controller.isOpen`, generalizes its deck to yield each member's surface into
 /// a cell, and supplies the session lookup, surface factories, and enter/close side effects.
 struct DashboardView: View {

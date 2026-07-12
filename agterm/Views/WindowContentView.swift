@@ -116,13 +116,17 @@ struct WindowContentView: View {
             // reciprocal exclusivity: a zoom becoming active while the dashboard is open closes the dashboard.
             closeDashboardIfZoomActive(new)
         }
-        // dashboard open/close drives the modal lifecycle + auto-follow pause; the member set drives the
-        // per-member transient font override (separate so a retarget re-sizes).
+        // dashboard open/close drives the modal lifecycle + auto-follow pause; the font key (members + font
+        // mode) drives the per-member transient font override, so a retarget OR a same-members re-open with a
+        // new font mode re-sizes; the session-id set drives member reconcile (prune a closed member).
         .onChange(of: dashboard.isOpen) { _, isOpen in
             handleDashboardOpenChange(isOpen)
         }
-        .onChange(of: dashboard.members) { _, _ in
-            handleDashboardMembersChange()
+        .onChange(of: dashboardFontKey) { _, _ in
+            handleDashboardFontChange()
+        }
+        .onChange(of: dashboardSessionIDs) { _, _ in
+            reconcileDashboardMembers()
         }
         // Editor-overlay reload hooks must stay mounted while terminal zoom replaces the normal deck.
         .onChange(of: openOverlaySessionIDs) { old, new in

@@ -2,11 +2,27 @@ import agtermCore
 import AppKit
 import SwiftUI
 
+/// The font-relevant dashboard state — the member set AND the font mode. A change to EITHER re-applies the
+/// per-member override, so a same-members re-open with a DIFFERENT font mode (`dashboard A B` then
+/// `dashboard A B --font-size 20`) still re-sizes; keying the apply off `members` alone missed it, because
+/// SwiftUI suppresses `.onChange(of: members)` when the array is Equatable-equal.
+struct DashboardFontKey: Equatable {
+    let members: [UUID]
+    let mode: DashboardFontMode
+}
+
 extension WindowContentView {
-    /// libghostty's built-in terminal font size (points), used as the base for `.auto` sizing when the user
-    /// has not set an explicit Settings font size (`AppSettings.fontSize == nil`). agterm has no constant for
-    /// it, so this mirrors ghostty's default.
-    private var ghosttyDefaultFontSize: Double { 13 }
+    /// The composite key the font apply reacts to (see `DashboardFontKey`).
+    var dashboardFontKey: DashboardFontKey {
+        DashboardFontKey(members: dashboard.members, mode: dashboard.fontMode)
+    }
+
+    /// Every session id currently in this window's store, in tree order — the reconcile key: when a member
+    /// session is closed while the dashboard is open (e.g. over the control socket), this array changes and
+    /// `reconcileDashboardMembers` prunes the gone member.
+    var dashboardSessionIDs: [UUID] {
+        store.workspaces.flatMap { $0.sessions.map(\.id) }
+    }
 
     /// The dashboard grid overlay, mounted in `windowOverlayLayer` while this window's `DashboardController`
     /// is open (inset by `titlebarHeight`, below `customTitlebar`, like the other window overlays). Closed
@@ -51,8 +67,8 @@ extension WindowContentView {
 
     /// The dashboard-open transition (the body's `.onChange(of: dashboard.isOpen)`): entering closes this
     /// window's transient chrome and pauses auto-follow (mirrors `handleZoomTargetChange`); exiting resumes
-    /// auto-follow. The per-member font override is driven separately off `dashboard.members` so a retarget
-    /// (re-open with a new set) re-applies it.
+    /// auto-follow. The per-member font override is driven separately off `dashboardFontKey` so a retarget
+    /// (re-open with a new set) OR a same-members re-open with a new font mode re-applies it.
     func handleDashboardOpenChange(_ isOpen: Bool) {
         if isOpen {
             // the palette is app-global and renders in the FRONTMOST window, so only that window's dashboard
@@ -71,22 +87,31 @@ extension WindowContentView {
         }
     }
 
-    /// The member-set change (the body's `.onChange(of: dashboard.members)`): clears every prior override,
-    /// then re-applies the font mode to the current members and records the applied size on the controller.
-    /// Fires on open ([] → members), retarget (members → new set), and close (members → []), so a de-membered
-    /// surface never keeps a stale shrunk font and a retarget re-sizes.
-    func handleDashboardMembersChange() {
+    /// The font-key change (the body's `.onChange(of: dashboardFontKey)`): clears every prior override, then
+    /// re-applies the font mode to the current members and records the applied size on the controller. Fires
+    /// on open ([] → members), retarget (members → new set), a same-members font-mode change, and close
+    /// (members → []), so a de-membered surface never keeps a stale shrunk font and a re-open always re-sizes.
+    func handleDashboardFontChange() {
         clearDashboardFontOverrides()
         guard dashboard.isOpen else {
-            dashboard.appliedFontSize = nil
+            dashboard.setAppliedFontSize(nil)
             return
         }
         let target = dashboardTargetFontSize(memberCount: dashboard.members.count)
-        dashboard.appliedFontSize = target
+        dashboard.setAppliedFontSize(target)
         guard let target else { return } // .untouched: leave each surface at its own session.fontSize
         for id in dashboard.members {
             dashboardMemberSurface(id)?.dashboardFontOverride = target
         }
+    }
+
+    /// The reconcile hook (the body's `.onChange(of: dashboardSessionIDs)`): drops any member whose session
+    /// was closed while the dashboard is open (e.g. over the control socket), so the grid recomputes to the
+    /// smaller count and the highlight never points at a gone session. A no-op while closed or when no member
+    /// vanished; `DashboardController.reconcile` closes the dashboard when the last member is gone.
+    func reconcileDashboardMembers() {
+        guard dashboard.isOpen else { return }
+        dashboard.reconcile(existing: Set(dashboardSessionIDs))
     }
 
     /// Reciprocal exclusivity (folded into the body's `.onChange(of: terminalZoom.target)`): a zoom becoming
@@ -122,7 +147,7 @@ extension WindowContentView {
             return value
         case .auto:
             let (cols, rows) = DashboardLayout.grid(count: memberCount)
-            let base = actions.settingsModel?.settings.fontSize ?? ghosttyDefaultFontSize
+            let base = actions.settingsModel?.settings.fontSize ?? DashboardLayout.ghosttyDefaultFontSize
             return DashboardLayout.dashboardFontSize(cols: cols, rows: rows, base: base)
         }
     }

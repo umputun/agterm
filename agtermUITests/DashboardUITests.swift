@@ -76,9 +76,11 @@ final class DashboardUITests: ControlAPITestCase {
 
         app.typeKey(.escape, modifierFlags: [])
         XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "Esc closes the dashboard")
-        settle(0.5)
+        // give any (wrongly) armed selection change time to LAND and assert it never does — polling for the
+        // WRONG state's absence, rather than a fixed settle before one read that could pass vacuously.
+        XCTAssertFalse(pollSelectedSession(ids[1], timeout: 3), "Esc must not select the highlighted session")
         XCTAssertEqual(selectedSessionID()?.lowercased(), ids[0].lowercased(),
-                       "Esc must not change the selected session")
+                       "Esc leaves the pre-open selection in place")
     }
 
     // the correctness crux: while the dashboard is open it is VIEW-ONLY — neither a typed keystroke nor a
@@ -110,21 +112,23 @@ final class DashboardUITests: ControlAPITestCase {
         // No Return: a Return would be consumed as Enter=select and close the overlay, so a leak is detected
         // by the sentinel appearing in the buffer, not by a marker file.
         app.typeText("LEAKSENTINEL9911")
-        settle(0.8)
         // a single click on the OTHER cell must reach the dashboard hit target (moving the highlight), never
         // the terminal below it (the member terminal is allowsHitTesting(false)).
         let secondCell = dashboardCells().element(boundBy: 1)
         XCTAssertTrue(secondCell.waitForExistence(timeout: 10), "the second member cell should exist")
         secondCell.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
-        settle(0.6)
+        // poll for the highlight to move to the clicked cell FIRST — a POSITIVE precondition proving the
+        // input pipeline drained PAST the typed sentinel, so a leaked keystroke would already be in the
+        // buffer below (a fixed settle before the negative buffer read could pass vacuously, hiding a late leak).
+        let moved = pollDashHighlighted(changedFrom: ids[0], timeout: 8)
+        XCTAssertEqual(moved?.lowercased(), ids[1].lowercased(),
+                       "a cell click highlights that cell (dashboard input), proving it never reached the terminal")
 
         XCTAssertTrue(dashboardOverlay.exists, "typing and clicking must not dismiss the view-only dashboard")
         let buffer = try readSessionText(ids[0])
         XCTAssertFalse(buffer.isEmpty, "the member surface buffer should be readable (its shell prompt)")
         XCTAssertFalse(buffer.contains("LEAKSENTINEL9911"),
                        "no typed keystroke may reach a terminal while the dashboard is open")
-        XCTAssertEqual(dashHighlighted()?.lowercased(), ids[1].lowercased(),
-                       "a cell click highlights that cell (dashboard input), proving it never reached the terminal")
 
         // PHASE 3 — closing restores terminal focus, and GUI typing lands again.
         app.typeKey(.escape, modifierFlags: [])

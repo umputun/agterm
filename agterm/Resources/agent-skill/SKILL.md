@@ -242,8 +242,8 @@ absolute cell font in points; `--auto-size` sizes cells relative to the Settings
 as the grid grows (the two are mutually exclusive; a non-positive size is rejected). More than 9 ids are
 capped to the first 9 and the dropped count is reported; ids are deduped and honor `--window` (default
 frontmost). Read the state back from the tree's top-level `dashboardMembers`/`dashboardHighlighted`/
-`dashboardFontSize`/`dashboardFontMode`. Zoom and the dashboard are mutually exclusive (opening one leaves
-the other). Opening/closing resizes each member's pty to its cell, so programs may redraw — view-only
+`dashboardFontSize`/`dashboardFontMode`. Zoom and the dashboard are mutually exclusive: opening one CLOSES
+the other. Opening/closing resizes each member's pty to its cell, so programs may redraw — view-only
 means no input, not no process effect.
 
 **quick** — `[show|hide|toggle]` (visibility; read back from the tree's `quickVisible`) ·

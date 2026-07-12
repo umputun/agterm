@@ -18,7 +18,7 @@ struct DashboardControllerTests {
         #expect(controller.highlighted == b)
         #expect(controller.fontMode == .auto)
 
-        controller.appliedFontSize = 9
+        controller.setAppliedFontSize(9)
         controller.close()
         #expect(controller.isOpen == false)
         #expect(controller.members.isEmpty)
@@ -112,8 +112,52 @@ struct DashboardControllerTests {
         controller.open(members: [a], fontMode: .fixed(18))
         #expect(controller.fontMode == .fixed(18))
         #expect(controller.appliedFontSize == nil)
-        controller.appliedFontSize = 18
+        controller.setAppliedFontSize(18)
         #expect(controller.appliedFontSize == 18)
+    }
+
+    @Test func reopenOverSameMembersUpdatesFontMode() {
+        // a same-members re-open with a new font mode must update the mode (the app-side wiring keys its
+        // font re-apply off members+fontMode, so this is what a `dashboard A B --font-size 20` re-open sees).
+        let controller = DashboardController()
+        let a = UUID(), b = UUID()
+        controller.open(members: [a, b], highlighted: b, fontMode: .fixed(20))
+        controller.setAppliedFontSize(20)
+        #expect(controller.fontMode == .fixed(20))
+
+        controller.open(members: [a, b], highlighted: b, fontMode: .untouched)
+        #expect(controller.members == [a, b])
+        #expect(controller.highlighted == b, "the highlight survives a same-members re-open")
+        #expect(controller.fontMode == .untouched, "the font mode reflects the latest open")
+    }
+
+    @Test func reconcileDropsClosedMembersAndFixesHighlight() {
+        let controller = DashboardController()
+        let a = UUID(), b = UUID(), c = UUID()
+        controller.open(members: [a, b, c], highlighted: b)
+
+        // b closed while open: it is pruned, order preserved, and the highlight moves to the first survivor.
+        controller.reconcile(existing: [a, c])
+        #expect(controller.members == [a, c])
+        #expect(controller.highlighted == a)
+
+        // a survivor highlight is left in place.
+        controller.reconcile(existing: [a, c])
+        #expect(controller.highlighted == a, "a no-op reconcile leaves state unchanged")
+    }
+
+    @Test func reconcileClosesDashboardWhenNoMemberSurvives() {
+        let controller = DashboardController()
+        let a = UUID(), b = UUID()
+        controller.open(members: [a, b], fontMode: .fixed(14))
+        controller.setAppliedFontSize(14)
+
+        controller.reconcile(existing: [])
+        #expect(controller.isOpen == false)
+        #expect(controller.members.isEmpty)
+        #expect(controller.highlighted == nil)
+        #expect(controller.fontMode == .untouched)
+        #expect(controller.appliedFontSize == nil)
     }
 
     @Test func registryRegistersLooksUpAndUnregisters() {

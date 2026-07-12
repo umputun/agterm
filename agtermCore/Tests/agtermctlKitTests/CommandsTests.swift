@@ -748,6 +748,22 @@ struct CommandsTests {
         #expect(validationMessage(["dashboard", "s1", "--close"]) == "--close takes no ids or font options")
     }
 
+    @Test func dashboardRejectsCloseWithAutoSize() {
+        #expect(validationMessage(["dashboard", "--close", "--auto-size"]) == "--close takes no ids or font options")
+    }
+
+    @Test func dashboardRejectsEmptyIdsWithoutClose() {
+        #expect(validationMessage(["dashboard"]) == "dashboard requires at least one session id (or --close)")
+    }
+
+    @Test func dashboardRejectsNegativeFontSize() {
+        #expect(validationMessage(["dashboard", "s1", "--font-size=-3"]) == "--font-size must be a positive number")
+    }
+
+    @Test func dashboardRejectsInfiniteFontSize() {
+        #expect(validationMessage(["dashboard", "s1", "--font-size=inf"]) == "--font-size must be a positive number")
+    }
+
     @Test func sidebarDefaultsToggle() throws {
         #expect(try request(["sidebar"]) == ControlRequest(cmd: .sidebar, args: ControlArgs(mode: "toggle")))
     }

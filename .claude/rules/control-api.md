@@ -142,7 +142,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 59-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 60-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -792,8 +792,10 @@ paths:
   Validation is host-free in `ControlDispatcher.dispatchDashboard`:
   `--close` takes no ids or font flags, `--font-size` is mutually exclusive with `--auto-size`,
   a `--font-size` must be finite and positive, an open needs at least one id,
-  and more than `DashboardLayout.maxCells` (9) unique ids are capped to the first 9 with the dropped
-  count reported in `result.text`.
+  and more than `DashboardLayout.maxCells` (9) RAW ids are capped to the first 9 (the cap is applied to
+  the raw target list BEFORE the app-side dedup + resolution, so duplicate or unresolvable ids among the
+  first 9 can yield fewer than 9 cells) with the dropped count reported in `result.text` — APPENDED to any
+  `unresolved: …` text, never clobbering it.
   The dispatcher routes to `ControlActions.setDashboard(targets:window:close:fontMode:)`;
   the app-side `ControlServer` resolves ids via `ControlTargetResolver` inside `args.window ?? frontmost`,
   DEDUPS by resolved UUID, drops unresolved, resolves each to its `addressableSurface`,

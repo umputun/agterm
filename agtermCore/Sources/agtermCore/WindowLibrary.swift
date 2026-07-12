@@ -303,6 +303,12 @@ public final class WindowLibrary {
         store(for: windowID(forSession: sessionID))
     }
 
+    /// The id of the open window backed by `store` (by identity), or nil — the reverse of `store(for:)`,
+    /// used to reach a window's per-window controllers (quick terminal / zoom / dashboard) from its store.
+    public func windowID(for store: AppStore) -> UUID? {
+        openIDs().first { stores[$0] === store }
+    }
+
     /// The auto-generated name for the next new window (`window 1`, `window 2`, …).
     public var defaultWindowName: String {
         "window \(windows.count + 1)"

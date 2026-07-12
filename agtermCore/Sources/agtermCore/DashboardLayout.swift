@@ -13,6 +13,11 @@ public enum DashboardLayout {
     /// instead of collapsing to an unreadable one.
     public static let minFontSize: Double = 6
 
+    /// libghostty's built-in terminal font size (points) — the `.auto` base when the user has not set an
+    /// explicit Settings font size (`AppSettings.fontSize == nil`). ghostty exposes no constant for it, so
+    /// this mirrors ghostty's default and is the single source for the app-side wiring and the tests.
+    public static let ghosttyDefaultFontSize: Double = 13
+
     /// A one-step highlight move in the 2-D grid; no wraparound.
     public enum Direction: String, Sendable, CaseIterable {
         case up, down, left, right

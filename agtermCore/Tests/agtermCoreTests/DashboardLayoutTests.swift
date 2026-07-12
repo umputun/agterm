@@ -75,6 +75,29 @@ struct DashboardLayoutTests {
         #expect(DashboardLayout.move(from: 8, direction: .right, cols: 3, count: 9) == 8)
     }
 
+    @Test func moveInFullSixGrid() {
+        // n=6, cols=3, rows=2 — a FULL 3×2 grid (both rows filled).
+        //   0 1 2
+        //   3 4 5
+        #expect(DashboardLayout.move(from: 1, direction: .down, cols: 3, count: 6) == 4)
+        #expect(DashboardLayout.move(from: 4, direction: .up, cols: 3, count: 6) == 1)
+        #expect(DashboardLayout.move(from: 5, direction: .left, cols: 3, count: 6) == 4)
+        #expect(DashboardLayout.move(from: 3, direction: .right, cols: 3, count: 6) == 4)
+        // edges stay put.
+        #expect(DashboardLayout.move(from: 2, direction: .right, cols: 3, count: 6) == 2)
+        #expect(DashboardLayout.move(from: 5, direction: .down, cols: 3, count: 6) == 5)
+    }
+
+    @Test func cellAndMoveDefendAgainstZeroCols() {
+        // cols:0 must not divide/modulo by zero — the width clamps to 1 (a single column).
+        #expect(DashboardLayout.cell(index: 2, cols: 0) == (0, 2))
+        // in a 1-wide grid: left/right stay put, up/down step by one within range.
+        #expect(DashboardLayout.move(from: 1, direction: .right, cols: 0, count: 3) == 1)
+        #expect(DashboardLayout.move(from: 1, direction: .up, cols: 0, count: 3) == 0)
+        #expect(DashboardLayout.move(from: 1, direction: .down, cols: 0, count: 3) == 2)
+        #expect(DashboardLayout.move(from: 2, direction: .down, cols: 0, count: 3) == 2)
+    }
+
     @Test func moveClampsRaggedLastRowThree() {
         // n=3, cols=2, rows=2:
         //   0 1
@@ -127,6 +150,8 @@ struct DashboardLayoutTests {
     }
 
     @Test func dashboardFontSizeScalesFactorsAtBaseThirteen() {
+        // base 13 = the shared ghostty default (the `.auto` base when Settings has no explicit size).
+        #expect(DashboardLayout.ghosttyDefaultFontSize == 13)
         #expect(DashboardLayout.dashboardFontSize(cols: 1, rows: 1, base: 13) == 13)
         #expect(DashboardLayout.dashboardFontSize(cols: 2, rows: 1, base: 13) == 11)
         #expect(DashboardLayout.dashboardFontSize(cols: 2, rows: 2, base: 13) == 10)

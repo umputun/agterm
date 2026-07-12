@@ -1571,6 +1571,15 @@ struct AppStoreTests {
         #expect(tree.dashboardFontMode == "auto")
     }
 
+    @Test func controlTreeDashboardMembersClosurePassesThroughVerbatim() {
+        // the closure value is threaded verbatim: an EMPTY array is distinct from nil (omitted). The app
+        // side never emits [] (its closure returns nil while the dashboard is closed, and a non-empty member
+        // set otherwise), so this pins the boundary — [] passes through as [], nil omits.
+        let store = makeStore()
+        #expect(store.controlTree(dashboardMembers: { [] }).dashboardMembers == [])
+        #expect(store.controlTree(dashboardMembers: { nil }).dashboardMembers == nil)
+    }
+
     @Test func setSidebarVisiblePostsChangeNotificationOnlyOnChange() {
         // the app-target ControlServer observes this to refresh window.list's cached sidebarVisible; the
         // post must fire only on an actual change (queue nil so the synchronous post delivers inline).

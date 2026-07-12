@@ -219,6 +219,9 @@ struct Dashboard: RequestCommand {
             }
             return
         }
+        guard !ids.isEmpty else {
+            throw ValidationError("dashboard requires at least one session id (or --close)")
+        }
         if fontSize != nil, autoSize {
             throw ValidationError("--font-size is mutually exclusive with --auto-size")
         }

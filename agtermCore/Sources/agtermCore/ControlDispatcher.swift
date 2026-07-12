@@ -626,7 +626,11 @@ public struct ControlDispatcher {
         var response = actions.setDashboard(targets: capped, window: args?.window, close: false, fontMode: fontMode)
         if dropped > 0, response.ok {
             var result = response.result ?? ControlResult()
-            result.text = "dropped \(dropped) beyond the \(DashboardLayout.maxCells)-session dashboard limit"
+            let dropText = "dropped \(dropped) beyond the \(DashboardLayout.maxCells)-session dashboard limit"
+            // APPEND to any "unresolved: …" text the server already produced — a >9 open where some of the
+            // first 9 ids don't resolve must report BOTH which ids failed AND how many were dropped, not
+            // clobber one with the other. Guarded on `ok` so an error response's message stays untouched.
+            result.text = [result.text, dropText].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "; ")
             response.result = result
         }
         return response

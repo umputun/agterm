@@ -1372,16 +1372,24 @@ struct ControlDispatcherTests {
     @Test func dashboardCapsBeyondNineTargetsAndReportsDrop() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
-
         let ids = (1...11).map { "s\($0)" }
-        let response = await dispatcher.dispatch(ControlRequest(
-            cmd: .dashboard, args: ControlArgs(targets: ids)))
+        let request = ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ids))
 
+        let response = await dispatcher.dispatch(request)
         #expect(response?.ok == true)
         #expect(response?.result?.text == "dropped 2 beyond the 9-session dashboard limit")
         #expect(actions.calls == [
             .dashboard(targets: Array(ids.prefix(9)), window: nil, close: false, fontMode: .untouched)
         ])
+
+        // the drop text is APPENDED to any "unresolved: …" text the server produced, never clobbering it.
+        actions.nextDashboardResponse = ControlResponse(ok: true, result: ControlResult(text: "unresolved: s3"))
+        let appended = await dispatcher.dispatch(request)
+        #expect(appended?.result?.text == "unresolved: s3; dropped 2 beyond the 9-session dashboard limit")
+
+        // an ok:false response keeps its error untouched — the drop text is not added.
+        actions.nextDashboardResponse = ControlResponse(ok: false, error: "no dashboard sessions resolved")
+        #expect(await dispatcher.dispatch(request) == ControlResponse(ok: false, error: "no dashboard sessions resolved"))
     }
 
     @Test func dashboardRejectsInvalidInputsBeforeCallingActions() async {
@@ -1401,6 +1409,8 @@ struct ControlDispatcherTests {
             cmd: .dashboard, args: ControlArgs(targets: ["a"], close: true)))
         let closeWithFont = await dispatcher.dispatch(ControlRequest(
             cmd: .dashboard, args: ControlArgs(close: true, fontSize: 12)))
+        let closeWithAutoSize = await dispatcher.dispatch(ControlRequest(
+            cmd: .dashboard, args: ControlArgs(close: true, autoSize: true)))
 
         #expect(emptyOpen == ControlResponse(ok: false, error: "dashboard requires at least one session id"))
         #expect(bothFonts == ControlResponse(
@@ -1410,6 +1420,7 @@ struct ControlDispatcherTests {
         #expect(nonFiniteFont == ControlResponse(ok: false, error: "dashboard --font-size must be a positive number"))
         #expect(closeWithIds == ControlResponse(ok: false, error: "dashboard --close takes no ids or font options"))
         #expect(closeWithFont == ControlResponse(ok: false, error: "dashboard --close takes no ids or font options"))
+        #expect(closeWithAutoSize == ControlResponse(ok: false, error: "dashboard --close takes no ids or font options"))
         #expect(actions.calls.isEmpty)
     }
 

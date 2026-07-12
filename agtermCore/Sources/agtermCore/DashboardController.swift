@@ -30,8 +30,8 @@ public final class DashboardController {
     public private(set) var fontMode: DashboardFontMode = .untouched
 
     /// The absolute font size (points) the wiring last applied, for tree read-back; nil when `.untouched`
-    /// or closed. Set app-side when the override is applied; reset on close.
-    public var appliedFontSize: Double?
+    /// or closed. Set app-side via `setAppliedFontSize(_:)` when the override is applied; reset on close.
+    public private(set) var appliedFontSize: Double?
 
     public init() {}
 
@@ -72,6 +72,30 @@ public final class DashboardController {
         let (cols, _) = DashboardLayout.grid(count: members.count)
         let to = DashboardLayout.move(from: from, direction: direction, cols: cols, count: members.count)
         self.highlighted = members[to]
+    }
+
+    /// setAppliedFontSize records the absolute font size the app-side wiring applied to the member surfaces,
+    /// for the `dashboardFontSize` tree read-back. The stored property stays `private(set)` so only this
+    /// method (never a stray external write) mutates it; the wiring calls it on every font (re)apply.
+    public func setAppliedFontSize(_ size: Double?) {
+        appliedFontSize = size
+    }
+
+    /// reconcile drops any member no longer present in `existing` (a member session closed while the
+    /// dashboard is open, e.g. over the control socket), preserving order. It closes the dashboard when no
+    /// member survives, and moves the highlight to the first survivor when the highlighted one vanished.
+    /// A no-op when nothing was removed, so it is cheap to call on every session add/remove.
+    public func reconcile(existing: Set<UUID>) {
+        let survivors = members.filter { existing.contains($0) }
+        guard survivors.count != members.count else { return }
+        guard !survivors.isEmpty else {
+            close()
+            return
+        }
+        members = survivors
+        if let highlighted, !survivors.contains(highlighted) {
+            self.highlighted = survivors.first
+        }
     }
 }
 

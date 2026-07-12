@@ -443,7 +443,7 @@ final class ControlServer {
     func setDashboard(targets: [String], window: String?, close: Bool,
                       fontMode: DashboardFontMode) -> ControlResponse {
         resolver.resolvePlacementStore(window) { store in
-            guard let windowID = library.openIDs().first(where: { library.store(for: $0) === store }),
+            guard let windowID = library.windowID(for: store),
                   let controller = DashboardControllerRegistry.shared.controller(for: windowID) else {
                 return ControlResponse(ok: false, error: "window not open — window.select it first")
             }
@@ -483,7 +483,7 @@ final class ControlServer {
         // the projected window owns its quick terminal; find its id by store identity to read the live
         // QuickTerminalController.isVisible (a nil controller — never opened, or the window is tearing
         // down — reads as not visible).
-        let windowID = library.openIDs().first { library.store(for: $0) === store }
+        let windowID = library.windowID(for: store)
         // the projected window's dashboard controller (nil until WindowContentView registers it), read
         // LIVE for the four dashboard read-backs — tree-only, since the keyboard-driven dashboard bypasses
         // the command path and a cached copy would go stale (same reason as zoomedSurface/quickVisible).
