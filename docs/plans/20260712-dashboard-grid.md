@@ -292,19 +292,19 @@ override + reapply; record `controller.appliedFontSize`. On close, clear the ove
 **Files:**
 - Create: `agterm/Views/DashboardView.swift`
 
-- [ ] render the grid from `DashboardLayout.grid(count:)`; each cell a `TerminalView` of the member's resolved
+- [x] render the grid from `DashboardLayout.grid(count:)`; each cell a `TerminalView` of the member's resolved
       `addressableSurface` slot (`\.surface`, or `\.splitSurface` for a promoted survivor) with
       `isActive:false, deckVisible:false, reportsFocusChange:false`, `.allowsHitTesting(false)`, and a stable
       `.id` (e.g. `"\(session.id)-dashboard"`)
-- [ ] a transparent hit target above each cell for click-highlight / double-click-enter (the terminal itself
+- [x] a transparent hit target above each cell for click-highlight / double-click-enter (the terminal itself
       takes no hits)
-- [ ] dimmed `displayName` caption per cell + accent highlight ring on the highlighted cell
-- [ ] AppKit key-catcher owning first responder that **consumes all keys**: arrows→`controller.move`,
+- [x] dimmed `displayName` caption per cell + accent highlight ring on the highlighted cell
+- [x] AppKit key-catcher owning first responder that **consumes all keys**: arrows→`controller.move`,
       Enter→select+close, Esc→close, everything else swallowed (never leaks to a terminal)
-- [ ] no animation on grid geometry / open / close
-- [ ] a11y ids: `dashboard`, `dashboard-cell`, `dashboard-highlighted`
-- [ ] behavior asserted by Task 11 e2e; gate on `make build` + `make lint`
-- [ ] run `make build` + `make lint` — pass before Task 9
+- [x] no animation on grid geometry / open / close
+- [x] a11y ids: `dashboard`, `dashboard-cell`, `dashboard-highlighted`
+- [x] behavior asserted by Task 11 e2e; gate on `make build` + `make lint`
+- [x] run `make build` + `make lint` — pass before Task 9
 
 ### Task 9: WindowContentView wiring — overlay, deck yield, interactivity, font, exclusivity
 
