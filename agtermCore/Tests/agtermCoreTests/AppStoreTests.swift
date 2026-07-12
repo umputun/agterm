@@ -1553,6 +1553,24 @@ struct AppStoreTests {
         #expect(store.controlTree(zoomedSurface: { "quick" }).zoomedSurface == "quick")
     }
 
+    @Test func controlTreeReportsDashboardFieldsFromClosures() {
+        let store = makeStore()
+        // no closures (host-free / default) or nothing open: all four omitted (nil).
+        let bare = store.controlTree()
+        #expect(bare.dashboardMembers == nil)
+        #expect(bare.dashboardHighlighted == nil)
+        #expect(bare.dashboardFontSize == nil)
+        #expect(bare.dashboardFontMode == nil)
+        // the app supplies the live DashboardController state via the closures.
+        let members = ["a", "b", "c"]
+        let tree = store.controlTree(dashboardMembers: { members }, dashboardHighlighted: { "b" },
+                                     dashboardFontSize: { 12 }, dashboardFontMode: { "auto" })
+        #expect(tree.dashboardMembers == members)
+        #expect(tree.dashboardHighlighted == "b")
+        #expect(tree.dashboardFontSize == 12)
+        #expect(tree.dashboardFontMode == "auto")
+    }
+
     @Test func setSidebarVisiblePostsChangeNotificationOnlyOnChange() {
         // the app-target ControlServer observes this to refresh window.list's cached sidebarVisible; the
         // post must fire only on an actual change (queue nil so the synchronous post delivers inline).

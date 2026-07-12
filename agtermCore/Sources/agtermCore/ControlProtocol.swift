@@ -28,6 +28,7 @@ public enum Command: String, Codable, Sendable {
     case sessionFocus = "session.focus"
     case sessionResize = "session.resize"
     case surfaceZoom = "surface.zoom"
+    case dashboard
     case sessionCopy = "session.copy"
     case sessionPaste = "session.paste"
     case sessionSelectAll = "session.selectall"
@@ -197,6 +198,15 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// form), and the reserved value `none` clears it. Names must be bundled themes.
     public var light: String?
     public var dark: String?
+    /// Whether `dashboard` CLOSES the open dashboard instead of opening one (the CLI's `--close`). Mutually
+    /// exclusive with targets (the ids to open) and with the font flags — closing takes no other argument.
+    public var close: Bool?
+    /// The absolute cell font size in points for `dashboard` (the CLI's `--font-size`); must be positive.
+    /// Mutually exclusive with `autoSize`.
+    public var fontSize: Double?
+    /// For `dashboard`, size the cells RELATIVE to the Settings default font size, shrinking as the grid
+    /// grows so dense grids stay readable (the CLI's `--auto-size`). Mutually exclusive with `fontSize`.
+    public var autoSize: Bool?
 
     public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
                 workspace: String? = nil, workspaceName: String? = nil,
@@ -210,7 +220,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 ratio: Double? = nil, ratioDelta: Double? = nil,
                 path: String? = nil, color: String? = nil, opacity: Double? = nil, fit: String? = nil,
                 position: String? = nil, repeats: Bool? = nil, all: Bool? = nil, lines: Int? = nil,
-                light: String? = nil, dark: String? = nil) {
+                light: String? = nil, dark: String? = nil,
+                close: Bool? = nil, fontSize: Double? = nil, autoSize: Bool? = nil) {
         self.name = name
         self.cwd = cwd
         self.targets = targets
@@ -253,6 +264,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.lines = lines
         self.light = light
         self.dark = dark
+        self.close = close
+        self.fontSize = fontSize
+        self.autoSize = autoSize
     }
 }
 
@@ -457,10 +471,32 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// can check "is it already zoomed" and record-then-restore. `tree`-only (not on `window.list`),
     /// like `quickVisible`: the GUI toggle bypasses the command path and would leave a cached copy stale.
     public let zoomedSurface: String?
+    /// The control ids (session UUID strings, in grid order) of the sessions the open dashboard shows, or
+    /// nil/omitted when no dashboard is open. LIVE — resolved app-side per request from the projected
+    /// window's `DashboardController` — the read side of the write-only `dashboard` command, so a script can
+    /// see which sessions are on the grid. `tree`-only (not on `window.list`), like `zoomedSurface`: the
+    /// keyboard-driven dashboard bypasses the command path and would leave a cached copy stale. nil in a
+    /// host-produced tree with no app closure.
+    public let dashboardMembers: [String]?
+    /// The session UUID string of the dashboard's currently highlighted cell (the one Enter jumps into), or
+    /// nil/omitted when no dashboard is open. LIVE — resolved app-side per request from the window's
+    /// `DashboardController` — the read side of the keyboard highlight nav. `tree`-only, like `dashboardMembers`.
+    public let dashboardHighlighted: String?
+    /// The absolute font size in points applied to the dashboard cells, or nil/omitted when no dashboard is
+    /// open OR the font is untouched (the members keep their own size). LIVE — resolved app-side per request
+    /// from the window's `DashboardController` — the read side of `dashboard --font-size`/`--auto-size`.
+    /// `tree`-only, like `dashboardMembers`.
+    public let dashboardFontSize: Double?
+    /// The dashboard's font mode — `auto` (`--auto-size`), `fixed` (`--font-size`), or `untouched` — or
+    /// nil/omitted when no dashboard is open. LIVE — resolved app-side per request from the window's
+    /// `DashboardController` — the read side of the font flags. `tree`-only, like `dashboardMembers`.
+    public let dashboardFontMode: String?
 
     public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
                 sidebarVisible: Bool? = nil, sidebarMode: String? = nil, quickVisible: Bool? = nil,
-                zoomedSurface: String? = nil) {
+                zoomedSurface: String? = nil, dashboardMembers: [String]? = nil,
+                dashboardHighlighted: String? = nil, dashboardFontSize: Double? = nil,
+                dashboardFontMode: String? = nil) {
         self.workspaces = workspaces
         self.idleMs = idleMs
         self.autoFollowMs = autoFollowMs
@@ -468,6 +504,10 @@ public struct ControlTree: Codable, Sendable, Equatable {
         self.sidebarMode = sidebarMode
         self.quickVisible = quickVisible
         self.zoomedSurface = zoomedSurface
+        self.dashboardMembers = dashboardMembers
+        self.dashboardHighlighted = dashboardHighlighted
+        self.dashboardFontSize = dashboardFontSize
+        self.dashboardFontMode = dashboardFontMode
     }
 }
 

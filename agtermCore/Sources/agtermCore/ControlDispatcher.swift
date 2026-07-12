@@ -154,6 +154,10 @@ public struct ControlDispatcher {
         case .windowNew, .windowList, .windowSelect, .windowClose, .windowRename,
                 .windowDelete, .windowResize, .windowMove, .windowZoom, .windowFullscreen:
             return await dispatchWindowCommand(request)
+        case .dashboard:
+            // not yet dispatcher-owned: Task 4 adds the validation arm + `ControlActions.setDashboard`;
+            // until then it falls through to `ControlServer`, mirroring the not-yet-migrated pattern.
+            return nil
         case .debugAppearance:
             // UI-test-only seam handled app-side in `ControlServer` (needs AppKit + `ContentView.isUITestLaunch`).
             return nil

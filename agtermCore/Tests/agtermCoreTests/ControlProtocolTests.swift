@@ -770,6 +770,65 @@ struct ControlProtocolTests {
         #expect(decoded.zoomedSurface == nil)
     }
 
+    @Test func dashboardRequestRoundTrips() throws {
+        let cases: [ControlRequest] = [
+            ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ["9f3c", "abcd"])),
+            ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ["9f3c"], window: "win", fontSize: 12)),
+            ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ["9f3c", "abcd"], autoSize: true)),
+            ControlRequest(cmd: .dashboard, args: ControlArgs(close: true)),
+        ]
+        for request in cases {
+            #expect(try roundTrip(request) == request)
+        }
+        let opened = try roundTrip(ControlRequest(cmd: .dashboard,
+                                                  args: ControlArgs(targets: ["a", "b"], fontSize: 14)))
+        #expect(opened.args?.targets == ["a", "b"])
+        #expect(opened.args?.fontSize == 14)
+        #expect(opened.args?.autoSize == nil)
+        let closed = try roundTrip(ControlRequest(cmd: .dashboard, args: ControlArgs(close: true)))
+        #expect(closed.args?.close == true)
+    }
+
+    @Test func dashboardArgsOmitFieldsWhenNil() throws {
+        // the new fields ride Bool?/Double? for the omit-when-nil wire contract: an open request with only
+        // targets must not emit close/fontSize/autoSize at all.
+        let request = ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ["9f3c"]))
+        let json = String(data: try JSONEncoder().encode(request), encoding: .utf8) ?? ""
+        #expect(!json.contains("close"), "a nil close must be omitted from the JSON; got \(json)")
+        #expect(!json.contains("fontSize"), "a nil fontSize must be omitted from the JSON; got \(json)")
+        #expect(!json.contains("autoSize"), "a nil autoSize must be omitted from the JSON; got \(json)")
+    }
+
+    @Test func treeRoundTripsWithDashboardFields() throws {
+        // the read side of dashboard: members / highlighted / applied font / mode ride the tree top level so
+        // a script can read the live grid state. LIVE, tree-only like zoomedSurface.
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [], dashboardMembers: ["a", "b", "c"], dashboardHighlighted: "b",
+            dashboardFontSize: 12, dashboardFontMode: "auto")))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        let tree = decoded.result?.tree
+        #expect(tree?.dashboardMembers == ["a", "b", "c"])
+        #expect(tree?.dashboardHighlighted == "b")
+        #expect(tree?.dashboardFontSize == 12)
+        #expect(tree?.dashboardFontMode == "auto")
+    }
+
+    @Test func treeOmitsDashboardFieldsWhenNil() throws {
+        // no dashboard open (or a host-produced tree with no app closure) — the keys must be omitted, not null.
+        let tree = ControlTree(workspaces: [])
+        let json = String(data: try JSONEncoder().encode(tree), encoding: .utf8) ?? ""
+        #expect(!json.contains("dashboardMembers"), "a nil dashboardMembers must be omitted; got \(json)")
+        #expect(!json.contains("dashboardHighlighted"), "a nil dashboardHighlighted must be omitted; got \(json)")
+        #expect(!json.contains("dashboardFontSize"), "a nil dashboardFontSize must be omitted; got \(json)")
+        #expect(!json.contains("dashboardFontMode"), "a nil dashboardFontMode must be omitted; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlTree.self, from: Data(json.utf8))
+        #expect(decoded.dashboardMembers == nil)
+        #expect(decoded.dashboardHighlighted == nil)
+        #expect(decoded.dashboardFontSize == nil)
+        #expect(decoded.dashboardFontMode == nil)
+    }
+
     @Test func backgroundWatermarkFitPositionSerializeAsRawStrings() throws {
         // the Fit/Position enums must serialize to ghostty's exact key strings (identical to the former
         // String), so the wire + persisted JSON are unchanged by the enum migration.

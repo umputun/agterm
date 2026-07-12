@@ -220,13 +220,13 @@ override + reapply; record `controller.appliedFontSize`. On close, clear the ove
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlProtocolTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTests.swift`
 
-- [ ] `Command.dashboard`; add `close/fontSize/autoSize` to `ControlArgs` (init + docs)
-- [ ] add `dashboardMembers`/`dashboardHighlighted`/`dashboardFontSize`/`dashboardFontMode` to `ControlTree`
+- [x] `Command.dashboard`; add `close/fontSize/autoSize` to `ControlArgs` (init + docs)
+- [x] add `dashboardMembers`/`dashboardHighlighted`/`dashboardFontSize`/`dashboardFontMode` to `ControlTree`
       (init + docs matching `zoomedSurface` LIVE/`tree`-only wording)
-- [ ] add four defaulted closure params to `AppStore.controlTree(...)` and thread into `ControlTree(...)`
-- [ ] tests: `ControlProtocolTests` round-trips (request + tree fields, present + omitted-when-nil)
-- [ ] tests: `AppStoreTests` populate test for the new closures
-- [ ] run `cd agtermCore && swift test` + `make lint` — pass before Task 4
+- [x] add four defaulted closure params to `AppStore.controlTree(...)` and thread into `ControlTree(...)`
+- [x] tests: `ControlProtocolTests` round-trips (request + tree fields, present + omitted-when-nil)
+- [x] tests: `AppStoreTests` populate test for the new closures
+- [x] run `cd agtermCore && swift test` + `make lint` — pass before Task 4
 
 ### Task 4: ControlDispatcher — validation, response, ControlActions.setDashboard
 
