@@ -35,7 +35,7 @@ struct TerminalZoomTests {
         #expect(!TerminalZoomController.isTargetValid(.session(session.id, .primary), in: store, quickTerminalVisible: false))
     }
 
-    @Test func splitTargetStaysValidWhenHiddenOrPromotedAndClearsWhenClosed() {
+    @Test func splitTargetStaysValidWhenHiddenAndClearsWhenPromotedOrClosed() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
@@ -48,35 +48,43 @@ struct TerminalZoomTests {
         #expect(session.hasSplit == true)
         #expect(TerminalZoomController.isTargetValid(.session(session.id, .split), in: store, quickTerminalVisible: false))
 
+        // the primary exits: the survivor is PROMOTED into the main slot, so no right pane exists
+        // anymore — a zoom on the split target must end, not keep covering the promoted main pane.
         session.surface = SpySurface()
         session.splitSurface = SpySurface()
         store.closePrimaryPane(session.id)
         #expect(session.hasSplit == false)
-        #expect(session.splitSurface != nil)
-        #expect(TerminalZoomController.isTargetValid(.session(session.id, .split), in: store, quickTerminalVisible: false))
+        #expect(session.splitSurface == nil)
+        #expect(!TerminalZoomController.isTargetValid(.session(session.id, .split), in: store, quickTerminalVisible: false))
 
+        // closing a live split clears the target the ordinary way too.
+        store.toggleSplit(session.id)
+        #expect(TerminalZoomController.isTargetValid(.session(session.id, .split), in: store, quickTerminalVisible: false))
         store.closeSplit(session.id)
         #expect(!TerminalZoomController.isTargetValid(.session(session.id, .split), in: store, quickTerminalVisible: false))
     }
 
-    @Test func primaryTargetClearsWhenPrimaryExitsAndSplitIsPromoted() {
+    @Test func primaryTargetStaysValidWhenPrimaryExitsAndSplitIsPromoted() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
 
         #expect(TerminalZoomController.isTargetValid(.session(session.id, .primary), in: store, quickTerminalVisible: false))
 
+        let survivor = SpySurface()
         session.surface = SpySurface()
-        session.splitSurface = SpySurface()
+        session.splitSurface = survivor
         session.isSplit = true
         session.hasSplit = true
         store.closePrimaryPane(session.id)
 
-        #expect(session.surface == nil)
-        #expect(session.splitSurface != nil)
-        #expect(session.splitFocused == true)
-        #expect(!TerminalZoomController.isTargetValid(.session(session.id, .primary), in: store, quickTerminalVisible: false))
-        #expect(TerminalZoomController.isTargetValid(.session(session.id, .split), in: store, quickTerminalVisible: false))
+        // the survivor MOVES into the primary slot: the primary target keeps pointing at the live
+        // shell (now the survivor), and the split target dies with the vacated right pane.
+        #expect(session.surface === survivor)
+        #expect(session.splitSurface == nil)
+        #expect(session.splitFocused == false)
+        #expect(TerminalZoomController.isTargetValid(.session(session.id, .primary), in: store, quickTerminalVisible: false))
+        #expect(!TerminalZoomController.isTargetValid(.session(session.id, .split), in: store, quickTerminalVisible: false))
     }
 
     @Test func scratchAndOverlayTargetsFollowActiveFlags() {

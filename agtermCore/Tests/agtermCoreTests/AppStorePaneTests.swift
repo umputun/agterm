@@ -522,25 +522,32 @@ struct AppStorePaneTests {
 
     @Test func controlTreeFontSizeReadsPromotedSurvivorViaAddressableSurface() throws {
         // regression: after the primary pane exits, the fontSize read-back must resolve through
-        // addressableSurface (the promoted split survivor) — the same surface the font default/left
-        // WRITE path targets — not bare `surface`, which is nil in that state. A closure over `surface`
-        // would report nothing for a session the user is actively typing in.
+        // addressableSurface — the same surface the font default/left WRITE path targets. With true
+        // promotion the survivor MOVES into `surface`, so addressableSurface === surface and the
+        // read-back keeps reporting the live shell across the collapse.
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         session.surface = SpySurface()
-        session.splitSurface = SpySurface()
+        let survivor = SpySurface()
+        session.splitSurface = survivor
         session.isSplit = true
         session.hasSplit = true
-        store.closePrimaryPane(session.id)                 // primary exits -> surface nil, survivor promoted
-        #expect(session.surface == nil)
-        #expect(session.addressableSurface != nil)
-        // the app wires fontSize off addressableSurface: it reports the survivor's size here...
+        store.closePrimaryPane(session.id)                 // primary exits -> survivor promoted into `surface`
+        #expect(session.surface === survivor)
+        #expect(session.addressableSurface === survivor)
+        let promoted = store.controlTree(fontSize: { $0.addressableSurface != nil ? 13 : nil })
+        #expect(promoted.workspaces[0].sessions.first?.fontSize == 13)
+        // the `?? splitSurface` term is a defensive fallback now — hand-build the surface-less state it
+        // covers and keep the addressable-vs-bare-`surface` distinction guarded: a closure over bare
+        // `surface` reports nothing there, the addressable one still finds the live split shell.
+        let fallback = store.addSession(toWorkspace: ws.id, cwd: "/b")!
+        fallback.hasSplit = true
+        fallback.splitSurface = SpySurface()
         let viaAddressable = store.controlTree(fontSize: { $0.addressableSurface != nil ? 13 : nil })
-        #expect(viaAddressable.workspaces[0].sessions.first?.fontSize == 13)
-        // ...whereas the old wiring over the (now nil) `surface` would report nothing.
+        #expect(viaAddressable.workspaces[0].sessions.last?.fontSize == 13)
         let viaSurface = store.controlTree(fontSize: { $0.surface != nil ? 13 : nil })
-        #expect(viaSurface.workspaces[0].sessions.first?.fontSize == nil)
+        #expect(viaSurface.workspaces[0].sessions.last?.fontSize == nil)
     }
 
     @Test func controlTreeReportsSplitFocused() throws {
