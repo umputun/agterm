@@ -106,7 +106,7 @@ struct DashboardView: View {
     /// so the cell auto-focuses nothing, is not a drop target, and never mutates session focus state.
     @ViewBuilder
     private func memberTerminal(for session: Session) -> some View {
-        if session.surface != nil {
+        if session.addressableSurfaceKind == .primary {
             TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
                          isActive: false, deckVisible: false, reportsFocusChange: false, viewOnly: true)
                 .id("\(session.id.uuidString)-dashboard")
@@ -199,10 +199,10 @@ private struct DashboardKeyCatcher: NSViewRepresentable {
             // consume EVERY key: recognized keys drive the dashboard, the rest are swallowed by NOT calling
             // super, so nothing (and no beep) leaks to a terminal behind the overlay.
             switch event.keyCode {
-            case 123: onKey?(.move(.left))
-            case 124: onKey?(.move(.right))
-            case 125: onKey?(.move(.down))
-            case 126: onKey?(.move(.up))
+            case 123: onKey?(.move(.left)) // left arrow
+            case 124: onKey?(.move(.right)) // right arrow
+            case 125: onKey?(.move(.down)) // down arrow
+            case 126: onKey?(.move(.up)) // up arrow
             case 36, 76: onKey?(.select) // return, keypad enter
             case 53: onKey?(.close) // escape
             default: break // swallowed

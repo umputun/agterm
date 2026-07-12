@@ -311,6 +311,12 @@ public final class Session: Identifiable {
     /// pointed at the same surface.
     public var addressableSurface: (any TerminalSurface)? { surface ?? splitSurface }
 
+    /// The `TerminalZoomSurface` slot that backs `addressableSurface`: `.primary` when the main shell is
+    /// live, else `.split` for a promoted split survivor. The single source for "which slot is the live
+    /// shell" — the dashboard's host-exclusion check and its cell key-path selection both consume it rather
+    /// than re-deriving `surface != nil ? .primary : .split` inline.
+    public var addressableSurfaceKind: TerminalZoomSurface { surface != nil ? .primary : .split }
+
     /// The surface currently on top and owning keyboard focus: an active overlay (full OR floating), else
     /// the scratch, else the active pane. The overlay renders above the scratch, and a full overlay or the
     /// scratch hides the pane(s) beneath it — so the session-focus helpers route through this to keep first

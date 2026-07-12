@@ -49,8 +49,7 @@ extension WindowContentView {
     /// scratch/overlay surfaces (the dashboard never hosts those), and while the dashboard is closed.
     func dashboardHostsSurface(session: Session, surface: TerminalZoomSurface) -> Bool {
         guard dashboard.isOpen, dashboard.members.contains(session.id) else { return false }
-        let hosted: TerminalZoomSurface = session.surface != nil ? .primary : .split
-        return surface == hosted
+        return surface == session.addressableSurfaceKind
     }
 
     /// Register this window's `DashboardController` so the control socket can drive it (called from `onAppear`).
