@@ -708,6 +708,22 @@
                   from macOS window zoom and full screen, which size the window itself.
                 </p>
               </div>
+              <div
+                style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 20px 22px"
+              >
+                <div
+                  style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 14px; color: #6d82f3; margin-bottom: 8px"
+                >
+                  Dashboard <span style="color: #6b727a">control API</span>
+                </div>
+                <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
+                  Watch several agents or builds at once: up to nine sessions' live output in one grid overlaid on the window. It is
+                  view-only — no cell takes input; the arrow keys move a highlight, Enter jumps into the highlighted session, and Esc
+                  closes. Opened over the control channel with <code style="color: #e6e1d7">agtermctl dashboard &lt;ids…&gt;</code>;
+                  cell fonts size absolutely (<code style="color: #e6e1d7">--font-size</code>) or scale to the grid
+                  (<code style="color: #e6e1d7">--auto-size</code>). Mutually exclusive with terminal zoom.
+                </p>
+              </div>
             </div>
           </section>
 
@@ -1027,7 +1043,7 @@
               "
             >
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0">
-                Looking for the full list? All 59 commands, with every argument, return value, and error, live on the
+                Looking for the full list? All 60 commands, with every argument, return value, and error, live on the
                 <a href="/commands" style="color: #6d82f3; font-weight: 500">Command reference →</a>
               </p>
             </div>
@@ -1180,7 +1196,7 @@
               <span style="color: #6b727a">&nbsp;# clear the unseen badge, focus-free</span><br />agtermctl
               sidebar mode flagged <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# tree|flagged|toggle</span><br />agtermctl quick
               toggle <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# show|hide|toggle</span><br />agtermctl quick type <span style="color: #f2b45c">'ls -la'</span>
-              <span style="color: #6b727a">&nbsp;# or --stdin; quick text reads it back</span><br />agtermctl surface zoom <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# fill the window with the active surface (show|hide|toggle; --target surface:&lt;id&gt;:right)</span><br />agtermctl font inc <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# main pane font size</span><br />agtermctl font dec --pane right <span style="color: #6b727a">&nbsp;# just the split pane (left|right|scratch)</span
+              <span style="color: #6b727a">&nbsp;# or --stdin; quick text reads it back</span><br />agtermctl surface zoom <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# fill the window with the active surface (show|hide|toggle; --target surface:&lt;id&gt;:right)</span><br />agtermctl dashboard <span style="color: #f2b45c">"$a" "$b" "$c"</span> --auto-size <span style="color: #6b727a">&nbsp;# view-only grid of up to 9 sessions (--font-size N | --auto-size; --close)</span><br />agtermctl font inc <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# main pane font size</span><br />agtermctl font dec --pane right <span style="color: #6b727a">&nbsp;# just the split pane (left|right|scratch)</span
               ><br /><br /><span style="color: #6b727a"># open the search bar, print the "N of M" counter</span><br />agtermctl
               session search <span style="color: #f2b45c">"error"</span><br />agtermctl session search --next
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# --prev | --close</span>

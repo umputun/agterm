@@ -14,7 +14,7 @@ description: >
   feature request / question as a GitHub Discussion.
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
-  session.split, session.scratch, session.focus, session.resize, surface.zoom, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
+  session.split, session.scratch, session.focus, session.resize, surface.zoom, dashboard, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
   session.flag, session.seen, session.reveal, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
   theme.set, theme.list, select theme, edit keymap, show an image, display an image inline, show-image,
@@ -116,7 +116,7 @@ you work. For any session-scoped command meant to act on *this* session — `ove
 `type`, `text`, `background`, `status`, `copy`, … — pass `--target "$AGTERM_SESSION_ID"`. Omit it and
 you open overlays / type into whatever the user has selected, not your own session.
 
-## Command summary (59 commands)
+## Command summary (60 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -140,7 +140,11 @@ the read side of `session resize`, record it to restore the exact divider), `spl
 when there's no split; the read side of `session focus`, record it to restore focus), and `surfaces`
 (`id`, `kind`, `active`, `visible`) for `surface zoom`. The tree top level carries `zoomedSurface`
 (the control id of the currently zoomed surface, omitted when nothing is zoomed — the read side of
-`surface zoom`, so a script can check the zoom state and record-then-restore).
+`surface zoom`, so a script can check the zoom state and record-then-restore). It also carries the read
+side of the `dashboard` command (all omitted when no dashboard is open): `dashboardMembers` (the session
+ids the open dashboard shows, in grid order), `dashboardHighlighted` (the highlighted cell's session id —
+the one Enter jumps into), `dashboardFontSize` (the absolute font size in points applied to the cells,
+omitted when untouched), and `dashboardFontMode` (`auto`|`fixed`|`untouched`).
 
 **workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom` ·
 `focus [on|off|toggle]` (collapse the sidebar tree to a single workspace; read back which workspace is
@@ -229,6 +233,18 @@ button remains). Omit `--target` to use the active surface;
 copy an explicit surface id from `tree --json` to address a hidden split/scratch or a background
 session (`quick` is the id returned for a quick-terminal zoom). `hide` exits zoom; `toggle`
 enters/exits only this zoom mode, not macOS window zoom.
+
+**dashboard** — `dashboard <ids…> [--font-size N | --auto-size] [--window W]` opens a view-only grid
+(max 9 sessions, laid out `ceil(sqrt(n))`) showing the named sessions' live surfaces; `dashboard --close
+[--window W]` closes it. View-only: no cell takes input — the keyboard drives it (arrows move the
+highlight, Enter jumps into the highlighted session and closes, Esc closes). `--font-size N` sets an
+absolute cell font in points; `--auto-size` sizes cells relative to the Settings default font, shrinking
+as the grid grows (the two are mutually exclusive; a non-positive size is rejected). More than 9 ids are
+capped to the first 9 and the dropped count is reported; ids are deduped and honor `--window` (default
+frontmost). Read the state back from the tree's top-level `dashboardMembers`/`dashboardHighlighted`/
+`dashboardFontSize`/`dashboardFontMode`. Zoom and the dashboard are mutually exclusive (opening one leaves
+the other). Opening/closing resizes each member's pty to its cell, so programs may redraw — view-only
+means no input, not no process effect.
 
 **quick** — `[show|hide|toggle]` (visibility; read back from the tree's `quickVisible`) ·
 `type TEXT` (or `--stdin`) inject keystrokes into the frontmost window's quick terminal ·

@@ -220,11 +220,12 @@ paths:
   rules, then remaining targets resolve inside that same store so one command never mutates multiple windows.
   The top-level `target` also carries the first explicit batch target so a new CLI talking to a still-running
   pre-batch server degrades to a named session instead of accidentally acting on `active`.
-- **Command catalog (59 commands):**
+- **Command catalog (60 commands):**
   - `tree`
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`
   - `session.new`/`session.close`/`session.select`/`session.rename`/`session.reveal`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.paste`/`session.selectall`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.resize`/`session.overlay.result`
   - `surface.zoom`
+  - `dashboard`
   - `quick`/`quick.type`/`quick.text`
   - `sidebar`/`sidebar.mode`/`sidebar.expand`/`sidebar.collapse`
   - `notify`
@@ -247,7 +248,7 @@ paths:
   Setting echoes the resulting effective side in `result.text`; the BARE form (no name) reads the side
   the last config feed applied (`SettingsModel.lastAppliedIsDark`), which the test polls to prove the
   flip actually drove the reload.
-  `AppearanceFlipUITests` is its only consumer; the public command count stays 59.
+  `AppearanceFlipUITests` is its only consumer; the public command count stays 60.
 
   `workspace.delete` honors keep-at-least-one and returns an error instead of the GUI confirm alert (nothing
   blocks on a modal).
@@ -776,6 +777,42 @@ paths:
   (4) round-trip in `ControlProtocolTests` (incl. `treeRoundTripsWithZoomedSurface`/`…OmitsZoomedSurfaceWhenNil`)
   + `TerminalZoomTests` + the e2e `ControlSurfaceZoomUITests` (incl. the tree read-back and the
   `--window`-scoped error paths).
+  `dashboard` opens a per-window, VIEW-ONLY grid of up to 9 sessions' live surfaces
+  (`agtermctl dashboard <ids…> [--font-size N | --auto-size] [--window W]`),
+  or CLOSES the open one (`dashboard --close [--window W]`).
+  It is the N-surface generalization of `surface.zoom`'s reparent, with focus inverted (zoom focuses
+  its one surface; the dashboard focuses NONE), and it is control-NATIVE — there is no GUI/menu entry,
+  it is only reachable over the socket (once open, the keyboard drives it: arrows move the highlight,
+  Enter jumps into the highlighted session + closes, Esc closes).
+  Host-free geometry + navigation + auto-size math live in `DashboardLayout`
+  (`grid(count:) = ceil(sqrt(n))` cols, `move` clamped 2-D nav into a ragged last row,
+  `dashboardFontSize(cols:rows:base:)`), per-window state in the `@Observable @MainActor DashboardController`
+  (`members`/`highlighted`/`fontMode`/`appliedFontSize`) reached through `DashboardControllerRegistry` —
+  the exact `TerminalZoomController`/`TerminalZoomRegistry` precedent.
+  Validation is host-free in `ControlDispatcher.dispatchDashboard`:
+  `--close` takes no ids or font flags, `--font-size` is mutually exclusive with `--auto-size`,
+  a `--font-size` must be finite and positive, an open needs at least one id,
+  and more than `DashboardLayout.maxCells` (9) unique ids are capped to the first 9 with the dropped
+  count reported in `result.text`.
+  The dispatcher routes to `ControlActions.setDashboard(targets:window:close:fontMode:)`;
+  the app-side `ControlServer` resolves ids via `ControlTargetResolver` inside `args.window ?? frontmost`,
+  DEDUPS by resolved UUID, drops unresolved, resolves each to its `addressableSurface`,
+  closes any active zoom (zoom ↔ dashboard are reciprocally exclusive), and drives that window's controller.
+  READ-BACK: FOUR `tree`-top-level fields (LIVE, `tree`-only like `zoomedSurface`) supplied to
+  `AppStore.controlTree(...)` as app-side closures reading the target window's controller through the registry —
+  `dashboardMembers` (session ids in grid order),
+  `dashboardHighlighted` (the highlighted cell's session id),
+  `dashboardFontSize` (the applied absolute size in points, nil = untouched),
+  and `dashboardFontMode` (`auto`/`fixed`/`untouched`).
+  Four-point keep-in-sync audit: (1) `case dashboard` + `ControlArgs.close`/`fontSize`/`autoSize`
+  (ids reuse `targets`, window reuses `window`) + the four `ControlTree.dashboard*` fields in `ControlProtocol.swift`,
+  (2) the `.dashboard` dispatch arm (`dispatchDashboard`) → `ControlActions.setDashboard` (app-side
+  `ControlServer`) + the four read-back closures at the `controlTree` build site,
+  (3) the `dashboard` subcommand (`validate()`-guarded flag combos) in `agtermctlKit/MiscCommands.swift`,
+  (4) round-trip in `ControlProtocolTests` + dispatcher validation/routing in `ControlDispatcherTests`
+  + `DashboardLayoutTests`/`DashboardControllerTests` + `AppStoreTests` (the read-back closures) +
+  CLI mapping in `CommandsTests` + the e2e `DashboardUITests`.
+  See the `libghostty.md` dashboard note for the reparent/overlay/view-only + transient-font-override mechanics.
   Mode-bearing commands (`session.split`/`quick`) compute the delta against current state so `on`/`off`/`show`/`hide`
   are idempotent, and an unknown mode is an error.
   `quick`'s visibility reads back on `ControlTree.quickVisible` at the tree TOP level — LIVE, resolved
@@ -1178,4 +1215,4 @@ paths:
   (image/text/color set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
-  examples.md recipes) and the command count there is bumped to 59 to match.
+  examples.md recipes) and the command count there is bumped to 60 to match.

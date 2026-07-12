@@ -380,14 +380,20 @@ override + reapply; record `controller.appliedFontSize`. On close, clear the ove
 - Modify: `site/docs.html`, `site/index.html`
 - Modify: `.claude/rules/control-api.md`, `.claude/rules/libghostty.md`
 
-- [ ] document `dashboard` (open/close, `--font-size`/`--auto-size`, `--window`, view-only nav, max 9 +
+- [x] document `dashboard` (open/close, `--font-size`/`--auto-size`, `--window`, view-only nav, max 9 +
       reported drop) in the agent skill + bump its command count; add the four `tree` read-backs to the reference
-- [ ] update `README.md` + `site/docs.html` (mirror) + `site/index.html` features grid
-- [ ] `.claude/rules/control-api.md`: add the command, bump the catalog count (currently 59 → 60; verify live)
-- [ ] `.claude/rules/libghostty.md`: add the dashboard reparent/overlay/view-only + transient-font-override +
+      (SKILL.md summary + count 59→60 + tree read-backs; reference.md `## dashboard` section + tree top-level
+      fields; examples.md recipe; when_to_use trigger)
+- [x] update `README.md` + `site/docs.html` (mirror) + `site/index.html` features grid (Dashboard feature
+      paragraph/card + control-channel example + "All 60 commands" count bump; site/commands.html count bumped
+      too — but its per-command sections deliberately omit control-native zoom/dashboard, matching the pre-existing
+      absent `surface.zoom` section)
+- [x] `.claude/rules/control-api.md`: add the command, bump the catalog count (verified live: 60 enum cases
+      excl. the exempt `debug.appearance`, so 59 → 60) + full command note with the four-point audit
+- [x] `.claude/rules/libghostty.md`: add the dashboard reparent/overlay/view-only + transient-font-override +
       zoom↔dashboard-exclusivity + pty-resize notes
-- [ ] do NOT touch `CHANGELOG.md` (release-only)
-- [ ] run `make lint` — pass before Task 13
+- [x] do NOT touch `CHANGELOG.md` (release-only) — left untouched
+- [x] run `make lint` — pass (swiftlint clean; docs/HTML don't affect it)
 
 ### Task 13: Verify acceptance criteria
 

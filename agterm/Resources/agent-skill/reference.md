@@ -78,22 +78,27 @@ from the top-level `zoomedSurface`. Workspace nodes carry
 tree is collapsed to this workspace — the read side of `workspace focus`, distinct from `active` the
 SELECTED workspace; omitted unless this is the focused one, and absent entirely when nothing is focused).
 
-The tree object itself carries six top-level read-only fields: `idleMs` (milliseconds since the last
+The tree object itself carries ten top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
 timeout in milliseconds, omitted when the setting is Disabled), `sidebarVisible` (whether the
 window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
 can restore it, e.g. a tmux-style zoom that hides the sidebar and must re-show it only when it was
 visible before), `sidebarMode` (`tree` or `flagged` — the sidebar view mode, the read side of
 `sidebar mode`), `quickVisible` (whether the window's quick terminal is currently shown — the read
-side of the write-only `quick` command, so a script can make the toggle idempotent), and
-`zoomedSurface` (the control id of the surface terminal zoom currently fills the window with —
+side of the write-only `quick` command, so a script can make the toggle idempotent), `zoomedSurface`
+(the control id of the surface terminal zoom currently fills the window with —
 `surface:<session-id>:<kind>` or `quick`; omitted when nothing is zoomed — the read side of the
 write-only `surface zoom` command, so a script can check "is it already zoomed" and
-record-then-restore). `idleMs` is live
+record-then-restore), and the four read sides of the write-only `dashboard` command (all omitted when
+no dashboard is open): `dashboardMembers` (the session ids the open dashboard shows, in grid order),
+`dashboardHighlighted` (the highlighted cell's session id — the one Enter jumps into),
+`dashboardFontSize` (the absolute font size in points applied to the cells, omitted when the mode is
+`untouched`), and `dashboardFontMode` (`auto` for `--auto-size`, `fixed` for `--font-size`, or
+`untouched`). `idleMs` is live
 and grows while the window is idle, so it is on `tree` only, never `window.list`; `sidebarVisible` is on
-both; `sidebarMode`, `quickVisible`, and `zoomedSurface` are `tree`-only (a GUI toggle would leave a
-cached copy stale).
-All six are read-only projections of GUI state.
+both; `sidebarMode`, `quickVisible`, `zoomedSurface`, and the four `dashboard*` fields are `tree`-only
+(a GUI/keyboard change would leave a cached copy stale).
+All ten are read-only projections of GUI state.
 
 ## workspace
 
@@ -383,6 +388,38 @@ quick terminal. While zoomed, the hidden deck keeps running: `session.split`/`se
 opens on the zoomed session still spawn their shells behind the zoom layer. A notification-banner
 click exits zoom before revealing its session. Use `surface zoom` when the user/agent needs a pane
 fullscreen inside agterm; use `window zoom` only to maximize the whole window on screen.
+
+## dashboard
+
+`agtermctl dashboard <ids…> [--font-size N | --auto-size] [--window W]` opens a per-window, view-only
+grid of the named sessions' live surfaces (max 9, laid out `ceil(sqrt(n))`); `agtermctl dashboard
+--close [--window W]` closes the open one. The positional ids are session addresses (id / unique prefix
+/ `active`); unresolved ids are dropped, ids are deduped by resolved session, and more than 9 are capped
+to the first 9 with the dropped count reported in the response text (`dropped N beyond the 9-session
+dashboard limit`). `--window` targets a specific window's dashboard (default: the frontmost).
+
+It is **view-only**: no cell takes keyboard or mouse input — the whole grid shows live output, and once
+open the keyboard drives it. Arrow keys move a highlight between cells (2-D, no wrap; clamped into a
+ragged last row), Enter jumps into the highlighted session (selecting it and closing the dashboard), and
+Esc closes it (leaving the selection as it was). Because a cell takes no input, a program you dashboard
+keeps running but you cannot type into it from the grid — jump in with Enter first.
+
+Font size is optional and mutually exclusive: `--font-size N` sets an absolute cell font in points
+(must be finite and positive), while `--auto-size` sizes the cells relative to the Settings default font
+size, shrinking as the grid grows so a dense 3×3 stays readable. Omit both to leave each member's own
+font untouched. The applied size and mode read back on the tree's top-level `dashboardFontSize` /
+`dashboardFontMode`; the members and the highlighted cell read back on `dashboardMembers` /
+`dashboardHighlighted`.
+
+The dashboard and terminal zoom are **mutually exclusive**: opening a dashboard closes any active zoom,
+and a zoom becoming active while the dashboard is open closes the dashboard. Opening (and closing) the
+dashboard resizes each member's pty to (and back from) its cell, so a running program receives a resize
+event and may redraw — "view-only" means no input reaches the cell, not that the member's process is
+untouched.
+
+Invalid invocations error (rejected at the CLI and re-checked server-side): `--font-size` with
+`--auto-size`, a non-positive `--font-size`, `--close` combined with ids or a font option, and an open
+with no ids.
 
 ## quick
 

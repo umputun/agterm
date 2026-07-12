@@ -416,6 +416,34 @@ agtermctl tree --json | jq -r '.result.tree.zoomedSurface'
 `surface zoom` is not `window zoom`: it does not move/resize the macOS window and must not change split
 ratios, sidebar state, focus, or split/scratch visibility. Surface ids come from `tree --json`.
 
+## Watch several sessions at once in a dashboard grid
+
+The dashboard shows up to 9 sessions' live output in one view-only grid — for watching several agents or
+builds at once. No cell takes input: the keyboard navigates a highlight (arrows), Enter jumps into the
+highlighted session and closes, Esc closes. Open it over the socket with explicit session ids.
+
+```bash
+# grid of three sessions, cells auto-sized to the grid (shrinking as it grows)
+agtermctl dashboard "$a" "$b" "$c" --auto-size
+
+# an absolute cell font in points instead of --auto-size (the two are mutually exclusive)
+agtermctl dashboard "$a" "$b" --font-size 12
+
+# open in a specific window (default is the frontmost)
+agtermctl dashboard "$a" "$b" --window "$AGTERM_WINDOW_ID"
+
+# read back what the open dashboard is showing (all null when none is open)
+agtermctl tree --json | jq '.result.tree | {dashboardMembers, dashboardHighlighted, dashboardFontSize, dashboardFontMode}'
+
+# close it (or press Enter/Esc in the grid)
+agtermctl dashboard --close
+```
+
+More than 9 ids are capped to the first 9 and the response reports the dropped count; ids are deduped.
+The dashboard and terminal zoom are mutually exclusive (opening one closes the other). Opening/closing
+resizes each member's pty to/from its cell, so a running program may redraw — view-only means no input,
+not no process effect.
+
 ## Navigate and manage windows
 
 ```bash
