@@ -263,14 +263,14 @@ override + reapply; record `controller.appliedFontSize`. On close, clear the ove
 **Files:**
 - Modify: `agterm/Control/ControlServer.swift` (or `ControlServer+SessionActions.swift`)
 
-- [ ] implement `ControlActions.setDashboard`: resolve ids via `ControlTargetResolver` inside `args.window ??
+- [x] implement `ControlActions.setDashboard`: resolve ids via `ControlTargetResolver` inside `args.window ??
       frontmost`, dedup by resolved UUID (preserve order), drop+report unresolved, resolve each to its
       `addressableSurface`, close any active zoom (`TerminalZoomRegistry`), drive that window's
       `DashboardController` via `DashboardControllerRegistry` (open members/highlighted/fontMode, or `close()`)
-- [ ] supply `dashboardMembers`/`dashboardHighlighted`/`dashboardFontSize`/`dashboardFontMode` closures at the
+- [x] supply `dashboardMembers`/`dashboardHighlighted`/`dashboardFontSize`/`dashboardFontMode` closures at the
       `controlTree(...)` build site (read from the target window's controller via the registry)
-- [ ] first `make build` — restores app conformance; behavior asserted by Task 11 e2e
-- [ ] run `cd agtermCore && swift test` + `make build` + `make lint` — pass before Task 7
+- [x] first `make build` — restores app conformance; behavior asserted by Task 11 e2e
+- [x] run `cd agtermCore && swift test` + `make build` + `make lint` — pass before Task 7
 
 ### Task 7: GhosttySurfaceView — transient dashboard font override
 

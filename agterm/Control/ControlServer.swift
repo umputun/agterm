@@ -375,7 +375,7 @@ final class ControlServer {
                 .sessionOverlayResult, .sessionBackground, .sessionText, .quick, .quickType, .quickText,
                 .windowNew, .windowList, .windowSelect,
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
-                .windowFullscreen, .restoreClear:
+                .windowFullscreen, .restoreClear, .dashboard:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         case .debugAppearance:
             return setDebugAppearance(args: request.args)
@@ -429,6 +429,53 @@ final class ControlServer {
         return ControlResponse(ok: true)
     }
 
+    /// Open or close the target window's dashboard overlay — the app side of the host-free `dashboard`
+    /// command (the dispatcher already validated the args, capped the ids to `DashboardLayout.maxCells`,
+    /// and built `fontMode`). Resolves `window ?? frontmost` to an OPEN window's store, then resolves each
+    /// id to a session in THAT store, deduping by resolved UUID (order preserved) and reporting any that
+    /// don't resolve in `result.text` (never a silent drop). Members are session UUIDs; the app-side
+    /// rendering (`WindowContentView`) reparents each member's `addressableSurface` (`surface ??
+    /// splitSurface`, NOT `\.surface`, so a promoted split survivor keeps its live shell). Opening closes any
+    /// active terminal zoom for the window (zoom and dashboard are mutually exclusive) and drives that
+    /// window's `DashboardController` via the registry; `--close` calls `close()`. The per-window controller
+    /// is registered by `WindowContentView`; until it is (or while the window is tearing down) the registry
+    /// returns nil and this reports the window isn't open.
+    func setDashboard(targets: [String], window: String?, close: Bool,
+                      fontMode: DashboardFontMode) -> ControlResponse {
+        resolver.resolvePlacementStore(window) { store in
+            guard let windowID = library.openIDs().first(where: { library.store(for: $0) === store }),
+                  let controller = DashboardControllerRegistry.shared.controller(for: windowID) else {
+                return ControlResponse(ok: false, error: "window not open — window.select it first")
+            }
+            if close {
+                controller.close()
+                return ControlResponse(ok: true)
+            }
+            let candidates = store.workspaces.flatMap { $0.sessions.map(\.id) }
+            var members: [UUID] = []
+            var seen = Set<UUID>()
+            var unresolved: [String] = []
+            for target in targets {
+                guard case .resolved(let id) = ControlResolve.resolve(target, candidates: candidates,
+                                                                      active: store.selectedSessionID),
+                      store.session(withID: id) != nil else {
+                    unresolved.append(target)
+                    continue
+                }
+                if seen.insert(id).inserted { members.append(id) }
+            }
+            guard !members.isEmpty else {
+                return ControlResponse(ok: false, error: "no dashboard sessions resolved")
+            }
+            // zoom and dashboard are mutually exclusive: drop any active zoom for this window on open.
+            TerminalZoomRegistry.shared.controller(for: windowID)?.clear()
+            controller.open(members: members, fontMode: fontMode)
+            guard !unresolved.isEmpty else { return ControlResponse(ok: true) }
+            return ControlResponse(ok: true,
+                                   result: ControlResult(text: "unresolved: \(unresolved.joined(separator: ", "))"))
+        }
+    }
+
     /// Project a window's workspace tree into the wire `ControlTree`, marking the active session and the
     /// active workspace (the one owning the selected session).
     func buildTree(in store: AppStore) -> ControlTree {
@@ -437,6 +484,10 @@ final class ControlServer {
         // QuickTerminalController.isVisible (a nil controller — never opened, or the window is tearing
         // down — reads as not visible).
         let windowID = library.openIDs().first { library.store(for: $0) === store }
+        // the projected window's dashboard controller (nil until WindowContentView registers it), read
+        // LIVE for the four dashboard read-backs — tree-only, since the keyboard-driven dashboard bypasses
+        // the command path and a cached copy would go stale (same reason as zoomedSurface/quickVisible).
+        let dashboard = DashboardControllerRegistry.shared.controller(for: windowID)
         return store.controlTree(
             foreground: { session in
                 (session.surface as? GhosttySurfaceView).flatMap {
@@ -452,7 +503,27 @@ final class ControlServer {
             splitFontSize: { ($0.splitSurface as? GhosttySurfaceView)?.currentFontSize() },
             scratchFontSize: { ($0.scratchSurface as? GhosttySurfaceView)?.currentFontSize() },
             quickVisible: { windowID.flatMap { QuickTerminalRegistry.shared.controller(for: $0)?.isVisible } ?? false },
-            zoomedSurface: { windowID.flatMap { TerminalZoomRegistry.shared.controller(for: $0)?.target?.controlID } }
+            zoomedSurface: { windowID.flatMap { TerminalZoomRegistry.shared.controller(for: $0)?.target?.controlID } },
+            dashboardMembers: {
+                guard let dashboard, dashboard.isOpen else { return nil }
+                return dashboard.members.map(\.uuidString)
+            },
+            dashboardHighlighted: {
+                guard let dashboard, dashboard.isOpen else { return nil }
+                return dashboard.highlighted?.uuidString
+            },
+            dashboardFontSize: {
+                guard let dashboard, dashboard.isOpen else { return nil }
+                return dashboard.appliedFontSize
+            },
+            dashboardFontMode: {
+                guard let dashboard, dashboard.isOpen else { return nil }
+                switch dashboard.fontMode {
+                case .auto: return "auto"
+                case .fixed: return "fixed"
+                case .untouched: return "untouched"
+                }
+            }
         )
     }
 
