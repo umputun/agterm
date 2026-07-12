@@ -58,6 +58,13 @@ public final class DashboardController {
         appliedFontSize = nil
     }
 
+    /// highlight moves the keyboard highlight directly to `id` (a mouse click on that cell), but only when
+    /// `id` is one of the current members — a stray id leaves the highlight unchanged. No-op when closed.
+    public func highlight(_ id: UUID) {
+        guard members.contains(id) else { return }
+        highlighted = id
+    }
+
     /// move walks the keyboard highlight one step in `direction`, clamped by `DashboardLayout` (no wrap,
     /// stays put at an edge or an empty slot of a ragged last row). No-op when closed or with no highlight.
     public func move(_ direction: DashboardLayout.Direction) {

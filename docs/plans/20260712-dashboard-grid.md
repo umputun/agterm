@@ -315,32 +315,37 @@ override + reapply; record `controller.appliedFontSize`. On close, clear the ove
 - Modify: `agterm/Views/WindowContentView+Zoom.swift` (generalize `deckHostsSurface` to exclude zoom-owned
   OR dashboard-hosted surfaces, matched on the member's resolved surface kind)
 
-- [ ] own a per-window `DashboardController`; `register`/`unregister` with `DashboardControllerRegistry` on
+- [x] own a per-window `DashboardController`; `register`/`unregister` with `DashboardControllerRegistry` on
       window appear/disappear (restore any font override before unregister)
-- [ ] `windowOverlayLayer` branch renders `DashboardView` when `controller.isOpen` (inset by `titlebarHeight`,
+- [x] `windowOverlayLayer` branch renders `DashboardView` when `controller.isOpen` (inset by `titlebarHeight`,
       `zIndex 1`, below the titlebar — never a body-level `.overlay`)
-- [ ] generalize `deckHostsSurface`: the eager deck renders a `Color.clear` placeholder for each member's
+- [x] generalize `deckHostsSurface`: the eager deck renders a `Color.clear` placeholder for each member's
       hosted surface (union with the existing zoom exclusion)
-- [ ] gate `deckInteractive` (`WindowContentView.swift:333`) to also require the dashboard closed (kills pane
+- [x] gate `deckInteractive` (`WindowContentView.swift:333`) to also require the dashboard closed (kills pane
       focus, scratch/overlay auto-focus, drag registration, background-click handling while open)
-- [ ] modal lifecycle on open (mirror `handleZoomTargetChange`): close palette/search/quick-terminal/switcher,
+- [x] modal lifecycle on open (mirror `handleZoomTargetChange`): close palette/search/quick-terminal/switcher,
       pause auto-follow
-- [ ] reciprocal exclusivity: `.onChange(of: terminalZoom.target)` — a zoom becoming active while the
+- [x] reciprocal exclusivity: `.onChange(of: terminalZoom.target)` — a zoom becoming active while the
       dashboard is open closes the dashboard
-- [ ] font apply/clear: on open set each member surface's `dashboardFontOverride` from `fontMode`
+- [x] font apply/clear: on open set each member surface's `dashboardFontOverride` from `fontMode`
       (`.auto` via `DashboardLayout.dashboardFontSize`, base `AppSettings.fontSize ?? ghosttyDefault`;
       `.fixed`; `.untouched` skip), reapply, and record `controller.appliedFontSize`; on close clear + reapply
-- [ ] focus/exit: Enter→`selectSession(highlighted)`+close+`focusActiveSession`; Esc→close+`focusActiveSession`
-      restoring the prior session; verify no cell holds first responder
-- [ ] keep new code in `WindowContentView+Dashboard.swift`; if `WindowContentView.swift` nears the 1000-line
+      (driven off `.onChange(of: dashboard.members)` so a retarget re-sizes; `AppSettings.fontSize` read via
+      `actions.settingsModel?.settings.fontSize`, nil → 13.0 ghostty default)
+- [x] focus/exit: Enter→`selectSession(highlighted)`+close+`focusActiveSession`; Esc→close+`focusActiveSession`
+      restoring the prior session; verify no cell holds first responder (key-catcher owns it, terminals
+      `allowsHitTesting(false)`); added public `DashboardController.highlight(_:)` + unit test for onHighlight
+- [x] keep new code in `WindowContentView+Dashboard.swift`; if `WindowContentView.swift` nears the 1000-line
       cap, ASK before relocating existing code — do not bump the swiftlint limit
-- [ ] behavior asserted by Task 11 e2e; gate on `make build` + `make lint`
-- [ ] run `make build` + `make lint` — pass before Task 10
+      (WindowContentView.swift = 986 lines, no relocation needed)
+- [x] behavior asserted by Task 11 e2e; gate on `make build` + `make lint`
+- [x] run `make build` + `make lint` — pass before Task 10
 
 ### Task 10: (reserved) — split Task 9 if it grows
 
-- [ ] if Task 9 spans too many concerns or pushes a file toward the cap, split the deck-yield/interactivity
-      wiring from the font apply/clear wiring here; otherwise mark N/A
+- [x] N/A - Task 9 stayed cohesive: WindowContentView.swift is 986 lines (under the 1000 cap) with only
+      the @State controller + overlay call + thin onChange/lifecycle hooks; all logic lives in
+      WindowContentView+Dashboard.swift (147 lines). No further split needed.
 
 ### Task 11: End-to-end XCUITests
 

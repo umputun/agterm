@@ -25,6 +25,10 @@ struct WindowContentView: View {
     /// Window-level terminal zoom: rehosts the currently visible terminal surface above the sidebar,
     /// titlebar, quick terminal frame, palettes, and switcher until the toggle is invoked again.
     @State var terminalZoom = TerminalZoomController()
+    /// Window-level dashboard grid overlay: reparents a control-picked set of member session surfaces into a
+    /// view-only grid. Registered in `DashboardControllerRegistry` on appear so the socket can drive it; the
+    /// `+Dashboard` extension owns the overlay branch, deck yield, font override, and modal lifecycle.
+    @State var dashboard = DashboardController()
     /// The terminal background color, mirrored from the (non-observable) `GhosttyApp` into view
     /// state and used as the quick terminal's opaque backing, so a settings theme change (posting
     /// `.agtermAppearanceChanged`) re-renders it live.
@@ -109,6 +113,16 @@ struct WindowContentView: View {
         }
         .onChange(of: terminalZoom.target) { old, new in
             handleZoomTargetChange(old: old, new: new)
+            // reciprocal exclusivity: a zoom becoming active while the dashboard is open closes the dashboard.
+            closeDashboardIfZoomActive(new)
+        }
+        // dashboard open/close drives the modal lifecycle + auto-follow pause; the member set drives the
+        // per-member transient font override (separate so a retarget re-sizes).
+        .onChange(of: dashboard.isOpen) { _, isOpen in
+            handleDashboardOpenChange(isOpen)
+        }
+        .onChange(of: dashboard.members) { _, _ in
+            handleDashboardMembersChange()
         }
         // Editor-overlay reload hooks must stay mounted while terminal zoom replaces the normal deck.
         .onChange(of: openOverlaySessionIDs) { old, new in
@@ -155,10 +169,12 @@ struct WindowContentView: View {
                 TerminalZoomController.resolveTarget(store: store, quickTerminalVisible: quickTerminal.isVisible)
             }
             TerminalZoomRegistry.shared.register(windowID, controller: terminalZoom)
+            registerDashboard()
         }
         .onDisappear {
             QuickTerminalRegistry.shared.unregister(windowID)
             TerminalZoomRegistry.shared.unregister(windowID)
+            tearDownDashboard()
         }
     }
 
@@ -328,9 +344,10 @@ struct WindowContentView: View {
         // FLOATING overlay (overlaySizePercent set) leaves the session VISIBLE and draws a smaller
         // opaque framed panel on top. Either way the pane(s) stay non-interactive while an overlay is up.
         let fullOverlay = session.fullOverlayActive
-        // While zoomed, the normal deck stays mounted only to realize surfaces; it must not focus,
-        // register drag targets, or show focusable controls behind the full-window zoom layer.
-        let deckInteractive = terminalZoom.target == nil
+        // While zoomed OR while the dashboard is open, the normal deck stays mounted only to realize
+        // surfaces; it must not focus, register drag targets, or show focusable controls behind the
+        // full-window modal layer (both are mutually exclusive, so at most one gate is ever active).
+        let deckInteractive = terminalZoom.target == nil && !dashboard.isOpen
         // the scratch terminal is a full-coverage overlay too, so it hides the pane(s) exactly like a
         // FULL overlay; `hideForOverlay` drives opacity + hit-testing. `overlaid` (any overlay OR scratch)
         // is what owns focus, so it gates the pane(s)' `isActive` (focus goes to the overlay/scratch, not
@@ -822,6 +839,9 @@ struct WindowContentView: View {
             quickTerminalOverlay
             commandPaletteOverlay
             sessionSwitcherOverlay
+            // the dashboard is the topmost window overlay: opening it closes the three above (mirrors the
+            // zoom lifecycle), so ordering only settles the empty case, but it renders last for clarity.
+            dashboardOverlay
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }

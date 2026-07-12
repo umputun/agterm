@@ -104,6 +104,10 @@ final class SessionSwitcher {
         store.selectSession(candidates[index])
     }
 
+    /// Abort an in-progress switch WITHOUT committing a selection — used when a modal overlay (the
+    /// dashboard) opens over the window and must take the keyboard cleanly.
+    func cancel() { reset() }
+
     private func reset() {
         isActive = false
         candidates = []

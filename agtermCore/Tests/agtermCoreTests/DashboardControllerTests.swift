@@ -78,6 +78,27 @@ struct DashboardControllerTests {
         #expect(controller.highlighted == ids[1])
     }
 
+    @Test func highlightMovesToMemberElseLeavesUnchanged() {
+        let controller = DashboardController()
+        let a = UUID(), b = UUID(), c = UUID()
+        controller.open(members: [a, b, c])
+        #expect(controller.highlighted == a)
+
+        // click on a member moves the highlight to it.
+        controller.highlight(c)
+        #expect(controller.highlighted == c)
+
+        // a non-member id leaves the highlight where it was.
+        controller.highlight(UUID())
+        #expect(controller.highlighted == c)
+    }
+
+    @Test func highlightIsNoOpWhenClosed() {
+        let controller = DashboardController()
+        controller.highlight(UUID())
+        #expect(controller.highlighted == nil)
+    }
+
     @Test func moveIsNoOpWhenClosedOrUnhighlighted() {
         let controller = DashboardController()
         controller.move(.right)

@@ -86,11 +86,14 @@ extension WindowContentView {
         }
     }
 
-    /// Whether the eager deck (not the zoom layer) hosts this session-surface slot. False only for the
-    /// one surface terminal zoom currently owns — its deck slot renders the `Color.clear` placeholder in
-    /// `sessionDetail` (an NSView can live in one host at a time) while every other slot stays mounted,
-    /// keeping the deck entry's shape constant and its surfaces realizing behind the zoom layer.
+    /// Whether the eager deck (not the zoom layer OR a dashboard cell) hosts this session-surface slot.
+    /// False for the one surface terminal zoom currently owns AND for any surface an open dashboard has
+    /// reparented into a grid cell — either renders the `Color.clear` placeholder in `sessionDetail` (an
+    /// NSView can live in one host at a time) while every other slot stays mounted, keeping the deck entry's
+    /// shape constant and its surfaces realizing behind the modal layer. The dashboard exclusion is the
+    /// union partner of the zoom exclusion (both are mutually exclusive, so at most one is ever active).
     func deckHostsSurface(session: Session, surface: TerminalZoomSurface) -> Bool {
+        if dashboardHostsSurface(session: session, surface: surface) { return false }
         guard case let .session(sessionID, zoomSurface) = terminalZoom.target else { return true }
         return sessionID != session.id || zoomSurface != surface
     }
