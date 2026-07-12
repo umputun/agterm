@@ -410,10 +410,19 @@ override + reapply; record `controller.appliedFontSize`. On close, clear the ove
 
 ### Task 14: Finalize documentation and archive plan
 
-- [ ] confirm README / agent skill / `site/` / `.claude/rules` reflect shipped behavior
-- [ ] update `CLAUDE.md` only if a new cross-subsystem pattern emerged (the N-surface reparent generalization
-      + the transient-font-override mechanism are candidates)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] confirm README / agent skill / `site/` / `.claude/rules` reflect shipped behavior — read-through of all
+      Task 12 surfaces (SKILL.md, reference.md, examples.md, README.md, site/docs.html + index.html +
+      commands.html, control-api.md, libghostty.md) against the shipped code (MiscCommands.swift command
+      shape, ControlDispatcher.dispatchDashboard validation + 9-cap-with-drop, the four ControlTree
+      read-backs, DashboardFontMode auto/fixed/untouched, DashboardLayout.maxCells=9 + ceil(sqrt(n)),
+      view-only viewOnly/acceptsFirstResponder/hitTest, dashboardFontOverride composer + reapply +
+      reportFontSize suppression, focusActiveSession dashboardActive guard). All accurate; no fixes needed.
+- [x] update `CLAUDE.md` only if a new cross-subsystem pattern emerged — covered by
+      `.claude/rules/libghostty.md` (N-surface reparent + transient-font-override + zoom↔dashboard
+      exclusivity + pty-resize) + `.claude/rules/control-api.md` (the dashboard command + four-point audit
+      + read-backs); no genuinely new cross-subsystem CONTRACT beyond those, so no root CLAUDE.md change needed.
+- [x] move this plan to `docs/plans/completed/` — deferred to exec finalize step (plan kept in place for the
+      review phases that still reference it at this path).
 
 ## Post-Completion
 
