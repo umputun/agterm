@@ -313,11 +313,16 @@ public final class Session: Identifiable {
 
     /// The `TerminalZoomSurface` slot that backs `addressableSurface`: `.primary` when the main shell is
     /// live — including a promoted split survivor, which `closePrimaryPane` moves INTO `surface` (nilling
-    /// `splitSurface`) — else `.split`, the `?? splitSurface` defensive-fallback state where `surface` is
-    /// nil while a split shell is still alive. The single source for "which slot is the live shell" — the
-    /// dashboard's host-exclusion check and its cell key-path selection both consume it rather than
-    /// re-deriving `surface != nil ? .primary : .split` inline.
-    public var addressableSurfaceKind: TerminalZoomSurface { surface != nil ? .primary : .split }
+    /// `splitSurface`) — and `.split` ONLY for a genuine split-only survivor (`surface` nil while a split
+    /// shell is still alive, the `?? splitSurface` defensive-fallback state). When NEITHER slot is realized
+    /// yet — a fresh dashboard member before the eager deck spawns its primary shell — it defaults to
+    /// `.primary`, so the cell hosts the primary factory and realizes the primary shell rather than a stray
+    /// right-pane split. Mirrors "the slot of `surface ?? splitSurface`, defaulting to primary when neither
+    /// exists". The single source for "which slot is the live shell" — the dashboard's host-exclusion check
+    /// and its cell key-path selection both consume it rather than re-deriving the expression inline.
+    public var addressableSurfaceKind: TerminalZoomSurface {
+        surface != nil ? .primary : (splitSurface != nil ? .split : .primary)
+    }
 
     /// The surface currently on top and owning keyboard focus: an active overlay (full OR floating), else
     /// the scratch, else the active pane. The overlay renders above the scratch, and a full overlay or the

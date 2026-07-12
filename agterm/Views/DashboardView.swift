@@ -101,19 +101,22 @@ struct DashboardView: View {
     }
 
     /// Hosts the member's resolved `addressableSurface` slot as a view-only `TerminalView`: `\.surface`
-    /// when the primary shell is live, else `\.splitSurface` for a promoted survivor — never `\.surface`
-    /// blindly (that would spawn a fresh shell). `isActive`/`deckVisible`/`reportsFocusChange` are all off
-    /// so the cell auto-focuses nothing, is not a drop target, and never mutates session focus state.
+    /// when the primary shell is live or the member is not yet realized, else `\.splitSurface` for a genuine
+    /// split-only survivor — never `\.splitSurface` blindly (that would spawn a stray right-pane shell). The
+    /// `.id` carries the hosted slot (`-dashboard-primary`/`-dashboard-split`) so a kind flip rebuilds the
+    /// representable against the matching key path instead of reusing the stale one. `isActive`/`deckVisible`/
+    /// `reportsFocusChange` are all off so the cell auto-focuses nothing, is not a drop target, and never
+    /// mutates session focus state.
     @ViewBuilder
     private func memberTerminal(for session: Session) -> some View {
         if session.addressableSurfaceKind == .primary {
             TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
                          isActive: false, deckVisible: false, reportsFocusChange: false, viewOnly: true)
-                .id("\(session.id.uuidString)-dashboard")
+                .id("\(session.id.uuidString)-dashboard-primary")
         } else {
             TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
                          isActive: false, deckVisible: false, reportsFocusChange: false, viewOnly: true)
-                .id("\(session.id.uuidString)-dashboard")
+                .id("\(session.id.uuidString)-dashboard-split")
         }
     }
 
