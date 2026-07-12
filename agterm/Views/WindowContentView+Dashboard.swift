@@ -36,8 +36,9 @@ extension WindowContentView {
     /// is open (inset by `titlebarHeight`, below `customTitlebar`, like the other window overlays). Closed
     /// over its `onSelect`/`onClose` closures + the control socket; view-only cells reparent each member's
     /// OWN pane surface (`.primary` → `\.surface`, `.split` → `\.splitSurface`) via the generalized deck
-    /// yield. `highlightColor` is the themed chrome foreground, so the highlight ring tracks the terminal
-    /// theme rather than the OS accent.
+    /// yield. `highlightColor` is the themed chrome foreground (the highlight ring tracks the terminal theme
+    /// rather than the OS accent), and `captionBackground` is the themed terminal background (the caption
+    /// chip fill), so the name chip matches the active theme too.
     @ViewBuilder var dashboardOverlay: some View {
         if dashboard.isOpen {
             DashboardView(
@@ -46,6 +47,7 @@ extension WindowContentView {
                 makeSurface: makeSurface,
                 makeSplitSurface: makeSplitSurface,
                 highlightColor: chromeText,
+                captionBackground: terminalColor,
                 onHighlight: { dashboard.highlight($0) },
                 onSelect: { selectDashboardMember($0) },
                 onClose: { closeDashboardFromKeyboard() }

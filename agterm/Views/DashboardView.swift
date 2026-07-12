@@ -22,9 +22,12 @@ struct DashboardView: View {
     let makeSurface: (Session) -> GhosttySurfaceView
     /// The split surface factory — used for a `.split` pane cell (`session.splitSurface`).
     let makeSplitSurface: (Session) -> GhosttySurfaceView
-    /// The themed chrome foreground (the terminal theme's foreground), used for the highlight ring so it
-    /// tracks the active terminal theme rather than the OS accent.
+    /// The themed chrome foreground (the terminal theme's foreground), used for the highlight ring and the
+    /// caption text so both track the active terminal theme rather than the OS accent.
     let highlightColor: Color
+    /// The themed terminal background, used as the caption chip's translucent fill so the name reads over
+    /// any terminal content while still matching the active theme (paired with `highlightColor` for the text).
+    let captionBackground: Color
     /// Single click on a cell highlights it (keyboard is primary, mouse secondary).
     let onHighlight: (DashboardMember) -> Void
     /// Enter, or a double click on a cell, jumps into that session+pane (the wiring selects + closes + focuses).
@@ -35,6 +38,9 @@ struct DashboardView: View {
     private static let cellCornerRadius: CGFloat = 6
     private static let gridSpacing: CGFloat = 8
     private static let highlightLineWidth: CGFloat = 2
+    /// how far the caption chip is nudged below the cell's bottom edge so it straddles the frame line
+    /// instead of covering the terminal's last row.
+    private static let captionBottomOffset: CGFloat = 8
 
     var body: some View {
         let members = controller.members
@@ -79,7 +85,6 @@ struct DashboardView: View {
         return ZStack {
             memberTerminal(for: member, session: session)
                 .allowsHitTesting(false)
-            caption(for: member, session: session)
             // transparent hit target above the terminal: single click highlights, double click enters.
             // it carries the per-cell accessibility id (the Metal-backed surface is not in the a11y tree).
             Color.clear
@@ -99,6 +104,13 @@ struct DashboardView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: Self.cellCornerRadius))
+        // the caption rides the cell's BOTTOM frame line: an overlay OUTSIDE the clip (so its lower half is
+        // not clipped away) is bottom-aligned and nudged down, so the chip straddles the border stroke
+        // instead of covering the terminal's last row. it sits just UNDER the border overlay below.
+        .overlay(alignment: .bottom) {
+            caption(for: member, session: session)
+                .offset(y: Self.captionBottomOffset)
+        }
         .overlay {
             // a thin, theme-tracking ring: the themed chrome foreground on the highlighted cell, the same
             // color at low opacity on the rest, so the border matches the active terminal theme (not the OS
@@ -128,26 +140,26 @@ struct DashboardView: View {
         }
     }
 
-    /// A small dimmed name chip pinned to the cell's bottom-left. For a split session's two cells a subtle
-    /// pane marker (`◀` primary / `▶` split) is appended so they read as the left/right pane of the same
-    /// session; a non-split session's single cell shows just the name. `.ultraThinMaterial` keeps it legible
-    /// over any terminal theme; non-interactive so it never blocks the hit target above it.
+    /// A small themed name chip riding the cell's bottom-left frame line. For a split session's two cells a
+    /// subtle pane marker (`◀` primary / `▶` split) is appended so they read as the left/right pane of the
+    /// same session; a non-split session's single cell shows just the name. The chip is themed to the active
+    /// terminal theme — `highlightColor` text over a translucent `captionBackground` fill — so it matches the
+    /// border ring and stays legible over any terminal content; non-interactive so it never blocks the hit
+    /// target above it. Left-aligned via the trailing `Spacer`, which also fixes the chip's width so a long
+    /// name middle-truncates instead of overflowing the cell.
     private func caption(for member: DashboardMember, session: Session) -> some View {
-        VStack(spacing: 0) {
+        HStack(spacing: 0) {
+            Text(session.displayName + paneIndicator(for: member, session: session))
+                .font(.caption)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .foregroundStyle(highlightColor)
+                .padding(.horizontal, 6)
+                .padding(.vertical, 2)
+                .background(captionBackground.opacity(0.8), in: Capsule())
             Spacer(minLength: 0)
-            HStack(spacing: 0) {
-                Text(session.displayName + paneIndicator(for: member, session: session))
-                    .font(.caption)
-                    .lineLimit(1)
-                    .truncationMode(.middle)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(.ultraThinMaterial, in: Capsule())
-                Spacer(minLength: 0)
-            }
-            .padding(6)
         }
+        .padding(.horizontal, 6)
         .allowsHitTesting(false)
     }
 

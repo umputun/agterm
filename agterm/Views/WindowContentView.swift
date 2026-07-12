@@ -32,7 +32,7 @@ struct WindowContentView: View {
     /// The terminal background color, mirrored from the (non-observable) `GhosttyApp` into view
     /// state and used as the quick terminal's opaque backing, so a settings theme change (posting
     /// `.agtermAppearanceChanged`) re-renders it live.
-    @State private var terminalColor: Color = WindowContentView.resolvedTerminalColor()
+    @State var terminalColor: Color = WindowContentView.resolvedTerminalColor()
     /// Mirror of `GhosttyApp.toolbarMode`: `normal` shows the cwd subtitle, `compact` collapses the title
     /// bar to a single line, `hidden` drops the row (and the traffic lights) for a full-bleed terminal.
     /// Refreshed on `.agtermAppearanceChanged`, like `terminalColor`.
