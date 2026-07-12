@@ -906,10 +906,12 @@ final class AppActions {
         }
     }
 
-    /// Bumped by each fresh `focusSplitPane` call (in AppActions+Focus) so an older retry loop cancels
-    /// itself when a newer focus op supersedes it - prevents two opposite-target loops from ping-ponging
-    /// first responder.
-    var focusGeneration = 0
+    /// Per-session generation counters (keyed by session id; bumped in AppActions+Focus). A fresh
+    /// `focusSplitPane` call bumps its session's counter so an older in-flight retry loop for the SAME
+    /// session cancels itself when superseded, stopping the opposite-target ping-pong flicker. Keyed by
+    /// session so a focus op on one session/window never cancels another session's still-materializing
+    /// focus retry (they target independent first-responder chains).
+    var focusGeneration: [UUID: Int] = [:]
 
     /// Bring a session/pane to the foreground from a notification click: surface the owning window
     /// (reopening it when the banner was clicked after the window closed), select the session (which

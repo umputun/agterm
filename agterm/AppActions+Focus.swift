@@ -10,19 +10,21 @@ extension AppActions {
     /// the visible `topmostSurface` instead — the caller has already set `splitFocused`, so the correct
     /// pane shows once the cover is dismissed.
     func focusSplitPane(_ session: Session, wantSplit: Bool, attempt: Int = 0, generation: Int? = nil) {
-        // each fresh call SUPERSEDES any in-flight retry loop. without this, two calls with opposite
-        // targets (focus-left then focus-right) each run their own 12x30ms `makeFirstResponder` loop
-        // concurrently and ping-pong first responder between the panes for ~400ms - both surfaces redraw
-        // on every flip, which is the split-focus flicker. the surviving (newest) loop still re-asserts
-        // through the split-materialize / reparent churn (a lone loop's re-asserts are no-ops once its
-        // target is first responder), so the retry keeps its original purpose.
+        // each fresh call SUPERSEDES any in-flight retry loop FOR THE SAME SESSION. without this, two
+        // calls with opposite targets (focus-left then focus-right) each run their own 12x30ms
+        // `makeFirstResponder` loop concurrently and ping-pong first responder between the panes for
+        // ~400ms - both surfaces redraw on every flip, the split-focus flicker. the counter is keyed by
+        // session so a focus op on one session/window never cancels ANOTHER session's still-materializing
+        // retry (independent first-responder chains). the surviving loop still re-asserts through the
+        // split-materialize / reparent churn (a lone loop's re-asserts are no-ops once its target is first
+        // responder), so the retry keeps its original purpose.
         let gen: Int
         if let generation {
-            guard generation == focusGeneration else { return } // superseded by a newer focus op
+            guard generation == focusGeneration[session.id] else { return } // superseded by a newer op on this session
             gen = generation
         } else {
-            focusGeneration += 1
-            gen = focusGeneration
+            gen = (focusGeneration[session.id] ?? 0) + 1
+            focusGeneration[session.id] = gen
         }
         // gate on the SESSION's window, not the frontmost one: this path is cross-window (the control
         // channel focuses sessions in background windows), where the frontmost window's zoom is irrelevant.
