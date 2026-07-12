@@ -32,6 +32,12 @@ final class AppActions {
         TerminalZoomRegistry.shared.controller(for: library.activeWindowID)
     }
 
+    /// The frontmost window's dashboard controller (each window owns its own), resolved through the same
+    /// `activeWindowID` accessor as `frontmostQuickTerminal`/`frontmostTerminalZoom`. Nil when no window is open.
+    var frontmostDashboard: DashboardController? {
+        DashboardControllerRegistry.shared.controller(for: library.activeWindowID)
+    }
+
     var terminalZoomActive: Bool {
         frontmostTerminalZoom?.target != nil
     }
@@ -704,6 +710,30 @@ final class AppActions {
     /// Toggle the frontmost window's full-window terminal zoom. Core resolves which surface is active
     /// (quick, overlay, scratch, split, or primary); the owning window renders it above all chrome.
     func toggleTerminalZoom() { frontmostTerminalZoom?.toggle() }
+
+    /// Toggle the frontmost window's dashboard — the keyboard/menu/palette opener for the MRU dashboard grid
+    /// (the ⌘⇧D / Navigate ▸ Dashboard equivalent of `agtermctl dashboard --mru --auto-size`). Inert while
+    /// terminal zoom is active (mirrors the GUI siblings + the `.disabled(zoomed)` menu item; the control
+    /// path keeps its own zoom-clear). Open → close it and refocus the active session; closed → open it over
+    /// the window's most-recently-used sessions, auto-sized. A no-op when the window has no recent sessions.
+    func toggleDashboard() {
+        guard !terminalZoomActive else { return }
+        guard let dashboard = frontmostDashboard else { return }
+        if dashboard.isOpen {
+            dashboard.close()
+            focusActiveSession()
+            return
+        }
+        guard let store else { return }
+        let members = store.dashboardMRUMembers(limit: DashboardLayout.maxCells)
+        guard !members.isEmpty else { return }
+        dashboard.open(members: members, fontMode: .auto)
+        // set the applied font size synchronously (the SwiftUI onChange applies the surface overrides a runloop
+        // turn later), resolving through the same DashboardFontMode seam as ControlServer.setDashboard so the
+        // GUI and control opens land on the identical auto size.
+        let base = settingsModel?.settings.fontSize ?? DashboardLayout.ghosttyDefaultFontSize
+        dashboard.setAppliedFontSize(DashboardFontMode.auto.appliedFontSize(memberCount: members.count, base: base))
+    }
 
     /// Toggle native macOS full screen for the key window (the frontmost terminal window). Native full
     /// screen matches the green traffic-light button and moves the window to its own Space; a second

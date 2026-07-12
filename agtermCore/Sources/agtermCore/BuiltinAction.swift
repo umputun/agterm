@@ -22,6 +22,7 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
     case firstSession = "first_session", lastSession = "last_session"
     case quickTerminal = "quick_terminal", sessionPalette = "session_palette", commandPalette = "command_palette"
     case customCommandPalette = "custom_command_palette", showAttention = "show_attention"
+    case dashboard = "dashboard"
 
     /// The shipped default chord for this action, or `nil` when it has no default key today.
     ///
@@ -58,6 +59,7 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
         case .commandPalette: return Chord(mods: [.control, .shift], key: "p")
         case .customCommandPalette: return Chord(mods: [.control, .shift], key: "o")
         case .showAttention: return Chord(mods: [.control, .shift], key: "i")
+        case .dashboard: return Chord(mods: [.command, .shift], key: "d")
         case .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .clearStatus,
              .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace:
             return nil

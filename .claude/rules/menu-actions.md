@@ -37,6 +37,14 @@ paths:
   AppKit renders it after View) holds moving the selection/focus: the two palettes (Go to Session / Command
   Palette), session stepping (Previous/Next, Previous/Next Attention, First/Last),
   and Focus Left/Right Pane.
+  It also carries the **Dashboard** grid opener (⌘⇧D → `AppActions.toggleDashboard`,
+  the `dashboard` built-in action) — a toggle that opens the frontmost window's most-recently-used
+  dashboard grid (auto-sized, the `dashboard --mru --auto-size` control equivalent) or closes it,
+  inert while terminal zoom is active; it is ALSO a command-palette entry.
+  Unlike the pure placement split, this one IS a keep-in-sync-ish addition:
+  the `dashboard` built-in reuses the existing socket `dashboard` command (no NEW control command),
+  and the session→pane-cell expansion is hoisted into the shared host-free `AppStore.dashboardMembers(for:limit:)`
+  helper that both `ControlServer.setDashboard` and `toggleDashboard` call.
   This is a pure menu-PLACEMENT split — every item still drives the SAME `AppActions`,
   and the control/palette/keymap surfaces are untouched (so it is NOT a keep-in-sync change).
   When adding a menu item, file it by intent: display state → View, moving between things → Navigate.

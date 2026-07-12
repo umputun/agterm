@@ -28,6 +28,7 @@ struct PaletteCatalogTests {
             "Focus Workspace",
             "Find…",
             "Quick Terminal",
+            "Dashboard",
             "Toggle Full Screen",
             "Increase Font Size",
             "Decrease Font Size",
@@ -49,7 +50,7 @@ struct PaletteCatalogTests {
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 41)
+        #expect(PaletteCommand.allCases.count == 42)
     }
 
     @Test func idsRoundTripThroughRawValue() {
@@ -101,6 +102,7 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.find.builtinAction == .toggleSearch)
         #expect(PaletteCommand.toggleTerminalZoom.builtinAction == .toggleTerminalZoom)
         #expect(PaletteCommand.resetFontSize.builtinAction == .resetFontSize)
+        #expect(PaletteCommand.dashboard.builtinAction == .dashboard)
         #expect(PaletteCommand.reopenRecent.builtinAction == .reopenRecent)
         #expect(PaletteCommand.undoClose.builtinAction == .undoClose)
         #expect(PaletteCommand.clearFlagged.builtinAction == nil)

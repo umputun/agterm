@@ -27,7 +27,8 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.reopenRecent.rawValue == "reopen_recent")
         #expect(BuiltinAction.undoClose.rawValue == "undo_close")
         #expect(BuiltinAction.toggleFullscreen.rawValue == "toggle_fullscreen")
-        #expect(BuiltinAction.allCases.count == 39)
+        #expect(BuiltinAction.dashboard.rawValue == "dashboard")
+        #expect(BuiltinAction.allCases.count == 40)
     }
 
     @Test func rejectsUnknownName() {
@@ -95,6 +96,7 @@ struct BuiltinActionTests {
             .commandPalette: Chord(mods: [.control, .shift], key: "p"),
             .customCommandPalette: Chord(mods: [.control, .shift], key: "o"),
             .showAttention: Chord(mods: [.control, .shift], key: "i"),
+            .dashboard: Chord(mods: [.command, .shift], key: "d"),
         ]
         // the table must cover every case so a new action can't be added without a documented default.
         #expect(expected.count == BuiltinAction.allCases.count)

@@ -270,6 +270,41 @@ final class DashboardUITests: ControlAPITestCase {
         XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "close removes the overlay after the resize")
     }
 
+    // the Navigate ▸ Dashboard menu item (⌘⇧D) is the GUI opener for the MRU dashboard grid — it TOGGLES:
+    // opening the window's most-recently-used sessions when closed, closing when open. Seeds a known recency
+    // via explicit selects, opens via the menu item, asserts the overlay renders one cell per recent session
+    // (the mru members), then toggles it closed via the same menu item and asserts the overlay is gone.
+    func testNavigateDashboardMenuTogglesMruGrid() throws {
+        let ids = try prepareSessions(extra: 2) // 3 sessions total
+        XCTAssertEqual(ids.count, 3)
+        // seed a deterministic recency so the mru open has members (each select pushes MRU front).
+        for id in ids {
+            XCTAssertEqual(try sendCommand(#"{"cmd":"session.select","target":"\#(id)"}"#)["ok"] as? Bool, true,
+                           "selecting \(id) should succeed")
+            XCTAssertTrue(pollSelectedSession(id, timeout: 10), "the select should land before the next")
+        }
+
+        XCTAssertFalse(dashboardOverlay.exists, "no dashboard overlay before opening")
+        openDashboardViaMenu()
+        XCTAssertTrue(dashboardOverlay.waitForExistence(timeout: 15), "the Navigate ▸ Dashboard item opens the grid")
+        XCTAssertTrue(pollCellCount(3, timeout: 15), "the mru grid renders one cell per recent session")
+        XCTAssertEqual(dashMembers()?.count, 3, "tree.dashboardMembers matches the mru member count")
+        XCTAssertEqual(dashFontMode(), "auto", "the menu opener is the --auto-size equivalent")
+
+        // toggling the same menu item again closes it.
+        openDashboardViaMenu()
+        XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "the menu item toggles the dashboard closed")
+        XCTAssertNil(dashMembers(), "tree.dashboardMembers clears on the toggle-close")
+    }
+
+    /// Click Navigate ▸ Dashboard in the menu bar.
+    private func openDashboardViaMenu() {
+        app.menuBars.menuBarItems["Navigate"].click()
+        let item = app.menuItems["Dashboard"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "the Navigate menu should offer a Dashboard item")
+        item.click()
+    }
+
     // MARK: - element queries
 
     private var dashboardOverlay: XCUIElement {

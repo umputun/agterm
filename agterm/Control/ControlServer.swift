@@ -480,19 +480,10 @@ final class ControlServer {
                     return ControlResponse(ok: false, error: "no dashboard sessions resolved")
                 }
             }
-            // expand each resolved session into pane cells: always the primary pane, plus the split pane when
-            // the session hasSplit (both shells alive, shown OR hidden), so a split session becomes two cells.
-            var members: [DashboardMember] = []
-            for id in sessionIDs {
-                members.append(DashboardMember(session: id, surface: .primary))
-                if store.session(withID: id)?.hasSplit == true {
-                    members.append(DashboardMember(session: id, surface: .split))
-                }
-            }
-            // the 9-cell cap counts PANES now, applied after expansion.
-            let capped = Array(members.prefix(DashboardLayout.maxCells))
-            let droppedPanes = members.count - capped.count
-            members = capped
+            // expand each resolved session into pane cells (always the primary pane, plus the split pane when the
+            // session hasSplit) and cap the resulting PANE list to the 9-cell limit — the shared host-free
+            // AppStore helper, so this expansion+cap has one implementation with AppActions.toggleDashboard.
+            let (members, droppedPanes) = store.dashboardMembers(for: sessionIDs, limit: DashboardLayout.maxCells)
             // zoom and dashboard are mutually exclusive: drop any active zoom for this window on open.
             TerminalZoomRegistry.shared.controller(for: windowID)?.clear()
             controller.open(members: members, fontMode: fontMode)

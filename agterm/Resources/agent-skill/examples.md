@@ -423,7 +423,10 @@ builds at once. The cell unit is a session+pane: a non-split session is one cell
 shows as TWO cells (its left/primary and right/split panes), capped at 9 cells total. No cell takes input:
 the keyboard navigates a highlight (arrows), Enter jumps into the highlighted session AND focuses that
 exact pane then closes, Esc closes. Open it over the socket with explicit session ids, or with `--mru` to
-pull the window's most-recently-used sessions automatically.
+pull the window's most-recently-used sessions automatically. The most-recently-used grid also has a built-in
+opener — **⌘⇧D** (the `dashboard` action), **Navigate ▸ Dashboard**, or the command palette's **Dashboard**
+toggle it auto-sized (the `dashboard --mru --auto-size` equivalent), so the recent-sessions view needs no
+script for the common case.
 
 ```bash
 # grid of three sessions, cells auto-sized to the grid (shrinking as it grows)
@@ -446,11 +449,12 @@ agtermctl tree --json | jq '.result.tree | {dashboardMembers, dashboardHighlight
 agtermctl dashboard --close
 ```
 
-Bind a leader-key "dashboard of my recent sessions" to a chord with a `keymap.conf` custom action (then
-`agtermctl keymap reload`) — `--mru` needs no ids, so it makes a clean one-key binding:
+The MRU grid is already on **⌘⇧D** (the built-in `dashboard` action) — rebind that chord in `keymap.conf`
+with `map <chord> dashboard`. To dashboard a FIXED set of explicit ids instead, bind a `keymap.conf` custom
+action (then `agtermctl keymap reload`):
 
 ```conf
-command "Dashboard" ctrl+a>d /usr/local/bin/agtermctl dashboard --mru --auto-size
+command "Dashboard build hosts" ctrl+a>d /usr/local/bin/agtermctl dashboard "$WEB" "$API" --auto-size
 ```
 
 `--mru` is mutually exclusive with explicit ids and `--close`, and errors with `no recent sessions` when

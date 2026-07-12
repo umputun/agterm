@@ -148,7 +148,7 @@ agterm arranges terminals into a small hierarchy. These are the only terms you n
 
 **Terminal zoom.** Zoom fills the whole window with one terminal surface — a pane, the scratch, an overlay, or the quick terminal — hiding the sidebar and collapsing the title bar to a slim strip that keeps the traffic lights and an exit button. Cmd+Shift+Return toggles it on the active surface (rebindable as `toggle_terminal_zoom`; the exit button, ⌘W, and View ▸ Toggle Terminal Zoom all leave it). It is a view mode, not a layout change: entering closes transient chrome (an open palette or search), and exiting restores split ratios, focus, and visibility exactly as they were. Everything else keeps running behind the zoomed surface, and a script can zoom any surface by id with `agtermctl surface zoom`. Distinct from macOS window zoom and full screen, which size the window itself.
 
-**Dashboard.** For watching several agents or builds at once, the dashboard shows sessions' live output side by side in a grid (laid out `ceil(sqrt(n))`), overlaid on the window. The cell unit is a session+pane: a non-split session is one cell, and a split session shows as two cells — its left/primary and right/split panes. It is view-only — no cell takes input; the keyboard navigates a highlight between cells with the arrow keys, Enter jumps into the highlighted session and focuses that exact pane (and closes the grid), and Esc closes it. It is opened over the control channel with `agtermctl dashboard <ids…>` — or with `agtermctl dashboard --mru` to fill the grid from the window's most-recently-used sessions instead of naming ids — and closed with `--close` (or Enter/Esc). Cell fonts can be sized absolutely with `--font-size` or scaled to the grid with `--auto-size`; the nine-cell cap counts panes, so a set whose panes exceed nine is capped with the drop reported, and `--window` picks a window (default frontmost). The dashboard and terminal zoom are mutually exclusive.
+**Dashboard.** For watching several agents or builds at once, the dashboard shows sessions' live output side by side in a grid (laid out `ceil(sqrt(n))`), overlaid on the window. The cell unit is a session+pane: a non-split session is one cell, and a split session shows as two cells — its left/primary and right/split panes. It is view-only — no cell takes input; the keyboard navigates a highlight between cells with the arrow keys, Enter jumps into the highlighted session and focuses that exact pane (and closes the grid), and Esc closes it. It is opened over the control channel with `agtermctl dashboard <ids…>` — or with `agtermctl dashboard --mru` to fill the grid from the window's most-recently-used sessions instead of naming ids — and closed with `--close` (or Enter/Esc). The most-recently-used grid also has a built-in opener: **⌘⇧D** (or **Navigate ▸ Dashboard**, or the command palette's **Dashboard**) toggles it, auto-sized, so the recent-sessions view is one keystroke away without a script. Cell fonts can be sized absolutely with `--font-size` or scaled to the grid with `--auto-size`; the nine-cell cap counts panes, so a set whose panes exceed nine is capped with the drop reported, and `--window` picks a window (default frontmost). The dashboard and terminal zoom are mutually exclusive.
 
 **Workspace.** A workspace is a named group of sessions for one project or context, for example "work" or "personal". Sessions belong to a workspace and can move between workspaces while still running, keeping their shell and scrollback. There is always at least one workspace.
 
@@ -324,7 +324,7 @@ The format is line-based with two verbs. Blank lines and lines starting with `#`
 
 ```
 # rebind a built-in to a single chord (mods joined by +; no leader sequences for built-ins)
-map cmd+shift+d   toggle_split
+map cmd+shift+l   toggle_split
 map ctrl+shift+k  command_palette
 
 # define custom commands ("name" shows in the palette; chord is optional)
@@ -351,6 +351,7 @@ previous_attention_session            next_attention_session
 quick_terminal     session_palette    command_palette
 custom_command_palette                show_attention
 select_theme       toggle_fullscreen  toggle_terminal_zoom
+dashboard
 ```
 
 The shell line of a `command` may use these `{AGT_X}` tokens, expanded at fire time (the same values are also exported as `$AGT_X` environment variables on the spawned process):

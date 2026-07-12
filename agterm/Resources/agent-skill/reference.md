@@ -406,6 +406,12 @@ count is reported in the response text (`dropped N pane(s) beyond the 9-cell lim
 explicit ids and `--close`, composes with the font flags and `--window`, and errors with `no recent
 sessions` when the window has none.
 
+The most-recently-used grid also has a GUI opener — **⌘⇧D** (the `dashboard` built-in action, rebindable
+in `keymap.conf`), **Navigate ▸ Dashboard**, and the command palette's **Dashboard** entry all TOGGLE the
+frontmost window's dashboard: open it over the window's most-recently-used sessions auto-sized (identical to
+`dashboard --mru --auto-size`) when closed, close it when open. It is a no-op while terminal zoom is active.
+There is no new control command for it — the socket `dashboard` command is unchanged.
+
 It is **view-only**: no cell takes keyboard or mouse input — the whole grid shows live output, and once
 open the keyboard drives it. Arrow keys move a highlight between cells (2-D, no wrap; clamped into a
 ragged last row), Enter jumps into the highlighted session AND focuses that exact pane (selecting the
@@ -544,7 +550,7 @@ so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are as untrusted as `{AGT_SELECT
 Built-in action names for `map` include: `new_window`, `new_workspace`, `new_session`,
 `open_directory`, `rename_session`, `close_session`, `reopen_recent`, `undo_close`, `clear_status`, `increase_font_size`,
 `decrease_font_size`, `reset_font_size`, `toggle_split`, `toggle_scratch`, `toggle_sidebar`, `quick_terminal`,
-`session_palette`, `command_palette`, `custom_command_palette`, and the navigation actions (`previous_session`, `next_session`,
+`session_palette`, `command_palette`, `custom_command_palette`, `dashboard`, and the navigation actions (`previous_session`, `next_session`,
 `first_session`, `last_session`, `previous_attention_session`, `next_attention_session`,
 `focus_left_pane`, `focus_right_pane`, `select_theme`). Editing the keymap from a terminal: open
 `keymap.conf` in `$EDITOR`, then `agtermctl keymap reload`.

@@ -301,6 +301,9 @@ extension agtermApp {
                 Button { actions.toggleAttentionPalette() } label: { Label("Go to Attention…", systemImage: "bell") }
                     .keyboardShortcut(shortcut(for: .showAttention))
                     .disabled(zoomed)
+                Button { actions.toggleDashboard() } label: { Label("Dashboard", systemImage: "square.grid.2x2") }
+                    .keyboardShortcut(shortcut(for: .dashboard))
+                    .disabled(zoomed)
                 Divider()
                 // step between sessions in the sidebar's flattened order. Prev/Next ride ⌥⌘↑/↓ (NOT bare
                 // ⌘+arrows, which shadow text-field caret nav in the rename/palette/settings fields); ⌥⌘↑/↓

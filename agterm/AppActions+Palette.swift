@@ -68,6 +68,7 @@ extension AppActions {
         case .focusWorkspace: focusActiveWorkspace()
         case .find: toggleSearch()
         case .quickTerminal: toggleQuickTerminal()
+        case .dashboard: toggleDashboard()
         case .toggleFullscreen: toggleFullscreen()
         case .increaseFontSize: increaseFontSize()
         case .decreaseFontSize: decreaseFontSize()

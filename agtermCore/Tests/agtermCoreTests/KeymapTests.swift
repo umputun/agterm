@@ -4,7 +4,7 @@ import Testing
 
 struct KeymapTests {
     @Test func overrideWinsOverDefault() {
-        let override = Chord(mods: [.command, .shift], key: "d")
+        let override = Chord(mods: [.command, .shift], key: "e")
         let keymap = Keymap(builtinOverrides: [.toggleSplit: override], commands: [])
         #expect(keymap.equivalent(for: .toggleSplit) == override)
         // sanity: the shipped default differs from the override, so this is a real win.
@@ -33,9 +33,9 @@ struct KeymapTests {
     }
 
     @Test func parseMapHappyPath() {
-        let (keymap, diagnostics) = parseKeymap("map cmd+shift+d toggle_split")
+        let (keymap, diagnostics) = parseKeymap("map cmd+shift+e toggle_split")
         #expect(diagnostics.isEmpty)
-        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "d")])
+        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "e")])
         #expect(keymap.commands.isEmpty)
     }
 
@@ -160,13 +160,13 @@ struct KeymapTests {
         let text = """
         # leading comment
 
-        map cmd+shift+d toggle_split  # inline comment
+        map cmd+shift+e toggle_split  # inline comment
         # another comment
         command "Deploy" ./deploy.sh
         """
         let (keymap, diagnostics) = parseKeymap(text)
         #expect(diagnostics.isEmpty)
-        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "d")])
+        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "e")])
         #expect(keymap.commands.count == 1)
         #expect(keymap.commands[0].name == "Deploy")
     }
@@ -236,11 +236,11 @@ struct KeymapTests {
     @Test func parseDuplicateBuiltinChordDiagnostic() {
         // two maps to the same chord for DIFFERENT actions: the later one (line 2) is skipped.
         let text = """
-        map cmd+shift+d toggle_split
-        map cmd+shift+d new_session
+        map cmd+shift+e toggle_split
+        map cmd+shift+e new_session
         """
         let (keymap, diagnostics) = parseKeymap(text)
-        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "d")])
+        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "e")])
         #expect(diagnostics.count == 1)
         #expect(diagnostics[0].line == 2)
         #expect(diagnostics[0].message.contains("conflicts with built-in 'toggle_split'"))
@@ -264,34 +264,34 @@ struct KeymapTests {
         // intentionally move-then-take, and the resolution is a single FINAL pass so it succeeds with
         // no diagnostic — the freed-default case must not regress.
         let text = """
-        map cmd+shift+d toggle_split
+        map cmd+shift+e toggle_split
         map cmd+d new_session
         """
         let (keymap, diagnostics) = parseKeymap(text)
         #expect(diagnostics.isEmpty)
-        #expect(keymap.builtinOverrides[.toggleSplit] == Chord(mods: [.command, .shift], key: "d"))
+        #expect(keymap.builtinOverrides[.toggleSplit] == Chord(mods: [.command, .shift], key: "e"))
         #expect(keymap.builtinOverrides[.newSession] == Chord(mods: [.command], key: "d"))
     }
 
     @Test func mapToOtherBuiltinDefaultThenMoveThatBuiltinBothSucceed() {
         // codex's reverse-order case: take cmd+d for new_session FIRST, then move toggle_split off cmd+d.
         // resolution is order-independent and decided against the final state, so both succeed with NO
-        // diagnostic (final state is conflict-free: new_session=cmd+d, toggle_split=cmd+shift+d).
+        // diagnostic (final state is conflict-free: new_session=cmd+d, toggle_split=cmd+shift+e).
         let text = """
         map cmd+d new_session
-        map cmd+shift+d toggle_split
+        map cmd+shift+e toggle_split
         """
         let (keymap, diagnostics) = parseKeymap(text)
         #expect(diagnostics.isEmpty)
         #expect(keymap.builtinOverrides[.newSession] == Chord(mods: [.command], key: "d"))
-        #expect(keymap.builtinOverrides[.toggleSplit] == Chord(mods: [.command, .shift], key: "d"))
+        #expect(keymap.builtinOverrides[.toggleSplit] == Chord(mods: [.command, .shift], key: "e"))
     }
 
     @Test func mapTabSeparatedLineParses() {
         // a tab between the chord and the action must parse the same as a space.
-        let (keymap, diagnostics) = parseKeymap("map\tcmd+shift+d\ttoggle_split")
+        let (keymap, diagnostics) = parseKeymap("map\tcmd+shift+e\ttoggle_split")
         #expect(diagnostics.isEmpty)
-        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "d")])
+        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "e")])
     }
 
     @Test func mapCascadingCollisionDropsBothRevertsToDefaults() {
@@ -341,10 +341,10 @@ struct KeymapTests {
     @Test func parseHandlesCRLFLineEndings() {
         // a CRLF file leaves a trailing \r that .whitespaces does not strip; normalization must let the
         // line parse normally rather than reading `toggle_split\r` as an unknown action.
-        let text = "map cmd+shift+d toggle_split\r\ncommand \"Deploy\" ./deploy.sh\r\n"
+        let text = "map cmd+shift+e toggle_split\r\ncommand \"Deploy\" ./deploy.sh\r\n"
         let (keymap, diagnostics) = parseKeymap(text)
         #expect(diagnostics.isEmpty)
-        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "d")])
+        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "e")])
         #expect(keymap.commands.count == 1)
         #expect(keymap.commands[0].name == "Deploy")
     }
@@ -352,7 +352,7 @@ struct KeymapTests {
     @Test func mapSameActionTwiceIsLastWins() {
         // re-mapping the SAME action can't collide with itself: the later chord wins, no diagnostic.
         let text = """
-        map cmd+shift+d toggle_split
+        map cmd+shift+e toggle_split
         map cmd+shift+x toggle_split
         """
         let (keymap, diagnostics) = parseKeymap(text)
@@ -376,14 +376,14 @@ struct KeymapTests {
 
     @Test func parseDiagnosticLineNumbersWhileGoodLinesParse() {
         let text = """
-        map cmd+shift+d toggle_split
+        map cmd+shift+e toggle_split
         bogus line here
         command "Deploy" ./deploy.sh
         map ctrl+a>g new_session
         """
         let (keymap, diagnostics) = parseKeymap(text)
         // the two valid lines still parse.
-        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "d")])
+        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "e")])
         #expect(keymap.commands.count == 1)
         #expect(keymap.commands[0].name == "Deploy")
         // the two bad lines each yield a diagnostic at the correct line number.
@@ -408,14 +408,14 @@ struct KeymapTests {
     }
 
     @Test func customChordEqualsOverriddenBuiltinChordIsDropped() {
-        // the built-in toggle_split is moved to cmd+shift+d; a custom command bound to the NEW
+        // the built-in toggle_split is moved to cmd+shift+e; a custom command bound to the NEW
         // built-in chord collides and is dropped.
         let text = """
-        map cmd+shift+d toggle_split
-        command "Boom" cmd+shift+d echo boom
+        map cmd+shift+e toggle_split
+        command "Boom" cmd+shift+e echo boom
         """
         let (keymap, diagnostics) = parseKeymap(text)
-        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "d")])
+        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "e")])
         #expect(keymap.commands.count == 1)
         #expect(keymap.commands[0].shortcut.isEmpty)
         #expect(diagnostics.count == 1)
@@ -427,10 +427,10 @@ struct KeymapTests {
         // is intentionally custom-before-map to prove validation is a single FINAL pass.
         let text = """
         command "Boom" cmd+d echo boom
-        map cmd+shift+d toggle_split
+        map cmd+shift+e toggle_split
         """
         let (keymap, diagnostics) = parseKeymap(text)
-        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "d")])
+        #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "e")])
         #expect(keymap.commands.count == 1)
         #expect(keymap.commands[0].shortcut == "cmd+d")
         #expect(diagnostics.isEmpty)
