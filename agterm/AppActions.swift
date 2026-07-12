@@ -22,7 +22,7 @@ final class AppActions {
 
     /// The frontmost window's quick-terminal controller (each window owns its own), resolved through
     /// the same frontmost-window accessor as `store`. Nil when no window is open.
-    private var frontmostQuickTerminal: QuickTerminalController? {
+    var frontmostQuickTerminal: QuickTerminalController? {
         QuickTerminalRegistry.shared.controller(for: library.activeWindowID)
     }
 
@@ -40,7 +40,7 @@ final class AppActions {
     /// session-addressed focus paths: control commands resolve sessions across ALL windows, so gating
     /// them on the FRONTMOST window's zoom would silently drop the focus step for an un-zoomed
     /// background window (and miss a zoomed non-frontmost one).
-    private func terminalZoomActive(for session: Session) -> Bool {
+    func terminalZoomActive(for session: Session) -> Bool {
         guard let windowID = library.windowID(forSession: session.id) else { return false }
         return TerminalZoomRegistry.shared.controller(for: windowID)?.target != nil
     }
@@ -906,31 +906,10 @@ final class AppActions {
         }
     }
 
-    /// Move first responder to the split (right) pane on open, or the primary on close.
-    /// Re-asserts over a short window because the split surface materializes a beat after the
-    /// toggle and the HSplitView collapse churns the primary view. While a full-coverage surface
-    /// (scratch or overlay) is up, the requested pane is hidden beneath it, so keep first responder on
-    /// the visible `topmostSurface` instead — the caller has already set `splitFocused`, so the correct
-    /// pane shows once the cover is dismissed.
-    func focusSplitPane(_ session: Session, wantSplit: Bool, attempt: Int = 0) {
-        // gate on the SESSION's window, not the frontmost one: this path is cross-window (the control
-        // channel focuses sessions in background windows), where the frontmost window's zoom is irrelevant.
-        if terminalZoomActive(for: session) { return }
-        // the quick terminal is a window-level cover above the session; while it's up it owns focus, so
-        // don't move first responder to a pane behind it (its own hide restores the session). The caller
-        // has already set `splitFocused`, so the right pane shows once the quick terminal is dismissed.
-        if frontmostQuickTerminal?.isVisible == true { return }
-        let target: (any TerminalSurface)? = (session.overlayActive || session.scratchActive)
-            ? session.topmostSurface
-            : (wantSplit ? session.splitSurface : session.surface)
-        if let view = target as? GhosttySurfaceView, let window = view.window {
-            window.makeFirstResponder(view)
-        }
-        guard attempt < 12 else { return }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.03) { [weak self] in
-            self?.focusSplitPane(session, wantSplit: wantSplit, attempt: attempt + 1)
-        }
-    }
+    /// Bumped by each fresh `focusSplitPane` call (in AppActions+Focus) so an older retry loop cancels
+    /// itself when a newer focus op supersedes it - prevents two opposite-target loops from ping-ponging
+    /// first responder.
+    var focusGeneration = 0
 
     /// Bring a session/pane to the foreground from a notification click: surface the owning window
     /// (reopening it when the banner was clicked after the window closed), select the session (which
