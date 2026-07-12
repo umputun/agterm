@@ -235,13 +235,16 @@ session (`quick` is the id returned for a quick-terminal zoom). `hide` exits zoo
 enters/exits only this zoom mode, not macOS window zoom.
 
 **dashboard** — `dashboard <ids…> [--font-size N | --auto-size] [--window W]` opens a view-only grid
-(max 9 sessions, laid out `ceil(sqrt(n))`) showing the named sessions' live surfaces; `dashboard --close
-[--window W]` closes it. View-only: no cell takes input — the keyboard drives it (arrows move the
-highlight, Enter jumps into the highlighted session and closes, Esc closes). `--font-size N` sets an
-absolute cell font in points; `--auto-size` sizes cells relative to the Settings default font, shrinking
-as the grid grows (the two are mutually exclusive; a non-positive size is rejected). More than 9 ids are
-capped to the first 9 and the dropped count is reported; ids are deduped and honor `--window` (default
-frontmost). Read the state back from the tree's top-level `dashboardMembers`/`dashboardHighlighted`/
+(max 9 sessions, laid out `ceil(sqrt(n))`) showing the named sessions' live surfaces; `dashboard --mru
+[--font-size N | --auto-size] [--window W]` opens the window's most-recently-used sessions (up to 9,
+fewer if it has fewer) instead of naming ids; `dashboard --close [--window W]` closes it. View-only: no
+cell takes input — the keyboard drives it (arrows move the highlight, Enter jumps into the highlighted
+session and closes, Esc closes). `--font-size N` sets an absolute cell font in points; `--auto-size`
+sizes cells relative to the Settings default font, shrinking as the grid grows (the two are mutually
+exclusive; a non-positive size is rejected). More than 9 ids are capped to the first 9 and the dropped
+count is reported; ids are deduped and honor `--window` (default frontmost). `--mru` is mutually
+exclusive with explicit ids and `--close`, and composes with the font flags. Read the state back from
+the tree's top-level `dashboardMembers`/`dashboardHighlighted`/
 `dashboardFontSize`/`dashboardFontMode`. Zoom and the dashboard are mutually exclusive: opening one CLOSES
 the other. Opening/closing resizes each member's pty to its cell, so programs may redraw — view-only
 means no input, not no process effect.

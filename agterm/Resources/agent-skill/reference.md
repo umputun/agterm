@@ -392,11 +392,15 @@ fullscreen inside agterm; use `window zoom` only to maximize the whole window on
 ## dashboard
 
 `agtermctl dashboard <ids…> [--font-size N | --auto-size] [--window W]` opens a per-window, view-only
-grid of the named sessions' live surfaces (max 9, laid out `ceil(sqrt(n))`); `agtermctl dashboard
---close [--window W]` closes the open one. The positional ids are session addresses (id / unique prefix
-/ `active`); unresolved ids are dropped, ids are deduped by resolved session, and more than 9 are capped
-to the first 9 with the dropped count reported in the response text (`dropped N beyond the 9-session
-dashboard limit`). `--window` targets a specific window's dashboard (default: the frontmost).
+grid of the named sessions' live surfaces (max 9, laid out `ceil(sqrt(n))`); `agtermctl dashboard --mru
+[--font-size N | --auto-size] [--window W]` opens the window's most-recently-used sessions (up to 9,
+fewer if it has fewer) instead of naming ids; `agtermctl dashboard --close [--window W]` closes the open
+one. The positional ids are session addresses (id / unique prefix / `active`); unresolved ids are
+dropped, ids are deduped by resolved session, and more than 9 are capped to the first 9 with the dropped
+count reported in the response text (`dropped N beyond the 9-session dashboard limit`). `--window`
+targets a specific window's dashboard (default: the frontmost). `--mru` draws its members from the
+window's recency (most-recent first); it is mutually exclusive with explicit ids and `--close`, composes
+with the font flags and `--window`, and errors with `no recent sessions` when the window has none.
 
 It is **view-only**: no cell takes keyboard or mouse input — the whole grid shows live output, and once
 open the keyboard drives it. Arrow keys move a highlight between cells (2-D, no wrap; clamped into a
@@ -418,8 +422,8 @@ event and may redraw — "view-only" means no input reaches the cell, not that t
 untouched.
 
 Invalid invocations error (rejected at the CLI and re-checked server-side): `--font-size` with
-`--auto-size`, a non-positive `--font-size`, `--close` combined with ids or a font option, and an open
-with no ids.
+`--auto-size`, a non-positive `--font-size`, `--close` combined with ids, `--mru`, or a font option,
+`--mru` combined with explicit ids, and an open with neither ids nor `--mru`.
 
 ## quick
 

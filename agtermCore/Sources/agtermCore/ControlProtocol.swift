@@ -207,6 +207,11 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// For `dashboard`, size the cells RELATIVE to the Settings default font size, shrinking as the grid
     /// grows so dense grids stay readable (the CLI's `--auto-size`). Mutually exclusive with `fontSize`.
     public var autoSize: Bool?
+    /// For `dashboard`, populate the grid from the target window's most-recently-used sessions (up to 9,
+    /// fewer if the window has fewer) instead of explicit ids (the CLI's `--mru`). Mutually exclusive with
+    /// `targets` and `close`; composes with the font flags. The MRU resolution is app-side (it needs the
+    /// store's recency), so this only signals the intent.
+    public var mru: Bool?
 
     public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
                 workspace: String? = nil, workspaceName: String? = nil,
@@ -221,7 +226,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 path: String? = nil, color: String? = nil, opacity: Double? = nil, fit: String? = nil,
                 position: String? = nil, repeats: Bool? = nil, all: Bool? = nil, lines: Int? = nil,
                 light: String? = nil, dark: String? = nil,
-                close: Bool? = nil, fontSize: Double? = nil, autoSize: Bool? = nil) {
+                close: Bool? = nil, fontSize: Double? = nil, autoSize: Bool? = nil, mru: Bool? = nil) {
         self.name = name
         self.cwd = cwd
         self.targets = targets
@@ -267,6 +272,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.close = close
         self.fontSize = fontSize
         self.autoSize = autoSize
+        self.mru = mru
     }
 }
 

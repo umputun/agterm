@@ -745,15 +745,32 @@ struct CommandsTests {
     }
 
     @Test func dashboardRejectsCloseWithIds() {
-        #expect(validationMessage(["dashboard", "s1", "--close"]) == "--close takes no ids or font options")
+        #expect(validationMessage(["dashboard", "s1", "--close"]) == "--close takes no ids, --mru, or font options")
     }
 
     @Test func dashboardRejectsCloseWithAutoSize() {
-        #expect(validationMessage(["dashboard", "--close", "--auto-size"]) == "--close takes no ids or font options")
+        #expect(validationMessage(["dashboard", "--close", "--auto-size"]) == "--close takes no ids, --mru, or font options")
     }
 
     @Test func dashboardRejectsEmptyIdsWithoutClose() {
-        #expect(validationMessage(["dashboard"]) == "dashboard requires at least one session id (or --close)")
+        #expect(validationMessage(["dashboard"]) == "dashboard requires at least one session id (or --mru, or --close)")
+    }
+
+    @Test func dashboardMruAlone() throws {
+        #expect(try request(["dashboard", "--mru"]) == ControlRequest(cmd: .dashboard, args: ControlArgs(mru: true)))
+    }
+
+    @Test func dashboardMruWithAutoSizeAndWindow() throws {
+        let expected = ControlRequest(cmd: .dashboard, args: ControlArgs(window: "win", autoSize: true, mru: true))
+        #expect(try request(["dashboard", "--mru", "--auto-size", "--window", "win"]) == expected)
+    }
+
+    @Test func dashboardRejectsMruWithIds() {
+        #expect(validationMessage(["dashboard", "s1", "--mru"]) == "--mru cannot be combined with session ids")
+    }
+
+    @Test func dashboardRejectsMruWithClose() {
+        #expect(validationMessage(["dashboard", "--mru", "--close"]) == "--close takes no ids, --mru, or font options")
     }
 
     @Test func dashboardRejectsNegativeFontSize() {

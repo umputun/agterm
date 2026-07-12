@@ -190,10 +190,12 @@ struct Surface: ParsableCommand {
 // MARK: - dashboard
 
 /// `agtermctl dashboard <ids…> [--font-size N | --auto-size] [--window W]` opens a view-only grid of the
-/// named sessions (max 9); `agtermctl dashboard --close [--window W]` closes the open one. The positional
-/// ids map to `ControlArgs.targets`; the dispatcher caps them at 9, dedups, and reports any drop. The CLI
-/// re-checks the flag combinations `validate()`-style so a bad invocation is a clean usage error without a
-/// socket round-trip (the dispatcher enforces the same rules server-side).
+/// named sessions (max 9); `agtermctl dashboard --mru [--font-size N | --auto-size] [--window W]` opens one
+/// of the window's most-recently-used sessions (up to 9) instead of naming ids; `agtermctl dashboard --close
+/// [--window W]` closes the open one. The positional ids map to `ControlArgs.targets`; the dispatcher caps
+/// them at 9, dedups, and reports any drop. The CLI re-checks the flag combinations `validate()`-style so a
+/// bad invocation is a clean usage error without a socket round-trip (the dispatcher enforces the same rules
+/// server-side).
 struct Dashboard: RequestCommand {
     static let configuration = CommandConfiguration(
         abstract: "Open a view-only grid of live sessions, or --close the open one.",
@@ -201,26 +203,33 @@ struct Dashboard: RequestCommand {
         dashboard S1 S2 S3                 open a grid of the named sessions (ids or unique prefixes, max 9)
         dashboard S1 S2 --font-size 12     open with an absolute cell font size (points)
         dashboard S1 S2 --auto-size        open sizing cells relative to the Settings default font
+        dashboard --mru                    open a grid of the window's most-recently-used sessions (up to 9)
+        dashboard --mru --auto-size        the same, sizing cells relative to the Settings default font
         dashboard S1 --window W            open in a specific window (defaults to the frontmost)
         dashboard --close                  close the open dashboard
         """)
-    @Argument(help: "Session ids (or unique prefixes) to show, max 9. Omit only with --close.") var ids: [String] = []
+    @Argument(help: "Session ids (or unique prefixes) to show, max 9. Omit only with --mru or --close.") var ids: [String] = []
     @Option(name: .customLong("font-size"), help: "Absolute cell font size in points (mutually exclusive with --auto-size).") var fontSize: Double?
     @Flag(name: .long, help: "Size cells relative to the Settings default font, shrinking as the grid grows.") var autoSize = false
-    @Flag(name: .long, help: "Close the open dashboard (takes no ids or font options).") var close = false
+    @Flag(name: .long, help: "Populate the grid from the window's most-recently-used sessions (up to 9).") var mru = false
+    @Flag(name: .long, help: "Close the open dashboard (takes no ids, --mru, or font options).") var close = false
     @OptionGroup var options: ClientOptions
 
     // reject the invalid flag combinations at parse time (before any connection) so they are clean usage
     // errors, unit-testable without a socket; the dispatcher re-checks the same rules server-side.
     func validate() throws {
         if close {
-            guard ids.isEmpty, fontSize == nil, !autoSize else {
-                throw ValidationError("--close takes no ids or font options")
+            guard ids.isEmpty, !mru, fontSize == nil, !autoSize else {
+                throw ValidationError("--close takes no ids, --mru, or font options")
             }
             return
         }
-        guard !ids.isEmpty else {
-            throw ValidationError("dashboard requires at least one session id (or --close)")
+        if mru, !ids.isEmpty {
+            throw ValidationError("--mru cannot be combined with session ids")
+        }
+        // an open needs explicit ids OR --mru (which supplies them from the window's recency).
+        guard !ids.isEmpty || mru else {
+            throw ValidationError("dashboard requires at least one session id (or --mru, or --close)")
         }
         if fontSize != nil, autoSize {
             throw ValidationError("--font-size is mutually exclusive with --auto-size")
@@ -235,7 +244,8 @@ struct Dashboard: RequestCommand {
         let args = ControlArgs(targets: ids.isEmpty ? nil : ids,
                                close: close ? true : nil,
                                fontSize: fontSize,
-                               autoSize: autoSize ? true : nil)
+                               autoSize: autoSize ? true : nil,
+                               mru: mru ? true : nil)
         return ControlRequest(cmd: .dashboard, args: options.withWindow(args))
     }
 }

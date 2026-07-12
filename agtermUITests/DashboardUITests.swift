@@ -35,6 +35,38 @@ final class DashboardUITests: ControlAPITestCase {
         XCTAssertNil(dashHighlighted(), "tree.dashboardHighlighted clears on close")
     }
 
+    // `dashboard --mru` populates the grid from the window's most-recently-used sessions (no explicit ids):
+    // a KNOWN recency order is seeded via explicit `session.select`s (the LAST selected is most-recent), then
+    // the mru members are asserted to equal that order exactly (recency is deterministic — the RecencyStack is
+    // pushed on every select), one cell per session (fewer than the 9-cell cap). Asserts ORDER, not just the
+    // set, since the switcher/recency behavior is deterministic.
+    func testDashboardMruOpensRecentSessions() throws {
+        let ids = try prepareSessions(extra: 3) // 4 sessions total (seeded + three new)
+        XCTAssertEqual(ids.count, 4)
+
+        // seed recency by selecting each session in a known sequence; most-recent-first is its reverse.
+        let selectOrder = [ids[1], ids[3], ids[0], ids[2]]
+        for id in selectOrder {
+            XCTAssertEqual(try sendCommand(#"{"cmd":"session.select","target":"\#(id)"}"#)["ok"] as? Bool, true,
+                           "selecting \(id) should succeed")
+            XCTAssertTrue(pollSelectedSession(id, timeout: 10), "the select should land before the next")
+        }
+        let expected = Array(selectOrder.reversed()) // [ids[2], ids[0], ids[3], ids[1]]
+
+        let response = try sendCommand(#"{"cmd":"dashboard","args":{"mru":true}}"#)
+        XCTAssertEqual(response["ok"] as? Bool, true, "dashboard --mru should succeed: \(response)")
+        XCTAssertTrue(dashboardOverlay.waitForExistence(timeout: 15), "the mru dashboard overlay should appear")
+
+        XCTAssertTrue(pollCellCount(4, timeout: 15), "mru renders one cell per recent session (≤9, fewer if fewer)")
+        let members = try XCTUnwrap(dashMembers(), "tree carries the mru members while open")
+        XCTAssertEqual(members.map { $0.lowercased() }, expected.map { $0.lowercased() },
+                       "mru members are the window's sessions in most-recent-first order")
+
+        try closeDashboard()
+        XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "close removes the mru overlay")
+        XCTAssertNil(dashMembers(), "the mru members read-back clears on close")
+    }
+
     // arrow keys walk the highlight between cells (observed via tree.dashboardHighlighted and the
     // `dashboard-highlighted` marker), and Enter jumps into the highlighted session — closing the overlay AND
     // moving the selection to that session.

@@ -1335,7 +1335,7 @@ struct ControlDispatcherTests {
 
         #expect(response == ControlResponse(ok: true, result: ControlResult(id: "win")))
         #expect(actions.calls == [
-            .dashboard(targets: ["a", "b"], window: "win", close: false, fontMode: .fixed(14))
+            .dashboard(targets: ["a", "b"], window: "win", close: false, fontMode: .fixed(14), mru: false)
         ])
     }
 
@@ -1351,8 +1351,8 @@ struct ControlDispatcherTests {
         #expect(auto == ControlResponse(ok: true))
         #expect(untouched == ControlResponse(ok: true))
         #expect(actions.calls == [
-            .dashboard(targets: ["a"], window: nil, close: false, fontMode: .auto),
-            .dashboard(targets: ["a", "b"], window: nil, close: false, fontMode: .untouched)
+            .dashboard(targets: ["a"], window: nil, close: false, fontMode: .auto, mru: false),
+            .dashboard(targets: ["a", "b"], window: nil, close: false, fontMode: .untouched, mru: false)
         ])
     }
 
@@ -1365,7 +1365,7 @@ struct ControlDispatcherTests {
 
         #expect(response == ControlResponse(ok: true))
         #expect(actions.calls == [
-            .dashboard(targets: [], window: "win", close: true, fontMode: .untouched)
+            .dashboard(targets: [], window: "win", close: true, fontMode: .untouched, mru: false)
         ])
     }
 
@@ -1379,7 +1379,7 @@ struct ControlDispatcherTests {
         #expect(response?.ok == true)
         #expect(response?.result?.text == "dropped 2 beyond the 9-session dashboard limit")
         #expect(actions.calls == [
-            .dashboard(targets: Array(ids.prefix(9)), window: nil, close: false, fontMode: .untouched)
+            .dashboard(targets: Array(ids.prefix(9)), window: nil, close: false, fontMode: .untouched, mru: false)
         ])
 
         // the drop text is APPENDED to any "unresolved: …" text the server produced, never clobbering it.
@@ -1418,9 +1418,9 @@ struct ControlDispatcherTests {
         #expect(zeroFont == ControlResponse(ok: false, error: "dashboard --font-size must be a positive number"))
         #expect(negativeFont == ControlResponse(ok: false, error: "dashboard --font-size must be a positive number"))
         #expect(nonFiniteFont == ControlResponse(ok: false, error: "dashboard --font-size must be a positive number"))
-        #expect(closeWithIds == ControlResponse(ok: false, error: "dashboard --close takes no ids or font options"))
-        #expect(closeWithFont == ControlResponse(ok: false, error: "dashboard --close takes no ids or font options"))
-        #expect(closeWithAutoSize == ControlResponse(ok: false, error: "dashboard --close takes no ids or font options"))
+        #expect(closeWithIds == ControlResponse(ok: false, error: "dashboard --close takes no ids, --mru, or font options"))
+        #expect(closeWithFont == ControlResponse(ok: false, error: "dashboard --close takes no ids, --mru, or font options"))
+        #expect(closeWithAutoSize == ControlResponse(ok: false, error: "dashboard --close takes no ids, --mru, or font options"))
         #expect(actions.calls.isEmpty)
     }
 
@@ -1583,7 +1583,7 @@ struct ControlDispatcherTests {
 }
 
 @MainActor
-private final class MockControlActions: ControlActions {
+final class MockControlActions: ControlActions {
     enum Call: Equatable {
         case tree(window: String?)
         case sessionNew(ControlSessionCreateOptions)
@@ -1609,7 +1609,7 @@ private final class MockControlActions: ControlActions {
         case sessionFocus(target: String?, window: String?, String?)
         case sessionResize(target: String?, window: String?, ControlSplitResize)
         case surfaceZoom(target: String?, window: String?, ControlToggleMode)
-        case dashboard(targets: [String], window: String?, close: Bool, fontMode: DashboardFontMode)
+        case dashboard(targets: [String], window: String?, close: Bool, fontMode: DashboardFontMode, mru: Bool)
         case font(target: String?, window: String?, pane: String?, String)
         case keymapReload
         case configReload
@@ -1811,8 +1811,8 @@ private final class MockControlActions: ControlActions {
     }
 
     func setDashboard(targets: [String], window: String?, close: Bool,
-                      fontMode: DashboardFontMode) -> ControlResponse {
-        calls.append(.dashboard(targets: targets, window: window, close: close, fontMode: fontMode))
+                      fontMode: DashboardFontMode, mru: Bool) -> ControlResponse {
+        calls.append(.dashboard(targets: targets, window: window, close: close, fontMode: fontMode, mru: mru))
         return nextDashboardResponse
     }
 

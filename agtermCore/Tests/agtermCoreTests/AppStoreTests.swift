@@ -1270,6 +1270,33 @@ struct AppStoreTests {
         #expect(store.sessionRecency.items == [a.id])
     }
 
+    @Test func recentSessionsReturnsMostRecentFirstRespectingLimit() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: ws.id, cwd: "/b")!
+        let c = store.addSession(toWorkspace: ws.id, cwd: "/c")!
+        // drive the recency order explicitly (selectSession pushes MRU front): most-recent is the last select.
+        store.selectSession(a.id)
+        store.selectSession(c.id)
+        store.selectSession(b.id)
+        #expect(store.recentSessions(limit: 9) == [b.id, c.id, a.id]) // fewer than the limit → all, mru first
+        #expect(store.recentSessions(limit: 2) == [b.id, c.id]) // limit clamps the count
+    }
+
+    @Test func recentSessionsSpansWorkspacesAndSkipsClosed() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
+        let b = store.addSession(toWorkspace: personal.id, cwd: "/b")!
+        store.selectSession(a.id)
+        store.selectSession(b.id)
+        #expect(store.recentSessions(limit: 9) == [b.id, a.id]) // recency spans every workspace
+        store.closeSession(b.id) // closed sessions are pruned from recency, so they drop out
+        #expect(store.recentSessions(limit: 9) == [a.id])
+    }
+
     @Test func setFontSizeRecordsValue() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

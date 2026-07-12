@@ -420,11 +420,15 @@ ratios, sidebar state, focus, or split/scratch visibility. Surface ids come from
 
 The dashboard shows up to 9 sessions' live output in one view-only grid — for watching several agents or
 builds at once. No cell takes input: the keyboard navigates a highlight (arrows), Enter jumps into the
-highlighted session and closes, Esc closes. Open it over the socket with explicit session ids.
+highlighted session and closes, Esc closes. Open it over the socket with explicit session ids, or with
+`--mru` to pull the window's most-recently-used sessions automatically.
 
 ```bash
 # grid of three sessions, cells auto-sized to the grid (shrinking as it grows)
 agtermctl dashboard "$a" "$b" "$c" --auto-size
+
+# no ids: fill the grid from the window's most-recently-used sessions (up to 9, fewer if fewer)
+agtermctl dashboard --mru --auto-size
 
 # an absolute cell font in points instead of --auto-size (the two are mutually exclusive)
 agtermctl dashboard "$a" "$b" --font-size 12
@@ -439,10 +443,18 @@ agtermctl tree --json | jq '.result.tree | {dashboardMembers, dashboardHighlight
 agtermctl dashboard --close
 ```
 
-More than 9 ids are capped to the first 9 and the response reports the dropped count; ids are deduped.
-The dashboard and terminal zoom are mutually exclusive (opening one closes the other). Opening/closing
-resizes each member's pty to/from its cell, so a running program may redraw — view-only means no input,
-not no process effect.
+Bind a leader-key "dashboard of my recent sessions" to a chord with a `keymap.conf` custom action (then
+`agtermctl keymap reload`) — `--mru` needs no ids, so it makes a clean one-key binding:
+
+```conf
+command "Dashboard" ctrl+a>d /usr/local/bin/agtermctl dashboard --mru --auto-size
+```
+
+`--mru` is mutually exclusive with explicit ids and `--close`, and errors with `no recent sessions` when
+the window has none. More than 9 explicit ids are capped to the first 9 and the response reports the
+dropped count; ids are deduped. The dashboard and terminal zoom are mutually exclusive (opening one
+closes the other). Opening/closing resizes each member's pty to/from its cell, so a running program may
+redraw — view-only means no input, not no process effect.
 
 ## Navigate and manage windows
 

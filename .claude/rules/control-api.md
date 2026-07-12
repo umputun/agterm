@@ -779,6 +779,8 @@ paths:
   `--window`-scoped error paths).
   `dashboard` opens a per-window, VIEW-ONLY grid of up to 9 sessions' live surfaces
   (`agtermctl dashboard <ids…> [--font-size N | --auto-size] [--window W]`),
+  or populates it from the window's most-recently-used sessions instead of explicit ids
+  (`dashboard --mru [--font-size N | --auto-size] [--window W]`),
   or CLOSES the open one (`dashboard --close [--window W]`).
   It is the N-surface generalization of `surface.zoom`'s reparent, with focus inverted (zoom focuses
   its one surface; the dashboard focuses NONE), and it is control-NATIVE — there is no GUI/menu entry,
@@ -790,23 +792,30 @@ paths:
   (`members`/`highlighted`/`fontMode`/`appliedFontSize`) reached through `DashboardControllerRegistry` —
   the exact `TerminalZoomController`/`TerminalZoomRegistry` precedent.
   Validation is host-free in `ControlDispatcher.dispatchDashboard`:
-  `--close` takes no ids or font flags, `--font-size` is mutually exclusive with `--auto-size`,
-  a `--font-size` must be finite and positive, an open needs at least one id,
+  `--close` takes no ids, `--mru`, or font flags, `--font-size` is mutually exclusive with `--auto-size`,
+  a `--font-size` must be finite and positive, an open needs at least one id OR `--mru`,
+  `--mru` cannot be combined with explicit ids (but composes with the font flags + `--window`),
   and more than `DashboardLayout.maxCells` (9) RAW ids are capped to the first 9 (the cap is applied to
   the raw target list BEFORE the app-side dedup + resolution, so duplicate or unresolvable ids among the
   first 9 can yield fewer than 9 cells) with the dropped count reported in `result.text` — APPENDED to any
   `unresolved: …` text, never clobbering it.
-  The dispatcher routes to `ControlActions.setDashboard(targets:window:close:fontMode:)`;
+  The dispatcher routes to `ControlActions.setDashboard(targets:window:close:fontMode:mru:)`;
   the app-side `ControlServer` resolves ids via `ControlTargetResolver` inside `args.window ?? frontmost`,
   DEDUPS by resolved UUID, drops unresolved, resolves each to its `addressableSurface`,
   closes any active zoom (zoom ↔ dashboard are reciprocally exclusive), and drives that window's controller.
+  `--mru` skips the id-resolution entirely: it takes the members from `AppStore.recentSessions(limit:)`
+  (host-free, on `AppStore+Recency.swift` — the window's `sessionRecency.top(9, in:validIDs)`, most-recent
+  first, ≤ 9, fewer if fewer, stale/closed ids skipped), erroring `no recent sessions` on an empty window;
+  the font flags still apply and nothing goes `unresolved`.
   READ-BACK: FOUR `tree`-top-level fields (LIVE, `tree`-only like `zoomedSurface`) supplied to
   `AppStore.controlTree(...)` as app-side closures reading the target window's controller through the registry —
   `dashboardMembers` (session ids in grid order),
   `dashboardHighlighted` (the highlighted cell's session id),
   `dashboardFontSize` (the applied absolute size in points, nil = untouched),
   and `dashboardFontMode` (`auto`/`fixed`/`untouched`).
-  Four-point keep-in-sync audit: (1) `case dashboard` + `ControlArgs.close`/`fontSize`/`autoSize`
+  `--mru` adds NO new read-back — the members it resolves ARE the existing `dashboardMembers`,
+  so a script reads back what it opened there (no tree field is owed for the mru intent itself).
+  Four-point keep-in-sync audit: (1) `case dashboard` + `ControlArgs.close`/`fontSize`/`autoSize`/`mru`
   (ids reuse `targets`, window reuses `window`) + the four `ControlTree.dashboard*` fields in `ControlProtocol.swift`,
   (2) the `.dashboard` dispatch arm (`dispatchDashboard`) → `ControlActions.setDashboard` (app-side
   `ControlServer`) + the four read-back closures at the `controlTree` build site,
@@ -814,6 +823,15 @@ paths:
   (4) round-trip in `ControlProtocolTests` + dispatcher validation/routing in `ControlDispatcherTests`
   + `DashboardLayoutTests`/`DashboardControllerTests` + `AppStoreTests` (the read-back closures) +
   CLI mapping in `CommandsTests` + the e2e `DashboardUITests`.
+  The `--mru` flag rides the same command with NO new command/read-back — its keep-in-sync is:
+  `ControlArgs.mru` (`ControlProtocol.swift`), the dispatcher `--mru` validation + routing
+  (`dispatchDashboard`, `--close`/id mutual-exclusion), the `mru:` param on `ControlActions.setDashboard`
+  + the app-side `AppStore.recentSessions(limit:)` lookup (`ControlServer`), the `--mru` CLI flag
+  (`MiscCommands.swift`), and its tests
+  (`AppStoreTests.recentSessions*`, `ControlProtocolTests` round-trip/omit, `ControlDispatcherTests`
+  `dashboardMru*`, `CommandsTests` `dashboardMru*`, and `DashboardUITests.testDashboardMruOpensRecentSessions`).
+  It is state-mutating-with-read-back EXEMPT: the resulting state IS `dashboardMembers`,
+  so no new tree field is owed.
   See the `libghostty.md` dashboard note for the reparent/overlay/view-only + transient-font-override mechanics.
   Mode-bearing commands (`session.split`/`quick`) compute the delta against current state so `on`/`off`/`show`/`hide`
   are idempotent, and an unknown mode is an error.

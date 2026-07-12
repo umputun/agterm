@@ -431,17 +431,19 @@ final class ControlServer {
 
     /// Open or close the target window's dashboard overlay — the app side of the host-free `dashboard`
     /// command (the dispatcher already validated the args, capped the ids to `DashboardLayout.maxCells`,
-    /// and built `fontMode`). Resolves `window ?? frontmost` to an OPEN window's store, then resolves each
-    /// id to a session in THAT store, deduping by resolved UUID (order preserved) and reporting any that
-    /// don't resolve in `result.text` (never a silent drop). Members are session UUIDs; the app-side
-    /// rendering (`WindowContentView`) reparents each member's `addressableSurface` (`surface ??
-    /// splitSurface`, NOT `\.surface`, so a promoted split survivor keeps its live shell). Opening closes any
-    /// active terminal zoom for the window (zoom and dashboard are mutually exclusive) and drives that
-    /// window's `DashboardController` via the registry; `--close` calls `close()`. The per-window controller
-    /// is registered by `WindowContentView`; until it is (or while the window is tearing down) the registry
+    /// and built `fontMode`). Resolves `window ?? frontmost` to an OPEN window's store. With `mru` it
+    /// pulls up to `DashboardLayout.maxCells` of that window's most-recently-used sessions from the store's
+    /// recency (fewer if it has fewer; nothing goes unresolved); otherwise it resolves each id to a session
+    /// in THAT store, deduping by resolved UUID (order preserved) and reporting any that don't resolve in
+    /// `result.text` (never a silent drop). Members are session UUIDs; the app-side rendering
+    /// (`WindowContentView`) reparents each member's `addressableSurface` (`surface ?? splitSurface`, NOT
+    /// `\.surface`, so a promoted split survivor keeps its live shell). Opening closes any active terminal
+    /// zoom for the window (zoom and dashboard are mutually exclusive) and drives that window's
+    /// `DashboardController` via the registry; `--close` calls `close()`. The per-window controller is
+    /// registered by `WindowContentView`; until it is (or while the window is tearing down) the registry
     /// returns nil and this reports the window isn't open.
     func setDashboard(targets: [String], window: String?, close: Bool,
-                      fontMode: DashboardFontMode) -> ControlResponse {
+                      fontMode: DashboardFontMode, mru: Bool) -> ControlResponse {
         resolver.resolvePlacementStore(window) { store in
             guard let windowID = library.windowID(for: store),
                   let controller = DashboardControllerRegistry.shared.controller(for: windowID) else {
@@ -451,21 +453,30 @@ final class ControlServer {
                 controller.close()
                 return ControlResponse(ok: true)
             }
-            let candidates = store.workspaces.flatMap { $0.sessions.map(\.id) }
             var members: [UUID] = []
-            var seen = Set<UUID>()
             var unresolved: [String] = []
-            for target in targets {
-                guard case .resolved(let id) = ControlResolve.resolve(target, candidates: candidates,
-                                                                      active: store.selectedSessionID),
-                      store.session(withID: id) != nil else {
-                    unresolved.append(target)
-                    continue
+            if mru {
+                // --mru: pull the window's most-recently-used sessions (≤ maxCells) from the store's recency;
+                // there are no explicit ids to resolve, so nothing goes unresolved.
+                members = store.recentSessions(limit: DashboardLayout.maxCells)
+                guard !members.isEmpty else {
+                    return ControlResponse(ok: false, error: "no recent sessions")
                 }
-                if seen.insert(id).inserted { members.append(id) }
-            }
-            guard !members.isEmpty else {
-                return ControlResponse(ok: false, error: "no dashboard sessions resolved")
+            } else {
+                let candidates = store.workspaces.flatMap { $0.sessions.map(\.id) }
+                var seen = Set<UUID>()
+                for target in targets {
+                    guard case .resolved(let id) = ControlResolve.resolve(target, candidates: candidates,
+                                                                          active: store.selectedSessionID),
+                          store.session(withID: id) != nil else {
+                        unresolved.append(target)
+                        continue
+                    }
+                    if seen.insert(id).inserted { members.append(id) }
+                }
+                guard !members.isEmpty else {
+                    return ControlResponse(ok: false, error: "no dashboard sessions resolved")
+                }
             }
             // zoom and dashboard are mutually exclusive: drop any active zoom for this window on open.
             TerminalZoomRegistry.shared.controller(for: windowID)?.clear()

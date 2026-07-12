@@ -776,6 +776,7 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ["9f3c"], window: "win", fontSize: 12)),
             ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ["9f3c", "abcd"], autoSize: true)),
             ControlRequest(cmd: .dashboard, args: ControlArgs(close: true)),
+            ControlRequest(cmd: .dashboard, args: ControlArgs(window: "win", autoSize: true, mru: true)),
         ]
         for request in cases {
             #expect(try roundTrip(request) == request)
@@ -785,8 +786,12 @@ struct ControlProtocolTests {
         #expect(opened.args?.targets == ["a", "b"])
         #expect(opened.args?.fontSize == 14)
         #expect(opened.args?.autoSize == nil)
+        #expect(opened.args?.mru == nil)
         let closed = try roundTrip(ControlRequest(cmd: .dashboard, args: ControlArgs(close: true)))
         #expect(closed.args?.close == true)
+        let mru = try roundTrip(ControlRequest(cmd: .dashboard, args: ControlArgs(mru: true)))
+        #expect(mru.args?.mru == true)
+        #expect(mru.args?.targets == nil)
     }
 
     @Test func dashboardArgsOmitFieldsWhenNil() throws {
@@ -797,6 +802,7 @@ struct ControlProtocolTests {
         #expect(!json.contains("close"), "a nil close must be omitted from the JSON; got \(json)")
         #expect(!json.contains("fontSize"), "a nil fontSize must be omitted from the JSON; got \(json)")
         #expect(!json.contains("autoSize"), "a nil autoSize must be omitted from the JSON; got \(json)")
+        #expect(!json.contains("mru"), "a nil mru must be omitted from the JSON; got \(json)")
     }
 
     @Test func treeRoundTripsWithDashboardFields() throws {
