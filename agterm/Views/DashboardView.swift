@@ -18,8 +18,10 @@ struct DashboardView: View {
     let store: AppStore
     /// The primary surface factory — used for a member whose `session.surface` slot is live.
     let makeSurface: (Session) -> GhosttySurfaceView
-    /// The split surface factory — used for a promoted-survivor member (`session.surface == nil`, live shell
-    /// in `splitSurface`), so the dashboard hosts its `addressableSurface` rather than spawning a new shell.
+    /// The split surface factory — the defensive `.split` branch, used only for a genuine split-only survivor
+    /// (`session.surface == nil` while `splitSurface` is live), so the dashboard hosts its `addressableSurface`
+    /// rather than spawning a new shell. A promoted survivor no longer reaches here: `closePrimaryPane` moves
+    /// it INTO `surface`, so it hosts via the primary factory.
     let makeSplitSurface: (Session) -> GhosttySurfaceView
     /// Single click on a cell highlights it (keyboard is primary, mouse secondary).
     let onHighlight: (UUID) -> Void

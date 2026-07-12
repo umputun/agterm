@@ -3,12 +3,13 @@ import AppKit
 import SwiftUI
 
 /// The font-relevant dashboard state — the member set, each member's live surface SLOT, AND the font mode.
-/// A change to ANY re-applies the per-member override. Two cases the `members`-only key missed (SwiftUI
+/// A change to ANY re-applies the per-member override. Two reasons the `members`-only key missed (SwiftUI
 /// suppresses `.onChange` when the whole key is Equatable-equal): a same-members re-open with a DIFFERENT
-/// font mode (`dashboard A B` then `dashboard A B --font-size 20`) must re-size; and when a member's primary
-/// shell exits and its split is promoted (`addressableSurfaceKind` flips `.primary` → `.split`) the cell
-/// rehosts the newly-addressable surface, which must inherit the override — keying off members+mode alone
-/// left the promoted survivor at the default font while the tree still reported the override size.
+/// font mode (`dashboard A B` then `dashboard A B --font-size 20`) must re-size; and folding each member's
+/// `addressableSurfaceKind` in re-applies the override should a member's hosted slot ever change while open,
+/// so the rehosted surface inherits it rather than dropping to the default font. A primary-pane exit no
+/// longer changes the kind — `closePrimaryPane` promotes the split survivor INTO `surface`, so the kind stays
+/// `.primary` — making the slot term defensive robustness, not a promotion trigger.
 struct DashboardFontKey: Equatable {
     let members: [UUID]
     let kinds: [TerminalZoomSurface]
@@ -17,8 +18,9 @@ struct DashboardFontKey: Equatable {
 
 extension WindowContentView {
     /// The composite key the font apply reacts to (see `DashboardFontKey`). `kinds` is each member's live
-    /// `addressableSurfaceKind`, so a primary→split promotion flips the key and re-applies the override to
-    /// the surface the cell now hosts.
+    /// `addressableSurfaceKind`, so any change to a member's hosted slot flips the key and re-applies the
+    /// override to the surface the cell now hosts — a defensive re-apply, since a primary-pane exit promotes
+    /// the survivor INTO `surface` and leaves the kind `.primary` rather than flipping it.
     var dashboardFontKey: DashboardFontKey {
         let kinds = dashboard.members.map { store.session(withID: $0)?.addressableSurfaceKind ?? .primary }
         return DashboardFontKey(members: dashboard.members, kinds: kinds, mode: dashboard.fontMode)
@@ -50,7 +52,8 @@ extension WindowContentView {
     }
 
     /// Whether an OPEN dashboard hosts this session-surface slot in a grid cell. The dashboard reparents each
-    /// member's `addressableSurface` — `.primary` when the primary shell is live, else `.split` for a promoted
+    /// member's `addressableSurface` — `.primary` when the main shell is live (including a promoted split
+    /// survivor, which `closePrimaryPane` moves INTO `surface`), else `.split` for a genuine split-only
     /// survivor — so that one slot's deck entry must yield the `Color.clear` placeholder (an NSView lives in
     /// one host at a time), exactly like the zoom exclusion. False for every non-member slot, for a member's
     /// scratch/overlay surfaces (the dashboard never hosts those), and while the dashboard is closed.
