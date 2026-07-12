@@ -32,6 +32,23 @@ extension WindowContentView {
         }
     }
 
+    /// The dashboard caption pill's FILL — the theme's muted selection-background highlight (the same color
+    /// the selected sidebar row draws), or a soft wash of the chrome foreground when the theme exposes no
+    /// selection color. Read live from `GhosttyApp` so a theme flip (which re-renders the body via
+    /// `chromeText`/`terminalColor`) re-resolves it, matching the sidebar pill — muted and themed, never the
+    /// loud foreground.
+    private var dashboardPillColor: Color {
+        if let selection = GhosttyApp.shared.terminalSelectionBackgroundColor { return Color(nsColor: selection) }
+        return chromeText.opacity(0.22)
+    }
+
+    /// The dashboard caption pill's TEXT — the theme's selection-foreground (readable over `dashboardPillColor`),
+    /// else the chrome foreground.
+    private var dashboardPillTextColor: Color {
+        if let selection = GhosttyApp.shared.terminalSelectionForegroundColor { return Color(nsColor: selection) }
+        return chromeText
+    }
+
     /// The dashboard grid overlay, mounted in `windowOverlayLayer` while this window's `DashboardController`
     /// is open (inset by `titlebarHeight`, below `customTitlebar`, like the other window overlays). Closed
     /// over its `onSelect`/`onClose` closures + the control socket; view-only cells reparent each member's
@@ -48,6 +65,8 @@ extension WindowContentView {
                 makeSplitSurface: makeSplitSurface,
                 highlightColor: chromeText,
                 captionBackground: terminalColor,
+                pillColor: dashboardPillColor,
+                pillTextColor: dashboardPillTextColor,
                 onHighlight: { dashboard.highlight($0) },
                 onSelect: { selectDashboardMember($0) },
                 onClose: { closeDashboardFromKeyboard() }
