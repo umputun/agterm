@@ -204,13 +204,13 @@ override + reapply; record `controller.appliedFontSize`. On close, clear the ove
 - Create: `agtermCore/Sources/agtermCore/DashboardController.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/DashboardControllerTests.swift`
 
-- [ ] `@Observable @MainActor public final class DashboardController` with `members`/`highlighted`/`fontMode`/
+- [x] `@Observable @MainActor public final class DashboardController` with `members`/`highlighted`/`fontMode`/
       `appliedFontSize` + `DashboardFontMode`; `open`/`close`/`move`/`isOpen`; highlight init prefers a
       supplied member else first
-- [ ] `DashboardControllerRegistry` (mirror `TerminalZoomRegistry`: `shared`/`register`/`unregister`/`controller(for:)`)
-- [ ] tests: open/close, member set, highlight init, movement (incl. ragged count), fontMode/applied-size state
-- [ ] tests: registry register/unregister/lookup
-- [ ] run `cd agtermCore && swift test` + `make lint` — pass before Task 3
+- [x] `DashboardControllerRegistry` (mirror `TerminalZoomRegistry`: `shared`/`register`/`unregister`/`controller(for:)`)
+- [x] tests: open/close, member set, highlight init, movement (incl. ragged count), fontMode/applied-size state
+- [x] tests: registry register/unregister/lookup
+- [x] run `cd agtermCore && swift test` + `make lint` — pass before Task 3
 
 ### Task 3: ControlProtocol + AppStore.controlTree — command, args, tree read-back
 
