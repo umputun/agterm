@@ -33,6 +33,11 @@ struct TerminalView: NSViewRepresentable {
     /// False for the terminal-zoom host: zoom reparenting/focus must not mutate session state such as
     /// `splitFocused`, but libghostty should still receive normal focus updates.
     var reportsFocusChange = true
+    /// True for the view-only dashboard grid cell: the surface renders but takes NO mouse or keyboard input,
+    /// so it never grabs first responder from the dashboard's key-catcher. `.allowsHitTesting(false)` alone
+    /// doesn't stop AppKit routing a click to the real NSView, so the surface itself refuses hits + first
+    /// responder (`GhosttySurfaceView.viewOnly`).
+    var viewOnly = false
 
     func makeCoordinator() -> Coordinator { Coordinator() }
 
@@ -44,6 +49,7 @@ struct TerminalView: NSViewRepresentable {
         view.deckActive = isActive
         view.deckVisible = deckVisible
         view.suppressFocusChange = !reportsFocusChange
+        view.viewOnly = viewOnly
         return view
     }
 
@@ -53,6 +59,7 @@ struct TerminalView: NSViewRepresentable {
         nsView.deckActive = isActive
         nsView.deckVisible = deckVisible
         nsView.suppressFocusChange = !reportsFocusChange
+        nsView.viewOnly = viewOnly
         // makeNSView may have run before the view had a sized window; createSurface is idempotent
         // (guards surface == nil and a non-zero backing size), so calling it here is safe. Synchronous
         // on purpose: a deferred next-tick create races the layout and gives the surface a stale size.

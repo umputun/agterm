@@ -36,6 +36,13 @@ final class AppActions {
         frontmostTerminalZoom?.target != nil
     }
 
+    /// Whether the frontmost window's dashboard grid overlay is open. Like a zoom or an open palette, the
+    /// dashboard is modal and its key-catcher owns first responder, so `focusActiveSession` must not grab
+    /// the active session's surface while it is up (that surface is a view-only grid cell).
+    private var dashboardActive: Bool {
+        DashboardControllerRegistry.shared.controller(for: library.activeWindowID)?.isOpen == true
+    }
+
     /// Whether terminal zoom is active in the window OWNING this session. The right gate for the
     /// session-addressed focus paths: control commands resolve sessions across ALL windows, so gating
     /// them on the FRONTMOST window's zoom would silently drop the focus step for an un-zoomed
@@ -890,6 +897,7 @@ final class AppActions {
     /// and re-focuses the session on its own hide, so don't fight it here.
     func focusActiveSession(attempt: Int = 0) {
         if terminalZoomActive { return }
+        if dashboardActive { return }
         if renamePending { return }
         // never grab terminal focus while a command palette is open — the palette owns the keyboard.
         // this also kills the retry loop the instant a palette (re)opens, so the action-palette "Select

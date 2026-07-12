@@ -352,14 +352,24 @@ override + reapply; record `controller.appliedFontSize`. On close, clear the ove
 **Files:**
 - Create: `agtermUITests/DashboardUITests.swift`
 
-- [ ] follow `.claude/rules/ui-tests.md` (`launchForUITest`, control-socket driving, occlusion-timeout note)
-- [ ] open (2–3 sessions) → overlay + correct `dashboard-cell` count
-- [ ] arrows move `dashboard-highlighted`; Enter selects+closes (selection changed); Esc closes (unchanged)
-- [ ] view-only: neither typing nor a click into a cell reaches a terminal
-- [ ] font: `--auto-size` open → member font changed → close → restored; explicit config reload while open
+- [x] follow `.claude/rules/ui-tests.md` (`launchForUITest`, control-socket driving, occlusion-timeout note)
+- [x] open (2–3 sessions) → overlay + correct `dashboard-cell` count
+- [x] arrows move `dashboard-highlighted`; Enter selects+closes (selection changed); Esc closes (unchanged)
+- [x] view-only: neither typing nor a click into a cell reaches a terminal
+- [x] font: `--auto-size` open → member font changed → close → restored; explicit config reload while open
       doesn't strand the dashboard font
-- [ ] busy/resize: 1/4/9 members with output flowing + a live window resize (no blank cells)
-- [ ] run the e2e scheme + `cd agtermCore && swift test` + `make build` + `make lint` — pass before Task 12
+      (observable proxies asserted: `tree.dashboardFontSize`/`dashboardFontMode` set while open + survive a
+      `config.reload` + clear on close; the PIXEL font size / visual restore stay the manual Post-Completion check)
+- [x] busy/resize: 1/4/9 members with output flowing + a live window resize (no blank cells)
+      (covered with 4 members = a full 2×2 grid; true "no blank cell" is a pixel property not XCUITest-observable
+      — asserted count-unchanged + a live `tree` read after each resize proves no crash/hang)
+- [x] run the e2e scheme + `cd agtermCore && swift test` + `make build` + `make lint` — pass before Task 12
+- ➕ Fixed a real view-only bug the e2e surfaced (Task 8/9): a member cell's `GhosttySurfaceView` grabbed
+      first responder while the dashboard was open (a click reached `mouseDown`, and `focusActiveSession`'s
+      retry loop re-grabbed the active session's surface), so keystrokes leaked to the terminal and the
+      key-catcher lost the keyboard. Fix: `GhosttySurfaceView.viewOnly` (nil `hitTest` + refuse first
+      responder) threaded via `TerminalView` into the cells, plus a `dashboardActive` guard in
+      `AppActions.focusActiveSession` (mirrors the existing zoom/palette guards).
 
 ### Task 12: Keep-in-sync documentation surfaces
 

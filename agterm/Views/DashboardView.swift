@@ -108,11 +108,11 @@ struct DashboardView: View {
     private func memberTerminal(for session: Session) -> some View {
         if session.surface != nil {
             TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
-                         isActive: false, deckVisible: false, reportsFocusChange: false)
+                         isActive: false, deckVisible: false, reportsFocusChange: false, viewOnly: true)
                 .id("\(session.id.uuidString)-dashboard")
         } else {
             TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
-                         isActive: false, deckVisible: false, reportsFocusChange: false)
+                         isActive: false, deckVisible: false, reportsFocusChange: false, viewOnly: true)
                 .id("\(session.id.uuidString)-dashboard")
         }
     }

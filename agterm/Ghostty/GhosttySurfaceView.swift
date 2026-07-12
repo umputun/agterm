@@ -212,6 +212,16 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         didSet { updateDropRegistration() }
     }
 
+    /// View-only mode: the surface is rendered but takes NO mouse or keyboard input (the dashboard grid
+    /// cell). SwiftUI's `.allowsHitTesting(false)` does NOT stop AppKit routing a click to this real NSView
+    /// (the same reason `deckVisible` gates drag registration — AppKit's hit resolution bypasses SwiftUI),
+    /// so a click would reach `mouseDown` and grab first responder, defeating the view-only dashboard and
+    /// stealing the keyboard from its key-catcher. When set, `hitTest` returns nil (clicks fall through to
+    /// the SwiftUI cell overlay) and the surface refuses first responder, so keystrokes never reach it.
+    /// `TerminalView` sets it; the dashboard cell turns it on and the deck slot turns it back off on the
+    /// same reparent.
+    var viewOnly = false
+
     /// Register the file/text drag types only while this surface is the on-screen deck pane; unregister
     /// otherwise, so an eagerly-realized background surface is not a drag target and a drop can only reach
     /// the visible pane. Called from `deckVisible`'s didSet and once from `createSurface` (didSet does not
@@ -883,7 +893,15 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
     // MARK: - First responder
 
-    override var acceptsFirstResponder: Bool { true }
+    override var acceptsFirstResponder: Bool { !viewOnly }
+
+    /// In view-only mode (a dashboard grid cell) refuse hit-testing so a click passes THROUGH to the SwiftUI
+    /// cell overlay (highlight/enter) instead of reaching `mouseDown` and grabbing first responder. AppKit
+    /// routes clicks to this real NSView regardless of SwiftUI `.allowsHitTesting(false)`, so the block must
+    /// live here.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        viewOnly ? nil : super.hitTest(point)
+    }
 
     /// Deliver the LEFT click that reactivates a background/inactive window straight to the surface (a
     /// "first mouse") instead of AppKit swallowing it just to raise the window. Without this, clicking a
