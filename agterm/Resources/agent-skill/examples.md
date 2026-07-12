@@ -418,10 +418,12 @@ ratios, sidebar state, focus, or split/scratch visibility. Surface ids come from
 
 ## Watch several sessions at once in a dashboard grid
 
-The dashboard shows up to 9 sessions' live output in one view-only grid — for watching several agents or
-builds at once. No cell takes input: the keyboard navigates a highlight (arrows), Enter jumps into the
-highlighted session and closes, Esc closes. Open it over the socket with explicit session ids, or with
-`--mru` to pull the window's most-recently-used sessions automatically.
+The dashboard shows several sessions' live output in one view-only grid — for watching several agents or
+builds at once. The cell unit is a session+pane: a non-split session is one cell, and a SPLIT session
+shows as TWO cells (its left/primary and right/split panes), capped at 9 cells total. No cell takes input:
+the keyboard navigates a highlight (arrows), Enter jumps into the highlighted session AND focuses that
+exact pane then closes, Esc closes. Open it over the socket with explicit session ids, or with `--mru` to
+pull the window's most-recently-used sessions automatically.
 
 ```bash
 # grid of three sessions, cells auto-sized to the grid (shrinking as it grows)
@@ -436,7 +438,8 @@ agtermctl dashboard "$a" "$b" --font-size 12
 # open in a specific window (default is the frontmost)
 agtermctl dashboard "$a" "$b" --window "$AGTERM_WINDOW_ID"
 
-# read back what the open dashboard is showing (all null when none is open)
+# read back what the open dashboard is showing (all null when none is open); members are pane refs
+# (`<id>:left`/`<id>:right`), so a split session shows both its :left and :right cells
 agtermctl tree --json | jq '.result.tree | {dashboardMembers, dashboardHighlighted, dashboardFontSize, dashboardFontMode}'
 
 # close it (or press Enter/Esc in the grid)
@@ -451,10 +454,11 @@ command "Dashboard" ctrl+a>d /usr/local/bin/agtermctl dashboard --mru --auto-siz
 ```
 
 `--mru` is mutually exclusive with explicit ids and `--close`, and errors with `no recent sessions` when
-the window has none. More than 9 explicit ids are capped to the first 9 and the response reports the
-dropped count; ids are deduped. The dashboard and terminal zoom are mutually exclusive (opening one
-closes the other). Opening/closing resizes each member's pty to/from its cell, so a running program may
-redraw — view-only means no input, not no process effect.
+the window has none. The 9-cell cap counts PANES (a split session is two cells), so a set whose panes
+exceed 9 keeps the first 9 panes and the response reports the dropped-pane count; ids are deduped. The
+dashboard and terminal zoom are mutually exclusive (opening one closes the other). Opening/closing resizes
+each pane's pty to/from its cell, so a running program may redraw — view-only means no input, not no
+process effect.
 
 ## Navigate and manage windows
 

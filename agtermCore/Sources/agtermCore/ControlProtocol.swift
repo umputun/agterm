@@ -477,16 +477,18 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// can check "is it already zoomed" and record-then-restore. `tree`-only (not on `window.list`),
     /// like `quickVisible`: the GUI toggle bypasses the command path and would leave a cached copy stale.
     public let zoomedSurface: String?
-    /// The control ids (session UUID strings, in grid order) of the sessions the open dashboard shows, or
-    /// nil/omitted when no dashboard is open. LIVE — resolved app-side per request from the projected
-    /// window's `DashboardController` — the read side of the write-only `dashboard` command, so a script can
-    /// see which sessions are on the grid. `tree`-only (not on `window.list`), like `zoomedSurface`: the
-    /// keyboard-driven dashboard bypasses the command path and would leave a cached copy stale. nil in a
-    /// host-produced tree with no app closure.
+    /// The pane refs (`<session-uuid>:left` for a primary pane, `<session-uuid>:right` for a split pane, in
+    /// grid order) of the cells the open dashboard shows, or nil/omitted when no dashboard is open. Each cell
+    /// is a session+pane, so a split session appears as TWO refs (`:left` and `:right`). LIVE — resolved
+    /// app-side per request from the projected window's `DashboardController` — the read side of the
+    /// write-only `dashboard` command, so a script can see which panes are on the grid. `tree`-only (not on
+    /// `window.list`), like `zoomedSurface`: the keyboard-driven dashboard bypasses the command path and
+    /// would leave a cached copy stale. nil in a host-produced tree with no app closure.
     public let dashboardMembers: [String]?
-    /// The session UUID string of the dashboard's currently highlighted cell (the one Enter jumps into), or
-    /// nil/omitted when no dashboard is open. LIVE — resolved app-side per request from the window's
-    /// `DashboardController` — the read side of the keyboard highlight nav. `tree`-only, like `dashboardMembers`.
+    /// The pane ref (`<session-uuid>:left`/`:right`) of the dashboard's currently highlighted cell (the one
+    /// Enter jumps into, focusing that exact pane), or nil/omitted when no dashboard is open. LIVE — resolved
+    /// app-side per request from the window's `DashboardController` — the read side of the keyboard highlight
+    /// nav. `tree`-only, like `dashboardMembers`.
     public let dashboardHighlighted: String?
     /// The absolute font size in points applied to the dashboard cells, or nil/omitted when no dashboard is
     /// open OR the font is untouched (the members keep their own size). LIVE — resolved app-side per request

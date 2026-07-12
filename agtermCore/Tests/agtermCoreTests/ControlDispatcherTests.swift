@@ -1369,27 +1369,26 @@ struct ControlDispatcherTests {
         ])
     }
 
-    @Test func dashboardCapsBeyondNineTargetsAndReportsDrop() async {
+    @Test func dashboardForwardsAllTargetsWithoutCapping() async {
+        // the 9-cell cap now counts PANES and lives app-side (a split session expands to two cells), so the
+        // dispatcher forwards ALL raw ids untouched and appends no drop text — the drop is computed and
+        // reported in `ControlServer.setDashboard`, which owns the pane expansion.
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
         let ids = (1...11).map { "s\($0)" }
-        let request = ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ids))
 
-        let response = await dispatcher.dispatch(request)
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ids)))
         #expect(response?.ok == true)
-        #expect(response?.result?.text == "dropped 2 beyond the 9-session dashboard limit")
+        #expect(response?.result?.text == nil, "the dispatcher no longer caps or reports a drop")
         #expect(actions.calls == [
-            .dashboard(targets: Array(ids.prefix(9)), window: nil, close: false, fontMode: .untouched, mru: false)
+            .dashboard(targets: ids, window: nil, close: false, fontMode: .untouched, mru: false)
         ])
 
-        // the drop text is APPENDED to any "unresolved: …" text the server produced, never clobbering it.
+        // whatever the app-side response is (unresolved / dropped-pane text), the dispatcher passes it through
+        // verbatim — it no longer post-processes the message.
         actions.nextDashboardResponse = ControlResponse(ok: true, result: ControlResult(text: "unresolved: s3"))
-        let appended = await dispatcher.dispatch(request)
-        #expect(appended?.result?.text == "unresolved: s3; dropped 2 beyond the 9-session dashboard limit")
-
-        // an ok:false response keeps its error untouched — the drop text is not added.
-        actions.nextDashboardResponse = ControlResponse(ok: false, error: "no dashboard sessions resolved")
-        #expect(await dispatcher.dispatch(request) == ControlResponse(ok: false, error: "no dashboard sessions resolved"))
+        let passed = await dispatcher.dispatch(ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ids)))
+        #expect(passed?.result?.text == "unresolved: s3")
     }
 
     @Test func dashboardRejectsInvalidInputsBeforeCallingActions() async {

@@ -247,17 +247,24 @@ paths:
   but is harder: it is NOT fixed by `refresh` or a forced `set_size` jitter,
   and a font change doesn't resize the view so this `updateMetalLayerSize` path never fires for it —
   still parked.
-- **Dashboard grid = the N-surface generalization of terminal-zoom's reparent, focus inverted.**
+- **Dashboard grid = the N-PANE generalization of terminal-zoom's reparent, focus inverted.**
   Where `surface.zoom` reparents ONE session surface into the window and focuses it, the dashboard
   (`DashboardView` + `WindowContentView+Dashboard.swift`, driven by the host-free `DashboardController`)
-  reparents up to `DashboardLayout.maxCells` (9) member surfaces into a `ceil(sqrt(n))`-wide grid and
-  focuses NONE — every cell is view-only.
-  Each cell hosts the member's RESOLVED `addressableSurface` (`\.surface`, or `\.splitSurface` for a
-  promoted survivor) via `TerminalView(isActive: false, deckVisible: false, reportsFocusChange: false,
-  viewOnly: true)` with a stable `.id`, so the grid shows the LIVE shell, never a fresh one.
-  The generalized `deckHostsSurface` yields each member's hosted surface out of the eager deck (a
-  `Color.clear` placeholder in its deck slot), the SAME "keep the deck mounted, swap only the hosted
-  slot" contract zoom uses, so control-opened split/scratch/overlay surfaces still realize behind the grid.
+  reparents up to `DashboardLayout.maxCells` (9) PANE surfaces into a `ceil(sqrt(n))`-wide grid and
+  focuses NONE while open — every cell is view-only.
+  The cell unit is a `DashboardMember` = session + `.primary`/`.split`: a non-split session is ONE
+  `.primary` cell, and a SPLIT session (`hasSplit`) shows as TWO cells — its `.primary` AND `.split`
+  panes — so the app-side expansion in `ControlServer.setDashboard` yields both, and the 9-cap counts PANES.
+  Each cell hosts its OWN pane surface — `.primary` → `\.surface` via `makeSurface`, `.split` →
+  `\.splitSurface` via `makeSplitSurface` — via `TerminalView(isActive: false, deckVisible: false,
+  reportsFocusChange: false, viewOnly: true)` with a stable slot `.id` (`-dashboard-primary`/`-dashboard-split`),
+  so the grid shows the LIVE shell, never a fresh one.
+  The generalized `dashboardHostsSurface` claims EACH member's pane slot (both panes of a split member),
+  so `deckHostsSurface` yields a `Color.clear` placeholder in each claimed deck slot — the SAME "keep the
+  deck mounted, swap only the hosted slot" contract zoom uses, generalized to N panes, so control-opened
+  split/scratch/overlay surfaces still realize behind the grid.
+  Enter on a cell selects the session, closes the dashboard, then focuses the cell's EXACT pane (the split
+  pane for a `.split` cell, else the main pane).
 - **Dashboard placement: a `windowOverlayLayer` branch, NOT a body-level `.overlay`.**
   It renders while `controller.isOpen` at `zIndex 1`, inset by `titlebarHeight`, below the `customTitlebar`
   — the same transparent-titlebar-scrim rule the quick terminal / palettes / switcher follow (see the
@@ -293,10 +300,12 @@ paths:
   the dashboard is open doesn't strand or clear the grid font), and `reportFontSize` is SUPPRESSED
   (`guard dashboardFontOverride == nil`) while the override is set, so the CELL_SIZE round-trip can't
   write the dashboard size into `session.fontSize`.
-  On open the wiring sets each member's override from `fontMode` (`.auto` via
+  On open the wiring sets each member cell's OWN pane surface override from `fontMode` (`.auto` via
   `DashboardLayout.dashboardFontSize`, base `AppSettings.fontSize ?? 13.0` ghostty default; `.fixed`
-  value; `.untouched` leaves it nil); on close it CLEARS the override (a store-wide sweep of surfaces
-  that carry one) and rebuilds from the session model — no record-restore dictionary.
+  value; `.untouched` leaves it nil) — `.primary` → `\.surface`, `.split` → `\.splitSurface`; on close it
+  CLEARS the override with a store-wide sweep of BOTH `\.surface` AND `\.splitSurface` of every session
+  (a split member's two panes can each carry one) and rebuilds from the session model — no record-restore
+  dictionary.
 - **Zoom ↔ dashboard are reciprocally exclusive.**
   `ControlServer.setDashboard` closes any active zoom before opening the grid, and
   `WindowContentView`'s `.onChange(of: terminalZoom.target)` closes the dashboard when a zoom becomes

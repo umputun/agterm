@@ -90,10 +90,11 @@ side of the write-only `quick` command, so a script can make the toggle idempote
 `surface:<session-id>:<kind>` or `quick`; omitted when nothing is zoomed — the read side of the
 write-only `surface zoom` command, so a script can check "is it already zoomed" and
 record-then-restore), and the four read sides of the write-only `dashboard` command (all omitted when
-no dashboard is open): `dashboardMembers` (the session ids the open dashboard shows, in grid order),
-`dashboardHighlighted` (the highlighted cell's session id — the one Enter jumps into),
-`dashboardFontSize` (the absolute font size in points applied to the cells, omitted when the mode is
-`untouched`), and `dashboardFontMode` (`auto` for `--auto-size`, `fixed` for `--font-size`, or
+no dashboard is open): `dashboardMembers` (the pane refs the open dashboard shows, in grid order —
+`<session-id>:left` for a primary pane, `<session-id>:right` for a split pane, so a split session appears
+as both), `dashboardHighlighted` (the highlighted cell's pane ref — the one Enter jumps into, focusing
+that exact pane), `dashboardFontSize` (the absolute font size in points applied to the cells, omitted when
+the mode is `untouched`), and `dashboardFontMode` (`auto` for `--auto-size`, `fixed` for `--font-size`, or
 `untouched`). `idleMs` is live
 and grows while the window is idle, so it is on `tree` only, never `window.list`; `sidebarVisible` is on
 both; `sidebarMode`, `quickVisible`, `zoomedSurface`, and the four `dashboard*` fields are `tree`-only
@@ -392,33 +393,37 @@ fullscreen inside agterm; use `window zoom` only to maximize the whole window on
 ## dashboard
 
 `agtermctl dashboard <ids…> [--font-size N | --auto-size] [--window W]` opens a per-window, view-only
-grid of the named sessions' live surfaces (max 9, laid out `ceil(sqrt(n))`); `agtermctl dashboard --mru
-[--font-size N | --auto-size] [--window W]` opens the window's most-recently-used sessions (up to 9,
-fewer if it has fewer) instead of naming ids; `agtermctl dashboard --close [--window W]` closes the open
-one. The positional ids are session addresses (id / unique prefix / `active`); unresolved ids are
-dropped, ids are deduped by resolved session, and more than 9 are capped to the first 9 with the dropped
-count reported in the response text (`dropped N beyond the 9-session dashboard limit`). `--window`
-targets a specific window's dashboard (default: the frontmost). `--mru` draws its members from the
-window's recency (most-recent first); it is mutually exclusive with explicit ids and `--close`, composes
-with the font flags and `--window`, and errors with `no recent sessions` when the window has none.
+grid of the named sessions' live panes; `agtermctl dashboard --mru [--font-size N | --auto-size]
+[--window W]` opens the window's most-recently-used sessions instead of naming ids; `agtermctl dashboard
+--close [--window W]` closes the open one. The cell unit is a session+pane: a non-split session is ONE
+cell, and a SPLIT session shows as TWO cells — its left/primary pane and its right/split pane. The
+positional ids are session addresses (id / unique prefix / `active`); unresolved ids are dropped and ids
+are deduped by resolved session. The 9-cell cap counts PANES (laid out `ceil(sqrt(n))`), applied after
+each session expands into its pane cells: if the panes exceed 9 the first 9 are kept and the dropped-pane
+count is reported in the response text (`dropped N pane(s) beyond the 9-cell limit`, appended to any
+`unresolved:` note with `; `). `--window` targets a specific window's dashboard (default: the frontmost).
+`--mru` draws its members from the window's recency (most-recent first); it is mutually exclusive with
+explicit ids and `--close`, composes with the font flags and `--window`, and errors with `no recent
+sessions` when the window has none.
 
 It is **view-only**: no cell takes keyboard or mouse input — the whole grid shows live output, and once
 open the keyboard drives it. Arrow keys move a highlight between cells (2-D, no wrap; clamped into a
-ragged last row), Enter jumps into the highlighted session (selecting it and closing the dashboard), and
-Esc closes it (leaving the selection as it was). Because a cell takes no input, a program you dashboard
-keeps running but you cannot type into it from the grid — jump in with Enter first.
+ragged last row), Enter jumps into the highlighted session AND focuses that exact pane (selecting the
+session, focusing the primary pane for a `:left` cell or the split pane for a `:right` cell, then closing
+the dashboard), and Esc closes it (leaving the selection as it was). Because a cell takes no input, a
+program you dashboard keeps running but you cannot type into it from the grid — jump in with Enter first.
 
 Font size is optional and mutually exclusive: `--font-size N` sets an absolute cell font in points
 (must be finite and positive), while `--auto-size` sizes the cells relative to the Settings default font
-size, shrinking as the grid grows so a dense 3×3 stays readable. Omit both to leave each member's own
+size, shrinking as the grid grows so a dense 3×3 stays readable. Omit both to leave each pane's own
 font untouched. The applied size and mode read back on the tree's top-level `dashboardFontSize` /
-`dashboardFontMode`; the members and the highlighted cell read back on `dashboardMembers` /
-`dashboardHighlighted`.
+`dashboardFontMode`; the member pane refs and the highlighted cell read back on `dashboardMembers` /
+`dashboardHighlighted` (each a `<session-id>:left`/`<session-id>:right` pane ref).
 
 The dashboard and terminal zoom are **mutually exclusive**: opening a dashboard closes any active zoom,
 and a zoom becoming active while the dashboard is open closes the dashboard. Opening (and closing) the
-dashboard resizes each member's pty to (and back from) its cell, so a running program receives a resize
-event and may redraw — "view-only" means no input reaches the cell, not that the member's process is
+dashboard resizes each pane's pty to (and back from) its cell, so a running program receives a resize
+event and may redraw — "view-only" means no input reaches the cell, not that the pane's process is
 untouched.
 
 Invalid invocations error (rejected at the CLI and re-checked server-side): `--font-size` with

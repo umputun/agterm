@@ -777,40 +777,54 @@ paths:
   (4) round-trip in `ControlProtocolTests` (incl. `treeRoundTripsWithZoomedSurface`/`…OmitsZoomedSurfaceWhenNil`)
   + `TerminalZoomTests` + the e2e `ControlSurfaceZoomUITests` (incl. the tree read-back and the
   `--window`-scoped error paths).
-  `dashboard` opens a per-window, VIEW-ONLY grid of up to 9 sessions' live surfaces
+  `dashboard` opens a per-window, VIEW-ONLY grid of live PANE cells
   (`agtermctl dashboard <ids…> [--font-size N | --auto-size] [--window W]`),
   or populates it from the window's most-recently-used sessions instead of explicit ids
   (`dashboard --mru [--font-size N | --auto-size] [--window W]`),
   or CLOSES the open one (`dashboard --close [--window W]`).
+  The cell unit is a session+PANE (a `DashboardMember` = session UUID + `.primary`/`.split`): a non-split
+  session is ONE `.primary` cell, and a SPLIT session (`hasSplit`, both shells alive) expands into TWO cells —
+  its `.primary` and `.split` panes — so a split shows both panes side by side.
   It is the N-surface generalization of `surface.zoom`'s reparent, with focus inverted (zoom focuses
-  its one surface; the dashboard focuses NONE), and it is control-NATIVE — there is no GUI/menu entry,
-  it is only reachable over the socket (once open, the keyboard drives it: arrows move the highlight,
-  Enter jumps into the highlighted session + closes, Esc closes).
+  its one surface; the dashboard focuses NONE while open), and it is control-NATIVE — there is no GUI/menu
+  entry, it is only reachable over the socket (once open, the keyboard drives it: arrows move the highlight,
+  Enter jumps into the highlighted session AND focuses that exact pane + closes, Esc closes).
   Host-free geometry + navigation + auto-size math live in `DashboardLayout`
   (`grid(count:) = ceil(sqrt(n))` cols, `move` clamped 2-D nav into a ragged last row,
   `dashboardFontSize(cols:rows:base:)`), per-window state in the `@Observable @MainActor DashboardController`
-  (`members`/`highlighted`/`fontMode`/`appliedFontSize`) reached through `DashboardControllerRegistry` —
-  the exact `TerminalZoomController`/`TerminalZoomRegistry` precedent.
+  (`members: [DashboardMember]`/`highlighted: DashboardMember?`/`fontMode`/`appliedFontSize`) reached through
+  `DashboardControllerRegistry` — the exact `TerminalZoomController`/`TerminalZoomRegistry` precedent.
   Validation is host-free in `ControlDispatcher.dispatchDashboard`:
   `--close` takes no ids, `--mru`, or font flags, `--font-size` is mutually exclusive with `--auto-size`,
   a `--font-size` must be finite and positive, an open needs at least one id OR `--mru`,
-  `--mru` cannot be combined with explicit ids (but composes with the font flags + `--window`),
-  and more than `DashboardLayout.maxCells` (9) RAW ids are capped to the first 9 (the cap is applied to
-  the raw target list BEFORE the app-side dedup + resolution, so duplicate or unresolvable ids among the
-  first 9 can yield fewer than 9 cells) with the dropped count reported in `result.text` — APPENDED to any
-  `unresolved: …` text, never clobbering it.
+  and `--mru` cannot be combined with explicit ids (but composes with the font flags + `--window`).
+  **The 9-cell cap is NO LONGER in the dispatcher** — the cell unit is a PANE now, so a split session
+  expands to two cells and the cap counts PANES, which needs the store; the dispatcher forwards ALL raw ids
+  untouched and the cap lives APP-SIDE.
   The dispatcher routes to `ControlActions.setDashboard(targets:window:close:fontMode:mru:)`;
   the app-side `ControlServer` resolves ids via `ControlTargetResolver` inside `args.window ?? frontmost`,
-  DEDUPS by resolved UUID, drops unresolved, resolves each to its `addressableSurface`,
-  closes any active zoom (zoom ↔ dashboard are reciprocally exclusive), and drives that window's controller.
-  `--mru` skips the id-resolution entirely: it takes the members from `AppStore.recentSessions(limit:)`
+  DEDUPS by resolved UUID, drops unresolved, then EXPANDS each resolved session IN ORDER into pane cells
+  (always its `.primary`; plus `.split` when `hasSplit`), CAPS the resulting PANE list to
+  `DashboardLayout.maxCells` (9) — so the drop counts panes, reported as
+  `dropped N pane(s) beyond the 9-cell limit` in `result.text`, APPENDED to any `unresolved: …` text with
+  `; ` (neither clobbers the other) — closes any active zoom (zoom ↔ dashboard are reciprocally exclusive),
+  and drives that window's controller.
+  `WindowContentView` reparents each cell's OWN pane surface (`.primary` → `\.surface`, `.split` →
+  `\.splitSurface`) via the generalized `dashboardHostsSurface` (both panes of a split member are claimed,
+  each yielding its deck slot's `Color.clear` placeholder).
+  `--mru` skips the id-resolution entirely: it takes the sessions from `AppStore.recentSessions(limit:)`
   (host-free, on `AppStore+Recency.swift` — the window's `sessionRecency.top(9, in:validIDs)`, most-recent
-  first, ≤ 9, fewer if fewer, stale/closed ids skipped), erroring `no recent sessions` on an empty window;
-  the font flags still apply and nothing goes `unresolved`.
+  first, ≤ 9, fewer if fewer, stale/closed ids skipped) then expands + caps like the id path, erroring
+  `no recent sessions` on an empty window; the font flags still apply and nothing goes `unresolved`.
+  Enter (`selectDashboardMember`) selects the session, CLOSES the dashboard, then focuses the cell's EXACT
+  pane — the split pane via `focusSplitPane(_:wantSplit:true)` for a `.split` cell (mirroring
+  `revealActiveBlockedPane`'s `.right` branch), else the main pane; close-before-focus keeps the
+  `dashboardActive` focus guards from blocking it.
   READ-BACK: FOUR `tree`-top-level fields (LIVE, `tree`-only like `zoomedSurface`) supplied to
   `AppStore.controlTree(...)` as app-side closures reading the target window's controller through the registry —
-  `dashboardMembers` (session ids in grid order),
-  `dashboardHighlighted` (the highlighted cell's session id),
+  `dashboardMembers` (PANE refs in grid order, `<session-id>:left`/`<session-id>:right` via
+  `DashboardMember.controlRef`, so a split session appears as both),
+  `dashboardHighlighted` (the highlighted cell's pane ref),
   `dashboardFontSize` (the applied absolute size in points, nil = untouched),
   and `dashboardFontMode` (`auto`/`fixed`/`untouched`).
   `--mru` adds NO new read-back — the members it resolves ARE the existing `dashboardMembers`,
@@ -821,8 +835,13 @@ paths:
   `ControlServer`) + the four read-back closures at the `controlTree` build site,
   (3) the `dashboard` subcommand (`validate()`-guarded flag combos) in `agtermctlKit/MiscCommands.swift`,
   (4) round-trip in `ControlProtocolTests` + dispatcher validation/routing in `ControlDispatcherTests`
-  + `DashboardLayoutTests`/`DashboardControllerTests` + `AppStoreTests` (the read-back closures) +
-  CLI mapping in `CommandsTests` + the e2e `DashboardUITests`.
+  (now asserting the dispatcher forwards ALL ids un-capped) + `DashboardLayoutTests`/`DashboardControllerTests`
+  (pane-cell open/move/highlight/reconcile, incl. a split member pruned when its split closes) +
+  `AppStoreTests` (the pane-ref read-back closures) + CLI mapping in `CommandsTests` + the e2e
+  `DashboardUITests` (incl. `testSplitSessionOpensTwoCellsAndEnterFocusesSplitPane`, which asserts the split
+  session's two `:left`/`:right` cells AND that Enter on the split cell flips the tree `splitFocused`).
+  The PANE expansion + the PANE cap + the dropped-pane text are app-side (`ControlServer.setDashboard`,
+  they need the store), build-verified + exercised by the e2e; the dispatcher no longer caps.
   The `--mru` flag rides the same command with NO new command/read-back — its keep-in-sync is:
   `ControlArgs.mru` (`ControlProtocol.swift`), the dispatcher `--mru` validation + routing
   (`dispatchDashboard`, `--close`/id mutual-exclusion), the `mru:` param on `ControlActions.setDashboard`

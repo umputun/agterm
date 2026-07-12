@@ -594,10 +594,12 @@ public struct ControlDispatcher {
 
     /// The dashboard overlay is host-free-validated here. The open path needs at least one id (or `--mru`)
     /// and at most one font flag; `--close` takes no id, `--mru`, or font flag; a `--font-size` must be
-    /// finite and positive; `--mru` cannot be combined with explicit ids (but composes with the font flags);
-    /// and more than `maxCells` ids are capped to the first `maxCells`, with the dropped count reported in
-    /// `result.text`. Target resolution (incl. the `--mru` recency lookup, which needs the store), the
-    /// surface reparent, and the per-window controller stay app-side behind `ControlActions.setDashboard`.
+    /// finite and positive; `--mru` cannot be combined with explicit ids (but composes with the font flags).
+    /// The 9-cell cap is NOT applied here: the cell unit is a session+pane, so a split session expands to two
+    /// cells and the cap counts PANES — that expansion needs the store, so it lives app-side in
+    /// `ControlServer.setDashboard`, which also reports any dropped panes. Target resolution (incl. the
+    /// `--mru` recency lookup), the pane expansion + cap, the surface reparent, and the per-window controller
+    /// all stay app-side behind `ControlActions.setDashboard`; this only forwards the raw ids.
     private func dispatchDashboard(_ request: ControlRequest) -> ControlResponse {
         let args = request.args
         let targets = args?.targets ?? []
@@ -621,7 +623,7 @@ public struct ControlDispatcher {
         let fontMode: DashboardFontMode = autoSize ? .auto : (fontSize.map(DashboardFontMode.fixed) ?? .untouched)
         if mru {
             // --mru supplies the members app-side from the window's recency, so it takes no explicit ids; the
-            // font flags still apply. The app resolves ≤ maxCells sessions, so no cap is needed here.
+            // font flags still apply.
             guard targets.isEmpty else {
                 return ControlResponse(ok: false, error: "dashboard --mru cannot be combined with explicit session ids")
             }
@@ -630,20 +632,6 @@ public struct ControlDispatcher {
         guard !targets.isEmpty else {
             return ControlResponse(ok: false, error: "dashboard requires at least one session id")
         }
-
-        let capped = Array(targets.prefix(DashboardLayout.maxCells))
-        let dropped = targets.count - capped.count
-        var response = actions.setDashboard(targets: capped, window: args?.window, close: false,
-                                            fontMode: fontMode, mru: false)
-        if dropped > 0, response.ok {
-            var result = response.result ?? ControlResult()
-            let dropText = "dropped \(dropped) beyond the \(DashboardLayout.maxCells)-session dashboard limit"
-            // APPEND to any "unresolved: …" text the server already produced — a >9 open where some of the
-            // first 9 ids don't resolve must report BOTH which ids failed AND how many were dropped, not
-            // clobber one with the other. Guarded on `ok` so an error response's message stays untouched.
-            result.text = [result.text, dropText].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "; ")
-            response.result = result
-        }
-        return response
+        return actions.setDashboard(targets: targets, window: args?.window, close: false, fontMode: fontMode, mru: false)
     }
 }

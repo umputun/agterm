@@ -29,20 +29,40 @@ public enum DashboardFontMode: Equatable, Sendable {
     }
 }
 
-/// Per-window dashboard state — the picked member sessions, the keyboard highlight, and the font mode.
+/// One dashboard cell's identity: a session plus which of its panes the cell hosts. A non-split session
+/// yields a single `.primary` member; a split session yields both `.primary` and `.split`, so each pane
+/// gets its own cell. `surface` is always `.primary` or `.split` for the dashboard — the `.scratch`/
+/// `.overlay` cases of `TerminalZoomSurface` are never dashboard members.
+public struct DashboardMember: Equatable, Hashable, Sendable {
+    public let session: UUID
+    public let surface: TerminalZoomSurface
+
+    public init(session: UUID, surface: TerminalZoomSurface) {
+        self.session = session
+        self.surface = surface
+    }
+
+    /// The `tree` read-back reference for this cell — `<uuid>:left` (primary) / `<uuid>:right` (split),
+    /// using the surface's raw value. The read side of `dashboardMembers`/`dashboardHighlighted`.
+    public var controlRef: String {
+        "\(session.uuidString):\(surface.rawValue)"
+    }
+}
+
+/// Per-window dashboard state — the picked pane cells, the keyboard highlight, and the font mode.
 /// Host-free (`agtermCore`, Foundation + Observation only) and `@MainActor`, mirroring
 /// `TerminalZoomController`: the app target owns one per window and drives it, and `ControlServer` reaches
-/// a specific window's controller through `DashboardControllerRegistry`. `members` are session UUIDs
-/// (resolved app-side to their live surfaces); `isOpen` derives from a non-empty member set, so `close()`
-/// (which empties it) is the single source of truth for open/closed.
+/// a specific window's controller through `DashboardControllerRegistry`. `members` are `DashboardMember`
+/// pane cells (a session + which pane; resolved app-side to their live surfaces); `isOpen` derives from a
+/// non-empty member set, so `close()` (which empties it) is the single source of truth for open/closed.
 @Observable
 @MainActor
 public final class DashboardController {
-    /// The picked member sessions, in grid order (row-major). Empty when the dashboard is closed.
-    public private(set) var members: [UUID] = []
+    /// The picked pane cells, in grid order (row-major). Empty when the dashboard is closed.
+    public private(set) var members: [DashboardMember] = []
 
-    /// The session under the keyboard highlight, or nil when closed. Always one of `members` while open.
-    public private(set) var highlighted: UUID?
+    /// The cell under the keyboard highlight, or nil when closed. Always one of `members` while open.
+    public private(set) var highlighted: DashboardMember?
 
     /// How the overlay sizes member fonts. Reset to `.untouched` on close.
     public private(set) var fontMode: DashboardFontMode = .untouched
@@ -58,7 +78,8 @@ public final class DashboardController {
 
     /// open shows the dashboard over `members`. The highlight starts on `highlighted` when it is one of
     /// `members`, otherwise on the first member. `fontMode` picks how member fonts are sized.
-    public func open(members: [UUID], highlighted: UUID? = nil, fontMode: DashboardFontMode = .untouched) {
+    public func open(members: [DashboardMember], highlighted: DashboardMember? = nil,
+                     fontMode: DashboardFontMode = .untouched) {
         self.members = members
         self.fontMode = fontMode
         if let highlighted, members.contains(highlighted) {
@@ -76,11 +97,12 @@ public final class DashboardController {
         appliedFontSize = nil
     }
 
-    /// highlight moves the keyboard highlight directly to `id` (a mouse click on that cell), but only when
-    /// `id` is one of the current members — a stray id leaves the highlight unchanged. No-op when closed.
-    public func highlight(_ id: UUID) {
-        guard members.contains(id) else { return }
-        highlighted = id
+    /// highlight moves the keyboard highlight directly to `member` (a mouse click on that cell), but only
+    /// when `member` is one of the current members — a stray one leaves the highlight unchanged. No-op when
+    /// closed.
+    public func highlight(_ member: DashboardMember) {
+        guard members.contains(member) else { return }
+        highlighted = member
     }
 
     /// move walks the keyboard highlight one step in `direction`, clamped by `DashboardLayout` (no wrap,
@@ -99,11 +121,12 @@ public final class DashboardController {
         appliedFontSize = size
     }
 
-    /// reconcile drops any member no longer present in `existing` (a member session closed while the
-    /// dashboard is open, e.g. over the control socket), preserving order. It closes the dashboard when no
-    /// member survives, and moves the highlight to the first survivor when the highlighted one vanished.
-    /// A no-op when nothing was removed, so it is cheap to call on every session add/remove.
-    public func reconcile(existing: Set<UUID>) {
+    /// reconcile drops any member pane no longer present in `existing` (a member session closed, OR a split
+    /// pane closed, while the dashboard is open — e.g. over the control socket), preserving order. It closes
+    /// the dashboard when no member survives, and moves the highlight to the first survivor when the
+    /// highlighted one vanished. A no-op when nothing was removed, so it is cheap to call on every
+    /// session/split add/remove.
+    public func reconcile(existing: Set<DashboardMember>) {
         let survivors = members.filter { existing.contains($0) }
         guard survivors.count != members.count else { return }
         guard !survivors.isEmpty else {

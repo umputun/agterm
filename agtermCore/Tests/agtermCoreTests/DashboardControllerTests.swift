@@ -4,6 +4,10 @@ import Testing
 
 @MainActor
 struct DashboardControllerTests {
+    // pane-cell members: a plain session is one `.primary` cell; a split session is `.primary` + `.split`.
+    private func primary(_ id: UUID) -> DashboardMember { DashboardMember(session: id, surface: .primary) }
+    private func split(_ id: UUID) -> DashboardMember { DashboardMember(session: id, surface: .split) }
+
     @Test func openSetsMembersHighlightAndModeThenCloseResets() {
         let controller = DashboardController()
         #expect(controller.isOpen == false)
@@ -12,10 +16,11 @@ struct DashboardControllerTests {
         #expect(controller.fontMode == .untouched)
 
         let a = UUID(), b = UUID(), c = UUID()
-        controller.open(members: [a, b, c], highlighted: b, fontMode: .auto)
+        let members = [primary(a), primary(b), primary(c)]
+        controller.open(members: members, highlighted: primary(b), fontMode: .auto)
         #expect(controller.isOpen)
-        #expect(controller.members == [a, b, c])
-        #expect(controller.highlighted == b)
+        #expect(controller.members == members)
+        #expect(controller.highlighted == primary(b))
         #expect(controller.fontMode == .auto)
 
         controller.setAppliedFontSize(9)
@@ -27,26 +32,39 @@ struct DashboardControllerTests {
         #expect(controller.appliedFontSize == nil)
     }
 
+    @Test func splitSessionExpandsToTwoPaneCells() {
+        // a split session contributes two cells — its primary AND its split pane — and the highlight/move
+        // treat them as distinct grid positions of the same session.
+        let controller = DashboardController()
+        let a = UUID()
+        controller.open(members: [primary(a), split(a)])
+        #expect(controller.members == [primary(a), split(a)])
+        #expect(controller.highlighted == primary(a), "the highlight starts on the first cell (the primary pane)")
+        controller.move(.right)
+        #expect(controller.highlighted == split(a), "moving right lands on the same session's split pane cell")
+    }
+
     @Test func highlightInitPrefersSuppliedMemberElseFirst() {
         let controller = DashboardController()
         let a = UUID(), b = UUID(), c = UUID()
+        let members = [primary(a), primary(b), primary(c)]
 
         // no supplied highlight → first member.
-        controller.open(members: [a, b, c])
-        #expect(controller.highlighted == a)
+        controller.open(members: members)
+        #expect(controller.highlighted == primary(a))
 
         // supplied member in the set → that member.
-        controller.open(members: [a, b, c], highlighted: c)
-        #expect(controller.highlighted == c)
+        controller.open(members: members, highlighted: primary(c))
+        #expect(controller.highlighted == primary(c))
 
         // supplied member not in the set → falls back to the first member.
-        controller.open(members: [a, b, c], highlighted: UUID())
-        #expect(controller.highlighted == a)
+        controller.open(members: members, highlighted: primary(UUID()))
+        #expect(controller.highlighted == primary(a))
     }
 
     @Test func moveWalksHighlightAcrossFullGrid() {
         let controller = DashboardController()
-        let ids = (0..<4).map { _ in UUID() } // cols=2: 0 1 / 2 3
+        let ids = (0..<4).map { _ in primary(UUID()) } // cols=2: 0 1 / 2 3
         controller.open(members: ids)
         #expect(controller.highlighted == ids[0])
         controller.move(.right)
@@ -66,7 +84,7 @@ struct DashboardControllerTests {
 
     @Test func moveClampsRaggedLastRow() {
         let controller = DashboardController()
-        let ids = (0..<5).map { _ in UUID() } // cols=3: 0 1 2 / 3 4
+        let ids = (0..<5).map { _ in primary(UUID()) } // cols=3: 0 1 2 / 3 4
         controller.open(members: ids, highlighted: ids[4])
         // no cell right of the last member in a ragged row.
         controller.move(.right)
@@ -81,21 +99,21 @@ struct DashboardControllerTests {
     @Test func highlightMovesToMemberElseLeavesUnchanged() {
         let controller = DashboardController()
         let a = UUID(), b = UUID(), c = UUID()
-        controller.open(members: [a, b, c])
-        #expect(controller.highlighted == a)
+        controller.open(members: [primary(a), primary(b), primary(c)])
+        #expect(controller.highlighted == primary(a))
 
         // click on a member moves the highlight to it.
-        controller.highlight(c)
-        #expect(controller.highlighted == c)
+        controller.highlight(primary(c))
+        #expect(controller.highlighted == primary(c))
 
-        // a non-member id leaves the highlight where it was.
-        controller.highlight(UUID())
-        #expect(controller.highlighted == c)
+        // a non-member leaves the highlight where it was.
+        controller.highlight(primary(UUID()))
+        #expect(controller.highlighted == primary(c))
     }
 
     @Test func highlightIsNoOpWhenClosed() {
         let controller = DashboardController()
-        controller.highlight(UUID())
+        controller.highlight(primary(UUID()))
         #expect(controller.highlighted == nil)
     }
 
@@ -109,7 +127,7 @@ struct DashboardControllerTests {
     @Test func fontModeAndAppliedSizeCarryState() {
         let controller = DashboardController()
         let a = UUID()
-        controller.open(members: [a], fontMode: .fixed(18))
+        controller.open(members: [primary(a)], fontMode: .fixed(18))
         #expect(controller.fontMode == .fixed(18))
         #expect(controller.appliedFontSize == nil)
         controller.setAppliedFontSize(18)
@@ -121,35 +139,48 @@ struct DashboardControllerTests {
         // font re-apply off members+fontMode, so this is what a `dashboard A B --font-size 20` re-open sees).
         let controller = DashboardController()
         let a = UUID(), b = UUID()
-        controller.open(members: [a, b], highlighted: b, fontMode: .fixed(20))
+        let members = [primary(a), primary(b)]
+        controller.open(members: members, highlighted: primary(b), fontMode: .fixed(20))
         controller.setAppliedFontSize(20)
         #expect(controller.fontMode == .fixed(20))
 
-        controller.open(members: [a, b], highlighted: b, fontMode: .untouched)
-        #expect(controller.members == [a, b])
-        #expect(controller.highlighted == b, "the highlight survives a same-members re-open")
+        controller.open(members: members, highlighted: primary(b), fontMode: .untouched)
+        #expect(controller.members == members)
+        #expect(controller.highlighted == primary(b), "the highlight survives a same-members re-open")
         #expect(controller.fontMode == .untouched, "the font mode reflects the latest open")
     }
 
     @Test func reconcileDropsClosedMembersAndFixesHighlight() {
         let controller = DashboardController()
         let a = UUID(), b = UUID(), c = UUID()
-        controller.open(members: [a, b, c], highlighted: b)
+        controller.open(members: [primary(a), primary(b), primary(c)], highlighted: primary(b))
 
         // b closed while open: it is pruned, order preserved, and the highlight moves to the first survivor.
-        controller.reconcile(existing: [a, c])
-        #expect(controller.members == [a, c])
-        #expect(controller.highlighted == a)
+        controller.reconcile(existing: [primary(a), primary(c)])
+        #expect(controller.members == [primary(a), primary(c)])
+        #expect(controller.highlighted == primary(a))
 
         // a survivor highlight is left in place.
-        controller.reconcile(existing: [a, c])
-        #expect(controller.highlighted == a, "a no-op reconcile leaves state unchanged")
+        controller.reconcile(existing: [primary(a), primary(c)])
+        #expect(controller.highlighted == primary(a), "a no-op reconcile leaves state unchanged")
+    }
+
+    @Test func reconcileDropsSplitPaneWhenSplitClosesButKeepsPrimary() {
+        // a split session opens as two cells; closing just its split pane (primary stays valid) prunes ONLY
+        // the split cell and moves the highlight off it, leaving the primary cell in place.
+        let controller = DashboardController()
+        let a = UUID(), b = UUID()
+        controller.open(members: [primary(a), split(a), primary(b)], highlighted: split(a))
+
+        controller.reconcile(existing: [primary(a), primary(b)]) // a's split pane closed
+        #expect(controller.members == [primary(a), primary(b)], "only the split cell is pruned")
+        #expect(controller.highlighted == primary(a), "the highlight moves to the first survivor")
     }
 
     @Test func reconcileClosesDashboardWhenNoMemberSurvives() {
         let controller = DashboardController()
         let a = UUID(), b = UUID()
-        controller.open(members: [a, b], fontMode: .fixed(14))
+        controller.open(members: [primary(a), primary(b)], fontMode: .fixed(14))
         controller.setAppliedFontSize(14)
 
         controller.reconcile(existing: [])
@@ -158,6 +189,12 @@ struct DashboardControllerTests {
         #expect(controller.highlighted == nil)
         #expect(controller.fontMode == .untouched)
         #expect(controller.appliedFontSize == nil)
+    }
+
+    @Test func memberControlRefEncodesSessionAndPane() {
+        let a = UUID()
+        #expect(primary(a).controlRef == "\(a.uuidString):left")
+        #expect(split(a).controlRef == "\(a.uuidString):right")
     }
 
     @Test func appliedFontSizeResolvesPerMode() {

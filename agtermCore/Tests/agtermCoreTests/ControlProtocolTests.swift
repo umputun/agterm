@@ -807,15 +807,17 @@ struct ControlProtocolTests {
 
     @Test func treeRoundTripsWithDashboardFields() throws {
         // the read side of dashboard: members / highlighted / applied font / mode ride the tree top level so
-        // a script can read the live grid state. LIVE, tree-only like zoomedSurface.
+        // a script can read the live grid state. Members/highlighted are pane refs (`<uuid>:left`/`:right`) —
+        // a split session appears as both its `:left` and `:right` cells. LIVE, tree-only like zoomedSurface.
+        let members = ["9f3c:left", "9f3c:right", "abcd:left"]
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
-            workspaces: [], dashboardMembers: ["a", "b", "c"], dashboardHighlighted: "b",
+            workspaces: [], dashboardMembers: members, dashboardHighlighted: "9f3c:right",
             dashboardFontSize: 12, dashboardFontMode: "auto")))
         let decoded = try roundTrip(response)
         #expect(decoded == response)
         let tree = decoded.result?.tree
-        #expect(tree?.dashboardMembers == ["a", "b", "c"])
-        #expect(tree?.dashboardHighlighted == "b")
+        #expect(tree?.dashboardMembers == members)
+        #expect(tree?.dashboardHighlighted == "9f3c:right")
         #expect(tree?.dashboardFontSize == 12)
         #expect(tree?.dashboardFontMode == "auto")
     }

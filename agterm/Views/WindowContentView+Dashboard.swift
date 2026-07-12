@@ -2,41 +2,42 @@ import agtermCore
 import AppKit
 import SwiftUI
 
-/// The font-relevant dashboard state — the member set, each member's live surface SLOT, AND the font mode.
-/// A change to ANY re-applies the per-member override. Two reasons the `members`-only key missed (SwiftUI
-/// suppresses `.onChange` when the whole key is Equatable-equal): a same-members re-open with a DIFFERENT
-/// font mode (`dashboard A B` then `dashboard A B --font-size 20`) must re-size; and folding each member's
-/// `addressableSurfaceKind` in re-applies the override should a member's hosted slot ever change while open,
-/// so the rehosted surface inherits it rather than dropping to the default font. A primary-pane exit no
-/// longer changes the kind — `closePrimaryPane` promotes the split survivor INTO `surface`, so the kind stays
-/// `.primary` — making the slot term defensive robustness, not a promotion trigger.
+/// The font-relevant dashboard state — the pane-cell member set AND the font mode. A change to either
+/// re-applies the per-cell font override. The members-only key would miss (SwiftUI suppresses `.onChange`
+/// when the whole key is Equatable-equal) a same-members re-open with a DIFFERENT font mode
+/// (`dashboard A B` then `dashboard A B --font-size 20`), so the mode rides the key too. Each member is now
+/// an explicit `(session, pane)` cell, so a member-set change already captures any slot change — no separate
+/// `kinds` term is needed.
 struct DashboardFontKey: Equatable {
-    let members: [UUID]
-    let kinds: [TerminalZoomSurface]
+    let members: [DashboardMember]
     let mode: DashboardFontMode
 }
 
 extension WindowContentView {
-    /// The composite key the font apply reacts to (see `DashboardFontKey`). `kinds` is each member's live
-    /// `addressableSurfaceKind`, so any change to a member's hosted slot flips the key and re-applies the
-    /// override to the surface the cell now hosts — a defensive re-apply, since a primary-pane exit promotes
-    /// the survivor INTO `surface` and leaves the kind `.primary` rather than flipping it.
+    /// The composite key the font apply reacts to (see `DashboardFontKey`): the pane-cell member set plus the
+    /// font mode, so a retarget, a same-members mode change, or a member add/remove re-applies the override.
     var dashboardFontKey: DashboardFontKey {
-        let kinds = dashboard.members.map { store.session(withID: $0)?.addressableSurfaceKind ?? .primary }
-        return DashboardFontKey(members: dashboard.members, kinds: kinds, mode: dashboard.fontMode)
+        DashboardFontKey(members: dashboard.members, mode: dashboard.fontMode)
     }
 
-    /// Every session id currently in this window's store, in tree order — the reconcile key: when a member
-    /// session is closed while the dashboard is open (e.g. over the control socket), this array changes and
-    /// `reconcileDashboardMembers` prunes the gone member.
-    var dashboardSessionIDs: [UUID] {
-        store.workspaces.flatMap { $0.sessions.map(\.id) }
+    /// Every VALID pane cell currently in this window's store, in tree order — each session contributes its
+    /// `.primary` cell plus a `.split` cell when it `hasSplit`. The reconcile key: when a member session is
+    /// closed OR a split pane closes while the dashboard is open (e.g. over the control socket), this array
+    /// changes and `reconcileDashboardMembers` prunes the gone cell(s).
+    var dashboardValidMembers: [DashboardMember] {
+        store.workspaces.flatMap(\.sessions).flatMap { session -> [DashboardMember] in
+            var members = [DashboardMember(session: session.id, surface: .primary)]
+            if session.hasSplit { members.append(DashboardMember(session: session.id, surface: .split)) }
+            return members
+        }
     }
 
     /// The dashboard grid overlay, mounted in `windowOverlayLayer` while this window's `DashboardController`
     /// is open (inset by `titlebarHeight`, below `customTitlebar`, like the other window overlays). Closed
     /// over its `onSelect`/`onClose` closures + the control socket; view-only cells reparent each member's
-    /// resolved `addressableSurface` via the generalized deck yield.
+    /// OWN pane surface (`.primary` → `\.surface`, `.split` → `\.splitSurface`) via the generalized deck
+    /// yield. `highlightColor` is the themed chrome foreground, so the highlight ring tracks the terminal
+    /// theme rather than the OS accent.
     @ViewBuilder var dashboardOverlay: some View {
         if dashboard.isOpen {
             DashboardView(
@@ -44,6 +45,7 @@ extension WindowContentView {
                 store: store,
                 makeSurface: makeSurface,
                 makeSplitSurface: makeSplitSurface,
+                highlightColor: chromeText,
                 onHighlight: { dashboard.highlight($0) },
                 onSelect: { selectDashboardMember($0) },
                 onClose: { closeDashboardFromKeyboard() }
@@ -51,15 +53,15 @@ extension WindowContentView {
         }
     }
 
-    /// Whether an OPEN dashboard hosts this session-surface slot in a grid cell. The dashboard reparents each
-    /// member's `addressableSurface` — `.primary` when the main shell is live (including a promoted split
-    /// survivor, which `closePrimaryPane` moves INTO `surface`), else `.split` for a genuine split-only
-    /// survivor — so that one slot's deck entry must yield the `Color.clear` placeholder (an NSView lives in
-    /// one host at a time), exactly like the zoom exclusion. False for every non-member slot, for a member's
-    /// scratch/overlay surfaces (the dashboard never hosts those), and while the dashboard is closed.
+    /// Whether an OPEN dashboard hosts this session-pane slot in a grid cell. A member is now an explicit
+    /// `(session, pane)` cell, so BOTH panes of a split member are claimed (each hosts its own surface) — the
+    /// deck must yield the `Color.clear` placeholder for every claimed slot (an NSView lives in one host at a
+    /// time), exactly like the zoom exclusion, but generalized to N panes. False for every non-member slot,
+    /// for a member's scratch/overlay surfaces (the dashboard never hosts those), and while the dashboard is
+    /// closed.
     func dashboardHostsSurface(session: Session, surface: TerminalZoomSurface) -> Bool {
-        guard dashboard.isOpen, dashboard.members.contains(session.id) else { return false }
-        return surface == session.addressableSurfaceKind
+        guard dashboard.isOpen else { return false }
+        return dashboard.members.contains(DashboardMember(session: session.id, surface: surface))
     }
 
     /// Register this window's `DashboardController` so the control socket can drive it (called from `onAppear`).
@@ -97,10 +99,11 @@ extension WindowContentView {
     }
 
     /// The font-key change (the body's `.onChange(of: dashboardFontKey)`): clears every prior override, then
-    /// re-applies the font mode to the current members and records the applied size on the controller. Fires
-    /// on open ([] → members), retarget (members → new set), a same-members font-mode change, a member's
-    /// surface-slot promotion (`.primary` → `.split`), and close (members → []), so a de-membered surface
-    /// never keeps a stale shrunk font, a re-open always re-sizes, and a promoted survivor inherits the override.
+    /// re-applies the font mode to the current pane cells and records the applied size on the controller.
+    /// Fires on open ([] → members), retarget (members → new set), a same-members font-mode change, a
+    /// member add/remove, and close (members → []), so a de-membered surface never keeps a stale shrunk font
+    /// and a re-open always re-sizes. Each cell's OWN pane surface (`.primary` → `\.surface`, `.split` →
+    /// `\.splitSurface`) gets the override.
     func handleDashboardFontChange() {
         clearDashboardFontOverrides()
         guard dashboard.isOpen else {
@@ -110,18 +113,19 @@ extension WindowContentView {
         let target = dashboardTargetFontSize(memberCount: dashboard.members.count)
         dashboard.setAppliedFontSize(target)
         guard let target else { return } // .untouched: leave each surface at its own session.fontSize
-        for id in dashboard.members {
-            dashboardMemberSurface(id)?.dashboardFontOverride = target
+        for member in dashboard.members {
+            dashboardMemberSurface(member)?.dashboardFontOverride = target
         }
     }
 
-    /// The reconcile hook (the body's `.onChange(of: dashboardSessionIDs)`): drops any member whose session
-    /// was closed while the dashboard is open (e.g. over the control socket), so the grid recomputes to the
-    /// smaller count and the highlight never points at a gone session. A no-op while closed or when no member
-    /// vanished; `DashboardController.reconcile` closes the dashboard when the last member is gone.
+    /// The reconcile hook (the body's `.onChange(of: dashboardValidMembers)`): drops any pane cell whose
+    /// session was closed OR whose split pane closed while the dashboard is open (e.g. over the control
+    /// socket), so the grid recomputes to the smaller count and the highlight never points at a gone pane. A
+    /// no-op while closed or when no member vanished; `DashboardController.reconcile` closes the dashboard
+    /// when the last member is gone.
     func reconcileDashboardMembers() {
         guard dashboard.isOpen else { return }
-        dashboard.reconcile(existing: Set(dashboardSessionIDs))
+        dashboard.reconcile(existing: Set(dashboardValidMembers))
     }
 
     /// Reciprocal exclusivity (folded into the body's `.onChange(of: terminalZoom.target)`): a zoom becoming
@@ -133,11 +137,24 @@ extension WindowContentView {
     }
 
     /// Enter (or a double-click) on the highlighted cell: select that session, close the dashboard, then land
-    /// first responder in it.
-    func selectDashboardMember(_ id: UUID) {
-        store.selectSession(id)
+    /// first responder in the cell's EXACT pane — the split (right) pane for a `.split` cell (mirroring
+    /// `revealActiveBlockedPane`'s `.right` branch: flip `splitFocused`, then `focusSplitPane(wantSplit:true)`),
+    /// else the main pane. Close BEFORE focusing so the `focusSplitPane`/`focusActiveSession` `dashboardActive`
+    /// guards (the window's controller `isOpen`) don't block the focus.
+    func selectDashboardMember(_ member: DashboardMember) {
+        store.selectSession(member.session)
         dashboard.close()
-        actions.focusActiveSession()
+        guard let session = store.session(withID: member.session) else {
+            actions.focusActiveSession()
+            return
+        }
+        if member.surface == .split, session.splitSurface != nil {
+            session.splitFocused = true
+            actions.focusSplitPane(session, wantSplit: true)
+        } else {
+            session.splitFocused = false
+            actions.focusActiveSession()
+        }
     }
 
     /// Esc: close the dashboard and restore first responder to the still-selected (previously active) session.
@@ -158,20 +175,25 @@ extension WindowContentView {
     }
 
     /// Clear the transient dashboard font override on every surface that currently carries one, restoring its
-    /// real (session-model) font. A store-wide sweep rather than iterating `dashboard.members`, so it stays
-    /// correct on close (members already emptied) and on window teardown; only touches surfaces with an active
-    /// override, so a plain surface isn't needlessly re-configured.
+    /// real (session-model) font. Sweeps BOTH `\.surface` AND `\.splitSurface` of every session, since a split
+    /// member now carries the override on its OWN pane surface (both panes can carry one). A store-wide sweep
+    /// rather than iterating `dashboard.members`, so it stays correct on close (members already emptied) and
+    /// on window teardown; only touches surfaces with an active override, so a plain surface isn't needlessly
+    /// re-configured.
     private func clearDashboardFontOverrides() {
         for session in store.workspaces.flatMap(\.sessions) {
-            guard let surface = session.addressableSurface as? GhosttySurfaceView,
-                  surface.dashboardFontOverride != nil else { continue }
-            surface.dashboardFontOverride = nil
+            for surface in [session.surface, session.splitSurface] {
+                guard let view = surface as? GhosttySurfaceView, view.dashboardFontOverride != nil else { continue }
+                view.dashboardFontOverride = nil
+            }
         }
     }
 
-    /// The member's hosted surface — `addressableSurface` (`surface ?? splitSurface`), the SAME slot the
-    /// dashboard cell reparents — as a `GhosttySurfaceView`, for the font override.
-    private func dashboardMemberSurface(_ id: UUID) -> GhosttySurfaceView? {
-        store.session(withID: id)?.addressableSurface as? GhosttySurfaceView
+    /// The cell's OWN pane surface as a `GhosttySurfaceView`, for the font override: `.split` → the session's
+    /// `splitSurface`, else its `surface` — the SAME slot the dashboard cell reparents.
+    private func dashboardMemberSurface(_ member: DashboardMember) -> GhosttySurfaceView? {
+        guard let session = store.session(withID: member.session) else { return nil }
+        let surface = member.surface == .split ? session.splitSurface : session.surface
+        return surface as? GhosttySurfaceView
     }
 }

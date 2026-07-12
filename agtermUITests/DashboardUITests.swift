@@ -59,12 +59,49 @@ final class DashboardUITests: ControlAPITestCase {
 
         XCTAssertTrue(pollCellCount(4, timeout: 15), "mru renders one cell per recent session (≤9, fewer if fewer)")
         let members = try XCTUnwrap(dashMembers(), "tree carries the mru members while open")
-        XCTAssertEqual(members.map { $0.lowercased() }, expected.map { $0.lowercased() },
-                       "mru members are the window's sessions in most-recent-first order")
+        // the sessions have no split, so each is a single primary-pane cell (`<id>:left`), in mru order.
+        XCTAssertEqual(members.map { $0.lowercased() }, expected.map { "\($0.lowercased()):left" },
+                       "mru members are the window's sessions in most-recent-first order (each a primary pane cell)")
 
         try closeDashboard()
         XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "close removes the mru overlay")
         XCTAssertNil(dashMembers(), "the mru members read-back clears on close")
+    }
+
+    // a SPLIT session opens as TWO cells — its primary AND its split pane — so tree.dashboardMembers carries
+    // BOTH `<id>:left` and `<id>:right`. Highlighting the split (right) cell and pressing Enter focuses the
+    // RIGHT pane, asserted via the tree `splitFocused` read-back (flips false → true). The focus routing is
+    // real behavior, not a weaker proxy: `splitFocused` is the same field `session.focus` reads back.
+    func testSplitSessionOpensTwoCellsAndEnterFocusesSplitPane() throws {
+        let ids = try prepareSessions(extra: 0) // just the seeded session
+        let id = ids[0]
+        // give the session a split pane (both shells alive). `session.split on` shows it and focuses the new
+        // RIGHT pane, so move focus back to the LEFT pane first — that makes the split-cell Enter below flip
+        // splitFocused false → true, a real (non-vacuous) effect to assert.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "session.split on should succeed")
+        XCTAssertTrue(pollSplit(id, timeout: 10), "the session should report a split")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(id)","args":{"pane":"left"}}"#)["ok"] as? Bool,
+                       true, "session.focus left should succeed")
+        XCTAssertTrue(pollSplitFocused(id, expected: false, timeout: 10), "focus the left pane before opening")
+
+        try openDashboard(members: [id])
+        XCTAssertTrue(pollCellCount(2, timeout: 15), "a split session opens as two pane cells")
+        let members = try XCTUnwrap(dashMembers(), "tree carries the pane-ref members while open")
+        XCTAssertEqual(Set(members.map { $0.lowercased() }),
+                       Set(["\(id.lowercased()):left", "\(id.lowercased()):right"]),
+                       "the two cells are the session's left and right panes")
+
+        // highlight the split (right) cell (right arrow: primary[0] → split[1]), then Enter.
+        settle(0.5)
+        app.typeKey(.rightArrow, modifierFlags: [])
+        XCTAssertTrue(pollDashHighlightedRef("\(id):right", timeout: 8), "right arrow highlights the split pane cell")
+
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "Enter closes the dashboard")
+        XCTAssertTrue(pollSelectedSession(id, timeout: 10), "Enter selects the session")
+        XCTAssertTrue(pollSplitFocused(id, expected: true, timeout: 10),
+                      "Enter on the split cell focuses the RIGHT pane (splitFocused flips to true)")
     }
 
     // arrow keys walk the highlight between cells (observed via tree.dashboardHighlighted and the
@@ -75,14 +112,14 @@ final class DashboardUITests: ControlAPITestCase {
         try openDashboard(members: ids)
 
         let initial = try XCTUnwrap(dashHighlighted(), "the highlight is set while open")
-        XCTAssertEqual(initial.lowercased(), ids[0].lowercased(), "the highlight starts on the first member")
+        XCTAssertEqual(refSession(initial), ids[0].lowercased(), "the highlight starts on the first member")
         XCTAssertTrue(highlightedMarker.waitForExistence(timeout: 10), "the highlighted cell renders its marker")
 
         // give the AppKit key-catcher a beat to own first responder, then move the highlight right.
         settle(0.5)
         app.typeKey(.rightArrow, modifierFlags: [])
-        let moved = pollDashHighlighted(changedFrom: initial, timeout: 8)
-        XCTAssertEqual(moved?.lowercased(), ids[1].lowercased(), "right arrow moves the highlight to the next cell")
+        let moved = pollDashHighlighted(changedFrom: ids[0], timeout: 8)
+        XCTAssertEqual(moved.map(refSession), ids[1].lowercased(), "right arrow moves the highlight to the next cell")
 
         // Enter selects the highlighted session and closes the dashboard.
         app.typeKey(.return, modifierFlags: [])
@@ -153,7 +190,7 @@ final class DashboardUITests: ControlAPITestCase {
         // input pipeline drained PAST the typed sentinel, so a leaked keystroke would already be in the
         // buffer below (a fixed settle before the negative buffer read could pass vacuously, hiding a late leak).
         let moved = pollDashHighlighted(changedFrom: ids[0], timeout: 8)
-        XCTAssertEqual(moved?.lowercased(), ids[1].lowercased(),
+        XCTAssertEqual(moved.map(refSession), ids[1].lowercased(),
                        "a cell click highlights that cell (dashboard input), proving it never reached the terminal")
 
         XCTAssertTrue(dashboardOverlay.exists, "typing and clicking must not dismiss the view-only dashboard")
@@ -353,15 +390,61 @@ final class DashboardUITests: ControlAPITestCase {
         return cells.count == expected
     }
 
-    /// Polls `tree.dashboardHighlighted` until it differs from `old` (case-insensitive), returning the new
-    /// value, or the last-read value on timeout.
+    /// The session part of a dashboard pane ref (`<uuid>:left`/`:right` → `<uuid>`), lowercased.
+    private func refSession(_ ref: String) -> String { String(ref.split(separator: ":").first ?? "").lowercased() }
+
+    /// Polls `tree.dashboardHighlighted` until its SESSION part differs from the `old` session id
+    /// (case-insensitive), returning the new pane ref, or the last-read value on timeout.
     private func pollDashHighlighted(changedFrom old: String, timeout: TimeInterval) -> String? {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if let current = dashHighlighted(), current.lowercased() != old.lowercased() { return current }
+            if let current = dashHighlighted(), refSession(current) != old.lowercased() { return current }
             usleep(200_000)
         }
         return dashHighlighted()
+    }
+
+    /// Polls `tree.dashboardHighlighted` until it equals `ref` exactly (case-insensitive pane ref), for the
+    /// split test where the two cells share a session and only the pane part distinguishes them.
+    private func pollDashHighlightedRef(_ ref: String, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if dashHighlighted()?.lowercased() == ref.lowercased() { return true }
+            usleep(200_000)
+        }
+        return dashHighlighted()?.lowercased() == ref.lowercased()
+    }
+
+    /// The `tree` session node for `id`, or nil if not readable yet.
+    private func sessionNode(_ id: String) -> [String: Any]? {
+        guard let workspaces = (try? treeTop())?["workspaces"] as? [[String: Any]] else { return nil }
+        for workspace in workspaces {
+            for session in (workspace["sessions"] as? [[String: Any]] ?? [])
+            where (session["id"] as? String)?.lowercased() == id.lowercased() {
+                return session
+            }
+        }
+        return nil
+    }
+
+    /// Polls the session node's `split` (isSplit) flag until true.
+    private func pollSplit(_ id: String, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if sessionNode(id)?["split"] as? Bool == true { return true }
+            usleep(200_000)
+        }
+        return sessionNode(id)?["split"] as? Bool == true
+    }
+
+    /// Polls the session node's `splitFocused` read-back until it equals `expected`.
+    private func pollSplitFocused(_ id: String, expected: Bool, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if sessionNode(id)?["splitFocused"] as? Bool == expected { return true }
+            usleep(200_000)
+        }
+        return sessionNode(id)?["splitFocused"] as? Bool == expected
     }
 
     private func pollDashFontSize(timeout: TimeInterval) -> Double? {

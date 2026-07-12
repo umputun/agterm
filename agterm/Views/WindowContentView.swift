@@ -125,7 +125,7 @@ struct WindowContentView: View {
         .onChange(of: dashboardFontKey) { _, _ in
             handleDashboardFontChange()
         }
-        .onChange(of: dashboardSessionIDs) { _, _ in
+        .onChange(of: dashboardValidMembers) { _, _ in
             reconcileDashboardMembers()
         }
         // Editor-overlay reload hooks must stay mounted while terminal zoom replaces the normal deck.

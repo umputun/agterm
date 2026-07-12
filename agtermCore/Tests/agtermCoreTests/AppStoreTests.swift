@@ -1588,12 +1588,13 @@ struct AppStoreTests {
         #expect(bare.dashboardHighlighted == nil)
         #expect(bare.dashboardFontSize == nil)
         #expect(bare.dashboardFontMode == nil)
-        // the app supplies the live DashboardController state via the closures.
-        let members = ["a", "b", "c"]
-        let tree = store.controlTree(dashboardMembers: { members }, dashboardHighlighted: { "b" },
+        // the app supplies the live DashboardController state via the closures. Members are pane refs now
+        // (`<uuid>:left`/`:right`): a split session shows as both its `:left` and `:right` cells.
+        let members = ["9f3c:left", "9f3c:right", "abcd:left"]
+        let tree = store.controlTree(dashboardMembers: { members }, dashboardHighlighted: { "9f3c:right" },
                                      dashboardFontSize: { 12 }, dashboardFontMode: { "auto" })
         #expect(tree.dashboardMembers == members)
-        #expect(tree.dashboardHighlighted == "b")
+        #expect(tree.dashboardHighlighted == "9f3c:right")
         #expect(tree.dashboardFontSize == 12)
         #expect(tree.dashboardFontMode == "auto")
     }
