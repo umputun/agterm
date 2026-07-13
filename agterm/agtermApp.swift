@@ -23,6 +23,10 @@ struct agtermApp: App {
     /// The plain `WindowGroup`'s scene id, used by `openWindow(id:)` to spawn additional windows.
     private static let windowGroupID = "terminal"
 
+    /// The version paired with agterm's `TERM_PROGRAM` identity in every spawned terminal.
+    private static let terminalProgramVersion =
+        Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
+
     init() {
         let library = agtermApp.restoredLibrary()
         _library = State(initialValue: library)
@@ -466,8 +470,9 @@ struct agtermApp: App {
         return view
     }
 
-    /// The `AGTERM_*` environment a tree surface (main / split / overlay / scratch) exposes to its spawned
-    /// shell. The window id comes from the open store that owns the session (split/overlay/scratch inherit it
+    /// The environment a tree surface (main / split / overlay / scratch) exposes to its spawned shell: the
+    /// `AGTERM_*` session facts plus agterm's app identity (`TERM_PROGRAM`/`TERM_PROGRAM_VERSION`). The window
+    /// id comes from the open store that owns the session (split/overlay/scratch inherit it
     /// via the same session); the workspace from the session's owning workspace; `AGTERM_SOCKET` is the path
     /// `ControlServer` will bind (resolved at init, so a launch-window shell that materializes before
     /// `start()` binds still sees it), honoring a test's `AGTERM_CONTROL_SOCKET` override. `pane` injects the
@@ -485,13 +490,15 @@ struct agtermApp: App {
         }
         return SurfaceEnvironment.session(sessionID: session.id, windowID: windowID,
                                           workspaceID: workspaceID, socketPath: controlServer.resolvedSocketPath,
+                                          programVersion: Self.terminalProgramVersion,
                                           pane: pane)
     }
 
-    /// The `AGTERM_*` environment a window's quick terminal exposes — scratch, not in the tree, so it
-    /// carries only `AGTERM_ENABLED`, `AGTERM_WINDOW_ID`, and `AGTERM_SOCKET` (no workspace/session ids).
+    /// The environment a window's quick terminal exposes — scratch, not in the tree, so its `AGTERM_*`
+    /// values carry only enabled, window, and socket facts (no workspace/session ids), plus app identity.
     @MainActor
     func quickTerminalEnv(for windowID: WindowInfo.ID) -> [String: String] {
-        SurfaceEnvironment.quickTerminal(windowID: windowID, socketPath: controlServer.resolvedSocketPath)
+        SurfaceEnvironment.quickTerminal(windowID: windowID, socketPath: controlServer.resolvedSocketPath,
+                                         programVersion: Self.terminalProgramVersion)
     }
 }
