@@ -138,20 +138,40 @@ struct DashboardView: View {
     /// Hosts the member's OWN pane surface as a view-only `TerminalView`: `.primary` → `\.surface` via
     /// `makeSurface`, `.split` → `\.splitSurface` via `makeSplitSurface`. The `.id` carries the hosted slot
     /// (`-dashboard-primary`/`-dashboard-split`) so a cell keyed to one pane never reuses the other pane's
-    /// representable. `isActive`/`deckVisible`/`reportsFocusChange` are all off and `viewOnly` is on, so the
-    /// cell auto-focuses nothing, is not a drop target, refuses first responder, and never mutates session
-    /// focus state.
+    /// representable, PLUS the resolved surface's per-instance identity (`surfaceToken`) so a surface
+    /// REPLACEMENT re-mounts the cell — see `surfaceToken`. `isActive`/`deckVisible`/`reportsFocusChange` are
+    /// all off and `viewOnly` is on, so the cell auto-focuses nothing, is not a drop target, refuses first
+    /// responder, and never mutates session focus state.
     @ViewBuilder
     private func memberTerminal(for member: DashboardMember, session: Session) -> some View {
         if member.surface == .split {
             TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
                          isActive: false, deckVisible: false, reportsFocusChange: false, viewOnly: true)
-                .id("\(session.id.uuidString)-dashboard-split")
+                .id("\(session.id.uuidString)-dashboard-split-\(surfaceToken(for: member, session: session))")
         } else {
             TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
                          isActive: false, deckVisible: false, reportsFocusChange: false, viewOnly: true)
-                .id("\(session.id.uuidString)-dashboard-primary")
+                .id("\(session.id.uuidString)-dashboard-primary-\(surfaceToken(for: member, session: session))")
         }
+    }
+
+    /// A per-instance identity token for the member's currently-resolved slot surface (`.split` →
+    /// `session.splitSurface`, else `session.surface`), folded into the cell `.id`. When a shown session's
+    /// PRIMARY shell exits, `AppStore.closePrimaryPane` PROMOTES the split survivor into `session.surface`
+    /// (a DIFFERENT surface instance) and nils `splitSurface`; reconcile then drops the `.split` cell but
+    /// keeps the `.primary` one. `TerminalView.updateNSView` never re-resolves `session[keyPath:]`, so without
+    /// the surface identity in the id SwiftUI would keep hosting the torn-down old primary surface (a blank
+    /// cell) while the live survivor stays unhosted. Folding `ObjectIdentifier` into the id changes it on a
+    /// swap, forcing a re-mount → `makeNSView` re-resolves the slot → hosts the survivor. The token is STABLE
+    /// across ordinary re-renders (same instance → same token → no spurious re-host, which would invalidate
+    /// the Metal drawable and flicker), and changes ONLY on a genuine surface swap. `session.surface`/
+    /// `splitSurface` are `@ObservationIgnored`, so the swap alone does not re-render — the reconcile-driven
+    /// `controller.members` change is what re-renders the grid and re-reads the new slot surface. A nil slot
+    /// keeps a stable `"none"` suffix.
+    private func surfaceToken(for member: DashboardMember, session: Session) -> String {
+        let surface = member.surface == .split ? session.splitSurface : session.surface
+        guard let surface else { return "none" }
+        return "\(ObjectIdentifier(surface as AnyObject))"
     }
 
     /// A small themed name chip riding the cell's bottom-RIGHT frame line. For a split session's two cells a
