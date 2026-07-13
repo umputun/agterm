@@ -128,7 +128,7 @@ final class GhosttyCallbacks: @unchecked Sendable {
         case GHOSTTY_ACTION_MOUSE_SHAPE:
             // libghostty requests a mouse cursor shape for this surface — the pointing hand over a detected
             // link / OSC-8 hyperlink, the I-beam over the grid, resize/crosshair in the matching modes.
-            // recover the surface and apply the mapped NSCursor via its cursor rects.
+            // recover the surface and apply the mapped NSCursor.
             guard let view = surfaceView(from: target) else { return true }
             let shape = action.action.mouse_shape
             DispatchQueue.main.async { view.applyMouseShape(shape) }
