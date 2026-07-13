@@ -460,12 +460,22 @@ final class GhosttyApp {
                        alpha: 1)
     }
 
-    /// Black or white, whichever contrasts better with `color` by perceived luminance. The selected-row
-    /// text falls back to this when the theme sets a selection-background but no selection-foreground.
-    private static func contrastingText(for color: NSColor) -> NSColor {
+    /// Black or white, whichever gives higher contrast against `color`, decided by WCAG relative luminance.
+    /// The selected-row text falls back to this when the theme sets a selection-background but no
+    /// selection-foreground, and the dashboard status pill uses it to keep its name readable over an
+    /// arbitrary status-color fill. WCAG relative luminance (gamma-linearized channels, not a raw luma
+    /// average) is what makes a saturated mid-tone like `systemGreen` correctly pick BLACK: a plain luma
+    /// cutoff reads green as "dark" and picks unreadable white-on-green.
+    static func contrastingText(for color: NSColor) -> NSColor {
         let c = color.usingColorSpace(.sRGB) ?? color
-        let luminance = 0.299 * c.redComponent + 0.587 * c.greenComponent + 0.114 * c.blueComponent
-        return luminance > 0.6 ? .black : .white
+        func linear(_ v: CGFloat) -> Double {
+            let d = Double(v)
+            return d <= 0.03928 ? d / 12.92 : pow((d + 0.055) / 1.055, 2.4)
+        }
+        let luminance = 0.2126 * linear(c.redComponent) + 0.7152 * linear(c.greenComponent)
+            + 0.0722 * linear(c.blueComponent)
+        // 0.179 is the crossover where contrast against black equals contrast against white.
+        return luminance > 0.179 ? .black : .white
     }
 
     /// Build a per-surface config = the SAME base files as `loadConfig` plus a small overlay (a session's

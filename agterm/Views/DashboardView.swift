@@ -28,10 +28,12 @@ struct DashboardView: View {
     /// The themed terminal background — the OPAQUE per-cell backing, so a translucent terminal surface
     /// (window background-opacity < 1) still reads as a solid cell in the grid.
     let captionBackground: Color
-    /// The caption pill's FILL — the theme's muted selection-background highlight (the same color the selected
-    /// sidebar row draws), so the chip is a themed, muted accent rather than the loud foreground.
+    /// The IDLE caption pill's FILL — the theme's muted selection-background highlight (the same color the
+    /// selected sidebar row draws), so an idle chip is a themed, muted accent rather than the loud foreground.
+    /// A non-idle session overrides this with its agent-status color (see `DashboardCaptionPill`).
     let pillColor: Color
-    /// The caption pill's TEXT — the theme's selection-foreground, readable over `pillColor`.
+    /// The IDLE caption pill's TEXT — the theme's selection-foreground, readable over `pillColor`. A non-idle
+    /// pill uses a luminance-contrasting black/white instead.
     let pillTextColor: Color
     /// Single click on a cell highlights it (keyboard is primary, mouse secondary).
     let onHighlight: (DashboardMember) -> Void
@@ -178,26 +180,21 @@ struct DashboardView: View {
         return "\(ObjectIdentifier(surface as AnyObject))"
     }
 
-    /// A small themed name chip riding the cell's bottom-RIGHT frame line. For a split session's two cells a
-    /// subtle pane marker (`◀` primary / `▶` split) is appended so they read as the left/right pane of the
-    /// same session; a non-split session's single cell shows just the name. The chip is a SOLID FILLED capsule
-    /// in the theme's MUTED selection colors — `pillTextColor` (selection-foreground) text over a `pillColor`
-    /// (selection-background) fill, the same muted highlight the selected sidebar row uses — so it reads as a
-    /// clearly-filled, legible pill without the loud foreground. Non-interactive so it never blocks the hit
-    /// target above it. Right-aligned via the leading `Spacer`, which also fixes the chip's width so a long name
-    /// middle-truncates instead of overflowing the cell. On an unselected cell the label text is muted
-    /// (`unselectedCaptionTextOpacity`) so the highlighted cell's name reads as the focused one.
+    /// A small name chip riding the cell's bottom-RIGHT frame line. For a split session's two cells a subtle
+    /// pane marker (`◀` primary / `▶` split) is appended so they read as the left/right pane of the same
+    /// session; a non-split session's single cell shows just the name. The chip's fill DOUBLES as the session's
+    /// agent-status light: a non-idle `agentIndicator` fills it with that status color (pulsing while `--blink`
+    /// is set), an idle session keeps the muted theme-selection pill. `DashboardCaptionPill` owns the fill,
+    /// contrast, and blink; this method only right-aligns it via the leading `Spacer` (which also fixes the
+    /// chip's width so a long name middle-truncates instead of overflowing) and makes it non-interactive so it
+    /// never blocks the hit target above it.
     private func caption(for member: DashboardMember, session: Session, isHighlighted: Bool) -> some View {
         HStack(spacing: 0) {
             Spacer(minLength: 0)
-            Text(session.displayName + paneIndicator(for: member, session: session))
-                .font(.caption)
-                .lineLimit(1)
-                .truncationMode(.middle)
-                .foregroundStyle(pillTextColor.opacity(isHighlighted ? 1 : Self.unselectedCaptionTextOpacity))
-                .padding(.horizontal, 6)
-                .padding(.vertical, 2)
-                .background(pillColor, in: Capsule())
+            DashboardCaptionPill(text: session.displayName + paneIndicator(for: member, session: session),
+                                 indicator: session.agentIndicator, isHighlighted: isHighlighted,
+                                 idleFill: pillColor, idleText: pillTextColor,
+                                 unselectedTextOpacity: Self.unselectedCaptionTextOpacity)
         }
         .padding(.horizontal, 6)
         .allowsHitTesting(false)
@@ -220,6 +217,74 @@ struct DashboardView: View {
         case .close:
             onClose()
         }
+    }
+}
+
+/// The dashboard cell's name chip, which also carries the session's agent status. An IDLE session draws the
+/// muted theme-selection pill — `idleText` (selection-foreground) over an `idleFill` (selection-background)
+/// capsule, with the label muted (`unselectedTextOpacity`) on an unselected cell so the highlighted cell's
+/// name stands out. A NON-IDLE session fills the capsule with its agent-status color
+/// (`GhosttyApp.statusColor(for:override:)`, honoring a `session.status --color` override) and draws the name
+/// in the luminance-contrasting black/white (`GhosttyApp.contrastingText`), so the name stays readable over ANY
+/// status color — including an arbitrary override. When the status is blinking the capsule stays fully OPAQUE
+/// and a color WASH pulses on top for attention (brighten a light fill / darken a dark one). It is NOT an
+/// opacity fade: fading the pill let the highlighted cell's bright frame ring bleed through the chip and read
+/// as broken, while an opaque capsule always covers the ring.
+private struct DashboardCaptionPill: View {
+    let text: String
+    let indicator: AgentIndicator
+    let isHighlighted: Bool
+    let idleFill: Color
+    let idleText: Color
+    let unselectedTextOpacity: Double
+
+    /// peak opacity of the pulsing color wash — how far the fill brightens/darkens at the top of each blink.
+    /// Deep on purpose: the wash rides a large opaque capsule, so a shallow value reads as a faint dimming
+    /// rather than a blink (the small sidebar glyph gets away with a lighter pulse; this chip needs more).
+    private static let washPeakOpacity: Double = 0.75
+    private static let pulseDuration: Double = 0.45
+
+    @State private var pulsed = false
+
+    private var isStatus: Bool { indicator.status != .idle }
+    /// the resolved status tint (per-call `--color` override else the Settings color); computed once so the
+    /// fill and its contrasting text agree.
+    private var statusColor: NSColor { GhosttyApp.shared.statusColor(for: indicator.status, override: indicator.color) }
+    /// black/white by the fill's luminance so the name is readable over any status color.
+    private var textNSColor: NSColor { GhosttyApp.contrastingText(for: statusColor) }
+    private var fill: Color { isStatus ? Color(nsColor: statusColor) : idleFill }
+    private var textColor: Color { isStatus ? Color(nsColor: textNSColor) : idleText }
+    /// wash toward the OPPOSITE of the text — white over a black-text (light) fill, black over a white-text
+    /// (dark) fill — so the pulse pushes the fill further from the contrast crossover and the name stays
+    /// readable at the wash peak.
+    private var washColor: Color { textNSColor == .black ? .white : .black }
+    /// full-opacity text on a status pill and on the highlighted cell; muted only for an idle, unselected cell
+    /// so the highlighted name reads as the focused one.
+    private var textOpacity: Double { isStatus || isHighlighted ? 1 : unselectedTextOpacity }
+    private var shouldPulse: Bool { isStatus && indicator.blink }
+
+    var body: some View {
+        Text(text)
+            .font(.caption)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .foregroundStyle(textColor.opacity(textOpacity))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background {
+                Capsule()
+                    .fill(fill)
+                    // the blink: the opaque fill keeps covering the cell's frame ring while this wash capsule
+                    // pulses its opacity on top, so nothing behind the chip ever shows through.
+                    .overlay { Capsule().fill(washColor).opacity(shouldPulse && pulsed ? Self.washPeakOpacity : 0) }
+            }
+            // a pill-level implicit animation on `pulsed` — deeper in the tree than the grid's
+            // `.transaction { animation = nil }`, so it re-enables the pulse for this pill WITHOUT re-animating
+            // the grid's reparent (later-in-tree wins). Only the wash opacity keys off `pulsed`.
+            .animation(shouldPulse ? .easeInOut(duration: Self.pulseDuration).repeatForever(autoreverses: true) : nil,
+                       value: pulsed)
+            .onAppear { pulsed = shouldPulse }
+            .onChange(of: shouldPulse) { _, now in pulsed = now }
     }
 }
 
