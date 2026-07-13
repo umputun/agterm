@@ -70,11 +70,20 @@ struct CustomCommandTests {
     @Test func paneDefaultsToLeft() {
         // an unspecified pane is the main pane — always a valid `session.type --pane` argument, so a
         // split-less session's context still round-trips into a pane-addressed control call. The typed
-        // `Pane` enum guarantees the value is left/right by construction; its rawValue feeds the token.
+        // `Pane` enum guarantees the value is left/right/scratch by construction; its rawValue feeds the token.
         #expect(CommandContext().pane == .left)
         #expect(CommandContext().environment()["AGT_PANE"] == "left")
         #expect(CommandContext().expand("{AGT_PANE}") == "left")
         #expect(CommandContext(pane: .right).expand("{AGT_PANE}") == "right")
+    }
+
+    @Test func paneScratchExpandsToScratch() {
+        // the scratch is a pane too — a chord fired from the session's scratch terminal reports
+        // `scratch`, which round-trips straight back through `session type --pane scratch`.
+        let ctx = CommandContext(pane: .scratch)
+        #expect(ctx.pane == .scratch)
+        #expect(ctx.environment()["AGT_PANE"] == "scratch")
+        #expect(ctx.expand("{AGT_PANE}") == "scratch")
     }
 
     @Test func environmentKeySetMatchesTheTokensExpandSubstitutes() {

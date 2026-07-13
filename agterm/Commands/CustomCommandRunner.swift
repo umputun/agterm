@@ -197,17 +197,15 @@ final class CustomCommandRunner {
     }
 
     /// Run a command fired by KEYBIND: resolve context from the surface that actually had focus at
-    /// key-down time, so a chord fired from a split/overlay (or during a window-switch race) runs
+    /// key-down time, so a chord fired from a split/scratch (or during a window-switch race) runs
     /// against THAT surface's session/cwd/window and reads the selection from THAT exact surface. The
     /// owning session/store come from the focused surface's `session` resolved through the host-free
-    /// `WindowLibrary` (no AppKit lives in core). Falls back to the active session (the palette path)
-    /// when the surface has no tree session (the quick terminal or a non-session overlay), or no-ops
-    /// when there is genuinely no session.
+    /// `WindowLibrary` (no AppKit lives in core). A sessionless focused surface (quick terminal /
+    /// overlay / scratch) routes through `runFromSessionlessSurface`, which reports `.scratch` for the
+    /// active session's scratch and otherwise takes the palette path.
     func runFromKeybind(_ command: CustomCommand, focusedSurface: GhosttySurfaceView) {
         guard let session = focusedSurface.session, let store = library.store(forSession: session.id) else {
-            // the focused surface isn't a tree pane (quick terminal / scratch overlay) — fall back to
-            // the active session, the same context the palette path uses.
-            run(command)
+            runFromSessionlessSurface(command, focusedSurface: focusedSurface)
             return
         }
         // the fired-from pane is the surface's identity, not the session's focus flag — a chord fired
@@ -217,9 +215,24 @@ final class CustomCommandRunner {
         spawn(command, context: context)
     }
 
+    /// The keybind fallback for a sessionless focused surface (no `view.session`: the quick terminal,
+    /// an overlay, or the scratch). The scratch belongs to the ACTIVE session, so a chord fired from it
+    /// runs against that session with `pane = .scratch` and reads the scratch's own selection — the read
+    /// leg of the `$AGT_PANE` → `session type --pane scratch` round-trip. The quick terminal and overlays
+    /// are not panes (their state is queryable via `tree`), so they take the plain palette path.
+    private func runFromSessionlessSurface(_ command: CustomCommand, focusedSurface: GhosttySurfaceView) {
+        if let store = library.activeStore, let session = store.activeSession,
+           (session.scratchSurface as? GhosttySurfaceView) === focusedSurface {
+            let context = self.context(for: session, in: store, selectionSurface: focusedSurface, pane: .scratch)
+            spawn(command, context: context)
+            return
+        }
+        run(command)
+    }
+
     /// Resolve every `{AGT_X}` token for the given session: ids + cwd from the model, the names from
     /// the owning workspace/window, the selection from `selectionSurface` (the exact focused surface),
-    /// the fired-from pane (`left`|`right`) from the caller, and the socket from the control server.
+    /// the fired-from pane (`left`|`right`|`scratch`) from the caller, and the socket from the control server.
     private func context(for session: Session, in store: AppStore, selectionSurface: GhosttySurfaceView?,
                          pane: CommandContext.Pane) -> CommandContext {
         let workspace = store.workspace(forSession: session.id)

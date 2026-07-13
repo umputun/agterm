@@ -543,8 +543,9 @@ so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are as untrusted as `{AGT_SELECT
 - `{AGT_SESSION_NAME}` / `$AGT_SESSION_NAME` — the session's display name (the focused pane's terminal title, remote-settable via OSC).
 - `{AGT_SESSION_PWD}` / `$AGT_SESSION_PWD` — the focused pane's working directory.
 - `{AGT_SELECTION}` / `$AGT_SELECTION` — the current selection.
-- `{AGT_PANE}` / `$AGT_PANE` — the pane the command fired from: `left` (main) or `right` (split). Feed
-  it back as `session type --pane "$AGT_PANE"` to type into the very pane the shortcut was pressed in.
+- `{AGT_PANE}` / `$AGT_PANE` — the pane the command fired from: `left` (main), `right` (split), or
+  `scratch` (the session's scratch terminal). Feed it back as `session type --pane "$AGT_PANE"` to type
+  into the very pane the shortcut was pressed in.
 - Plus the other `$AGT_*` context vars the runner exports.
 
 Built-in action names for `map` include: `new_window`, `new_workspace`, `new_session`,

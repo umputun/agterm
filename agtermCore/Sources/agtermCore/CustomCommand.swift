@@ -34,6 +34,7 @@ public struct CommandContext: Equatable, Sendable {
     public enum Pane: String, Equatable, Sendable {
         case left
         case right
+        case scratch
     }
 
     public var sessionID: String
@@ -43,13 +44,13 @@ public struct CommandContext: Equatable, Sendable {
     public var workspaceName: String
     public var windowID: String
     public var windowName: String
-    /// The pane that had focus at fire time — `.left` (main) or `.right` (split). `.left` for any
-    /// single-pane session, including a promoted split survivor: when the primary pane exits,
-    /// `closePrimaryPane` moves the surviving split pane into the main slot, so it reports `.left` and
-    /// `session.type --pane left` reaches it. Typed (not a raw `String`) so `rawValue` can only be
-    /// `left`/`right`; it is consumed as the `$AGT_PANE` env var a script feeds back through
-    /// `session type --pane` (re-validated CLI- AND server-side — the enum pins the token this emits,
-    /// not the shell round-trip).
+    /// The pane that had focus at fire time — `.left` (main), `.right` (split), or `.scratch` (the
+    /// session's scratch terminal). `.left` for any single-pane session, including a promoted split
+    /// survivor: when the primary pane exits, `closePrimaryPane` moves the surviving split pane into the
+    /// main slot, so it reports `.left` and `session.type --pane left` reaches it. Typed (not a raw
+    /// `String`) so `rawValue` can only be `left`/`right`/`scratch`; it is consumed as the `$AGT_PANE`
+    /// env var a script feeds back through `session type --pane` (re-validated CLI- AND server-side —
+    /// the enum pins the token this emits, not the shell round-trip).
     public var pane: Pane
     public var selection: String
     public var socket: String

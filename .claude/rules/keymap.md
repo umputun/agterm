@@ -54,11 +54,16 @@ paths:
   in a text field) and rebuilds its matcher on `.agtermKeymapChanged`.
   The runner also exposes a public `run(_:)` for the palette items, which resolve context from the active
   session (no first responder to key off).
-  `CommandContext.pane` (the `{AGT_PANE}`/`$AGT_PANE` token, `left`|`right`)
+  `CommandContext.pane` (the `{AGT_PANE}`/`$AGT_PANE` token, `left`|`right`|`scratch`)
   carries the fired-from pane: the keybind path derives it from the focused SURFACE's identity
-  (`splitSurface === focusedSurface`), the palette path from `session.splitFocused` —
+  (`splitSurface === focusedSurface` → `right`; the sessionless-surface branch `runFromSessionlessSurface`
+  identifies the active session's `scratchSurface` → `scratch`), the palette path from `session.splitFocused` —
   so a script can feed it back as `agtermctl session type --pane "$AGT_PANE"` to type into the very
   pane the shortcut was pressed in.
+  The scratch is the ONLY sessionless surface that reports a pane (the read leg of the `$AGT_PANE` →
+  `session type --pane scratch` round-trip, which `--pane` already accepted); the quick terminal and
+  overlays are NOT panes, so a chord fired from them takes the active-session palette path (their state
+  is queryable via `tree`'s `quickVisible`/`overlay`).
   It reflects the pane's physical surface slot: `left` for any single-pane session, including a promoted
   split survivor.
   When the primary pane's shell exits, `closePrimaryPane` MOVES the surviving split pane from

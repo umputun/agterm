@@ -2,11 +2,12 @@ import Foundation
 import XCTest
 
 // Verifies the `CustomCommandRunner` pane derivation that populates `{AGT_PANE}`/`$AGT_PANE`: a custom
-// command reports the pane it fired FROM — "left" (main) or "right" (split). This is the only test that
-// pins that logic. The keybind path derives the pane from the focused SURFACE's identity (NOT the
-// session's `splitFocused` flag), and the palette path from the flag. The probe command writes
-// `$AGT_PANE` to a marker file, which the test reads back. A `ControlAPITestCase` subclass so it can
-// split/focus panes over the control socket while firing real keystrokes for the keybind path.
+// command reports the pane it fired FROM — "left" (main), "right" (split), or "scratch" (the session's
+// scratch terminal). This is the only test that pins that logic. The keybind path derives the pane from
+// the focused SURFACE's identity (NOT the session's `splitFocused` flag), and the palette path from the
+// flag. The probe command writes `$AGT_PANE` to a marker file, which the test reads back. A
+// `ControlAPITestCase` subclass so it can split/focus/scratch panes over the control socket while firing
+// real keystrokes for the keybind path.
 @MainActor
 final class CustomCommandPaneTokenUITests: ControlAPITestCase {
     // keybind path: fire the SAME chord from the main pane (no split) and then from the split's focused
@@ -42,6 +43,29 @@ final class CustomCommandPaneTokenUITests: ControlAPITestCase {
         app.activate()
         XCTAssertEqual(firePaneProbe(marker) { self.app.typeKey("e", modifierFlags: [.command, .shift]) }, "right",
                        "a chord fired from the split's right pane should report $AGT_PANE=right")
+    }
+
+    // keybind path, SCRATCH: open the session's scratch terminal over the socket (it auto-focuses on
+    // show), then fire the SAME chord from it → "scratch". This is the app-side proof of
+    // `runFromSessionlessSurface`'s scratch branch: the scratch surface has no `view.session`, so the
+    // runner identifies it as the ACTIVE session's `scratchSurface` and reports `.scratch`, the read leg
+    // of the `$AGT_PANE` → `session type --pane scratch` round-trip. The host-free tests can't reach the
+    // runner. The quick terminal and overlays deliberately have no pane value (their state is on `tree`).
+    func testAgtPaneKeybindReportsScratch() throws {
+        let marker = markerDir.appendingPathComponent("agt-pane-scratch")
+        try relaunch(withKeymap: "command \"Pane Probe\" cmd+shift+e printf %s \"$AGT_PANE\" > \"\(marker.path)\"\n")
+
+        focusMainTerminal()
+        let scratch = try sendCommand(#"{"cmd":"session.scratch","target":"active","args":{"mode":"on"}}"#)
+        XCTAssertEqual(scratch["ok"] as? Bool, true, "scratch on should succeed: \(scratch)")
+        // wait for the scratch surface to realize (shell spawned, readable) so the focus it grabs is real.
+        XCTAssertTrue(pollScratchRealized(timeout: 10), "the control-opened scratch should realize its surface")
+        app.activate()
+
+        // the scratch auto-focuses on show, but that focus is async — retry the chord until it reports the
+        // scratch (a chord landing before the scratch grabs first responder reports the main pane).
+        XCTAssertEqual(fireUntil("scratch", marker: marker) { self.app.typeKey("e", modifierFlags: [.command, .shift]) },
+                       "scratch", "a chord fired from the scratch terminal should report $AGT_PANE=scratch")
     }
 
     // palette path: the runner's `run(_:)` (no fired-from surface to key off) derives the pane from the
@@ -163,5 +187,34 @@ final class CustomCommandPaneTokenUITests: ControlAPITestCase {
         field.click()
         field.typeText(name)
         app.typeKey(.return, modifierFlags: [])
+    }
+
+    /// Poll `session.text --pane scratch` until it returns ok, proving the scratch surface has realized
+    /// (shell spawned, surface mounted) so the first responder it grabs on show is real.
+    private func pollScratchRealized(timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let response = try? sendCommand(#"{"cmd":"session.text","target":"active","args":{"pane":"scratch"}}"#),
+               response["ok"] as? Bool == true { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+        return false
+    }
+
+    /// Fire `press` repeatedly, clearing the marker each attempt, until it reads `expected` — tolerating
+    /// intermediate values while an async focus change settles. Returns the last value seen, or nil on
+    /// timeout, so a failed assertion shows what it actually reported.
+    private func fireUntil(_ expected: String, marker: URL, attempts: Int = 12, perAttempt: TimeInterval = 2,
+                           press: () -> Void) -> String? {
+        var last: String?
+        for _ in 0..<attempts {
+            try? FileManager.default.removeItem(at: marker)
+            press()
+            if let value = pollMarker(marker, timeout: perAttempt) {
+                last = value
+                if value == expected { return value }
+            }
+        }
+        return last
     }
 }
