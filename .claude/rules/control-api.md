@@ -97,9 +97,9 @@ paths:
 - **Agent-status hooks install.**
   A second Help entry, **Help ▸ Install Agent Status Hooks…** (`AgentHooksInstaller.run()`),
   wires coding agents to `session.status`.
-  The hooks scripts bundle at `agterm/Resources/agent-status/` (`agterm-agent-status.sh` generic wrapper,
-  `agterm-codex-status.sh` Codex adapter, `shell/integration.sh`, and `shell/integration.fish`,
-  a `project.yml` Contents/Resources folder mirroring `Resources/ghostty`).
+  The hooks package bundles at `agterm/Resources/agent-status/` (`agterm-agent-status.sh` generic wrapper,
+  `agterm-codex-status.sh` Codex adapter, `shell/integration.sh`, `shell/integration.fish`, and
+  `pi/agterm-status.ts`, a `project.yml` Contents/Resources folder mirroring `Resources/ghostty`).
   The installer copies them to `~/.config/agterm/agent-status/`, bakes the bundled `agtermctl`'s absolute
   path (`Bundle.main.url(forAuxiliaryExecutable:)`) into both wrappers so the hooks fire even without the
   CLI on PATH, appends a marker-guarded `source` line to `~/.zshrc` + `~/.bashrc`,
@@ -135,10 +135,20 @@ paths:
   (the app-side `readExistingConfig`), so a permission/encoding read failure leaves the file untouched
   instead of clobbering it with no backup.
   Codex requires new or changed command hooks to be reviewed (`/hooks`) before they run.
-  Idempotent + re-runnable (re-run refreshes the baked path).
-  Like the CLI installer, the host-free JSON/TOML-merge / shell-rc-marker / backup-path logic is `agtermCore.AgentHooksInstall`
-  (unit-tested); `AgentHooksInstaller` (app-side) owns the AppKit FS glue,
-  manually verified.
+  When `~/.pi/agent` exists, the installer copies the bundled `pi/agterm-status.ts` lifecycle extension to
+  `~/.pi/agent/extensions/agterm-status.ts`.
+  Pi's `agent_start` sends `active --blink`; its `agent_settled` sends `completed --auto-reset` only after
+  retries, compaction retries, and queued continuations finish.
+  Pi deliberately has no native permission/structured-question event, so the extension does NOT infer
+  `blocked` from agent prose.
+  The source carries `AgentHooksInstall.piExtensionMarker`; an unmarked same-named extension is user-owned
+  and left untouched, and Pi must restart or run `/reload` after installation.
+  Idempotent + re-runnable (re-run refreshes the baked path and the managed Pi extension).
+  Like the CLI installer, the host-free JSON/TOML-merge / shell-rc-marker / backup-path / Pi-path-and-marker
+  logic is `agtermCore.AgentHooksInstall` (unit-tested); `AgentHooksInstaller` (app-side) owns the AppKit
+  FS glue, manually verified.
+  Install is GUI-only and keep-in-sync EXEMPT — driving it over the socket is meaningless because the
+  integration being installed is itself what uses `agtermctl`.
 - **Agent skill install (Claude Code + Codex).**
   A third Help entry, **Help ▸ Install Agent Skill…** (`SkillInstaller.run()`),
   copies a bundled, personal-scope Agent Skill to `~/.claude/skills/agterm/` AND `~/.codex/skills/agterm/`

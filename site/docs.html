@@ -443,7 +443,7 @@
                 <span
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
-                ><strong style="color: #e6e1d7">Install Agent Status Hooks…</strong> lets a coding agent (Claude Code, Codex, or
+                ><strong style="color: #e6e1d7">Install Agent Status Hooks…</strong> lets a coding agent (Claude Code, Codex, Pi, or
                 others) report its state onto its session's row, so you can tell which of several running agents is active,
                 blocked, or finished.
               </li>
@@ -1875,8 +1875,12 @@
               the default set is gemini, cursor-agent, aider, opencode, crush, goose), and four Claude Code hooks (prompt → active,
               tool run → active, Stop → completed, permission prompt → blocked). Six Codex lifecycle events run a dedicated adapter.
               A permission request is only a candidate because it fires before Auto Review; the adapter keeps automatic decisions
-              active and changes the row to blocked only after a real approval or structured question appears in that pane.
-              Re-running upgrades an older agterm-managed Codex block and is otherwise idempotent.
+              active and changes the row to blocked only after a real approval or structured question appears in that pane. When Pi
+              has already created <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.pi/agent</span>,
+              the installer also adds a lifecycle extension: Pi work starts as active and settles as completed after retries and
+              queued continuations finish. Pi has no built-in permission or structured-question event, so it does not infer blocked
+              from assistant prose. Restart Pi or run <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/reload</span>
+              after installing it. Re-running upgrades agterm-managed integrations and is otherwise idempotent.
             </p>
           </section>
 
