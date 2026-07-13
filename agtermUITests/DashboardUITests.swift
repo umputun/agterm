@@ -327,6 +327,30 @@ final class DashboardUITests: ControlAPITestCase {
         XCTAssertTrue(pollSessionCount(2, timeout: 5), "the session set is unchanged after gating + close")
     }
 
+    // ⌘W (close_session) DISMISSES the open dashboard like it dismisses terminal zoom — it must NOT close a
+    // session behind the grid. Distinct from the ⌘N gating above: ⌘N stays gated (grid stays OPEN, no new
+    // session), while ⌘W dismisses the grid (and closes no session). The Close Session menu item stays enabled
+    // while modal (so ⌘W can dismiss the cover); its key-equivalent routes through the menu, PAST the grid's
+    // keyDown-only key-catcher, into closeActiveSession, whose dashboard branch closes the grid and refocuses
+    // the session before ever reaching the session-close path.
+    func testCloseSessionShortcutDismissesDashboardWithoutClosingSession() throws {
+        let ids = try prepareSessions(extra: 1) // [seeded, new1] → two sessions
+        XCTAssertEqual(ids.count, 2)
+        XCTAssertTrue(pollSessionCount(2, timeout: 10), "two sessions before opening the dashboard")
+
+        try openDashboard(members: ids)
+        XCTAssertTrue(pollCellCount(2, timeout: 15), "the dashboard opens over both sessions")
+
+        // ⌘W while the dashboard is open closes the GRID, not a session.
+        app.typeKey("w", modifierFlags: .command)
+        XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "⌘W dismisses the open dashboard")
+        XCTAssertNil(dashMembers(), "the dashboard read-backs clear on the ⌘W dismiss")
+        // poll for the WRONG state (a session closed → count 1) never landing rather than a single settled read,
+        // then assert the full count held — a ⌘W that leaked to close-session would drop a session here.
+        XCTAssertFalse(pollSessionCount(1, timeout: 3), "⌘W must not close a session while the dashboard is open")
+        XCTAssertTrue(pollSessionCount(2, timeout: 5), "the session set is unchanged after the ⌘W dismiss")
+    }
+
     /// Click Navigate ▸ Dashboard in the menu bar.
     private func openDashboardViaMenu() {
         app.menuBars.menuBarItems["Navigate"].click()

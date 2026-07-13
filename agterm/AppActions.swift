@@ -197,8 +197,11 @@ final class AppActions {
     func closeActiveSession() -> Bool {
         // terminal zoom is the window-topmost cover of all: ⌘W dismisses it like the covers below
         // (stepwise — a zoomed quick terminal un-zooms first, the next ⌘W hides it) rather than
-        // swallowing the keystroke, and still never mutates hidden session/window state behind it.
+        // swallowing the keystroke, and still never mutates hidden session/window state behind it. the
+        // dashboard grid is the other modal cover (mutually exclusive with zoom): ⌘W dismisses it the same
+        // way — close the grid and refocus the session — rather than closing the session behind it.
         if terminalZoomActive { frontmostTerminalZoom?.clear(); return true }
+        if let dashboard = frontmostDashboard, dashboard.isOpen { dashboard.close(); focusActiveSession(); return true }
         if let quick = frontmostQuickTerminal, quick.isVisible { quick.hide(); return true }
         guard let store, let session = store.activeSession else { return false }
         if session.overlayActive { store.closeOverlay(session.id); return true }
