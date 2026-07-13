@@ -786,9 +786,15 @@ paths:
   session is ONE `.primary` cell, and a SPLIT session (`hasSplit`, both shells alive) expands into TWO cells —
   its `.primary` and `.split` panes — so a split shows both panes side by side.
   It is the N-surface generalization of `surface.zoom`'s reparent, with focus inverted (zoom focuses
-  its one surface; the dashboard focuses NONE while open), and it is control-NATIVE — there is no GUI/menu
-  entry, it is only reachable over the socket (once open, the keyboard drives it: arrows move the highlight,
-  Enter jumps into the highlighted session AND focuses that exact pane + closes, Esc closes).
+  its one surface; the dashboard focuses NONE while open).
+  It is reachable BOTH over the socket AND from the GUI:
+  the control open path is `dashboard`/`agtermctl dashboard` (unchanged),
+  and the GUI opener is `BuiltinAction.dashboard` (⌘⇧D), Navigate ▸ Dashboard, and the command palette
+  `Dashboard` entry — all TOGGLE the frontmost window's MRU grid auto-sized (the `dashboard --mru
+  --auto-size` equivalent), reusing the existing socket command with NO new control command, so the catalog
+  stays 60.
+  Once open, the keyboard drives it: arrows move the highlight, Enter jumps into the highlighted session
+  AND focuses that exact pane + closes, Esc closes.
   Host-free geometry + navigation + auto-size math live in `DashboardLayout`
   (`grid(count:) = ceil(sqrt(n))` cols, `move` clamped 2-D nav into a ragged last row,
   `dashboardFontSize(cols:rows:base:)`), per-window state in the `@Observable @MainActor DashboardController`
