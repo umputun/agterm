@@ -130,32 +130,32 @@ struct AgentHooksInstallTests {
         #expect(block.contains("type = \"command\""))
     }
 
-    @Test func codexHooksBlockMapsStatesAndBakesWrapperPath() {
+    @Test func codexHooksBlockMapsActionsAndBakesWrapperPath() {
         let block = AgentHooksInstall.codexHooksBlock(scriptDir: scriptDir)
-        let wrapper = AgentHooksInstall.wrapperPath(scriptDir: scriptDir)
-        // every command bakes the shell-quoted absolute wrapper path inside a TOML basic string
-        #expect(block.contains("command = \"'\(wrapper)' idle\""))
-        #expect(block.contains("command = \"'\(wrapper)' active --blink\""))
-        // blocked does NOT blink, matching the Claude Code hook set (only active blinks)
-        #expect(block.contains("command = \"'\(wrapper)' blocked\""))
-        #expect(!block.contains("blocked --blink"))
-        // Stop always clears on visit; completed never appears without --auto-reset
-        #expect(block.contains("command = \"'\(wrapper)' completed --auto-reset\""))
-        #expect(!block.contains("completed\""))
+        let hook = scriptDir + "/agterm-codex-status.sh"
+        // Codex-specific behavior stays in the installed Codex hook. agterm only generates the six
+        // lifecycle entries and copies the hook package from its app resources.
+        #expect(block.contains("command = \"'\(hook)' session-start\""))
+        #expect(block.contains("command = \"'\(hook)' user-prompt-submit\""))
+        #expect(block.contains("command = \"'\(hook)' pre-tool-use\""))
+        #expect(block.contains("command = \"'\(hook)' post-tool-use\""))
+        #expect(block.contains("command = \"'\(hook)' permission-request\""))
+        #expect(block.contains("command = \"'\(hook)' stop\""))
+        #expect(!block.contains("command = \"'\(AgentHooksInstall.wrapperPath(scriptDir: scriptDir))' blocked\""))
     }
 
     @Test func codexHooksBlockShellQuotesPathWithSpace() {
         let dir = "/Users/my name/.config/agterm/agent-status"
         let block = AgentHooksInstall.codexHooksBlock(scriptDir: dir)
         // the path keeps its space as ONE shell token via single-quoting inside the TOML value
-        #expect(block.contains("command = \"'\(dir)/agterm-agent-status.sh' idle\""))
+        #expect(block.contains("command = \"'\(dir)/agterm-codex-status.sh' session-start\""))
     }
 
     @Test func codexHooksBlockEscapesApostropheInPath() {
         // a username with an apostrophe: shellQuote emits '\'' (a backslash), which the TOML basic
         // string must escape as \\ so the parsed value is a valid /bin/sh command again
         let block = AgentHooksInstall.codexHooksBlock(scriptDir: "/Users/O'Brien/agent-status")
-        #expect(block.contains("'/Users/O'\\\\''Brien/agent-status/agterm-agent-status.sh' idle"))
+        #expect(block.contains("'/Users/O'\\\\''Brien/agent-status/agterm-codex-status.sh' session-start"))
     }
 
     // extract the written contents from a `.merged` outcome, failing the test otherwise.
@@ -181,6 +181,48 @@ struct AgentHooksInstallTests {
         // second run sees our marker → .unchanged (checked before the hooks-present probe)
         #expect(AgentHooksInstall.mergeCodexConfig(existing: first, scriptDir: scriptDir) == .unchanged)
         #expect(first.components(separatedBy: AgentHooksInstall.rcMarkerBegin).count - 1 == 1)
+    }
+
+    @Test func mergeCodexConfigUpgradesManagedHooksAndPreservesTrustState() {
+        let legacyWrapper = AgentHooksInstall.wrapperPath(scriptDir: scriptDir)
+        let existing = """
+        model = "gpt-5"
+
+        \(AgentHooksInstall.rcMarkerBegin)
+        [[hooks.SessionStart]]
+        [[hooks.SessionStart.hooks]]
+        type = "command"
+        command = "'\(legacyWrapper)' idle"
+
+        [[hooks.PermissionRequest]]
+        [[hooks.PermissionRequest.hooks]]
+        type = "command"
+        command = "'\(legacyWrapper)' blocked"
+
+        [hooks.state]
+
+        [hooks.state."/Users/me/.codex/config.toml:session_start:0:0"]
+        trusted_hash = "sha256:stale-but-preserved"
+        \(AgentHooksInstall.rcMarkerEnd)
+        """
+        let contents = mergedContents(AgentHooksInstall.mergeCodexConfig(existing: existing, scriptDir: scriptDir))
+        let hook = scriptDir + "/agterm-codex-status.sh"
+        for action in ["session-start", "user-prompt-submit", "pre-tool-use", "post-tool-use", "permission-request", "stop"] {
+            #expect(contents.contains("'\(hook)' \(action)"))
+        }
+        #expect(!contents.contains("'\(legacyWrapper)' blocked"))
+        #expect(contents.contains("trusted_hash = \"sha256:stale-but-preserved\""))
+        #expect(contents.components(separatedBy: AgentHooksInstall.rcMarkerBegin).count - 1 == 1)
+    }
+
+    @Test func mergeCodexConfigDoesNotReplaceForeignMarkerBlock() {
+        let existing = """
+        \(AgentHooksInstall.rcMarkerBegin)
+        # user content that happens to use the same generic markers
+        model = "gpt-5"
+        \(AgentHooksInstall.rcMarkerEnd)
+        """
+        #expect(AgentHooksInstall.mergeCodexConfig(existing: existing, scriptDir: scriptDir) == .unchanged)
     }
 
     @Test func mergeCodexConfigStripsLegacyNotifyLine() {

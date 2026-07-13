@@ -11,6 +11,10 @@ public enum AgentHooksInstall {
     /// The wrapper script the hooks invoke, installed into the script directory.
     public static let wrapperName = "agterm-agent-status.sh"
 
+    /// Codex-specific lifecycle adapter installed beside the generic status wrapper. Agent-specific
+    /// event and terminal-output knowledge stays in this hook resource, outside agterm's runtime.
+    public static let codexWrapperName = "agterm-codex-status.sh"
+
     /// The shell integration script sourced from the user's rc files, relative to the script directory.
     public static let integrationRelativePath = "shell/integration.sh"
 
@@ -37,20 +41,15 @@ public enum AgentHooksInstall {
         ("Notification", "permission_prompt", "blocked"),
     ]
 
-    /// The Codex lifecycle hook events, paired with the agent state (plus any flags) each maps to.
-    /// Codex's finer per-turn events replace the old `notify` keyword-inference: `PermissionRequest`
-    /// fires the moment Codex asks for approval (so `blocked` shows when it matters, not after the turn),
-    /// and `Stop` always sets `completed` regardless of the final message text. `SessionStart` clears the
-    /// indicator on a new session; the three `active` events (a new prompt, before a tool, after a tool)
-    /// hold `active` across an answered approval — `PostToolUse` re-asserts it once the approved tool
-    /// finishes, mirroring the Claude Code set.
-    static let codexHooks: [(event: String, state: String)] = [
-        ("SessionStart", "idle"),
-        ("UserPromptSubmit", "active --blink"),
-        ("PreToolUse", "active --blink"),
-        ("PostToolUse", "active --blink"),
-        ("PermissionRequest", "blocked"),
-        ("Stop", "completed --auto-reset"),
+    /// Codex lifecycle events paired with actions understood by the installed Codex hook. The adapter,
+    /// rather than agterm's runtime, owns the event-to-status behavior and Auto Review workaround.
+    static let codexHooks: [(event: String, action: String)] = [
+        ("SessionStart", "session-start"),
+        ("UserPromptSubmit", "user-prompt-submit"),
+        ("PreToolUse", "pre-tool-use"),
+        ("PostToolUse", "post-tool-use"),
+        ("PermissionRequest", "permission-request"),
+        ("Stop", "stop"),
     ]
 
     /// Thrown by `mergeClaudeSettings` when the existing `settings.json` is non-empty but not a valid
@@ -116,7 +115,7 @@ public enum AgentHooksInstall {
     public enum CodexMergeOutcome: Equatable {
         /// The hooks block was added (and any stale `codex-notify.sh` notify line removed) — write `contents`.
         case merged(contents: String)
-        /// The file already carries the agterm hooks block (marker present) — nothing to do.
+        /// The file already carries the current agterm hooks block — nothing to do.
         case unchanged
         /// The file already defines its OWN `hooks` — auto-appending ours would duplicate (array-of-tables
         /// form) or break (compact form) them, so the merge is skipped; surface `codexHooksBlock` for a
@@ -131,8 +130,8 @@ public enum AgentHooksInstall {
     /// `existing` is the file's current contents (empty = no file yet); `scriptDir` is the installed
     /// script directory. The decision is made by PARSING `existing` with `TOMLDecoder` (a pure-Swift,
     /// spec-compliant parser) rather than string-matching, which is what keeps the merge safe:
-    /// - marker already present → `.unchanged` (idempotent; checked first, since our own appended block
-    ///   would otherwise read as pre-existing hooks);
+    /// - marker already present → upgrade an older managed block to the current installed Codex adapter,
+    ///   preserving Codex's trailing hook trust-state tables; otherwise `.unchanged`;
     /// - the file does not parse as TOML → `.unparseable` (never rewrite a file we can't understand);
     /// - the file already defines `hooks` → `.hooksExist` (appending ours would duplicate or break them);
     /// - otherwise → `.merged`, appending the marker-guarded `[[hooks.*]]` block (a new array-of-tables at
@@ -141,10 +140,11 @@ public enum AgentHooksInstall {
     ///   comment merely naming the file, or the user's own notifier, is never touched). The surgical
     ///   append/removal preserves the user's comments and layout.
     public static func mergeCodexConfig(existing: String, scriptDir: String) -> CodexMergeOutcome {
-        // marker present → we already installed; nothing to do (checked before the hooks-present probe,
-        // since our own block defines hooks and would otherwise read as the user's).
+        // marker present → refresh only our managed hook definitions. Codex may append hook trust-state
+        // tables before our end marker; the refresh preserves that suffix byte-for-byte.
         if existing.contains(rcMarkerBegin) {
-            return .unchanged
+            let refreshed = refreshManagedCodexBlock(in: existing, scriptDir: scriptDir)
+            return refreshed == existing ? .unchanged : .merged(contents: refreshed)
         }
 
         // a genuinely empty/whitespace file has no TOML to parse — start fresh.
@@ -200,6 +200,40 @@ public enum AgentHooksInstall {
         return prefix + "\n" + block
     }
 
+    // Replace only the generated definitions inside an existing managed block. Codex writes its
+    // `[hooks.state...]` trust records at the end of config.toml, which lands inside our EOF marker;
+    // retain that entire suffix. A coincidental marker block without one of our hook scripts is foreign
+    // and remains untouched.
+    private static func refreshManagedCodexBlock(in text: String, scriptDir: String) -> String {
+        var lines = text.components(separatedBy: "\n")
+        guard let begin = lines.firstIndex(where: { $0.trimmingCharacters(in: .whitespaces) == rcMarkerBegin }),
+              let end = lines.indices.dropFirst(begin + 1).first(where: {
+                  lines[$0].trimmingCharacters(in: .whitespaces) == rcMarkerEnd
+              }) else { return text }
+        let body = lines[(begin + 1)..<end]
+        guard body.contains(where: { $0.contains(wrapperName) || $0.contains(codexWrapperName) }) else {
+            return text
+        }
+
+        var suffix: [String] = []
+        if var stateStart = body.firstIndex(where: {
+            $0.trimmingCharacters(in: .whitespaces).hasPrefix("[hooks.state")
+        }) {
+            if stateStart > begin + 1, lines[stateStart - 1].trimmingCharacters(in: .whitespaces).isEmpty {
+                stateStart -= 1
+            }
+            suffix = Array(lines[stateStart..<end])
+        }
+
+        var replacement = codexHooksBlock(scriptDir: scriptDir).components(separatedBy: "\n")
+        if !suffix.isEmpty {
+            if suffix.first?.trimmingCharacters(in: .whitespaces).isEmpty == false { replacement.append("") }
+            replacement.append(contentsOf: suffix)
+        }
+        lines.replaceSubrange((begin + 1)..<end, with: replacement)
+        return lines.joined(separator: "\n")
+    }
+
     // remove the retired single-line `notify = [...codex-notify.sh...]` assignment (only ever written by
     // the old installer in the single-line form). Restricted to the TOP-LEVEL region (above the first
     // table header) so a table-scoped notify is never touched, and to a line carrying codex-notify.sh in
@@ -228,19 +262,24 @@ public enum AgentHooksInstall {
         scriptDir + "/" + wrapperName
     }
 
+    /// The absolute installed Codex lifecycle-adapter path.
+    public static func codexWrapperPath(scriptDir: String) -> String {
+        scriptDir + "/" + codexWrapperName
+    }
+
     /// render the `~/.codex/config.toml` `[[hooks.*]]` block the installer merges into the user's config
     /// (or surfaces for a manual add when the file already has hooks or doesn't parse), wiring Codex's
     /// lifecycle events to the indicator. `scriptDir` is the installed script directory; the wrapper's
     /// absolute path is baked into each command — shell-quoted (so a path with spaces is one token)
     /// inside a TOML basic string — so the hook fires without the CLI on PATH.
     public static func codexHooksBlock(scriptDir: String) -> String {
-        let wrapper = shellQuote(wrapperPath(scriptDir: scriptDir))
+        let wrapper = shellQuote(codexWrapperPath(scriptDir: scriptDir))
         return codexHooks.map { hook in
             """
             [[hooks.\(hook.event)]]
             [[hooks.\(hook.event).hooks]]
             type = "command"
-            command = \(tomlBasicString(wrapper + " " + hook.state))
+            command = \(tomlBasicString(wrapper + " " + hook.action))
             """
         }.joined(separator: "\n\n")
     }

@@ -97,10 +97,11 @@ paths:
 - **Agent-status hooks install.**
   A second Help entry, **Help ▸ Install Agent Status Hooks…** (`AgentHooksInstaller.run()`),
   wires coding agents to `session.status`.
-  The hooks scripts bundle at `agterm/Resources/agent-status/` (`agterm-agent-status.sh` wrapper + `shell/integration.sh`
-  + `shell/integration.fish`, a `project.yml` Contents/Resources folder mirroring `Resources/ghostty`).
+  The hooks scripts bundle at `agterm/Resources/agent-status/` (`agterm-agent-status.sh` generic wrapper,
+  `agterm-codex-status.sh` Codex adapter, `shell/integration.sh`, and `shell/integration.fish`,
+  a `project.yml` Contents/Resources folder mirroring `Resources/ghostty`).
   The installer copies them to `~/.config/agterm/agent-status/`, bakes the bundled `agtermctl`'s absolute
-  path (`Bundle.main.url(forAuxiliaryExecutable:)`) into the wrapper so the hooks fire even without the
+  path (`Bundle.main.url(forAuxiliaryExecutable:)`) into both wrappers so the hooks fire even without the
   CLI on PATH, appends a marker-guarded `source` line to `~/.zshrc` + `~/.bashrc`,
   merges four Claude Code hooks into `~/.claude/settings.json` with a `.bak` (UserPromptSubmit→`active --blink`,
   PostToolUse→`active --blink`, Stop→`completed --auto-reset`, Notification[`permission_prompt`]→`blocked`;
@@ -108,17 +109,23 @@ paths:
   back to active when work resumes — Claude Code has no "permission answered" event,
   and the gated tool's own PreToolUse fires BEFORE `blocked` is set, so the approved tool's PostToolUse
   is the first hook afterwards), and merges SIX Codex lifecycle hooks into `~/.codex/config.toml` with a
-  `.bak` (SessionStart→`idle`, UserPromptSubmit/PreToolUse/PostToolUse→`active --blink`,
-  PermissionRequest→`blocked`, Stop→`completed --auto-reset` — `blocked` does NOT blink, matching the
-  Claude set where only `active` blinks).
-  Codex's `PermissionRequest` fires the moment it asks for approval, so `blocked` shows when it matters,
-  and `Stop` always sets `completed` — replacing a retired `codex-notify.sh` that keyword-matched the
-  turn's final message and misfired both ways (issue #193; the merge also strips the old
-  `notify = [...codex-notify.sh...]` line).
+  `.bak`.
+  Those six events call the dedicated `agterm-codex-status.sh` adapter with lifecycle actions.
+  The adapter maps SessionStart to `idle`, UserPromptSubmit/PreToolUse/PostToolUse to `active --blink`,
+  and Stop to `completed --auto-reset` through the generic wrapper.
+  `PermissionRequest` is only a candidate signal because Codex fires it before Auto Review decides whether
+  a person is needed.
+  A per-session/pane watcher reads the visible terminal footer through `agtermctl session text` and reports
+  `blocked` only after a real approval or structured-question dialog appears.
+  Automatic approvals and denials never become `blocked`.
+  This replaces a retired `codex-notify.sh` that keyword-matched the turn's final message and misfired both
+  ways (issue #193; the merge also strips the old `notify = [...codex-notify.sh...]` line).
   The Codex merge PARSES the config with `TOMLDecoder` (a pure-Swift, spec-compliant parser — the one
   dependency `agtermCore` links besides swift-argument-parser) to decide the outcome
-  (`AgentHooksInstall.CodexMergeOutcome`): marker present → `.unchanged`; the file already defines its own
-  `hooks` → `.hooksExist`; the file isn't valid TOML → `.unparseable`; else → `.merged`, a marker-guarded
+  (`AgentHooksInstall.CodexMergeOutcome`): a marker block carrying an older agterm wrapper is refreshed
+  while preserving Codex's trailing hook trust tables; a foreign marker block is unchanged;
+  the file already defines its own `hooks` → `.hooksExist`; the file isn't valid TOML → `.unparseable`;
+  else → `.merged`, a marker-guarded
   append (the same `rcMarkerBegin`/`End` markers as the shell rc files, so comments/layout survive) plus
   removal of a stale top-level `notify` ONLY when its PARSED value points at `codex-notify.sh` (a comment
   merely naming the file, or the user's own notifier, is never touched).
@@ -127,7 +134,7 @@ paths:
   Both the Codex and Claude write paths distinguish an ABSENT config from one that EXISTS-but-unreadable
   (the app-side `readExistingConfig`), so a permission/encoding read failure leaves the file untouched
   instead of clobbering it with no backup.
-  Codex requires new command hooks to be reviewed (`/hooks`) before they run.
+  Codex requires new or changed command hooks to be reviewed (`/hooks`) before they run.
   Idempotent + re-runnable (re-run refreshes the baked path).
   Like the CLI installer, the host-free JSON/TOML-merge / shell-rc-marker / backup-path logic is `agtermCore.AgentHooksInstall`
   (unit-tested); `AgentHooksInstaller` (app-side) owns the AppKit FS glue,

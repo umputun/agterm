@@ -88,19 +88,21 @@ enum AgentHooksInstaller {
     // and replaces it so the path is refreshed rather than duplicated.
     private static let agtermctlMarker = "# >>> agterm agtermctl path (installer-baked) >>>"
 
-    // bake the bundled agtermctl's absolute path into the installed wrapper so the hook fires even when
+    // bake the bundled agtermctl's absolute path into the installed wrappers so the hooks fire even when
     // the CLI was never symlinked into PATH. `[ -n "${AGTERMCTL:-}" ] || AGTERMCTL='<path>'` sets it only
     // when AGTERMCTL is unset, so an explicit env override still wins (resolution order 1 > 2 > PATH); the
     // path is single-quoted (shellQuote) so spaces / shell metacharacters in the bundle path are inert.
     // refreshed on every run: any prior baked block is stripped first, healing a moved bundle.
     private static func bakeAgtermctlPath() throws {
         guard let tool = bundledTool else { return } // no bundled CLI: leave the PATH fallback in place
-        let wrapper = destinationFolder.appendingPathComponent(AgentHooksInstall.wrapperName)
-        let original = try String(contentsOf: wrapper, encoding: .utf8)
-        let stripped = stripBakedBlock(from: original)
-        let block = agtermctlMarker + "\n[ -n \"${AGTERMCTL:-}\" ] || AGTERMCTL=\(AgentHooksInstall.shellQuote(tool.path))\n"
-        let baked = insertAfterShebang(stripped, block: block)
-        try writePreservingSymlink(baked, to: wrapper)
+        for name in [AgentHooksInstall.wrapperName, AgentHooksInstall.codexWrapperName] {
+            let wrapper = destinationFolder.appendingPathComponent(name)
+            let original = try String(contentsOf: wrapper, encoding: .utf8)
+            let stripped = stripBakedBlock(from: original)
+            let block = agtermctlMarker + "\n[ -n \"${AGTERMCTL:-}\" ] || AGTERMCTL=\(AgentHooksInstall.shellQuote(tool.path))\n"
+            let baked = insertAfterShebang(stripped, block: block)
+            try writePreservingSymlink(baked, to: wrapper)
+        }
     }
 
     // remove a previously baked AGTERMCTL block (the marker line plus the assignment line under it).

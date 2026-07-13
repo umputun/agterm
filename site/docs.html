@@ -1872,11 +1872,11 @@
               hooks package: a generic bash/zsh/fish shell integration (flags
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> while a command
               matching <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_AGENT_RE</span> runs;
-              the default set is codex, gemini, cursor-agent, aider, opencode, crush, goose), and four Claude Code hooks (prompt →
-              active, tool run → active, Stop → completed, permission prompt → blocked). For Codex it prints a
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">notify</span> line to add to
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.codex/config.toml</span>.
-              Re-running is idempotent.
+              the default set is gemini, cursor-agent, aider, opencode, crush, goose), and four Claude Code hooks (prompt → active,
+              tool run → active, Stop → completed, permission prompt → blocked). Six Codex lifecycle events run a dedicated adapter.
+              A permission request is only a candidate because it fires before Auto Review; the adapter keeps automatic decisions
+              active and changes the row to blocked only after a real approval or structured question appears in that pane.
+              Re-running upgrades an older agterm-managed Codex block and is otherwise idempotent.
             </p>
           </section>
 

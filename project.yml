@@ -70,8 +70,8 @@ targets:
       - path: agterm/Resources/terminfo
         type: folder
         buildPhase: resources
-      # Agent-status hooks package (the wrapper + shell integration + codex
-      # notify chain). Folder reference (not the default "group") so the
+      # Agent-status hooks package (the generic wrapper, shell integration, and
+      # agent-specific lifecycle adapters). Folder reference (not the default "group") so the
       # extensionless .sh files, the shell/ subdir, and the exec bit survive.
       # Lands at Contents/Resources/agent-status — the installer copies it from
       # there to ~/.config/agterm/agent-status.
