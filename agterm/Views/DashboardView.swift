@@ -44,7 +44,7 @@ struct DashboardView: View {
     /// inter-cell (and outer) gap. Kept a few points WIDER than `captionBottomOffset` so the caption chip,
     /// which overhangs the cell's bottom edge by that offset, clears the cell below instead of touching it.
     private static let gridSpacing: CGFloat = 12
-    private static let highlightLineWidth: CGFloat = 2
+    private static let highlightLineWidth: CGFloat = 1.5
     /// how far the caption chip is nudged below the cell's bottom edge so it straddles the frame line
     /// instead of covering the terminal's last row.
     private static let captionBottomOffset: CGFloat = 8
@@ -66,8 +66,12 @@ struct DashboardView: View {
         }
         .padding(Self.gridSpacing)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // a moderate scrim so the grid reads as a distinct modal over whatever remains behind it.
-        .background(Color.black.opacity(0.4))
+        // NO darkening backdrop: a transparent fill, exactly like the quick terminal's margin, so the area
+        // OUTSIDE the cells preserves the window's translucency + blur (the emptied deck slots already yield
+        // Color.clear, revealing the translucent window backing). A black scrim here composited OVER that
+        // backing and read as near-black — the cells already stand apart via their opaque backing + ring, so
+        // no scrim is needed to make the grid a distinct modal.
+        .background(Color.clear)
         // the key-catcher sits behind the cells so it never intercepts their click hit targets; it owns
         // first responder and swallows every key while open.
         .background { DashboardKeyCatcher(onKey: handleKey) }
