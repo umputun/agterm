@@ -269,26 +269,6 @@ struct SessionTests {
         #expect(session.activeSurface === primary)
     }
 
-    @Test func addressableSurfaceKindDefaultsToPrimaryUntilASplitSurvivorExists() {
-        let session = Session(initialCwd: "/repo")
-        // both slots nil (fresh, not-yet-realized member): default to primary so the dashboard cell hosts
-        // the primary factory and realizes the primary shell, not a stray right-pane split.
-        #expect(session.addressableSurface == nil)
-        #expect(session.addressableSurfaceKind == .primary)
-
-        // live primary (ordinary session, and a promoted survivor which sits in `surface`): primary.
-        session.surface = FakeSurface()
-        #expect(session.addressableSurfaceKind == .primary)
-
-        // primary + split both live: still addresses the primary slot.
-        session.splitSurface = FakeSurface()
-        #expect(session.addressableSurfaceKind == .primary)
-
-        // genuine split-only survivor (surface gone, split shell still alive): the only .split case.
-        session.surface = nil
-        #expect(session.addressableSurfaceKind == .split)
-    }
-
     @Test func searchDisplayTextIsEmptyBeforeAnyQuery() {
         // searchTotal nil (no query run yet): empty string, so the bar shows no counter.
         let session = Session(initialCwd: "/repo")

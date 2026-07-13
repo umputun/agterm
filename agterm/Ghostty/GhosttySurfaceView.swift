@@ -737,8 +737,11 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
         // a session carrying a background watermark (set earlier on a never-shown session, or restored from
         // a snapshot) applies it now that the surface exists — covering deferred-size creation, the eager
-        // deck, and relaunch. No-op for the sessionless overlay/scratch/quick surfaces.
-        if session?.backgroundWatermark != nil { applyWatermarkFromSession() }
+        // deck, and relaunch. No-op for the sessionless overlay/scratch/quick surfaces. ALSO re-applies a
+        // standalone `dashboardFontOverride` (a dashboard member whose surface realizes AFTER the dashboard
+        // set the transient font): `applyWatermarkFromSession` honors `dashboardFontOverride ?? session.fontSize`,
+        // so without this the late-realized cell renders at the default font. Mirrors `reapplySessionConfigIfNeeded`.
+        if session?.backgroundWatermark != nil || dashboardFontOverride != nil { applyWatermarkFromSession() }
         // an overlay surface with its own background color (session.overlay.open --background-color) applies
         // it here too — the overlay is sessionless, so the watermark path above skips it.
         if overlayBackgroundColorHex != nil { applyOverlayBackgroundColor() }

@@ -111,7 +111,10 @@ extension WindowContentView {
                 (session.searchSurface as? GhosttySurfaceView)?.endSearch()
             }
             if quickTerminal.isVisible { quickTerminal.hide() }
-            if sessionSwitcher.isActive { sessionSwitcher.cancel() }
+            // the session switcher is app-global and renders in the FRONTMOST window (like the palette above),
+            // so only that window's dashboard may cancel it — a control-driven dashboard of a background window
+            // must not abort an in-progress Ctrl-Tab in the frontmost window.
+            if library.activeWindowID == windowID, sessionSwitcher.isActive { sessionSwitcher.cancel() }
             // pause this window's idle auto-follow so an armed jump can't reshuffle the selection under the modal.
             store.suppressAutoFollow()
         } else {
@@ -147,6 +150,13 @@ extension WindowContentView {
     func reconcileDashboardMembers() {
         guard dashboard.isOpen else { return }
         dashboard.reconcile(existing: Set(dashboardValidMembers))
+        // reconcile may have CLOSED the dashboard (its last member's session/pane vanished); the key-catcher
+        // that held first responder then unmounts with nothing to re-grab it, stranding the window without
+        // focus. Restore it like the Esc/Enter paths do — but ONLY for the frontmost window: this fires
+        // per-window (incl. a background window on a control-driven session close) and `focusActiveSession`
+        // targets the frontmost store, so an unguarded call would grab first responder in the WRONG window
+        // (the same hazard the zoom-exit refocus guards against).
+        if !dashboard.isOpen, library.activeWindowID == windowID { actions.focusActiveSession() }
     }
 
     /// Reciprocal exclusivity (folded into the body's `.onChange(of: terminalZoom.target)`): a zoom becoming
