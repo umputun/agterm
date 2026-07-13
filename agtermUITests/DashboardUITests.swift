@@ -193,6 +193,36 @@ final class DashboardUITests: ControlAPITestCase {
                        "Esc leaves the pre-open selection in place")
     }
 
+    // while the view-only dashboard is open the full titlebar is swapped for a stripped bar (mirroring
+    // terminal zoom): its interactive session controls are GONE, so a stray click on one can no longer steal
+    // the key-catcher's first responder (which stranded Esc) or drive an action behind the grid. Only an exit
+    // button remains, and clicking it closes the dashboard.
+    func testDashboardTitlebarStripsInteractiveButtonsAndExitCloses() throws {
+        let ids = try prepareSessions(extra: 1)
+
+        // baseline: the full titlebar's session controls exist before opening.
+        XCTAssertTrue(app.buttons["split-toggle"].waitForExistence(timeout: 15),
+                      "the split button renders in the normal titlebar")
+
+        try openDashboard(members: ids)
+
+        // opening swaps in the stripped titlebar: every interactive session control is gone...
+        for control in ["split-toggle", "sidebar-toggle-button", "scratch-toggle", "quick-terminal-toggle"] {
+            XCTAssertTrue(app.buttons[control].waitForNonExistence(timeout: 10),
+                          "\(control) must not render while the dashboard is open")
+        }
+        // ...and only the exit button remains (the counterpart of terminal-zoom-exit).
+        let exit = app.buttons["dashboard-exit"]
+        XCTAssertTrue(exit.waitForExistence(timeout: 10), "the stripped dashboard titlebar shows an exit button")
+
+        // the exit button closes the dashboard (same close-and-refocus path as Esc)...
+        exit.click()
+        XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "the exit button closes the dashboard")
+        // ...and the full titlebar returns once it is closed.
+        XCTAssertTrue(app.buttons["split-toggle"].waitForExistence(timeout: 10),
+                      "the full titlebar returns once the dashboard closes")
+    }
+
     // the correctness crux: while the dashboard is open it is VIEW-ONLY — neither a typed keystroke nor a
     // mouse click reaches any terminal. Proven with a three-phase probe so the negative is not vacuous:
     //   1. before opening, GUI typing DOES reach the focused terminal (a marker file is written);
