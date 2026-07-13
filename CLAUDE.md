@@ -323,6 +323,10 @@ always in context:
   keybindings, or modes, update both.
   `site/index.html` (the features grid and install copy) and the `softwareVersion` in its
   `SoftwareApplication` JSON-LD must reflect major features and the latest release.
+  `site/commands.html` is the per-command `agtermctl` control reference — it documents the FULL
+  control-command catalog, each entry carrying the invocation, arguments, and the `tree` read-back field.
+  It MUST gain, lose, or update an entry for EVERY control-command add/change/remove, in lockstep with
+  the agent skill and `.claude/rules/control-api.md` (a new `Command` case owes a new commands.html entry).
   See the `## Website` section below for the deploy model.
 
 ## Website

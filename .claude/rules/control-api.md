@@ -1261,3 +1261,11 @@ paths:
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
   examples.md recipes) and the command count there is bumped to 60 to match.
+  **Website mirror (HARD keep-in-sync):** the site's per-command reference `site/commands.html` documents
+  EVERY `agtermctl` control command — one inline-styled card per command carrying its invocation, its
+  arguments, and the `tree` read-back field, grouped into its command family's section.
+  A new `Command` case REQUIRES a new `site/commands.html` entry (a changed command an updated one, a
+  removed command a deleted one), in lockstep with the agent skill above and `README.md`/`site/docs.html`;
+  the page's "60 commands" copy must track the catalog count.
+  It drifted once because the site keep-in-sync convention named only `docs.html`/`index.html`, so
+  `dashboard` and `surface.zoom` shipped undocumented here.
