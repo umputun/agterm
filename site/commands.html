@@ -156,6 +156,8 @@
             <a href="#session" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">session</a>
             <a href="#overlay" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">session overlay</a>
             <a href="#window" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">window</a>
+            <a href="#surface" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">surface zoom</a>
+            <a href="#dashboard" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">dashboard</a>
             <a href="#quick" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">quick</a>
             <a href="#sidebar" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">sidebar</a>
             <a href="#notify" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">notify</a>
@@ -1201,6 +1203,121 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zoom</span>. Read back via
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">window list</span>'s
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">fullscreen</span>.
+              </p>
+            </div>
+          </section>
+
+          <!-- SURFACE -->
+          <section id="surface" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              surface zoom
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              A view mode that fills the window with one terminal surface. It never touches the macOS window frame —
+              distinct from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">window zoom</span>.
+            </p>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl surface zoom [show|hide|toggle] [--target surface:&lt;id&gt;:right | active | quick] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">surface.zoom</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Fill the window with one terminal surface, hiding the sidebar and collapsing the title bar to a slim strip
+                (traffic lights plus an exit button). Omit
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> (or pass
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>) to zoom the active surface — the quick
+                terminal if shown, else the active session's overlay, scratch, focused split, or primary pane. An explicit
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">surface:&lt;session-id&gt;:&lt;left|right|scratch|overlay&gt;</span>
+                id (from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>'s
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surfaces[].id</span>) zooms that exact surface, including a
+                hidden-but-alive split or scratch; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quick</span> addresses a
+                quick-terminal zoom.
+              </p>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">show</span> is idempotent;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">hide</span> exits and is idempotent too (an explicit id clears
+                only that target and succeeds even if the surface has since vanished);
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">toggle</span> enters when unzoomed and exits when that surface is
+                already zoomed. Zoom must not mutate split ratios, focus, sidebar state, or split/scratch visibility. Control half of
+                ⌘⇧Return / View ▸ Toggle Terminal Zoom and the title-bar exit button.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Read the current zoom back from the tree's top-level
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zoomedSurface</span> (the zoomed surface's control id, or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quick</span>; omitted when nothing is zoomed).
+              </p>
+            </div>
+          </section>
+
+          <!-- DASHBOARD -->
+          <section id="dashboard" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              dashboard
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              A per-window, view-only grid of live terminal panes. Reciprocally exclusive with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surface zoom</span>: opening one closes the other.
+            </p>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl dashboard &lt;ids…&gt; [--mru] [--font-size N | --auto-size] [--close] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">dashboard</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Open a grid of the named sessions' live panes, populate it from the window's most-recently-used sessions with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--mru</span>, or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--close</span> the open one. The cell unit is a session+pane: a
+                non-split session is one cell, and a split session shows as two — its left/primary and right/split panes — so the
+                9-cell cap counts <em>panes</em> (laid out ceil(√n)). Positional ids are session addresses (id / unique prefix /
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>), deduped by resolved session; unresolved ids are
+                dropped and any panes beyond 9 are trimmed, both reported in the response text.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--mru</span> is mutually exclusive with ids and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--close</span>, composes with the font flags and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span>, and errors
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no recent sessions</span> when the window has none.
+              </p>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                View-only: no cell takes input. Once open the keyboard drives it — arrow keys move a highlight between cells, Enter
+                jumps into the highlighted session and focuses that exact pane (then closes the grid), and Esc closes it.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--font-size N</span> sets an absolute cell font in points
+                (finite, positive); <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--auto-size</span> sizes cells relative to
+                the Settings default font, shrinking as the grid grows; the two are mutually exclusive, and omitting both leaves each
+                pane's own font untouched.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                The GUI openers — ⌘⇧D, Navigate ▸ Dashboard, and the command palette's Dashboard entry — toggle the frontmost
+                window's most-recently-used grid auto-sized (the
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">dashboard --mru --auto-size</span> equivalent; no separate
+                control command). Read back from the tree's top-level
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">dashboardMembers</span> (the pane refs shown, in grid order — a
+                split session appears as both <span style="font-family: &quot;JetBrains Mono&quot;, monospace">&lt;id&gt;:left</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">&lt;id&gt;:right</span>),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">dashboardHighlighted</span> (the highlighted cell's pane ref),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">dashboardFontSize</span> (the applied absolute size, omitted when
+                untouched), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">dashboardFontMode</span>
+                (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">auto</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">fixed</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">untouched</span>).
               </p>
             </div>
           </section>
