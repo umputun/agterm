@@ -220,7 +220,16 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// the SwiftUI cell overlay) and the surface refuses first responder, so keystrokes never reach it.
     /// `TerminalView` sets it; the dashboard cell turns it on and the deck slot turns it back off on the
     /// same reparent.
-    var viewOnly = false
+    var viewOnly = false {
+        didSet {
+            guard viewOnly, !oldValue else { return }
+            // acceptsFirstResponder=false only blocks NEW grabs — a surface that carried first responder in
+            // from the deck (the focused split pane when the dashboard opened) keeps it across the
+            // reparent-within-window, so keystrokes reach the cell and defeat the dashboard's key-catcher.
+            // Resign it here; once view-only, nothing can re-grab it, so the key-catcher owns the keyboard.
+            if let window, window.firstResponder === self { window.makeFirstResponder(nil) }
+        }
+    }
 
     /// Register the file/text drag types only while this surface is the on-screen deck pane; unregister
     /// otherwise, so an eagerly-realized background surface is not a drag target and a drop can only reach

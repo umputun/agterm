@@ -104,6 +104,47 @@ final class DashboardUITests: ControlAPITestCase {
                       "Enter on the split cell focuses the RIGHT pane (splitFocused flips to true)")
     }
 
+    // regression: opening the dashboard over a session whose FOCUSED split pane holds first responder must
+    // hand the keyboard to the dashboard's key-catcher, not leave it with the reparented pane surface. The
+    // focused split surface carries first responder ACROSS the reparent into the view-only cell
+    // (`acceptsFirstResponder=false` blocks only NEW grabs, never a HELD one), so without the viewOnly resign
+    // it keeps the keyboard — a bare arrow goes to that pane (invisible) instead of walking the highlight.
+    // Deliberately does NOT use the `openDashboard` helper: its post-open cell click forces a key-catcher
+    // re-grab that would MASK this exact race (the test would then pass even on the broken code). Routing is
+    // established by the pre-open `row.click()` + `splitButton.click()` (the SplitUITests idiom) and persists
+    // into the socket-opened dashboard, so the bare arrow below is the real discriminator.
+    func testDashboardOverFocusedSplitPaneGivesKeyboardToKeyCatcher() throws {
+        let ids = try prepareSessions(extra: 0) // just the seeded session
+        let id = ids[0]
+
+        // GUI click establishes XCUITest key routing AND focuses the seeded terminal; the split button then
+        // moves focus to the NEW right pane, so its surface holds first responder (SplitUITests idiom).
+        let row = app.staticTexts["session-row"]
+        XCTAssertTrue(row.waitForExistence(timeout: 15), "the seeded row should exist")
+        row.click()
+        settle(0.6)
+        let splitButton = app.buttons["split-toggle"]
+        XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
+        splitButton.click()
+        XCTAssertTrue(pollSplit(id, timeout: 10), "the session should report a split")
+        XCTAssertTrue(pollSplitFocused(id, expected: true, timeout: 10), "opening the split focuses the right pane")
+
+        // open the dashboard over the split session via the SOCKET, WITHOUT the masking cell click.
+        let response = try sendCommand(#"{"cmd":"dashboard","args":{"targets":["\#(id)"]}}"#)
+        XCTAssertEqual(response["ok"] as? Bool, true, "dashboard open should succeed: \(response)")
+        XCTAssertTrue(dashboardOverlay.waitForExistence(timeout: 15), "the dashboard overlay should appear")
+        XCTAssertTrue(pollCellCount(2, timeout: 15), "the split session opens as two pane cells")
+        XCTAssertTrue(pollDashHighlightedRef("\(id):left", timeout: 8), "the highlight starts on the primary pane cell")
+
+        // a bare right arrow must WALK the highlight to the split cell — proving the key-catcher owns the
+        // keyboard. Without the viewOnly resign, the carried-in split surface swallows the arrow and the
+        // highlight never leaves the primary cell.
+        settle(0.5)
+        app.typeKey(.rightArrow, modifierFlags: [])
+        XCTAssertTrue(pollDashHighlightedRef("\(id):right", timeout: 8),
+                      "a bare arrow walks the highlight — the key-catcher, not the reparented split pane, owns keys")
+    }
+
     // arrow keys walk the highlight between cells (observed via tree.dashboardHighlighted and the
     // `dashboard-highlighted` marker), and Enter jumps into the highlighted session — closing the overlay AND
     // moving the selection to that session.
