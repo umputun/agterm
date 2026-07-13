@@ -168,10 +168,12 @@ final class DashboardUITests: ControlAPITestCase {
         seededRow.click()
         settle(0.8)
 
-        // PHASE 1 — GUI keystrokes reach the focused terminal (baseline that typing works at all).
+        // PHASE 1 — GUI keystrokes reach the focused terminal (baseline that typing works at all). Retry the
+        // GUI type until the marker lands: a freshly focused terminal's pty may not be ready to read when the
+        // first keystrokes arrive (especially under full-suite CPU load), so a single type can be dropped —
+        // the GUI-input twin of the base typeUntilMarker readiness wait.
         let beforeFile = markerDir.appendingPathComponent("before")
-        typeShellMarker(token: "DASHBEFORE7788", file: beforeFile)
-        XCTAssertNotNil(pollMarker(beforeFile, timeout: 10),
+        XCTAssertNotNil(typeShellMarkerUntilFile(token: "DASHBEFORE7788", file: beforeFile),
                         "GUI keystrokes should reach the terminal before the dashboard opens")
 
         try openDashboard(members: ids)
@@ -408,6 +410,25 @@ final class DashboardUITests: ControlAPITestCase {
     private func typeShellMarker(token: String, file: URL) {
         app.typeText("echo \(token) > '\(file.path)'")
         app.typeKey(.return, modifierFlags: [])
+    }
+
+    /// Type the shell marker via the GUI keyboard, retrying until the marker file appears (or attempts are
+    /// exhausted). The GUI-input twin of the base `typeUntilMarker` (which drives the control socket): phase 1
+    /// of the view-only test must prove GUI keystrokes reach the terminal, so it cannot use the socket-driven
+    /// helper. A freshly focused terminal's shell/pty may not be ready to read when the first keystrokes land,
+    /// so a single type can be dropped — re-typing once the shell has had a beat is the deterministic readiness
+    /// wait. The `echo` line is idempotent, so re-typing is safe. Returns the marker contents, or nil if it
+    /// never appeared across all attempts.
+    @discardableResult
+    private func typeShellMarkerUntilFile(token: String, file: URL, attempts: Int = 4,
+                                          perAttempt: TimeInterval = 4) -> String? {
+        for _ in 0..<attempts {
+            // clear any marker a prior attempt's late write may have left, so a stale value isn't read as success.
+            try? FileManager.default.removeItem(at: file)
+            typeShellMarker(token: token, file: file)
+            if let value = pollMarker(file, timeout: perAttempt) { return value }
+        }
+        return nil
     }
 
     // MARK: - tree read-back
