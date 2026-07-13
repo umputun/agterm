@@ -49,6 +49,45 @@ extension WindowContentView {
         return chromeText
     }
 
+    /// The stripped chrome above the OPEN dashboard grid, the exact counterpart of `zoomTitlebar`: in
+    /// hidden-toolbar mode the same invisible ~3px drag strip, otherwise a bare bar carrying ONLY an exit
+    /// button — none of the sidebar/split/scratch/quick-terminal/attention controls the full `customTitlebar`
+    /// renders. Dropping them is the fix: while the view-only grid is up those buttons would steal the
+    /// key-catcher's first responder (stranding Esc) and drive actions that make no sense behind the modal.
+    /// Window drag / double-click / traffic lights stay via `WindowControlArea`; the exit button runs the
+    /// same close-and-refocus path as Esc.
+    @ViewBuilder var dashboardTitlebar: some View {
+        if toolbarMode == .hidden {
+            Color.clear
+                .frame(height: 3)
+                .frame(maxWidth: .infinity)
+                .allowsHitTesting(false)
+                .background { WindowControlArea() }
+        } else {
+            HStack(spacing: 0) {
+                Color.clear
+                    .frame(width: 78)
+                    .allowsHitTesting(false)
+                Spacer(minLength: 12)
+                Button {
+                    closeDashboardFromKeyboard()
+                } label: {
+                    Image(systemName: "xmark")
+                }
+                .help("Exit Dashboard")
+                .accessibilityLabel("Exit Dashboard")
+                .accessibilityIdentifier("dashboard-exit")
+                .padding(.trailing, 14)
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(chromeText)
+            .imageScale(toolbarMode == .normal ? .large : .medium)
+            .frame(height: titlebarHeight)
+            .frame(maxWidth: .infinity)
+            .background { WindowControlArea() }
+        }
+    }
+
     /// The dashboard grid overlay, mounted in `windowOverlayLayer` while this window's `DashboardController`
     /// is open (inset by `titlebarHeight`, below `customTitlebar`, like the other window overlays). Closed
     /// over its `onSelect`/`onClose` closures + the control socket; view-only cells reparent each member's

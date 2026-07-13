@@ -90,8 +90,17 @@ struct WindowContentView: View {
                 windowOverlayLayer
                     .padding(.top, titlebarHeight)
                     .zIndex(1)
-                customTitlebar
-                    .zIndex(2)
+                if dashboard.isOpen {
+                    // the open dashboard is a view-only modal, like terminal zoom: swap the full titlebar for
+                    // a stripped bar (mirroring zoomTitlebar) so its interactive buttons can't steal the
+                    // key-catcher's first responder — which strands Esc — or drive actions that make no sense
+                    // behind the grid. The two modes are mutually exclusive, so only one titlebar is ever up.
+                    dashboardTitlebar
+                        .zIndex(2)
+                } else {
+                    customTitlebar
+                        .zIndex(2)
+                }
             }
         }
         // with the title bar hidden (.hiddenTitleBar), pull our header to the very top so the traffic
