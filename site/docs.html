@@ -753,7 +753,8 @@
             </h2>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
               agterm is built to run from the keyboard. Every action has a shortcut and appears in the menus. Three fuzzy palettes
-              (type to filter, Enter to run, Esc to dismiss) and a Ctrl-Tab MRU switcher cover the rest.
+              (type to filter, Enter to run, Esc to dismiss) and a Ctrl-Tab MRU switcher cover the rest; a title-bar clock button
+              opens the recent-session list with the mouse.
             </p>
             <div
               style="
@@ -1842,9 +1843,11 @@
               When the sidebar is hidden the glyphs go with it, so an optional
               <strong style="color: #e6e1d7">title-bar bell</strong> (Settings ▸ Notifications ▸ Show attention indicator, off by
               default) reflects the window: dimmed when nothing needs you, plain when a session is active or completed, filled
-              amber when any is blocked. Clicking it — or ⌃⇧I, <strong style="color: #e6e1d7">Navigate ▸ Go to Attention…</strong>,
-              or the action palette's "Show Attention" — opens the <strong style="color: #e6e1d7">attention list</strong>: this
-              window's non-idle sessions, sorted blocked → active → completed. Over the control channel,
+              amber when any is blocked. Clicking it opens a <strong style="color: #e6e1d7">popover</strong> of this window's non-idle
+              sessions, sorted blocked → active → completed, that you hover to highlight and click to jump to the session and the
+              pane that set its status. ⌃⇧I, <strong style="color: #e6e1d7">Navigate ▸ Go to Attention…</strong>, or the action
+              palette's "Show Attention" opens the same <strong style="color: #e6e1d7">attention list</strong> as a searchable
+              palette. Over the control channel,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports
               each session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">status</span> and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusPane</span> (which pane set it).

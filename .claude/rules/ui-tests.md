@@ -144,6 +144,20 @@ paths:
   open the popup, then click `app.menuItems["X"]` (see `SettingsUITests.testNewSessionDirectoryPickerPersists`
   / `testToolbarModePickerPersists`).
   Changing a Picker's style therefore requires updating its test's interaction, not just the label.
+- **XCUITest can NOT click a SwiftUI `Button` inside a `.popover` (`NSPopover`).**
+  A synthesized click — element `.click()` OR `coordinate(withNormalizedOffset:).click()` — reaches the row
+  (the trace shows "Click … Button", the event synthesizes) but the SwiftUI action NEVER fires (confirmed by
+  instrumenting the action to a `/tmp` marker: the app is un-sandboxed so it can write, and the marker stayed
+  empty across both click styles + retries).
+  A real mouse click works because it makes the transient popover key first; the synthesized one doesn't.
+  So a `.popover`-hosted control is only e2e-testable up to OPEN + CONTENTS, not the click:
+  assert the popover opens and lists the right elements (find the row `Button` by `accessibilityIdentifier`
+  once no PARENT carries an id — a SwiftUI id on a container propagates to and OVERRIDES its descendants'
+  ids, so the popover container must have NONE), and verify the click→action by hand + host-free unit tests.
+  Also the transient popover can dismiss before the first AX snapshot, so RETRY the open (click the anchor
+  only while no row is showing, so an already-open popover is never toggled shut).
+  See `RecentSessionsButtonUITests` / `AttentionButtonUITests` and the recent/attention popover note in
+  [[menu-actions]].
 - **A screen-occluding overlay app (HazeOver) makes `app.typeText`/`typeKey` fail with `Failed to synthesize event: Timed out while synthesizing event`**
   — a ~90 s hang that ends the test with NO `XCTAssert` failure (the keyboard event never reaches the
   covered window; the run log shows `Synthesize event` → `Failed: Timed out` ~64 s apart).

@@ -193,12 +193,18 @@ paths:
   No count, no pulse.
   Reading `attentionSessions` registers the `agentIndicator` observation,
   so the icon updates LIVE on status change.
-  Click → `AppActions.toggleAttentionPalette()` (the `.attention` palette — see the Menu/actions section).
+  Click → toggles the **attention popover** (`WindowContentView+RecentSessions.swift`, the MOUSE form): a
+  theme-tinted popover listing `AppStore.attentionSessions` as `SessionPopoverRow`s with a leading `StatusGlyph`,
+  sorted blocked→active→completed, hover-highlighted; a row click selects the session + reveals its blocked
+  pane (`selectAttention` → `selectSession` + `AppActions.revealActiveBlockedPane`).
+  ⌃⇧I / Navigate ▸ Go to Attention… / the ⌃⇧P "Show Attention" entry keep the SEARCHABLE `.attention` palette
+  (`toggleAttentionPalette`), so the bell is the mouse form and the palette the keyboard form — mirroring the
+  recent-sessions clock ↔ Ctrl-Tab split (see the Menu/actions section).
   It carries `.accessibilityIdentifier("attention-button")`, a `.help` string,
   and an `.accessibilityValue` of `none`|`attention`|`blocked` — mirroring `StatusIconView`'s state-name
   value so XCUITest can read the otherwise-unobservable `bell`↔`bell.fill` highlight.
   `WindowContentView` mirrors the chrome flag into `@State` (seeded from `GhosttyApp.shared.attentionButtonEnabled`,
   refreshed on `.agtermAppearanceChanged`), NOT from `model.settings`.
-  The bell is pure visual chrome (it opens the already-controllable attention palette / `session.select`)
-  — keep-in-sync EXEMPT, like the other titlebar buttons.
+  The bell is pure visual chrome (it opens the attention popover, a mouse form of the already-controllable
+  attention list / `session.select`) — keep-in-sync EXEMPT, like the other titlebar buttons.
 

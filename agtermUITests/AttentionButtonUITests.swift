@@ -59,14 +59,17 @@ final class AttentionButtonUITests: XCTestCase {
                       "clearing the last attention session should disable the bell back to none")
     }
 
-    // clicking the bell opens the attention command palette; choosing its only row (the blocked session)
-    // selects that session — proving the click drives `toggleAttentionPalette` and the row drives select.
-    func testAttentionButtonOpensPaletteAndSelectsSession() throws {
+    // clicking the bell opens the attention POPOVER (the mouse form; ⌃⇧I keeps the searchable palette),
+    // listing the blocked session as a row. The row click→select can't be driven from XCUITest (a synthesized
+    // click inside an NSPopover doesn't fire a SwiftUI button — see RecentSessionsButtonUITests), so this
+    // asserts the popover opens and lists exactly the attention session; the select is verified by hand and
+    // covered host-free by the selection APIs.
+    func testAttentionButtonOpensPopoverListingAttention() throws {
         launch(attentionEnabled: true)
         let seeded = try seededSessionID()
 
-        // flag the seeded session, then add a SECOND session — `session.new` selects the new (idle) one,
-        // so the seeded blocked session is NOT the active one. The bell still lists it (window-wide).
+        // block the seeded session, then add a SECOND (idle) session — `session.new` selects the new one, so
+        // only the seeded session needs attention. The bell lists it window-wide; the new one is not listed.
         try setStatus("blocked", target: seeded)
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let createdResult = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
@@ -75,18 +78,19 @@ final class AttentionButtonUITests: XCTestCase {
 
         let bell = app.buttons["attention-button"]
         XCTAssertTrue(pollButton(bell, value: "blocked", enabled: true), "the bell should mark the blocked seeded session")
-        bell.click()
 
-        let palette = app.descendants(matching: .any).matching(identifier: "command-palette").firstMatch
-        XCTAssertTrue(palette.waitForExistence(timeout: 5), "clicking the bell should open the command palette")
-
-        // the panel enters the AX tree before its field grabs first responder, and a button-open settles
-        // focus a beat slower than a menu-open — so a single Return can land before the field is
-        // keyboard-ready and do nothing. re-send Return each tick until the seeded (only attention) row's
-        // session is selected, so the test is deterministic rather than racing a fixed delay.
-        let field = app.textFields.firstMatch
-        XCTAssertTrue(field.waitForExistence(timeout: 5), "the attention palette field should appear")
-        XCTAssertTrue(pollReturnSelects(seeded), "choosing the attention row should select that session")
+        // the transient popover can dismiss before the first snapshot, so retry the open until the row shows;
+        // a click is only issued while no row is showing, so it never toggles an already-open popover shut.
+        let row = app.buttons["attention-session-row"]
+        let deadline = Date().addingTimeInterval(10)
+        while Date() < deadline {
+            if row.exists { break }
+            bell.click()
+            if row.waitForExistence(timeout: 1) { break }
+        }
+        XCTAssertTrue(row.exists, "clicking the bell should open the attention popover listing the blocked session")
+        XCTAssertEqual(app.buttons.matching(identifier: "attention-session-row").count, 1,
+                       "only the blocked session needs attention, so the popover lists exactly one row")
     }
 
     // with the toggle off (the default — no seeded setting), the bell is absent from the title bar.
@@ -151,19 +155,6 @@ final class AttentionButtonUITests: XCTestCase {
         stateDir.pollSnapshot(equals: expected.lowercased(), timeout: timeout) { obj in
             (obj["selectedSessionID"] as? String)?.lowercased()
         }
-    }
-
-    /// Re-sends Return each tick (the only attention row is the blocked seeded session, so Return on the
-    /// top match selects it) until the snapshot reports `expected` selected, bounded by `timeout`. A
-    /// button-opened palette settles field focus a beat slower than a menu-open, so a single keypress can
-    /// race the focus and no-op; re-sending until the selection lands makes the assertion deterministic.
-    private func pollReturnSelects(_ expected: String, timeout: TimeInterval = 8) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            app.typeKey(.return, modifierFlags: [])
-            if pollSelectedSessionID(expected, timeout: 0.4) { return true }
-        }
-        return false
     }
 
     /// Polls until the element is gone from the AX tree (the bell after the toggle is flipped off), or the

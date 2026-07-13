@@ -279,13 +279,15 @@ paths:
   expressible/pure-`defaultChord`, NOT an arrow exception) → `AppActions.toggleAttentionPalette()` →
   `palette.toggle(.attention)`, the **Navigate ▸ "Go to Attention…"** menu item (reading `equivalent(for: .showAttention)`),
   and a **"Show Attention"** entry in `paletteActions()` (the ⌃⇧P launcher).
-  The fourth opener is the title-bar bell (see the Notifications section).
+  The title-bar bell is NOT a fourth palette opener: clicking it opens a MOUSE-form popover of the attention
+  sessions, not the palette (see the Notifications section + the recent/attention popover note below).
   Opening a palette is interactive-only → keep-in-sync EXEMPT, like every other palette open.
-  **Button-open focus fix (`CommandPalette.onAppear`):** a palette opened from a title-bar BUTTON (the
-  bell) mounts while that button still holds first responder, so `onAppear`'s synchronous `fieldFocused = true`
-  loses the race and the field never takes the keyboard; the fix re-asserts `fieldFocused = true` on
-  the next runloop tick via `DispatchQueue.main.async` — a no-op for the already-focused menu/hotkey/⌃P
-  opens (no competing responder).
+  **Button-open focus fix (`CommandPalette.onAppear`):** kept from when the bell opened the palette — a palette
+  opened from a title-bar BUTTON mounts while that button still holds first responder, so `onAppear`'s
+  synchronous `fieldFocused = true` loses the race and the field never takes the keyboard; the fix re-asserts
+  `fieldFocused = true` on the next runloop tick via `DispatchQueue.main.async`.
+  The bell now opens a popover, so no button currently opens the palette and the fix is DORMANT/defensive
+  (a no-op for the menu/hotkey/⌃P opens, which have no competing responder).
 - Inline rename has no direct handle from the menu/palette into the sidebar's editor,
   so `AppActions.renameActive{Session,Workspace}()` post `.agtermBeginRenameSession`/`.agtermBeginRenameWorkspace`;
   `WorkspaceSidebar.Coordinator` observes them and calls `beginEditing` on the selected row (async,
@@ -313,4 +315,24 @@ paths:
   Tab-while-Ctrl-held plus the modifier-release signal.
   The overlay has no focusable control, so the terminal keeps first responder and selection-on-commit
   re-focuses via `TerminalView`.
+- **Title-bar mouse popovers: the CLOCK is the mouse form of the Ctrl-Tab switcher, the BELL the mouse form
+  of the attention palette** (`WindowContentView+RecentSessions.swift`, split out to keep `WindowContentView.swift`
+  under 1000 lines; the `attentionButton` moved here too).
+  Both open a theme-tinted SwiftUI `.popover` of clickable session rows — the shared `SessionPopoverRow`:
+  a `SessionSwitcherRow` (now taking an optional themed `foreground` + an optional leading `status` glyph)
+  wrapped in a `Button` with `.onHover` highlight (the theme selection color), `.contentShape(Rectangle())`
+  for a full-row hit target, and `.presentationBackground(terminalColor)` + `chromeText` text so the panel
+  tracks the terminal theme like the sidebar/titlebar chrome.
+  The CLOCK's `recentSessions` = `sessionRecency.top(SessionSwitcher.maxCandidates, in:)` with the ACTIVE
+  session removed (it is not a jump target), so the button enables only with ≥2 sessions; a row click runs
+  `selectRecent` (`noteUserActivity` + `selectSession` + `focusActiveSession`).
+  The BELL's `attentionPopover` = `AppStore.attentionSessions` (all non-idle, INCLUDING the current), each
+  row carrying its `StatusGlyph`; a row click runs `selectAttention` (adds `AppActions.revealActiveBlockedPane`).
+  Both are control-API keep-in-sync EXEMPT (interactive popover opens, like the bell↔palette before).
+  **The row CLICK is not XCUITest-drivable** — a synthesized click (element OR coordinate) inside an
+  `NSPopover` does not fire a SwiftUI `Button` action (confirmed by instrumentation: the action never ran),
+  though a real mouse click does (it makes the popover key).
+  So the e2e (`RecentSessionsButtonUITests`, `AttentionButtonUITests.testAttentionButtonOpensPopoverListingAttention`)
+  asserts the popover OPENS and lists the right sessions; the click→select is verified by hand and covered
+  host-free by the selection APIs (see [[ui-tests]]).
 

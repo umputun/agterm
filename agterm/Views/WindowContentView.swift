@@ -52,6 +52,13 @@ struct WindowContentView: View {
     /// Refreshed on `.agtermAppearanceChanged`, like `toolbarMode`, so flipping the Settings toggle
     /// shows/hides the bell live without a relaunch.
     @State var attentionButtonEnabled: Bool = WindowContentView.resolvedAttentionButtonEnabled()
+    /// Whether the recent-sessions popover (the mouse equivalent of the Ctrl-Tab switcher) is shown,
+    /// anchored on the title-bar clock button. Non-private so the `+RecentSessions` extension's button/rows
+    /// can toggle it.
+    @State var recentSessionsShown = false
+    /// Whether the attention popover (the mouse equivalent of the ⌃⇧I attention palette) is shown, anchored
+    /// on the title-bar bell. Non-private so the `+RecentSessions` extension's bell/rows can toggle it.
+    @State var attentionPopoverShown = false
     /// Custom sidebar width and show/hide both live on the per-window `AppStore` (`sidebarWidth` /
     /// `sidebarVisible`), persisted in `Snapshot` so they restore on relaunch. The toolbar button, the View
     /// menu, the palette, and the `sidebar` control command share `sidebarVisible`.
@@ -700,6 +707,7 @@ struct WindowContentView: View {
             if attentionButtonEnabled {
                 attentionButton.labelStyle(.iconOnly).padding(.leading, 10)
             }
+            recentSessionsButton.labelStyle(.iconOnly).padding(.leading, 10)
             Spacer(minLength: 12)
             HStack(spacing: 14) {
                 scratchButton.labelStyle(.iconOnly)
@@ -731,7 +739,8 @@ struct WindowContentView: View {
     /// Sidebar (⌃⌘S)`), or just the base text when the action has no configured shortcut. Keeps the
     /// toolbar/sidebar hints in lockstep with the keymap — a rebind shows the new chord, an unbound
     /// action shows none — via the SAME `AppActions.shortcutGlyph` resolver the action palette uses.
-    private func helpHint(_ base: String, _ action: BuiltinAction) -> String {
+    /// Non-private so the `+RecentSessions` extension's attention button can build its tooltip.
+    func helpHint(_ base: String, _ action: BuiltinAction) -> String {
         guard let glyph = actions.shortcutGlyph(for: action) else { return base }
         return "\(base) (\(glyph))"
     }
@@ -806,31 +815,6 @@ struct WindowContentView: View {
         }
         .help(helpHint("Quick Terminal", .quickTerminal))
         .accessibilityIdentifier("quick-terminal-toggle")
-    }
-
-    /// Title-bar bell reflecting the window's attention state at a glance (opt-in, gated by the
-    /// `attentionButtonEnabled` mirror). Three states from `store.attentionSessions`: empty → a dimmed
-    /// disabled outline bell; non-empty with nothing blocked → a plain enabled bell in `chromeText`; any
-    /// blocked session → a filled bell tinted the blocked-status color. No count, no pulse. Click opens
-    /// the `.attention` palette. Reading `store.attentionSessions` in the body registers the per-session
-    /// `agentIndicator` observation, so the glyph re-renders live as a status changes. `.accessibilityValue`
-    /// (none|attention|blocked) exposes the otherwise-unobservable bell↔bell.fill state to XCUITest,
-    /// mirroring `StatusIconView`'s state-name value.
-    private var attentionButton: some View {
-        let sessions = store.attentionSessions
-        let blocked = sessions.contains { $0.agentIndicator.status == .blocked }
-        let empty = sessions.isEmpty
-        return Button {
-            actions.toggleAttentionPalette()
-        } label: {
-            Label("Attention", systemImage: blocked ? "bell.fill" : "bell")
-        }
-        .foregroundStyle(blocked ? Color(nsColor: GhosttyApp.shared.blockedStatusColor) : chromeText)
-        .opacity(empty ? 0.35 : 1)
-        .disabled(empty)
-        .help(helpHint(empty ? "No sessions need attention" : "Show sessions that need attention", .showAttention))
-        .accessibilityIdentifier("attention-button")
-        .accessibilityValue(empty ? "none" : (blocked ? "blocked" : "attention"))
     }
 
     /// The quick-terminal overlay: the scratch terminal centered at 90% of the window, framed by a

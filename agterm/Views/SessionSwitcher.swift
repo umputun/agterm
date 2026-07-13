@@ -29,7 +29,8 @@ final class SessionSwitcher {
     private static let escapeKey: UInt16 = 53
     /// Cap on rows the Ctrl-Tab switcher shows: it's a quick most-recent jump, not a full session list
     /// (the ⌃P fuzzy palette covers everything). The recency STORE keeps its full 100-item history.
-    private static let maxCandidates = 10
+    /// Shared with the mouse-driven recent-sessions popover so the two list the same sessions.
+    static let maxCandidates = 10
 
     init(library: WindowLibrary, canSwitch: @escaping () -> Bool) {
         self.library = library
@@ -149,20 +150,43 @@ struct SessionSwitcherOverlay: View {
 
     @ViewBuilder private func row(_ id: UUID, selected: Bool) -> some View {
         if let session = store.session(withID: id) {
-            HStack {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text(session.displayName)
-                    Text("\(store.workspace(forSession: id)?.name ?? "") · \(session.subtitleDetail)")
-                        .font(.caption).foregroundStyle(.secondary)
-                        .lineLimit(1).truncationMode(.middle)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 6)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(selected ? Color.accentColor.opacity(0.25) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 6))
+            SessionSwitcherRow(title: session.displayName,
+                               subtitle: "\(store.workspace(forSession: id)?.name ?? "") · \(session.subtitleDetail)")
+                .background(selected ? Color.accentColor.opacity(0.25) : Color.clear)
+                .clipShape(RoundedRectangle(cornerRadius: 6))
         }
+    }
+}
+
+/// One session row for the switcher surfaces — the display name over a `workspace · cwd` subtitle.
+/// Shared by the keyboard Ctrl-Tab overlay (`SessionSwitcherOverlay`) and the mouse-driven recent-sessions
+/// popover (`WindowContentView.recentSessionsPopover`) so the two rows never drift; the caller supplies the
+/// row's background (the overlay's keyboard highlight, the popover's button hover).
+struct SessionSwitcherRow: View {
+    let title: String
+    let subtitle: String
+    /// Optional themed foreground: nil renders the system label colors (the Ctrl-Tab overlay's look); a set
+    /// color themes the title with it and the subtitle at 0.6 opacity (the recent-sessions popover's look).
+    var foreground: Color?
+    /// Optional leading agent-status glyph — the attention popover sets it; the Ctrl-Tab overlay and the
+    /// recent-sessions popover leave it nil. `statusColorHex` is the per-call `session.status --color` tint.
+    var status: AgentStatus?
+    var statusColorHex: String?
+
+    var body: some View {
+        HStack {
+            if let status { StatusGlyph(status: status, colorHex: statusColorHex) }
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title).foregroundStyle(foreground ?? Color.primary)
+                Text(subtitle)
+                    .font(.caption)
+                    .foregroundStyle(foreground.map { $0.opacity(0.6) } ?? Color.secondary)
+                    .lineLimit(1).truncationMode(.middle)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
