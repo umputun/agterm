@@ -297,6 +297,34 @@ final class DashboardUITests: ControlAPITestCase {
         XCTAssertNil(dashMembers(), "tree.dashboardMembers clears on the toggle-close")
     }
 
+    // while the dashboard is open the UI is modal: session-mutating menu key-equivalents are gated the same
+    // way terminal zoom gates them. ⌘N (new_session) routes through the menu (performKeyEquivalent, PAST the
+    // grid's keyDown-only key-catcher), but the New Session item is .disabled while the dashboard is open AND
+    // AppActions.newSession guards on uiActionsEnabled, so it neither creates a session nor dismisses the grid.
+    // The Dashboard toggle stays enabled so ⌘⇧D still closes the grid — the user is never trapped.
+    func testDashboardGatesSessionShortcutsWhileOpen() throws {
+        let ids = try prepareSessions(extra: 1) // [seeded, new1] → two sessions
+        XCTAssertEqual(ids.count, 2)
+        XCTAssertTrue(pollSessionCount(2, timeout: 10), "two sessions before opening the dashboard")
+
+        try openDashboard(members: ids)
+        XCTAssertTrue(pollCellCount(2, timeout: 15), "the dashboard opens over both sessions")
+
+        // ⌘N is a session-mutating menu key-equivalent; while the dashboard is open it must be a no-op. Poll
+        // for the WRONG state (a third session) never landing rather than a single settled read.
+        app.typeKey("n", modifierFlags: .command)
+        settle(0.8)
+        XCTAssertTrue(dashboardOverlay.exists, "a gated shortcut must not dismiss the view-only dashboard")
+        XCTAssertEqual(dashMembers()?.count, 2, "the gated shortcut leaves the dashboard members unchanged")
+        XCTAssertFalse(pollSessionCount(3, timeout: 3), "⌘N must not create a session while the dashboard is open")
+
+        // the Dashboard toggle stays enabled (the escape hatch): ⌘⇧D closes the grid cleanly.
+        app.typeKey("d", modifierFlags: [.command, .shift])
+        XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "⌘⇧D closes the open dashboard")
+        XCTAssertNil(dashMembers(), "the dashboard read-backs clear on the toggle-close")
+        XCTAssertTrue(pollSessionCount(2, timeout: 5), "the session set is unchanged after gating + close")
+    }
+
     /// Click Navigate ▸ Dashboard in the menu bar.
     private func openDashboardViaMenu() {
         app.menuBars.menuBarItems["Navigate"].click()

@@ -42,9 +42,12 @@ final class AppActions {
         frontmostTerminalZoom?.target != nil
     }
 
-    /// While terminal zoom is active, the UI is modal: keyboard/menu/palette actions must not mutate the
-    /// hidden deck. The zoom toggle, socket commands, and macOS window controls remain separate paths.
-    var uiActionsEnabled: Bool { !terminalZoomActive }
+    /// While terminal zoom OR the dashboard grid is active, the UI is modal: keyboard/menu/palette actions
+    /// must not mutate the deck behind it. The zoom/dashboard toggles, socket commands, and macOS window
+    /// controls remain separate paths (they never gate on this), so the user is never trapped and can always
+    /// dismiss the modal. `frontmostDashboard?.isOpen` mirrors `terminalZoomActive`, resolved on the frontmost
+    /// window like the zoom target.
+    var uiActionsEnabled: Bool { !terminalZoomActive && !(frontmostDashboard?.isOpen ?? false) }
 
     /// Set briefly while a rename is being started, so the focus-restore that runs when a palette
     /// or the quick terminal closes doesn't steal first responder from the inline rename field.
