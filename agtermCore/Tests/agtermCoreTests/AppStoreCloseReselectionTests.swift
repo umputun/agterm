@@ -3,8 +3,9 @@ import Testing
 @testable import agtermCore
 
 /// Closing the ACTIVE session returns to the most-recently-active SURVIVING session, scoped to the
-/// closing session's workspace and the active focus/flagged filter, with the positional
-/// `reselectionTarget` as the fallback (GitHub Discussion #147).
+/// closing session's workspace and — in `.flagged` sidebar mode — to the flagged set, with the
+/// positional `reselectionTarget` as the fallback (GitHub Discussion #147). The FOCUS filter
+/// deliberately does NOT scope the pick; see `closeReselectionTarget(after:)`.
 @MainActor
 struct AppStoreCloseReselectionTests {
     @Test func closeActiveSessionInsertedAfterCurrentReturnsToTheSessionItCameFrom() throws {
@@ -71,7 +72,7 @@ struct AppStoreCloseReselectionTests {
 
     @Test func closeActiveSessionEmptyingItsWorkspacePicksTheRecentSurvivorElsewhere() throws {
         // the workspace scope has nothing left to hold on to once the close empties the workspace, so the
-        // MRU widens to the whole navigable set rather than jumping positionally into the first workspace.
+        // MRU widens to the whole TREE rather than jumping positionally into the first workspace.
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
         let scratch = store.addWorkspace(name: "scratch")
@@ -163,7 +164,7 @@ struct AppStoreCloseReselectionTests {
     }
 
     @Test func closeActiveSessionInFlaggedModeCrossesWorkspacesRatherThanLeavingTheFlaggedSet() throws {
-        // `navigableSessions` is cross-workspace in `.flagged` mode, so when the close leaves the closing
+        // `flaggedSessions` is cross-workspace by definition, so when the close leaves the closing
         // session's workspace with no flagged survivor, the pick follows the FILTER out of the workspace
         // instead of falling back to an unflagged sibling the sidebar isn't even rendering.
         let store = makeStore()
@@ -202,6 +203,24 @@ struct AppStoreCloseReselectionTests {
         store.closeSession(ids[1])
         #expect(store.selectedSessionID == ids[0]) // the flagged survivor, not the unflagged `ids[2]`
         #expect(store.flaggedSessions.map(\.id).contains(try #require(store.selectedSessionID)))
+    }
+
+    @Test func closeTheLastFlaggedSessionFallsThroughToThePositionalTarget() throws {
+        // the flagged scope is empty once the only flagged session is the one closing, so the filtered
+        // fallback has nothing to return: the positional pick stands rather than selecting nothing (the
+        // flagged sidebar renders no rows at all in this state, so there is no in-filter row to land on).
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        _ = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let closing = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        let after = try #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
+        store.setFlag(true, forSession: closing.id)
+        store.sidebarMode = .flagged
+        store.selectSession(closing.id)
+
+        store.closeSession(closing.id)
+        #expect(store.flaggedSessions.isEmpty)
+        #expect(store.selectedSessionID == after.id) // the positional neighbor; nothing flagged survives
     }
 
     @Test func closeActiveSessionWithAnEmptyScopedRecencyFallsBackToThePositionalTarget() throws {

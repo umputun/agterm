@@ -32,7 +32,9 @@ extension AppStore {
         // `reselectionTarget` walks the tree positionally, so in `.flagged` mode it can land on an
         // unflagged sibling the sidebar isn't rendering (reachable when no scoped session has ever been
         // activated — e.g. the first close after restoring a snapshot with no persisted recency). Keep the
-        // fallback inside the filter: the first in-scope session in tree order.
+        // fallback inside the filter: the first in-scope session in tree order. When the close took the LAST
+        // flagged session anywhere, `scope` is empty and there is nothing left to keep it inside — the
+        // positional pick then stands, since leaving no session selected would leave no terminal.
         if sidebarMode == .flagged, let inScope = flaggedSessions.first(where: { scope.contains($0.id) }) {
             return inScope.id
         }

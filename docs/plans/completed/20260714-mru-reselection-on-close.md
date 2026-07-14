@@ -284,16 +284,17 @@ stale index would pick the last session instead. The `removedBeforeActive` code 
 
 ## Technical Details
 
-**The helper** (`agtermCore/Sources/agtermCore/AppStore.swift`, alongside `reselectionTarget(after:)`):
+**The helper — AS SHIPPED** (`agtermCore/Sources/agtermCore/AppStore+CloseReselection.swift`; this block
+was revised during implementation, see "Deviations from the planned shape" below):
 
 ```
 closeReselectionTarget(after location: (workspaceIndex: Int, sessionIndex: Int)) -> UUID?
-    guard workspaces.indices.contains(location.workspaceIndex)
-      else -> first session of any remaining workspace (reselectionTarget would TRAP on the stale
-              index — it force-indexes workspaces[location.workspaceIndex]; see the Task 1 findings)
-    scope = Set(workspaces[location.workspaceIndex].sessions.map(\.id))
-              .intersection(Set(navigableSessions.map(\.id)))
+    filtered      = sidebarMode == .flagged ? flagged ids : all tree ids
+    sameWorkspace = ids of workspaces[location.workspaceIndex].sessions ∩ filtered
+    scope         = sameWorkspace.isEmpty ? filtered : sameWorkspace   // widen when the workspace is spent
     if let recent = sessionRecency.top(1, in: scope).first { return recent }
+    if sidebarMode == .flagged, let inScope = first flagged session in tree order within scope
+      { return inScope }                                               // keep the fallback in the filter
     return reselectionTarget(after: location)
 ```
 
@@ -302,11 +303,20 @@ from `workspaces` *before* reselection at every call site, so it is absent from 
 That is what makes the soft-close paths correct without pruning `sessionRecency` at close time (which they
 must not do — undo needs the entry).
 
-**Why `navigableSessions` and not `visibleWorkspaces`:** `navigableSessions` is the single existing
-definition of "the set the user is navigating within" — it already collapses to the focused workspace under
-a focus filter and to the flagged set in `.flagged` sidebar mode, and it is what `navigateSession`, the
-Ctrl-Tab candidate set, and the ⌃P session palette all read. Reusing it keeps close-reselection from drifting
-away from every other selection surface.
+**Deviations from the planned shape** (all three landed as follow-up commits after review; the code's doc
+comment and `.claude/rules/menu-actions.md` are the authority):
+
+- **The FOCUS filter does not scope the pick** — the plan called for `∩ navigableSessions`, which folds
+  focus in. That breaks two reachable states: closing a session while ANOTHER workspace is focused would
+  jump the user INTO the focused workspace, and closing the focused workspace's last session would widen
+  into an EMPTY set and fall through to a positional first-workspace jump. Focus is a property of the TREE,
+  not of the selection (`setFocusedWorkspace` never moves the active session), and every caller already runs
+  `autoUnfocusIfOutsideFocus` to reveal a pick landing outside it. Only the FLAGGED filter scopes.
+- **The workspace term is dropped when the close leaves the workspace with nothing in scope**, rather than
+  falling straight to the positional pick — "stay in this workspace" has nothing left to mean, and the
+  positional alternative is a jump into the first workspace, the disorientation this feature removes.
+- **No stale-index guard** — `reselectionTarget` itself force-indexes `workspaces[location.workspaceIndex]`
+  with no guard, so the helper adds no new trap risk, and no caller removes a workspace before reselecting.
 
 **Call sites after the change** (all three pass the same `location` they pass today):
 

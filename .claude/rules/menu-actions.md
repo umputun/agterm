@@ -228,6 +228,10 @@ paths:
   `reselectionTarget` walks the tree positionally and would otherwise land on an unflagged sibling the flagged
   sidebar has no row for (`syncSelection` would then `deselectAll` and show nothing selected).
   Pinned by `closeActiveSessionInFlaggedModeWithAnEmptyScopedRecencyStaysWithinTheFlaggedSet`.
+  The ONE case the flagged scoping cannot hold is closing the LAST flagged session anywhere: the scope is then
+  empty, the flagged sidebar renders no rows at all, and the positional pick stands — selecting nothing would
+  leave no terminal.
+  Pinned by `closeTheLastFlaggedSessionFallsThroughToThePositionalTarget`.
   `reselectionTarget` now has exactly ONE caller, this helper: `removeWorkspace` / `softRemoveWorkspace` never used
   it and keep their own inline positional pick (reselection there is deliberately untouched — the
   "stay in the current workspace" constraint is meaningless when the workspace itself is what's being removed).
