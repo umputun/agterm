@@ -184,6 +184,26 @@ struct AppStoreCloseReselectionTests {
         #expect(store.flaggedSessions.map(\.id).contains(try #require(store.selectedSessionID)))
     }
 
+    @Test func closeActiveSessionInFlaggedModeWithAnEmptyScopedRecencyStaysWithinTheFlaggedSet() throws {
+        // a cold restore in flagged mode: once the closing session is pruned the scoped recency is empty,
+        // so the pick falls back — but the positional neighbor is unflagged and the flagged sidebar has no
+        // row for it, so the fallback must stay inside the filter.
+        let store = makeStore()
+        let wsID = UUID()
+        let ids = [UUID(), UUID(), UUID()]
+        let sessions = [SessionSnapshot(id: ids[0], customName: nil, cwd: "/a", flagged: true),
+                        SessionSnapshot(id: ids[1], customName: nil, cwd: "/b", flagged: true),
+                        SessionSnapshot(id: ids[2], customName: nil, cwd: "/c")]
+        store.restore(from: Snapshot(selectedSessionID: ids[1],
+                                     workspaces: [WorkspaceSnapshot(id: wsID, name: "work", sessions: sessions)],
+                                     sidebarMode: .flagged))
+        #expect(store.sessionRecency.items == [ids[1]]) // only the restored selection
+
+        store.closeSession(ids[1])
+        #expect(store.selectedSessionID == ids[0]) // the flagged survivor, not the unflagged `ids[2]`
+        #expect(store.flaggedSessions.map(\.id).contains(try #require(store.selectedSessionID)))
+    }
+
     @Test func closeActiveSessionWithAnEmptyScopedRecencyFallsBackToThePositionalTarget() throws {
         // a cold restore: nothing has been activated, so once the closing session is pruned the scoped
         // recency is empty and the pick is exactly today's positional neighbor.

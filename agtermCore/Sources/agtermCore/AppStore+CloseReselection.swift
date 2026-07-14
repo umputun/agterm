@@ -9,8 +9,8 @@ extension AppStore {
     /// widens rather than falling straight to a positional jump into the first workspace.
     ///
     /// The `.flagged` sidebar filter DOES scope the pick (landing on a session the flagged view isn't even
-    /// rendering would be worse), and it survives the widening because `flaggedSessions` is cross-workspace
-    /// by definition. The FOCUS filter deliberately does NOT scope it — unlike flagged mode, focus is a
+    /// rendering would be worse — so it scopes the positional fallback too), and it survives the widening
+    /// because `flaggedSessions` is cross-workspace by definition. The FOCUS filter deliberately does NOT scope it — unlike flagged mode, focus is a
     /// property of the TREE, not of the selection: `setFocusedWorkspace` never moves the active session, so
     /// focus can sit on a workspace the closing session doesn't even belong to. Scoping by it (i.e. using
     /// `navigableSessions`, which folds focus in) would make ⌘W in that state jump into the FOCUSED workspace,
@@ -29,6 +29,13 @@ extension AppStore {
         let sameWorkspace = inWorkspace.intersection(filtered)
         let scope = sameWorkspace.isEmpty ? filtered : sameWorkspace
         if let recent = sessionRecency.top(1, in: scope).first { return recent }
+        // `reselectionTarget` walks the tree positionally, so in `.flagged` mode it can land on an
+        // unflagged sibling the sidebar isn't rendering (reachable when no scoped session has ever been
+        // activated — e.g. the first close after restoring a snapshot with no persisted recency). Keep the
+        // fallback inside the filter: the first in-scope session in tree order.
+        if sidebarMode == .flagged, let inScope = flaggedSessions.first(where: { scope.contains($0.id) }) {
+            return inScope.id
+        }
         return reselectionTarget(after: location)
     }
 }
