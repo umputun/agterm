@@ -9,8 +9,10 @@ import SwiftUI
 extension WindowContentView {
     /// The frontmost window's most-recently-used sessions, EXCLUDING the current one (it's not a jump target —
     /// you're already there), scoped to the visible/filtered set and capped like the Ctrl-Tab switcher.
-    /// Reading `activeSession`/`navigableSessions`/`sessionRecency` here registers the observation, so the
-    /// button enables/disables and the list refreshes live as sessions come and go.
+    /// The live refresh rides the OBSERVED `activeSession`/`navigableSessions` reads — every `sessionRecency`
+    /// mutation co-occurs with one of them (a push on select changes `activeSession`, a prune on close changes
+    /// `navigableSessions`); `sessionRecency` itself is `@ObservationIgnored`, read for its value, not for
+    /// observation, so it registers none on its own.
     private var recentSessions: [UUID] {
         var valid = Set(store.navigableSessions.map(\.id))
         if let activeID = store.activeSession?.id { valid.remove(activeID) }
@@ -34,6 +36,17 @@ extension WindowContentView {
         .accessibilityIdentifier("recent-sessions-button")
         .popover(isPresented: $recentSessionsShown, arrowEdge: .bottom) {
             recentSessionsPopover
+        }
+        .onChange(of: recentSessionsShown) { _, shown in
+            // suppress this window's auto-follow while the popover is open so an armed idle jump can't
+            // reshuffle the MRU rows under the pointer (the command palette + dashboard bracket the same way);
+            // the counted suppression stays balanced across open/close and with the attention popover.
+            if shown { store.suppressAutoFollow() } else { store.resumeAutoFollow() }
+        }
+        .onChange(of: recentSessions.isEmpty) { _, empty in
+            // the only listed session exiting on its own fires no outside-click dismiss, so close the popover
+            // ourselves when the list empties — else an empty sliver lingers under a now-disabled button.
+            if empty { recentSessionsShown = false }
         }
     }
 
@@ -115,6 +128,16 @@ extension WindowContentView {
         .accessibilityValue(empty ? "none" : (blocked ? "blocked" : "attention"))
         .popover(isPresented: $attentionPopoverShown, arrowEdge: .bottom) {
             attentionPopover
+        }
+        .onChange(of: attentionPopoverShown) { _, shown in
+            // same as the recent popover: suppress auto-follow while open so an armed idle jump can't
+            // reshuffle the listed attention sessions under the pointer; counted, so it stays balanced.
+            if shown { store.suppressAutoFollow() } else { store.resumeAutoFollow() }
+        }
+        .onChange(of: empty) { _, isEmpty in
+            // the last attention session going idle fires no outside-click dismiss; close the popover so no
+            // empty sliver lingers under the now-disabled bell.
+            if isEmpty { attentionPopoverShown = false }
         }
     }
 
