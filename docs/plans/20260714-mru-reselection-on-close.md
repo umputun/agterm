@@ -265,13 +265,22 @@ stale index would pick the last session instead. The `removedBeforeActive` code 
 
 ### Task 6: [Final] Update documentation
 
-- [ ] update `.claude/rules/menu-actions.md`: the Close Session / session-navigation notes describe the
-      selection model, so record that closing the ACTIVE session now returns to the most-recently-active
-      surviving session, scoped to its workspace and the active focus/flagged filter, with the positional
-      `reselectionTarget` as the fallback. Use **semantic line breaks** (one sentence per line) per CLAUDE.md
-- [ ] confirm — and state in the PR — that no control-API, agent-skill, or website change is owed (see the
-      keep-in-sync audit in Context above)
-- [ ] do NOT touch `CHANGELOG.md` (release-only)
+- [x] update `.claude/rules/menu-actions.md`: added a dedicated bullet right after `Close Session` recording
+      that closing the ACTIVE session now returns to the most-recently-active surviving session via
+      `closeReselectionTarget(after:)` (scoped to the closing session's own workspace ∩ `navigableSessions`,
+      so the focus/flagged filter is preserved), why the scope set is built from the tree rather than the
+      recency stack (soft close must NOT prune `sessionRecency` — undo needs the entry), and that the
+      positional `reselectionTarget` stays as the fallback and as the direct pick for
+      `removeWorkspace`/`softRemoveWorkspace`. Semantic line breaks throughout
+- [x] confirm — and state in the PR — that no control-API, agent-skill, or website change is owed: re-verified
+      the keep-in-sync audit holds. No new user action (`session.close` already drives the same `AppStore`
+      seam and picks the behavior up for free), so the four-point control audit is already satisfied; no new
+      per-session state, so no `tree` read-back field is owed (`selectedSessionID` already surfaces the result);
+      the agent skill documents commands/args/returns and the window/workspace/session model, none of which
+      change; `README.md` / `site/docs.html` / `site/commands.html` never documented the close-reselection rule,
+      so nothing user-facing to update. This goes in the PR body
+- [x] do NOT touch `CHANGELOG.md` (release-only) — untouched, confirmed via `git status`
+- [x] full suite green after the doc change: **1540 tests in 63 suites passed**, `make lint` clean
 
 ## Technical Details
 

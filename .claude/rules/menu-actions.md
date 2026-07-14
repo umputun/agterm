@@ -189,6 +189,29 @@ paths:
   quick terminal was up, closing the window instead of the cover.
   `AppStore.currentWorkspaceID`/`defaultWorkspaceName` are the host-free placement/naming helpers behind
   New Session / New Workspace.
+- **Closing the ACTIVE session returns to the most-recently-active SURVIVING session, not to a positional
+  neighbor** (Discussion #147).
+  `AppStore.closeReselectionTarget(after:)` (`AppStore+CloseReselection.swift`, host-free and unit-tested in
+  `AppStoreCloseReselectionTests`) is the single reselection pick for all three close paths — `closeSession`
+  plus the two undoable ones, `softCloseSession` / `softCloseSessions`.
+  It takes `sessionRecency.top(1, in: scope)` where `scope` = the closing session's OWN workspace's surviving
+  session ids ∩ `navigableSessions` ids.
+  The scope is what keeps the close from being disorienting: an UNSCOPED "most recent survivor" could yank the
+  user into another workspace, or silently drop an active focus/flagged filter, and `navigableSessions` is the
+  one existing definition of "the set the user is navigating within" (it already collapses to the focused
+  workspace under a focus filter and to the flagged set in `.flagged` sidebar mode), so reusing it stops
+  close-reselection from drifting away from every other selection surface.
+  The scope set is built from the TREE, not from the recency stack: the closing session is removed from
+  `workspaces` before reselection at every call site, so it can never be picked — which is what makes the
+  soft-close paths correct WITHOUT pruning `sessionRecency` at close time (they must not, since undo needs the
+  entry back; only `hardFinalizePendingSession` prunes, at grace expiry).
+  An empty scoped MRU (a fresh restore before anything was activated, sessions never focused, or the only
+  recent entry was the one just closed) falls straight back to the positional `reselectionTarget(after:)`,
+  which is UNCHANGED and still the direct pick for `removeWorkspace` / `softRemoveWorkspace` (the
+  "stay in the current workspace" constraint is meaningless when the workspace itself is what's being removed).
+  So the worst case is exactly the old neighbor behavior, never an empty selection.
+  `softCloseSessions`' `removedBeforeActive` index adjustment is preserved verbatim — it now feeds only the
+  fallback.
 - **Session navigation (between sessions).**
   Previous/Next Session sit on ⌥⌘↑/⌥⌘↓; First/Last Session have NO hotkey (menu + palette + `session.go`
   only).
