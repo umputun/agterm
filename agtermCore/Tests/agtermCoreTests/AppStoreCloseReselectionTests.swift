@@ -103,6 +103,48 @@ struct AppStoreCloseReselectionTests {
         #expect(store.focusedWorkspaceID == work.id) // the filter survives the close
     }
 
+    @Test func closeTheFocusedWorkspacesLastSessionPicksTheRecentSurvivorElsewhere() throws {
+        // the focus filter must NOT scope the widened MRU: under focus, `navigableSessions` collapses to the
+        // focused workspace, so scoping by it would widen into an EMPTY set once the close empties that
+        // workspace and fall through to a positional jump into the FIRST workspace — the very disorientation
+        // this feature removes. `autoUnfocusIfOutsideFocus` drops the now-meaningless filter instead.
+        let store = makeStore()
+        let personal = store.addWorkspace(name: "personal")
+        let work = store.addWorkspace(name: "work")
+        _ = try #require(store.addSession(toWorkspace: personal.id, cwd: "/first"))
+        let cameFrom = try #require(store.addSession(toWorkspace: personal.id, cwd: "/mru"))
+        let onlyInWork = try #require(store.addSession(toWorkspace: work.id, cwd: "/only"))
+        store.selectSession(cameFrom.id)
+        store.selectSession(onlyInWork.id)
+        store.setFocusedWorkspace(work.id)
+
+        store.closeSession(onlyInWork.id)
+        #expect(store.workspaces[1].sessions.isEmpty)
+        #expect(store.selectedSessionID == cameFrom.id) // not `/first`, the positional first-workspace jump
+        #expect(store.focusedWorkspaceID == nil) // the emptied focus is dropped to reveal the pick
+    }
+
+    @Test func closeActiveSessionWhileAnotherWorkspaceIsFocusedStaysInTheClosingWorkspace() throws {
+        // `setFocusedWorkspace` never moves the selection, so focus can sit on a workspace the ACTIVE session
+        // doesn't belong to. Scoping the MRU by focus would yank the close into the focused workspace; the
+        // pick must stay next to the session that closed, exactly as the positional neighbor used to.
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        let cameFrom = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        _ = try #require(store.addSession(toWorkspace: work.id, cwd: "/b"))
+        let closing = try #require(store.addSession(toWorkspace: work.id, cwd: "/c"))
+        let elsewhere = try #require(store.addSession(toWorkspace: personal.id, cwd: "/x"))
+        store.selectSession(elsewhere.id) // seeds `personal` into the recency stack
+        store.selectSession(cameFrom.id)
+        store.selectSession(closing.id)
+        store.setFocusedWorkspace(personal.id) // focus elsewhere, active session still in `work`
+
+        store.closeSession(closing.id)
+        #expect(store.selectedSessionID == cameFrom.id) // not `elsewhere`, in the focused workspace
+        #expect(store.focusedWorkspaceID == nil) // the pick is outside the focus, so the filter drops
+    }
+
     @Test func closeActiveSessionInFlaggedModeStaysWithinTheFlaggedSet() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
