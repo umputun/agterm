@@ -119,16 +119,41 @@ and the discussion only agreed to the session-close case. Do not touch them.
 
 ### Task 1: Set up the isolated worktree and pin down current behavior
 
-- [ ] create an isolated git worktree for this work (Claude Code native worktree support / `EnterWorktree`,
-      never a manual `git worktree add`), branched off `master`
-- [ ] symlink the three gitignored build artifacts into the worktree with **ABSOLUTE** targets:
-      `GhosttyKit.xcframework`, `agterm/Resources/ghostty`, `agterm/Resources/terminfo` — do NOT re-run
-      `scripts/setup.sh` (it would rebuild libghostty from upstream)
-- [ ] confirm the baseline is green: `cd agtermCore && swift test`
-- [ ] read `AppStore.closeSession`, `reselectionTarget(after:)`, `navigableSessions`, `RecencyStack.top(_:in:)`,
-      and both soft-close paths; confirm the soft-close paths leave the closing session in `sessionRecency`
-      but remove it from the tree (the note in Context above) — record the finding in this plan if it differs
-- [ ] run `make lint` to confirm a clean starting tree
+- [x] create an isolated git worktree for this work — ⚠️ **not applicable**: the work is already isolated on
+      the `mru-reselection-on-close` branch in the main checkout (`git worktree list` shows a single
+      checkout, already on that branch), and the ralphex loop drives that working directory. Moving to a
+      separate worktree mid-loop would strand the loop's cwd. No worktree created.
+- [x] symlink the three gitignored build artifacts — **not needed** for the same reason: `GhosttyKit.xcframework`,
+      `agterm/Resources/ghostty`, and `agterm/Resources/terminfo` are all present in this checkout.
+      `scripts/setup.sh` was not run.
+- [x] confirm the baseline is green: `cd agtermCore && swift test` → **1528 tests in 62 suites passed**
+- [x] read `AppStore.closeSession`, `reselectionTarget(after:)`, `navigableSessions`, `RecencyStack.top(_:in:)`,
+      and both soft-close paths — **all four Context claims confirmed verbatim, nothing differs** (findings below)
+- [x] run `make lint` to confirm a clean starting tree → **swiftlint --strict clean, zero findings**
+
+**Findings (Task 1 code read — the Context section is accurate, no plan changes needed)**
+
+- `closeSession` (`AppStore.swift:401`): removes the session from the tree (line 405), then calls
+  `sessionRecency.remove(sessionID)` (line 413) **before** `selectedSessionID = reselectionTarget(after: location)`
+  (line 415). Confirmed.
+- `softCloseSession` (`AppStore+PendingClose.swift:54`): removes the session from the tree (line 58) and calls
+  `reselectionTarget(after: location)` (line 77). It does **not** touch `sessionRecency`. Confirmed.
+- `softCloseSessions` (`AppStore+PendingClose.swift:93`): removes the group from the tree (line 121) and calls
+  `reselectionTarget` with the `removedBeforeActive`-adjusted index (lines 131-135). It does **not** touch
+  `sessionRecency` either. Confirmed.
+- The **only** recency prune on a soft close is `hardFinalizePendingSession` → `removeFromRecency`
+  (`AppStore+PendingClose.swift:376`), which runs at grace expiry. So the key behavioral note holds: a
+  soft-closed session stays in `sessionRecency` (undo needs it) but is gone from the tree, and since the
+  scope set is built from the tree, `top(1, in: scope)` cannot return it. This gets an explicit test in Task 4.
+- ➕ **Plan correction for Task 3.** `reselectionTarget(after:)` (`AppStore.swift:948`) force-indexes
+  `workspaces[location.workspaceIndex]` with no bounds check — it traps on a stale index. So the defensive
+  guard the plan specifies ("if the workspace index is no longer valid, fall back to `reselectionTarget`")
+  cannot call `reselectionTarget` in that branch; it would crash on exactly the input it is meant to defend
+  against. In the stale-index branch, return the first session of any remaining workspace instead (the same
+  last-resort `reselectionTarget` itself uses), which also preserves the "never nil while sessions survive"
+  criterion. The Technical Details pseudo-code below is updated to match.
+- `navigableSessions` (`AppStore.swift:791`) and `RecencyStack.top(_:in:)` (`RecencyStack.swift:32`) are exactly
+  as described — `top` already skips ids absent from `valid`.
 
 ### Task 2: Write the failing tests for MRU reselection on close (TDD)
 
@@ -211,7 +236,9 @@ fail until Task 3 lands — that is expected and is the point.
 
 ```
 closeReselectionTarget(after location: (workspaceIndex: Int, sessionIndex: Int)) -> UUID?
-    guard the workspace index is still valid, else -> reselectionTarget(after: location)
+    guard workspaces.indices.contains(location.workspaceIndex)
+      else -> first session of any remaining workspace (reselectionTarget would TRAP on the stale
+              index — it force-indexes workspaces[location.workspaceIndex]; see the Task 1 findings)
     scope = Set(workspaces[location.workspaceIndex].sessions.map(\.id))
               .intersection(Set(navigableSessions.map(\.id)))
     if let recent = sessionRecency.top(1, in: scope).first { return recent }
