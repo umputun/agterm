@@ -396,8 +396,8 @@ public final class AppStore {
     }
 
     /// Removes a session, tears down its surface, and — if it was the active
-    /// session — reselects a neighbor (next in the same workspace, else the
-    /// previous, else any remaining session, else nil).
+    /// session — reselects the most-recently-active surviving session in scope
+    /// (see `closeReselectionTarget(after:)`), falling back to the positional neighbor.
     public func closeSession(_ sessionID: UUID) {
         guard let location = location(ofSession: sessionID) else { return }
         let wasActive = selectedSessionID == sessionID
@@ -412,7 +412,7 @@ public final class AppStore {
         WatermarkStorage.removeRenderedText(sessionID: sessionID) // drop any rendered .text PNG; the session is gone
         sessionRecency.remove(sessionID)
         if wasActive {
-            selectedSessionID = reselectionTarget(after: location)
+            selectedSessionID = closeReselectionTarget(after: location)
             replaceSidebarSelection(with: selectedSessionID)
             autoUnfocusIfOutsideFocus(selectedSessionID) // the neighbor may live outside the focused workspace
             recordRecency()

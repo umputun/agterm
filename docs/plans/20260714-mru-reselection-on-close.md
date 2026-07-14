@@ -190,18 +190,26 @@ tests should go in the same new file.
 
 ### Task 3: Add the scoped-MRU reselection helper and wire the hard close
 
-- [ ] add `closeReselectionTarget(after location:)` to `AppStore.swift`, next to `reselectionTarget(after:)`:
-      build the scope as the closing session's workspace's surviving session ids ∩ `navigableSessions` ids,
-      return `sessionRecency.top(1, in: scope).first`, else fall back to `reselectionTarget(after: location)`
-      (also fall back if `location.workspaceIndex` is no longer a valid index — defensive)
-- [ ] document the helper with a doc comment stating **why** the scope is restricted (an unscoped survivor
-      could pull the user into another workspace or silently drop a focus filter) — that rationale is not
-      obvious from the code, so per the commenting guidelines it belongs there; do not restate what the code
-      already says
-- [ ] swap `closeSession` (AppStore.swift ~line 415) to call `closeReselectionTarget(after: location)`
-- [ ] leave `reselectionTarget(after:)` itself unchanged — it is now the fallback, and `removeWorkspace` /
+➕ **Plan deviation — the helper lives in a NEW file, `AppStore+CloseReselection.swift`, not inside
+`AppStore.swift`.** Added in place, it pushed `AppStore.swift` to 1016 lines and broke the 1000-line
+`file_length` limit (`make lint --strict`). Per CLAUDE.md the limit is not to be bumped to fit new code, so
+the helper sits in a small `extension AppStore` file of its own. It is `internal`, so `closeSession` and
+both soft-close paths (Task 4) reach it exactly as planned.
+
+- [x] add `closeReselectionTarget(after location:)` — in `AppStore+CloseReselection.swift` (see the deviation
+      above): scope = the closing session's workspace's surviving session ids ∩ `navigableSessions` ids,
+      return `sessionRecency.top(1, in: scope).first`, else fall back to `reselectionTarget(after: location)`;
+      a stale `location.workspaceIndex` returns the first session of any remaining workspace directly (per the
+      Task 1 finding, `reselectionTarget` would trap on it)
+- [x] document the helper with a doc comment stating **why** the scope is restricted (an unscoped survivor
+      could pull the user into another workspace or silently drop a focus filter), plus why the scope is built
+      from the tree rather than the recency stack
+- [x] swap `closeSession` (AppStore.swift line 415) to call `closeReselectionTarget(after: location)`, and
+      update its doc comment (it no longer just "reselects a neighbor")
+- [x] leave `reselectionTarget(after:)` itself unchanged — it is now the fallback, and `removeWorkspace` /
       `softRemoveWorkspace` still call it directly
-- [ ] run `swift test` — the hard-close tests from Task 2 must now pass
+- [x] run `swift test` — the 5 failing hard-close tests from Task 2 now pass; full suite **1536 tests in 63
+      suites passed**, `make lint` clean
 
 ### Task 4: Wire the two soft-close (undoable) paths
 
