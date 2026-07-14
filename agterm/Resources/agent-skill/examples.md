@@ -392,6 +392,10 @@ agtermctl tree --json | jq -r '.result.tree.workspaces[].sessions[] | select(.st
 `--pane left` (or omitting it) is the main pane. Feed a keymap command's `$AGT_PANE` straight through
 (`session status blocked --pane "$AGT_PANE"`) to tag the exact pane a shortcut fired from.
 
+The installed agent-status hook also forwards each surface's `$AGTERM_PANE_ID` as `session status --pane-id`,
+a stable per-surface token that resolves to the pane's LIVE slot and overrides a stale `--pane` after a split
+survivor is promoted into the main pane and then re-split; scripts driving `--pane` directly need not set it.
+
 ## Zoom a terminal surface by control id
 
 ```bash
