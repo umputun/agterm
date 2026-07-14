@@ -125,6 +125,82 @@ struct AppStoreCloseReselectionTests {
         #expect(store.selectedSessionID == ids[2]) // the session that shifted into the removed slot
     }
 
+    @Test func softCloseActiveSessionPicksTheRecentSurvivorLikeTheHardClose() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let first = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        _ = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        let neighbor = try #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
+        let closing = try #require(store.addSession(toWorkspace: ws.id, cwd: "/d"))
+        store.selectSession(first.id)
+        store.selectSession(closing.id)
+
+        #expect(store.softCloseSession(closing.id, grace: 60))
+        #expect(store.selectedSessionID == first.id) // the MRU survivor
+        #expect(store.selectedSessionID != neighbor.id) // not the positional neighbor
+    }
+
+    @Test func softCloseSessionsNeverPicksAMemberOfTheClosingGroup() throws {
+        // the soft-close paths deliberately leave the closing sessions in `sessionRecency` (undo needs
+        // them back), so the MRU pick must be kept off them by the TREE-derived scope alone.
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let oldest = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let survivor = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        let alsoClosing = try #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
+        let closing = try #require(store.addSession(toWorkspace: ws.id, cwd: "/d"))
+        store.selectSession(survivor.id)
+        store.selectSession(alsoClosing.id)
+        store.selectSession(closing.id)
+
+        #expect(store.softCloseSessions([alsoClosing.id, closing.id], grace: 60))
+        #expect(store.selectedSessionID == survivor.id) // the most recent survivor OUTSIDE the group
+        #expect(store.selectedSessionID != oldest.id)
+        // both closed sessions are more recent than `survivor` and still in the stack, yet unpickable
+        #expect(store.sessionRecency.items.contains(closing.id))
+        #expect(store.sessionRecency.items.contains(alsoClosing.id))
+    }
+
+    @Test func undoOfASoftCloseStillRestoresThePreviouslySelectedSession() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let other = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let closing = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        store.selectSession(other.id)
+        store.selectSession(closing.id)
+
+        #expect(store.softCloseSession(closing.id, grace: 60))
+        #expect(store.selectedSessionID == other.id)
+
+        let summary = try #require(store.pendingCloseSummary)
+        #expect(store.undoPendingClose(summary.id))
+        #expect(store.session(withID: closing.id) === closing)
+        #expect(store.selectedSessionID == closing.id) // undo reselects what was closed
+    }
+
+    @Test func graceExpiryAfterASoftCloseLeavesTheSelectionAlone() async throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let survivor = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let closing = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
+        let surface = SpySurface()
+        closing.surface = surface
+        store.selectSession(survivor.id)
+        store.selectSession(closing.id)
+
+        #expect(store.softCloseSession(closing.id, grace: 0.01))
+        #expect(store.selectedSessionID == survivor.id)
+        // poll the teardown rather than a flat sleep: the grace timer can land late under parallel load
+        for _ in 0..<200 {
+            if surface.teardownCount == 1 { break }
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+
+        #expect(surface.teardownCount == 1)
+        #expect(store.selectedSessionID == survivor.id) // finalization must not re-run reselection
+        #expect(!store.sessionRecency.items.contains(closing.id)) // finalize prunes it now
+    }
+
     @Test func closeActiveSessionNeverClearsTheSelectionWhileSessionsSurvive() throws {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")

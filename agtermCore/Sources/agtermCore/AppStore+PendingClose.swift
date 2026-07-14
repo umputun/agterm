@@ -74,7 +74,7 @@ extension AppStore {
                                   workspaceIndex: location.workspaceIndex, sessionIndex: location.sessionIndex,
                                   id: closeID)
         if wasActive {
-            selectedSessionID = reselectionTarget(after: location)
+            selectedSessionID = closeReselectionTarget(after: location)
             replaceSidebarSelection(with: selectedSessionID)
             autoUnfocusIfOutsideFocus(selectedSessionID)
             recordRecency()
@@ -131,8 +131,8 @@ extension AppStore {
                 let removedBeforeActive = closes.count {
                     $0.workspaceIndex == close.workspaceIndex && $0.sessionIndex < close.sessionIndex
                 }
-                return reselectionTarget(after: (workspaceIndex: close.workspaceIndex,
-                                                 sessionIndex: close.sessionIndex - removedBeforeActive))
+                return closeReselectionTarget(after: (workspaceIndex: close.workspaceIndex,
+                                                      sessionIndex: close.sessionIndex - removedBeforeActive))
             } ?? workspaces.first(where: { !$0.sessions.isEmpty })?.sessions.first?.id
             replaceSidebarSelection(with: selectedSessionID)
             autoUnfocusIfOutsideFocus(selectedSessionID)

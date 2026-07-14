@@ -213,18 +213,31 @@ both soft-close paths (Task 4) reach it exactly as planned.
 
 ### Task 4: Wire the two soft-close (undoable) paths
 
-- [ ] swap `softCloseSession` (AppStore+PendingClose.swift line 77) to `closeReselectionTarget(after:)`
-- [ ] swap `softCloseSessions` (AppStore+PendingClose.swift line 134) to `closeReselectionTarget(after:)`,
+➕ **One EXISTING test had to be rewritten: `softCloseSessionsAdjustsReselectionForEarlierBatchRemovals`
+(`AppStoreTests.swift:474`).** It built its four sessions with `addSession` (which auto-selects each one), so
+the last-added `/d` was the most-recently-activated survivor — under the new behavior the scoped MRU
+legitimately picks `/d`, not the positional neighbor `/c` the test asserted. This is the intended change, not
+a regression: the `removedBeforeActive` adjustment now feeds only the **fallback**. To keep that adjustment
+covered, the test now drives the fallback path through `restore(from:)` (empty scoped recency once the
+restored selection is the session being closed) and still asserts the neighbor — without the adjustment the
+stale index would pick the last session instead. The `removedBeforeActive` code itself is unchanged, verbatim.
+
+- [x] swap `softCloseSession` (AppStore+PendingClose.swift line 77) to `closeReselectionTarget(after:)`
+- [x] swap `softCloseSessions` (AppStore+PendingClose.swift line 134) to `closeReselectionTarget(after:)`,
       **preserving** the existing `removedBeforeActive` index adjustment that feeds the positional fallback
-- [ ] write tests: soft-closing the active session picks the MRU survivor, same as the hard close
-- [ ] write tests: multi-soft-close of several sessions (including the active one) picks the most-recent
+- [x] write tests: soft-closing the active session picks the MRU survivor, same as the hard close
+      (`softCloseActiveSessionPicksTheRecentSurvivorLikeTheHardClose` — the one new test that FAILED before the
+      swap, for the right reason: the positional neighbor was picked)
+- [x] write tests: multi-soft-close of several sessions (including the active one) picks the most-recent
       survivor that is NOT part of the closing group — the closed group is out of the tree, so it can never
-      be selected even though it is still in `sessionRecency`
-- [ ] write tests: **undo** of a soft close still restores the previously-selected session (the existing
+      be selected even though it is still in `sessionRecency` (`softCloseSessionsNeverPicksAMemberOfTheClosingGroup`
+      asserts both legs: the survivor is selected AND both closed ids are still in `sessionRecency.items`)
+- [x] write tests: **undo** of a soft close still restores the previously-selected session (the existing
       `restorePendingSessions` behavior must not regress)
-- [ ] write tests: grace-expiry finalization after a soft close leaves the selection alone (finalize must not
-      re-run reselection)
-- [ ] run `swift test` — all tests must pass before the next task
+- [x] write tests: grace-expiry finalization after a soft close leaves the selection alone (finalize must not
+      re-run reselection) — polls the teardown rather than a flat sleep, per the existing suite's convention
+- [x] run `swift test` — all tests must pass before the next task → **1540 tests in 63 suites passed**,
+      `make lint` clean
 
 ### Task 5: Verify acceptance criteria
 
