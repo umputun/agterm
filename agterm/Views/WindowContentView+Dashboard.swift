@@ -245,12 +245,13 @@ extension WindowContentView {
 
     /// A mouse click on a cell: flash the active frame on it (`dashboard.highlight`), then enter after a brief
     /// delay — an instant jump with no frame flash reads as confusing. Keyboard Enter has no delay (its
-    /// highlight is already visible). Re-checks the member is still current after the delay, since the
-    /// dashboard could close or reconcile a pane away in the gap.
+    /// highlight is already visible). The delayed enter only fires while this cell is STILL the highlighted
+    /// one, so a superseding click (or an arrow) on another cell wins — last-click, not first-scheduled — and
+    /// a close/reconcile in the gap (which clears or moves the highlight) cancels the pending enter.
     func clickDashboardMember(_ member: DashboardMember) {
         dashboard.highlight(member)
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.dashboardClickEnterDelay) {
-            guard dashboard.isOpen, dashboard.members.contains(member) else { return }
+            guard dashboard.isOpen, dashboard.highlighted == member else { return }
             selectDashboardMember(member)
         }
     }

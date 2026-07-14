@@ -274,8 +274,8 @@ paths:
   (see the surface-bridge note), so a click would still reach `mouseDown` and the retry loops would
   re-grab the surface.
   The full set:
-  - each cell's terminal is `.allowsHitTesting(false)`, with a transparent hit target ABOVE it for
-    click-highlight / double-click-enter (the terminal itself takes no hits);
+  - each cell's terminal is `.allowsHitTesting(false)`, with a transparent hit target ABOVE it that flashes
+    the highlight then enters that session+pane on a single click (the terminal itself takes no hits);
   - `GhosttySurfaceView.viewOnly` (threaded via `TerminalView`) makes the member surface refuse to be
     first responder (`acceptsFirstResponder = !viewOnly`) and drop hits (`hitTest` returns nil when
     `viewOnly`), so even a stray reactivation click can't focus it;
