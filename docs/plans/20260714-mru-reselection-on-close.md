@@ -157,26 +157,36 @@ and the discussion only agreed to the session-close case. Do not touch them.
 
 ### Task 2: Write the failing tests for MRU reselection on close (TDD)
 
-Tests go in `agtermCore/Tests/agtermCoreTests/AppStoreTests.swift`, using the existing fixtures. They will
-fail until Task 3 lands — that is expected and is the point.
+➕ **Plan deviation — the tests went into a NEW file, `AppStoreCloseReselectionTests.swift`, not
+`AppStoreTests.swift`.** The plan called for extending `AppStoreTests.swift`, but that file is already
+1979 lines against the HARD 2000-line test budget (`agtermCore/Tests/.swiftlint.yml`), so the ~140 new lines
+would have pushed it over and failed `make lint --strict`. Per CLAUDE.md the limit is not to be bumped to
+fit new code, so the new suite (`AppStoreCloseReselectionTests`, `@MainActor struct`) lives in its own file
+and reuses `AppStoreTestFixtures.swift` (`makeStore()`) exactly as the plan intended. Task 4's soft-close
+tests should go in the same new file.
 
-- [ ] test: the first discussion example — sessions `1 2 3`, select `1`, insert `4` **after** the current one
+- [x] test: the first discussion example — sessions `1 2 3`, select `1`, insert `4` **after** the current one
       (`1 4 2 3`) and select it, close `4` → selection is **`1`** (today it would be `2`)
-- [ ] test: the second discussion example — sessions `1 2 3`, select `1`, append `4` at the end (`1 2 3 4`)
+- [x] test: the second discussion example — sessions `1 2 3`, select `1`, append `4` at the end (`1 2 3 4`)
       and select it, close `4` → selection is **`1`** (today it would be `3`)
-- [ ] test: the MRU survivor is preferred over the positional neighbor in general (a session touched more
+- [x] test: the MRU survivor is preferred over the positional neighbor in general (a session touched more
       recently but positionally distant wins)
-- [ ] test: a more-recent MRU entry in **another workspace** is NOT picked — closing the active session falls
+- [x] test: a more-recent MRU entry in **another workspace** is NOT picked — closing the active session falls
       back to the positional neighbor within its own workspace, and `focusedWorkspaceID` is untouched
-- [ ] test: with a focus filter on (`focusedWorkspaceID` set), the pick stays inside the focused workspace
-- [ ] test: in `.flagged` sidebar mode, the pick stays within the flagged set of the closing session's
+- [x] test: with a focus filter on (`focusedWorkspaceID` set), the pick stays inside the focused workspace
+- [x] test: in `.flagged` sidebar mode, the pick stays within the flagged set of the closing session's
       workspace
-- [ ] test: an empty scoped MRU (nothing ever activated — e.g. a fresh restore, or the only recent entry was
+- [x] test: an empty scoped MRU (nothing ever activated — e.g. a fresh restore, or the only recent entry was
       the session just closed) falls back to `reselectionTarget`, reproducing today's positional pick exactly
-- [ ] test: closing the last session in the tree yields a nil selection (unchanged), but closing any session
+      (driven through `restore(from:)`, since `sessionRecency` is `private(set)` and cannot be cleared directly)
+- [x] test: closing the last session in the tree yields a nil selection (unchanged), but closing any session
       while others survive NEVER yields nil
-- [ ] run `swift test` — the new tests must fail for the right reason (wrong session selected), not compile
-      errors or crashes
+- [x] run `swift test` — the new tests must fail for the right reason (wrong session selected), not compile
+      errors or crashes → **exactly as expected: 5 of the 8 fail on a wrong-session `#expect`** (the
+      positional neighbor is picked), zero compile errors or crashes. The other 3 PASS already and are
+      no-regression guardrails: the cross-workspace, empty-recency-fallback, and never-nil cases must hold
+      both before and after Task 3. Full suite: 1536 tests, the ONLY failures are these 5 — no existing test
+      regressed. `make lint` is clean.
 
 ### Task 3: Add the scoped-MRU reselection helper and wire the hard close
 
