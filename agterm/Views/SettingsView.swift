@@ -388,9 +388,9 @@ private struct AppearanceSettingsView: View {
     }
 }
 
-/// Notifications tab: the banner / badge / attention-indicator toggles, all default-driven through
-/// `SettingsModel`. The toggles are independent — the badge count keeps tracking whether or not
-/// banners are shown.
+/// Notifications tab: the banner / badge / attention-indicator toggles plus the Dock-bounce mode picker,
+/// all default-driven through `SettingsModel`. The controls are independent — the badge count keeps
+/// tracking whether or not banners are shown, and a Dock bounce can fire whether or not banners are shown.
 private struct NotificationsSettingsView: View {
     let model: SettingsModel
 
@@ -402,6 +402,13 @@ private struct NotificationsSettingsView: View {
 
                 Toggle("Show notification badges", isOn: notificationBadgeEnabled)
                     .accessibilityIdentifier("settings-notification-badges")
+
+                Picker("Bounce Dock icon", selection: dockBounce) {
+                    Text("None").tag(DockBounce.off)
+                    Text("Once").tag(DockBounce.once)
+                    Text("Until focused").tag(DockBounce.untilFocused)
+                }
+                .accessibilityIdentifier("settings-dock-bounce")
 
                 Toggle("Show attention indicator", isOn: attentionButtonEnabled)
                     .accessibilityIdentifier("settings-attention-button")
@@ -423,6 +430,13 @@ private struct NotificationsSettingsView: View {
     private var notificationBadgeEnabled: Binding<Bool> {
         Binding(get: { model.settings.notificationBadgeEnabled ?? true },
                 set: { model.setNotificationBadgeEnabled($0 ? nil : false) })
+    }
+
+    /// Resolves nil (the default) to `.off`; selecting None maps back to nil so settings.json stays
+    /// minimal until the user picks a bounce mode. Mirrors the toolbar-mode picker binding.
+    private var dockBounce: Binding<DockBounce> {
+        Binding(get: { model.settings.effectiveDockBounce },
+                set: { model.setDockBounce($0 == .off ? nil : $0) })
     }
 
     /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json

@@ -12,6 +12,17 @@ public enum ToolbarMode: String, Codable, Sendable, CaseIterable {
     case hidden
 }
 
+/// How a delivered notification bounces the Dock icon (macOS `requestUserAttention`): `off` (no bounce),
+/// `once` (a single `.informationalRequest`), or `untilFocused` (a `.criticalRequest` that bounces until
+/// agterm becomes active). Stored raw on `AppSettings` so an unknown future value decodes tolerantly (via
+/// `effectiveDockBounce`). The default `off` case is named `off` (not `none`) to avoid the `Optional.none`
+/// collision at the `effectiveDockBounce` call site, matching the `AutoFollowAttention.off` precedent.
+public enum DockBounce: String, Codable, Sendable, CaseIterable {
+    case off
+    case once
+    case untilFocused
+}
+
 /// User-facing appearance settings, persisted independently of the workspace tree.
 ///
 /// Every field is optional: nil means "use the ghostty default", and a settings file written
@@ -172,6 +183,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// a glance). nil means the default (off). An app-level chrome flag, NOT a ghostty key — it never
     /// appears in `ghosttyConfigLines()`; it only gates whether the titlebar builds the icon.
     public var attentionButtonEnabled: Bool?
+    /// How a delivered notification bounces the Dock icon (`off`/`once`/`untilFocused`), stored as a
+    /// `DockBounce` RAW STRING so an unknown future value decodes tolerantly to the default via
+    /// `effectiveDockBounce` (the AppSettings forward-compat rule). nil means the default (`off`). An
+    /// app-level attention setting, NOT a ghostty key — it never appears in `ghosttyConfigLines()`;
+    /// `NotificationManager` reads its mirror and issues the matching `requestUserAttention`, a no-op while
+    /// agterm is the frontmost app.
+    public var dockBounce: String?
     /// Name of the system sound played when a session enters the `blocked` status (e.g. `Glass`, resolved by
     /// `NSSound(named:)`), or nil/empty for no sound (the default). A per-call `session.status --sound`
     /// overrides this. An app-level value played at the AppKit level, NOT a ghostty key — it never appears
@@ -224,6 +242,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 mouseScrollMultiplier: Double? = nil, inactivePaneMuteStrength: Int? = nil,
                 sidebarBackgroundShift: Int? = nil, restoreRunningCommand: Bool? = nil,
                 inheritGlobalGhosttyConfig: Bool? = nil, attentionButtonEnabled: Bool? = nil,
+                dockBounce: String? = nil,
                 blockedStatusSoundName: String? = nil, rightClickPaste: Bool? = nil,
                 newSessionDirectory: String? = nil, newSessionCustomDirectory: String? = nil,
                 confirmCloseSession: Bool? = nil, closeGraceUndoEnabled: Bool? = nil,
@@ -250,6 +269,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.restoreRunningCommand = restoreRunningCommand
         self.inheritGlobalGhosttyConfig = inheritGlobalGhosttyConfig
         self.attentionButtonEnabled = attentionButtonEnabled
+        self.dockBounce = dockBounce
         self.blockedStatusSoundName = blockedStatusSoundName
         self.rightClickPaste = rightClickPaste
         self.newSessionDirectory = newSessionDirectory
@@ -267,6 +287,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// read point the app target uses, so callers never touch the raw shim.
     public var effectiveToolbarMode: ToolbarMode {
         toolbarMode.flatMap(ToolbarMode.init(rawValue:)) ?? (compactToolbar == false ? .normal : .compact)
+    }
+
+    /// The resolved Dock-bounce mode: the explicit `dockBounce` when set to a KNOWN raw value, else `off`.
+    /// An unknown/nil raw value falls through to `off` the same way, so a future-written mode never fails
+    /// the read. The single read point the app target uses, so callers never touch the raw string.
+    public var effectiveDockBounce: DockBounce {
+        dockBounce.flatMap(DockBounce.init(rawValue:)) ?? .off
     }
 
     /// The working directory a new session should open in, resolving the `newSessionDirectory` mode

@@ -16,7 +16,7 @@ paths:
   NO version field — optionality is the forward-compat) + `SettingsStore` (JSON at `<stateDir>/settings.json`,
   `AGTERM_STATE_DIR`-isolated, mirrors `PersistenceStore`).
   Fields: `fontFamily`/`fontSize`/`theme`/`darkTheme`/`followSystemAppearance` + `backgroundOpacity` (0...1) / `backgroundBlur` (CGS radius)
-  + `notificationsEnabled` / `toolbarMode` / `notificationBadgeEnabled` / `attentionButtonEnabled`
+  + `notificationsEnabled` / `toolbarMode` / `notificationBadgeEnabled` / `attentionButtonEnabled` / `dockBounce`
   + the agent-status glyph colors `activeStatusColorHex`/`blockedStatusColorHex`/`completedStatusColorHex`
   (nil defaults: `notificationsEnabled`/`notificationBadgeEnabled` = on,
   `toolbarMode` = the three-state titlebar chrome `ToolbarMode { normal, compact, hidden }`,
@@ -29,7 +29,7 @@ paths:
   `compactToolbar: Bool?` is RETAINED only as a legacy decode shim (the old two-state key: `false` = normal,
   nil/true = compact) so pre-existing `settings.json` still opens right — writing a mode nils it, so it
   evaporates on the next save.
-  `attentionButtonEnabled` = off, the `*ColorHex` = default tint, active `#DBD9E6` + blocked/completed
+  `attentionButtonEnabled` = off, `dockBounce` = off, the `*ColorHex` = default tint, active `#DBD9E6` + blocked/completed
   system orange/green; NOT ghostty keys) + `mouseScrollMultiplier` (ghostty `mouse-scroll-multiplier`)
   + `inactivePaneMuteStrength` (0...10 inactive-split-pane text mute, nil = default 5,
   NOT a ghostty key) + `sidebarBackgroundShift` (0...10 sidebar lighter/darker tint relative to the terminal,
@@ -160,7 +160,7 @@ paths:
   back to nil, matching the terminal font-size stepper's style) + the inactive-pane-mute slider.
   The formerly-separate **Panes** section was folded into **Window** so the tab still fits 480×590 without
   scrolling after adding the font-size stepper).
-  **Notifications** (a **Notifications** section with the banner / badge / attention-indicator toggles).
+  **Notifications** (a **Notifications** section with the banner / badge / attention-indicator toggles plus the Dock-bounce mode picker).
   **Agent Status** (a **Colors** section with the three glyph color pickers, a **Sound** section with
   the blocked-sound picker, an **Auto-follow** section with the idle-timeout Picker
   (Disabled/5s/10s/30s/60s/5m) + the "Don't auto-follow away from a running session" Toggle, and a trailing
@@ -356,6 +356,25 @@ paths:
   `session.select`; only `theme.set`/`config.reload` touch settings over the socket).
   See the Notifications section for the bell's three states and the Menu/actions section for the `.attention`
   palette it opens.
+- **`dockBounce` (bounce the Dock icon on a background notification, opt-in, Notifications tab).**
+  `AppSettings.dockBounce: String?` — a `DockBounce` RAW STRING (`off`/`once`/`untilFocused`, nil = `off`,
+  the default-off precedent like `attentionButtonEnabled`, NOT `notificationBadgeEnabled`'s
+  default-ON; the case is named `off` not `none` to dodge the `Optional.none` collision, like
+  `AutoFollowAttention.off`), resolved through `effectiveDockBounce` (an unknown/future value degrades to
+  `off`, the tolerant-decode rule shared with `toolbarMode`/`newSessionDirectory`).
+  NOT a ghostty key (`writeGhosttyConfig` no-ops, no surface reload).
+  Unlike the chrome-mirror settings it needs NO `.agtermAppearanceChanged` re-render: `SettingsModel.setDockBounce`
+  saves + `applyDockBounce` pushes `settings.effectiveDockBounce` into the `NotificationManager.dockBounce`
+  mirror (alongside `applyNotificationsEnabled`, the OTHER `NotificationManager` mirror), read on the NEXT
+  notification rather than rendered continuously.
+  `NotificationManager.bounceDock()` switches the mode to the matching `requestUserAttention` (`once` →
+  `.informationalRequest`, `untilFocused` → `.criticalRequest`, both a no-op while frontmost) after the badge
+  bump in both the OSC `notify` and the control `send` paths — see the Notifications rule for the full behavior.
+  The Notifications tab's `Picker("Bounce Dock icon")` mirrors the toolbar-mode picker binding (get
+  `effectiveDockBounce`, set `$0 == .off ? nil : $0` so None maps back to nil and keeps `settings.json` minimal).
+  GUI-only and keep-in-sync EXEMPT (only `theme.set`/`config.reload` touch settings over the socket).
+  Default + tolerant-decode covered host-free in `AppSettingsTests`; the bounce itself is app-target
+  (settings-picker persistence in `SettingsUITests`, the animation verified by eye — not accessibility-observable).
 - **`confirmCloseSession` (confirm before closing a session, opt-in, General tab).**
   `AppSettings.confirmCloseSession: Bool?` (nil = OFF, the default-off precedent like `restoreRunningCommand`)
   gates a native `NSAlert` confirm before a GUI session close.

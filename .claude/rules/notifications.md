@@ -91,6 +91,31 @@ paths:
   toggle flip.
   Keep-in-sync EXEMPT — pure derived chrome (`unseenCount` is already driven by `notify` / `session.select`),
   nothing new to drive over the socket.
+- **Dock bounce (opt-in, off by default) — a three-mode picker.**
+  `AppSettings.dockBounce` (a `DockBounce` raw string `off`/`once`/`untilFocused`, nil = `off`, resolved
+  via `effectiveDockBounce`) chooses whether a delivered notification ALSO bounces the Dock icon:
+  `off` no bounce, `once` a single `NSApp.requestUserAttention(.informationalRequest)`, `untilFocused` a
+  `.criticalRequest` that bounces until agterm becomes active.
+  The default case is named `off` (not `none`) to avoid the `Optional.none` collision at the
+  `effectiveDockBounce` call site, matching the `AutoFollowAttention.off` precedent.
+  `.criticalRequest` is auto-cancelled by macOS the moment agterm activates, so `untilFocused` needs NO
+  `cancelUserAttentionRequest` bookkeeping — that free "until focused" stop, plus the one-shot `once`, is
+  why the picker exposes both modes instead of hard-coding one.
+  `NotificationManager.bounceDock()` switches on the mode and fires right after the `unseenCount` bump in
+  BOTH the OSC path (`notify`) and the control path (`send` / `agtermctl notify`), independent of
+  `bannersEnabled` — like the badge, a bounce can fire whether or not banners show.
+  It needs NO explicit app-active gate: BOTH request types are a no-op while agterm is the frontmost app,
+  so the OSC path's `shouldDeliver` suppression plus that no-op mean a bounce only ever fires for a
+  BACKGROUND notification — exactly "bounce when a notification arrives for a session you're not looking at".
+  The `NotificationManager.dockBounce` mirror of `AppSettings.effectiveDockBounce` is pushed by
+  `SettingsModel.applyDockBounce` alongside `applyNotificationsEnabled` (the other `NotificationManager`
+  mirror) — NOT a ghostty key and NOT a chrome mirror, so no `.agtermAppearanceChanged` re-render (nothing
+  renders it continuously; it is read on the next notification).
+  GUI-only and keep-in-sync EXEMPT (a settings picker; only `theme.set`/`config.reload` touch settings over
+  the socket).
+  The bounce animation is not accessibility-observable, so it is verified by eye like the cursor-focus /
+  disclosure-triangle cases; only the `AppSettings` round-trip / tolerant-decode and the settings-picker
+  persistence (`SettingsUITests.testDockBouncePickerPersists`) are tested.
 - **Agent-status glyph.**
   Mirrors the `notify-badge` cell pattern (see the Control API `session.status`).
   `StatusIconView` (an `NSImageView` sibling of `BadgeView` in `WorkspaceSidebar`) draws the row's tinted
