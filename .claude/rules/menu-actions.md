@@ -225,10 +225,18 @@ paths:
   just closed) falls back to the positional `reselectionTarget(after:)`, which is UNCHANGED — so the worst case is
   the old neighbor behavior (scoped to the flagged set in `.flagged` mode, see the next paragraph), never an empty
   selection.
-  In `.flagged` mode that fallback is scoped too — it takes the first IN-SCOPE session in tree order, because
-  `reselectionTarget` walks the tree positionally and would otherwise land on an unflagged sibling the flagged
-  sidebar has no row for (`syncSelection` would then `deselectAll` and show nothing selected).
-  Pinned by `closeActiveSessionInFlaggedModeWithAnEmptyScopedRecencyStaysWithinTheFlaggedSet`.
+  In `.flagged` mode that fallback is scoped too — `nearestInScopeTarget` repeats `reselectionTarget`'s walk
+  restricted to the scope, because `reselectionTarget` walks the tree positionally and would otherwise land on an
+  unflagged sibling the flagged sidebar has no row for (`syncSelection` would then `deselectAll` and show nothing
+  selected).
+  It stays POSITIONAL within the filter (the in-scope session that shifted into the removed slot, else the one
+  before it, else — only once the closing workspace holds nothing in scope, i.e. the scope has already widened
+  across workspaces — the first in-scope session in tree order).
+  Taking merely "the first flagged row" instead would throw away the locality the fallback exists to preserve and
+  break the "worst case is the old neighbor behavior" promise above, jumping to the TOP of the flagged list when a
+  mid-list session closes.
+  Pinned by `closeActiveSessionInFlaggedModeWithAnEmptyScopedRecencyStaysWithinTheFlaggedSet` and
+  `closeActiveSessionInFlaggedModeWithAnEmptyScopedRecencyPicksTheNEARESTFlaggedSurvivor`.
   The ONE case the flagged scoping cannot hold is closing the LAST flagged session anywhere: the scope is then
   empty, the flagged sidebar renders no rows at all, and the positional pick stands — selecting nothing would
   leave no terminal.

@@ -205,6 +205,23 @@ struct AppStoreCloseReselectionTests {
         #expect(store.flaggedSessions.map(\.id).contains(try #require(store.selectedSessionID)))
     }
 
+    @Test func closeActiveSessionInFlaggedModeWithAnEmptyScopedRecencyPicksTheNEARESTFlaggedSurvivor() throws {
+        // the filtered fallback is positional WITHIN the flagged set, not "the first flagged row": closing a
+        // session in the middle of the flagged list must land on the flagged row that shifted into its slot,
+        // the same locality the unfiltered positional fallback has.
+        let store = makeStore()
+        let wsID = UUID()
+        let ids = [UUID(), UUID(), UUID()]
+        let sessions = ids.map { SessionSnapshot(id: $0, customName: nil, cwd: "/\($0)", flagged: true) }
+        store.restore(from: Snapshot(selectedSessionID: ids[1],
+                                     workspaces: [WorkspaceSnapshot(id: wsID, name: "work", sessions: sessions)],
+                                     sidebarMode: .flagged))
+        #expect(store.sessionRecency.items == [ids[1]]) // only the restored selection
+
+        store.closeSession(ids[1])
+        #expect(store.selectedSessionID == ids[2]) // the neighbor that shifted up, not the top of the list
+    }
+
     @Test func closeTheLastFlaggedSessionFallsThroughToThePositionalTarget() throws {
         // the flagged scope is empty once the only flagged session is the one closing, so the filtered
         // fallback has nothing to return: the positional pick stands rather than selecting nothing (the
