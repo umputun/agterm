@@ -241,15 +241,27 @@ stale index would pick the last session instead. The `removedBeforeActive` code 
 
 ### Task 5: Verify acceptance criteria
 
-- [ ] verify both examples from the discussion body produce session `1`, exactly as the maintainer expects
-- [ ] verify no call site can produce a nil selection while sessions survive (grep every `reselectionTarget`
-      and `closeReselectionTarget` caller)
-- [ ] verify `removeWorkspace` / `softRemoveWorkspace` are untouched and still positional
-- [ ] run the full `swift test` suite — must pass
-- [ ] build the app (`make build`) — must succeed
-- [ ] run `make lint` (`swiftlint --strict`, zero findings) — must pass
-- [ ] run the existing XCUITest suites that close sessions to confirm no regression in the e2e selection
-      assertions
+- [x] verify both examples from the discussion body produce session `1`, exactly as the maintainer expects —
+      covered by the two named unit tests `closeActiveSessionInsertedAfterCurrentReturnsToTheSessionItCameFrom`
+      and `closeActiveSessionAppendedAtTheEndReturnsToTheSessionItCameFrom`, both green
+- [x] verify no call site can produce a nil selection while sessions survive (grep every `reselectionTarget`
+      and `closeReselectionTarget` caller) — exactly three callers of `closeReselectionTarget` (`closeSession`,
+      `softCloseSession`, `softCloseSessions`); every branch of the helper returns a live tree id while any
+      session survives (MRU hit → an id from the tree scope; stale index → first session of any workspace;
+      otherwise `reselectionTarget`, which is nil only when no session remains anywhere). Guarded by
+      `closeActiveSessionNeverClearsTheSelectionWhileSessionsSurvive`
+- [x] verify `removeWorkspace` / `softRemoveWorkspace` are untouched and still positional — neither ever
+      called `reselectionTarget`; both keep their own inline positional pick (`AppStore.swift:450-456`,
+      `AppStore+PendingClose.swift:165-171`), unmodified by this branch
+- [x] run the full `swift test` suite — must pass → **1540 tests in 63 suites passed**
+- [x] build the app (`make build`) — must succeed → **BUILD SUCCEEDED**
+- [x] run `make lint` (`swiftlint --strict`, zero findings) — must pass → **clean**
+- [x] run the existing XCUITest suites that close sessions to confirm no regression in the e2e selection
+      assertions — ran the five suites that exercise `session.close`/Close Session/undo-close
+      (`ControlAPIUITests`, `NewSessionDirectoryUITests`, `DashboardUITests`, `SplitUITests`,
+      `SidebarUITests`). All close/selection assertions passed. ⚠️ One unrelated flake:
+      `SidebarUITests.testDragSessionToWorkspace` failed once (a drag test, no close path involved) and
+      **passes on re-run in isolation** — not a regression from this change.
 
 ### Task 6: [Final] Update documentation
 
