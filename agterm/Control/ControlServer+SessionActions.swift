@@ -463,11 +463,16 @@ extension ControlServer: ControlActions {
             return ControlResponse(ok: false, error: "unknown sound: \(sound) (use 'default', 'beep', or one of: \(hint))")
         }
         return resolver.resolveSession(target, window: window) { store, id in
+            let session = store.session(withID: id)
             // capture the status BEFORE mutating so the Settings default plays only on a real transition.
-            let wasBlocked = store.session(withID: id)?.agentIndicator.status == .blocked
+            let wasBlocked = session?.agentIndicator.status == .blocked
+            // a `--pane-id` that resolves against the session's LIVE surfaces overrides the stale role
+            // `--pane`, so a status set from a promoted-then-re-split pane lands on the pane's CURRENT slot
+            // (#199); an absent/unknown token falls back to the baked `--pane` (the pre-token behavior).
+            let resolvedPane = update.paneID.flatMap { session?.paneRole(forToken: $0) } ?? update.pane
             store.setAgentIndicator(AgentIndicator(status: update.status, blink: update.blink ?? false,
                                                    autoReset: update.autoReset ?? false,
-                                                   color: update.color, statusPane: update.pane), forSession: id)
+                                                   color: update.color, statusPane: resolvedPane), forSession: id)
             // explicit per-call sound wins on any status; the Settings default plays only when a session
             // newly enters `blocked`, not on a repeated `blocked` set.
             let blockedDefault = wasBlocked ? nil : self.settingsModel.settings.blockedStatusSoundName

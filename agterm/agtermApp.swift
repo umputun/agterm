@@ -488,10 +488,13 @@ struct agtermApp: App {
                 workspaceID = workspace.id
             }
         }
+        // a session-owned pane (main/split/scratch) gets a fresh stable token baked as AGTERM_PANE_ID so the
+        // agent-status hook can forward it as --pane-id and the status handler resolves the surface's LIVE
+        // slot rather than the baked role (#199); the overlay (pane == nil) needs none.
         return SurfaceEnvironment.session(sessionID: session.id, windowID: windowID,
                                           workspaceID: workspaceID, socketPath: controlServer.resolvedSocketPath,
                                           programVersion: Self.terminalProgramVersion,
-                                          pane: pane)
+                                          pane: pane, paneToken: pane == nil ? nil : UUID().uuidString)
     }
 
     /// The environment a window's quick terminal exposes — scratch, not in the tree, so its `AGTERM_*`

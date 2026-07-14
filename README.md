@@ -308,7 +308,7 @@ agtermctl tree --window "$w"                              # the tree of window $
 agtermctl session new --window "$w" --cwd ~/src/agterm       # open a session in window $w
 ```
 
-Inside a session's shell, `agterm` injects environment variables a script can read: `AGTERM_ENABLED=1`, `AGTERM_WINDOW_ID`, `AGTERM_WORKSPACE_ID`, `AGTERM_SESSION_ID`, `AGTERM_SOCKET` (the live control-socket path), and `AGTERM_PANE` (which pane this shell runs in — `left` for the main pane, `right` for the split, or `scratch`; unset in an overlay). So a script running in a session can drive its own window without hard-coding ids:
+Inside a session's shell, `agterm` injects environment variables a script can read: `AGTERM_ENABLED=1`, `AGTERM_WINDOW_ID`, `AGTERM_WORKSPACE_ID`, `AGTERM_SESSION_ID`, `AGTERM_SOCKET` (the live control-socket path), `AGTERM_PANE` (which pane this shell runs in — `left` for the main pane, `right` for the split, or `scratch`; unset in an overlay), and `AGTERM_PANE_ID` (a stable per-surface token the agent-status hook forwards as `session status --pane-id`, so a status from a pane whose role went stale — a split survivor promoted into the main pane, then re-split — still resolves to the pane's current slot). So a script running in a session can drive its own window without hard-coding ids:
 
 ```sh
 agtermctl session new --window "$AGTERM_WINDOW_ID" --cwd .   # open a sibling session in this window

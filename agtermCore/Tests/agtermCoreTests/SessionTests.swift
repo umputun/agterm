@@ -417,9 +417,39 @@ struct SessionTests {
         session.overlayActive = false
         #expect(session.fullOverlayActive == false)
     }
+
+    @Test func paneRoleResolvesTokenToItsCurrentSlot() {
+        let session = Session(initialCwd: "/repo")
+        session.surface = FakeSurface(paneToken: "main-tok")
+        session.splitSurface = FakeSurface(paneToken: "split-tok")
+        session.scratchSurface = FakeSurface(paneToken: "scratch-tok")
+
+        #expect(session.paneRole(forToken: "main-tok") == .left)
+        #expect(session.paneRole(forToken: "split-tok") == .right)
+        #expect(session.paneRole(forToken: "scratch-tok") == .scratch)
+        // an empty or unknown token never matches — the caller falls back to the baked --pane role.
+        #expect(session.paneRole(forToken: "") == nil)
+        #expect(session.paneRole(forToken: "no-such-tok") == nil)
+    }
+
+    @Test func paneRoleFollowsAPromotedSurvivorAndReSplit() {
+        // #199: a split survivor (baked `right`, token `agent-tok`) is promoted into the MAIN slot, then a
+        // fresh helper (also baked `right`, token `helper-tok`) opens as the new split. Both shells were
+        // baked with the SAME stale `right` role, so only the stable token disambiguates them: the survivor
+        // now resolves to the main slot (.left), the helper to the split slot (.right).
+        let session = Session(initialCwd: "/repo")
+        let survivor = FakeSurface(paneToken: "agent-tok")
+        session.surface = survivor
+        session.splitSurface = FakeSurface(paneToken: "helper-tok")
+
+        #expect(session.paneRole(forToken: "agent-tok") == .left)
+        #expect(session.paneRole(forToken: "helper-tok") == .right)
+    }
 }
 
 private final class FakeSurface: TerminalSurface {
+    var paneToken: String
+    init(paneToken: String = "") { self.paneToken = paneToken }
     func teardown() {}
     func promoteToPrimaryPane() {}
 }

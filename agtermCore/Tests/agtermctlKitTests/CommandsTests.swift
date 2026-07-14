@@ -490,6 +490,18 @@ struct CommandsTests {
         #expect(req.args?.pane == nil)
     }
 
+    @Test func sessionStatusWithPaneID() throws {
+        let expected = ControlRequest(cmd: .sessionStatus, target: "s1",
+                                      args: ControlArgs(pane: "right", paneID: "agent-tok", status: "blocked"))
+        #expect(try request(["session", "status", "blocked", "--pane", "right",
+                             "--pane-id", "agent-tok", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionStatusWithoutPaneIDOmitsIt() throws {
+        let req = try request(["session", "status", "blocked"])
+        #expect(req.args?.paneID == nil)
+    }
+
     @Test func sessionStatusRejectsBadPane() {
         // `other` is a session.focus mode, not a status pane — status accepts left|right|scratch only.
         #expect(validationMessage(["session", "status", "blocked", "--pane", "other"]) == "--pane must be left, right, or scratch")

@@ -195,6 +195,20 @@ struct ControlProtocolTests {
         #expect(decoded.args?.color == nil)
     }
 
+    @Test func sessionStatusRoundTripsWithPaneID() throws {
+        let request = ControlRequest(cmd: .sessionStatus, target: "9f3c",
+                                     args: ControlArgs(paneID: "surface-token-abc", status: "blocked"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.paneID == "surface-token-abc")
+    }
+
+    @Test func sessionStatusOmitsPaneIDWhenNil() throws {
+        let request = ControlRequest(cmd: .sessionStatus, target: "9f3c", args: ControlArgs(status: "active"))
+        let decoded = try roundTrip(request)
+        #expect(decoded.args?.paneID == nil)
+    }
+
     @Test func sessionStatusDecodesSound() throws {
         let json = #"{"cmd":"session.status","args":{"status":"blocked","sound":"default"}}"#
         let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8))

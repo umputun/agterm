@@ -127,6 +127,12 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// pre-pane behavior), and which pane set `session.status` (`left`|`right`|`scratch`; omitted =
     /// `left`/main, parsed to `StatusPane`).
     public var pane: String?
+    /// A surface's STABLE spawn token for `session.status --pane-id` (the shell's baked `AGTERM_PANE_ID`,
+    /// forwarded by the agent-status hook). When it resolves against the session's live surfaces it
+    /// OVERRIDES the stale role `pane`, so a status set from a promoted-then-re-split pane lands on the
+    /// pane's CURRENT slot; an empty/unknown token falls back to `pane`. Opaque — validated only by whether
+    /// it resolves. See `Session.paneRole(forToken:)` and the #199 fix.
+    public var paneID: String?
     /// Absolute left-pane split fraction (0...1) for `session.resize`, clamped server-side to
     /// `AppStore.splitRatioMin...splitRatioMax`. Mutually exclusive with `ratioDelta`.
     public var ratio: Double?
@@ -218,7 +224,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 createWorkspace: Bool? = nil, text: String? = nil, select: Bool? = nil, mode: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
                 follow: Bool? = nil, window: String? = nil,
-                pane: String? = nil, to: String? = nil, after: String? = nil, before: String? = nil,
+                pane: String? = nil, paneID: String? = nil, to: String? = nil,
+                after: String? = nil, before: String? = nil,
                 title: String? = nil, body: String? = nil,
                 width: Int? = nil, height: Int? = nil, x: Int? = nil, y: Int? = nil, display: Int? = nil,
                 status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil, sound: String? = nil,
@@ -243,6 +250,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.follow = follow
         self.window = window
         self.pane = pane
+        self.paneID = paneID
         self.to = to
         self.after = after
         self.before = before
