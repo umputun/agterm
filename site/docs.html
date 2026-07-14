@@ -756,7 +756,9 @@
               (type to filter, Enter to run, Esc to dismiss) and a Ctrl-Tab MRU switcher cover the rest; a title-bar clock button
               opens the recent-session list with the mouse. That same recently-used history decides where you land when you close
               the session you are in — agterm returns you to the session you were most recently working in, not to whichever row
-              happens to sit next to the one that closed.
+              happens to sit next to the one that closed. The pick stays inside the closing session's workspace, and in the flagged
+              view stays within the flagged set, widening beyond the workspace only when the close leaves nothing there to return
+              to; if no recent session qualifies, it falls back to the adjacent one.
             </p>
             <div
               style="

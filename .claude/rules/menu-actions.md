@@ -223,7 +223,8 @@ paths:
   `closeTheFocusedWorkspacesLastSessionPicksTheRecentSurvivorElsewhere`.
   Only an empty MRU after that (a fresh restore before anything was activated, or the only recent entry was the one
   just closed) falls back to the positional `reselectionTarget(after:)`, which is UNCHANGED — so the worst case is
-  exactly the old neighbor behavior, never an empty selection.
+  the old neighbor behavior (scoped to the flagged set in `.flagged` mode, see the next paragraph), never an empty
+  selection.
   In `.flagged` mode that fallback is scoped too — it takes the first IN-SCOPE session in tree order, because
   `reselectionTarget` walks the tree positionally and would otherwise land on an unflagged sibling the flagged
   sidebar has no row for (`syncSelection` would then `deselectAll` and show nothing selected).

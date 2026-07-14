@@ -414,7 +414,7 @@ public final class AppStore {
         if wasActive {
             selectedSessionID = closeReselectionTarget(after: location)
             replaceSidebarSelection(with: selectedSessionID)
-            autoUnfocusIfOutsideFocus(selectedSessionID) // the neighbor may live outside the focused workspace
+            autoUnfocusIfOutsideFocus(selectedSessionID) // the reselected session may live outside the focused workspace
             recordRecency()
         } else {
             pruneSidebarSelection()
