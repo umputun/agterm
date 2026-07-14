@@ -758,7 +758,9 @@
               the session you are in — agterm returns you to the session you were most recently working in, not to whichever row
               happens to sit next to the one that closed. The pick stays inside the closing session's workspace, and in the flagged
               view stays within the flagged set, widening beyond the workspace only when the close leaves nothing there to return
-              to; if no recent session qualifies, it falls back to the adjacent one.
+              to; if no recent session qualifies, it falls back to the adjacent row in that workspace — to the adjacent flagged row
+              in the flagged view, unless the close took the last flagged session, where the plain neighbor stands — and, when the
+              closed session was the last one in its workspace, to the first session of another workspace.
             </p>
             <div
               style="

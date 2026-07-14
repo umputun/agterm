@@ -229,14 +229,19 @@ paths:
   restricted to the scope, because `reselectionTarget` walks the tree positionally and would otherwise land on an
   unflagged sibling the flagged sidebar has no row for (`syncSelection` would then `deselectAll` and show nothing
   selected).
-  It stays POSITIONAL within the filter (the in-scope session that shifted into the removed slot, else the one
-  before it, else — only once the closing workspace holds nothing in scope, i.e. the scope has already widened
-  across workspaces — the first in-scope session in tree order).
+  It stays POSITIONAL within the filter, and the walk runs over the tree FLATTENED in sidebar order: the in-scope
+  session that shifted into the removed slot, else the nearest in-scope one before it.
+  The walk spans workspaces because the scope can — once the closing workspace holds nothing in scope the scope has
+  widened to the whole flagged set, which the flagged sidebar renders as ONE flat cross-workspace list, so the
+  adjacent row there is the neighboring FLAGGED row even when it lives in another workspace.
+  (While the scope is still same-workspace it holds only that workspace's ids, so the flat walk collapses to the
+  in-workspace one.)
   Taking merely "the first flagged row" instead would throw away the locality the fallback exists to preserve and
   break the "worst case is the old neighbor behavior" promise above, jumping to the TOP of the flagged list when a
   mid-list session closes.
-  Pinned by `closeActiveSessionInFlaggedModeWithAnEmptyScopedRecencyStaysWithinTheFlaggedSet` and
-  `closeActiveSessionInFlaggedModeWithAnEmptyScopedRecencyPicksTheNEARESTFlaggedSurvivor`.
+  Pinned by `closeActiveSessionInFlaggedModeWithAnEmptyScopedRecencyStaysWithinTheFlaggedSet`,
+  `closeActiveSessionInFlaggedModeWithAnEmptyScopedRecencyPicksTheNEARESTFlaggedSurvivor`, and
+  `closeTheWorkspacesLastFlaggedSessionWithAnEmptyRecencyPicksTheADJACENTFlaggedRow`.
   The ONE case the flagged scoping cannot hold is closing the LAST flagged session anywhere: the scope is then
   empty, the flagged sidebar renders no rows at all, and the positional pick stands — selecting nothing would
   leave no terminal.

@@ -82,8 +82,11 @@ and the discussion only agreed to the session-close case. Do not touch them.
 - The bundled agent skill (`agterm/Resources/agent-skill/`) documents commands/args/returns and the
   window/workspace/session model, none of which change. No update needed.
 - `site/docs.html` / `site/commands.html` / `README.md` do not document close-reselection behavior (verified:
-  no mention of the positional neighbor rule anywhere user-facing), so no website change. The behavior IS
-  described in `.claude/rules/menu-actions.md`, which does need updating.
+  no mention of the positional neighbor rule anywhere user-facing), so no website change was planned. The
+  behavior IS described in `.claude/rules/menu-actions.md`, which does need updating. **As shipped, this
+  changed**: review asked for a user-facing sentence, so `README.md` and its `site/docs.html` mirror each
+  gained a short note on the new close-reselection rule; `site/commands.html` stays untouched (no command
+  changed).
 - `CHANGELOG.md` is release-only — **do not touch it** in this PR.
 
 ## Development Approach
@@ -145,7 +148,10 @@ and the discussion only agreed to the session-close case. Do not touch them.
   (`AppStore+PendingClose.swift:376`), which runs at grace expiry. So the key behavioral note holds: a
   soft-closed session stays in `sessionRecency` (undo needs it) but is gone from the tree, and since the
   scope set is built from the tree, `top(1, in: scope)` cannot return it. This gets an explicit test in Task 4.
-- ➕ **Plan correction for Task 3.** `reselectionTarget(after:)` (`AppStore.swift:948`) force-indexes
+- ➕ **Plan correction for Task 3 — later SUPERSEDED, the shipped helper has no stale-index branch at all
+  (see the Task 3 note and "Deviations from the planned shape"): no caller removes a workspace before
+  reselecting, so the defensive guard this bullet proposed was never needed.** `reselectionTarget(after:)`
+  (`AppStore.swift:948`) force-indexes
   `workspaces[location.workspaceIndex]` with no bounds check — it traps on a stale index. So the defensive
   guard the plan specifies ("if the workspace index is no longer valid, fall back to `reselectionTarget`")
   cannot call `reselectionTarget` in that branch; it would crash on exactly the input it is meant to defend
@@ -197,17 +203,28 @@ the helper sits in a small `extension AppStore` file of its own. It is `internal
 both soft-close paths (Task 4) reach it exactly as planned.
 
 - [x] add `closeReselectionTarget(after location:)` — in `AppStore+CloseReselection.swift` (see the deviation
-      above): scope = the closing session's workspace's surviving session ids ∩ `navigableSessions` ids,
-      return `sessionRecency.top(1, in: scope).first`, else fall back to `reselectionTarget(after: location)`;
-      a stale `location.workspaceIndex` returns the first session of any remaining workspace directly (per the
-      Task 1 finding, `reselectionTarget` would trap on it)
+      above). ⚠️ **Shipped differently from this bullet's original wording in three ways** (all four points are
+      spelled out under "Deviations from the planned shape"; the code's doc comment and
+      `.claude/rules/menu-actions.md` are the authority):
+      (a) the scope is the closing workspace's surviving ids ∩ the FLAGGED set in `.flagged` mode only — NOT
+      ∩ `navigableSessions`, since that folds the FOCUS filter in and breaks two reachable states;
+      (b) when the close leaves that workspace with nothing in scope the workspace term is DROPPED and the
+      scope widens, rather than falling straight to the positional pick; in `.flagged` mode the fallback is
+      itself scoped-and-positional (`nearestInScopeTarget`), with the unfiltered `reselectionTarget(after:)`
+      standing only once the scope is empty (the last flagged session anywhere was closed);
+      (c) there is NO stale-index branch — `reselectionTarget` force-indexes `workspaces[location.workspaceIndex]`
+      with no guard of its own and no caller removes a workspace before reselecting, so the helper adds no new
+      trap risk and the Task 1 "plan correction" turned out to be unnecessary
 - [x] document the helper with a doc comment stating **why** the scope is restricted (an unscoped survivor
-      could pull the user into another workspace or silently drop a focus filter), plus why the scope is built
-      from the tree rather than the recency stack
+      could pull the user into another workspace), plus why the scope is built from the tree rather than the
+      recency stack. ⚠️ **The "silently drop a focus filter" half of this bullet is SUPERSEDED**: as shipped,
+      the focus filter deliberately does NOT scope the pick, and the doc comment says so explicitly — see
+      deviation (a) above and "Deviations from the planned shape"
 - [x] swap `closeSession` (AppStore.swift line 415) to call `closeReselectionTarget(after: location)`, and
       update its doc comment (it no longer just "reselects a neighbor")
-- [x] leave `reselectionTarget(after:)` itself unchanged — it is now the fallback, and `removeWorkspace` /
-      `softRemoveWorkspace` still call it directly
+- [x] leave `reselectionTarget(after:)` itself unchanged — it is now the fallback, and its ONLY caller (Task 5
+      verified `removeWorkspace` / `softRemoveWorkspace` never called it; both keep their own inline positional
+      pick, untouched by this branch)
 - [x] run `swift test` — the 5 failing hard-close tests from Task 2 now pass; full suite **1536 tests in 63
       suites passed**, `make lint` clean
 
@@ -246,8 +263,9 @@ stale index would pick the last session instead. The `removedBeforeActive` code 
       and `closeActiveSessionAppendedAtTheEndReturnsToTheSessionItCameFrom`, both green
 - [x] verify no call site can produce a nil selection while sessions survive (grep every `reselectionTarget`
       and `closeReselectionTarget` caller) — exactly three callers of `closeReselectionTarget` (`closeSession`,
-      `softCloseSession`, `softCloseSessions`); every branch of the helper returns a live tree id while any
-      session survives (MRU hit → an id from the tree scope; stale index → first session of any workspace;
+      `softCloseSession`, `softCloseSessions`), and `closeReselectionTarget` is in turn the ONLY caller of
+      `reselectionTarget`; every branch of the helper returns a live tree id while any session survives (MRU
+      hit → an id from the tree scope; `.flagged` fallback → an in-scope id from `nearestInScopeTarget`;
       otherwise `reselectionTarget`, which is nil only when no session remains anywhere). Guarded by
       `closeActiveSessionNeverClearsTheSelectionWhileSessionsSurvive`
 - [x] verify `removeWorkspace` / `softRemoveWorkspace` are untouched and still positional — neither ever
@@ -267,18 +285,21 @@ stale index would pick the last session instead. The `removedBeforeActive` code 
 
 - [x] update `.claude/rules/menu-actions.md`: added a dedicated bullet right after `Close Session` recording
       that closing the ACTIVE session now returns to the most-recently-active surviving session via
-      `closeReselectionTarget(after:)` (scoped to the closing session's own workspace ∩ `navigableSessions`,
-      so the focus/flagged filter is preserved), why the scope set is built from the tree rather than the
-      recency stack (soft close must NOT prune `sessionRecency` — undo needs the entry), and that the
-      positional `reselectionTarget` stays as the fallback and as the direct pick for
-      `removeWorkspace`/`softRemoveWorkspace`. Semantic line breaks throughout
-- [x] confirm — and state in the PR — that no control-API, agent-skill, or website change is owed: re-verified
+      `closeReselectionTarget(after:)` (scoped to the closing session's own workspace, further ∩ the FLAGGED
+      set in `.flagged` sidebar mode only — the focus filter deliberately does not scope it; the workspace
+      term is dropped when the close leaves that workspace with nothing in scope), why the scope set is built
+      from the tree rather than the recency stack (soft close must NOT prune `sessionRecency` — undo needs the
+      entry), and that the positional `reselectionTarget` stays as the fallback (its only caller is now the
+      helper — `removeWorkspace`/`softRemoveWorkspace` keep their own inline positional pick and were never
+      callers). Semantic line breaks throughout
+- [x] confirm — and state in the PR — that no control-API or agent-skill change is owed: re-verified
       the keep-in-sync audit holds. No new user action (`session.close` already drives the same `AppStore`
       seam and picks the behavior up for free), so the four-point control audit is already satisfied; no new
       per-session state, so no `tree` read-back field is owed (`selectedSessionID` already surfaces the result);
       the agent skill documents commands/args/returns and the window/workspace/session model, none of which
-      change; `README.md` / `site/docs.html` / `site/commands.html` never documented the close-reselection rule,
-      so nothing user-facing to update. This goes in the PR body
+      change. The website claim did NOT hold: `README.md` and its `site/docs.html` mirror gained a short note
+      on the new close-reselection rule (`site/commands.html` unchanged — no command changed). This goes in
+      the PR body
 - [x] do NOT touch `CHANGELOG.md` (release-only) — untouched, confirmed via `git status`
 - [x] full suite green after the doc change: **1540 tests in 63 suites passed**, `make lint` clean
 
@@ -293,9 +314,11 @@ closeReselectionTarget(after location: (workspaceIndex: Int, sessionIndex: Int))
     sameWorkspace = ids of workspaces[location.workspaceIndex].sessions ∩ filtered
     scope         = sameWorkspace.isEmpty ? filtered : sameWorkspace   // widen when the workspace is spent
     if let recent = sessionRecency.top(1, in: scope).first { return recent }
-    if sidebarMode == .flagged, let inScope = first flagged session in tree order within scope
-      { return inScope }                                               // keep the fallback in the filter
-    return reselectionTarget(after: location)
+    if sidebarMode == .flagged, let inScope = nearest in-scope session to the removed slot, walking the
+      tree FLATTENED in sidebar order (forward first, then backward)
+      { return inScope }                                               // keep the fallback in the filter,
+                                                                       // and keep it POSITIONAL
+    return reselectionTarget(after: location)                          // scope empty: last flagged closed
 ```
 
 **Why the scope set is built from the tree, not from the recency stack:** the closing session is removed
@@ -303,7 +326,7 @@ from `workspaces` *before* reselection at every call site, so it is absent from 
 That is what makes the soft-close paths correct without pruning `sessionRecency` at close time (which they
 must not do — undo needs the entry).
 
-**Deviations from the planned shape** (all three landed as follow-up commits after review; the code's doc
+**Deviations from the planned shape** (all four landed as follow-up commits after review; the code's doc
 comment and `.claude/rules/menu-actions.md` are the authority):
 
 - **The FOCUS filter does not scope the pick** — the plan called for `∩ navigableSessions`, which folds
@@ -315,6 +338,13 @@ comment and `.claude/rules/menu-actions.md` are the authority):
 - **The workspace term is dropped when the close leaves the workspace with nothing in scope**, rather than
   falling straight to the positional pick — "stay in this workspace" has nothing left to mean, and the
   positional alternative is a jump into the first workspace, the disorientation this feature removes.
+- **The `.flagged` fallback is scoped AND positional** — the plan had the unfiltered `reselectionTarget` as
+  the only fallback, which walks the tree positionally and so could land on an unflagged sibling the flagged
+  sidebar renders no row for. `nearestInScopeTarget` repeats that walk restricted to the scope, over the tree
+  flattened in sidebar order: the in-scope session that shifted into the removed slot, else the nearest
+  in-scope one before it — cross-workspace once the scope has widened, since the flagged sidebar is one flat
+  list. Only when the close took the LAST flagged session anywhere (empty scope) does the unfiltered
+  positional pick stand.
 - **No stale-index guard** — `reselectionTarget` itself force-indexes `workspaces[location.workspaceIndex]`
   with no guard, so the helper adds no new trap risk, and no caller removes a workspace before reselecting.
 
@@ -339,8 +369,10 @@ the deployed app):
   (`1 4 2 3`), close `4` → should land back on `1`.
 - Reproduce discussion example 2: from `1 2 3` on session `1`, open a new session at the end (`1 2 3 4`),
   close `4` → should land back on `1`.
-- Close a session with a focus filter active → the filter must survive and the selection stay inside it.
-- Close a session in flagged sidebar mode → the selection stays within the flagged set.
+- Close a session with a focus filter active → the pick is NOT scoped by focus (see the deviation above);
+  when it lands outside the focused workspace, `autoUnfocusIfOutsideFocus` drops the filter to reveal it.
+- Close a session in flagged sidebar mode → the selection stays within the flagged set, unless that close
+  took the LAST flagged session anywhere, where the scope is empty and the unfiltered positional pick stands.
 - Close a session right after a cold restore (nothing activated yet) → the old positional neighbor, no
   empty selection.
 - Soft-close then undo within the grace window → the closed session comes back and is reselected.
@@ -348,8 +380,9 @@ the deployed app):
 **PR**
 
 - Target `umputun/agterm` `master`; reference Discussion #147 in the PR body, note that the shape follows
-  umputun's comment (scoped MRU with a positional fallback, no setting), and state that no control-API,
-  agent-skill, or website change is owed.
+  umputun's comment (scoped MRU with a positional fallback, no setting), and state that no control-API or
+  agent-skill change is owed. The user-facing behavior note DOES land in `README.md` and its `site/docs.html`
+  mirror.
 - Write the PR description as prose, no test plan section, no AI attribution.
 - After merge: remove the worktree, merging/branch-deleting from the **main checkout**, never from the
   worktree (it would switch the main checkout's branch).

@@ -32,26 +32,30 @@ extension AppStore {
         // `reselectionTarget` walks the tree positionally, so in `.flagged` mode it can land on an
         // unflagged sibling the sidebar isn't rendering (reachable when no scoped session has ever been
         // activated — e.g. the first close after restoring a snapshot with no persisted recency). Keep the
-        // fallback inside the filter, but keep it POSITIONAL: the nearest in-scope neighbor, not merely the
-        // first flagged row in the tree, so the worst case really is the old neighbor behavior scoped to the
-        // flagged set. When the close took the LAST flagged session anywhere, `scope` is empty and there is
-        // nothing left to keep it inside — the positional pick then stands, since leaving no session selected
-        // would leave no terminal.
+        // fallback inside the filter, but keep it POSITIONAL: the nearest in-scope neighbor, so the worst
+        // case really is the old neighbor behavior scoped to the flagged set. When the close took the LAST
+        // flagged session anywhere, `scope` is empty and there is nothing left to keep it inside — the
+        // positional pick then stands, since leaving no session selected would leave no terminal.
         if sidebarMode == .flagged, let inScope = nearestInScopeTarget(after: location, scope: scope) {
             return inScope
         }
         return reselectionTarget(after: location)
     }
 
-    /// `reselectionTarget`'s walk restricted to `scope`: the session that shifted into the removed slot, else
-    /// the one before it, else — once the closing workspace holds nothing in scope, which is exactly when the
-    /// scope has widened across workspaces — the first in-scope session in tree order.
+    /// `reselectionTarget`'s walk restricted to `scope`, over the tree FLATTENED in sidebar order: the
+    /// in-scope session that shifted into the removed slot, else the nearest one before it. The walk spans
+    /// workspaces because the scope can: once the closing workspace holds nothing in scope the scope has
+    /// widened to the whole flagged set, and the flagged sidebar renders that set as one flat cross-workspace
+    /// list — so the adjacent row there is the neighboring FLAGGED row, which may live in another workspace.
+    /// While the scope is still same-workspace it holds only that workspace's ids, so the flat walk collapses
+    /// to the in-workspace one.
     private func nearestInScopeTarget(after location: (workspaceIndex: Int, sessionIndex: Int),
                                       scope: Set<UUID>) -> UUID? {
         let sessions = workspaces[location.workspaceIndex].sessions
-        let removedSlot = min(location.sessionIndex, sessions.count)
-        if let after = sessions[removedSlot...].first(where: { scope.contains($0.id) }) { return after.id }
-        if let before = sessions[..<removedSlot].last(where: { scope.contains($0.id) }) { return before.id }
-        return workspaces.flatMap(\.sessions).first { scope.contains($0.id) }?.id
+        let before = workspaces[..<location.workspaceIndex].reduce(0) { $0 + $1.sessions.count }
+        let removedSlot = before + min(location.sessionIndex, sessions.count)
+        let flattened = workspaces.flatMap(\.sessions)
+        if let next = flattened[removedSlot...].first(where: { scope.contains($0.id) }) { return next.id }
+        return flattened[..<removedSlot].last { scope.contains($0.id) }?.id
     }
 }
