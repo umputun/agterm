@@ -45,12 +45,16 @@ enum AgentHooksInstaller {
         }
     }
 
+    // the Pi extension-install outcome, mirroring CodexResult: installed/alreadyConfigured/noPi are
+    // informational; the warning cases mean agterm could not safely write and left the destination as-is.
     private enum PiResult {
-        case installed, alreadyConfigured, userOwned, unreadable, noPi
+        case installed, alreadyConfigured, userOwned, unreadable, writeFailed, noPi
 
+        // a warning-level outcome: agterm could not update the extension and the user must act (move the
+        // user-owned file, or fix the unreadable/unwritable path). installed/already/noPi are informational.
         var isWarning: Bool {
             switch self {
-            case .userOwned, .unreadable: return true
+            case .userOwned, .unreadable, .writeFailed: return true
             case .installed, .alreadyConfigured, .noPi: return false
             }
         }
@@ -244,26 +248,31 @@ enum AgentHooksInstaller {
         }
 
         let destination = URL(fileURLWithPath: AgentHooksInstall.piExtensionPath(home: home.path))
-        let destinationExists = (try? fm.attributesOfItem(atPath: destination.path)) != nil
+        // read the destination the same way the Claude/Codex merges read their configs: nil = absent,
+        // throw = exists-but-unreadable (folded to .unreadable). Reusing readExistingConfig means a
+        // non-ENOENT stat error can't masquerade as "absent" and slip past the ownership-marker gate.
         let existing: String?
-        if destinationExists {
-            do {
-                existing = try String(contentsOf: destination, encoding: .utf8)
-            } catch {
-                return .unreadable
-            }
-        } else {
-            existing = nil
+        do {
+            existing = try readExistingConfig(at: destination)
+        } catch {
+            return .unreadable
         }
-        guard AgentHooksInstall.mayOverwritePiExtension(fileExists: destinationExists, existingContents: existing) else {
+        guard AgentHooksInstall.mayOverwritePiExtension(fileExists: existing != nil, existingContents: existing) else {
             return .userOwned
         }
         guard existing != sourceContents else { return .alreadyConfigured }
 
-        try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        let target = symlinkTarget(of: destination) ?? destination
-        let mode = AgentHooksInstall.posixMode(ofFile: target.path)
-        try writePreservingSymlink(sourceContents, to: destination, posixMode: mode)
+        // a filesystem error on ~/.pi/agent/extensions degrades to a warning like every sibling
+        // integration, rather than throwing and aborting the whole install (which would hide that the
+        // Claude/Codex/shell steps already ran).
+        do {
+            try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let target = symlinkTarget(of: destination) ?? destination
+            let mode = AgentHooksInstall.posixMode(ofFile: target.path)
+            try writePreservingSymlink(sourceContents, to: destination, posixMode: mode)
+        } catch {
+            return .writeFailed
+        }
         return .installed
     }
 
@@ -353,6 +362,8 @@ enum AgentHooksInstaller {
             return "~/.pi/agent/extensions/agterm-status.ts is user-owned, so agterm left it untouched."
         case .unreadable:
             return "~/.pi/agent/extensions/agterm-status.ts exists but could not be read, so agterm left it untouched."
+        case .writeFailed:
+            return "Pi's lifecycle extension couldn't be written to ~/.pi/agent/extensions/ (check that directory's permissions), so it was skipped."
         case .noPi:
             return "No ~/.pi/agent found, so Pi's lifecycle extension was skipped. Start Pi once, then run this again."
         }
