@@ -205,11 +205,18 @@ paths:
   `workspaces` before reselection at every call site, so it can never be picked — which is what makes the
   soft-close paths correct WITHOUT pruning `sessionRecency` at close time (they must not, since undo needs the
   entry back; only `hardFinalizePendingSession` prunes, at grace expiry).
-  An empty scoped MRU (a fresh restore before anything was activated, sessions never focused, or the only
-  recent entry was the one just closed) falls straight back to the positional `reselectionTarget(after:)`,
-  which is UNCHANGED and still the direct pick for `removeWorkspace` / `softRemoveWorkspace` (the
+  When the close leaves that workspace with NO navigable session — it emptied the workspace, or in `.flagged`
+  mode no other session there is flagged — the workspace term is dropped and the MRU widens to `navigableSessions`
+  alone: "stay in the current workspace" has nothing left to mean, and the alternative is a positional jump into
+  the FIRST workspace, which is the disorientation the whole feature exists to remove.
+  The filter term always survives that widening, so a `.flagged`-mode close crosses workspaces rather than landing
+  on an unflagged session the sidebar isn't rendering.
+  Only an empty MRU after that (a fresh restore before anything was activated, or the only recent entry was the one
+  just closed) falls back to the positional `reselectionTarget(after:)`, which is UNCHANGED — so the worst case is
+  exactly the old neighbor behavior, never an empty selection.
+  `reselectionTarget` now has exactly ONE caller, this helper: `removeWorkspace` / `softRemoveWorkspace` never used
+  it and keep their own inline positional pick (reselection there is deliberately untouched — the
   "stay in the current workspace" constraint is meaningless when the workspace itself is what's being removed).
-  So the worst case is exactly the old neighbor behavior, never an empty selection.
   `softCloseSessions`' `removedBeforeActive` index adjustment is preserved verbatim — it now feeds only the
   fallback.
 - **Session navigation (between sessions).**
