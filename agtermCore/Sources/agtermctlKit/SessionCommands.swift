@@ -337,6 +337,12 @@ struct Session: ParsableCommand {
         @Option(name: .long, help: "Override the glyph tint for this call only (#rrggbb); reverts on the next status set without it.")
         var color: String?
         @Option(name: .long, help: "Which pane set this status: left (main), right (split), or scratch. Records the blocked pane so nav lands on it. Defaults to the left pane.") var pane: String?
+        @Option(name: .customLong("pane-id"), help: """
+            A surface's stable token (the shell's $AGTERM_PANE_ID) — the agent-status hook forwards it so a \
+            status set from a promoted-then-re-split pane lands on the pane's current slot. Overrides --pane \
+            when it resolves; falls back to --pane otherwise.
+            """)
+        var paneID: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions
 
@@ -349,7 +355,8 @@ struct Session: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionStatus, target: target.target,
-                           args: options.withWindow(ControlArgs(pane: pane, status: state, blink: blink ? true : nil,
+                           args: options.withWindow(ControlArgs(pane: pane, paneID: paneID, status: state,
+                                                                 blink: blink ? true : nil,
                                                                  autoReset: autoReset ? true : nil, sound: sound,
                                                                  color: color)))
         }

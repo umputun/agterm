@@ -6,9 +6,12 @@ public enum SurfaceEnvironment {
     /// Environment for a session-owned surface: main pane, split pane, overlay, or scratch.
     /// `pane`, when non-nil, adds `AGTERM_PANE` so the hook wrapper can forward `--pane` and a status
     /// set from a background pane records which surface blocked; overlay surfaces pass nil (nil→main).
+    /// `paneToken`, when non-empty, adds `AGTERM_PANE_ID` — the surface's STABLE spawn identity (see
+    /// `TerminalSurface.paneToken`), which the hook forwards as `--pane-id` so the status handler resolves
+    /// the surface's LIVE role instead of the stale baked `AGTERM_PANE` after a promote + re-split (#199).
     public static func session(sessionID: UUID, windowID: UUID?, workspaceID: UUID?,
                                socketPath: String, programVersion: String,
-                               pane: StatusPane? = nil) -> [String: String] {
+                               pane: StatusPane? = nil, paneToken: String? = nil) -> [String: String] {
         var env = terminalIdentity(programVersion: programVersion).merging([
             "AGTERM_ENABLED": "1",
             "AGTERM_SESSION_ID": sessionID.uuidString,
@@ -22,6 +25,9 @@ public enum SurfaceEnvironment {
         }
         if let pane {
             env["AGTERM_PANE"] = pane.rawValue
+        }
+        if let paneToken, !paneToken.isEmpty {
+            env["AGTERM_PANE_ID"] = paneToken
         }
         return env
     }

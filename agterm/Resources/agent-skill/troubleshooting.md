@@ -95,7 +95,7 @@ session — a tmux server captures the spawning shell's `AGTERM_*` into its GLOB
 matter which client attaches. Diagnose: find the agent's pid and check its real environment —
 `ps eww <pid> | tr ' ' '\n' | grep AGTERM_SESSION_ID` — if the id is not the session the process
 lives in, it leaked. Fix a poisoned tmux server without restarting it:
-`for v in AGTERM_ENABLED AGTERM_PANE AGTERM_SESSION_ID AGTERM_SOCKET AGTERM_WINDOW_ID AGTERM_WORKSPACE_ID; do tmux set-environment -g -r "$v"; done`,
+`for v in AGTERM_ENABLED AGTERM_PANE AGTERM_PANE_ID AGTERM_SESSION_ID AGTERM_SOCKET AGTERM_WINDOW_ID AGTERM_WORKSPACE_ID; do tmux set-environment -g -r "$v"; done`,
 then restart the affected panes/processes (a respawn is enough; existing processes keep their
 inherited copy). Prevent it: start daemons and session managers with the variables scrubbed
 (`env -u AGTERM_SESSION_ID … <cmd>`, full list in SKILL.md), or from a shell outside agterm.

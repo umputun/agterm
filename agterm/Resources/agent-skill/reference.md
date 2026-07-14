@@ -233,7 +233,7 @@ All ten are read-only projections of GUI state.
   `0.05..0.95` and persisted, and the applied (clamped) fraction is printed (and returned as `result.ratio`
   under `--json`). Errors when the session has no split. Resizing a hidden split updates the stored
   fraction; it takes effect when the split is next shown.
-- `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb] [--pane left|right|scratch] [--target] [--window W]` —
+- `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb] [--pane left|right|scratch] [--pane-id TOKEN] [--target] [--window W]` —
   set the sidebar agent-status glyph. `--blink` pulses it (for attention). `--auto-reset` clears it
   back to idle once the session is visited (use for a one-shot completion flash). `--sound` plays a
   one-shot sound when the status is set: `default` (the system alert sound) or a system sound name
@@ -256,6 +256,11 @@ All ten are read-only projections of GUI state.
   reveal is a GUI/auto-follow concern.) An agent that runs in a split or scratch should set its own pane so
   the user lands on it. The value is read back on `tree` as the session node's `statusPane`. An invalid
   value errors (`--pane must be left, right, or scratch`).
+  `--pane-id` is the surface's stable spawn token (the shell's `$AGTERM_PANE_ID`) — the agent-status hook
+  forwards it automatically. When it resolves against the session's LIVE surfaces it OVERRIDES `--pane`, so
+  a status from a pane whose baked role went stale (a split survivor promoted into the main pane, then a
+  re-split) lands on the pane's CURRENT slot instead of the stale role; an absent/unknown token falls back
+  to `--pane`. Scripts normally set `--pane` directly and leave `--pane-id` to the hook.
   An unknown state errors. Setting non-idle is for agents/hooks; `idle` clears it (also available in the GUI).
 - `session flag [on|off|toggle|clear] [--target] [--window W]` — flag/unflag a session for the flagged
   working-set view (a durable, persisted membership). `on`/`off`/`toggle` act on `--target` (default

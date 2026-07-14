@@ -123,14 +123,21 @@ public struct ControlSessionStatusUpdate: Equatable, Sendable {
     /// Which pane set the status (`left`=main, `right`=split, `scratch`), or nil when unspecified. Stamped
     /// onto the indicator so pane-scoped keystroke-clear and pane-aware navigation know which surface blocked.
     public let pane: StatusPane?
+    /// The surface's STABLE spawn token (the shell's baked `AGTERM_PANE_ID`, forwarded by the hook as
+    /// `--pane-id`). Resolved app-side against the session's live surfaces (`Session.paneRole(forToken:)`);
+    /// when it resolves it OVERRIDES the stale role `pane`, fixing a status set from a promoted-then-re-split
+    /// pane (#199). nil/empty/unknown falls back to `pane`. The resolution stays app-side because the
+    /// dispatcher has no session — this only carries the token through.
+    public let paneID: String?
 
     public init(status: AgentStatus, blink: Bool?, autoReset: Bool?, sound: String?,
-                color: String? = nil, pane: StatusPane? = nil) {
+                color: String? = nil, pane: StatusPane? = nil, paneID: String? = nil) {
         self.status = status
         self.blink = blink
         self.autoReset = autoReset
         self.sound = sound
         self.color = color
         self.pane = pane
+        self.paneID = paneID
     }
 }

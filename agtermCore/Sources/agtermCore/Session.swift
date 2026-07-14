@@ -311,6 +311,23 @@ public final class Session: Identifiable {
     /// pointed at the same surface.
     public var addressableSurface: (any TerminalSurface)? { surface ?? splitSurface }
 
+    /// Resolves a surface's stable spawn token (`TerminalSurface.paneToken`, baked as `AGTERM_PANE_ID` and
+    /// forwarded by the agent-status hook as `session.status --pane-id`) to the pane role of the slot it
+    /// CURRENTLY occupies — `.left` for the main slot, `.right` for the split, `.scratch` for the scratch.
+    /// Because the role is derived LIVE from slot occupancy, a promoted split survivor (moved into `surface`
+    /// by `closePrimaryPane`) resolves `.left` and a fresh re-split helper (in `splitSurface`) resolves
+    /// `.right`, even though BOTH shells were baked with the same stale `right` role — the #199 fix. Returns
+    /// nil for an empty or unknown token (a torn-down surface, or a shell spawned before the token existed),
+    /// so the caller falls back to the baked `--pane` value. This mirrors the live-role read the pane-scoped
+    /// keystroke-clear already does via `GhosttySurfaceView.isSplitPane` (see the Notifications rule).
+    public func paneRole(forToken token: String) -> StatusPane? {
+        guard !token.isEmpty else { return nil }
+        if surface?.paneToken == token { return .left }
+        if splitSurface?.paneToken == token { return .right }
+        if scratchSurface?.paneToken == token { return .scratch }
+        return nil
+    }
+
     /// The surface currently on top and owning keyboard focus: an active overlay (full OR floating), else
     /// the scratch, else the active pane. The overlay renders above the scratch, and a full overlay or the
     /// scratch hides the pane(s) beneath it — so the session-focus helpers route through this to keep first

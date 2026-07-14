@@ -593,10 +593,12 @@ struct ControlDispatcherTests {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
 
+        // the opaque --pane-id rides through untouched alongside a valid role --pane (the app-side arm, not
+        // the dispatcher, resolves the token against the session's live surfaces).
         let tagged = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionStatus,
             target: "session",
-            args: ControlArgs(pane: "right", status: "blocked")
+            args: ControlArgs(pane: "right", paneID: "agent-tok", status: "blocked")
         ))
         let badPane = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionStatus,
@@ -609,8 +611,8 @@ struct ControlDispatcherTests {
         // the invalid pane never reaches actions (status unchanged), only the valid one is recorded.
         #expect(actions.calls == [
             .sessionStatus(target: "session", window: nil,
-                           ControlSessionStatusUpdate(status: .blocked, blink: nil,
-                                                      autoReset: nil, sound: nil, pane: .right))
+                           ControlSessionStatusUpdate(status: .blocked, blink: nil, autoReset: nil,
+                                                      sound: nil, pane: .right, paneID: "agent-tok"))
         ])
     }
 

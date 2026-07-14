@@ -20,6 +20,15 @@ public protocol TerminalSurface: AnyObject {
     /// requirement (no default) like `teardown()`: a conformer that routes pwd/title by role MUST
     /// reassign here, so a future surface fails to compile rather than silently mis-reporting.
     func promoteToPrimaryPane()
+
+    /// A stable per-surface identity assigned when the surface spawns, distinct from the pane ROLE
+    /// (`left|right|scratch`), which is NOT stable: a promoted split survivor keeps its baked `right`
+    /// role but moves into the main slot. Baked into the shell's env as `AGTERM_PANE_ID` and forwarded by
+    /// the agent-status hook as `session.status --pane-id`, it lets `Session.paneRole(forToken:)` resolve
+    /// the surface's CURRENT slot rather than trusting the stale baked role — the fix for a status set from
+    /// a promoted-then-re-split pane (#199). Empty for a surface spawned without a pane identity (overlay /
+    /// quick terminal, or a test stub), which `paneRole(forToken:)` never matches.
+    var paneToken: String { get }
 }
 
 /// The direction the search selection steps, in agterm's natural convention:

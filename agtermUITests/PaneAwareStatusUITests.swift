@@ -338,6 +338,33 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
         XCTAssertFalse(onScreen.contains("\(mainTag)-42"), "the idle-session selection must not dismiss the scratch to the main pane")
     }
 
+    // #199 end-to-end: `session.status --pane-id <token>` resolves the surface's LIVE slot and overrides a
+    // stale `--pane` role. Read the MAIN pane's real `$AGTERM_PANE_ID` from its shell (the exact value the
+    // agent-status hook forwards), then set a status carrying that main-slot token but the WRONG role
+    // (--pane right) — the promoted-survivor shape. The tree read-back must report `left` (the token won),
+    // and an unknown token must fall back to the baked `--pane right`.
+    func testPaneIDOverridesStaleRoleThenFallsBack() throws {
+        let sessionA = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sessionA)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "split on should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the session should report split:true")
+
+        let mainToken = try readPaneToken(target: sessionA, pane: "left")
+        XCTAssertFalse(mainToken.isEmpty, "the main pane's shell should expose a non-empty AGTERM_PANE_ID")
+
+        // --pane-id resolves to the main slot and OVERRIDES the stale --pane right → statusPane reads left.
+        XCTAssertEqual(try sendStatus(target: sessionA, pane: "right", paneID: mainToken)["ok"] as? Bool, true,
+                       "session.status with --pane-id should succeed")
+        XCTAssertEqual(try statusPane(of: sessionA), "left",
+                       "a main-slot --pane-id must override the stale --pane right (#199)")
+
+        // an UNKNOWN token resolves to nothing and falls back to the baked --pane right (pre-token behavior).
+        XCTAssertEqual(try sendStatus(target: sessionA, pane: "right", paneID: "not-a-real-token")["ok"] as? Bool, true,
+                       "session.status with a bogus --pane-id should still succeed")
+        XCTAssertEqual(try statusPane(of: sessionA), "right",
+                       "an unknown --pane-id falls back to the baked --pane right")
+    }
+
     // MARK: - Helpers
 
     /// Type Escape into the focused surface until the agent-status glyph clears (retrying rides out a
@@ -372,6 +399,35 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
             _ = try self.sendCommand(self.typeRequest(text: "echo \(tag)-$((6*7))\n", target: target, select: false, pane: pane))
         })
         XCTAssertNotNil(seeded, "seeding the \(pane) pane marker should land in its buffer")
+    }
+
+    /// Send `session.status blocked --pane <pane> --pane-id <paneID>` on `target`, returning the raw response.
+    private func sendStatus(target: String, pane: String, paneID: String) throws -> [String: Any] {
+        let args: [String: Any] = ["status": "blocked", "pane": pane, "paneID": paneID]
+        let obj: [String: Any] = ["cmd": "session.status", "target": target, "args": args]
+        let line = String(decoding: try! JSONSerialization.data(withJSONObject: obj), as: UTF8.self)
+        return try sendCommand(line)
+    }
+
+    /// Read a pane's stable spawn token straight from its shell's `$AGTERM_PANE_ID` — the exact value the
+    /// agent-status hook forwards as `--pane-id`. Echoes `<tag>-42[<token>]`, where the arithmetic 42 (from
+    /// `$((6*7))`) proves the shell RAN the line (the typed command shows `$((6*7))`, only the output shows
+    /// `42`), then extracts the token between the brackets. Reuses `pollPaneText`'s readiness-retry.
+    private func readPaneToken(target: String, pane: String) throws -> String {
+        let tag = "PIDR-\(UUID().uuidString.prefix(8))"
+        let needle = "\(tag)-42["
+        let buffer = try pollPaneText(target: target, pane: pane, contains: needle, retype: {
+            _ = try self.sendCommand(self.typeRequest(
+                text: "printf '\(tag)-%s[%s]\\n' \"$((6*7))\" \"$AGTERM_PANE_ID\"\n",
+                target: target, select: false, pane: pane))
+        })
+        let text = try XCTUnwrap(buffer, "reading the \(pane) pane's AGTERM_PANE_ID should land in its buffer")
+        let pattern = NSRegularExpression.escapedPattern(for: needle) + "([-0-9A-Fa-f]+)\\]"
+        let regex = try NSRegularExpression(pattern: pattern)
+        let match = try XCTUnwrap(regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                                  "the \(pane) pane should echo a non-empty AGTERM_PANE_ID")
+        let tokenRange = try XCTUnwrap(Range(match.range(at: 1), in: text))
+        return String(text[tokenRange])
     }
 
     /// Add a fresh session (which takes the selection) and wait for it to become the parked selection, so the

@@ -21,6 +21,8 @@ import Foundation
 final class SpySurface: TerminalSurface {
     var teardownCount = 0
     var promotedCount = 0
+    var paneToken: String
+    init(paneToken: String = "") { self.paneToken = paneToken }
     func teardown() { teardownCount += 1 }
     func promoteToPrimaryPane() { promotedCount += 1 }
 }
