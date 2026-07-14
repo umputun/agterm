@@ -702,7 +702,7 @@
                 </div>
                 <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
                   Fills the whole window with one terminal surface — a pane, the scratch, an overlay, or the quick terminal —
-                  hiding the sidebar and collapsing the title bar to a slim strip with the traffic lights and an exit button
+                  hiding the sidebar and collapsing the title bar to a slim strip with the traffic lights, the window title, and an exit button
                   (⌘W leaves zoom too). A view mode, not a layout change: exiting
                   restores split ratios, focus, and visibility exactly as they were, and everything else keeps running behind it.
                   Scripts can zoom any surface by id with <code style="color: #e6e1d7">agtermctl surface zoom</code>. Distinct
@@ -721,14 +721,14 @@
                   Watch several agents or builds at once: sessions' live output in one grid overlaid on the window. The cell unit is a
                   session+pane — a non-split session is one cell, a split session is two (its left and right panes), capped at nine
                   cells. Each cell's name chip also reflects the session's agent status, filling with the status color and pulsing
-                  while it blinks, so a session that needs attention stands out in the grid. It is view-only — no cell takes input;
-                  the arrow keys move a highlight, Enter jumps into the highlighted
+                  while it blinks, so a session that needs attention stands out in the grid. It is view-only — no cell's terminal
+                  takes input; the arrow keys move a highlight, Enter (or a single mouse click on a cell) jumps into that
                   session and focuses that exact pane, and Esc closes. Opened over the control channel with
                   <code style="color: #e6e1d7">agtermctl dashboard &lt;ids…&gt;</code>, or
                   <code style="color: #e6e1d7">agtermctl dashboard --mru</code> to fill it from the window's most-recently-used
-                  sessions instead of naming ids. The most-recently-used grid also toggles from the keyboard —
-                  <strong>⌘⇧D</strong> (or <strong>Navigate ▸ Dashboard</strong>, or the command palette's Dashboard) opens it
-                  auto-sized. Cell fonts size absolutely
+                  sessions instead of naming ids. The most-recently-used grid also has a built-in opener —
+                  <strong>⌘⇧D</strong> (or <strong>Navigate ▸ Dashboard</strong>, the command palette's Dashboard, or the
+                  title-bar grid button) opens it auto-sized. Cell fonts size absolutely
                   (<code style="color: #e6e1d7">--font-size</code>) or scale to the grid
                   (<code style="color: #e6e1d7">--auto-size</code>). Mutually exclusive with terminal zoom.
                 </p>

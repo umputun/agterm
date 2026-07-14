@@ -648,8 +648,9 @@ struct WindowContentView: View {
     }
 
     /// The window title at the terminal's leading edge: the session name, plus the cwd subtitle on a
-    /// second line only in normal mode (compact drops it for a single short row).
-    private var titleLabel: some View {
+    /// second line only in normal mode (compact drops it for a single short row). Non-private so the zoom
+    /// titlebar reuses it — a zoomed terminal shows the same title as the normal window.
+    var titleLabel: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(windowTitle).fontWeight(.semibold)
             if !windowSubtitle.isEmpty {
@@ -683,8 +684,9 @@ struct WindowContentView: View {
 
     /// Custom titlebar row replacing the system toolbar: the sidebar toggle pinned to the sidebar's
     /// trailing edge (by the divider), the title at the terminal's start, and the trailing action cluster
-    /// (recent-sessions / attention popovers, a divider, then the scratch / split / quick-terminal
-    /// buttons). Positions track `sidebarWidth`; the left inset clears the system traffic lights.
+    /// (recent-sessions / attention popovers, a divider, the scratch / split view controls, a divider, then
+    /// the dashboard / quick-terminal group). Positions track `sidebarWidth`; the left inset clears the
+    /// system traffic lights.
     private var titlebarRow: some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: 78).allowsHitTesting(false) // system traffic lights
@@ -714,6 +716,9 @@ struct WindowContentView: View {
                 Rectangle().fill(chromeText.opacity(0.25)).frame(width: 1, height: 16)
                 scratchButton.labelStyle(.iconOnly)
                 splitButton.labelStyle(.iconOnly)
+                // separates the per-session view controls from the window-overlay group (dashboard + quick terminal).
+                Rectangle().fill(chromeText.opacity(0.25)).frame(width: 1, height: 16)
+                dashboardButton.labelStyle(.iconOnly)
                 quickTerminalButton.labelStyle(.iconOnly)
             }
             .padding(.trailing, 14)

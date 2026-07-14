@@ -49,9 +49,19 @@ extension WindowContentView {
         return chromeText
     }
 
+    /// The dashboard's title, following the normal `windowTitle` logic: just "Dashboard", plus "— <window
+    /// name>" when the window carries a custom name (auto "window N" names omitted, exactly like the normal
+    /// title). No cwd subtitle — the grid has no single active session to source one from.
+    private var dashboardWindowTitle: String {
+        guard let info = library.windows.first(where: { $0.id == windowID }), info.hasCustomName else {
+            return "Dashboard"
+        }
+        return "Dashboard — \(info.name)"
+    }
+
     /// The stripped chrome above the OPEN dashboard grid, the exact counterpart of `zoomTitlebar`: in
-    /// hidden-toolbar mode the same invisible ~3px drag strip, otherwise a bare bar carrying ONLY an exit
-    /// button — none of the sidebar/split/scratch/quick-terminal/attention controls the full `customTitlebar`
+    /// hidden-toolbar mode the same invisible ~3px drag strip, otherwise a bare bar carrying the dashboard
+    /// title and an exit button — none of the sidebar/split/scratch/quick-terminal/attention controls the full `customTitlebar`
     /// renders. Dropping them is the fix: while the view-only grid is up those buttons would steal the
     /// key-catcher's first responder (stranding Esc) and drive actions that make no sense behind the modal.
     /// Window drag / double-click / traffic lights stay via `WindowControlArea`; the exit button runs the
@@ -67,6 +77,12 @@ extension WindowContentView {
             HStack(spacing: 0) {
                 Color.clear
                     .frame(width: 78)
+                    .allowsHitTesting(false)
+                Text(dashboardWindowTitle)
+                    .fontWeight(.semibold)
+                    .lineLimit(1)
+                    .padding(.leading, 8)
+                    // falls through to the drag/zoom layer behind the bar, like the normal title.
                     .allowsHitTesting(false)
                 Spacer(minLength: 12)
                 Button {
@@ -106,11 +122,28 @@ extension WindowContentView {
                 captionBackground: terminalColor,
                 pillColor: dashboardPillColor,
                 pillTextColor: dashboardPillTextColor,
-                onHighlight: { dashboard.highlight($0) },
+                onClick: { clickDashboardMember($0) },
                 onSelect: { selectDashboardMember($0) },
                 onClose: { closeDashboardFromKeyboard() }
             )
         }
+    }
+
+    /// Title-bar button that opens the dashboard grid — the frontmost window's most-recently-used sessions in
+    /// a view-only grid, auto-sized (the `AppActions.toggleDashboard` / ⌘⇧D / Navigate ▸ Dashboard opener). A
+    /// single glyph, never a 2-state toggle: while the dashboard is open the whole titlebar is swapped for the
+    /// stripped `dashboardTitlebar`, so this button only ever renders while the dashboard is closed. Disabled
+    /// with no sessions (nothing to show), like the split/scratch buttons. Non-private so `titlebarRow`
+    /// (in `WindowContentView`) can place it, mirroring the `+RecentSessions` buttons.
+    var dashboardButton: some View {
+        Button {
+            actions.toggleDashboard()
+        } label: {
+            Label("Dashboard", systemImage: "square.split.2x2")
+        }
+        .help(helpHint("Dashboard", .dashboard))
+        .disabled(store.activeSession == nil)
+        .accessibilityIdentifier("dashboard-toggle-button")
     }
 
     /// Whether an OPEN dashboard hosts this session-pane slot in a grid cell. A member is now an explicit
@@ -206,8 +239,25 @@ extension WindowContentView {
         dashboard.close()
     }
 
-    /// Enter (or a double-click) on the highlighted cell: select that session, close the dashboard, then land
-    /// first responder in the cell's EXACT pane — the split (right) pane for a `.split` cell (mirroring
+    /// How long the active frame flashes on a clicked cell before the click enters it — a brief, visible
+    /// acknowledgement so a mouse jump doesn't feel like an instant, unexplained close.
+    static let dashboardClickEnterDelay: TimeInterval = 0.18
+
+    /// A mouse click on a cell: flash the active frame on it (`dashboard.highlight`), then enter after a brief
+    /// delay — an instant jump with no frame flash reads as confusing. Keyboard Enter has no delay (its
+    /// highlight is already visible). The delayed enter only fires while this cell is STILL the highlighted
+    /// one, so a superseding click (or an arrow) on another cell wins — last-click, not first-scheduled — and
+    /// a close/reconcile in the gap (which clears or moves the highlight) cancels the pending enter.
+    func clickDashboardMember(_ member: DashboardMember) {
+        dashboard.highlight(member)
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.dashboardClickEnterDelay) {
+            guard dashboard.isOpen, dashboard.highlighted == member else { return }
+            selectDashboardMember(member)
+        }
+    }
+
+    /// Enter (immediately), or a mouse click (after its flash delay), enters a cell: select that session,
+    /// close the dashboard, then land first responder in the cell's EXACT pane — the split (right) pane for a `.split` cell (mirroring
     /// `revealActiveBlockedPane`'s `.right` branch: flip `splitFocused`, then `focusSplitPane(wantSplit:true)`),
     /// else the main pane. Close BEFORE focusing so the `focusSplitPane`/`focusActiveSession` `dashboardActive`
     /// guards (the window's controller `isOpen`) don't block the focus.

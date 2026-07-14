@@ -97,9 +97,9 @@ public final class DashboardController {
         appliedFontSize = nil
     }
 
-    /// highlight moves the keyboard highlight directly to `member` (a mouse click on that cell), but only
-    /// when `member` is one of the current members — a stray one leaves the highlight unchanged. No-op when
-    /// closed.
+    /// highlight moves the highlight directly to `member`, but only when `member` is one of the current
+    /// members — a stray one leaves it unchanged; a no-op when closed. Used by a mouse click to flash the
+    /// active frame on the clicked cell before entering it (the keyboard walks the highlight with `move`).
     public func highlight(_ member: DashboardMember) {
         guard members.contains(member) else { return }
         highlighted = member

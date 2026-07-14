@@ -102,7 +102,7 @@ struct DashboardControllerTests {
         controller.open(members: [primary(a), primary(b), primary(c)])
         #expect(controller.highlighted == primary(a))
 
-        // click on a member moves the highlight to it.
+        // a click flashes the highlight onto that member.
         controller.highlight(primary(c))
         #expect(controller.highlighted == primary(c))
 
