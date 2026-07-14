@@ -310,7 +310,7 @@ extension agtermApp {
                 Button { actions.toggleAttentionPalette() } label: { Label("Go to Attention…", systemImage: "bell") }
                     .keyboardShortcut(shortcut(for: .showAttention))
                     .disabled(modalActive)
-                Button { actions.toggleDashboard() } label: { Label("Dashboard", systemImage: "square.grid.2x2") }
+                Button { actions.toggleDashboard() } label: { Label("Dashboard", systemImage: "square.split.2x2") }
                     .keyboardShortcut(shortcut(for: .dashboard))
                     // stays zoomed-only, NOT modalActive: ⌘⇧D must still CLOSE an open dashboard, so this
                     // toggle is the escape hatch and is never disabled by the dashboard being open

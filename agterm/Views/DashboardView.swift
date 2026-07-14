@@ -4,12 +4,12 @@ import SwiftUI
 
 /// The dashboard grid overlay: a per-window modal that hosts up to `DashboardLayout.maxCells` live pane
 /// cells in a `ceil(sqrt(n))`-wide grid, view-only. The cell unit is a session+pane (a `DashboardMember`),
-/// so a split session shows as TWO cells (its primary + split panes). No cell takes keyboard or mouse
-/// input — each pane surface is `.allowsHitTesting(false)` and never becomes first responder, so its cursor
-/// draws hollow. An AppKit key-catcher owns first responder while open and swallows every key, walking a
+/// so a split session shows as TWO cells (its primary + split panes). No pane SURFACE takes keyboard or
+/// mouse input — each is `.allowsHitTesting(false)` and never becomes first responder, so its cursor draws
+/// hollow. An AppKit key-catcher owns first responder while open and swallows every key, walking a
 /// keyboard highlight between cells; Enter jumps into the highlighted session AND focuses that exact pane,
-/// Esc closes. A transparent hit target over each cell single-click-highlights and double-click-enters
-/// (mouse is secondary).
+/// Esc closes. A transparent hit target over each cell handles a mouse click: it flashes the active frame on
+/// the cell, then enters that session+pane after a brief delay (an instant jump with no flash is confusing).
 ///
 /// The view is purely presentational and closure-driven: `WindowContentView` mounts it in
 /// `windowOverlayLayer` while `controller.isOpen`, generalizes its deck to yield each member's surface into
@@ -25,8 +25,9 @@ struct DashboardView: View {
     /// The themed chrome foreground (the terminal theme's foreground), used for the highlight ring so it
     /// tracks the active terminal theme rather than the OS accent.
     let highlightColor: Color
-    /// The themed terminal background — the OPAQUE per-cell backing, so a translucent terminal surface
-    /// (window background-opacity < 1) still reads as a solid cell in the grid.
+    /// The themed terminal background — the OPAQUE backing for BOTH the whole grid and each cell, so a
+    /// translucent terminal surface (window background-opacity < 1) still reads as a solid grid, and the
+    /// regular layer beneath the overlay (sidebar, add-buttons, deck) doesn't bleed through the margins.
     let captionBackground: Color
     /// The IDLE caption pill's FILL — the theme's muted selection-background highlight (the same color the
     /// selected sidebar row draws), so an idle chip is a themed, muted accent rather than the loud foreground.
@@ -35,9 +36,11 @@ struct DashboardView: View {
     /// The IDLE caption pill's TEXT — the theme's selection-foreground, readable over `pillColor`. A non-idle
     /// pill uses a luminance-contrasting black/white instead.
     let pillTextColor: Color
-    /// Single click on a cell highlights it (keyboard is primary, mouse secondary).
-    let onHighlight: (DashboardMember) -> Void
-    /// Enter, or a double click on a cell, jumps into that session+pane (the wiring selects + closes + focuses).
+    /// A single mouse click on a cell: the wiring flashes the active frame on it, then enters it after a brief
+    /// delay, so the click is visibly acknowledged before the grid closes.
+    let onClick: (DashboardMember) -> Void
+    /// Enter on the keyboard highlight jumps into that session+pane immediately (the wiring selects + closes +
+    /// focuses). No click-flash delay on this path — the keyboard highlight is already visible.
     let onSelect: (DashboardMember) -> Void
     /// Esc, or the wiring's close path, dismisses the dashboard.
     let onClose: () -> Void
@@ -68,12 +71,17 @@ struct DashboardView: View {
         }
         .padding(Self.gridSpacing)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // NO darkening backdrop: a transparent fill, exactly like the quick terminal's margin, so the area
-        // OUTSIDE the cells preserves the window's translucency + blur (the emptied deck slots already yield
-        // Color.clear, revealing the translucent window backing). A black scrim here composited OVER that
-        // backing and read as near-black — the cells already stand apart via their opaque backing + ring, so
-        // no scrim is needed to make the grid a distinct modal.
-        .background(Color.clear)
+        // an OPAQUE themed backdrop (the terminal theme's background, the SAME color the cells use), so the
+        // grid reads as a SOLID modal instead of letting the layer beneath it bleed through the margins around
+        // the cells — the sidebar, its bottom add-buttons, and the session deck showing through the
+        // transparent margin looked odd. This deliberately drops the window translucency/blur in the dashboard
+        // area: a clean theme-colored panel beats a see-through margin over the regular layer. Not a black
+        // scrim (which composited over the translucent backing and read as near-black) — the theme background.
+        .background(captionBackground)
+        // restore the title-bar/content hairline the opaque backdrop would otherwise cover: the SAME 1px
+        // themed line `detailColumn` draws under the title bar (`highlightColor` is the chrome foreground), so
+        // the boundary under the (stripped) title bar stays visible while the dashboard is open.
+        .overlay(alignment: .top) { Rectangle().fill(highlightColor.opacity(0.1)).frame(height: 1) }
         // the key-catcher sits behind the cells so it never intercepts their click hit targets; it owns
         // first responder and swallows every key while open.
         .background { DashboardKeyCatcher(onKey: handleKey) }
@@ -104,12 +112,13 @@ struct DashboardView: View {
             captionBackground
             memberTerminal(for: member, session: session)
                 .allowsHitTesting(false)
-            // transparent hit target above the terminal: single click highlights, double click enters.
+            // transparent hit target above the terminal: a single click flashes the frame then enters (see
+            // onClick). A lone count:1 tap has no double-click interval to wait out, so the click registers
+            // immediately — a count:2 + count:1 pair delayed every single click by the system double-click timeout.
             // it carries the per-cell accessibility id (the Metal-backed surface is not in the a11y tree).
             Color.clear
                 .contentShape(Rectangle())
-                .onTapGesture(count: 2) { onSelect(member) }
-                .onTapGesture(count: 1) { onHighlight(member) }
+                .onTapGesture { onClick(member) }
                 .accessibilityElement()
                 .accessibilityIdentifier("dashboard-cell")
             if isHighlighted {

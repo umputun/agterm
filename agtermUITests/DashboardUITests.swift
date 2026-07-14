@@ -223,14 +223,18 @@ final class DashboardUITests: ControlAPITestCase {
                       "the full titlebar returns once the dashboard closes")
     }
 
-    // the correctness crux: while the dashboard is open it is VIEW-ONLY — neither a typed keystroke nor a
-    // mouse click reaches any terminal. Proven with a three-phase probe so the negative is not vacuous:
+    // the correctness crux: while the dashboard is open it is VIEW-ONLY — a typed keystroke never reaches
+    // any terminal. Proven with a three-phase probe so the negative is not vacuous:
     //   1. before opening, GUI typing DOES reach the focused terminal (a marker file is written);
-    //   2. while open, a typed sentinel is swallowed (it never echoes into the surface buffer) and a cell
-    //      click is consumed by the dashboard (it moves the highlight) rather than the terminal beneath it;
+    //   2. while open, a typed sentinel is swallowed (it never echoes into the surface buffer) — a bare arrow
+    //      that walks the highlight proves the key pipeline drained PAST the sentinel first (a leaked
+    //      keystroke would already be in the buffer);
     //   3. after closing, GUI typing reaches the terminal again — so the block in phase 2 was the dashboard,
     //      not a dead terminal.
-    func testDashboardIsViewOnlyKeystrokesAndClickDoNotReachTerminal() throws {
+    // A single mouse CLICK on a cell now ENTERS it — that mouse path is covered by
+    // testDashboardCellSingleClickEntersSession, which also proves a click is consumed by the dashboard's hit
+    // target rather than the terminal beneath it.
+    func testDashboardIsViewOnlyKeystrokesDoNotReachTerminal() throws {
         let ids = try prepareSessions(extra: 1) // [seeded, new1]
 
         // focus the seeded terminal via its sidebar row (row click → select + focus, the SplitUITests idiom).
@@ -254,19 +258,15 @@ final class DashboardUITests: ControlAPITestCase {
         // No Return: a Return would be consumed as Enter=select and close the overlay, so a leak is detected
         // by the sentinel appearing in the buffer, not by a marker file.
         app.typeText("LEAKSENTINEL9911")
-        // a single click on the OTHER cell must reach the dashboard hit target (moving the highlight), never
-        // the terminal below it (the member terminal is allowsHitTesting(false)).
-        let secondCell = dashboardCells().element(boundBy: 1)
-        XCTAssertTrue(secondCell.waitForExistence(timeout: 10), "the second member cell should exist")
-        secondCell.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
-        // poll for the highlight to move to the clicked cell FIRST — a POSITIVE precondition proving the
-        // input pipeline drained PAST the typed sentinel, so a leaked keystroke would already be in the
-        // buffer below (a fixed settle before the negative buffer read could pass vacuously, hiding a late leak).
+        // a bare arrow must walk the highlight (dashboard input, never the terminal below) AND it proves the
+        // key pipeline drained PAST the typed sentinel: a leaked keystroke would already be in the buffer, so
+        // a fixed settle before the negative buffer read could pass vacuously and hide a late leak.
+        app.typeKey(.rightArrow, modifierFlags: [])
         let moved = pollDashHighlighted(changedFrom: ids[0], timeout: 8)
         XCTAssertEqual(moved.map(refSession), ids[1].lowercased(),
-                       "a cell click highlights that cell (dashboard input), proving it never reached the terminal")
+                       "a bare arrow walks the highlight (dashboard input), proving keystrokes never reached the terminal")
 
-        XCTAssertTrue(dashboardOverlay.exists, "typing and clicking must not dismiss the view-only dashboard")
+        XCTAssertTrue(dashboardOverlay.exists, "typing must not dismiss the view-only dashboard")
         let buffer = try readSessionText(ids[0])
         XCTAssertFalse(buffer.isEmpty, "the member surface buffer should be readable (its shell prompt)")
         XCTAssertFalse(buffer.contains("LEAKSENTINEL9911"),
@@ -280,6 +280,51 @@ final class DashboardUITests: ControlAPITestCase {
         typeShellMarker(token: "DASHAFTER7788", file: afterFile)
         XCTAssertNotNil(pollMarker(afterFile, timeout: 10),
                         "closing the dashboard restores terminal focus so GUI typing lands again")
+    }
+
+    // single-click mouse navigation: one click on a cell ENTERS that session+pane immediately — no
+    // double-click, no wait (the count:1 + count:2 pair the cell used to carry delayed every click by the
+    // double-click interval). It is the mouse counterpart of Enter on the keyboard highlight. The click also
+    // proves it is consumed by the dashboard's transparent hit target (entering the CLICKED cell) rather than
+    // passing to the allowsHitTesting(false) terminal beneath: a click that reached the terminal would leave
+    // the dashboard open and change nothing.
+    func testDashboardCellSingleClickEntersSession() throws {
+        let ids = try prepareSessions(extra: 1) // [seeded, new1]; openDashboard selects ids[0] (row 0) for routing
+        try openDashboard(members: ids)
+        settle(0.5)
+
+        // a SINGLE click on the second cell (ids[1]) enters that session and closes the dashboard.
+        let secondCell = dashboardCells().element(boundBy: 1)
+        XCTAssertTrue(secondCell.waitForExistence(timeout: 10), "the second member cell should exist")
+        secondCell.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
+
+        XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10),
+                      "a single click on a cell enters that session and closes the dashboard")
+        XCTAssertTrue(pollSelectedSession(ids[1], timeout: 10),
+                      "the single click enters the CLICKED cell's session (ids[1]), not the pre-selected ids[0] — "
+                          + "so the click hit the dashboard, not the terminal beneath")
+    }
+
+    // the title-bar Dashboard button opens the MRU dashboard grid — the GUI opener alongside ⌘⇧D / Navigate ▸
+    // Dashboard. It lives in the trailing action cluster in its own separator group (before the quick-terminal
+    // button). Disabled with no sessions, so this seeds one first.
+    func testTitlebarDashboardButtonOpensDashboard() throws {
+        _ = try prepareSessions(extra: 1) // ≥1 session so the button is enabled and MRU has members
+
+        let dashboardButton = app.buttons["dashboard-toggle-button"]
+        XCTAssertTrue(dashboardButton.waitForExistence(timeout: 15), "the title-bar dashboard button should exist")
+        dashboardButton.click()
+
+        XCTAssertTrue(dashboardOverlay.waitForExistence(timeout: 15),
+                      "clicking the title-bar dashboard button opens the dashboard grid")
+        // the stripped dashboard titlebar shows the "Dashboard" title (normal window-title logic; the test
+        // window has no custom name, so the base label). Matched by the visible label, not an a11y id — a
+        // Text tagged with accessibilityIdentifier reports an empty XCUITest `.label`.
+        XCTAssertTrue(app.staticTexts["Dashboard"].waitForExistence(timeout: 10),
+                      "the dashboard titlebar shows the 'Dashboard' title")
+        // the open dashboard swaps the full titlebar for the stripped bar, so the button is gone while open.
+        XCTAssertTrue(dashboardButton.waitForNonExistence(timeout: 10),
+                      "the full titlebar (and its dashboard button) is replaced by the stripped bar while the dashboard is open")
     }
 
     // opening with --auto-size records a positive applied font size and fontMode=auto on `tree` while open,
@@ -459,6 +504,18 @@ final class DashboardUITests: ControlAPITestCase {
 
     /// Open the dashboard over the socket with `members` (in order) and wait for the overlay to mount.
     private func openDashboard(members: [String], autoSize: Bool = false) throws {
+        // establish XCUITest key routing BEFORE opening: synthesized keystrokes reach the app only after a
+        // real click makes it the event target, and a bare arrow (unlike SplitUITests' MODIFIED arrows, which
+        // the menu dispatches) is delivered straight to the key window's first responder. A POST-open CELL
+        // click can no longer serve this — a single cell click now ENTERS + closes the dashboard. So click the
+        // first sidebar row (the SplitUITests idiom); routing persists through the socket open, then the
+        // key-catcher grabs first responder on mount. Row 0 is the default selection, so this perturbs no
+        // caller's baseline.
+        let routingRow = app.staticTexts.matching(identifier: "session-row").element(boundBy: 0)
+        if routingRow.waitForExistence(timeout: 15) {
+            routingRow.click()
+            settle(0.3)
+        }
         var args: [String: Any] = ["targets": members]
         if autoSize { args["autoSize"] = true }
         let data = try JSONSerialization.data(withJSONObject: ["cmd": "dashboard", "args": args])
@@ -466,16 +523,7 @@ final class DashboardUITests: ControlAPITestCase {
         let response = try sendCommand(line)
         XCTAssertEqual(response["ok"] as? Bool, true, "dashboard open should succeed: \(response)")
         XCTAssertTrue(dashboardOverlay.waitForExistence(timeout: 15), "the dashboard overlay should appear")
-        // the dashboard was opened over the SOCKET with no GUI interaction. A bare arrow is delivered to the
-        // key window's first responder (unlike SplitUITests' MODIFIED arrows, which the menu dispatches), and
-        // XCUITest only routes synthesized keystrokes into the app after a real click establishes it as the
-        // event target. Click the highlighted marker (it fills the highlighted cell, so the click re-selects
-        // the SAME cell — no highlight change) to establish that routing and settle the key-catcher's first
-        // responder before any keystroke.
-        if highlightedMarker.waitForExistence(timeout: 10) {
-            highlightedMarker.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).click()
-            settle(0.5)
-        }
+        settle(0.4)
     }
 
     private func closeDashboard() throws {
