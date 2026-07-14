@@ -183,8 +183,9 @@ paths:
   the waiting pane, not just the session.
 - **Titlebar attention bell (opt-in, window-wide aggregate of the glyph).**
   When `attentionButtonEnabled` is on (Settings ▸ General, default OFF — see the Settings section),
-  `customTitlebar` (`ContentView`) shows a bell icon just after the title that recovers the per-session
-  attention signal when the sidebar is hidden.
+  `customTitlebar` (`ContentView`) shows a bell icon in the trailing action cluster (after the
+  recent-sessions clock, before the divider and the scratch/split/quick-terminal buttons) that recovers
+  the per-session attention signal when the sidebar is hidden.
   It derives THREE states from the window's `AppStore.attentionSessions` (the host-free per-window set
   — ALL non-idle sessions, broader than `needsAttention`): empty → `bell`,
   ~0.35 opacity, `.disabled(true)`; non-empty no-blocked → `bell`, `chromeText`,

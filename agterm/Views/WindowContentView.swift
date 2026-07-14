@@ -682,9 +682,9 @@ struct WindowContentView: View {
     }
 
     /// Custom titlebar row replacing the system toolbar: the sidebar toggle pinned to the sidebar's
-    /// trailing edge (by the divider), the title at the terminal's start, and the split / quick-terminal
-    /// buttons at the trailing edge. Positions track `sidebarWidth`; the left inset clears the system
-    /// traffic lights.
+    /// trailing edge (by the divider), the title at the terminal's start, and the trailing action cluster
+    /// (recent-sessions / attention popovers, a divider, then the scratch / split / quick-terminal
+    /// buttons). Positions track `sidebarWidth`; the left inset clears the system traffic lights.
     private var titlebarRow: some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: 78).allowsHitTesting(false) // system traffic lights
@@ -704,16 +704,16 @@ struct WindowContentView: View {
                 // so double-clicking it zooms and dragging it moves the window — the rest of the row is
                 // empty spacers (already non-hittable) and the buttons, which keep their own clicks.
                 .allowsHitTesting(false)
-            if attentionButtonEnabled {
-                attentionButton.labelStyle(.iconOnly).padding(.leading, 10)
-            }
-            recentSessionsButton.labelStyle(.iconOnly).padding(.leading, 10)
             Spacer(minLength: 12)
             HStack(spacing: 14) {
+                recentSessionsButton.labelStyle(.iconOnly)
+                if attentionButtonEnabled {
+                    attentionButton.labelStyle(.iconOnly)
+                }
+                // separates the recent-sessions / attention popovers from the view controls.
+                Rectangle().fill(chromeText.opacity(0.25)).frame(width: 1, height: 16)
                 scratchButton.labelStyle(.iconOnly)
                 splitButton.labelStyle(.iconOnly)
-                // separates the per-session view toggles (scratch/split) from the window-level quick terminal.
-                Rectangle().fill(chromeText.opacity(0.25)).frame(width: 1, height: 16)
                 quickTerminalButton.labelStyle(.iconOnly)
             }
             .padding(.trailing, 14)
