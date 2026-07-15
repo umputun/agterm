@@ -410,12 +410,18 @@ paths:
   `!quickTerminal.isVisible` on the pane, scratch, AND overlay expressions (it covers the deck WITHOUT
   touching `deckInteractive`/`hideForOverlay`, so without that term the covered surfaces flicker against the
   quick-terminal surface — issue #225's quick-terminal path).
-  A FLOATING overlay is the one residual: it leaves the pane VISIBLE in the margin around the panel (so the
-  pane legitimately keeps `deckVisible = true`), and no boolean gate can scope the cursor to the
-  panel-vs-margin split — over the panel's overlap the pane and the overlay surface can still show competing
-  shapes.
-  This is a known limitation of the boolean approach: narrow (needs a floating overlay AND the two surfaces
-  cached at different shapes) and far milder than the original many-surface flicker.
+  Two residual cases remain, both far milder than the original many-surface flicker and both predating this
+  change.
+  A FLOATING overlay leaves the pane VISIBLE in the margin around the panel (so the pane legitimately keeps
+  `deckVisible = true`), and no boolean gate can scope the cursor to the panel-vs-margin split — over the
+  panel's overlap the pane and the overlay surface can still show competing shapes.
+  The command palette and Ctrl-Tab switcher (window-level SwiftUI overlays NOT in the `deckVisible`
+  predicate) likewise leave the covered pane `deckVisible = true`, so over them the covered terminal surface
+  can still write its cached cursor (cosmetic, plus a rare drop-through) — but that is ONE terminal surface
+  under a SwiftUI overlay, not two terminals fighting, and these are transient keyboard-driven overlays the
+  pointer rarely rests on.
+  Both are left as known limitations of the boolean approach rather than chasing every window-level overlay
+  into the predicate (the quick terminal is gated because it is the persistent, mouse-used one).
   The tracking + pointer methods live in `GhosttySurfaceView+Tracking.swift` (`currentTrackingArea` is
   `internal`, not `private`, so that extension can manage the stored area).
   Cursor shape is not accessibility-observable, so this is verified BY EYE (like the cursor solid/hollow
