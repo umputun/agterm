@@ -449,9 +449,10 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
 
     /// Re-assert this pane's cursor when its window becomes key. AppKit does NOT re-issue a `cursorUpdate`
     /// to the visible pane on bare window activation, so a reactivating click otherwise leaves the OS default
-    /// (arrow) cursor until the next mouse move. Gated exactly like the `.set()` sites — `deckVisible` (only
-    /// the on-screen pane sets the cursor) and pointer-in-bounds (never paint the terminal cursor over the
-    /// sidebar/titlebar or a background window) — so with hidden surfaces already muted it wins uncontested.
+    /// (arrow) cursor until the next mouse move. Gated on `deckVisible` (only the on-screen pane sets the
+    /// cursor) + `isKeyWindow` + pointer-in-bounds (checked fresh from `mouseLocationOutsideOfEventStream`,
+    /// since `pointerInside` can be stale on a no-move activation) — so it never paints the terminal cursor
+    /// over the sidebar/titlebar or a background window, and with hidden surfaces already muted it wins uncontested.
     func reassertCursorOnActivation() {
         guard deckVisible, let window, window.isKeyWindow else { return }
         let pointInView = convert(window.mouseLocationOutsideOfEventStream, from: nil)

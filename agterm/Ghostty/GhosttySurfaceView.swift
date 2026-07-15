@@ -211,6 +211,9 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// and (dis)installs the mouse-tracking area for the same reason (see `updatePointerTracking`).
     var deckVisible = true {
         didSet {
+            // `TerminalView` assigns this on every SwiftUI update pass, so skip the tracking-area teardown/
+            // rebuild + drag re-registration unless the visibility actually flipped.
+            guard deckVisible != oldValue else { return }
             updateDropRegistration()
             updatePointerTracking()
         }
@@ -282,6 +285,9 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     var _selectedRange = NSRange(location: NSNotFound, length: 0)
     var keyTextAccumulator: [String] = []
     var currentKeyEvent: NSEvent?
+
+    // the pointer's mouse-tracking area, managed by GhosttySurfaceView+Tracking.swift (a stored property
+    // can't live in an extension, so it stays here as internal rather than private).
     var currentTrackingArea: NSTrackingArea?
 
     /// The mouse-cursor shape libghostty last requested for this surface (`GHOSTTY_ACTION_MOUSE_SHAPE`):

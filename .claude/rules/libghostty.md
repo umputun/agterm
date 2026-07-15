@@ -403,6 +403,19 @@ paths:
   when its window becomes key — gated `deckVisible` + `isKeyWindow` + pointer-in-bounds, so it never paints
   the terminal cursor over the sidebar or a background window, and it wins uncontested since hidden panes are
   already muted.
+  `deckVisible` itself is computed in `WindowContentView.sessionDetail` (the pane's `visible`, plus the
+  scratch and overlay `deckVisible` expressions); each must exclude EVERY layer that covers the surface, or
+  the covered surface keeps `deckVisible = true` and competes anyway.
+  Full overlay / scratch drop it via `hideForOverlay`; the window-level quick terminal drops it via
+  `!quickTerminal.isVisible` on the pane, scratch, AND overlay expressions (it covers the deck WITHOUT
+  touching `deckInteractive`/`hideForOverlay`, so without that term the covered surfaces flicker against the
+  quick-terminal surface — issue #225's quick-terminal path).
+  A FLOATING overlay is the one residual: it leaves the pane VISIBLE in the margin around the panel (so the
+  pane legitimately keeps `deckVisible = true`), and no boolean gate can scope the cursor to the
+  panel-vs-margin split — over the panel's overlap the pane and the overlay surface can still show competing
+  shapes.
+  This is a known limitation of the boolean approach: narrow (needs a floating overlay AND the two surfaces
+  cached at different shapes) and far milder than the original many-surface flicker.
   The tracking + pointer methods live in `GhosttySurfaceView+Tracking.swift` (`currentTrackingArea` is
   `internal`, not `private`, so that extension can manage the stored area).
   Cursor shape is not accessibility-observable, so this is verified BY EYE (like the cursor solid/hollow
