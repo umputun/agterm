@@ -133,7 +133,14 @@
           <details class="site-nav-mobile">
             <summary>menu</summary>
             <nav aria-label="Mobile navigation" onclick="this.parentElement.open=false">
-              <label for="doc-drawer">contents</label>
+              <button
+                type="button"
+                class="doc-drawer-trigger"
+                aria-controls="doc-navigation"
+                onclick="document.getElementById('doc-drawer').checked=true; document.querySelector('#doc-navigation a').focus()"
+              >
+                contents
+              </button>
               <a href="/">← home</a>
               <a href="/docs">docs</a>
               <a href="https://github.com/umputun/agterm">GitHub ↗</a>
@@ -143,7 +150,12 @@
       </div>
 
       <input class="doc-drawer-toggle" type="checkbox" id="doc-drawer" />
-      <label class="doc-drawer-overlay" for="doc-drawer" aria-label="Close documentation navigation"></label>
+      <button
+        type="button"
+        class="doc-drawer-overlay"
+        aria-label="Close documentation navigation"
+        onclick="document.getElementById('doc-drawer').checked=false; document.querySelector('.site-nav-mobile summary').focus()"
+      ></button>
 
       <!-- ===== LAYOUT ===== -->
       <div
@@ -152,6 +164,7 @@
       >
         <!-- SIDEBAR -->
         <aside
+          id="doc-navigation"
           class="doc-scroll"
           style="
             position: sticky;
@@ -165,7 +178,7 @@
         >
           <nav
             aria-label="Command reference sections"
-            onclick="document.getElementById('doc-drawer').checked=false"
+            onclick="document.getElementById('doc-drawer').checked=false; document.querySelector('.site-nav-mobile summary').focus()"
             style="display: flex; flex-direction: column; gap: 4px; font-size: 13.5px"
           >
             <a href="#overview" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Overview</a>

@@ -21,6 +21,7 @@ body {
   margin: 0;
   padding: 0;
   background: #191d20;
+  overflow-x: clip;
 }
 ::selection {
   background: rgba(109, 130, 243, 0.28);
@@ -87,18 +88,24 @@ a {
     0 16px 40px rgba(0, 0, 0, 0.35);
 }
 .site-nav-mobile nav a,
-.site-nav-mobile nav label {
+.site-nav-mobile nav button {
   min-height: 44px;
   padding: 0 12px;
   display: flex;
   align-items: center;
+  width: 100%;
   color: #b7bdc5;
   cursor: pointer;
+  font: inherit;
+  text-align: left;
+  background: none;
+  border: 0;
   border-radius: 6px;
 }
 .site-nav-mobile nav a:hover,
 .site-nav-mobile nav a:focus-visible,
-.site-nav-mobile nav label:hover {
+.site-nav-mobile nav button:hover,
+.site-nav-mobile nav button:focus-visible {
   color: #e6e1d7;
   background: rgba(255, 255, 255, 0.06);
 }
@@ -148,17 +155,20 @@ a {
     inset: 64px 0 0;
     z-index: 48;
     display: block;
+    padding: 0;
     background: rgba(0, 0, 0, 0.48);
+    cursor: pointer;
+    border: 0;
   }
   .doc-content {
     max-width: none !important;
     padding: 32px 0 96px !important;
   }
-  .doc-content p > span[style*="white-space: nowrap"] {
+  .doc-content p > span[style*="white-space"][style*="nowrap"] {
     white-space: normal !important;
     overflow-wrap: anywhere;
   }
-  .doc-content div[style*="flex-wrap: wrap"] > span[style*="white-space: nowrap"] {
+  .doc-content div[style*="flex-wrap: wrap"] > span[style*="white-space"][style*="nowrap"] {
     max-width: 100%;
     white-space: normal !important;
     overflow-wrap: anywhere;
