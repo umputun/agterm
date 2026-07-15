@@ -10,7 +10,7 @@ import XCTest
 @MainActor
 class ControlAPITestCase: XCTestCase {
     var app: XCUIApplication!
-    private var stateDir: URL!
+    private(set) var stateDir: URL!
     private var socketPath: String!
     private(set) var markerDir: URL!
 
