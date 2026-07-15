@@ -123,7 +123,7 @@
         font-family: &quot;IBM Plex Sans&quot;, system-ui, sans-serif;
         -webkit-font-smoothing: antialiased;
         min-height: 100vh;
-        overflow-x: hidden;
+        overflow-x: clip;
       "
     >
       <!-- ===== NAV ===== -->
@@ -138,6 +138,7 @@
         "
       >
         <div
+          class="site-nav-bar"
           style="
             max-width: 1140px;
             margin: 0 auto;
@@ -167,6 +168,7 @@
             >
           </a>
           <div
+            class="site-nav-desktop"
             style="
               display: flex;
               align-items: center;
@@ -195,6 +197,17 @@
               >GitHub ↗</a
             >
           </div>
+          <details class="site-nav-mobile">
+            <summary>menu</summary>
+            <nav aria-label="Mobile navigation" onclick="this.parentElement.open=false">
+              <a href="#features">features</a>
+              <a href="#scripting">scripting</a>
+              <a href="#install">install</a>
+              <a href="/docs">docs</a>
+              <a href="/commands">commands</a>
+              <a href="https://github.com/umputun/agterm">GitHub ↗</a>
+            </nav>
+          </details>
         </div>
       </div>
 

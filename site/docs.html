@@ -64,6 +64,7 @@
         "
       >
         <div
+          class="site-nav-bar"
           style="
             max-width: 1240px;
             margin: 0 auto;
@@ -104,6 +105,7 @@
             >
           </a>
           <div
+            class="site-nav-desktop"
             style="
               display: flex;
               align-items: center;
@@ -128,11 +130,26 @@
               >GitHub ↗</a
             >
           </div>
+          <details class="site-nav-mobile">
+            <summary>menu</summary>
+            <nav aria-label="Mobile navigation" onclick="this.parentElement.open=false">
+              <label for="doc-drawer">contents</label>
+              <a href="/">← home</a>
+              <a href="/commands">commands</a>
+              <a href="https://github.com/umputun/agterm">GitHub ↗</a>
+            </nav>
+          </details>
         </div>
       </div>
 
+      <input class="doc-drawer-toggle" type="checkbox" id="doc-drawer" />
+      <label class="doc-drawer-overlay" for="doc-drawer" aria-label="Close documentation navigation"></label>
+
       <!-- ===== LAYOUT ===== -->
-      <div style="max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: 236px 1fr; gap: 48px; padding: 0 28px">
+      <div
+        class="doc-layout"
+        style="max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: 236px 1fr; gap: 48px; padding: 0 28px"
+      >
         <!-- SIDEBAR -->
         <aside
           class="doc-scroll"
@@ -146,7 +163,11 @@
             font-family: &quot;JetBrains Mono&quot;, monospace;
           "
         >
-          <nav style="display: flex; flex-direction: column; gap: 4px; font-size: 13.5px">
+          <nav
+            aria-label="Documentation sections"
+            onclick="document.getElementById('doc-drawer').checked=false"
+            style="display: flex; flex-direction: column; gap: 4px; font-size: 13.5px"
+          >
             <a href="#overview" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Overview</a>
             <a href="#install" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Install</a>
             <div style="height: 16px"></div>
@@ -177,7 +198,7 @@
         </aside>
 
         <!-- CONTENT -->
-        <main style="min-width: 0; padding: 48px 0 120px; max-width: 760px">
+        <main class="doc-content" style="min-width: 0; padding: 48px 0 120px; max-width: 760px">
           <!-- title -->
           <div
             style="
