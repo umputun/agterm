@@ -383,6 +383,33 @@ paths:
   It is the companion to the `mouseEntered` restore (which only covers cross-the-boundary re-entry).
   Like the cursor-focus case, this input plumbing is not accessibility-observable and is verified by hand,
   not a UI test.
+- **Only the ON-SCREEN deck pane may set the process-global cursor (`deckVisible` gates every cursor write).**
+  Every session's surface is eagerly realized with a `.mouseMoved`/`.cursorUpdate` tracking area, and AppKit
+  tracking ignores SwiftUI `.opacity(0)`/sibling overlap the SAME way drag-destination resolution does — a
+  hidden surface's `visibleRect` is NOT clipped by the visible pane stacked over it.
+  So several stacked surfaces receive the SAME `mouseMoved` and each ran `NSCursor.set()`; a hidden session
+  cached at a different mouse shape (a mouse-reporting TUI, or an OSC 22 pointer shape) then flickered its
+  shape over the visible terminal on every move — issue #225's arrow↔I-beam flicker, seen in RESTORED
+  sessions precisely because restore mounts MANY surfaces at once (one session shows no competition).
+  The fix gates the cursor on `deckVisible` (the same on-screen-pane flag drag registration uses) in TWO
+  places: `setupTrackingArea` installs the tracking area only while `deckVisible` (a hidden surface gets no
+  `mouseMoved` at all — this also stops the `reportMousePos` fan-out to every hidden TUI), AND the three
+  cursor-set sites (`mouseMoved`, `applyMouseShape`, `cursorUpdate`) each `guard deckVisible`.
+  The tracking-area gate ALONE is NOT enough: AppKit still delivers a `cursorUpdate` to a HIDDEN surface on
+  window activation, so a background pane cached at a stale shape would paint it on the reactivating click
+  without the `.set()`-site guards.
+  Conversely AppKit does NOT re-issue a `cursorUpdate` to the VISIBLE pane on bare activation, so
+  `reassertCursorOnActivation` (called from the `didBecomeKey` observer) re-asserts the visible pane's cursor
+  when its window becomes key — gated `deckVisible` + `isKeyWindow` + pointer-in-bounds, so it never paints
+  the terminal cursor over the sidebar or a background window, and it wins uncontested since hidden panes are
+  already muted.
+  The tracking + pointer methods live in `GhosttySurfaceView+Tracking.swift` (`currentTrackingArea` is
+  `internal`, not `private`, so that extension can manage the stored area).
+  Cursor shape is not accessibility-observable, so this is verified BY EYE (like the cursor solid/hollow
+  case), reproduced deterministically with several stacked sessions given differing OSC 22 shapes
+  (`printf '\033]22;crosshair\007'`).
+  Do NOT "simplify" this to only the tracking-area gate (the refocus crosshair returns) or only the
+  `.set()`-site gates (hidden TUIs keep getting the `reportMousePos` fan-out).
 - **OSC 52 clipboard access is gated in OUR callbacks, not by a ghostty-internal dialog.**
   A program reading (`\e]52;c;?\a`) or writing (`\e]52;c;<base64>\a`) the system clipboard reaches agterm
   through `read_clipboard_cb`/`confirm_read_clipboard_cb` and `write_clipboard_cb` (`GhosttyCallbacks`).
