@@ -126,7 +126,8 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 
 **tree** — print the workspace/session tree (`--json` for structured). Each session node carries
 `foreground`/`splitForeground` (the live argv of each pane's foreground process, omitted when the pane
-is at its shell prompt) — i.e. what each pane is currently running — `status` (the agent-status set
+is at its shell prompt, or running a setuid/setgid program like `top` or `sudo` whose argv macOS won't
+expose) — i.e. what each pane is currently running — `status` (the agent-status set
 via `session status`: `active`|`completed`|`blocked`, omitted when idle), `statusPane` (which pane set
 that status: `left` (main) | `right` (split) | `scratch`, from `session status --pane`, omitted when
 unset or idle), `statusBlink`/`statusColor` (the status glyph's `--blink` flag and `--color` `#rrggbb`
