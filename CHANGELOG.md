@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.14.1 - 2026-07-15
+
+### Bug Fixes
+
+- stop the mouse cursor flickering between shapes over a restored session's visible terminal, by scoping every cursor write to the on-screen deck pane so a hidden stacked surface can no longer paint its cached shape over the front one #228 @umputun
+
 ## v0.14.0 - 2026-07-14
 
 ### New Features
