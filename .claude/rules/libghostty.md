@@ -274,8 +274,8 @@ paths:
   (see the surface-bridge note), so a click would still reach `mouseDown` and the retry loops would
   re-grab the surface.
   The full set:
-  - each cell's terminal is `.allowsHitTesting(false)`, with a transparent hit target ABOVE it for
-    click-highlight / double-click-enter (the terminal itself takes no hits);
+  - each cell's terminal is `.allowsHitTesting(false)`, with a transparent hit target ABOVE it that flashes
+    the highlight then enters that session+pane on a single click (the terminal itself takes no hits);
   - `GhosttySurfaceView.viewOnly` (threaded via `TerminalView`) makes the member surface refuse to be
     first responder (`acceptsFirstResponder = !viewOnly`) and drop hits (`hitTest` returns nil when
     `viewOnly`), so even a stray reactivation click can't focus it;
@@ -383,6 +383,52 @@ paths:
   It is the companion to the `mouseEntered` restore (which only covers cross-the-boundary re-entry).
   Like the cursor-focus case, this input plumbing is not accessibility-observable and is verified by hand,
   not a UI test.
+- **Only the ON-SCREEN deck pane may set the process-global cursor (`deckVisible` gates every cursor write).**
+  Every session's surface is eagerly realized with a `.mouseMoved`/`.cursorUpdate` tracking area, and AppKit
+  tracking ignores SwiftUI `.opacity(0)`/sibling overlap the SAME way drag-destination resolution does — a
+  hidden surface's `visibleRect` is NOT clipped by the visible pane stacked over it.
+  So several stacked surfaces receive the SAME `mouseMoved` and each ran `NSCursor.set()`; a hidden session
+  cached at a different mouse shape (a mouse-reporting TUI, or an OSC 22 pointer shape) then flickered its
+  shape over the visible terminal on every move — issue #225's arrow↔I-beam flicker, seen in RESTORED
+  sessions precisely because restore mounts MANY surfaces at once (one session shows no competition).
+  The fix gates the cursor on `deckVisible` (the same on-screen-pane flag drag registration uses) in TWO
+  places: `setupTrackingArea` installs the tracking area only while `deckVisible` (a hidden surface gets no
+  `mouseMoved` at all — this also stops the `reportMousePos` fan-out to every hidden TUI), AND the three
+  cursor-set sites (`mouseMoved`, `applyMouseShape`, `cursorUpdate`) each `guard deckVisible`.
+  The tracking-area gate ALONE is NOT enough: AppKit still delivers a `cursorUpdate` to a HIDDEN surface on
+  window activation, so a background pane cached at a stale shape would paint it on the reactivating click
+  without the `.set()`-site guards.
+  Conversely AppKit does NOT re-issue a `cursorUpdate` to the VISIBLE pane on bare activation, so
+  `reassertCursorOnActivation` (called from the `didBecomeKey` observer) re-asserts the visible pane's cursor
+  when its window becomes key — gated `deckVisible` + `isKeyWindow` + pointer-in-bounds, so it never paints
+  the terminal cursor over the sidebar or a background window, and it wins uncontested since hidden panes are
+  already muted.
+  `deckVisible` itself is computed in `WindowContentView.sessionDetail` (the pane's `visible`, plus the
+  scratch and overlay `deckVisible` expressions); each must exclude EVERY layer that covers the surface, or
+  the covered surface keeps `deckVisible = true` and competes anyway.
+  Full overlay / scratch drop it via `hideForOverlay`; the window-level quick terminal drops it via
+  `!quickTerminal.isVisible` on the pane, scratch, AND overlay expressions (it covers the deck WITHOUT
+  touching `deckInteractive`/`hideForOverlay`, so without that term the covered surfaces flicker against the
+  quick-terminal surface — issue #225's quick-terminal path).
+  Two residual cases remain, both far milder than the original many-surface flicker and both predating this
+  change.
+  A FLOATING overlay leaves the pane VISIBLE in the margin around the panel (so the pane legitimately keeps
+  `deckVisible = true`), and no boolean gate can scope the cursor to the panel-vs-margin split — over the
+  panel's overlap the pane and the overlay surface can still show competing shapes.
+  The command palette and Ctrl-Tab switcher (window-level SwiftUI overlays NOT in the `deckVisible`
+  predicate) likewise leave the covered pane `deckVisible = true`, so over them the covered terminal surface
+  can still write its cached cursor (cosmetic, plus a rare drop-through) — but that is ONE terminal surface
+  under a SwiftUI overlay, not two terminals fighting, and these are transient keyboard-driven overlays the
+  pointer rarely rests on.
+  Both are left as known limitations of the boolean approach rather than chasing every window-level overlay
+  into the predicate (the quick terminal is gated because it is the persistent, mouse-used one).
+  The tracking + pointer methods live in `GhosttySurfaceView+Tracking.swift` (`currentTrackingArea` is
+  `internal`, not `private`, so that extension can manage the stored area).
+  Cursor shape is not accessibility-observable, so this is verified BY EYE (like the cursor solid/hollow
+  case), reproduced deterministically with several stacked sessions given differing OSC 22 shapes
+  (`printf '\033]22;crosshair\007'`).
+  Do NOT "simplify" this to only the tracking-area gate (the refocus crosshair returns) or only the
+  `.set()`-site gates (hidden TUIs keep getting the `reportMousePos` fan-out).
 - **OSC 52 clipboard access is gated in OUR callbacks, not by a ghostty-internal dialog.**
   A program reading (`\e]52;c;?\a`) or writing (`\e]52;c;<base64>\a`) the system clipboard reaches agterm
   through `read_clipboard_cb`/`confirm_read_clipboard_cb` and `write_clipboard_cb` (`GhosttyCallbacks`).

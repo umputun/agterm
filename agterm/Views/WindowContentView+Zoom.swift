@@ -18,6 +18,10 @@ extension WindowContentView {
                 Color.clear
                     .frame(width: 78)
                     .allowsHitTesting(false)
+                titleLabel
+                    .padding(.leading, 8)
+                    // falls through to the drag/zoom layer behind the bar, like the normal title.
+                    .allowsHitTesting(false)
                 Spacer(minLength: 12)
                 Button {
                     terminalZoom.clear()

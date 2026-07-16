@@ -130,6 +130,19 @@ The app must build, `swift test` must stay green, and `make lint` must pass afte
   Cleanup must NEVER switch the main checkout's branch (the user may be working there in another window),
   and `gh pr merge --delete-branch` run FROM the worktree switches it, so merge / branch-delete from the
   main checkout, not the worktree.
+  **A squash (or rebase) merge makes `ExitWorktree` `remove` (and a manual `git worktree remove`) REFUSE
+  with "N commits will be discarded permanently"** — git can't recognize the worktree branch as merged,
+  because the squash rewrote its commits into one new commit on `master`.
+  This is the SAME snag every worktree cleanup after a squash merge; it is expected, not a failure.
+  Once you have VERIFIED the squash landed on `origin/master` (its tip is the PR's merge commit — check
+  with `gh pr view <n> --json state,mergeCommit` + `git fetch origin master`), re-invoke `ExitWorktree`
+  with `discard_changes: true`: the branch work is safe inside the squash, so discarding the loose commits
+  loses nothing.
+  Second gotcha: `ExitWorktree`'s message and its `remove` reference the ORIGINAL branch name
+  (`worktree-<name>`) even after you renamed the branch to `<name>`, so the renamed local `<name>` branch
+  SURVIVES the worktree removal and must be deleted separately with `git branch -D <name>` from the main
+  checkout (and GitHub's auto-delete-head-branch may already have removed the remote one — confirm with
+  `git ls-remote --heads origin <name>` before any `git push origin --delete`).
 - **Working in a git WORKTREE: SYMLINK the prebuilt artifacts, don't re-run setup.** A fresh `git worktree`
   does NOT contain the gitignored `GhosttyKit.xcframework`, `agterm/Resources/ghostty`,
   or `agterm/Resources/terminfo` (they're build outputs, never committed).
@@ -363,6 +376,27 @@ Assets are self-hosted under `site/assets/`: latin `woff2` fonts in `site/assets
 screenshots as `webp`, plus a generated 1200×630 `agterm-og.png` social card and favicons.
 The pages were converted from a design-tool bundle export whose source zip lives on the maintainer's
 Desktop, not in the repo, so a visual redesign means re-exporting the design and re-running that conversion.
+
+Two recurring screenshot/layout gotchas when editing the pages.
+The hero carousel (`.hero-gallery` in `site/index.html`) is a FIXED-aspect crop box:
+`aspect-ratio: 1187 / 696` (≈1.70:1) with `object-fit: cover` (`site/style.css`),
+so a screenshot added to it must be captured at ~1.70:1 (existing shots are 2374×1392) or `cover` crops its
+top and bottom.
+A dense multi-pane shot (the dashboard's grid) is taller by nature — resize the agterm window to ~1.70:1
+BEFORE capturing rather than letting the crop eat rows, and expect its `webp` to floor around ~200k
+(vs the 85–172k of single-window shots), so tune `cwebp -q`/`-m 6` for size, not the usual quality.
+Adding a slide also means re-timing the crossfade in `style.css`:
+the loop duration is `slides × 5s`, each image needs its own `nth-child(N)` `animation-delay` on the 5s
+stagger, and the `heroGallery`/`heroGalleryFirst` keyframe plateau (the `opacity: 1` hold) is ≈`1/slides` of
+the cycle — leave the old percentages and adjacent slides double-expose.
+
+Feature-card grids that use `repeat(auto-fit, minmax(…))` strand an ORPHAN card on the last row when the
+card count does not divide evenly into the resolved column count (five surface cards rendered 4 + 1, the
+Dashboard card stranded alone).
+For an even row, switch that block to a fixed `grid-template-columns: repeat(N, minmax(0, 1fr))` and give the
+wide/odd item a `grid-column: span M`, with `@media` fallbacks for narrow widths — see `.surfaces-grid`,
+where row 1 holds the four surface cards and row 2 pairs the Dashboard card with the Windows callout spanning
+three columns.
 
 ## Subsystem notes (path-scoped rules)
 

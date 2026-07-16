@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.14.1 - 2026-07-15
+
+### Bug Fixes
+
+- stop the mouse cursor flickering between shapes over a restored session's visible terminal, by scoping every cursor write to the on-screen deck pane so a hidden stacked surface can no longer paint its cached shape over the front one #228 @umputun
+
+## v0.14.0 - 2026-07-14
+
+### New Features
+
+- Pi agent-status support in Install Agent Status Hooks, so a Pi agent running in a session reports active then completed onto its sidebar row, matching the Claude Code and Codex auto-wiring #208 @taras-mrtn
+- a title-bar button that opens the dashboard, grouped with the quick-terminal button behind a separator #217 @umputun
+
+### Improvements
+
+- dashboard cells now enter on a single click instead of a double click, flashing the active frame first so the click reads as acknowledged #217 @umputun
+- the dashboard and terminal-zoom modes now show the window title in their stripped title bars #217 @umputun
+
 ## v0.13.0 - 2026-07-14
 
 ### New Features

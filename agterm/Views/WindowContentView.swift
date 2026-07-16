@@ -375,10 +375,14 @@ struct WindowContentView: View {
         // this subtree's shape/hit-testing must not change when a floating overlay opens (NSSplitView overrun).
         let hideForOverlay = fullOverlay || session.scratchActive
         let overlaid = session.overlayActive || session.scratchActive
-        // on-screen = selected session, not hidden by a full overlay/scratch. Shared by BOTH split panes
-        // (unlike the focus-gated `isActive`), it gates each surface's drag-type (un)registration so a file
-        // drop lands on the visible pane, not an invisible background deck surface (matches the panes' hit-testing).
-        let visible = deckInteractive && isActive && !hideForOverlay
+        // on-screen = selected session, not hidden by a full overlay/scratch, and not covered by the
+        // window-level quick terminal. Shared by BOTH split panes (unlike the focus-gated `isActive`), it
+        // gates each surface's drag-type (un)registration AND its mouse-cursor tracking (the `deckVisible`
+        // note in libghostty.md) so neither a file drop nor a cursor write lands on an off-screen surface.
+        // `!quickTerminal.isVisible` mutes the covered pane while the quick terminal is up — otherwise the
+        // covered pane keeps deckVisible=true and races the quick-terminal surface for the cursor and fans
+        // mouse-motion into the covered TUI (issue #225 quick-terminal path).
+        let visible = deckInteractive && isActive && !hideForOverlay && !quickTerminal.isVisible
         ZStack {
             // the session's pane(s), kept MOUNTED while an overlay is up — shells stay alive, like the deck
             // does for inactive sessions. a FULL overlay hides them (opacity 0) so its translucency reveals the
@@ -470,7 +474,7 @@ struct WindowContentView: View {
                 // rule so only an on-screen scratch is a file-drop target.
                 TerminalView(session: session, surfaceKeyPath: \.scratchSurface, makeSurface: makeScratchSurface,
                              isActive: deckInteractive && isActive && !session.overlayActive && !quickTerminal.isVisible,
-                             deckVisible: deckInteractive && isActive && !fullOverlay)
+                             deckVisible: deckInteractive && isActive && !fullOverlay && !quickTerminal.isVisible)
                     .opacity(fullOverlay ? 0 : 1)
                     .allowsHitTesting(!fullOverlay)
                     .id("\(session.id.uuidString)-scratch")
@@ -530,7 +534,7 @@ struct WindowContentView: View {
                     // responder (the full variant hides the panes, so it's covered either way).
                     Color.clear.contentShape(Rectangle())
                     TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
-                                 makeSurface: makeOverlaySurface, isActive: isActive, deckVisible: isActive)
+                                 makeSurface: makeOverlaySurface, isActive: isActive, deckVisible: isActive && !quickTerminal.isVisible)
                         .frame(width: geo.size.width * fraction, height: geo.size.height * fraction)
                         // floating = opaque backing + hairline frame + shadow so it reads as a distinct window
                         // over the still-visible session; full = translucent, no chrome (libghostty draws only
@@ -648,8 +652,9 @@ struct WindowContentView: View {
     }
 
     /// The window title at the terminal's leading edge: the session name, plus the cwd subtitle on a
-    /// second line only in normal mode (compact drops it for a single short row).
-    private var titleLabel: some View {
+    /// second line only in normal mode (compact drops it for a single short row). Non-private so the zoom
+    /// titlebar reuses it — a zoomed terminal shows the same title as the normal window.
+    var titleLabel: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(windowTitle).fontWeight(.semibold)
             if !windowSubtitle.isEmpty {
@@ -683,8 +688,9 @@ struct WindowContentView: View {
 
     /// Custom titlebar row replacing the system toolbar: the sidebar toggle pinned to the sidebar's
     /// trailing edge (by the divider), the title at the terminal's start, and the trailing action cluster
-    /// (recent-sessions / attention popovers, a divider, then the scratch / split / quick-terminal
-    /// buttons). Positions track `sidebarWidth`; the left inset clears the system traffic lights.
+    /// (recent-sessions / attention popovers, a divider, the scratch / split view controls, a divider, then
+    /// the dashboard / quick-terminal group). Positions track `sidebarWidth`; the left inset clears the
+    /// system traffic lights.
     private var titlebarRow: some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: 78).allowsHitTesting(false) // system traffic lights
@@ -714,6 +720,9 @@ struct WindowContentView: View {
                 Rectangle().fill(chromeText.opacity(0.25)).frame(width: 1, height: 16)
                 scratchButton.labelStyle(.iconOnly)
                 splitButton.labelStyle(.iconOnly)
+                // separates the per-session view controls from the window-overlay group (dashboard + quick terminal).
+                Rectangle().fill(chromeText.opacity(0.25)).frame(width: 1, height: 16)
+                dashboardButton.labelStyle(.iconOnly)
                 quickTerminalButton.labelStyle(.iconOnly)
             }
             .padding(.trailing, 14)

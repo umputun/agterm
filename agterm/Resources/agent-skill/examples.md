@@ -9,7 +9,7 @@ Worked `agtermctl` examples. See `reference.md` for exact flags and return shape
 agtermctl tree --json        # workspaces -> sessions, active/split/overlay/scratch/flagged flags, surface ids
 agtermctl window list --json # windows, with open/active flags
 
-# what is each pane RUNNING right now (foreground argv; absent when at the shell prompt)
+# what is each pane RUNNING right now (foreground argv; absent at the shell prompt or for a setuid program like top/sudo)
 agtermctl tree --json | jq -r '.result.tree.workspaces[].sessions[] | "\(.name): \(.foreground // "shell")"'
 ```
 

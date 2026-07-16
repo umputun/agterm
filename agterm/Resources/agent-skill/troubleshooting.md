@@ -84,6 +84,14 @@ To remap a shortcut ghostty still owns: a physical key name (`key_c`, `key_v`, �
 any layout; a bare letter (`c`, `v`) matches the produced character. Edit `~/.config/agterm/ghostty.conf`,
 then `agtermctl config reload`.
 
+### "The agent-status glyph does not update"
+
+Install the hooks from Help ▸ Install Agent Status Hooks…. For shell-integrated agents, start a fresh shell
+so the installer-added `source` line takes effect. For Pi, restart it or run `/reload` so it loads
+`~/.pi/agent/extensions/agterm-status.ts`; the extension installs only after Pi has created `~/.pi/agent`.
+The installed wrapper resolves the bundled `agtermctl` itself; a bare development build instead needs
+`agtermctl` on `PATH`.
+
 ### "The agent-status glyph updates the wrong session"
 
 One session's glyph blinks/changes while the work is happening in a DIFFERENT session — typically when
