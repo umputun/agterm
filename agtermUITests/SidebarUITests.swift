@@ -384,11 +384,21 @@ final class SidebarUITests: XCTestCase {
     }
 
     /// The inline "+" button on a workspace row adds a session to that workspace —
-    /// the same action as right-click "New Session" on the row.
+    /// the same action as right-click "New Session" on the row. The button is hover-revealed
+    /// (hidden at zero width on an idle row), so the row must be hovered before it is hittable.
     func testInlineAddSessionButtonCreatesSession() throws {
         XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
+        let ws = app.staticTexts["workspace 1"]
+        XCTAssertTrue(ws.waitForExistence(timeout: 5), "seeded workspace should exist")
         let addBtn = app.descendants(matching: .any).matching(identifier: "workspace-add-session").firstMatch
-        XCTAssertTrue(addBtn.waitForExistence(timeout: 5), "workspace row should show an inline '+' button")
+        // hover the row to reveal the button; retry — the first synthesized move can land before
+        // the window is key, and .activeInKeyWindow tracking swallows it.
+        let deadline = Date().addingTimeInterval(8)
+        while !addBtn.isHittable, Date() < deadline {
+            ws.hover()
+            usleep(200_000)
+        }
+        XCTAssertTrue(addBtn.isHittable, "hovering the workspace row should reveal the inline '+' button")
         addBtn.click()
         XCTAssertTrue(pollSessionCount(workspace: "workspace 1", expected: 2, timeout: 5),
                       "workspace 1 should have 2 sessions after clicking the inline '+' button")

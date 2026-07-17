@@ -37,9 +37,10 @@ extension WorkspaceSidebar.Coordinator {
         field.isEditable = false
         field.isBordered = false
         field.drawsBackground = false
-        // a recycled cell may carry the prior row's badge/status; reset before use
+        // a recycled cell may carry the prior row's badge/status/hover state; reset before use
         applyBadge(toCell: cell, count: 0)
         cell.statusIcon.apply(AgentIndicator())
+        cell.setAddButtonVisible(false)
         switch node.kind {
         case .workspace:
             let workspace = store.workspaces.first(where: { $0.id == node.id })
@@ -107,8 +108,10 @@ extension WorkspaceSidebar.Coordinator {
     /// the icon and badge stay whole.
     ///
     /// Workspace cells additionally get an inline "+" button (`cell.addButton`) between the name
-    /// and the status icon — clicking it adds a new session to that workspace via
-    /// `addSessionButtonClicked`, the same path as the right-click "New Session" menu item.
+    /// and the status icon, revealed only while the pointer hovers the row (the Finder/Xcode
+    /// convention; see `SidebarCellView.setAddButtonVisible`) — clicking it adds a new session to
+    /// that workspace via `addSessionButtonClicked`, the same path as the right-click "New Session"
+    /// menu item.
     private func makeCell(identifier: NSUserInterfaceItemIdentifier) -> SidebarCellView {
         let cell = SidebarCellView()
         cell.identifier = identifier
@@ -169,11 +172,17 @@ extension WorkspaceSidebar.Coordinator {
             let addBtn = makeAddSessionButton()
             cell.addSubview(addBtn)
             cell.addButton = addBtn
+            // hover-revealed: starts hidden at zero width (setAddButtonVisible toggles the width
+            // constraint, like StatusIconView), so an idle row's name gets the same -6 trailing
+            // margin a session row has and the roll-up badge keeps its slot uncontested.
+            let width = addBtn.widthAnchor.constraint(equalToConstant: 0)
+            cell.addButtonWidthConstraint = width
+            addBtn.isHidden = true
             constraints += [
-                field.trailingAnchor.constraint(equalTo: addBtn.leadingAnchor, constant: -4),
-                addBtn.trailingAnchor.constraint(equalTo: statusIcon.leadingAnchor, constant: -4),
+                field.trailingAnchor.constraint(equalTo: addBtn.leadingAnchor, constant: -6),
+                addBtn.trailingAnchor.constraint(equalTo: statusIcon.leadingAnchor),
                 addBtn.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-                addBtn.widthAnchor.constraint(equalToConstant: 16),
+                width,
                 addBtn.heightAnchor.constraint(equalToConstant: 16),
             ]
         } else {
