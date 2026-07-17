@@ -154,7 +154,10 @@ final class GhosttyCallbacks: @unchecked Sendable {
             let change = action.action.color_change
             guard change.kind == GHOSTTY_ACTION_COLOR_KIND_BACKGROUND else { return true }
             let hex = String(format: "#%02x%02x%02x", Int(change.r), Int(change.g), Int(change.b))
-            DispatchQueue.main.async { view.applyOSCBackground(hex) }
+            // dedupe the per-prompt OSC re-emit storm: a shell that re-asserts OSC 11 on every prompt would
+            // otherwise drive a full per-surface config rebuild each time. skip when unchanged — the reload
+            // and opacity re-assert callers still force a re-apply by calling applyOSCBackground directly.
+            DispatchQueue.main.async { guard view.oscBackgroundColorHex != hex else { return }; view.applyOSCBackground(hex) }
             return true
         default:
             return false

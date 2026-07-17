@@ -95,15 +95,16 @@ extension GhosttySurfaceView {
     /// invisible. This gives the surface its OWN `.color` overlay — the SAME per-surface path as
     /// `session background color`, baking the current window opacity into `background-opacity` — so the
     /// pane renders its tint (translucent, honoring the opacity slider), per-pane, without touching the
-    /// window backing, the chrome, or any other surface. Reads the current font (session zoom / dashboard
-    /// override / initial) so the config re-apply can't reset the pane's font. A malformed hex is rejected.
+    /// window backing, the chrome, or any other surface. Reads the current font (dashboard override /
+    /// session zoom / live zoom / initial) so the config re-apply can't reset the pane's font — including a
+    /// sessionless scratch/overlay whose live cmd-+/- zoom would otherwise reset. A malformed hex is rejected.
     /// Retains the per-surface config in `ownedConfigs`, freed on teardown.
     func applyOSCBackground(_ hex: String) {
         guard let surface, WatermarkConfig.isValidColorHex(hex) else { return }
         oscBackgroundColorHex = hex
         let overlay = WatermarkConfig.overlayText(watermark: BackgroundWatermark(kind: .color, colorHex: hex),
                                                   resolvedImagePath: nil,
-                                                  fontSize: dashboardFontOverride ?? session?.fontSize ?? initialFontSize.map(Double.init),
+                                                  fontSize: dashboardFontOverride ?? session?.fontSize ?? currentFontSize() ?? initialFontSize.map(Double.init),
                                                   windowOpacity: GhosttyApp.shared.windowOpacity)
         guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
             NSLog("osc background: per-surface config build failed")
