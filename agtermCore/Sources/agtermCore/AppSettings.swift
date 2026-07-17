@@ -190,10 +190,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// `NotificationManager` reads its mirror and issues the matching `requestUserAttention`, a no-op while
     /// agterm is the frontmost app.
     public var dockBounce: String?
-    /// Name of the system sound played when a desktop notification is delivered (e.g. `Glass`, resolved
-    /// by `NSSound(named:)`), or nil/empty for no sound (the default). Independent of
-    /// `notificationsEnabled` — like the Dock bounce, the sound fires whether or not banners show. An
-    /// app-level value played at the AppKit level, NOT a ghostty key — it never appears in
+    /// Name of the system sound attached to a delivered desktop notification (e.g. `Glass`), or
+    /// nil/empty for no sound (the default). Delivered as `UNNotificationSound(named:)` on the banner's
+    /// content (the `.aiff` suffix is added when the name has none), so it RIDES the banner: gated by
+    /// `notificationsEnabled` and the macOS notification authorization, and silenced by Do Not Disturb —
+    /// unlike the badge and the Dock bounce, which fire whether or not banners show (only the Settings
+    /// picker's preview uses `NSSound`). An app-level value, NOT a ghostty key — it never appears in
     /// `ghosttyConfigLines()`.
     public var notificationSoundName: String?
     /// Name of the system sound played when a session enters the `blocked` status (e.g. `Glass`, resolved by
