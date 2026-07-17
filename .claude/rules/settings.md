@@ -16,7 +16,7 @@ paths:
   NO version field — optionality is the forward-compat) + `SettingsStore` (JSON at `<stateDir>/settings.json`,
   `AGTERM_STATE_DIR`-isolated, mirrors `PersistenceStore`).
   Fields: `fontFamily`/`fontSize`/`theme`/`darkTheme`/`followSystemAppearance` + `backgroundOpacity` (0...1) / `backgroundBlur` (CGS radius)
-  + `notificationsEnabled` / `toolbarMode` / `notificationBadgeEnabled` / `attentionButtonEnabled` / `dockBounce`
+  + `notificationsEnabled` / `toolbarMode` / `notificationBadgeEnabled` / `attentionButtonEnabled` / `dockBounce` / `notificationSoundName`
   + the agent-status glyph colors `activeStatusColorHex`/`blockedStatusColorHex`/`completedStatusColorHex`
   (nil defaults: `notificationsEnabled`/`notificationBadgeEnabled` = on,
   `toolbarMode` = the three-state titlebar chrome `ToolbarMode { normal, compact, hidden }`,
@@ -160,7 +160,7 @@ paths:
   back to nil, matching the terminal font-size stepper's style) + the inactive-pane-mute slider.
   The formerly-separate **Panes** section was folded into **Window** so the tab still fits 480×590 without
   scrolling after adding the font-size stepper).
-  **Notifications** (a **Notifications** section with the banner / badge / attention-indicator toggles plus the Dock-bounce mode picker).
+  **Notifications** (a **Notifications** section with the banner / badge / attention-indicator toggles plus the Dock-bounce mode and notification-sound pickers).
   **Agent Status** (a **Colors** section with the three glyph color pickers, a **Sound** section with
   the blocked-sound picker, an **Auto-follow** section with the idle-timeout Picker
   (Disabled/5s/10s/30s/60s/5m) + the "Don't auto-follow away from a running session" Toggle, and a trailing
@@ -375,6 +375,22 @@ paths:
   GUI-only and keep-in-sync EXEMPT (only `theme.set`/`config.reload` touch settings over the socket).
   Default + tolerant-decode covered host-free in `AppSettingsTests`; the bounce itself is app-target
   (settings-picker persistence in `SettingsUITests`, the animation verified by eye — not accessibility-observable).
+- **`notificationSoundName` (a system sound on every delivered banner, opt-in, Notifications tab).**
+  `AppSettings.notificationSoundName: String?` (nil/empty = silent, the default) names the system sound
+  attached to the delivered banner (`UNNotificationSound`, so it follows the banner toggle and Do Not
+  Disturb), in BOTH the OSC and control paths.
+  NOT a ghostty key (`writeGhosttyConfig` no-ops, no surface reload).
+  Like `dockBounce` it needs NO `.agtermAppearanceChanged` re-render: `SettingsModel.setNotificationSoundName`
+  saves + `applyNotificationSound` pushes the value into the `NotificationManager.notificationSoundName`
+  mirror (alongside the other two `NotificationManager` mirrors), read on the NEXT notification.
+  The Notifications tab's `Picker("Notification sound")` mirrors the Agent Status blocked-sound picker
+  binding (None maps back to nil to keep `settings.json` minimal; selecting a sound previews it via
+  `StatusSoundPlayer`).
+  GUI-only and keep-in-sync EXEMPT (only `theme.set`/`config.reload` touch settings over the socket).
+  Default + round-trip covered host-free in `AppSettingsTests`; the picker persistence in `SettingsUITests`
+  (`testNotificationSoundPickerPersists`); the sound itself is app-target (verified by ear, like the
+  blocked sound).
+  See the Notifications rule for the delivery behavior.
 - **`confirmCloseSession` (confirm before closing a session, opt-in, General tab).**
   `AppSettings.confirmCloseSession: Bool?` (nil = OFF, the default-off precedent like `restoreRunningCommand`)
   gates a native `NSAlert` confirm before a GUI session close.

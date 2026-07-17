@@ -116,6 +116,27 @@ paths:
   The bounce animation is not accessibility-observable, so it is verified by eye like the cursor-focus /
   disclosure-triangle cases; only the `AppSettings` round-trip / tolerant-decode and the settings-picker
   persistence (`SettingsUITests.testDockBouncePickerPersists`) are tested.
+- **Notification sound (opt-in, None by default) — a system-sound picker, routed through the banner.**
+  `AppSettings.notificationSoundName` (nil/empty = silent, the default; else a system sound name) is
+  attached to the delivered banner as `content.sound` (`UNNotificationSound`) in BOTH the OSC path (`notify`)
+  and the control path (`send` / `agtermctl notify`) — deliberately NOT played via raw `NSSound` (review
+  decision on #232): riding the banner means the sound follows `bannersEnabled`, the macOS notification
+  authorization, AND Do Not Disturb / Focus, and a banners-off user is never audibly interrupted.
+  This is the OPPOSITE of the badge/bounce independence — a sound is an active interruption, not a
+  glance-level cue.
+  The name maps to a sound FILE: `.aiff` is assumed when the name has no extension (the system sounds'
+  format); `default`/`beep` map to `UNNotificationSound.default`; `start()` requests `.sound` in the
+  authorization options, and `willPresent` returns `[.banner, .list, .sound]` so a foreground banner
+  (a session you're NOT looking at) dings too — the focused-pane case is already dropped by `shouldDeliver`.
+  The `StatusSoundPlayer` throttle is NOT involved (the OS owns playback; same-pane repeats coalesce by
+  request identifier); the picker's selection preview still plays via `StatusSoundPlayer.action`.
+  The `NotificationManager.notificationSoundName` mirror is pushed by `SettingsModel.applyNotificationSound`
+  alongside `applyNotificationsEnabled`/`applyDockBounce` — read on the next notification, not rendered
+  continuously, so no `.agtermAppearanceChanged` re-render.
+  The Notifications tab's `Picker("Notification sound")` mirrors the Agent Status blocked-sound picker
+  (None maps back to nil to keep `settings.json` minimal; selecting a sound previews it).
+  GUI-only and keep-in-sync EXEMPT (a settings picker, like `dockBounce`); the control channel's per-call
+  audible nudge remains `session.status --sound`.
 - **Agent-status glyph.**
   Mirrors the `notify-badge` cell pattern (see the Control API `session.status`).
   `StatusIconView` (an `NSImageView` sibling of `BadgeView` in `WorkspaceSidebar`) draws the row's tinted

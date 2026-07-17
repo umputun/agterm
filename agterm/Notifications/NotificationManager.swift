@@ -34,14 +34,23 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     /// active app, so a bounce only fires when a notification arrives in the background.
     var dockBounce: DockBounce = .off
 
-    /// Register as the notification delegate and request alert + badge authorization. Idempotent; the
-    /// scene `.task` may re-run. Best-effort: a denial just means no banners. The `.badge` option is what
-    /// lets `DockBadgeController` render the Dock count via `UNUserNotificationCenter.setBadgeCount` — the
-    /// legacy `NSApp.dockTile.badgeLabel` is silently suppressed for agterm without it.
+    /// Name of the system sound attached to a delivered notification (the Notifications settings
+    /// picker, default nil = silent). Routed through the OS (`UNNotificationSound` on the banner's
+    /// content), NOT played directly — so it follows the banner: gated by `bannersEnabled` and the
+    /// macOS notification authorization, and silenced by Do Not Disturb / Focus, unlike the raw
+    /// `NSSound` agent-status sounds. Set by `SettingsModel`.
+    var notificationSoundName: String?
+
+    /// Register as the notification delegate and request alert + badge + sound authorization.
+    /// Idempotent; the scene `.task` may re-run. Best-effort: a denial just means no banners. The
+    /// `.badge` option is what lets `DockBadgeController` render the Dock count via
+    /// `UNUserNotificationCenter.setBadgeCount` — the legacy `NSApp.dockTile.badgeLabel` is silently
+    /// suppressed for agterm without it. `.sound` is what lets the configured notification sound
+    /// (attached to the banner's content) actually play.
     func start() {
         let center = UNUserNotificationCenter.current()
         center.delegate = self
-        center.requestAuthorization(options: [.alert, .badge]) { granted, error in
+        center.requestAuthorization(options: [.alert, .badge, .sound]) { granted, error in
             if !granted { logger.notice("notification authorization denied: \(String(describing: error), privacy: .public)") }
         }
     }
@@ -71,6 +80,7 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         let content = UNMutableNotificationContent()
         content.title = title.isEmpty ? session.displayName : title
         content.body = body
+        content.sound = notificationSound
         // the request identifier is the identity (`<windowID>:<sessionID>:<pane>`): it both coalesces
         // repeats from the same pane and carries the target a click decodes via `TerminalNotification`.
         let identity = TerminalNotification.identity(windowID: windowID, sessionID: session.id, pane: pane)
@@ -93,6 +103,7 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         let content = UNMutableNotificationContent()
         content.title = title.isEmpty ? session.displayName : title
         content.body = body
+        content.sound = notificationSound
         let identity = TerminalNotification.identity(windowID: windowID, sessionID: session.id, pane: .main)
         UNUserNotificationCenter.current().add(UNNotificationRequest(identifier: identity, content: content, trigger: nil)) { error in
             if let error { logger.error("send failed: \(error.localizedDescription, privacy: .public)") }
@@ -170,6 +181,17 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         }
     }
 
+    /// The `UNNotificationSound` for the configured name, or nil when unset (silent, the default).
+    /// `default`/`beep` map to the system alert sound; any other value names a sound file the OS
+    /// resolves against the standard sound locations (`~/Library/Sounds` through
+    /// `/System/Library/Sounds`), with `.aiff` assumed when the name carries no extension — the system
+    /// sounds' format, and how the Settings picker stores them.
+    private var notificationSound: UNNotificationSound? {
+        guard let name = notificationSoundName, !name.isEmpty else { return nil }
+        if name == "default" || name == "beep" { return .default }
+        return UNNotificationSound(named: UNNotificationSoundName(name.contains(".") ? name : name + ".aiff"))
+    }
+
     /// Which of the session's surfaces fired, by identity against its three slots.
     private func paneRole(of view: GhosttySurfaceView, in session: Session) -> PaneRole {
         if view === (session.splitSurface as? GhosttySurfaceView) { return .split }
@@ -177,11 +199,13 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         return .main
     }
 
-    /// Present banners even while agterm is the active app (the focused-pane case is dropped before
-    /// delivery, so anything reaching here should show).
+    /// Present banners — with their attached sound — even while agterm is the active app (the
+    /// focused-pane case is dropped before delivery, so anything reaching here should show). Without
+    /// `.sound` a foreground banner would show silently, so a notification from a session you're NOT
+    /// looking at would only ding while agterm is backgrounded.
     func userNotificationCenter(_: UNUserNotificationCenter, willPresent _: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        completionHandler([.banner, .list])
+        completionHandler([.banner, .list, .sound])
     }
 
     /// A banner was clicked: bring agterm forward and navigate to the firing session/pane (decoded from

@@ -172,6 +172,16 @@ struct AppSettingsTests {
         #expect(AppSettings(confirmCloseSession: true).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
+    @Test func notificationSoundNameRoundTripsAndIsNotAConfigLine() throws {
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(notificationSoundName: "Glass")))
+        #expect(decoded.notificationSoundName == "Glass")
+        // absent in a legacy file decodes to nil (no sound).
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
+        #expect(legacy.notificationSoundName == nil)
+        // an app-level value, never a ghostty config key — only the always-on defaults (scroll + right-click) are emitted.
+        #expect(AppSettings(notificationSoundName: "Glass").ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
+
     @Test func blockedStatusSoundNameRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(blockedStatusSoundName: "Glass")))
         #expect(decoded.blockedStatusSoundName == "Glass")
