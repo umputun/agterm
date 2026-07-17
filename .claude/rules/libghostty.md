@@ -231,6 +231,25 @@ paths:
   a `deckVisible` gate (so a covered scratch is also not a file-drop target).
   The FLOATING (sized) overlay and the quick terminal need none of this — both draw an opaque
   `terminalColor`-backed panel, so nothing shows through them.
+- **OSC 11 dynamic background is honored PER-PANE via `GHOSTTY_ACTION_COLOR_CHANGE`.**
+  libghostty parses OSC 10/11/12 (set fg/bg/cursor) and applies the color to its own render state, then
+  fires the `GHOSTTY_ACTION_COLOR_CHANGE` action as a NOTIFICATION (the reference macOS apprt only posts
+  a NotificationCenter event from it; it does not paint the surface).
+  Under translucency the surface renders `background-opacity = 0`, so an OSC 11 background is invisible —
+  the terminal is transparent and the AppKit window backing (theme) shows through.
+  `GhosttyCallbacks` handles `COLOR_CHANGE` for the BACKGROUND kind and calls `GhosttySurfaceView.applyOSCBackground(_:)`,
+  which gives THIS surface its own `.color` config overlay (`WatermarkConfig.overlayText` — the SAME
+  per-surface path as `session background color`), baking the window opacity into `background-opacity`, so
+  the pane renders its tint translucently, per-pane, without touching the window backing or any other surface.
+  Re-asserted across a config reload and a live opacity change via
+  `reapplySessionConfigIfNeeded`/`reapplyColorBackgroundIfNeeded` (OSC wins over a persisted `.color`
+  watermark), and stored on `GhosttySurfaceView.oscBackgroundColorHex`.
+  Only BACKGROUND is wired — OSC 10/12 (fg/cursor) render regardless of translucency.
+  Reset (OSC 111) arrives as a `COLOR_CHANGE` to the theme color, so it reverts to the theme background
+  rather than a true clear-to-transparent; a pane/tab close clears it outright.
+  Diagnosed with codex; verified BY EYE (background color is not accessibility-observable, like the
+  cursor solid/hollow case), only visible under translucency (at 100% opacity ghostty renders the OSC bg
+  itself).
 - **Non-zero backing size.**
   Create the surface only when the view has a non-zero backing size, else the Metal layer renders blank.
   `pendingSurfaceCreation` defers creation until `setFrameSize` reports a real size.

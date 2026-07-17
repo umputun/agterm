@@ -143,6 +143,19 @@ final class GhosttyCallbacks: @unchecked Sendable {
             let link = String(decoding: UnsafeRawBufferPointer(start: ptr, count: Int(openURL.len)), as: UTF8.self)
             DispatchQueue.main.async { view.openLink(link) }
             return true
+        case GHOSTTY_ACTION_COLOR_CHANGE:
+            // a program set a dynamic terminal color via OSC 10/11/12 (fg/bg/cursor). libghostty already
+            // applied it to its own render state, but under window translucency every surface renders
+            // background-opacity 0 (the AppKit window backing supplies the tint), so an OSC 11 BACKGROUND
+            // stays invisible until we give THIS surface its own `.color` overlay — a per-pane tint. Only
+            // background needs acting on; foreground/cursor render regardless of translucency. Copy the
+            // color out synchronously (the struct is only valid for this call), then hop to the apply.
+            guard let view = surfaceView(from: target) else { return true }
+            let change = action.action.color_change
+            guard change.kind == GHOSTTY_ACTION_COLOR_KIND_BACKGROUND else { return true }
+            let hex = String(format: "#%02x%02x%02x", Int(change.r), Int(change.g), Int(change.b))
+            DispatchQueue.main.async { view.applyOSCBackground(hex) }
+            return true
         default:
             return false
         }
