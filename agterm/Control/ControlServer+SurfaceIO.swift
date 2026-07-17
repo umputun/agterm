@@ -140,7 +140,11 @@ extension ControlServer {
     /// surface (nil) is skipped — it applies the spec itself on creation (`GhosttySurfaceView.createSurface`).
     private func applyWatermark(to session: Session) {
         for surface in [session.surface, session.splitSurface] {
-            (surface as? GhosttySurfaceView)?.applyWatermarkFromSession()
+            guard let view = surface as? GhosttySurfaceView else { continue }
+            // an explicit `session.background` set/clear wins over a live OSC 11 latch — release it so the
+            // user's chosen background isn't reverted to the stale OSC color on the next reload / opacity change.
+            view.oscBackgroundColorHex = nil
+            view.applyWatermarkFromSession()
         }
     }
 

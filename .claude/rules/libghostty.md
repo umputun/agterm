@@ -241,12 +241,19 @@ paths:
   which gives THIS surface its own `.color` config overlay (`WatermarkConfig.overlayText` — the SAME
   per-surface path as `session background color`), baking the window opacity into `background-opacity`, so
   the pane renders its tint translucently, per-pane, without touching the window backing or any other surface.
-  Re-asserted across a config reload and a live opacity change via
-  `reapplySessionConfigIfNeeded`/`reapplyColorBackgroundIfNeeded` (OSC wins over a persisted `.color`
-  watermark), and stored on `GhosttySurfaceView.oscBackgroundColorHex`.
+  Held on `GhosttySurfaceView.oscBackgroundColorHex` and re-asserted across a config reload and a live
+  opacity change (`reapplySessionConfigIfNeeded`/`reapplyColorBackgroundIfNeeded`), and preserved across a
+  dashboard open/close (the `dashboardFontOverride` didSet re-emits it).
+  **Precedence:** an active OSC 11 wins over a session's persisted watermark while it is set, BUT an
+  explicit `session.background` set/clear WINS — the control write path (`ControlServer.applyWatermark`)
+  releases the latch (`oscBackgroundColorHex = nil`) so a user-chosen background is not reverted to a stale
+  OSC color on the next reload/opacity change.
   Only BACKGROUND is wired — OSC 10/12 (fg/cursor) render regardless of translucency.
-  Reset (OSC 111) arrives as a `COLOR_CHANGE` to the theme color, so it reverts to the theme background
-  rather than a true clear-to-transparent; a pane/tab close clears it outright.
+  A per-prompt OSC re-emit is deduped in the `COLOR_CHANGE` caller (skip when the hex is unchanged) so a
+  shell re-asserting OSC 11 every prompt does not rebuild the surface config each time.
+  Reset (OSC 111) arrives as a `COLOR_CHANGE` to the theme color, so the pane reverts to the theme
+  background (intended — the callback cannot distinguish a reset from a deliberate set-to-theme-color); a
+  pane/tab close clears the latch outright.
   Diagnosed with codex; verified BY EYE (background color is not accessibility-observable, like the
   cursor solid/hollow case), only visible under translucency (at 100% opacity ghostty renders the OSC bg
   itself).

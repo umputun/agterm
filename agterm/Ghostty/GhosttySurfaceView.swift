@@ -261,7 +261,8 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// re-composes the surface config — a value shrinks the cell's font, nil rebuilds from the session model.
     var dashboardFontOverride: Double? {
         didSet {
-            applyWatermarkFromSession()
+            // keep a live OSC 11 tint across dashboard open/close (applyOSCBackground re-emits it with the dashboard font); else rebuild from the session model.
+            if let hex = oscBackgroundColorHex { applyOSCBackground(hex) } else { applyWatermarkFromSession() }
             // a SET override (-> value) can't strand a revert report — reportFontSize's
             // `dashboardFontOverride == nil` guard drops its CELL_SIZE report while the override is active
             // — so just drop any pending restore.
