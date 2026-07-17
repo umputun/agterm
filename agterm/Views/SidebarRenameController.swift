@@ -52,6 +52,12 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
         guard row >= 0, let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView,
               let field = cell.textField else { return }
         renameOriginalValue = field.stringValue
+        // the flagged view shows a decorated `name : workspace` row label; seed the editable field with
+        // the bare session name so an edit that keeps the ` : workspace` tail never bakes it into the
+        // custom name. tree mode already shows the bare name, so this is a no-op there.
+        if node.kind == .session, let session = store.session(withID: node.id) {
+            field.stringValue = session.displayName
+        }
         field.isEditable = true
         field.isBordered = true
         field.drawsBackground = true
