@@ -14,6 +14,52 @@ final class SidebarCellView: NSTableCellView {
     /// Hidden on `.idle` (workspace rows always idle for now).
     let statusIcon = StatusIconView()
 
+    /// Inline "+" button between the name and the status icon, present only on workspace cells.
+    /// Nil for session cells. Set by the cell builder and used by `handleSingleClick` to guard
+    /// against toggling expansion when the click lands on this button.
+    var addButton: NSButton?
+
+    /// Width of `addButton`, toggled between 0 (hidden) and the glyph width by `setAddButtonVisible`
+    /// — the same collapse-the-slot convention as `StatusIconView.widthConstraint`, so an idle row's
+    /// name reclaims the space. Set by the cell builder alongside `addButton`.
+    var addButtonWidthConstraint: NSLayoutConstraint?
+
+    private static let addButtonWidth: CGFloat = 16
+    private var hoverTrackingArea: NSTrackingArea?
+
+    /// Reveals or collapses the inline "+": the Finder/Xcode hover convention, so an idle row shows
+    /// no button and the roll-up badge keeps its slot. Driven by `mouseEntered`/`mouseExited` and
+    /// reset hidden when a reused cell is reconfigured in the row provider. No-op for session cells.
+    func setAddButtonVisible(_ visible: Bool) {
+        guard let addButton, let addButtonWidthConstraint else { return }
+        addButton.isHidden = !visible
+        addButtonWidthConstraint.constant = visible ? Self.addButtonWidth : 0
+    }
+
+    // hover tracking for the "+" reveal, workspace cells only (session cells have no button to show)
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTrackingArea { removeTrackingArea(hoverTrackingArea); self.hoverTrackingArea = nil }
+        guard addButton != nil else { return }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self
+        )
+        addTrackingArea(area)
+        hoverTrackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        setAddButtonVisible(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        setAddButtonVisible(false)
+    }
+
     /// Color the row text/icon from the terminal theme: a selected row pairs with the selection
     /// foreground (over the selection-background pill the row draws), or white over the soft wash when
     /// the theme exposes no selection color; an unselected row uses the theme foreground, icons dimmed.
@@ -26,7 +72,9 @@ final class SidebarCellView: NSTableCellView {
             ? (app.terminalSelectionForegroundColor ?? .white)
             : (app.terminalForegroundColor ?? .labelColor)
         textField?.textColor = color
-        imageView?.contentTintColor = color.withAlphaComponent(selected ? 0.85 : 0.6)
+        let iconAlpha: CGFloat = selected ? 0.85 : 0.6
+        imageView?.contentTintColor = color.withAlphaComponent(iconAlpha)
+        addButton?.contentTintColor = color.withAlphaComponent(iconAlpha)
     }
 }
 

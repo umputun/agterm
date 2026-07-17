@@ -16,10 +16,14 @@ extension WorkspaceSidebar.Coordinator {
     @objc func handleSingleClick(_ sender: NSOutlineView) {
         let row = sender.clickedRow
         guard row >= 0, let node = sender.item(atRow: row) as? SidebarNode, node.kind == .workspace else { return }
-        // clicking the disclosure triangle already toggles natively — ignore that region so we don't double-toggle.
         if let event = NSApp.currentEvent {
             let point = sender.convert(event.locationInWindow, from: nil)
+            // clicking the disclosure triangle already toggles natively — ignore that region so we don't double-toggle.
             if point.x < sender.frameOfOutlineCell(atRow: row).maxX { return }
+            // clicking the inline "+" button is handled by the button itself — don't schedule the toggle.
+            if let cell = sender.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView,
+               let btn = cell.addButton,
+               btn.convert(btn.bounds, to: sender).contains(point) { return }
         }
         pendingRowToggle?.cancel()
         let toggle = DispatchWorkItem { [weak self, weak node] in
@@ -190,6 +194,19 @@ extension WorkspaceSidebar.Coordinator {
         guard let node = sender.representedObject as? SidebarNode else { return }
         // resolve the cwd via the same new-session-directory setting as AppActions.newSession(), so the
         // workspace-row New Session honors it too (home / current session's cwd / a fixed custom dir).
+        addSession(toWorkspace: node.id, cwd: actions.resolvedNewSessionCwd())
+    }
+
+    /// Inline "+" button on a workspace row — same action as the right-click "New Session" menu item.
+    /// The button carries no workspace id; we derive it from the outline row at click time so reused
+    /// cells always target the correct workspace.
+    @objc func addSessionButtonClicked(_ sender: NSButton) {
+        // cancel any pending single-click workspace toggle so clicking "+" doesn't also flip expansion.
+        pendingRowToggle?.cancel()
+        pendingRowToggle = nil
+        guard let outline = outlineView else { return }
+        let row = outline.row(for: sender)
+        guard row >= 0, let node = outline.item(atRow: row) as? SidebarNode, node.kind == .workspace else { return }
         addSession(toWorkspace: node.id, cwd: actions.resolvedNewSessionCwd())
     }
 
