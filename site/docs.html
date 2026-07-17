@@ -997,7 +997,8 @@
               so an orchestrator driving a session over the socket can acknowledge it without pulling focus
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports each session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">unseen</span> count).
               Banners and count badges toggle independently in the Notifications settings, which also sets the Dock-icon
-              bounce for a background notification (off, once, or until you focus agterm). For a coding agent that just needs to say it is
+              bounce for a background notification (off, once, or until you focus agterm) and an optional notification
+              sound (a system sound played when a notification is delivered; None by default). For a coding agent that just needs to say it is
               waiting, <a href="#status" style="color: #6d82f3">agent status</a> is usually the better fit.
             </p>
           </section>
@@ -1044,7 +1045,8 @@
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
                 ><strong style="color: #e6e1d7">Notifications</strong> — the banner, the unseen-count badge, the Dock-icon
-                bounce for a background notification (off / once / until focused), and the title-bar attention indicator.
+                bounce for a background notification (off / once / until focused), the notification sound (None by
+                default), and the title-bar attention indicator.
               </div>
               <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span

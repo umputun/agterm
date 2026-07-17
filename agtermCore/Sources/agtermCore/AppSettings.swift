@@ -190,6 +190,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// `NotificationManager` reads its mirror and issues the matching `requestUserAttention`, a no-op while
     /// agterm is the frontmost app.
     public var dockBounce: String?
+    /// Name of the system sound played when a desktop notification is delivered (e.g. `Glass`, resolved
+    /// by `NSSound(named:)`), or nil/empty for no sound (the default). Independent of
+    /// `notificationsEnabled` — like the Dock bounce, the sound fires whether or not banners show. An
+    /// app-level value played at the AppKit level, NOT a ghostty key — it never appears in
+    /// `ghosttyConfigLines()`.
+    public var notificationSoundName: String?
     /// Name of the system sound played when a session enters the `blocked` status (e.g. `Glass`, resolved by
     /// `NSSound(named:)`), or nil/empty for no sound (the default). A per-call `session.status --sound`
     /// overrides this. An app-level value played at the AppKit level, NOT a ghostty key — it never appears
@@ -242,7 +248,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 mouseScrollMultiplier: Double? = nil, inactivePaneMuteStrength: Int? = nil,
                 sidebarBackgroundShift: Int? = nil, restoreRunningCommand: Bool? = nil,
                 inheritGlobalGhosttyConfig: Bool? = nil, attentionButtonEnabled: Bool? = nil,
-                dockBounce: String? = nil,
+                dockBounce: String? = nil, notificationSoundName: String? = nil,
                 blockedStatusSoundName: String? = nil, rightClickPaste: Bool? = nil,
                 newSessionDirectory: String? = nil, newSessionCustomDirectory: String? = nil,
                 confirmCloseSession: Bool? = nil, closeGraceUndoEnabled: Bool? = nil,
@@ -270,6 +276,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.inheritGlobalGhosttyConfig = inheritGlobalGhosttyConfig
         self.attentionButtonEnabled = attentionButtonEnabled
         self.dockBounce = dockBounce
+        self.notificationSoundName = notificationSoundName
         self.blockedStatusSoundName = blockedStatusSoundName
         self.rightClickPaste = rightClickPaste
         self.newSessionDirectory = newSessionDirectory

@@ -71,6 +71,7 @@ final class SettingsModel {
         applyWindowTranslucency()
         applyNotificationsEnabled()
         applyDockBounce()
+        applyNotificationSound()
         applyToolbarMode()
         applyNotificationBadgeEnabled()
         applyInactivePaneMute()
@@ -225,6 +226,9 @@ final class SettingsModel {
     func setToolbarMode(_ mode: ToolbarMode?) { settings.toolbarMode = mode?.rawValue; settings.compactToolbar = nil; persistAndApply() }
     func setNotificationBadgeEnabled(_ value: Bool?) { settings.notificationBadgeEnabled = value; persistAndApply() }
     func setDockBounce(_ mode: DockBounce?) { settings.dockBounce = mode?.rawValue; persistAndApply() }
+    /// Persist the system sound played when a notification is delivered (nil/empty = none). Not a ghostty
+    /// key; the `NotificationManager` mirror is read on the next notification, like `dockBounce`.
+    func setNotificationSoundName(_ name: String?) { settings.notificationSoundName = name; persistAndApply() }
     func setMouseScrollMultiplier(_ value: Double?) { settings.mouseScrollMultiplier = value; persistAndApply() }
     // ghostty key (right-click-action): persistAndApply() rewrites the conf and reloads surfaces live.
     func setRightClickPaste(_ value: Bool?) { settings.rightClickPaste = value; persistAndApply() }
@@ -634,6 +638,7 @@ final class SettingsModel {
         }
         applyNotificationsEnabled()
         applyDockBounce()
+        applyNotificationSound()
         applyToolbarMode()
         applyNotificationBadgeEnabled()
         applyInactivePaneMute()
@@ -660,6 +665,10 @@ final class SettingsModel {
 
     private func applyDockBounce() {
         NotificationManager.shared.dockBounce = settings.effectiveDockBounce
+    }
+
+    private func applyNotificationSound() {
+        NotificationManager.shared.notificationSoundName = settings.notificationSoundName
     }
 
     private func applyToolbarMode() {

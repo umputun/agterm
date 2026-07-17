@@ -116,6 +116,22 @@ paths:
   The bounce animation is not accessibility-observable, so it is verified by eye like the cursor-focus /
   disclosure-triangle cases; only the `AppSettings` round-trip / tolerant-decode and the settings-picker
   persistence (`SettingsUITests.testDockBouncePickerPersists`) are tested.
+- **Notification sound (opt-in, None by default) — a system-sound picker.**
+  `AppSettings.notificationSoundName` (nil/empty = silent, the default; else a system sound name resolved by `NSSound(named:)`)
+  plays a one-shot sound when a notification is delivered.
+  `NotificationManager.playNotificationSound()` fires right after `bounceDock()` in BOTH the OSC path (`notify`)
+  and the control path (`send` / `agtermctl notify`), independent of `bannersEnabled` — like the badge and the
+  bounce, a sound can fire whether or not banners show.
+  The OSC path's `shouldDeliver` suppression still applies, so the pane you're typing in never sounds.
+  Played via `StatusSoundPlayer.shared.play` (the `session.status --sound` player), whose `SoundThrottle`
+  de-bounces an identical replay so several agents finishing at once don't machine-gun the same clip.
+  The `NotificationManager.notificationSoundName` mirror is pushed by `SettingsModel.applyNotificationSound`
+  alongside `applyNotificationsEnabled`/`applyDockBounce` — read on the next notification, not rendered
+  continuously, so no `.agtermAppearanceChanged` re-render.
+  The Notifications tab's `Picker("Notification sound")` mirrors the Agent Status blocked-sound picker
+  (None maps back to nil to keep `settings.json` minimal; selecting a sound previews it).
+  GUI-only and keep-in-sync EXEMPT (a settings picker, like `dockBounce`); the control channel's per-call
+  audible nudge remains `session.status --sound`.
 - **Agent-status glyph.**
   Mirrors the `notify-badge` cell pattern (see the Control API `session.status`).
   `StatusIconView` (an `NSImageView` sibling of `BadgeView` in `WorkspaceSidebar`) draws the row's tinted

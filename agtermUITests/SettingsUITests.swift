@@ -85,6 +85,26 @@ final class SettingsUITests: XCTestCase {
                       "selecting None (the default) should remove the dockBounce key from settings.json")
     }
 
+    func testNotificationSoundPickerPersists() throws {
+        let picker = settingsControl(tab: "Notifications", control: "settings-notification-sound")
+
+        // Glass → notificationSoundName="Glass".
+        picker.click()
+        let glass = app.menuItems["Glass"]
+        XCTAssertTrue(glass.waitForExistence(timeout: 5), "the notification-sound picker should offer 'Glass'")
+        glass.click()
+        XCTAssertTrue(poll { self.settingsValue("notificationSoundName") == "Glass" },
+                      "selecting 'Glass' should persist notificationSoundName=Glass to settings.json")
+
+        // None → the default, mapped back to nil, so the key is REMOVED.
+        picker.click()
+        let none = app.menuItems["None"]
+        XCTAssertTrue(none.waitForExistence(timeout: 5), "the notification-sound picker should offer 'None'")
+        none.click()
+        XCTAssertTrue(poll { self.settingsValue("notificationSoundName") == nil },
+                      "selecting None (the default) should remove the notificationSoundName key from settings.json")
+    }
+
     func testToolbarModePickerPersists() throws {
         // the Toolbar dropdown offers Normal/Compact/Hidden. compact is the default and maps back to nil;
         // Normal/Hidden write a stable key.

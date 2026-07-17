@@ -34,6 +34,13 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     /// active app, so a bounce only fires when a notification arrives in the background.
     var dockBounce: DockBounce = .off
 
+    /// Name of the system sound played when a notification is delivered (the Notifications settings
+    /// picker, default nil = silent). Independent of `bannersEnabled` — like the bounce and the badge,
+    /// the sound fires whether or not banners show. Set by `SettingsModel`. Played via
+    /// `StatusSoundPlayer`, whose throttle keeps a burst of simultaneous notifications from
+    /// machine-gunning the same clip.
+    var notificationSoundName: String?
+
     /// Register as the notification delegate and request alert + badge authorization. Idempotent; the
     /// scene `.task` may re-run. Best-effort: a denial just means no banners. The `.badge` option is what
     /// lets `DockBadgeController` render the Dock count via `UNUserNotificationCenter.setBadgeCount` — the
@@ -66,6 +73,7 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         // the badge always tracks the unseen notification; the macOS banner is gated by the toggle.
         session.unseenCount += 1
         bounceDock()
+        playNotificationSound()
         guard bannersEnabled else { return }
 
         let content = UNMutableNotificationContent()
@@ -89,6 +97,7 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         guard let windowID = library?.windowID(forSession: session.id) else { return false }
         session.unseenCount += 1
         bounceDock()
+        playNotificationSound()
         guard bannersEnabled else { return true }
         let content = UNMutableNotificationContent()
         content.title = title.isEmpty ? session.displayName : title
@@ -168,6 +177,16 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         case .once: NSApp.requestUserAttention(.informationalRequest)
         case .untilFocused: NSApp.requestUserAttention(.criticalRequest)
         }
+    }
+
+    /// Play the configured notification sound (nil/empty = silent, the default). Fires right after the
+    /// badge bump in BOTH the OSC and control paths, independent of `bannersEnabled` — like the bounce,
+    /// a sound can fire whether or not banners show. The OSC path's `shouldDeliver` suppression still
+    /// applies (no sound for the pane you're typing in), and `StatusSoundPlayer.play` de-bounces an
+    /// identical replay so several agents finishing at once don't machine-gun the same clip.
+    private func playNotificationSound() {
+        guard let name = notificationSoundName, !name.isEmpty else { return }
+        StatusSoundPlayer.shared.play(name)
     }
 
     /// Which of the session's surfaces fired, by identity against its three slots.

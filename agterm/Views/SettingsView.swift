@@ -388,9 +388,10 @@ private struct AppearanceSettingsView: View {
     }
 }
 
-/// Notifications tab: the banner / badge / attention-indicator toggles plus the Dock-bounce mode picker,
-/// all default-driven through `SettingsModel`. The controls are independent — the badge count keeps
-/// tracking whether or not banners are shown, and a Dock bounce can fire whether or not banners are shown.
+/// Notifications tab: the banner / badge / attention-indicator toggles plus the Dock-bounce mode and
+/// notification-sound pickers, all default-driven through `SettingsModel`. The controls are independent —
+/// the badge count keeps tracking whether or not banners are shown, and a Dock bounce or a sound can
+/// fire whether or not banners are shown.
 private struct NotificationsSettingsView: View {
     let model: SettingsModel
 
@@ -409,6 +410,14 @@ private struct NotificationsSettingsView: View {
                     Text("Until focused").tag(DockBounce.untilFocused)
                 }
                 .accessibilityIdentifier("settings-dock-bounce")
+
+                Picker("Notification sound", selection: notificationSound) {
+                    Text("None").tag("None")
+                    ForEach(StatusSoundPlayer.standardNames, id: \.self) { name in
+                        Text(name).tag(name)
+                    }
+                }
+                .accessibilityIdentifier("settings-notification-sound")
 
                 Toggle("Show attention indicator", isOn: attentionButtonEnabled)
                     .accessibilityIdentifier("settings-attention-button")
@@ -437,6 +446,17 @@ private struct NotificationsSettingsView: View {
     private var dockBounce: Binding<DockBounce> {
         Binding(get: { model.settings.effectiveDockBounce },
                 set: { model.setDockBounce($0 == .off ? nil : $0) })
+    }
+
+    // the system sound played when a notification is delivered; "None" maps to nil. Selecting a sound
+    // previews it so you hear the choice, the way macOS sound settings do.
+    private var notificationSound: Binding<String> {
+        Binding(get: { model.settings.notificationSoundName ?? "None" },
+                set: { name in
+                    let value = name == "None" ? nil : name
+                    model.setNotificationSoundName(value)
+                    if let value { StatusSoundPlayer.shared.action(for: value)?() }
+                })
     }
 
     /// 1:1 with the toggle; nil (the default) reads as OFF, so on → true / off → nil keeps settings.json
