@@ -1,6 +1,6 @@
 import XCTest
 
-/// Drives the Settings window (Cmd+,): confirms the five tabs exist and that choosing a theme in
+/// Drives the Settings window (Cmd+,): confirms the six tabs exist and that choosing a theme in
 /// Appearance persists to the hermetic `settings.json` (file oracle, like the other UI tests).
 @MainActor
 final class SettingsUITests: XCTestCase {
@@ -22,11 +22,11 @@ final class SettingsUITests: XCTestCase {
         if let stateDir { try? FileManager.default.removeItem(at: stateDir) }
     }
 
-    func testSettingsWindowHasFiveTabsAndThemePersists() throws {
+    func testSettingsWindowHasSixTabsAndThemePersists() throws {
         app.typeKey(",", modifierFlags: .command)
 
-        // the five tabs are reachable.
-        for tab in ["General", "Appearance", "Notifications", "Agent Status", "Key Mapping"] {
+        // the six tabs are reachable.
+        for tab in ["General", "Appearance", "Interface", "Notifications", "Agent Status", "Key Mapping"] {
             XCTAssertTrue(app.buttons[tab].firstMatch.waitForHittable(timeout: 12), "Settings should have a \(tab) tab")
         }
 
@@ -170,6 +170,19 @@ final class SettingsUITests: XCTestCase {
                       "moving the scroll-speed slider should persist a >3 mouseScrollMultiplier to settings.json")
     }
 
+    func testInterfaceElementTogglePersists() throws {
+        // the Interface tab's toggles are default-on (element visible); turning one off adds its raw name
+        // to hiddenInterfaceElements, and turning it back on empties the set so the key is removed.
+        let toggle = settingsControl(tab: "Interface", control: "settings-interface-split")
+        toggle.click() // hide the Split view element (default shown)
+        XCTAssertTrue(poll { self.settingsStringArray("hiddenInterfaceElements")?.contains("split") == true },
+                      "hiding the Split view element should persist \"split\" into hiddenInterfaceElements")
+
+        toggle.click() // show it again → the set empties
+        XCTAssertTrue(poll { self.settingsObject()?["hiddenInterfaceElements"] == nil },
+                      "re-showing the last hidden element should remove hiddenInterfaceElements from settings.json")
+    }
+
     // MARK: - Helpers
 
     /// Opens the Settings window (Cmd+,) if needed, switches to `tab`, and returns the control with
@@ -215,6 +228,10 @@ final class SettingsUITests: XCTestCase {
 
     private func settingsDouble(_ key: String) -> Double? {
         (settingsObject()?[key] as? NSNumber)?.doubleValue
+    }
+
+    private func settingsStringArray(_ key: String) -> [String]? {
+        settingsObject()?[key] as? [String]
     }
 
     private func settingsObject() -> [String: Any]? {

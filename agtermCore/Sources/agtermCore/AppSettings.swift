@@ -23,6 +23,55 @@ public enum DockBounce: String, Codable, Sendable, CaseIterable {
     case untilFocused
 }
 
+/// A toggleable window-chrome element in the title bar or the sidebar footer. Persisted by raw name in
+/// `AppSettings.hiddenInterfaceElements`, so an unknown future case in a stored list decodes tolerantly
+/// (it is simply dropped) rather than failing the whole decode — the AppSettings forward-compat rule.
+/// Every element is shown by default; hiding one adds its raw name to the persisted list.
+public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
+    // title bar
+    case sidebarToggle
+    case sessionName
+    case windowName
+    case recentSessions
+    case scratch
+    case split
+    case dashboard
+    case quickTerminal
+    // sidebar footer
+    case newWorkspace
+    case newSession
+    case flaggedView
+
+    /// Which chrome surface the element belongs to — the Settings tab groups the toggles by this.
+    public enum Section: Sendable { case titleBar, sidebar }
+
+    /// The surface this element lives on: the sidebar footer for the three add/flag controls, the title
+    /// bar for everything else.
+    public var section: Section {
+        switch self {
+        case .newWorkspace, .newSession, .flaggedView: return .sidebar
+        default: return .titleBar
+        }
+    }
+
+    /// The human-facing toggle label shown in the Interface settings tab.
+    public var displayName: String {
+        switch self {
+        case .sidebarToggle: return "Sidebar toggle"
+        case .sessionName: return "Session name"
+        case .windowName: return "Window name"
+        case .recentSessions: return "Recent sessions"
+        case .scratch: return "Scratch terminal"
+        case .split: return "Split view"
+        case .dashboard: return "Dashboard"
+        case .quickTerminal: return "Quick terminal"
+        case .newWorkspace: return "New workspace"
+        case .newSession: return "New session"
+        case .flaggedView: return "Flagged view"
+        }
+    }
+}
+
 /// User-facing appearance settings, persisted independently of the workspace tree.
 ///
 /// Every field is optional: nil means "use the ghostty default", and a settings file written
@@ -240,6 +289,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// sizes. Applied at the AppKit level when the sidebar draws, NOT a ghostty key — it never appears in
     /// `ghosttyConfigLines()`.
     public var sidebarFontSize: Double?
+    /// Raw names of title-bar / sidebar-footer chrome elements the user has HIDDEN (see `InterfaceElement`).
+    /// nil/empty means every element is shown (the default). Stored as raw strings so an unknown future
+    /// element name decodes tolerantly (it is dropped by `resolvedHiddenInterfaceElements`) instead of
+    /// failing the whole decode — the AppSettings forward-compat rule. A GUI-only chrome value applied at
+    /// the AppKit/SwiftUI level, NOT a ghostty key — it never appears in `ghosttyConfigLines()`.
+    public var hiddenInterfaceElements: [String]?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 darkTheme: String? = nil, followSystemAppearance: Bool? = nil,
@@ -255,7 +310,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 newSessionDirectory: String? = nil, newSessionCustomDirectory: String? = nil,
                 confirmCloseSession: Bool? = nil, closeGraceUndoEnabled: Bool? = nil,
                 autoFollowAttention: String? = nil,
-                autoFollowStayOnActive: Bool? = nil, sidebarFontSize: Double? = nil) {
+                autoFollowStayOnActive: Bool? = nil, sidebarFontSize: Double? = nil,
+                hiddenInterfaceElements: [String]? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -288,6 +344,20 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.autoFollowAttention = autoFollowAttention
         self.autoFollowStayOnActive = autoFollowStayOnActive
         self.sidebarFontSize = sidebarFontSize
+        self.hiddenInterfaceElements = hiddenInterfaceElements
+    }
+
+    /// The resolved set of hidden chrome elements: the known raw names from `hiddenInterfaceElements`,
+    /// with any unknown (future-written) names dropped. The single read point the app target and the
+    /// Settings UI use, so callers never touch the raw string list.
+    public var resolvedHiddenInterfaceElements: Set<InterfaceElement> {
+        Set((hiddenInterfaceElements ?? []).compactMap(InterfaceElement.init(rawValue:)))
+    }
+
+    /// Whether a given chrome element is hidden. Everything is shown by default, so an element absent from
+    /// the persisted list reads as visible.
+    public func isInterfaceElementHidden(_ element: InterfaceElement) -> Bool {
+        resolvedHiddenInterfaceElements.contains(element)
     }
 
     /// The resolved titlebar row state: the explicit `toolbarMode` when set to a KNOWN raw value, else the

@@ -515,4 +515,45 @@ struct AppSettingsTests {
         // app-level per-window behavior values, never ghostty config keys — only the always-on defaults emit.
         #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
+
+    @Test func hiddenInterfaceElementsDefaultsNilAndShowsEverything() {
+        let settings = AppSettings()
+        #expect(settings.hiddenInterfaceElements == nil)
+        #expect(settings.resolvedHiddenInterfaceElements.isEmpty)
+        for element in InterfaceElement.allCases {
+            #expect(!settings.isInterfaceElementHidden(element))
+        }
+    }
+
+    @Test func hiddenInterfaceElementsRoundTripsAndIsNotAConfigLine() throws {
+        let original = AppSettings(hiddenInterfaceElements: ["scratch", "flaggedView"])
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
+        #expect(decoded == original)
+        #expect(decoded.isInterfaceElementHidden(.scratch))
+        #expect(decoded.isInterfaceElementHidden(.flaggedView))
+        #expect(!decoded.isInterfaceElementHidden(.split))
+        // a GUI-only chrome value, never a ghostty config key — only the always-on defaults emit.
+        #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
+
+    @Test func unknownInterfaceElementDecodesTolerantly() throws {
+        // a future-written element name must decode tolerantly (the forward-compat rule): the unknown name
+        // is dropped from the resolved set, and it must NOT fail the whole decode and discard other fields.
+        let decoded = try JSONDecoder().decode(
+            AppSettings.self,
+            from: Data(#"{ "hiddenInterfaceElements": ["scratch", "teleporter"], "fontSize": 16 }"#.utf8))
+        #expect(decoded.fontSize == 16)
+        #expect(decoded.resolvedHiddenInterfaceElements == [.scratch])
+        #expect(decoded.isInterfaceElementHidden(.scratch))
+    }
+
+    @Test func interfaceElementSectionsPartitionAllCases() {
+        // every case belongs to exactly one section, and both sections are non-empty — the Settings tab
+        // relies on this to group the toggles.
+        let titleBar = InterfaceElement.allCases.filter { $0.section == .titleBar }
+        let sidebar = InterfaceElement.allCases.filter { $0.section == .sidebar }
+        #expect(titleBar.count + sidebar.count == InterfaceElement.allCases.count)
+        #expect(sidebar == [.newWorkspace, .newSession, .flaggedView])
+        #expect(!titleBar.isEmpty)
+    }
 }

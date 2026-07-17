@@ -118,12 +118,18 @@ paths:
   The host-free `cd agtermCore && swift test` is fast (~0.2 s) — always run it.
   The XCUITest suite is SLOW (~75 s for one class, ~460 s for all 77) and re-runs unaffected tests,
   so a full UI run is NOT a default pre-commit gate.
-  For an isolated change, run ONLY the affected target/case (`xcodebuild test … -only-testing:agtermUITests/SplitUITests`,
-  or a single method like `…/SidebarUITests/testRenameSession`).
+  For an isolated change, scope to the EXACT affected test METHODS — one `-only-testing:agtermUITests/<Class>/<method>`
+  flag per method (e.g. `…/SettingsUITests/testInterfaceElementTogglePersists`),
+  NOT the whole enclosing class, and NEVER an adjacent class "for extra confidence" on a pure refactor.
+  A refactor/extraction that preserves accessibility ids and behavior needs NO UI test at all — `make build`
+  + `make lint` already cover it (a code MOVE with identical ids is not "shared-chrome" work that warrants
+  a broad run).
   Before committing UI-affecting work, ASK which UI-test scope is wanted and RECOMMEND one:
-  focused for self-contained changes; full only for foundational/cross-concern work (app launch,
-  signing/bundle, the eager deck, window/scene wiring, shared chrome).
-  Don't burn minutes re-running the whole suite when the change is self-contained.
+  the specific new/changed methods for a self-contained change; a full class or broader run ONLY for
+  foundational/cross-concern work that actually changes behavior (app launch, signing/bundle, the eager
+  deck, window/scene wiring), never merely because a file under shared chrome was touched.
+  Don't burn minutes re-running the whole suite (or unrelated classes) when the change is self-contained —
+  running too many unrelated tests is a repeat offense the user has interrupted.
 - **After editing a TEST file, rebuild the test bundle with `build-for-testing` — `test-without-building`
   runs the STALE bundle.**
   `xcodebuild build` (or `make build`) builds only the APP target, NOT the `agtermUITests` bundle.

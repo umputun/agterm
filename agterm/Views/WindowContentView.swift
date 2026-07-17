@@ -52,6 +52,10 @@ struct WindowContentView: View {
     /// Refreshed on `.agtermAppearanceChanged`, like `toolbarMode`, so flipping the Settings toggle
     /// shows/hides the bell live without a relaunch.
     @State var attentionButtonEnabled: Bool = WindowContentView.resolvedAttentionButtonEnabled()
+    /// Mirror of `GhosttyApp.hiddenInterfaceElements`: the title-bar / sidebar-footer chrome elements the
+    /// user has hidden in Settings ▸ Interface. Refreshed on `.agtermAppearanceChanged`, like `toolbarMode`,
+    /// so flipping a toggle shows/hides the element live without a relaunch. `shows(_:)` reads it.
+    @State var hiddenInterfaceElements: Set<InterfaceElement> = WindowContentView.resolvedHiddenInterfaceElements()
     /// Whether the recent-sessions popover (the mouse equivalent of the Ctrl-Tab switcher) is shown,
     /// anchored on the title-bar clock button. Non-private so the `+RecentSessions` extension's button/rows
     /// can toggle it.
@@ -166,6 +170,7 @@ struct WindowContentView: View {
             toolbarMode = WindowContentView.resolvedToolbarMode()
             chromeText = WindowContentView.resolvedChromeText()
             attentionButtonEnabled = WindowContentView.resolvedAttentionButtonEnabled()
+            hiddenInterfaceElements = WindowContentView.resolvedHiddenInterfaceElements()
             inactivePaneMute = WindowContentView.resolvedInactivePaneMute()
             sidebarShift = WindowContentView.resolvedSidebarShift()
         }
@@ -615,6 +620,18 @@ struct WindowContentView: View {
         GhosttyApp.shared.attentionButtonEnabled
     }
 
+    /// The hidden-chrome-element set from the (non-observable) `GhosttyApp`, mirrored into view state so a
+    /// settings change (posting `.agtermAppearanceChanged`) shows/hides the gated chrome live.
+    private static func resolvedHiddenInterfaceElements() -> Set<InterfaceElement> {
+        GhosttyApp.shared.hiddenInterfaceElements
+    }
+
+    /// Whether a title-bar / sidebar-footer chrome element should be drawn. Everything is shown unless the
+    /// user hid it in Settings ▸ Interface.
+    func shows(_ element: InterfaceElement) -> Bool {
+        !hiddenInterfaceElements.contains(element)
+    }
+
     /// The inactive-pane mute strength from the (non-observable) `GhosttyApp`, mirrored into view state
     /// so a settings change (posting `.agtermAppearanceChanged`) re-renders the inactive pane live.
     private static func resolvedInactivePaneMute() -> Int {
@@ -633,117 +650,6 @@ struct WindowContentView: View {
         Color(nsColor: GhosttyApp.shared.terminalForegroundColor ?? .labelColor)
     }
 
-    /// The titlebar title (first line): the active session's display name, suffixed with the window
-    /// name as "session — window" when the window has a custom (user-set) name, so a renamed window
-    /// is identifiable at a glance. Auto "window N" names are omitted. "Agterm" when nothing is selected.
-    private var windowTitle: String {
-        let session = store.activeSession?.displayName ?? "Agterm"
-        guard let info = library.windows.first(where: { $0.id == windowID }), info.hasCustomName else {
-            return session
-        }
-        return "\(session) — \(info.name)"
-    }
-
-    /// The titlebar subtitle (second line): the focused pane's `subtitleDetail` — its terminal title for
-    /// a remote (SSH) session whose local cwd is stale, else its working directory (the split pane's while
-    /// it's focused, else the primary's). Shown only in normal mode; compact/hidden drop it.
-    private var windowSubtitle: String {
-        toolbarMode == .normal ? (store.activeSession?.subtitleDetail ?? "") : ""
-    }
-
-    /// The window title at the terminal's leading edge: the session name, plus the cwd subtitle on a
-    /// second line only in normal mode (compact drops it for a single short row). Non-private so the zoom
-    /// titlebar reuses it — a zoomed terminal shows the same title as the normal window.
-    var titleLabel: some View {
-        VStack(alignment: .leading, spacing: 1) {
-            Text(windowTitle).fontWeight(.semibold)
-            if !windowSubtitle.isEmpty {
-                Text(windowSubtitle)
-                    .font(.caption)
-                    .foregroundStyle(chromeText.opacity(0.6))
-            }
-        }
-    }
-
-    /// The window chrome above the terminal: the full custom titlebar row, or — in hidden mode — an
-    /// invisible ~3px top drag strip and nothing else (no row, and `WindowAppearance.sync` also drops the
-    /// traffic lights) so the terminal runs full-bleed while the window stays movable + double-click-zoomable.
-    @ViewBuilder private var customTitlebar: some View {
-        if toolbarMode == .hidden {
-            // only the top ~3px loses click-through (the accepted cost) — kept thin so it doesn't cover the
-            // terminal's first row (window-padding-y = 6), which would otherwise swallow clicks meant to
-            // select it; it still keeps the standard title-bar gestures via the same `WindowControlArea`.
-            Color.clear
-                .frame(height: 3)
-                .frame(maxWidth: .infinity)
-                // Color.clear is hit-testable in SwiftUI, so it would swallow the mouseDown before it
-                // reaches the WindowControlArea behind it — opt out (like the titlebarRow spacers) so the
-                // strip's drag/double-click-zoom gestures fall through to the AppKit view.
-                .allowsHitTesting(false)
-                .background { WindowControlArea() }
-        } else {
-            titlebarRow
-        }
-    }
-
-    /// Custom titlebar row replacing the system toolbar: the sidebar toggle pinned to the sidebar's
-    /// trailing edge (by the divider), the title at the terminal's start, and the trailing action cluster
-    /// (recent-sessions / attention popovers, a divider, the scratch / split view controls, a divider, then
-    /// the dashboard / quick-terminal group). Positions track `sidebarWidth`; the left inset clears the
-    /// system traffic lights.
-    private var titlebarRow: some View {
-        HStack(spacing: 0) {
-            Color.clear.frame(width: 78).allowsHitTesting(false) // system traffic lights
-            if store.sidebarVisible {
-                HStack(spacing: 0) {
-                    Spacer(minLength: 0)
-                    sidebarToggleButton.labelStyle(.iconOnly)
-                }
-                .frame(width: max(40, CGFloat(store.sidebarWidth) - 78))
-                Color.clear.frame(width: 11).allowsHitTesting(false) // 1px divider + gap to the title
-            } else {
-                sidebarToggleButton.labelStyle(.iconOnly)
-                Spacer().frame(width: 12)
-            }
-            titleLabel
-                // the title text falls through to the drag/zoom layer behind it (see `.background` below),
-                // so double-clicking it zooms and dragging it moves the window — the rest of the row is
-                // empty spacers (already non-hittable) and the buttons, which keep their own clicks.
-                .allowsHitTesting(false)
-            Spacer(minLength: 12)
-            HStack(spacing: 14) {
-                recentSessionsButton.labelStyle(.iconOnly)
-                if attentionButtonEnabled {
-                    attentionButton.labelStyle(.iconOnly)
-                }
-                // separates the recent-sessions / attention popovers from the view controls.
-                Rectangle().fill(chromeText.opacity(0.25)).frame(width: 1, height: 16)
-                scratchButton.labelStyle(.iconOnly)
-                splitButton.labelStyle(.iconOnly)
-                // separates the per-session view controls from the window-overlay group (dashboard + quick terminal).
-                Rectangle().fill(chromeText.opacity(0.25)).frame(width: 1, height: 16)
-                dashboardButton.labelStyle(.iconOnly)
-                quickTerminalButton.labelStyle(.iconOnly)
-            }
-            .padding(.trailing, 14)
-        }
-        .buttonStyle(.plain)
-        // tint the title text and the toolbar buttons with the terminal theme's foreground so the
-        // chrome tracks the theme (the cwd subtitle dims itself to 0.6 over this).
-        .foregroundStyle(chromeText)
-        // larger icons in the normal row, smaller in compact (the row isn't drawn in hidden mode; imageScale hits the
-        // SF Symbols, not the title text).
-        .imageScale(toolbarMode == .normal ? .large : .medium)
-        .frame(height: titlebarHeight)
-        .frame(maxWidth: .infinity)
-        // make the header behave like a standard title bar: single-click drag moves the window, double-click
-        // runs the user's configured title-bar action (zoom/minimize/none). The layer sits BEHIND the row,
-        // so the buttons render in front and keep their clicks; the empty spacers + the title text opt out of
-        // hit-testing (above) so their region falls through to it. Custom titlebar = no native title-bar
-        // double-click handling, hence this.
-        .background { WindowControlArea() }
-    }
-
     /// A tooltip string with the action's current shortcut appended in parentheses (e.g. `Toggle
     /// Sidebar (⌃⌘S)`), or just the base text when the action has no configured shortcut. Keeps the
     /// toolbar/sidebar hints in lockstep with the keymap — a rebind shows the new chord, an unbound
@@ -752,78 +658,6 @@ struct WindowContentView: View {
     func helpHint(_ base: String, _ action: BuiltinAction) -> String {
         guard let glyph = actions.shortcutGlyph(for: action) else { return base }
         return "\(base) (\(glyph))"
-    }
-
-    /// Our own sidebar show/hide toggle (the custom split has no system one). Animated collapse.
-    private var sidebarToggleButton: some View {
-        Button {
-            actions.toggleSidebar()
-        } label: {
-            Label("Toggle Sidebar", systemImage: "sidebar.left")
-        }
-        .help(helpHint("Toggle Sidebar", .toggleSidebar))
-        .accessibilityIdentifier("sidebar-toggle-button")
-    }
-
-    private var splitButton: some View {
-        let isSplit = store.activeSession?.isSplit ?? false
-        let hasSplit = store.activeSession?.hasSplit ?? false
-        let splitFocused = store.activeSession?.splitFocused ?? false
-        // filled = pane visible, outline = hidden. no split: an empty two-pane outline. split shown: both
-        // panes filled. collapsed to a single pane (hasSplit but not shown): only the VISIBLE pane's half
-        // is filled — left for the primary, right for the split pane (`splitFocused` is the shown one when
-        // hidden) — so the glyph tells you which pane is up and that the other is parked. `a11y` mirrors the
-        // four states for XCUITest, which can't read the symbol name (like the attention bell's value).
-        let symbol: String
-        let a11y: String
-        if !hasSplit {
-            symbol = "rectangle.split.2x1"; a11y = "none"
-        } else if isSplit {
-            symbol = "rectangle.split.2x1.fill"; a11y = "both"
-        } else if splitFocused {
-            symbol = "rectangle.righthalf.filled"; a11y = "right"
-        } else {
-            symbol = "rectangle.lefthalf.filled"; a11y = "left"
-        }
-        return Button {
-            actions.toggleSplit()
-        } label: {
-            // a Label (icon + title) so the toolbar's "Icon and Text" mode has text to show; the title
-            // is hidden in the default icon-only mode.
-            Label("Split", systemImage: symbol)
-        }
-        .help(helpHint(isSplit ? "Hide split" : (hasSplit ? "Show split" : "Split right"), .toggleSplit))
-        .disabled(store.activeSession == nil)
-        .accessibilityValue(a11y)
-        .accessibilityIdentifier("split-toggle")
-    }
-
-    /// Toolbar button that toggles the active session's scratch terminal — a third, full-overlay login
-    /// shell, kept alive when hidden. 2-state glyph (filled while shown): unlike the split there is no
-    /// "hidden but exists" indicator, since the shell's own `exit` clears it and the next show is fresh.
-    private var scratchButton: some View {
-        let active = store.activeSession?.scratchActive ?? false
-        return Button {
-            actions.toggleScratch()
-        } label: {
-            Label("Scratch", systemImage: active ? "rectangle.inset.filled" : "rectangle")
-        }
-        .help(helpHint(active ? "Hide scratch terminal" : "Show scratch terminal", .toggleScratch))
-        .disabled(store.activeSession == nil)
-        .accessibilityIdentifier("scratch-toggle")
-    }
-
-    /// Toolbar button (next to the split toggle) that toggles the quick terminal: a single
-    /// scratch terminal overlaid at 90% of the window, on top of the sidebar and terminal.
-    /// Click the button again or the surrounding margin to hide; the shell stays alive until quit.
-    private var quickTerminalButton: some View {
-        Button {
-            quickTerminal.toggle()
-        } label: {
-            Label("Quick Terminal", systemImage: "terminal")
-        }
-        .help(helpHint("Quick Terminal", .quickTerminal))
-        .accessibilityIdentifier("quick-terminal-toggle")
     }
 
     /// The quick-terminal overlay: the scratch terminal centered at 90% of the window, framed by a
@@ -908,33 +742,37 @@ struct WindowContentView: View {
     /// to add a session to the current workspace (default cwd) or a picked directory.
     private var bottomBar: some View {
         HStack(spacing: 2) {
-            Button {
-                actions.newWorkspace()
-            } label: {
-                Image(systemName: "rectangle.stack.badge.plus")
-                    .frame(width: 24, height: 22)
-                    .contentShape(Rectangle())
+            if shows(.newWorkspace) {
+                Button {
+                    actions.newWorkspace()
+                } label: {
+                    Image(systemName: "rectangle.stack.badge.plus")
+                        .frame(width: 24, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                .help(helpHint("New Workspace", .newWorkspace))
+                .accessibilityLabel("New Workspace")
             }
-            .buttonStyle(.borderless)
-            .help(helpHint("New Workspace", .newWorkspace))
-            .accessibilityLabel("New Workspace")
 
-            Menu {
-                Button("New Session") { actions.newSession() }
-                Button("Open Directory…") { actions.openDirectory() }
-            } label: {
-                Image(systemName: "plus.rectangle")
-                    .frame(width: 24, height: 22)
-                    .contentShape(Rectangle())
+            if shows(.newSession) {
+                Menu {
+                    Button("New Session") { actions.newSession() }
+                    Button("Open Directory…") { actions.openDirectory() }
+                } label: {
+                    Image(systemName: "plus.rectangle")
+                        .frame(width: 24, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .menuStyle(.borderlessButton)
+                // a borderless Menu ignores foregroundStyle on its glyph but follows the accent tint.
+                .tint(chromeText)
+                .menuIndicator(.hidden)
+                .fixedSize()
+                .help(helpHint("New Session", .newSession))
+                .accessibilityLabel("Add session")
+                .accessibilityIdentifier("add-session")
             }
-            .menuStyle(.borderlessButton)
-            // a borderless Menu ignores foregroundStyle on its glyph but follows the accent tint.
-            .tint(chromeText)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .help(helpHint("New Session", .newSession))
-            .accessibilityLabel("Add session")
-            .accessibilityIdentifier("add-session")
 
             Spacer()
 
@@ -963,23 +801,25 @@ struct WindowContentView: View {
 
             // flip the sidebar between the workspace tree and the flat flagged working-set list. 2-state
             // glyph (filled in flagged mode); the switch animates via splitRoot's `.animation(value:)`.
-            Button {
-                actions.toggleFlaggedView()
-            } label: {
-                let flagged = store.sidebarMode == .flagged
-                Image(systemName: flagged ? "flag.fill" : "flag")
-                    .frame(width: 24, height: 22)
-                    .contentShape(Rectangle())
+            if shows(.flaggedView) {
+                Button {
+                    actions.toggleFlaggedView()
+                } label: {
+                    let flagged = store.sidebarMode == .flagged
+                    Image(systemName: flagged ? "flag.fill" : "flag")
+                        .frame(width: 24, height: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.borderless)
+                // nothing to show: disable entering an empty flagged view (tree mode + no flags). Stays
+                // enabled in flagged mode so the button can always switch back to the tree. The explicit
+                // chromeText foregroundStyle defeats SwiftUI's default disabled dimming, so mute it by hand.
+                .disabled(store.sidebarMode == .tree && store.flaggedSessions.isEmpty)
+                .opacity(store.sidebarMode == .tree && store.flaggedSessions.isEmpty ? 0.35 : 1)
+                .help(helpHint(store.sidebarMode == .flagged ? "Show all sessions" : "Show flagged sessions", .toggleFlaggedView))
+                .accessibilityLabel("Toggle Flagged View")
+                .accessibilityIdentifier("flagged-view-toggle")
             }
-            .buttonStyle(.borderless)
-            // nothing to show: disable entering an empty flagged view (tree mode + no flags). Stays
-            // enabled in flagged mode so the button can always switch back to the tree. The explicit
-            // chromeText foregroundStyle defeats SwiftUI's default disabled dimming, so mute it by hand.
-            .disabled(store.sidebarMode == .tree && store.flaggedSessions.isEmpty)
-            .opacity(store.sidebarMode == .tree && store.flaggedSessions.isEmpty ? 0.35 : 1)
-            .help(helpHint(store.sidebarMode == .flagged ? "Show all sessions" : "Show flagged sessions", .toggleFlaggedView))
-            .accessibilityLabel("Toggle Flagged View")
-            .accessibilityIdentifier("flagged-view-toggle")
         }
         .padding(.horizontal, 6)
         .padding(.vertical, 4)

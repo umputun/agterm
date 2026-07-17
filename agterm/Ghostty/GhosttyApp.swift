@@ -73,6 +73,11 @@ final class GhosttyApp {
     /// reads it (via `WindowContentView`'s mirrored chrome state), `SettingsModel` writes it. The
     /// re-render rides the `.agtermAppearanceChanged` notification, like `toolbarMode`. Defaults off.
     private(set) var attentionButtonEnabled: Bool = false
+    /// Which title-bar / sidebar-footer chrome elements are hidden (`AppSettings.hiddenInterfaceElements`).
+    /// NOT ghostty-resolved: `WindowContentView` mirrors it into view state and gates each element,
+    /// `SettingsModel` writes it. The re-render rides the `.agtermAppearanceChanged` notification, like
+    /// `toolbarMode`. Empty by default (everything shown).
+    private(set) var hiddenInterfaceElements: Set<InterfaceElement> = []
     /// Program basenames NOT to re-run on restore — the parsed user-editable `restore-denylist.conf`
     /// (seeded with the terminal multiplexers). The surface factories read it via
     /// `CommandRestore.shouldRestore`; `SettingsModel` parses the file and writes it. Read at launch only.
@@ -182,6 +187,12 @@ final class GhosttyApp {
     /// every change; the title-bar re-render rides the `.agtermAppearanceChanged` notification.
     func setAttentionButtonEnabled(_ enabled: Bool) {
         attentionButtonEnabled = enabled
+    }
+
+    /// Set which title-bar / sidebar-footer chrome elements are hidden. Called by `SettingsModel` at launch
+    /// and on every change; the chrome re-render rides the `.agtermAppearanceChanged` notification.
+    func setHiddenInterfaceElements(_ elements: Set<InterfaceElement>) {
+        hiddenInterfaceElements = elements
     }
 
     /// Set the parsed restore denylist (program basenames not to re-run). Called by `SettingsModel` at

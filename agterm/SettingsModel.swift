@@ -81,6 +81,7 @@ final class SettingsModel {
         applyAgentStatusColors()
         applyRestoreRunningCommand()
         applyAttentionButtonEnabled()
+        applyInterfaceElements()
         // create the commented starter keymap on first launch, then load + parse it.
         ensureStarterKeymap()
         loadKeymap()
@@ -239,6 +240,17 @@ final class SettingsModel {
     func setRestoreRunningCommand(_ value: Bool?) { settings.restoreRunningCommand = value; persistAndApply() }
     // chrome flag, not a ghostty key: persistAndApply() no-ops the config but rides .agtermAppearanceChanged.
     func setAttentionButtonEnabled(_ value: Bool?) { settings.attentionButtonEnabled = value; persistAndApply() }
+
+    /// Show or hide a single title-bar / sidebar-footer chrome element, then persist. Toggling `visible`
+    /// off adds the element to `hiddenInterfaceElements`, on removes it; an empty result maps back to nil so
+    /// `settings.json` stays minimal. A GUI-only chrome flag, not a ghostty key — `persistAndApply()`
+    /// no-ops the config text but rides `.agtermAppearanceChanged` so every window re-gates the element live.
+    func setInterfaceElementVisible(_ element: InterfaceElement, visible: Bool) {
+        var hidden = settings.resolvedHiddenInterfaceElements
+        if visible { hidden.remove(element) } else { hidden.insert(element) }
+        settings.hiddenInterfaceElements = hidden.isEmpty ? nil : hidden.map(\.rawValue).sorted()
+        persistAndApply()
+    }
 
     /// Persist whether agterm inherits the user's global `~/.config/ghostty/config` and FULLY reload the
     /// ghostty config so the change takes effect live. NOT a `ghosttyConfigLines()` key, so
@@ -648,6 +660,7 @@ final class SettingsModel {
         applyAgentStatusColors()
         applyRestoreRunningCommand()
         applyAttentionButtonEnabled()
+        applyInterfaceElements()
         // refresh the app chrome (title bar + sidebar + quick terminal) with the new terminal color,
         // window translucency, and toolbar style immediately, rather than only when the window next
         // re-keys. The title-bar re-sync and the cwd-subtitle drop both ride this notification.
@@ -686,6 +699,10 @@ final class SettingsModel {
 
     private func applyAttentionButtonEnabled() {
         GhosttyApp.shared.setAttentionButtonEnabled(settings.attentionButtonEnabled ?? false)
+    }
+
+    private func applyInterfaceElements() {
+        GhosttyApp.shared.setHiddenInterfaceElements(settings.resolvedHiddenInterfaceElements)
     }
 
     /// Push the current auto-follow configuration into a single window's store. Called when a window's
