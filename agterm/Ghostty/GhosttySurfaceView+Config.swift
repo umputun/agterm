@@ -23,6 +23,12 @@ extension GhosttySurfaceView {
     /// here so it always matches the current string/color. Main-actor; reads the session imperatively.
     func applyWatermarkFromSession() {
         guard let surface, let session else { return }
+        // this installs a watermark/plain config with NO OSC-11 overlay, so release the OSC latch: it is the
+        // dedupe key in the COLOR_CHANGE handler, and a stale value makes a subsequent identical OSC 11 (a
+        // re-`printf` right after `session background clear/set`) get skipped and never render. the reload /
+        // opacity / dashboard re-assert paths guard on the latch BEFORE calling this, so they never reach here
+        // with a live OSC to drop.
+        oscBackgroundColorHex = nil
         let resolvedImagePath = WatermarkRenderer.materialize(session.backgroundWatermark, sessionID: session.id)
         let overlay = WatermarkConfig.overlayText(watermark: session.backgroundWatermark,
                                                   resolvedImagePath: resolvedImagePath, fontSize: dashboardFontOverride ?? session.fontSize,
