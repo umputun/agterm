@@ -121,6 +121,41 @@ struct SurfaceEnvironmentTests {
         ])
     }
 
+    @Test func sessionEnvironmentInjectsPaneTokenWhenGiven() {
+        let sessionID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+
+        let env = SurfaceEnvironment.session(
+            sessionID: sessionID,
+            windowID: nil,
+            workspaceID: nil,
+            socketPath: "/tmp/agterm.sock",
+            programVersion: "0.12.0",
+            pane: .right,
+            paneToken: "surface-token-abc"
+        )
+
+        #expect(env["AGTERM_PANE_ID"] == "surface-token-abc")
+        // the token rides alongside the role, not instead of it
+        #expect(env["AGTERM_PANE"] == "right")
+    }
+
+    @Test(arguments: [nil, ""])
+    func sessionEnvironmentOmitsPaneTokenWhenNilOrEmpty(token: String?) {
+        let sessionID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+
+        let env = SurfaceEnvironment.session(
+            sessionID: sessionID,
+            windowID: nil,
+            workspaceID: nil,
+            socketPath: "/tmp/agterm.sock",
+            programVersion: "0.12.0",
+            pane: .left,
+            paneToken: token
+        )
+
+        #expect(env["AGTERM_PANE_ID"] == nil)
+    }
+
     @Test func quickTerminalEnvironmentOmitsSessionAndWorkspaceIdentifiers() {
         let windowID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
 

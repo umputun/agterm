@@ -302,6 +302,21 @@ struct AgentHooksInstallTests {
         #expect(result.contents.contains("source '\(scriptDir)/shell/integration.fish'"))
     }
 
+    @Test func piExtensionPathsUsePiGlobalExtensionsDirectory() {
+        #expect(AgentHooksInstall.piExtensionDirectory(home: "/Users/me") == "/Users/me/.pi/agent/extensions")
+        #expect(AgentHooksInstall.piExtensionPath(home: "/Users/me") == "/Users/me/.pi/agent/extensions/agterm-status.ts")
+    }
+
+    @Test func piExtensionOwnershipProtectsUserExtension() {
+        #expect(AgentHooksInstall.mayOverwritePiExtension(fileExists: false, existingContents: nil))
+        #expect(AgentHooksInstall.mayOverwritePiExtension(
+            fileExists: true,
+            existingContents: "// agterm-pi-status-extension\nexport default () => {}\n"
+        ))
+        #expect(!AgentHooksInstall.mayOverwritePiExtension(fileExists: true, existingContents: "export default () => {}\n"))
+        #expect(!AgentHooksInstall.mayOverwritePiExtension(fileExists: true, existingContents: nil))
+    }
+
     @Test func backupPathAppendsBak() {
         #expect(AgentHooksInstall.backupPath(for: "/home/me/.claude/settings.json") == "/home/me/.claude/settings.json.bak")
     }

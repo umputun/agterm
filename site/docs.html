@@ -64,6 +64,7 @@
         "
       >
         <div
+          class="site-nav-bar"
           style="
             max-width: 1240px;
             margin: 0 auto;
@@ -104,6 +105,7 @@
             >
           </a>
           <div
+            class="site-nav-desktop"
             style="
               display: flex;
               align-items: center;
@@ -128,13 +130,41 @@
               >GitHub ↗</a
             >
           </div>
+          <details class="site-nav-mobile">
+            <summary>menu</summary>
+            <nav aria-label="Mobile navigation" onclick="this.parentElement.open=false">
+              <button
+                type="button"
+                class="doc-drawer-trigger"
+                aria-controls="doc-navigation"
+                onclick="document.getElementById('doc-drawer').checked=true; document.querySelector('#doc-navigation a').focus()"
+              >
+                contents
+              </button>
+              <a href="/">← home</a>
+              <a href="/commands">commands</a>
+              <a href="https://github.com/umputun/agterm">GitHub ↗</a>
+            </nav>
+          </details>
         </div>
       </div>
 
+      <input class="doc-drawer-toggle" type="checkbox" id="doc-drawer" />
+      <button
+        type="button"
+        class="doc-drawer-overlay"
+        aria-label="Close documentation navigation"
+        onclick="document.getElementById('doc-drawer').checked=false; document.querySelector('.site-nav-mobile summary').focus()"
+      ></button>
+
       <!-- ===== LAYOUT ===== -->
-      <div style="max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: 236px 1fr; gap: 48px; padding: 0 28px">
+      <div
+        class="doc-layout"
+        style="max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: 236px 1fr; gap: 48px; padding: 0 28px"
+      >
         <!-- SIDEBAR -->
         <aside
+          id="doc-navigation"
           class="doc-scroll"
           style="
             position: sticky;
@@ -146,7 +176,11 @@
             font-family: &quot;JetBrains Mono&quot;, monospace;
           "
         >
-          <nav style="display: flex; flex-direction: column; gap: 4px; font-size: 13.5px">
+          <nav
+            aria-label="Documentation sections"
+            onclick="document.getElementById('doc-drawer').checked=false; document.querySelector('.site-nav-mobile summary').focus()"
+            style="display: flex; flex-direction: column; gap: 4px; font-size: 13.5px"
+          >
             <a href="#overview" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Overview</a>
             <a href="#install" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Install</a>
             <div style="height: 16px"></div>
@@ -177,7 +211,7 @@
         </aside>
 
         <!-- CONTENT -->
-        <main style="min-width: 0; padding: 48px 0 120px; max-width: 760px">
+        <main class="doc-content" style="min-width: 0; padding: 48px 0 120px; max-width: 760px">
           <!-- title -->
           <div
             style="
@@ -444,7 +478,7 @@
                 <span
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
-                ><strong style="color: #e6e1d7">Install Agent Status Hooks…</strong> lets a coding agent (Claude Code, Codex, or
+                ><strong style="color: #e6e1d7">Install Agent Status Hooks…</strong> lets a coding agent (Claude Code, Codex, Pi, or
                 others) report its state onto its session's row, so you can tell which of several running agents is active,
                 blocked, or finished.
               </li>
@@ -704,7 +738,7 @@
                 </div>
                 <p style="font-size: 15px; line-height: 1.6; color: #949ba4; margin: 0">
                   Fills the whole window with one terminal surface — a pane, the scratch, an overlay, or the quick terminal —
-                  hiding the sidebar and collapsing the title bar to a slim strip with the traffic lights and an exit button
+                  hiding the sidebar and collapsing the title bar to a slim strip with the traffic lights, the window title, and an exit button
                   (⌘W leaves zoom too). A view mode, not a layout change: exiting
                   restores split ratios, focus, and visibility exactly as they were, and everything else keeps running behind it.
                   Scripts can zoom any surface by id with <code style="color: #e6e1d7">agtermctl surface zoom</code>. Distinct
@@ -723,19 +757,40 @@
                   Watch several agents or builds at once: sessions' live output in one grid overlaid on the window. The cell unit is a
                   session+pane — a non-split session is one cell, a split session is two (its left and right panes), capped at nine
                   cells. Each cell's name chip also reflects the session's agent status, filling with the status color and pulsing
-                  while it blinks, so a session that needs attention stands out in the grid. It is view-only — no cell takes input;
-                  the arrow keys move a highlight, Enter jumps into the highlighted
+                  while it blinks, so a session that needs attention stands out in the grid. It is view-only — no cell's terminal
+                  takes input; the arrow keys move a highlight, Enter (or a single mouse click on a cell) jumps into that
                   session and focuses that exact pane, and Esc closes. Opened over the control channel with
                   <code style="color: #e6e1d7">agtermctl dashboard &lt;ids…&gt;</code>, or
                   <code style="color: #e6e1d7">agtermctl dashboard --mru</code> to fill it from the window's most-recently-used
-                  sessions instead of naming ids. The most-recently-used grid also toggles from the keyboard —
-                  <strong>⌘⇧D</strong> (or <strong>Navigate ▸ Dashboard</strong>, or the command palette's Dashboard) opens it
-                  auto-sized. Cell fonts size absolutely
+                  sessions instead of naming ids. The most-recently-used grid also has a built-in opener —
+                  <strong>⌘⇧D</strong> (or <strong>Navigate ▸ Dashboard</strong>, the command palette's Dashboard, or the
+                  title-bar grid button) opens it auto-sized. Cell fonts size absolutely
                   (<code style="color: #e6e1d7">--font-size</code>) or scale to the grid
                   (<code style="color: #e6e1d7">--auto-size</code>). Mutually exclusive with terminal zoom.
                 </p>
               </div>
             </div>
+            <figure
+              style="
+                margin: 28px 0 0;
+                background: #22272b;
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 12px;
+                overflow: hidden;
+              "
+            >
+              <img
+                src="/assets/screenshot-dashboard.webp"
+                alt="The dashboard grid showing several live sessions at once"
+                width="1187"
+                height="748"
+                loading="lazy"
+                style="display: block; width: 100%; height: auto; border-bottom: 1px solid rgba(255, 255, 255, 0.06)"
+              />
+              <figcaption style="padding: 14px 18px; font-size: 13.5px; color: #949ba4">
+                The dashboard: several sessions' live output in one view-only grid.
+              </figcaption>
+            </figure>
           </section>
 
           <!-- NAVIGATION -->
@@ -755,7 +810,8 @@
             </h2>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 20px">
               agterm is built to run from the keyboard. Every action has a shortcut and appears in the menus. Three fuzzy palettes
-              (type to filter, Enter to run, Esc to dismiss) and a Ctrl-Tab MRU switcher cover the rest.
+              (type to filter, Enter to run, Esc to dismiss) and a Ctrl-Tab MRU switcher cover the rest; a title-bar clock button
+              opens the recent-session list with the mouse.
             </p>
             <div
               style="
@@ -942,7 +998,8 @@
               clear it headlessly with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session seen</span>
               so an orchestrator driving a session over the socket can acknowledge it without pulling focus
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports each session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">unseen</span> count).
-              Banners and count badges toggle independently in General settings. For a coding agent that just needs to say it is
+              Banners and count badges toggle independently in the Notifications settings, which also sets the Dock-icon
+              bounce for a background notification (off, once, or until you focus agterm). For a coding agent that just needs to say it is
               waiting, <a href="#status" style="color: #6d82f3">agent status</a> is usually the better fit.
             </p>
           </section>
@@ -988,8 +1045,8 @@
                 <span
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
-                ><strong style="color: #e6e1d7">Notifications</strong> — the banner, the unseen-count badge, and the title-bar
-                attention indicator.
+                ><strong style="color: #e6e1d7">Notifications</strong> — the banner, the unseen-count badge, the Dock-icon
+                bounce for a background notification (off / once / until focused), and the title-bar attention indicator.
               </div>
               <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
@@ -1368,7 +1425,10 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE</span> (which pane the shell runs in —
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left</span> (main),
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span> (split), or
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span>; unset in an overlay), so a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span>; unset in an overlay), and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE_ID</span> (a stable per-surface token the
+              agent-status hook forwards as <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session status --pane-id</span>,
+              so a promoted-then-re-split pane still tags correctly), so a
               script can drive its own window without hard-coding ids.
             </div>
           </section>
@@ -1823,6 +1883,8 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--color</span>
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#rrggbb</span>) overrides the glyph
               tint for that one call — it rides the status, so the next status set without it reverts to the configured color.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span>
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">left</span>|<span
                 style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
@@ -1834,7 +1896,10 @@
               agent in a split or scratch tags its own pane to be found (the control <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session go next-attention</span>
               only steps the selection, it does not itself move focus into the pane). It reads back on
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusPane</span>. Typing into a
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusPane</span>.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              Typing into a
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">blocked</span>/<span
                 style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
                 >completed</span
@@ -1846,9 +1911,11 @@
               When the sidebar is hidden the glyphs go with it, so an optional
               <strong style="color: #e6e1d7">title-bar bell</strong> (Settings ▸ Notifications ▸ Show attention indicator, off by
               default) reflects the window: dimmed when nothing needs you, plain when a session is active or completed, filled
-              amber when any is blocked. Clicking it — or ⌃⇧I, <strong style="color: #e6e1d7">Navigate ▸ Go to Attention…</strong>,
-              or the action palette's "Show Attention" — opens the <strong style="color: #e6e1d7">attention list</strong>: this
-              window's non-idle sessions, sorted blocked → active → completed. Over the control channel,
+              amber when any is blocked. Clicking it opens a <strong style="color: #e6e1d7">popover</strong> of this window's non-idle
+              sessions, sorted blocked → active → completed, that you hover to highlight and click to jump to the session and the
+              pane that set its status. ⌃⇧I, <strong style="color: #e6e1d7">Navigate ▸ Go to Attention…</strong>, or the action
+              palette's "Show Attention" opens the same <strong style="color: #e6e1d7">attention list</strong> as a searchable
+              palette. Over the control channel,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports
               each session's <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">status</span> and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusPane</span> (which pane set it).
@@ -1880,10 +1947,20 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> while a command
               matching <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_AGENT_RE</span> runs;
               the default set is gemini, cursor-agent, aider, opencode, crush, goose), and four Claude Code hooks (prompt → active,
-              tool run → active, Stop → completed, permission prompt → blocked). Six Codex lifecycle events run a dedicated adapter.
+              tool run → active, Stop → completed, permission prompt → blocked).
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              Six Codex lifecycle events run a dedicated adapter.
               A permission request is only a candidate because it fires before Auto Review; the adapter keeps automatic decisions
               active and changes the row to blocked only after a real approval or structured question appears in that pane.
-              Re-running upgrades an older agterm-managed Codex block and is otherwise idempotent.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              When Pi
+              has already created <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.pi/agent</span>,
+              the installer also adds a lifecycle extension: Pi work starts as active and settles as completed after retries and
+              queued continuations finish. Pi has no built-in permission or structured-question event, so it does not infer blocked
+              from assistant prose. Restart Pi or run <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/reload</span>
+              after installing it. Re-running upgrades agterm-managed integrations and is otherwise idempotent.
             </p>
           </section>
 

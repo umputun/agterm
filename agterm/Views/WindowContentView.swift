@@ -52,6 +52,13 @@ struct WindowContentView: View {
     /// Refreshed on `.agtermAppearanceChanged`, like `toolbarMode`, so flipping the Settings toggle
     /// shows/hides the bell live without a relaunch.
     @State var attentionButtonEnabled: Bool = WindowContentView.resolvedAttentionButtonEnabled()
+    /// Whether the recent-sessions popover (the mouse equivalent of the Ctrl-Tab switcher) is shown,
+    /// anchored on the title-bar clock button. Non-private so the `+RecentSessions` extension's button/rows
+    /// can toggle it.
+    @State var recentSessionsShown = false
+    /// Whether the attention popover (the mouse equivalent of the ⌃⇧I attention palette) is shown, anchored
+    /// on the title-bar bell. Non-private so the `+RecentSessions` extension's bell/rows can toggle it.
+    @State var attentionPopoverShown = false
     /// Custom sidebar width and show/hide both live on the per-window `AppStore` (`sidebarWidth` /
     /// `sidebarVisible`), persisted in `Snapshot` so they restore on relaunch. The toolbar button, the View
     /// menu, the palette, and the `sidebar` control command share `sidebarVisible`.
@@ -368,10 +375,14 @@ struct WindowContentView: View {
         // this subtree's shape/hit-testing must not change when a floating overlay opens (NSSplitView overrun).
         let hideForOverlay = fullOverlay || session.scratchActive
         let overlaid = session.overlayActive || session.scratchActive
-        // on-screen = selected session, not hidden by a full overlay/scratch. Shared by BOTH split panes
-        // (unlike the focus-gated `isActive`), it gates each surface's drag-type (un)registration so a file
-        // drop lands on the visible pane, not an invisible background deck surface (matches the panes' hit-testing).
-        let visible = deckInteractive && isActive && !hideForOverlay
+        // on-screen = selected session, not hidden by a full overlay/scratch, and not covered by the
+        // window-level quick terminal. Shared by BOTH split panes (unlike the focus-gated `isActive`), it
+        // gates each surface's drag-type (un)registration AND its mouse-cursor tracking (the `deckVisible`
+        // note in libghostty.md) so neither a file drop nor a cursor write lands on an off-screen surface.
+        // `!quickTerminal.isVisible` mutes the covered pane while the quick terminal is up — otherwise the
+        // covered pane keeps deckVisible=true and races the quick-terminal surface for the cursor and fans
+        // mouse-motion into the covered TUI (issue #225 quick-terminal path).
+        let visible = deckInteractive && isActive && !hideForOverlay && !quickTerminal.isVisible
         ZStack {
             // the session's pane(s), kept MOUNTED while an overlay is up — shells stay alive, like the deck
             // does for inactive sessions. a FULL overlay hides them (opacity 0) so its translucency reveals the
@@ -463,7 +474,7 @@ struct WindowContentView: View {
                 // rule so only an on-screen scratch is a file-drop target.
                 TerminalView(session: session, surfaceKeyPath: \.scratchSurface, makeSurface: makeScratchSurface,
                              isActive: deckInteractive && isActive && !session.overlayActive && !quickTerminal.isVisible,
-                             deckVisible: deckInteractive && isActive && !fullOverlay)
+                             deckVisible: deckInteractive && isActive && !fullOverlay && !quickTerminal.isVisible)
                     .opacity(fullOverlay ? 0 : 1)
                     .allowsHitTesting(!fullOverlay)
                     .id("\(session.id.uuidString)-scratch")
@@ -523,7 +534,7 @@ struct WindowContentView: View {
                     // responder (the full variant hides the panes, so it's covered either way).
                     Color.clear.contentShape(Rectangle())
                     TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
-                                 makeSurface: makeOverlaySurface, isActive: isActive, deckVisible: isActive)
+                                 makeSurface: makeOverlaySurface, isActive: isActive, deckVisible: isActive && !quickTerminal.isVisible)
                         .frame(width: geo.size.width * fraction, height: geo.size.height * fraction)
                         // floating = opaque backing + hairline frame + shadow so it reads as a distinct window
                         // over the still-visible session; full = translucent, no chrome (libghostty draws only
@@ -641,8 +652,9 @@ struct WindowContentView: View {
     }
 
     /// The window title at the terminal's leading edge: the session name, plus the cwd subtitle on a
-    /// second line only in normal mode (compact drops it for a single short row).
-    private var titleLabel: some View {
+    /// second line only in normal mode (compact drops it for a single short row). Non-private so the zoom
+    /// titlebar reuses it — a zoomed terminal shows the same title as the normal window.
+    var titleLabel: some View {
         VStack(alignment: .leading, spacing: 1) {
             Text(windowTitle).fontWeight(.semibold)
             if !windowSubtitle.isEmpty {
@@ -675,9 +687,10 @@ struct WindowContentView: View {
     }
 
     /// Custom titlebar row replacing the system toolbar: the sidebar toggle pinned to the sidebar's
-    /// trailing edge (by the divider), the title at the terminal's start, and the split / quick-terminal
-    /// buttons at the trailing edge. Positions track `sidebarWidth`; the left inset clears the system
-    /// traffic lights.
+    /// trailing edge (by the divider), the title at the terminal's start, and the trailing action cluster
+    /// (recent-sessions / attention popovers, a divider, the scratch / split view controls, a divider, then
+    /// the dashboard / quick-terminal group). Positions track `sidebarWidth`; the left inset clears the
+    /// system traffic lights.
     private var titlebarRow: some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: 78).allowsHitTesting(false) // system traffic lights
@@ -697,15 +710,19 @@ struct WindowContentView: View {
                 // so double-clicking it zooms and dragging it moves the window — the rest of the row is
                 // empty spacers (already non-hittable) and the buttons, which keep their own clicks.
                 .allowsHitTesting(false)
-            if attentionButtonEnabled {
-                attentionButton.labelStyle(.iconOnly).padding(.leading, 10)
-            }
             Spacer(minLength: 12)
             HStack(spacing: 14) {
+                recentSessionsButton.labelStyle(.iconOnly)
+                if attentionButtonEnabled {
+                    attentionButton.labelStyle(.iconOnly)
+                }
+                // separates the recent-sessions / attention popovers from the view controls.
+                Rectangle().fill(chromeText.opacity(0.25)).frame(width: 1, height: 16)
                 scratchButton.labelStyle(.iconOnly)
                 splitButton.labelStyle(.iconOnly)
-                // separates the per-session view toggles (scratch/split) from the window-level quick terminal.
+                // separates the per-session view controls from the window-overlay group (dashboard + quick terminal).
                 Rectangle().fill(chromeText.opacity(0.25)).frame(width: 1, height: 16)
+                dashboardButton.labelStyle(.iconOnly)
                 quickTerminalButton.labelStyle(.iconOnly)
             }
             .padding(.trailing, 14)
@@ -731,7 +748,8 @@ struct WindowContentView: View {
     /// Sidebar (⌃⌘S)`), or just the base text when the action has no configured shortcut. Keeps the
     /// toolbar/sidebar hints in lockstep with the keymap — a rebind shows the new chord, an unbound
     /// action shows none — via the SAME `AppActions.shortcutGlyph` resolver the action palette uses.
-    private func helpHint(_ base: String, _ action: BuiltinAction) -> String {
+    /// Non-private so the `+RecentSessions` extension's attention button can build its tooltip.
+    func helpHint(_ base: String, _ action: BuiltinAction) -> String {
         guard let glyph = actions.shortcutGlyph(for: action) else { return base }
         return "\(base) (\(glyph))"
     }
@@ -806,31 +824,6 @@ struct WindowContentView: View {
         }
         .help(helpHint("Quick Terminal", .quickTerminal))
         .accessibilityIdentifier("quick-terminal-toggle")
-    }
-
-    /// Title-bar bell reflecting the window's attention state at a glance (opt-in, gated by the
-    /// `attentionButtonEnabled` mirror). Three states from `store.attentionSessions`: empty → a dimmed
-    /// disabled outline bell; non-empty with nothing blocked → a plain enabled bell in `chromeText`; any
-    /// blocked session → a filled bell tinted the blocked-status color. No count, no pulse. Click opens
-    /// the `.attention` palette. Reading `store.attentionSessions` in the body registers the per-session
-    /// `agentIndicator` observation, so the glyph re-renders live as a status changes. `.accessibilityValue`
-    /// (none|attention|blocked) exposes the otherwise-unobservable bell↔bell.fill state to XCUITest,
-    /// mirroring `StatusIconView`'s state-name value.
-    private var attentionButton: some View {
-        let sessions = store.attentionSessions
-        let blocked = sessions.contains { $0.agentIndicator.status == .blocked }
-        let empty = sessions.isEmpty
-        return Button {
-            actions.toggleAttentionPalette()
-        } label: {
-            Label("Attention", systemImage: blocked ? "bell.fill" : "bell")
-        }
-        .foregroundStyle(blocked ? Color(nsColor: GhosttyApp.shared.blockedStatusColor) : chromeText)
-        .opacity(empty ? 0.35 : 1)
-        .disabled(empty)
-        .help(helpHint(empty ? "No sessions need attention" : "Show sessions that need attention", .showAttention))
-        .accessibilityIdentifier("attention-button")
-        .accessibilityValue(empty ? "none" : (blocked ? "blocked" : "attention"))
     }
 
     /// The quick-terminal overlay: the scratch terminal centered at 90% of the window, framed by a

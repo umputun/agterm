@@ -91,6 +91,31 @@ paths:
   toggle flip.
   Keep-in-sync EXEMPT — pure derived chrome (`unseenCount` is already driven by `notify` / `session.select`),
   nothing new to drive over the socket.
+- **Dock bounce (opt-in, off by default) — a three-mode picker.**
+  `AppSettings.dockBounce` (a `DockBounce` raw string `off`/`once`/`untilFocused`, nil = `off`, resolved
+  via `effectiveDockBounce`) chooses whether a delivered notification ALSO bounces the Dock icon:
+  `off` no bounce, `once` a single `NSApp.requestUserAttention(.informationalRequest)`, `untilFocused` a
+  `.criticalRequest` that bounces until agterm becomes active.
+  The default case is named `off` (not `none`) to avoid the `Optional.none` collision at the
+  `effectiveDockBounce` call site, matching the `AutoFollowAttention.off` precedent.
+  `.criticalRequest` is auto-cancelled by macOS the moment agterm activates, so `untilFocused` needs NO
+  `cancelUserAttentionRequest` bookkeeping — that free "until focused" stop, plus the one-shot `once`, is
+  why the picker exposes both modes instead of hard-coding one.
+  `NotificationManager.bounceDock()` switches on the mode and fires right after the `unseenCount` bump in
+  BOTH the OSC path (`notify`) and the control path (`send` / `agtermctl notify`), independent of
+  `bannersEnabled` — like the badge, a bounce can fire whether or not banners show.
+  It needs NO explicit app-active gate: BOTH request types are a no-op while agterm is the frontmost app,
+  so the OSC path's `shouldDeliver` suppression plus that no-op mean a bounce only ever fires for a
+  BACKGROUND notification — exactly "bounce when a notification arrives for a session you're not looking at".
+  The `NotificationManager.dockBounce` mirror of `AppSettings.effectiveDockBounce` is pushed by
+  `SettingsModel.applyDockBounce` alongside `applyNotificationsEnabled` (the other `NotificationManager`
+  mirror) — NOT a ghostty key and NOT a chrome mirror, so no `.agtermAppearanceChanged` re-render (nothing
+  renders it continuously; it is read on the next notification).
+  GUI-only and keep-in-sync EXEMPT (a settings picker; only `theme.set`/`config.reload` touch settings over
+  the socket).
+  The bounce animation is not accessibility-observable, so it is verified by eye like the cursor-focus /
+  disclosure-triangle cases; only the `AppSettings` round-trip / tolerant-decode and the settings-picker
+  persistence (`SettingsUITests.testDockBouncePickerPersists`) are tested.
 - **Agent-status glyph.**
   Mirrors the `notify-badge` cell pattern (see the Control API `session.status`).
   `StatusIconView` (an `NSImageView` sibling of `BadgeView` in `WorkspaceSidebar`) draws the row's tinted
@@ -183,8 +208,9 @@ paths:
   the waiting pane, not just the session.
 - **Titlebar attention bell (opt-in, window-wide aggregate of the glyph).**
   When `attentionButtonEnabled` is on (Settings ▸ General, default OFF — see the Settings section),
-  `customTitlebar` (`ContentView`) shows a bell icon just after the title that recovers the per-session
-  attention signal when the sidebar is hidden.
+  `customTitlebar` (`ContentView`) shows a bell icon in the trailing action cluster (after the
+  recent-sessions clock, before the divider and the scratch/split/quick-terminal buttons) that recovers
+  the per-session attention signal when the sidebar is hidden.
   It derives THREE states from the window's `AppStore.attentionSessions` (the host-free per-window set
   — ALL non-idle sessions, broader than `needsAttention`): empty → `bell`,
   ~0.35 opacity, `.disabled(true)`; non-empty no-blocked → `bell`, `chromeText`,
@@ -193,12 +219,18 @@ paths:
   No count, no pulse.
   Reading `attentionSessions` registers the `agentIndicator` observation,
   so the icon updates LIVE on status change.
-  Click → `AppActions.toggleAttentionPalette()` (the `.attention` palette — see the Menu/actions section).
+  Click → toggles the **attention popover** (`WindowContentView+RecentSessions.swift`, the MOUSE form): a
+  theme-tinted popover listing `AppStore.attentionSessions` as `SessionPopoverRow`s with a leading `StatusGlyph`,
+  sorted blocked→active→completed, hover-highlighted; a row click selects the session + reveals its blocked
+  pane (`selectAttention` → `selectSession` + `AppActions.revealActiveBlockedPane`).
+  ⌃⇧I / Navigate ▸ Go to Attention… / the ⌃⇧P "Show Attention" entry keep the SEARCHABLE `.attention` palette
+  (`toggleAttentionPalette`), so the bell is the mouse form and the palette the keyboard form — mirroring the
+  recent-sessions clock ↔ Ctrl-Tab split (see the Menu/actions section).
   It carries `.accessibilityIdentifier("attention-button")`, a `.help` string,
   and an `.accessibilityValue` of `none`|`attention`|`blocked` — mirroring `StatusIconView`'s state-name
   value so XCUITest can read the otherwise-unobservable `bell`↔`bell.fill` highlight.
   `WindowContentView` mirrors the chrome flag into `@State` (seeded from `GhosttyApp.shared.attentionButtonEnabled`,
   refreshed on `.agtermAppearanceChanged`), NOT from `model.settings`.
-  The bell is pure visual chrome (it opens the already-controllable attention palette / `session.select`)
-  — keep-in-sync EXEMPT, like the other titlebar buttons.
+  The bell is pure visual chrome (it opens the attention popover, a mouse form of the already-controllable
+  attention list / `session.select`) — keep-in-sync EXEMPT, like the other titlebar buttons.
 

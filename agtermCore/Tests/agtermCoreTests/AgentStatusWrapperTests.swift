@@ -126,4 +126,33 @@ struct AgentStatusWrapperTests {
         #expect(r.argv.isEmpty)
         #expect(r.exit == 0)
     }
+
+    @Test func paneIDForwardedWithRole() throws {
+        // the app injects AGTERM_PANE_ID (stable surface token) alongside AGTERM_PANE (role); the wrapper
+        // forwards both, --pane then --pane-id, so the app can resolve the live slot from the token (#199).
+        let r = try runWrapper(["blocked"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_SOCKET": "/tmp/s.sock",
+                                                  "AGTERM_PANE": "right", "AGTERM_PANE_ID": "agent-tok"])
+        #expect(r.argv == ["session", "status", "blocked", "--target", "sid", "--socket", "/tmp/s.sock",
+                           "--pane", "right", "--pane-id", "agent-tok"])
+    }
+
+    @Test func paneIDSplicedBeforeExtraArgs() throws {
+        // both discriminators come before the forwarded "$@" (e.g. --blink), never after
+        let r = try runWrapper(["blocked", "--blink"], env: ["AGTERM_SESSION_ID": "sid",
+                                                             "AGTERM_PANE": "right", "AGTERM_PANE_ID": "agent-tok"])
+        #expect(r.argv == ["session", "status", "blocked", "--target", "sid",
+                           "--pane", "right", "--pane-id", "agent-tok", "--blink"])
+    }
+
+    @Test func paneIDForwardedWithoutRole() throws {
+        // defensively, a token with no role still forwards --pane-id alone (no --pane)
+        let r = try runWrapper(["blocked"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_PANE_ID": "agent-tok"])
+        #expect(r.argv == ["session", "status", "blocked", "--target", "sid", "--pane-id", "agent-tok"])
+    }
+
+    @Test func paneIDOmittedWhenUnset() throws {
+        // AGTERM_PANE set but no AGTERM_PANE_ID: no --pane-id flag
+        let r = try runWrapper(["active"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_PANE": "right"])
+        #expect(!r.argv.contains("--pane-id"))
+    }
 }

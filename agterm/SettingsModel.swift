@@ -70,6 +70,7 @@ final class SettingsModel {
         // toggle into their shared channels at launch, before any settings change fires.
         applyWindowTranslucency()
         applyNotificationsEnabled()
+        applyDockBounce()
         applyToolbarMode()
         applyNotificationBadgeEnabled()
         applyInactivePaneMute()
@@ -223,6 +224,7 @@ final class SettingsModel {
     /// it evaporates from `settings.json` on the next save; the Settings Picker maps `.compact` back to nil.
     func setToolbarMode(_ mode: ToolbarMode?) { settings.toolbarMode = mode?.rawValue; settings.compactToolbar = nil; persistAndApply() }
     func setNotificationBadgeEnabled(_ value: Bool?) { settings.notificationBadgeEnabled = value; persistAndApply() }
+    func setDockBounce(_ mode: DockBounce?) { settings.dockBounce = mode?.rawValue; persistAndApply() }
     func setMouseScrollMultiplier(_ value: Double?) { settings.mouseScrollMultiplier = value; persistAndApply() }
     // ghostty key (right-click-action): persistAndApply() rewrites the conf and reloads surfaces live.
     func setRightClickPaste(_ value: Bool?) { settings.rightClickPaste = value; persistAndApply() }
@@ -631,6 +633,7 @@ final class SettingsModel {
             for surface in liveSurfaces() { surface.reapplyColorBackgroundIfNeeded() }
         }
         applyNotificationsEnabled()
+        applyDockBounce()
         applyToolbarMode()
         applyNotificationBadgeEnabled()
         applyInactivePaneMute()
@@ -653,6 +656,10 @@ final class SettingsModel {
 
     private func applyNotificationsEnabled() {
         NotificationManager.shared.bannersEnabled = settings.notificationsEnabled ?? true
+    }
+
+    private func applyDockBounce() {
+        NotificationManager.shared.dockBounce = settings.effectiveDockBounce
     }
 
     private func applyToolbarMode() {

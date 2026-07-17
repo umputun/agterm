@@ -1,5 +1,37 @@
 # Changelog
 
+## v0.14.1 - 2026-07-15
+
+### Bug Fixes
+
+- stop the mouse cursor flickering between shapes over a restored session's visible terminal, by scoping every cursor write to the on-screen deck pane so a hidden stacked surface can no longer paint its cached shape over the front one #228 @umputun
+
+## v0.14.0 - 2026-07-14
+
+### New Features
+
+- Pi agent-status support in Install Agent Status Hooks, so a Pi agent running in a session reports active then completed onto its sidebar row, matching the Claude Code and Codex auto-wiring #208 @taras-mrtn
+- a title-bar button that opens the dashboard, grouped with the quick-terminal button behind a separator #217 @umputun
+
+### Improvements
+
+- dashboard cells now enter on a single click instead of a double click, flashing the active frame first so the click reads as acknowledged #217 @umputun
+- the dashboard and terminal-zoom modes now show the window title in their stripped title bars #217 @umputun
+
+## v0.13.0 - 2026-07-14
+
+### New Features
+
+- title-bar recent-sessions clock and attention bell, each opening a popover to jump to a recent or waiting session when the sidebar is hidden #212 @umputun
+- opt-in Dock-icon bounce on a background notification, off by default, with a None / Once / Until focused picker in Settings ▸ Notifications #215 @umputun
+- agent-status glyphs on dashboard cells, so a session that needs attention stands out in the grid #209 @umputun
+- `$AGT_PANE` now reports which pane a custom command fired from (`left` / `right` / `scratch`), so a keybinding can route a follow-up `agtermctl` call back into that pane #210 @umputun
+
+### Bug Fixes
+
+- resolve a session's agent-status pane from a stable surface token, keeping the status glyph and pane-aware reveal correct across split and scratch teardown #213 @umputun
+- apply libghostty mouse cursor shapes via `cursorUpdate`, so the pointer shape tracks what the terminal program requests #207 @umputun
+
 ## v0.12.1 - 2026-07-13
 
 ### Bug Fixes

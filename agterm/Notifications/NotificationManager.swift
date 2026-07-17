@@ -27,6 +27,13 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     /// suppressed but the sidebar badge still tracks unseen notifications. Set by `SettingsModel`.
     var bannersEnabled = true
 
+    /// How a delivered notification bounces the Dock icon (the Notifications settings picker, default
+    /// `off`). Independent of `bannersEnabled` — like the badge, a bounce can fire whether or not banners
+    /// show. Set by `SettingsModel`. `.once` requests a single `.informationalRequest`; `.untilFocused` a
+    /// `.criticalRequest` macOS auto-cancels when agterm becomes active — both no-op while agterm is the
+    /// active app, so a bounce only fires when a notification arrives in the background.
+    var dockBounce: DockBounce = .off
+
     /// Register as the notification delegate and request alert + badge authorization. Idempotent; the
     /// scene `.task` may re-run. Best-effort: a denial just means no banners. The `.badge` option is what
     /// lets `DockBadgeController` render the Dock count via `UNUserNotificationCenter.setBadgeCount` — the
@@ -58,6 +65,7 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
 
         // the badge always tracks the unseen notification; the macOS banner is gated by the toggle.
         session.unseenCount += 1
+        bounceDock()
         guard bannersEnabled else { return }
 
         let content = UNMutableNotificationContent()
@@ -80,6 +88,7 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     func send(toSession session: Session, title: String, body: String) -> Bool {
         guard let windowID = library?.windowID(forSession: session.id) else { return false }
         session.unseenCount += 1
+        bounceDock()
         guard bannersEnabled else { return true }
         let content = UNMutableNotificationContent()
         content.title = title.isEmpty ? session.displayName : title
@@ -146,6 +155,18 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         let request = UNNotificationRequest(identifier: "config-diagnostics", content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request) { error in
             if let error { logger.error("config-diagnostics banner add failed: \(error.localizedDescription, privacy: .public)") }
+        }
+    }
+
+    /// Bounce the Dock icon for a background notification per the configured mode. `.once` is a single
+    /// `.informationalRequest`; `.untilFocused` a `.criticalRequest` that bounces until agterm becomes active
+    /// (macOS auto-cancels it then, so there is no cancel bookkeeping). Both are automatically a no-op while
+    /// agterm is the active app, so a notification for a session you're already looking at never bounces.
+    private func bounceDock() {
+        switch dockBounce {
+        case .off: return
+        case .once: NSApp.requestUserAttention(.informationalRequest)
+        case .untilFocused: NSApp.requestUserAttention(.criticalRequest)
         }
     }
 

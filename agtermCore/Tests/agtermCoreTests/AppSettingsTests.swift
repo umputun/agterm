@@ -384,6 +384,23 @@ struct AppSettingsTests {
         #expect(legacy.attentionButtonEnabled == nil)
     }
 
+    @Test func dockBounceDefaultsToOffResolvesTolerantlyAndIsNotAGhosttyKey() throws {
+        // default (nil) resolves to off; an app-level attention setting, so it adds NO ghostty line.
+        #expect(AppSettings().effectiveDockBounce == .off)
+        #expect(AppSettings(dockBounce: "once").ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
+        // each known raw value round-trips and resolves to its case.
+        for mode in DockBounce.allCases {
+            let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(dockBounce: mode.rawValue)))
+            #expect(decoded.dockBounce == mode.rawValue)
+            #expect(decoded.effectiveDockBounce == mode)
+        }
+        // an unknown/future raw value degrades to off instead of failing the decode; a legacy file omits it.
+        #expect(AppSettings(dockBounce: "supernova").effectiveDockBounce == .off)
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(legacy.dockBounce == nil)
+        #expect(legacy.effectiveDockBounce == .off)
+    }
+
     @Test func rightClickPasteDefaultsOnAndIsAGhosttyKey() throws {
         // default (nil) = on → emits `right-click-action = paste`; off → `ignore`. UNLIKE the app-level
         // flags this IS a ghostty key (the toggle owns it, always emitted).

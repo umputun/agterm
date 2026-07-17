@@ -64,6 +64,7 @@
         "
       >
         <div
+          class="site-nav-bar"
           style="
             max-width: 1240px;
             margin: 0 auto;
@@ -104,6 +105,7 @@
             >
           </a>
           <div
+            class="site-nav-desktop"
             style="
               display: flex;
               align-items: center;
@@ -128,13 +130,41 @@
               >GitHub ↗</a
             >
           </div>
+          <details class="site-nav-mobile">
+            <summary>menu</summary>
+            <nav aria-label="Mobile navigation" onclick="this.parentElement.open=false">
+              <button
+                type="button"
+                class="doc-drawer-trigger"
+                aria-controls="doc-navigation"
+                onclick="document.getElementById('doc-drawer').checked=true; document.querySelector('#doc-navigation a').focus()"
+              >
+                contents
+              </button>
+              <a href="/">← home</a>
+              <a href="/docs">docs</a>
+              <a href="https://github.com/umputun/agterm">GitHub ↗</a>
+            </nav>
+          </details>
         </div>
       </div>
 
+      <input class="doc-drawer-toggle" type="checkbox" id="doc-drawer" />
+      <button
+        type="button"
+        class="doc-drawer-overlay"
+        aria-label="Close documentation navigation"
+        onclick="document.getElementById('doc-drawer').checked=false; document.querySelector('.site-nav-mobile summary').focus()"
+      ></button>
+
       <!-- ===== LAYOUT ===== -->
-      <div style="max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: 236px 1fr; gap: 48px; padding: 0 28px">
+      <div
+        class="doc-layout"
+        style="max-width: 1240px; margin: 0 auto; display: grid; grid-template-columns: 236px 1fr; gap: 48px; padding: 0 28px"
+      >
         <!-- SIDEBAR -->
         <aside
+          id="doc-navigation"
           class="doc-scroll"
           style="
             position: sticky;
@@ -146,7 +176,11 @@
             font-family: &quot;JetBrains Mono&quot;, monospace;
           "
         >
-          <nav style="display: flex; flex-direction: column; gap: 4px; font-size: 13.5px">
+          <nav
+            aria-label="Command reference sections"
+            onclick="document.getElementById('doc-drawer').checked=false; document.querySelector('.site-nav-mobile summary').focus()"
+            style="display: flex; flex-direction: column; gap: 4px; font-size: 13.5px"
+          >
             <a href="#overview" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Overview</a>
             <a href="#addressing" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Addressing</a>
             <div style="height: 16px"></div>
@@ -174,7 +208,7 @@
         </aside>
 
         <!-- CONTENT -->
-        <main style="min-width: 0; padding: 48px 0 120px; max-width: 760px">
+        <main class="doc-content" style="min-width: 0; padding: 48px 0 120px; max-width: 760px">
           <div
             style="
               font-family: &quot;JetBrains Mono&quot;, monospace;
@@ -398,7 +432,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusColor</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">foreground</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitForeground</span> (each pane's live foreground
-                argv, omitted at the shell prompt),
+                argv, omitted at the shell prompt or for a setuid program like top/sudo),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">background</span>, and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unseen</span>.
               </p>
@@ -882,7 +916,7 @@
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session status &lt;idle|active|completed|blocked&gt; [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb]
-                [--pane left|right|scratch] [--target T] [--window W]
+                [--pane left|right|scratch] [--pane-id TOKEN] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.status</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -914,6 +948,11 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusPane</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusBlink</span>, and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusColor</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> is the surface's stable spawn token
+                (the shell's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$AGTERM_PANE_ID</span>), forwarded
+                automatically by the agent-status hook; when it resolves it overrides
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>, so a status from a promoted-then-re-split
+                pane lands on its current slot. Scripts leave it to the hook.
               </p>
             </div>
 

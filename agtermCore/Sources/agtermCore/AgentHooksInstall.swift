@@ -15,6 +15,16 @@ public enum AgentHooksInstall {
     /// event and terminal-output knowledge stays in this hook resource, outside agterm's runtime.
     public static let codexWrapperName = "agterm-codex-status.sh"
 
+    /// The bundled Pi extension's path relative to the agent-status package.
+    public static let piExtensionRelativePath = "pi/agterm-status.ts"
+
+    /// The Pi extension's destination filename under `~/.pi/agent/extensions/`.
+    public static let piExtensionName = "agterm-status.ts"
+
+    /// Ownership sentinel in the bundled Pi extension. A reinstall refuses to overwrite an unmarked
+    /// same-named extension, preserving a user-authored integration.
+    public static let piExtensionMarker = "// agterm-pi-status-extension"
+
     /// The shell integration script sourced from the user's rc files, relative to the script directory.
     public static let integrationRelativePath = "shell/integration.sh"
 
@@ -51,6 +61,24 @@ public enum AgentHooksInstall {
         ("PermissionRequest", "permission-request"),
         ("Stop", "stop"),
     ]
+
+    /// The destination directory for Pi's auto-discovered global extensions.
+    public static func piExtensionDirectory(home: String) -> String {
+        home + "/.pi/agent/extensions"
+    }
+
+    /// The destination path for agterm's Pi status extension.
+    public static func piExtensionPath(home: String) -> String {
+        piExtensionDirectory(home: home) + "/" + piExtensionName
+    }
+
+    /// Whether the Pi extension destination is safe to replace. An absent destination is safe; an
+    /// existing file must carry the agterm ownership marker. An unreadable file is treated as user-owned.
+    public static func mayOverwritePiExtension(fileExists: Bool, existingContents: String?) -> Bool {
+        guard fileExists else { return true }
+        guard let existingContents else { return false }
+        return existingContents.contains(piExtensionMarker)
+    }
 
     /// Thrown by `mergeClaudeSettings` when the existing `settings.json` is non-empty but not a valid
     /// JSON object: the installer refuses to overwrite a hand-maintained file it cannot safely parse.

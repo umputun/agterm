@@ -4,11 +4,12 @@ import agtermCore
 /// Installs the bundled agent-status hooks package into the user's home: copies the scripts from the
 /// app bundle into `~/.config/agterm/agent-status/`, bakes the bundled `agtermctl`'s absolute path
 /// into the wrapper, appends a marker-guarded `source` line to `~/.zshrc`, `~/.bashrc`, and `~/.config/fish/config.fish`, merges
-/// the four Claude Code hooks into `~/.claude/settings.json`, and merges the six Codex lifecycle hooks
-/// into `~/.codex/config.toml` (both writing a `.bak` first; the Codex step is gated on `~/.codex`
-/// existing, PARSES the config with `TOMLDecoder` to decide, and falls back to surfacing the block for a
-/// manual add when the file already has hooks or doesn't parse). The host-free string/JSON/TOML
-/// transforms live in `agtermCore.AgentHooksInstall`; this type owns the AppKit filesystem glue.
+/// the four Claude Code hooks into `~/.claude/settings.json`, merges the six Codex lifecycle hooks into
+/// `~/.codex/config.toml`, and installs Pi's lifecycle extension into `~/.pi/agent/extensions/` when Pi
+/// is configured. Claude/Codex configs write a `.bak` first; the Codex step parses TOML and falls back to
+/// surfacing a manual block when the file already has hooks or does not parse. The host-free string/JSON/
+/// TOML transforms and Pi ownership policy live in `agtermCore.AgentHooksInstall`; this type owns the
+/// AppKit filesystem glue.
 /// Idempotent and re-runnable: re-running refreshes the baked `agtermctl` path (healing a
 /// moved/reinstalled bundle) and is a clean no-op for already-present rc/settings/config entries.
 @MainActor
@@ -44,14 +45,29 @@ enum AgentHooksInstaller {
         }
     }
 
+    // the Pi extension-install outcome, mirroring CodexResult: installed/alreadyConfigured/noPi are
+    // informational; the warning cases mean agterm could not safely write and left the destination as-is.
+    private enum PiResult {
+        case installed, alreadyConfigured, userOwned, unreadable, writeFailed, noPi
+
+        // a warning-level outcome: agterm could not update the extension and the user must act (move the
+        // user-owned file, or fix the unreadable/unwritable path). installed/already/noPi are informational.
+        var isWarning: Bool {
+            switch self {
+            case .userOwned, .unreadable, .writeFailed: return true
+            case .installed, .alreadyConfigured, .noPi: return false
+            }
+        }
+    }
+
     /// Run the install and show a result alert.
     static func run() {
         do {
             let outcome = try install()
-            let warned = outcome.settingsSkipped || outcome.codex.isWarning
+            let warned = outcome.settingsSkipped || outcome.codex.isWarning || outcome.pi.isWarning
             present(style: warned ? .warning : .informational,
                     title: warned ? "Agent Status Hooks Installed — with a warning" : "Agent Status Hooks Installed",
-                    text: successText(settingsSkipped: outcome.settingsSkipped, codex: outcome.codex))
+                    text: successText(settingsSkipped: outcome.settingsSkipped, codex: outcome.codex, pi: outcome.pi))
         } catch let error as InstallError {
             present(style: .warning, title: "Install Failed", text: error.message)
         } catch {
@@ -60,15 +76,16 @@ enum AgentHooksInstaller {
     }
 
     // settingsSkipped is true when the Claude settings merge was SKIPPED because ~/.claude/settings.json
-    // isn't valid JSON or couldn't be read (it is left untouched); codex reports how the config.toml merge
-    // went. Every step still runs regardless.
-    private static func install() throws -> (settingsSkipped: Bool, codex: CodexResult) {
+    // isn't valid JSON or couldn't be read (it is left untouched); codex and pi report their respective
+    // integration outcomes. Every step still runs regardless.
+    private static func install() throws -> (settingsSkipped: Bool, codex: CodexResult, pi: PiResult) {
         try copyBundledFolder()
         try bakeAgtermctlPath()
         let settingsSkipped = try mergeClaudeSettings()
         try appendShellRC()
         let codex = try mergeCodexConfig()
-        return (settingsSkipped, codex)
+        let pi = try installPiExtension()
+        return (settingsSkipped, codex, pi)
     }
 
     // copy the bundled agent-status folder into ~/.config/agterm/agent-status, overwriting any prior
@@ -211,6 +228,54 @@ enum AgentHooksInstaller {
         }
     }
 
+    // Install Pi's auto-discovered global extension only when Pi has already created ~/.pi/agent. A
+    // same-named, unmarked extension is user-owned and left untouched; an agterm-managed one refreshes
+    // from the newly copied package. Pi has no config merge, and its extension carries no user state, so
+    // unlike Claude/Codex config we do not create a backup for a managed refresh.
+    private static func installPiExtension() throws -> PiResult {
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser
+        let piAgentDirectory = home.appendingPathComponent(".pi/agent")
+        guard fm.fileExists(atPath: piAgentDirectory.path) else { return .noPi }
+
+        let source = destinationFolder.appendingPathComponent(AgentHooksInstall.piExtensionRelativePath)
+        guard fm.fileExists(atPath: source.path) else {
+            throw InstallError(message: "The Pi status extension is not bundled in this build.")
+        }
+        let sourceContents = try String(contentsOf: source, encoding: .utf8)
+        guard sourceContents.contains(AgentHooksInstall.piExtensionMarker) else {
+            throw InstallError(message: "The bundled Pi status extension is missing its ownership marker.")
+        }
+
+        let destination = URL(fileURLWithPath: AgentHooksInstall.piExtensionPath(home: home.path))
+        // read the destination the same way the Claude/Codex merges read their configs: nil = absent,
+        // throw = exists-but-unreadable (folded to .unreadable). Reusing readExistingConfig means a
+        // non-ENOENT stat error can't masquerade as "absent" and slip past the ownership-marker gate.
+        let existing: String?
+        do {
+            existing = try readExistingConfig(at: destination)
+        } catch {
+            return .unreadable
+        }
+        guard AgentHooksInstall.mayOverwritePiExtension(fileExists: existing != nil, existingContents: existing) else {
+            return .userOwned
+        }
+        guard existing != sourceContents else { return .alreadyConfigured }
+
+        // a filesystem error on ~/.pi/agent/extensions degrades to a warning like every sibling
+        // integration, rather than throwing and aborting the whole install (which would hide that the
+        // Claude/Codex/shell steps already ran).
+        do {
+            try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let target = symlinkTarget(of: destination) ?? destination
+            let mode = AgentHooksInstall.posixMode(ofFile: target.path)
+            try writePreservingSymlink(sourceContents, to: destination, posixMode: mode)
+        } catch {
+            return .writeFailed
+        }
+        return .installed
+    }
+
     // merge the Codex lifecycle hooks into ~/.codex/config.toml, writing a .bak first when the merge
     // changes anything. Gated on ~/.codex existing (like the fish rc gate) so a non-Codex user's home
     // isn't seeded with a config.toml. The host-free `AgentHooksInstall.mergeCodexConfig` PARSES the file
@@ -247,8 +312,8 @@ enum AgentHooksInstaller {
     }
 
     // the success-alert text. Explains what was left out when the Claude settings merge was skipped, or
-    // when the Codex merge couldn't proceed (existing hooks / unparseable / unreadable / no Codex).
-    private static func successText(settingsSkipped: Bool, codex: CodexResult) -> String {
+    // when the Codex/Pi integrations could not safely update a user-owned or unreadable file.
+    private static func successText(settingsSkipped: Bool, codex: CodexResult, pi: PiResult) -> String {
         let claudeLine = settingsSkipped
             ? "Your ~/.claude/settings.json isn't valid JSON (or couldn't be read), so the Claude Code hooks were NOT added "
               + "(the file was left untouched). Fix it and run this again, or add the hooks manually."
@@ -257,6 +322,7 @@ enum AgentHooksInstaller {
         Scripts installed to \(destinationFolder.path).
         \(claudeLine)
         \(codexText(codex))
+        \(piText(pi))
         The source line was added to ~/.zshrc, ~/.bashrc (and ~/.config/fish/config.fish if fish is installed).
 
         Open a new terminal for the shell integration to take effect.
@@ -282,6 +348,24 @@ enum AgentHooksInstaller {
             return "Your ~/.codex/config.toml exists but couldn't be read, so agterm left it untouched."
         case .noCodex:
             return "No ~/.codex found, so Codex hooks were skipped. Install Codex, then run this again."
+        }
+    }
+
+    // Describe Pi's extension-install outcome. Pi extensions auto-discover on the next startup or `/reload`.
+    private static func piText(_ pi: PiResult) -> String {
+        switch pi {
+        case .installed:
+            return "Pi lifecycle extension installed to ~/.pi/agent/extensions/agterm-status.ts. Restart Pi or run /reload."
+        case .alreadyConfigured:
+            return "Pi lifecycle extension is already current at ~/.pi/agent/extensions/agterm-status.ts."
+        case .userOwned:
+            return "~/.pi/agent/extensions/agterm-status.ts is user-owned, so agterm left it untouched."
+        case .unreadable:
+            return "~/.pi/agent/extensions/agterm-status.ts exists but could not be read, so agterm left it untouched."
+        case .writeFailed:
+            return "Pi's lifecycle extension couldn't be written to ~/.pi/agent/extensions/ (check that directory's permissions), so it was skipped."
+        case .noPi:
+            return "No ~/.pi/agent found, so Pi's lifecycle extension was skipped. Start Pi once, then run this again."
         }
     }
 

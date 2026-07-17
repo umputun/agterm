@@ -30,12 +30,16 @@ set -u
 state=$1
 shift
 
-# forward the pane discriminator when the app injected it: each session surface
-# (main/split/scratch) sets its own AGTERM_PANE so a status set from a background pane
-# lands on that pane. it is validated agtermctl-side, so pass it through verbatim. the
-# ${arr[@]+..} guard keeps the empty-array expansion safe under `set -u` on bash 3.2.
+# forward the pane discriminators when the app injected them: each session surface
+# (main/split/scratch) sets its own AGTERM_PANE (the role) plus AGTERM_PANE_ID (a stable
+# per-surface token). the role can go stale — a split survivor promoted into the main pane
+# keeps its baked `right` — so we also forward the token as --pane-id, which the app resolves
+# to the surface's CURRENT slot and lets override the stale role (#199). both are validated
+# agtermctl-side, so pass them through verbatim. the ${arr[@]+..} guard keeps the empty-array
+# expansion safe under `set -u` on bash 3.2.
 pane_args=()
-[ -n "${AGTERM_PANE:-}" ] && pane_args=(--pane "$AGTERM_PANE")
+[ -n "${AGTERM_PANE:-}" ] && pane_args+=(--pane "$AGTERM_PANE")
+[ -n "${AGTERM_PANE_ID:-}" ] && pane_args+=(--pane-id "$AGTERM_PANE_ID")
 
 if [ -n "${AGTERM_SOCKET:-}" ]; then
   "${AGTERMCTL:-agtermctl}" session status "$state" \

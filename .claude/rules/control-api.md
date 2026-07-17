@@ -97,9 +97,9 @@ paths:
 - **Agent-status hooks install.**
   A second Help entry, **Help ▸ Install Agent Status Hooks…** (`AgentHooksInstaller.run()`),
   wires coding agents to `session.status`.
-  The hooks scripts bundle at `agterm/Resources/agent-status/` (`agterm-agent-status.sh` generic wrapper,
-  `agterm-codex-status.sh` Codex adapter, `shell/integration.sh`, and `shell/integration.fish`,
-  a `project.yml` Contents/Resources folder mirroring `Resources/ghostty`).
+  The hooks package bundles at `agterm/Resources/agent-status/` (`agterm-agent-status.sh` generic wrapper,
+  `agterm-codex-status.sh` Codex adapter, `shell/integration.sh`, `shell/integration.fish`, and
+  `pi/agterm-status.ts`, a `project.yml` Contents/Resources folder mirroring `Resources/ghostty`).
   The installer copies them to `~/.config/agterm/agent-status/`, bakes the bundled `agtermctl`'s absolute
   path (`Bundle.main.url(forAuxiliaryExecutable:)`) into both wrappers so the hooks fire even without the
   CLI on PATH, appends a marker-guarded `source` line to `~/.zshrc` + `~/.bashrc`,
@@ -135,10 +135,20 @@ paths:
   (the app-side `readExistingConfig`), so a permission/encoding read failure leaves the file untouched
   instead of clobbering it with no backup.
   Codex requires new or changed command hooks to be reviewed (`/hooks`) before they run.
-  Idempotent + re-runnable (re-run refreshes the baked path).
-  Like the CLI installer, the host-free JSON/TOML-merge / shell-rc-marker / backup-path logic is `agtermCore.AgentHooksInstall`
-  (unit-tested); `AgentHooksInstaller` (app-side) owns the AppKit FS glue,
-  manually verified.
+  When `~/.pi/agent` exists, the installer copies the bundled `pi/agterm-status.ts` lifecycle extension to
+  `~/.pi/agent/extensions/agterm-status.ts`.
+  Pi's `agent_start` sends `active --blink`; its `agent_settled` sends `completed --auto-reset` only after
+  retries, compaction retries, and queued continuations finish.
+  Pi deliberately has no native permission/structured-question event, so the extension does NOT infer
+  `blocked` from agent prose.
+  The source carries `AgentHooksInstall.piExtensionMarker`; an unmarked same-named extension is user-owned
+  and left untouched, and Pi must restart or run `/reload` after installation.
+  Idempotent + re-runnable (re-run refreshes the baked path and the managed Pi extension).
+  Like the CLI installer, the host-free JSON/TOML-merge / shell-rc-marker / backup-path / Pi-path-and-marker
+  logic is `agtermCore.AgentHooksInstall` (unit-tested); `AgentHooksInstaller` (app-side) owns the AppKit
+  FS glue, manually verified.
+  Install is GUI-only and keep-in-sync EXEMPT — driving it over the socket is meaningless because the
+  integration being installed is itself what uses `agtermctl`.
 - **Agent skill install (Claude Code + Codex).**
   A third Help entry, **Help ▸ Install Agent Skill…** (`SkillInstaller.run()`),
   copies a bundled, personal-scope Agent Skill to `~/.claude/skills/agterm/` AND `~/.codex/skills/agterm/`
@@ -988,6 +998,32 @@ paths:
   + `AgentStatusTests` (the `clearedBy` truth table) + `SurfaceEnvironmentTests` + `AgentStatusWrapperTests`
   + CLI mapping in `CommandsTests` + the e2e in `PaneAwareStatusUITests`.
   It is control-native for the tag itself (no GUI sets a pane), the same keep-in-sync footing as `--color`/`--sound`.
+  `session.status --pane-id <token>` is the robust companion to `--pane`, added for #199:
+  the baked `AGTERM_PANE` role goes STALE when a split survivor is promoted into the main pane and the
+  session is then re-split — both the promoted agent (baked `right`) and the fresh helper (baked `right`)
+  emit `--pane right` with `hasSplit == true`, so the `setAgentIndicator` `!hasSplit` coercion cannot tell
+  them apart and the block lands on the wrong pane.
+  The fix bakes a STABLE per-surface token (`AGTERM_PANE_ID`, distinct from the mutable role) that the hook
+  forwards as `--pane-id`; the app resolves it against the session's LIVE surfaces
+  (`Session.paneRole(forToken:)` — `.left`/`.right`/`.scratch` from which slot currently holds the matching
+  `TerminalSurface.paneToken`) and lets it OVERRIDE the stale `--pane`, falling back to `--pane` when the
+  token is absent or unknown (older shells, a torn-down surface).
+  This makes the status-SET path resolve the pane the same way the keystroke-clear already does via the
+  live `GhosttySurfaceView.isSplitPane` (see [[notifications]]) — a per-surface token is irreducibly
+  required because the role alone is degenerate once both live surfaces are baked `right`.
+  It carries NO new read-back — `--pane-id` is alternative ADDRESSING for the same `statusPane` state
+  (the RESOLVED role reads back on `ControlSessionNode.statusPane`), the `session.type --pane` pattern.
+  Keep-in-sync: (1) `ControlArgs.paneID` + `ControlSessionStatusUpdate.paneID` + `Session.paneRole(forToken:)`
+  + `TerminalSurface.paneToken` + `SurfaceEnvironment.session(paneToken:)` (injects `AGTERM_PANE_ID`) in
+  `agtermCore`, plus the dispatcher threading `paneID` un-validated (opaque token), (2) the `.sessionStatus`
+  arm resolving `update.paneID` to the live role in `setSessionStatus` + `GhosttySurfaceView.paneToken`
+  (computed from the baked env) + `surfaceEnv` generating a fresh token per session-owned pane,
+  (3) the `session status --pane-id` option + the hook wrapper forwarding `$AGTERM_PANE_ID`,
+  (4) round-trip in `ControlProtocolTests` + dispatcher threading in `ControlDispatcherTests` +
+  `SessionTests` (`paneRole` resolver, incl. the promote + re-split case) + `SurfaceEnvironmentTests`
+  (`AGTERM_PANE_ID` bake) + `AgentStatusWrapperTests` (`--pane-id` forwarding) + CLI mapping in `CommandsTests`
+  + the e2e `testPaneIDOverridesStaleRoleThenFallsBack` in `PaneAwareStatusUITests` (reads the pane's real
+  `$AGTERM_PANE_ID` and proves override + fallback).
   Visibility is keep-state vs one-time, decided by `autoReset` alone: `AppStore.selectSession` resets
   an `autoReset` indicator (the `completed` flash) to idle on BOTH the session visited AND the one left
   (right after `clearUnseen`), so it never lingers on a row you switch away from,

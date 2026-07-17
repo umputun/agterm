@@ -57,6 +57,34 @@ final class SettingsUITests: XCTestCase {
                       "turning notifications off should persist notificationsEnabled=false")
     }
 
+    func testDockBouncePickerPersists() throws {
+        let picker = settingsControl(tab: "Notifications", control: "settings-dock-bounce")
+
+        // Until focused → dockBounce="untilFocused".
+        picker.click()
+        let untilFocused = app.menuItems["Until focused"]
+        XCTAssertTrue(untilFocused.waitForExistence(timeout: 5), "the dock-bounce picker should offer 'Until focused'")
+        untilFocused.click()
+        XCTAssertTrue(poll { self.settingsValue("dockBounce") == "untilFocused" },
+                      "selecting 'Until focused' should persist dockBounce=untilFocused to settings.json")
+
+        // Once → dockBounce="once".
+        picker.click()
+        let once = app.menuItems["Once"]
+        XCTAssertTrue(once.waitForExistence(timeout: 5), "the dock-bounce picker should offer 'Once'")
+        once.click()
+        XCTAssertTrue(poll { self.settingsValue("dockBounce") == "once" },
+                      "selecting 'Once' should persist dockBounce=once to settings.json")
+
+        // None → the default, mapped back to nil, so the key is REMOVED.
+        picker.click()
+        let none = app.menuItems["None"]
+        XCTAssertTrue(none.waitForExistence(timeout: 5), "the dock-bounce picker should offer 'None'")
+        none.click()
+        XCTAssertTrue(poll { self.settingsValue("dockBounce") == nil },
+                      "selecting None (the default) should remove the dockBounce key from settings.json")
+    }
+
     func testToolbarModePickerPersists() throws {
         // the Toolbar dropdown offers Normal/Compact/Hidden. compact is the default and maps back to nil;
         // Normal/Hidden write a stable key.
