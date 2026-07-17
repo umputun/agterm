@@ -2,17 +2,18 @@ import agtermCore
 import AppKit
 import SwiftUI
 
-/// The Settings window (Cmd+,): five tabs — General (mouse, sessions, ghostty config),
-/// Appearance (font/theme + window translucency + pane dimming), Notifications (banner / badge /
-/// attention toggles), Agent Status (the sidebar glyph colors + blocked sound + auto-follow), and Key
-/// Mapping (the config directory + keymap diagnostics + Reload).
+/// The Settings window (Cmd+,): six tabs — General (mouse, sessions, ghostty config),
+/// Appearance (font/theme + window translucency + pane dimming), Interface (per-element title-bar and
+/// sidebar-footer chrome visibility), Notifications (banner / badge / attention toggles), Agent Status
+/// (the sidebar glyph colors + blocked sound + auto-follow), and Key Mapping (the config directory +
+/// keymap diagnostics + Reload).
 struct SettingsView: View {
     let model: SettingsModel
 
     /// Identifies each tab. An explicit selection binding is what keeps the window opening on General:
     /// without it, SwiftUI's Settings scene auto-persists the last tab to `selectedTabIndex` in user
     /// defaults and restores it next launch, which we don't want for a settings window.
-    private enum Tab: Hashable { case general, appearance, notifications, agentStatus, keyMapping }
+    private enum Tab: Hashable { case general, appearance, interface, notifications, agentStatus, keyMapping }
     @State private var selection: Tab = .general
 
     var body: some View {
@@ -23,6 +24,9 @@ struct SettingsView: View {
             AppearanceSettingsView(model: model)
                 .tabItem { Label("Appearance", systemImage: "paintbrush") }
                 .tag(Tab.appearance)
+            InterfaceSettingsView(model: model)
+                .tabItem { Label("Interface", systemImage: "macwindow") }
+                .tag(Tab.interface)
             NotificationsSettingsView(model: model)
                 .tabItem { Label("Notifications", systemImage: "bell") }
                 .tag(Tab.notifications)
@@ -385,6 +389,40 @@ private struct AppearanceSettingsView: View {
     private var inactivePaneMuteStrength: Binding<Double> {
         Binding(get: { Double(model.settings.inactivePaneMuteStrength ?? AppSettings.defaultInactivePaneMuteStrength) },
                 set: { let v = Int($0.rounded()); model.setInactivePaneMuteStrength(v == AppSettings.defaultInactivePaneMuteStrength ? nil : v) })
+    }
+}
+
+/// Interface tab: per-element visibility of the window's title-bar and sidebar-footer chrome, grouped by
+/// surface (Title Bar / Sidebar). Every element is shown by default; a toggle off adds it to
+/// `AppSettings.hiddenInterfaceElements`. Each toggle live-applies through `SettingsModel` and re-gates
+/// the element in every open window via `.agtermAppearanceChanged`.
+private struct InterfaceSettingsView: View {
+    let model: SettingsModel
+
+    var body: some View {
+        Form {
+            Section("Title Bar") {
+                ForEach(InterfaceElement.allCases.filter { $0.section == .titleBar }, id: \.self) { element in
+                    Toggle(element.displayName, isOn: binding(for: element))
+                        .accessibilityIdentifier("settings-interface-\(element.rawValue)")
+                }
+            }
+            Section("Sidebar") {
+                ForEach(InterfaceElement.allCases.filter { $0.section == .sidebar }, id: \.self) { element in
+                    Toggle(element.displayName, isOn: binding(for: element))
+                        .accessibilityIdentifier("settings-interface-\(element.rawValue)")
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+    }
+
+    /// A show/hide toggle for one element: ON = visible (the default), so hiding it is the opt-in that
+    /// writes to `hiddenInterfaceElements`.
+    private func binding(for element: InterfaceElement) -> Binding<Bool> {
+        Binding(get: { !model.settings.isInterfaceElementHidden(element) },
+                set: { model.setInterfaceElementVisible(element, visible: $0) })
     }
 }
 

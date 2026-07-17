@@ -44,7 +44,9 @@ paths:
   + `autoFollowAttention`/`autoFollowStayOnActive` (the per-window idle auto-follow-to-oldest-blocked policy:
   `autoFollowAttention` an `AutoFollowAttention` raw string [nil = off/disabled], `autoFollowStayOnActive`
   [nil/false = off] the "don't leave a running session" opt-in; NOT ghostty keys, save-only + fanned out into
-  every open window's `AppStore` via `SettingsModel.applyAutoFollow` → `AppStore.setAutoFollow`).
+  every open window's `AppStore` via `SettingsModel.applyAutoFollow` → `AppStore.setAutoFollow`)
+  + `hiddenInterfaceElements` (raw names of title-bar / sidebar-footer chrome elements the user hid,
+  nil/empty = all shown; the `InterfaceElement` set; NOT a ghostty key — see its own bullet).
   `theme`/`darkTheme`/`followSystemAppearance` are the macOS light/dark appearance-sync state: `theme` is the single/light-slot theme, `darkTheme` the dark slot, `followSystemAppearance` (nil = off) the toggle; when following, `ghosttyConfigLines()` emits ghostty's raw dual `theme = light:NAME,dark:NAME` conditional and libghostty resolves the side at runtime — `ghosttyConfigLines()` takes NO `isDark` arg (see the Theme picker rule; `ThemeResolution` is gone, the dual value is reduced to the active side for the sidebar selection colors by `ThemeName.resolved(from:isDark:)`).
   The three `*StatusColorHex` (`#RRGGBB`, nil = active `#DBD9E6` muted lavender-grey + system amber/green)
   color the sidebar agent-status glyph: `SettingsModel` passes the hex to `GhosttyApp.setAgentStatusColors`
@@ -143,7 +145,7 @@ paths:
   `ContentView` mirrors the color into `terminalColor` view state (the quick terminal's opaque backing
   re-renders with the new color) and `TitleProbeView` re-applies the window appearance.
   Without this the chrome only refreshed when the window next re-keyed.
-  UI is the standard SwiftUI `Settings` scene (Cmd+,) with a 5-tab `TabView` (frame 480×590).
+  UI is the standard SwiftUI `Settings` scene (Cmd+,) with a 6-tab `TabView` (frame 480×590).
   An explicit `TabView(selection:)` binding (`@State` default `.general`) suppresses SwiftUI's
   `com_apple_SwiftUI_Settings_selectedTabIndex` auto-persistence, so the window always opens on General
   instead of restoring the last-used tab.
@@ -160,6 +162,8 @@ paths:
   back to nil, matching the terminal font-size stepper's style) + the inactive-pane-mute slider.
   The formerly-separate **Panes** section was folded into **Window** so the tab still fits 480×590 without
   scrolling after adding the font-size stepper).
+  **Interface** (per-element chrome visibility, grouped into a **Title Bar** section and a **Sidebar**
+  section — one default-on Toggle per `InterfaceElement`; see the `hiddenInterfaceElements` bullet).
   **Notifications** (a **Notifications** section with the banner / badge / attention-indicator toggles plus the Dock-bounce mode and notification-sound pickers).
   **Agent Status** (a **Colors** section with the three glyph color pickers, a **Sound** section with
   the blocked-sound picker, an **Auto-follow** section with the idle-timeout Picker
@@ -407,6 +411,39 @@ paths:
   must never prompt), like the quit-confirm.
   Default-off + round-trip covered host-free in `AppSettingsTests`; the confirm itself is app-target
   (manually/build verified, no app unit-test host, like `confirmDelete`/`confirmClearFlags`).
+- **`hiddenInterfaceElements` (per-element title-bar / sidebar-footer chrome visibility, Interface tab).**
+  `AppSettings.hiddenInterfaceElements: [String]?` (nil/empty = everything shown, the default) holds the
+  raw names of the chrome elements the user HID.
+  Stored as raw strings so an unknown future element name decodes tolerantly (dropped by
+  `resolvedHiddenInterfaceElements`) instead of failing the whole decode — the forward-compat rule shared
+  with `toolbarMode`/`dockBounce`.
+  NOT a ghostty key (`ghosttyConfigLines()` never emits it).
+  The toggleable elements are the host-free `InterfaceElement` enum (agtermCore): title bar —
+  `sidebarToggle`/`sessionName`/`windowName`/`recentSessions`/`scratch`/`split`/`dashboard`/`quickTerminal`;
+  sidebar footer — `newWorkspace`/`newSession`/`flaggedView`.
+  Each case carries its `section` (Title Bar / Sidebar) and `displayName` (the toggle label), so the
+  Interface tab iterates `InterfaceElement.allCases` grouped by section.
+  The attention bell is NOT in the set — it keeps its own `attentionButtonEnabled` opt-in (default OFF, not
+  ON), and the focus pill is transient, so neither is a per-element toggle.
+  It is the non-observable chrome-mirror pattern (like `attentionButtonEnabled`/`toolbarMode`):
+  `SettingsModel.setInterfaceElementVisible(_:visible:)` mutates the RAW string set (NOT
+  `resolvedHiddenInterfaceElements`, whose known-only filter would erase an unknown future element name a
+  newer build persisted; empty maps back to nil to keep `settings.json` minimal) + `persistAndApply` +
+  `applyInterfaceElements` pushes `settings.resolvedHiddenInterfaceElements` into the
+  `GhosttyApp.hiddenInterfaceElements` mirror, so a flip rides `.agtermAppearanceChanged` and every open
+  window re-reads the mirror (`WindowContentView.shows(_:)`) to gate each element live.
+  The title-bar building moved to `WindowContentView+Titlebar.swift` (matching the `+Dashboard`/`+RecentSessions`/`+Zoom`
+  split) to keep `WindowContentView.swift` under the 1000-line limit; the session-vs-window title split lives
+  there in `titleText` (gated) vs `windowTitle` (always the OS window title), and the trailing button cluster
+  draws a group divider ONLY where two groups that each still show 2+ buttons meet (a group reduced to one
+  button flows in without a bracketing divider) — the rule is the host-free
+  `InterfaceElement.titlebarGroupDividers(countA:countB:countC:)`, unit-tested in `AppSettingsTests`.
+  GUI-only and keep-in-sync EXEMPT — pure visual chrome, and every gated element's ACTION already has full
+  control coverage (`sidebar`/`session.split`/`session.scratch`/`quick`/`dashboard`/`workspace.new`/`session.new`;
+  only `theme.set`/`config.reload` touch settings over the socket).
+  Default + round-trip + tolerant-decode covered host-free in `AppSettingsTests`; the picker persistence in
+  `SettingsUITests` (`testInterfaceElementTogglePersists`); the live gating is app-target (build/manually
+  verified, no app unit-test host).
 - **A Settings toggle's DESCRIPTION stays single-line short-form** — a terse hint, not a manual.
   No detailed multi-line explanation of what the toggle does and no cross-refs to other toggles;
   keep the minimal style (see also the flag-description convention).

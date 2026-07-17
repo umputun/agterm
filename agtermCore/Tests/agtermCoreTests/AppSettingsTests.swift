@@ -515,4 +515,65 @@ struct AppSettingsTests {
         // app-level per-window behavior values, never ghostty config keys — only the always-on defaults emit.
         #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
+
+    @Test func hiddenInterfaceElementsDefaultsNilAndShowsEverything() {
+        let settings = AppSettings()
+        #expect(settings.hiddenInterfaceElements == nil)
+        #expect(settings.resolvedHiddenInterfaceElements.isEmpty)
+        for element in InterfaceElement.allCases {
+            #expect(!settings.isInterfaceElementHidden(element))
+        }
+    }
+
+    @Test func hiddenInterfaceElementsRoundTripsAndIsNotAConfigLine() throws {
+        let original = AppSettings(hiddenInterfaceElements: ["scratch", "flaggedView"])
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
+        #expect(decoded == original)
+        #expect(decoded.isInterfaceElementHidden(.scratch))
+        #expect(decoded.isInterfaceElementHidden(.flaggedView))
+        #expect(!decoded.isInterfaceElementHidden(.split))
+        // a GUI-only chrome value, never a ghostty config key — only the always-on defaults emit.
+        #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
+
+    @Test func unknownInterfaceElementDecodesTolerantly() throws {
+        // a future-written element name must decode tolerantly (the forward-compat rule): the unknown name
+        // is dropped from the resolved set, and it must NOT fail the whole decode and discard other fields.
+        let decoded = try JSONDecoder().decode(
+            AppSettings.self,
+            from: Data(#"{ "hiddenInterfaceElements": ["scratch", "teleporter"], "fontSize": 16 }"#.utf8))
+        #expect(decoded.fontSize == 16)
+        #expect(decoded.resolvedHiddenInterfaceElements == [.scratch])
+        #expect(decoded.isInterfaceElementHidden(.scratch))
+    }
+
+    @Test func interfaceElementSectionsPartitionAllCases() {
+        // every case belongs to exactly one section, and both sections are non-empty — the Settings tab
+        // relies on this to group the toggles.
+        let titleBar = InterfaceElement.allCases.filter { $0.section == .titleBar }
+        let sidebar = InterfaceElement.allCases.filter { $0.section == .sidebar }
+        #expect(titleBar.count + sidebar.count == InterfaceElement.allCases.count)
+        #expect(sidebar == [.newWorkspace, .newSession, .flaggedView])
+        #expect(!titleBar.isEmpty)
+    }
+
+    @Test(arguments: [
+        // (countA, countB, countC, afterA, afterB)
+        (1, 2, 2, false, true),  // default: lone recent flows in, one divider between the two full groups
+        (1, 1, 2, false, false), // hide a B button: B is a single, no divider anywhere
+        (2, 2, 2, true, true),   // all full: both dividers
+        (2, 0, 2, false, true),  // empty B: a full A and a full C meet directly
+        (2, 1, 2, false, false), // lone B between two full groups: no bridge, no dividers
+        (2, 2, 1, true, false),  // lone C: divider only between the two full A/B groups
+        (0, 2, 2, false, true),  // empty A: divider only between B and C
+        (0, 0, 2, false, false), // only C present: no dividers at the leading edge
+        (2, 2, 0, true, false),  // empty C: divider only between A and B
+        (0, 0, 0, false, false), // nothing visible
+    ])
+    func titlebarGroupDividersOnlyBetweenFullGroups(countA: Int, countB: Int, countC: Int,
+                                                    afterA: Bool, afterB: Bool) {
+        let dividers = InterfaceElement.titlebarGroupDividers(countA: countA, countB: countB, countC: countC)
+        #expect(dividers.afterA == afterA)
+        #expect(dividers.afterB == afterB)
+    }
 }
