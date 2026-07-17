@@ -556,4 +556,24 @@ struct AppSettingsTests {
         #expect(sidebar == [.newWorkspace, .newSession, .flaggedView])
         #expect(!titleBar.isEmpty)
     }
+
+    @Test(arguments: [
+        // (countA, countB, countC, afterA, afterB)
+        (1, 2, 2, false, true),  // default: lone recent flows in, one divider between the two full groups
+        (1, 1, 2, false, false), // hide a B button: B is a single, no divider anywhere
+        (2, 2, 2, true, true),   // all full: both dividers
+        (2, 0, 2, false, true),  // empty B: a full A and a full C meet directly
+        (2, 1, 2, false, false), // lone B between two full groups: no bridge, no dividers
+        (2, 2, 1, true, false),  // lone C: divider only between the two full A/B groups
+        (0, 2, 2, false, true),  // empty A: divider only between B and C
+        (0, 0, 2, false, false), // only C present: no dividers at the leading edge
+        (2, 2, 0, true, false),  // empty C: divider only between A and B
+        (0, 0, 0, false, false), // nothing visible
+    ])
+    func titlebarGroupDividersOnlyBetweenFullGroups(countA: Int, countB: Int, countC: Int,
+                                                    afterA: Bool, afterB: Bool) {
+        let dividers = InterfaceElement.titlebarGroupDividers(countA: countA, countB: countB, countC: countC)
+        #expect(dividers.afterA == afterA)
+        #expect(dividers.afterB == afterB)
+    }
 }

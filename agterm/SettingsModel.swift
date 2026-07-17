@@ -245,10 +245,12 @@ final class SettingsModel {
     /// off adds the element to `hiddenInterfaceElements`, on removes it; an empty result maps back to nil so
     /// `settings.json` stays minimal. A GUI-only chrome flag, not a ghostty key — `persistAndApply()`
     /// no-ops the config text but rides `.agtermAppearanceChanged` so every window re-gates the element live.
+    /// Mutates the RAW string set (not `resolvedHiddenInterfaceElements`, which drops unknown names) so a
+    /// future element hidden by a newer build survives a toggle here instead of being erased.
     func setInterfaceElementVisible(_ element: InterfaceElement, visible: Bool) {
-        var hidden = settings.resolvedHiddenInterfaceElements
-        if visible { hidden.remove(element) } else { hidden.insert(element) }
-        settings.hiddenInterfaceElements = hidden.isEmpty ? nil : hidden.map(\.rawValue).sorted()
+        var hidden = Set(settings.hiddenInterfaceElements ?? [])
+        if visible { hidden.remove(element.rawValue) } else { hidden.insert(element.rawValue) }
+        settings.hiddenInterfaceElements = hidden.isEmpty ? nil : hidden.sorted()
         persistAndApply()
     }
 

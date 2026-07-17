@@ -70,6 +70,18 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         case .flaggedView: return "Flagged view"
         }
     }
+
+    /// Which of the two separators in the title bar's trailing button cluster to draw, given how many
+    /// visible buttons each of the three groups has (A = recent-sessions + attention, B = scratch + split,
+    /// C = dashboard + quick-terminal). A separator sits ONLY where two groups that each still show 2+
+    /// buttons meet: `afterA` between A and B, `afterB` between B and C, or — when B is empty — directly
+    /// between a full A and a full C. A group reduced to one button flows in without a bracketing separator.
+    /// Host-free so the rule is unit-tested without an app host; the view supplies the three counts.
+    public static func titlebarGroupDividers(countA: Int, countB: Int, countC: Int) -> (afterA: Bool, afterB: Bool) {
+        let afterA = countA >= 2 && countB >= 2
+        let afterB = (countB >= 2 && countC >= 2) || (countA >= 2 && countC >= 2 && countB == 0)
+        return (afterA, afterB)
+    }
 }
 
 /// User-facing appearance settings, persisted independently of the workspace tree.

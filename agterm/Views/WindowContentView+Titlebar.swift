@@ -14,10 +14,8 @@ extension WindowContentView {
     /// regardless of the Interface toggles that gate only the on-screen `titleText`.
     var windowTitle: String {
         let session = store.activeSession?.displayName ?? "Agterm"
-        guard let info = library.windows.first(where: { $0.id == windowID }), info.hasCustomName else {
-            return session
-        }
-        return "\(session) — \(info.name)"
+        guard let name = customWindowName else { return session }
+        return "\(session) — \(name)"
     }
 
     /// The titlebar subtitle (second line): the focused pane's `subtitleDetail` — its terminal title for
@@ -153,17 +151,15 @@ extension WindowContentView {
         let countA = (showRecent ? 1 : 0) + (showAttention ? 1 : 0)  // recent-sessions + attention popovers
         let countB = (showScratch ? 1 : 0) + (showSplit ? 1 : 0)     // per-session scratch + split controls
         let countC = (showDashboard ? 1 : 0) + (showQuick ? 1 : 0)   // window-overlay dashboard + quick terminal
-        // a separator only between two 2+-button groups: after A when both A and B are full; after B when
-        // both B and C are full, or (B empty) directly between a full A and a full C.
-        let dividerAfterA = countA >= 2 && countB >= 2
-        let dividerAfterB = (countB >= 2 && countC >= 2) || (countA >= 2 && countC >= 2 && countB == 0)
+        // a separator only between two 2+-button groups (the host-free rule, unit-tested in agtermCore).
+        let dividers = InterfaceElement.titlebarGroupDividers(countA: countA, countB: countB, countC: countC)
         return HStack(spacing: 14) {
             if showRecent { recentSessionsButton.labelStyle(.iconOnly) }
             if showAttention { attentionButton.labelStyle(.iconOnly) }
-            if dividerAfterA { titlebarDivider }
+            if dividers.afterA { titlebarDivider }
             if showScratch { scratchButton.labelStyle(.iconOnly) }
             if showSplit { splitButton.labelStyle(.iconOnly) }
-            if dividerAfterB { titlebarDivider }
+            if dividers.afterB { titlebarDivider }
             if showDashboard { dashboardButton.labelStyle(.iconOnly) }
             if showQuick { quickTerminalButton.labelStyle(.iconOnly) }
         }

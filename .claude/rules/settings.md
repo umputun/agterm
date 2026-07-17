@@ -426,16 +426,18 @@ paths:
   The attention bell is NOT in the set — it keeps its own `attentionButtonEnabled` opt-in (default OFF, not
   ON), and the focus pill is transient, so neither is a per-element toggle.
   It is the non-observable chrome-mirror pattern (like `attentionButtonEnabled`/`toolbarMode`):
-  `SettingsModel.setInterfaceElementVisible(_:visible:)` mutates the set (empty maps back to nil to keep
-  `settings.json` minimal) + `persistAndApply` + `applyInterfaceElements` pushes
-  `settings.resolvedHiddenInterfaceElements` into the `GhosttyApp.hiddenInterfaceElements` mirror, so a flip
-  rides `.agtermAppearanceChanged` and every open window re-reads the mirror (`WindowContentView.shows(_:)`)
-  to gate each element live.
+  `SettingsModel.setInterfaceElementVisible(_:visible:)` mutates the RAW string set (NOT
+  `resolvedHiddenInterfaceElements`, whose known-only filter would erase an unknown future element name a
+  newer build persisted; empty maps back to nil to keep `settings.json` minimal) + `persistAndApply` +
+  `applyInterfaceElements` pushes `settings.resolvedHiddenInterfaceElements` into the
+  `GhosttyApp.hiddenInterfaceElements` mirror, so a flip rides `.agtermAppearanceChanged` and every open
+  window re-reads the mirror (`WindowContentView.shows(_:)`) to gate each element live.
   The title-bar building moved to `WindowContentView+Titlebar.swift` (matching the `+Dashboard`/`+RecentSessions`/`+Zoom`
   split) to keep `WindowContentView.swift` under the 1000-line limit; the session-vs-window title split lives
   there in `titleText` (gated) vs `windowTitle` (always the OS window title), and the trailing button cluster
   draws a group divider ONLY where two groups that each still show 2+ buttons meet (a group reduced to one
-  button flows in without a bracketing divider).
+  button flows in without a bracketing divider) — the rule is the host-free
+  `InterfaceElement.titlebarGroupDividers(countA:countB:countC:)`, unit-tested in `AppSettingsTests`.
   GUI-only and keep-in-sync EXEMPT — pure visual chrome, and every gated element's ACTION already has full
   control coverage (`sidebar`/`session.split`/`session.scratch`/`quick`/`dashboard`/`workspace.new`/`session.new`;
   only `theme.set`/`config.reload` touch settings over the socket).
