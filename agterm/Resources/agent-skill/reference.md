@@ -157,8 +157,11 @@ All ten are read-only projections of GUI state.
   background — it is "new session seeded with the source's cwd", not a clone of state. Errors: the usual
   resolver errors for an unresolvable / ambiguous target, and `could not duplicate session` when creation
   fails. READ-BACK: no new tree field — `tree` itself is the read-back, since the new session node appears
-  directly after its source and carries the same `cwd`. It is the control half of the sidebar row's
-  **Duplicate Session** context-menu item (single-selection only).
+  directly after its source, carrying the source's focused-pane cwd. That equals the source node's
+  `tree.cwd` for a non-split session (and a split focused on its primary pane); for a split focused off its
+  primary the source node's `tree.cwd` reports the primary pane while the duplicate carries the focused
+  pane's directory. It is the control half of the sidebar row's **Duplicate Session** context-menu item
+  (single-selection only).
 - `session close [--target T ...] [--window W]` — close one session, or repeat `--target` to close
   several sessions in the same window/store. Batch close honors the GUI grace-undo setting: one grouped
   undo/reopen record when enabled, immediate close when disabled. Returns `result.affected`.
@@ -568,7 +571,7 @@ so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are as untrusted as `{AGT_SELECT
 - Plus the other `$AGT_*` context vars the runner exports.
 
 Built-in action names for `map` include: `new_window`, `new_workspace`, `new_session`,
-`open_directory`, `rename_session`, `close_session`, `reopen_recent`, `undo_close`, `clear_status`, `increase_font_size`,
+`open_directory`, `rename_session`, `duplicate_session`, `close_session`, `reopen_recent`, `undo_close`, `clear_status`, `increase_font_size`,
 `decrease_font_size`, `reset_font_size`, `toggle_split`, `toggle_scratch`, `toggle_sidebar`, `quick_terminal`,
 `session_palette`, `command_palette`, `custom_command_palette`, `dashboard`, and the navigation actions (`previous_session`, `next_session`,
 `first_session`, `last_session`, `previous_attention_session`, `next_attention_session`,

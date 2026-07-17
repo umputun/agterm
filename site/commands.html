@@ -639,8 +639,11 @@
                 size, or background. It is the control half of the sidebar row's <strong style="color: #bfbab0">Duplicate Session</strong>
                 context-menu item (single-selection only). Read back from
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>: no new field — the new session node
-                appears directly after its source, carrying the same
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cwd</span>.
+                appears directly after its source, carrying the source's focused-pane
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cwd</span> (equal to the source node's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree.cwd</span> unless the source is a split
+                focused off its primary pane, where <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree.cwd</span>
+                reports the primary).
               </p>
             </div>
 

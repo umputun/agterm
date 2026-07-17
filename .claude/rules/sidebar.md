@@ -110,7 +110,9 @@ paths:
   split, scratch, status, flag, font size, or watermark — it is "New Session seeded with the source's cwd",
   not a clone of state.
   Its control half is `session.duplicate` (`agtermctl session duplicate [--target]`), which reads back off
-  `tree` as a new node right after its source with the same `cwd` (see the Control API rule).
+  `tree` as a new node right after its source carrying the source's focused-pane cwd — equal to the source
+  node's `tree.cwd` unless the source is a split focused off its primary pane (then `tree.cwd` reports the
+  primary and the two differ), see the Control API rule.
 - **Flagged working-set view (`AppStore.sidebarMode` `.tree`/`.flagged`).**
   `SidebarMode` (`agtermCore/SidebarMode.swift`, `String`-backed `Codable`/`Sendable`) drives a per-window
   MODE toggle between the normal two-level tree and a FLAT list of just the flagged sessions.

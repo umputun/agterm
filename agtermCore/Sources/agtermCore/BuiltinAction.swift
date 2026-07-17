@@ -10,6 +10,7 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
     case newWindow = "new_window", renameWindow = "rename_window", deleteWindow = "delete_window"
     case newWorkspace = "new_workspace", renameWorkspace = "rename_workspace", deleteWorkspace = "delete_workspace"
     case newSession = "new_session", openDirectory = "open_directory", renameSession = "rename_session"
+    case duplicateSession = "duplicate_session"
     case closeSession = "close_session", reopenRecent = "reopen_recent", undoClose = "undo_close", clearStatus = "clear_status"
     case increaseFontSize = "increase_font_size", decreaseFontSize = "decrease_font_size", resetFontSize = "reset_font_size"
     case toggleSplit = "toggle_split", toggleScratch = "toggle_scratch", toggleTerminalZoom = "toggle_terminal_zoom"
@@ -26,7 +27,7 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
 
     /// The shipped default chord for this action, or `nil` when it has no default key today.
     ///
-    /// `nil` covers two groups: the keyless actions (`rename_*`/`delete_*`/`clear_status`/
+    /// `nil` covers two groups: the keyless actions (`rename_*`/`delete_*`/`duplicate_session`/`clear_status`/
     /// `first_session`/`last_session`/`select_theme`/`toggle_flagged_view`/`focus_workspace`),
     /// which gain a key only when the user `map`s one; AND the six
     /// arrow-bound actions (`focus_left_pane` ⌘⌥←, `focus_right_pane` ⌘⌥→, `previous_session` ⌥⌘↑,
@@ -60,8 +61,8 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
         case .customCommandPalette: return Chord(mods: [.control, .shift], key: "o")
         case .showAttention: return Chord(mods: [.control, .shift], key: "i")
         case .dashboard: return Chord(mods: [.command, .shift], key: "d")
-        case .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .clearStatus,
-             .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace:
+        case .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .duplicateSession,
+             .clearStatus, .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace:
             return nil
         case .focusLeftPane, .focusRightPane, .previousSession, .nextSession,
              .previousAttentionSession, .nextAttentionSession:

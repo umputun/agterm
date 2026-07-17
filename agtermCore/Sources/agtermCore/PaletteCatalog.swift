@@ -36,7 +36,7 @@ public struct PaletteContext: Sendable, Equatable {
 /// Static action-palette rows, in the same order the macOS palette presents them before dynamic rows.
 public enum PaletteCommand: String, CaseIterable, Sendable {
     case newSession, newWorkspace, openDirectory
-    case renameSession, renameWorkspace, closeSession, reopenRecent, undoClose, clearStatus
+    case renameSession, duplicateSession, renameWorkspace, closeSession, reopenRecent, undoClose, clearStatus
     case previousSession, nextSession, previousAttentionSession, nextAttentionSession
     case firstSession, lastSession, showAttention
     case toggleSplit, toggleScratch, toggleTerminalZoom, toggleSidebar, toggleFlag, focusWorkspace
@@ -79,6 +79,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .newWorkspace: return "New Workspace"
         case .openDirectory: return "Open Directory…"
         case .renameSession: return "Rename Session"
+        case .duplicateSession: return "Duplicate Session"
         case .renameWorkspace: return "Rename Workspace"
         case .closeSession: return "Close Session"
         case .reopenRecent: return "Reopen Last Closed Item"
@@ -126,6 +127,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .newWorkspace: return .newWorkspace
         case .openDirectory: return .openDirectory
         case .renameSession: return .renameSession
+        case .duplicateSession: return .duplicateSession
         case .renameWorkspace: return .renameWorkspace
         case .closeSession: return .closeSession
         case .reopenRecent: return .reopenRecent

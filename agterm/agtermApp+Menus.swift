@@ -162,6 +162,9 @@ extension agtermApp {
                 Button("Rename Session") { actions.renameActiveSession() }
                     .keyboardShortcut(shortcut(for: .renameSession))
                     .disabled(library.activeStore?.activeSession == nil || modalActive)
+                Button("Duplicate Session") { actions.duplicateActiveSession() }
+                    .keyboardShortcut(shortcut(for: .duplicateSession))
+                    .disabled(library.activeStore?.activeSession == nil || modalActive)
                 Button("Reveal in Finder") { actions.revealActiveSessionInFinder() }
                     .disabled(!actions.canRevealActiveSessionInFinder)
                 Button("Close Session") {

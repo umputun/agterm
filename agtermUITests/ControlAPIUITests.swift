@@ -248,6 +248,53 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertTrue(pollSessionCount(1, timeout: 10), "closing the session should remove its row")
     }
 
+    // session.duplicate opens a fresh shell rooted at the source's cwd, inserted DIRECTLY AFTER the source
+    // in the same workspace, and focuses it. Read-back is `tree`: the new node follows its source carrying
+    // the source's cwd (the write-only command's own read-back point) and becomes the active session. Seeds
+    // the source with a real non-home directory so the cwd carry-over is a genuine assertion, not the shared
+    // new-session default.
+    func testSessionDuplicate() throws {
+        let sourceID = UUID(uuidString: "DD100000-0000-0000-0000-000000000001")!
+        // a real dir UNDER home (home is not a symlink, so the shell's OSC 7 report matches the seeded path
+        // verbatim — no /private canonicalization that a /tmp or NSTemporaryDirectory() seed would hit).
+        let cwd = NSHomeDirectory() + "/agterm-dup-\(UUID().uuidString)"
+        try FileManager.default.createDirectory(atPath: cwd, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: cwd) }
+        let snapshot = """
+        {"version":1,"selectedSessionID":"\(sourceID.uuidString)","workspaces":[\
+        {"id":"\(UUID().uuidString)","name":"workspace 1","sessions":[\
+        {"id":"\(sourceID.uuidString)","customName":null,"cwd":"\(cwd)"}]}]}
+        """
+        try relaunch(withSnapshot: snapshot)
+        XCTAssertTrue(pollSessionCount(1, timeout: 10), "should start with the one seeded session")
+
+        let dup = try sendCommand(#"{"cmd":"session.duplicate","target":"\#(sourceID.uuidString)"}"#)
+        XCTAssertEqual(dup["ok"] as? Bool, true, "session.duplicate should succeed: \(dup)")
+        let result = try XCTUnwrap(dup["result"] as? [String: Any], "session.duplicate should carry a result")
+        let newID = try XCTUnwrap(result["id"] as? String, "session.duplicate should return the new id")
+        XCTAssertFalse(newID.isEmpty, "the new session id should not be empty")
+        XCTAssertNotEqual(newID.lowercased(), sourceID.uuidString.lowercased(), "the duplicate must be a new session")
+        XCTAssertTrue(pollSessionCount(2, timeout: 10), "the duplicate should land in workspaces.json")
+
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let root = try XCTUnwrap(treeResult["tree"] as? [String: Any], "result should carry a tree")
+        let workspace = try XCTUnwrap((root["workspaces"] as? [[String: Any]])?.first, "one seeded workspace expected")
+        let sessions = try XCTUnwrap(workspace["sessions"] as? [[String: Any]], "workspace should list sessions")
+        XCTAssertEqual(sessions.count, 2, "the source and its duplicate")
+
+        // inserted DIRECTLY AFTER its source, not appended elsewhere.
+        XCTAssertEqual((sessions[0]["id"] as? String)?.lowercased(), sourceID.uuidString.lowercased(),
+                       "the source stays first")
+        XCTAssertEqual((sessions[1]["id"] as? String)?.lowercased(), newID.lowercased(),
+                       "the duplicate lands right after its source")
+        // carries the source's cwd (the read-back) and becomes the active session.
+        XCTAssertEqual(sessions[1]["cwd"] as? String, sessions[0]["cwd"] as? String,
+                       "the duplicate carries its source's cwd")
+        XCTAssertEqual(sessions[1]["cwd"] as? String, cwd, "the duplicate opens in the source's specific directory")
+        XCTAssertEqual(sessions[1]["active"] as? Bool, true, "the duplicate becomes the active session")
+    }
+
     // session.close with multiple targets is the control surface for the GUI batch close: one request
     // hides all targeted sessions together (the save is deferred by the grace window, so assert via tree).
     func testSessionCloseMultipleTargets() throws {

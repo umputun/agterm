@@ -21,6 +21,26 @@ struct AppStoreDuplicateTests {
         #expect(store.selectedSessionID == dupe.id)
     }
 
+    /// The seed is the FOCUSED pane's cwd, not the primary's: a split focused on its non-primary pane
+    /// duplicates into the split pane's directory (`focusedCwd`), not the primary's (`effectiveCwd`). Pins
+    /// the `focusedCwd`-over-`effectiveCwd` choice — swapping the seed to `effectiveCwd` fails only here.
+    @Test func duplicateSessionSeedsFromFocusedSplitPane() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let source = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/primary"))
+        source.currentCwd = "/primary"
+        source.isSplit = true
+        source.hasSplit = true
+        source.splitSurface = SpySurface() // a focused split always has a live split surface
+        source.splitCwd = "/split-pane"
+        source.splitFocused = true
+
+        let dupe = try! #require(store.duplicateSession(source.id))
+
+        // the duplicate opens where FOCUS is (the split pane), not the primary pane's cwd.
+        #expect(dupe.initialCwd == "/split-pane")
+    }
+
     @Test func duplicateSessionTracksLiveCwd() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

@@ -48,6 +48,7 @@ extension AppActions {
         case .newWorkspace: newWorkspace()
         case .openDirectory: openDirectory()
         case .renameSession: renameActiveSession()
+        case .duplicateSession: duplicateActiveSession()
         case .renameWorkspace: renameActiveWorkspace()
         case .closeSession: closeActiveSession()
         case .reopenRecent: openLatestRecentClosed()

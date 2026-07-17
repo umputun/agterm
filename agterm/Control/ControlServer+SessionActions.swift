@@ -155,7 +155,9 @@ extension ControlServer: ControlActions {
     /// The control half of the sidebar row's "Duplicate": a fresh shell in the target's directory, inserted
     /// right after it in its own workspace. Takes no options — the target names both the workspace and the
     /// cwd — and, like `session.new`, focuses the duplicate when it lands in the frontmost window and returns
-    /// its id. The read-back is `tree`: the new session appears after its source, carrying the same `cwd`.
+    /// its id. The read-back is `tree`: the new session appears after its source, carrying the source's
+    /// focused-pane cwd — equal to the source node's `tree.cwd` unless the source is a split focused off its
+    /// primary pane (then `tree.cwd` reports the primary and the two differ).
     func duplicateSession(_ target: String?, window: String?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.duplicateSession(id) else {

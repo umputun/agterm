@@ -171,7 +171,9 @@ focused from the tree workspace node's `focused` flag).
   after it, rooted at the target's focused-pane cwd; selects + focuses it and returns the new id. ONLY the
   directory carries over — no custom name, command, split, scratch, status, flag, font size, or background.
   Equivalent to `session new --cwd <source cwd> --after <source>` in one round-trip. Read it back from
-  `tree`: the new node sits directly after its source with the same `cwd`.
+  `tree`: the new node sits directly after its source carrying the source's focused-pane cwd (equal to the
+  source node's `tree.cwd` unless the source is a split focused off its primary pane, where `tree.cwd`
+  reports the primary).
 - `close [--target T ...]` — close one session, or repeat `--target` to close a batch with one
   grace-period undo.
 - `select` · `rename <name>` · `reveal` (select the focused pane's cwd in Finder).

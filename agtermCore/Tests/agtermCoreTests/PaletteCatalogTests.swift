@@ -8,6 +8,7 @@ struct PaletteCatalogTests {
             "New Workspace",
             "Open Directory…",
             "Rename Session",
+            "Duplicate Session",
             "Rename Workspace",
             "Close Session",
             "Reopen Last Closed Item",
@@ -50,7 +51,7 @@ struct PaletteCatalogTests {
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 42)
+        #expect(PaletteCommand.allCases.count == 43)
     }
 
     @Test func idsRoundTripThroughRawValue() {

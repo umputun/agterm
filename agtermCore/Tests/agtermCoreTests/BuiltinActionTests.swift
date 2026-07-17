@@ -28,7 +28,8 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.undoClose.rawValue == "undo_close")
         #expect(BuiltinAction.toggleFullscreen.rawValue == "toggle_fullscreen")
         #expect(BuiltinAction.dashboard.rawValue == "dashboard")
-        #expect(BuiltinAction.allCases.count == 40)
+        #expect(BuiltinAction.duplicateSession.rawValue == "duplicate_session")
+        #expect(BuiltinAction.allCases.count == 41)
     }
 
     @Test func rejectsUnknownName() {
@@ -66,6 +67,7 @@ struct BuiltinActionTests {
             .newSession: Chord(mods: [.command], key: "n"),
             .openDirectory: Chord(mods: [.command], key: "o"),
             .renameSession: nil,
+            .duplicateSession: nil,  // keyless — gains a key only when the user maps one
             .closeSession: Chord(mods: [.command], key: "w"),
             .reopenRecent: Chord(mods: [.command, .shift], key: "t"),
             .undoClose: Chord(mods: [.command], key: "z"),
@@ -146,8 +148,8 @@ struct BuiltinActionTests {
 
     @Test func keylessActionsHaveNilDefault() {
         let keyless: Set<BuiltinAction> = [
-            .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .clearStatus,
-            .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace,
+            .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .duplicateSession,
+            .clearStatus, .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace,
             // arrow-bound actions are also nil here (arrows can't round-trip through parseKeybind).
             .focusLeftPane, .focusRightPane, .previousSession, .nextSession,
             .previousAttentionSession, .nextAttentionSession,

@@ -345,7 +345,7 @@ The bindable built-in action names are:
 ```
 new_window         rename_window      delete_window
 new_workspace      rename_workspace   delete_workspace
-new_session        open_directory     rename_session
+new_session        open_directory     rename_session     duplicate_session
 close_session      reopen_recent      undo_close         clear_status
 increase_font_size decrease_font_size reset_font_size
 toggle_split       toggle_scratch     toggle_search

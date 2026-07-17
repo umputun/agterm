@@ -74,7 +74,10 @@ agtermctl session type $'npm run dev\n' --target "$sid"        # run something i
 ```
 
 Read it back off `tree` — there is no new tree field: the duplicate's node appears directly after its
-source and carries the same `cwd`.
+source, carrying the source's focused-pane cwd. That equals the source node's `tree.cwd` for a non-split
+session (and a split focused on its primary pane); for a split focused off its primary the source node's
+`tree.cwd` reports the primary while the duplicate carries the focused pane's directory, so compare against
+the pane you duplicated from.
 
 ## Build a small layout
 

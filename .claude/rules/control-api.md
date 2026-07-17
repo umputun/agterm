@@ -477,7 +477,12 @@ paths:
   It is the control half of the sidebar row's **Duplicate Session** context-menu item (SINGLE-selection only, like
   Rename / Reveal in Finder — not batch-capable; see the Sidebar rule).
   READ-BACK: it adds NO `ControlSessionNode` field — `tree` ITSELF is the read-back, since the new session
-  node appears directly after its source and carries the same `cwd`, which is what a script checks.
+  node appears directly after its source, which is what a script checks.
+  The duplicate's `cwd` is seeded from the source's `focusedCwd` (the focused pane), while `tree` reports
+  each node's `cwd` from `effectiveCwd` (always the PRIMARY pane), so the duplicate's `cwd` equals the
+  source node's `tree.cwd` for a non-split source (and a split focused ON its primary) but DIFFERS when the
+  source is a split focused OFF its primary pane — there the source node's `tree.cwd` shows the primary
+  while the duplicate carries the focused pane's directory.
   `session.type` injects into the target surface.
   `args.pane` picks the pane like `session.text` (`left`|`right`|`scratch`, no `other`):
   omitted/`left` is the MAIN pane (omitted deliberately keeps the pre-pane behavior — always the main
