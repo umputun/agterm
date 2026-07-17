@@ -244,10 +244,29 @@ paths:
   Held on `GhosttySurfaceView.oscBackgroundColorHex` and re-asserted across a config reload and a live
   opacity change (`reapplySessionConfigIfNeeded`/`reapplyColorBackgroundIfNeeded`), and preserved across a
   dashboard open/close (the `dashboardFontOverride` didSet re-emits it).
-  **Precedence:** an active OSC 11 wins over a session's persisted watermark while it is set, BUT an
-  explicit `session.background` set/clear WINS — the control write path (`ControlServer.applyWatermark`)
-  releases the latch (`oscBackgroundColorHex = nil`) so a user-chosen background is not reverted to a stale
-  OSC color on the next reload/opacity change.
+  **A program's live OSC 11 owns the pane's rendered color; an explicit `session.background` CANNOT
+  override it against the pinned libghostty.**
+  libghostty's `DynamicRGB` (terminal `Colors.background`, `src/terminal/color.zig`) has two layers —
+  `override` (set by OSC 11 via `colors.background.set`) and `default` (seeded from the ghostty `background`
+  config key, `Termio.zig`) — and the renderer draws `override orelse default`.
+  `session.background color` (and the `.color` overlay generally) only sets the config `default`, so while
+  an OSC 11 `override` is live it MASKS the explicit color and the pane keeps rendering the OSC color.
+  The pinned GhosttyKit exposes NO C API to clear the `override` (only an OSC 111 reset or a full-terminal
+  RIS clears it), so agterm cannot make an explicit background beat a live OSC 11 — the explicit spec is the
+  DEFAULT layer, which renders once no OSC override is active (a fresh surface, or after the program emits
+  OSC 111).
+  So the control write path (`ControlServer.applyWatermark`) does NOT clear `oscBackgroundColorHex` on an
+  explicit set — the latch honestly tracks the live OSC override for re-assertion across reload / opacity /
+  dashboard, and `tree`'s `background` reports the stored spec (which can differ from what a live OSC
+  program is painting).
+  `session.background clear` does NOT reset the OSC override either: it emits an EMPTY overlay (no
+  `background`/`background-opacity` lines), so the surface falls back to the base config's pinned
+  `background-opacity = 0` and the OSC color is re-HIDDEN behind the window backing, so the pane shows the
+  theme background rather than a true clear.
+  So `clear` is how you visually DROP a live OSC tint (the opacity falls to 0), while `session.background
+  color X` bumps the opacity back to `windowOpacity` and the OSC override RESURFACES to mask X.
+  And because `session.background` is session-scoped, `clear` hits both split panes even though the OSC tint
+  was per-pane.
   Only BACKGROUND is wired — OSC 10/12 (fg/cursor) render regardless of translucency.
   A per-prompt OSC re-emit is deduped in the `COLOR_CHANGE` caller (skip when the hex is unchanged) so a
   shell re-asserting OSC 11 every prompt does not rebuild the surface config each time.
