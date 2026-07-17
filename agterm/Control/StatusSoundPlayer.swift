@@ -2,7 +2,8 @@ import AppKit
 import agtermCore
 
 /// StatusSoundPlayer plays the one-shot sound requested by `session.status --sound`. It is a thin AppKit
-/// wrapper over `NSSound`, owned by `ControlServer` for the app's lifetime.
+/// wrapper over `NSSound`: a shared `@MainActor` singleton used by `ControlServer` (the per-call and
+/// blocked-default status sounds) and by the Settings sound pickers' selection previews.
 ///
 /// `action(for:)` resolves a sound name to its play closure (or nil when a named sound can't be found),
 /// so the caller can validate before mutating the indicator and surface an `unknown sound` error. The
@@ -26,7 +27,8 @@ final class StatusSoundPlayer {
     /// transitions) doesn't stutter the same clip; the Settings preview bypasses this and always sounds.
     private var throttle = SoundThrottle(window: .milliseconds(200))
 
-    /// The standard macOS system sound names, used only to suggest valid values in the `unknown sound`
+    /// The standard macOS system sound names: the option list of the Settings sound pickers (the
+    /// blocked-status and notification sounds), and the suggested valid values in the `unknown sound`
     /// error; any name `NSSound(named:)` can resolve is accepted, not just these.
     static let standardNames = ["Basso", "Blow", "Bottle", "Frog", "Funk", "Hero", "Morse",
                                 "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink", "Glass"]

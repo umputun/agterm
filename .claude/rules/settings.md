@@ -375,9 +375,10 @@ paths:
   GUI-only and keep-in-sync EXEMPT (only `theme.set`/`config.reload` touch settings over the socket).
   Default + tolerant-decode covered host-free in `AppSettingsTests`; the bounce itself is app-target
   (settings-picker persistence in `SettingsUITests`, the animation verified by eye — not accessibility-observable).
-- **`notificationSoundName` (a system sound on every delivered notification, opt-in, Notifications tab).**
+- **`notificationSoundName` (a system sound on every delivered banner, opt-in, Notifications tab).**
   `AppSettings.notificationSoundName: String?` (nil/empty = silent, the default) names the system sound
-  played when a notification is delivered, in BOTH the OSC and control paths.
+  attached to the delivered banner (`UNNotificationSound`, so it follows the banner toggle and Do Not
+  Disturb), in BOTH the OSC and control paths.
   NOT a ghostty key (`writeGhosttyConfig` no-ops, no surface reload).
   Like `dockBounce` it needs NO `.agtermAppearanceChanged` re-render: `SettingsModel.setNotificationSoundName`
   saves + `applyNotificationSound` pushes the value into the `NotificationManager.notificationSoundName`
