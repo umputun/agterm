@@ -15,7 +15,7 @@ description: >
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.scratch, session.focus, session.resize, surface.zoom, dashboard, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
-  session.flag, session.seen, session.reveal, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
+  session.flag, session.seen, session.reveal, session.duplicate, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
   theme.set, theme.list, select theme, edit keymap, show an image, display an image inline, show-image,
   AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: troubleshoot agterm,
@@ -69,7 +69,8 @@ is not on PATH, the user can install it, or you invoke it by absolute path.
   mutations print `ok`, batch close/move prints the affected session count, and `tree`/`list` print a
   human listing.
 - One request per invocation. Mutating commands return the affected/new id; batch session mutations return
-  the number actually changed. Create commands (`session new`, `workspace new`, `window new`) print the new id.
+  the number actually changed. Create commands (`session new`, `session duplicate`, `workspace new`, `window new`)
+  print the new id.
 
 ## The model
 
@@ -116,7 +117,7 @@ you work. For any session-scoped command meant to act on *this* session — `ove
 `type`, `text`, `background`, `status`, `copy`, … — pass `--target "$AGTERM_SESSION_ID"`. Omit it and
 you open overlays / type into whatever the user has selected, not your own session.
 
-## Command summary (60 commands)
+## Command summary (61 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -162,6 +163,11 @@ focused from the tree workspace node's `focused` flag).
   after/before an anchor session (id/prefix/`active`) instead of appending — the anchor carries its own
   workspace, so it's mutually exclusive with `--workspace`/`--workspace-name`. `new --after active` =
   create right after the current session.
+- `duplicate [--target]` — create a fresh session (a plain login shell) in the target's workspace, right
+  after it, rooted at the target's focused-pane cwd; selects + focuses it and returns the new id. ONLY the
+  directory carries over — no custom name, command, split, scratch, status, flag, font size, or background.
+  Equivalent to `session new --cwd <source cwd> --after <source>` in one round-trip. Read it back from
+  `tree`: the new node sits directly after its source with the same `cwd`.
 - `close [--target T ...]` — close one session, or repeat `--target` to close a batch with one
   grace-period undo.
 - `select` · `rename <name>` · `reveal` (select the focused pane's cwd in Finder).

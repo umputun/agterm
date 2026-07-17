@@ -125,6 +125,17 @@ struct CommandsTests {
             == "session.new takes --after/--before or a workspace, not both")
     }
 
+    @Test func sessionDuplicateTargetsExplicitSession() throws {
+        let expected = ControlRequest(cmd: .sessionDuplicate, target: "9f3c")
+        #expect(try request(["session", "duplicate", "--target", "9f3c"]) == expected)
+    }
+
+    @Test func sessionDuplicateDefaultsToActive() throws {
+        // no options at all: the target defaults to `active`, which names its own workspace and cwd.
+        let expected = ControlRequest(cmd: .sessionDuplicate, target: "active")
+        #expect(try request(["session", "duplicate"]) == expected)
+    }
+
     @Test func sessionClose() throws {
         #expect(try request(["session", "close", "--target", "x"]) == ControlRequest(cmd: .sessionClose, target: "x"))
     }

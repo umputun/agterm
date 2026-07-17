@@ -149,7 +149,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 60-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 61-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -227,10 +227,10 @@ paths:
   rules, then remaining targets resolve inside that same store so one command never mutates multiple windows.
   The top-level `target` also carries the first explicit batch target so a new CLI talking to a still-running
   pre-batch server degrades to a named session instead of accidentally acting on `active`.
-- **Command catalog (60 commands):**
+- **Command catalog (61 commands):**
   - `tree`
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`
-  - `session.new`/`session.close`/`session.select`/`session.rename`/`session.reveal`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.paste`/`session.selectall`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.resize`/`session.overlay.result`
+  - `session.new`/`session.duplicate`/`session.close`/`session.select`/`session.rename`/`session.reveal`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.paste`/`session.selectall`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.resize`/`session.overlay.result`
   - `surface.zoom`
   - `dashboard`
   - `quick`/`quick.type`/`quick.text`
@@ -255,7 +255,7 @@ paths:
   Setting echoes the resulting effective side in `result.text`; the BARE form (no name) reads the side
   the last config feed applied (`SettingsModel.lastAppliedIsDark`), which the test polls to prove the
   flip actually drove the reload.
-  `AppearanceFlipUITests` is its only consumer; the public command count stays 60.
+  `AppearanceFlipUITests` is its only consumer; the public command count stays 61.
 
   `workspace.delete` honors keep-at-least-one and returns an error instead of the GUI confirm alert (nothing
   blocks on a modal).
@@ -451,6 +451,23 @@ paths:
   across the id- and name-addressed paths; the `session new` CLI carries `--command`/`--name`/`--workspace-name`/`--create-workspace`
   (the last two also `validate()`-guarded); and round-trip + e2e (`testSessionNewWithCommandRunsAsProcess`,
   `testSessionNewWithName`, `testSessionNewWorkspaceNameCreatesThenReuses`) cover them.
+  `session.duplicate` (target = session) creates a fresh session in the SAME workspace as the target,
+  inserted directly AFTER it, rooted at the target's focused-pane cwd (`Session.focusedCwd` — the live
+  OSC 7 directory the sidebar row shows and `session.reveal` opens), then selects + focuses it and returns
+  the NEW id (`echoesResultID`, like `session.new`; it focuses only when the duplicate lands in the frontmost
+  window, the same rule `session.new` follows).
+  It is exactly `session.new --cwd <source cwd> --after <source>` in ONE atomic round-trip, so it takes NO
+  options beyond `--target` (default `active`) and the global `--window` — the target session names BOTH the
+  destination workspace and the cwd.
+  ONLY the directory carries over: the duplicate is a plain login shell with the auto basename and does NOT
+  inherit the source's `customName`, `initialCommand`, split, scratch, status, flag, font size, or watermark
+  — it is "New Session seeded with the source's cwd", NOT a clone of state.
+  Errors are the standard resolver ones for an unresolvable / ambiguous target, plus `could not duplicate
+  session` when creation fails.
+  It is the control half of the sidebar row's **Duplicate Session** context-menu item (SINGLE-selection only, like
+  Rename / Reveal in Finder — not batch-capable; see the Sidebar rule).
+  READ-BACK: it adds NO `ControlSessionNode` field — `tree` ITSELF is the read-back, since the new session
+  node appears directly after its source and carries the same `cwd`, which is what a script checks.
   `session.type` injects into the target surface.
   `args.pane` picks the pane like `session.text` (`left`|`right`|`scratch`, no `other`):
   omitted/`left` is the MAIN pane (omitted deliberately keeps the pre-pane behavior — always the main
@@ -799,7 +816,7 @@ paths:
   and the GUI opener is `BuiltinAction.dashboard` (⌘⇧D), Navigate ▸ Dashboard, and the command palette
   `Dashboard` entry — all TOGGLE the frontmost window's MRU grid auto-sized (the `dashboard --mru
   --auto-size` equivalent), reusing the existing socket command with NO new control command, so the catalog
-  stays 60.
+  does not grow for it.
   Once open, the keyboard drives it: arrows move the highlight, Enter jumps into the highlighted session
   AND focuses that exact pane + closes, Esc closes.
   Host-free geometry + navigation + auto-size math live in `DashboardLayout`
@@ -1267,12 +1284,12 @@ paths:
   (image/text/color set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
-  examples.md recipes) and the command count there is bumped to 60 to match.
+  examples.md recipes) and the command count there is bumped to 61 to match.
   **Website mirror (HARD keep-in-sync):** the site's per-command reference `site/commands.html` documents
   EVERY `agtermctl` control command — one inline-styled card per command carrying its invocation, its
   arguments, and the `tree` read-back field, grouped into its command family's section.
   A new `Command` case REQUIRES a new `site/commands.html` entry (a changed command an updated one, a
   removed command a deleted one), in lockstep with the agent skill above and `README.md`/`site/docs.html`;
-  the page's "60 commands" copy must track the catalog count.
+  the page's "61 commands" copy must track the catalog count.
   It drifted once because the site keep-in-sync convention named only `docs.html`/`index.html`, so
   `dashboard` and `surface.zoom` shipped undocumented here.

@@ -158,6 +158,21 @@ final class AppActions {
         focusActiveSession()
     }
 
+    /// Duplicates a session — a fresh shell in the source's directory, placed right after it. Scoped to the
+    /// caller's store (like the other sidebar row actions) so a background window's context menu acts on its
+    /// own row, not the frontmost store's session. `AppStore.duplicateSession` carries the directory-only
+    /// contract; this adds the same select + focus the sidebar's New Session does.
+    @discardableResult
+    func duplicateSession(_ id: UUID, in store: AppStore) -> Session? {
+        guard let session = store.duplicateSession(id) else { return nil }
+        // creating + selecting a session is a user-initiated selection: note activity so it buys the full
+        // idle grace before auto-follow can pull the selection away from the just-made session.
+        store.noteUserActivity()
+        store.selectSession(session.id)
+        focusActiveSession()
+        return session
+    }
+
     /// Reveal the active session's focused-pane cwd in Finder. Finder gets the directory itself selected
     /// (rather than opening arbitrary terminal output), matching "Reveal in Finder" behavior elsewhere on Mac.
     func revealActiveSessionInFinder() {

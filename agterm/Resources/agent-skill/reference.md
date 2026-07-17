@@ -145,6 +145,19 @@ All ten are read-only projections of GUI state.
   therefore mutually exclusive with each other and with `--workspace`/`--workspace-name` (the anchor
   already picks the workspace). `agtermctl session new --after active` is the headline case: create
   right after the current session in one round-trip.
+- `session duplicate [--target] [--window W]` — create a fresh session in the SAME workspace as the
+  target, inserted directly AFTER it, rooted at the target's focused-pane working directory (the live
+  OSC 7 cwd the sidebar row shows and `session reveal` opens); selects + focuses the new session and
+  returns its id. There are NO other options — the target session names both the destination workspace
+  and the cwd — and `--target` defaults to `active`. It is equivalent to
+  `session new --cwd <source cwd> --after <source>` in ONE atomic round-trip.
+  ONLY the directory carries over: the duplicate is a plain login shell with the auto basename, and it
+  does NOT inherit the source's custom name, `--command`, split, scratch, status, flag, font size, or
+  background — it is "new session seeded with the source's cwd", not a clone of state. Errors: the usual
+  resolver errors for an unresolvable / ambiguous target, and `could not duplicate session` when creation
+  fails. READ-BACK: no new tree field — `tree` itself is the read-back, since the new session node appears
+  directly after its source and carries the same `cwd`. It is the control half of the sidebar row's
+  **Duplicate Session** context-menu item (single-selection only).
 - `session close [--target T ...] [--window W]` — close one session, or repeat `--target` to close
   several sessions in the same window/store. Batch close honors the GUI grace-undo setting: one grouped
   undo/reopen record when enabled, immediate close when disabled. Returns `result.affected`.

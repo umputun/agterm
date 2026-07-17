@@ -555,8 +555,10 @@
                   "
                   >›</span
                 >Add workspaces and sessions from a two-icon bar at the bottom of the sidebar. Rename inline (double-click a row).
-                Shift-click and ⌘-click select multiple sessions for batch flag, close, move, and drag. Dragged sessions keep
-                running, shell and scrollback intact.
+                <strong style="color: #e6e1d7">Duplicate Session</strong> from a single session's context menu for a fresh shell in the
+                same workspace, right after it, in its current directory — only the directory carries over. Shift-click and ⌘-click
+                select multiple sessions for batch flag, close, move, and drag. Dragged sessions keep running, shell and scrollback
+                intact.
               </li>
               <li style="font-size: 15.5px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
@@ -1052,7 +1054,7 @@
               "
             >
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0">
-                Looking for the full list? All 60 commands, with every argument, return value, and error, live on the
+                Looking for the full list? All 61 commands, with every argument, return value, and error, live on the
                 <a href="/commands" style="color: #6d82f3; font-weight: 500">Command reference →</a>
               </p>
             </div>
@@ -1120,7 +1122,9 @@
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# reorder: up|down|top|bottom</span><br />agtermctl session move
               <span style="color: #f2b45c">"$ws"</span> <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# relocate to a workspace</span
               ><br />agtermctl session new --after active
-              <span style="color: #6b727a">&nbsp;&nbsp;# create right after the current session (--before to precede)</span><br />agtermctl session move --after
+              <span style="color: #6b727a">&nbsp;&nbsp;# create right after the current session (--before to precede)</span
+              ><br />agtermctl session duplicate --target <span style="color: #f2b45c">9f3c</span>
+              <span style="color: #6b727a">&nbsp;&nbsp;# a fresh shell in that session's workspace and cwd, right after it</span><br />agtermctl session move --after
               <span style="color: #f2b45c">9f3c</span> <span style="color: #6b727a">&nbsp;&nbsp;# place after an anchor (its workspace is used; relocates cross-workspace)</span
               ><br />agtermctl session move <span style="color: #f2b45c">"$ws"</span> --target 9f3c --target abcd
               <span style="color: #6b727a">&nbsp;&nbsp;# move a batch as one ordered block</span

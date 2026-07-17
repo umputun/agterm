@@ -101,6 +101,16 @@ paths:
   Batch row actions: move uses `AppStore.moveSessions`, close uses `AppActions.closeSessions(_:in:)` →
   `AppStore.softCloseSessions`, flag uses `AppActions.toggleFlags(_:in:)` → `setFlag(_:forSessions:)`,
   and clear-status loops `setAgentIndicator` once per selected session (loop-equivalent to `session status idle`).
+  SINGLE-selection-only row actions (shown only when the context menu resolves to exactly ONE session, since
+  they have no sensible batch meaning): Rename, **Duplicate Session** (right after Rename), and Reveal in Finder.
+  **Duplicate Session** creates a fresh session — a plain new login shell — in the SAME workspace, inserted directly
+  AFTER the source, rooted at the source's focused-pane cwd (`Session.focusedCwd`, the same directory the row
+  shows and Reveal in Finder opens), then selects + focuses it.
+  ONLY the directory carries over: the duplicate does NOT inherit the source's custom name, initial command,
+  split, scratch, status, flag, font size, or watermark — it is "New Session seeded with the source's cwd",
+  not a clone of state.
+  Its control half is `session.duplicate` (`agtermctl session duplicate [--target]`), which reads back off
+  `tree` as a new node right after its source with the same `cwd` (see the Control API rule).
 - **Flagged working-set view (`AppStore.sidebarMode` `.tree`/`.flagged`).**
   `SidebarMode` (`agtermCore/SidebarMode.swift`, `String`-backed `Codable`/`Sendable`) drives a per-window
   MODE toggle between the normal two-level tree and a FLAT list of just the flagged sessions.

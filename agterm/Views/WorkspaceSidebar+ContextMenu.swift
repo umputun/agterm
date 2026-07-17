@@ -74,6 +74,15 @@ extension WorkspaceSidebar.Coordinator {
 
         switch node.kind {
         case .session:
+            // "Duplicate Session" opens a fresh shell in this session's directory, right after it —
+            // single-selection only (like Rename/Reveal in Finder), and sitting next to Rename mirrors
+            // Finder's ordering. The title matches the New Session / Close Session naming on the same menu.
+            if sessionCount == 1 {
+                let duplicate = NSMenuItem(title: "Duplicate Session", action: #selector(menuDuplicate(_:)), keyEquivalent: "")
+                duplicate.target = self
+                duplicate.representedObject = node
+                menu.addItem(duplicate)
+            }
             let targets = store.workspaces.filter { workspace in
                 sessionTargets.contains { ownerWorkspaceID(ofSession: $0) != workspace.id }
             }
@@ -179,6 +188,13 @@ extension WorkspaceSidebar.Coordinator {
     @objc private func menuToggleFlag(_ sender: NSMenuItem) {
         guard let request = sender.representedObject as? SessionBatchRequest else { return }
         actions.toggleFlags(request.sessionIDs, in: store)
+    }
+
+    @objc private func menuDuplicate(_ sender: NSMenuItem) {
+        guard let node = sender.representedObject as? SidebarNode else { return }
+        // pass THIS sidebar's window-local store, like Close/Flag: a background window's Duplicate must
+        // act on its own row, not the frontmost window's session.
+        actions.duplicateSession(node.id, in: store)
     }
 
     @objc private func menuRevealInFinder(_ sender: NSMenuItem) {
