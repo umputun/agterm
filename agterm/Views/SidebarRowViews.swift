@@ -14,6 +14,11 @@ final class SidebarCellView: NSTableCellView {
     /// Hidden on `.idle` (workspace rows always idle for now).
     let statusIcon = StatusIconView()
 
+    /// Inline "+" button between the name and the status icon, present only on workspace cells.
+    /// Nil for session cells. Set by the cell builder and used by `handleSingleClick` to guard
+    /// against toggling expansion when the click lands on this button.
+    var addButton: NSButton?
+
     /// Color the row text/icon from the terminal theme: a selected row pairs with the selection
     /// foreground (over the selection-background pill the row draws), or white over the soft wash when
     /// the theme exposes no selection color; an unselected row uses the theme foreground, icons dimmed.
@@ -26,7 +31,9 @@ final class SidebarCellView: NSTableCellView {
             ? (app.terminalSelectionForegroundColor ?? .white)
             : (app.terminalForegroundColor ?? .labelColor)
         textField?.textColor = color
-        imageView?.contentTintColor = color.withAlphaComponent(selected ? 0.85 : 0.6)
+        let iconAlpha: CGFloat = selected ? 0.85 : 0.6
+        imageView?.contentTintColor = color.withAlphaComponent(iconAlpha)
+        addButton?.contentTintColor = color.withAlphaComponent(iconAlpha)
     }
 }
 

@@ -383,6 +383,17 @@ final class SidebarUITests: XCTestCase {
                       "workspace 1 should have 2 sessions after add-session -> New Session")
     }
 
+    /// The inline "+" button on a workspace row adds a session to that workspace —
+    /// the same action as right-click "New Session" on the row.
+    func testInlineAddSessionButtonCreatesSession() throws {
+        XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
+        let addBtn = app.descendants(matching: .any).matching(identifier: "workspace-add-session").firstMatch
+        XCTAssertTrue(addBtn.waitForExistence(timeout: 5), "workspace row should show an inline '+' button")
+        addBtn.click()
+        XCTAssertTrue(pollSessionCount(workspace: "workspace 1", expected: 2, timeout: 5),
+                      "workspace 1 should have 2 sessions after clicking the inline '+' button")
+    }
+
     // Verifies the "Open Directory…" wiring: the menu item presents the native
     // folder picker. (The picker is system UI; choosing a directory and the
     // resulting addSession(cwd:) are covered at the model level by AppStoreTests.)

@@ -105,9 +105,14 @@ extension WorkspaceSidebar.Coordinator {
     /// `beginEditing`), and a trailing notification badge. The name hugs and resists compression
     /// weakly while the icon and badge hug and resist strongly, so the name truncates first and
     /// the icon and badge stay whole.
+    ///
+    /// Workspace cells additionally get an inline "+" button (`cell.addButton`) between the name
+    /// and the status icon — clicking it adds a new session to that workspace via
+    /// `addSessionButtonClicked`, the same path as the right-click "New Session" menu item.
     private func makeCell(identifier: NSUserInterfaceItemIdentifier) -> SidebarCellView {
         let cell = SidebarCellView()
         cell.identifier = identifier
+        let isWorkspace = identifier.rawValue == "workspace-cell"
 
         let icon = NSImageView()
         icon.translatesAutoresizingMaskIntoConstraints = false
@@ -142,16 +147,15 @@ extension WorkspaceSidebar.Coordinator {
         badge.setContentCompressionResistancePriority(.required, for: .horizontal)
         cell.addSubview(badge)
 
-        NSLayoutConstraint.activate([
+        var constraints: [NSLayoutConstraint] = [
             icon.leadingAnchor.constraint(equalTo: cell.leadingAnchor, constant: 2),
             icon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
             icon.widthAnchor.constraint(equalToConstant: 16),
             icon.heightAnchor.constraint(equalToConstant: 16),
             field.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 6),
             field.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-            // chain: name (flex) | status icon | badge (trailing). the status icon and badge hug
-            // their content, so the name truncates first and both stay whole.
-            field.trailingAnchor.constraint(equalTo: statusIcon.leadingAnchor, constant: -6),
+            // chain: name (flex) | [+ button for workspace] | status icon | badge (trailing).
+            // the status icon and badge hug their content, so the name truncates first and both stay whole.
             statusIcon.trailingAnchor.constraint(equalTo: badge.leadingAnchor),
             statusIcon.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
             // width is owned by StatusIconView (0 when idle, glyph-width otherwise) so an idle row
@@ -159,8 +163,44 @@ extension WorkspaceSidebar.Coordinator {
             statusIcon.heightAnchor.constraint(equalToConstant: 16),
             badge.trailingAnchor.constraint(equalTo: cell.trailingAnchor, constant: -2),
             badge.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
-        ])
+        ]
+
+        if isWorkspace {
+            let addBtn = makeAddSessionButton()
+            cell.addSubview(addBtn)
+            cell.addButton = addBtn
+            constraints += [
+                field.trailingAnchor.constraint(equalTo: addBtn.leadingAnchor, constant: -4),
+                addBtn.trailingAnchor.constraint(equalTo: statusIcon.leadingAnchor, constant: -4),
+                addBtn.centerYAnchor.constraint(equalTo: cell.centerYAnchor),
+                addBtn.widthAnchor.constraint(equalToConstant: 16),
+                addBtn.heightAnchor.constraint(equalToConstant: 16),
+            ]
+        } else {
+            constraints.append(field.trailingAnchor.constraint(equalTo: statusIcon.leadingAnchor, constant: -6))
+        }
+
+        NSLayoutConstraint.activate(constraints)
         return cell
+    }
+
+    private func makeAddSessionButton() -> NSButton {
+        let btn = NSButton()
+        btn.translatesAutoresizingMaskIntoConstraints = false
+        btn.isBordered = false
+        let config = NSImage.SymbolConfiguration(pointSize: 11, weight: .regular)
+        btn.image = NSImage(systemSymbolName: "plus", accessibilityDescription: "New Session")?
+            .withSymbolConfiguration(config)
+        btn.image?.isTemplate = true
+        btn.imageScaling = .scaleProportionallyUpOrDown
+        btn.contentTintColor = .secondaryLabelColor
+        btn.setContentHuggingPriority(.required, for: .horizontal)
+        btn.setContentCompressionResistancePriority(.required, for: .horizontal)
+        btn.setAccessibilityIdentifier("workspace-add-session")
+        btn.setAccessibilityLabel("New Session")
+        btn.target = self
+        btn.action = #selector(addSessionButtonClicked(_:))
+        return btn
     }
 
     /// The row's label: the session `displayName` in tree mode, or `session : workspace` (the session
