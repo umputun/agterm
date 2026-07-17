@@ -91,6 +91,46 @@ final class FlaggedViewUITests: XCTestCase {
         XCTAssertTrue(hint.waitForExistence(timeout: 8), "the empty-state hint should appear after Clear Flagged")
     }
 
+    /// Issue #242: in the flagged view a row is labeled `session : workspace`. Entering inline rename must
+    /// seed the editor with the BARE session name, not that decorated label — otherwise editing without
+    /// deleting the ` : <workspace>` tail bakes the suffix into the stored custom name, and the flagged
+    /// view re-appends it (visibly duplicating, e.g. `alpha-x : workspace 1 : workspace 1`).
+    func testRenameInFlaggedViewSeedsBareName() throws {
+        XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
+        let defaultName = (sessionRow().value as? String) ?? ""
+        XCTAssertFalse(defaultName.isEmpty, "seeded session should expose a default name")
+        rename(rowNamed: defaultName, to: "alpha")
+        flagRow(named: "alpha")
+        XCTAssertTrue(pollFlagged("alpha", timeout: 8), "alpha should persist flagged == true")
+
+        // flip to the flat flagged view: the row now shows the decorated `alpha : workspace 1` label.
+        let toggle = app.buttons["flagged-view-toggle"]
+        XCTAssertTrue(toggle.waitForHittable(timeout: 8), "flagged-view toggle should be hittable")
+        toggle.click()
+        let decorated = sessionRow(named: "alpha : workspace 1")
+        XCTAssertTrue(decorated.waitForHittable(timeout: 8), "the flagged row should show the decorated label")
+
+        // enter inline rename via double-click.
+        let field = app.descendants(matching: .any).matching(identifier: "edit-field").firstMatch
+        var editing = false
+        for _ in 0..<5 {
+            decorated.doubleClick()
+            if field.waitForExistence(timeout: 2) { editing = true; break }
+        }
+        XCTAssertTrue(editing, "rename did not enter edit mode in the flagged view (field never appeared)")
+
+        // the reporter's flow: edit WITHOUT clearing the seed. collapse the selection to the end of the
+        // pre-filled text (right arrow), append, and commit. the stored custom name must be the bare
+        // `alpha-x` — if the editor was seeded with the decorated label, it would bake in ` : workspace 1`.
+        app.typeKey(.rightArrow, modifierFlags: [])
+        app.typeText("-x\r")
+        XCTAssertTrue(stateDir.pollSnapshot(equals: "alpha-x", timeout: 8) { obj in
+            guard let workspaces = obj["workspaces"] as? [[String: Any]],
+                  let sessions = workspaces.first?["sessions"] as? [[String: Any]] else { return nil }
+            return sessions.first(where: { ($0["flagged"] as? Bool) == true })?["customName"] as? String
+        }, "committing an appended edit must store the bare `alpha-x`, never bake in ` : workspace 1`")
+    }
+
     // MARK: - Fixture
 
     /// Renames the seeded session to "alpha" and adds two more renamed rows ("beta", "gamma"), leaving the
