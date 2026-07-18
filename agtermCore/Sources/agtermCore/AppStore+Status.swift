@@ -1,5 +1,4 @@
 import Foundation
-import Observation
 
 // MARK: - Agent status & attention
 
@@ -10,8 +9,10 @@ import Observation
 extension AppStore {
     /// Sets a session's agent status indicator (the sidebar status glyph). The single mutation point
     /// for the control channel's `session.status`. Stamps `statusChangedAt` with the current time on any
-    /// non-idle status (the attention list's newest-first sort key) and clears it on idle. No-op for an
-    /// unknown id. Not persisted (the indicator is ephemeral), so it never triggers a `save()`.
+    /// non-idle status (the attention list's newest-first sort key) and clears it on idle. Clears the
+    /// session's `autoFollowConsumed` on a transition INTO blocked, re-arming idle auto-follow for the
+    /// fresh episode. No-op for an unknown id. Not persisted (the indicator is ephemeral), so it never
+    /// triggers a `save()`.
     public func setAgentIndicator(_ indicator: AgentIndicator, forSession id: UUID) {
         guard let session = session(withID: id) else { return }
         let wasBlocked = session.agentIndicator.status == .blocked

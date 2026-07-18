@@ -139,9 +139,11 @@ extension AppStore {
     /// filtered to `.blocked`), consults `autoFollowTarget`, and selects the target when there is one. A
     /// no-op (no target) does nothing and does NOT reschedule — being parked on the blocked session is
     /// itself the suppressor until a keystroke clears it and re-arms the timer. Selection here deliberately
-    /// does NOT note activity (that would reset the idle timer on the app's own jump). `internal` so tests
-    /// can drive it directly. Posts `.agtermAutoFollowed` after the select so the app target can move first
-    /// responder into the target (selection alone doesn't, per the eager deck) when its window is key.
+    /// does NOT note activity (that would reset the idle timer on the app's own jump). Marks the target
+    /// `autoFollowConsumed` so a later idle fire won't pull back to it until it re-enters blocked.
+    /// `internal` so tests can drive it directly. Posts `.agtermAutoFollowed` after the select so the app
+    /// target can move first responder into the target (selection alone doesn't, per the eager deck) when
+    /// its window is key.
     func autoFollowFire() {
         // a non-terminal editor/overlay (sidebar inline rename, command palette) owns first responder:
         // no-op so the jump can't interrupt a rename or reshuffle a palette's target. no reschedule — the
