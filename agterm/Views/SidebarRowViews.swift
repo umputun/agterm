@@ -276,20 +276,34 @@ final class SidebarRowView: NSTableRowView {
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
-        setHovered(true)
+        updateHover(with: event)
     }
 
     override func mouseMoved(with event: NSEvent) {
         super.mouseMoved(with: event)
-        setHovered(true)
+        updateHover(with: event)
     }
 
     override func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
         setHovered(false)
+        (closeButton as? SessionCloseButton)?.setWash(false)
     }
 
     private var isHovered = false
+
+    /// The ONE hover driver: the row's tracking area feeds the row wash, the "×" reveal, AND the
+    /// "×" circle (cursor inside the button's frame, selected row only) from the same event stream.
+    /// The button deliberately has NO tracking area of its own — nested areas whose visibility churns
+    /// under the cursor produce enter/exit storms that flicker the hover state.
+    private func updateHover(with event: NSEvent) {
+        guard isSessionRow else { return }
+        setHovered(true)
+        guard let closeButton else { return }
+        let point = convert(event.locationInWindow, from: nil)
+        let overButton = !closeButton.isHidden && closeButton.frame.contains(point)
+        (closeButton as? SessionCloseButton)?.setWash(overButton && isSelected)
+    }
 
     private func setHovered(_ hovered: Bool) {
         guard isSessionRow else { return }
@@ -362,39 +376,19 @@ final class SidebarRowView: NSTableRowView {
 }
 
 /// The session row's "×": a circular wash behind the glyph while the cursor is over the button,
-/// shown only on the selected row.
+/// shown only on the selected row. Wash state is DRIVEN by the hosting `SidebarRowView`'s single
+/// tracking area (see `updateHover`); the button owns no tracking of its own.
 final class SessionCloseButton: NSButton {
-    private var highlightTrackingArea: NSTrackingArea?
-
     private var washVisible = false {
         didSet { if washVisible != oldValue { needsDisplay = true } }
     }
 
     override var isHidden: Bool {
-        didSet { if isHidden { washVisible = false } } // a hidden button gets no mouseExited
+        didSet { if isHidden { washVisible = false } }
     }
 
-    override func updateTrackingAreas() {
-        super.updateTrackingAreas()
-        if let highlightTrackingArea { removeTrackingArea(highlightTrackingArea); self.highlightTrackingArea = nil }
-        let area = NSTrackingArea(
-            rect: bounds,
-            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
-            owner: self
-        )
-        addTrackingArea(area)
-        highlightTrackingArea = area
-    }
-
-    override func mouseEntered(with event: NSEvent) {
-        super.mouseEntered(with: event)
-        guard (superview as? NSTableRowView)?.isSelected == true else { return }
-        washVisible = true
-    }
-
-    override func mouseExited(with event: NSEvent) {
-        super.mouseExited(with: event)
-        washVisible = false
+    func setWash(_ visible: Bool) {
+        washVisible = visible
     }
 
     // path-drawn (not layer cornerRadius): the button's frame can be wider than its constrained

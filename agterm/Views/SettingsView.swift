@@ -120,6 +120,8 @@ private struct GeneralSettingsView: View {
                     .accessibilityIdentifier("settings-confirm-close-session")
                 Toggle("Allow undo after closing sessions and workspaces", isOn: closeGraceUndoEnabled)
                     .accessibilityIdentifier("settings-close-grace-undo")
+                Toggle("Close button on session hover", isOn: sessionCloseButtonEnabled)
+                    .accessibilityIdentifier("settings-session-close-button")
             }
 
             Section("Ghostty Config") {
@@ -144,6 +146,11 @@ private struct GeneralSettingsView: View {
     private var confirmCloseSession: Binding<Bool> {
         Binding(get: { model.settings.confirmCloseSession ?? false },
                 set: { model.setConfirmCloseSession($0 ? true : nil) })
+    }
+
+    private var sessionCloseButtonEnabled: Binding<Bool> {
+        Binding(get: { model.settings.sessionCloseButtonEnabled ?? false },
+                set: { model.setSessionCloseButtonEnabled($0 ? true : nil) })
     }
 
     /// nil (the default) reads as ON; turning it off stores false and makes GUI closes immediate.
@@ -412,10 +419,6 @@ private struct InterfaceSettingsView: View {
                     Toggle(element.displayName, isOn: binding(for: element))
                         .accessibilityIdentifier("settings-interface-\(element.rawValue)")
                 }
-                // opt-in (default OFF), unlike the show/hide element toggles above — so it is a
-                // dedicated AppSettings flag, not an InterfaceElement.
-                Toggle("Close button on hover", isOn: sessionCloseButtonEnabled)
-                    .accessibilityIdentifier("settings-session-close-button")
             }
         }
         .formStyle(.grouped)
@@ -427,11 +430,6 @@ private struct InterfaceSettingsView: View {
     private func binding(for element: InterfaceElement) -> Binding<Bool> {
         Binding(get: { !model.settings.isInterfaceElementHidden(element) },
                 set: { model.setInterfaceElementVisible(element, visible: $0) })
-    }
-
-    private var sessionCloseButtonEnabled: Binding<Bool> {
-        Binding(get: { model.settings.sessionCloseButtonEnabled ?? false },
-                set: { model.setSessionCloseButtonEnabled($0 ? true : nil) })
     }
 }
 
