@@ -1139,6 +1139,14 @@
               no output streaming and no event subscription.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              To open a terminal at a directory without the CLI,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">open -a agterm &lt;path&gt;</span> — or
+              right-click a folder in Finder and choose <strong style="color: #e6e1d7">Open With ▸ agterm</strong>. agterm adds a
+              session in that directory to the last-active window. This works when agterm is already running (its usual state); if it
+              isn't, launch agterm first, then run the command. The socket equivalent, and the way to place the session precisely, is
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session new --cwd &lt;path&gt;</span>.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               Each command targets a session or workspace by its UUID, a unique prefix of that UUID (git-style), or the keyword
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> (the selected session /
               current workspace). <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--target</span>

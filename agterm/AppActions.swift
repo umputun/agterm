@@ -158,6 +158,27 @@ final class AppActions {
         focusActiveSession()
     }
 
+    /// Opens a new session at `directory` in the last-active window — the target of `open -a agterm /path`
+    /// (the OS "open terminal here" integration). Mirrors `newSession()`
+    /// (note-activity + select + focus) but seeds the cwd from the passed directory instead of the
+    /// new-session-directory setting. Resolves `library.activeStore` (the frontmost/last-active window,
+    /// the same target the control channel's `session.new` defaults to), so it is NOT gated on
+    /// `uiActionsEnabled` — an external OS command, like a socket command, must land regardless of a
+    /// modal zoom/dashboard. Returns whether a session was created, so the delegate's cold-start drain
+    /// can retry until restore has settled the frontmost store.
+    @discardableResult
+    func openSession(atDirectory directory: String) -> Bool {
+        guard let store, let workspaceID = store.currentWorkspaceID,
+              let session = store.addSession(toWorkspace: workspaceID, cwd: directory)
+        else { return false }
+        // creating + selecting a session is a user-initiated selection: note activity so it buys the full
+        // idle grace before auto-follow can pull the selection away from the just-made session.
+        store.noteUserActivity()
+        store.selectSession(session.id)
+        focusActiveSession()
+        return true
+    }
+
     /// Duplicates a session — a fresh shell in the source's directory, placed right after it. Scoped to the
     /// caller's store (like the other sidebar row actions) so a background window's context menu acts on its
     /// own row, not the frontmost store's session. `AppStore.duplicateSession` carries the directory-only

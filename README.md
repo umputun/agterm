@@ -190,6 +190,8 @@ The theme picker (View ▸ Select Theme…, or the action palette) previews each
 
 `agterm` can be driven from a script over a local unix-domain socket through a companion CLI, `agtermctl`. This is for personal scripting — fire-and-forget commands that manage workspaces and sessions, inject text, and invoke control actions. There is no terminal-output streaming and no event subscription.
 
+To open a terminal at a directory without the CLI, `open -a agterm <path>` — or right-click a folder in Finder and choose **Open With ▸ agterm**. agterm adds a session in that directory to the last-active window. This works when agterm is already running (its usual state); if it isn't, launch agterm first, then run the command. The socket equivalent, and the way to place the session precisely, is `agtermctl session new --cwd <path>`.
+
 The sections below cover the common cases. All 61 commands, with every argument, return value, and error, are documented in the **[Command reference](https://agterm.com/commands)**.
 
 The app bundles `agtermctl` inside `agterm.app`. The easiest way to put it on your PATH is **Help ▸ Install Command Line Tool…**, which symlinks the bundled binary into `/usr/local/bin` (the first entry in macOS's default PATH). When that directory is user-writable it installs silently; otherwise it asks once for an administrator password.

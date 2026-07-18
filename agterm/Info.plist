@@ -36,5 +36,18 @@
 	<string>© 2026 Umputun</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Command-line tools you run inside agterm (for example, voice dictation in Claude Code) request microphone access through agterm.</string>
+	<key>CFBundleDocumentTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeName</key>
+			<string>Folder</string>
+			<key>CFBundleTypeRole</key>
+			<string>Viewer</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.folder</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

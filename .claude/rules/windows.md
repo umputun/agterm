@@ -256,4 +256,41 @@ never two bundles in one window.
   is matched across ALL open stores (`resolveTargetAcrossWindows`) and mapped back to its owning `AppStore`.
   See the Control API section for the catalog and the keep-in-sync four-point audit (all eight window
   commands satisfy it).
+- **`open -a agterm /path` (the OS "open terminal here" integration — Discussion #230) is WARM-ONLY on purpose.**
+  `AppDelegate.application(_:open:)` resolves each URL to a directory (host-free `OpenPathResolver`:
+  a folder → itself, a file → its parent, nil for a non-file / missing path), queues it in
+  `pendingOpenDirectories`, and `drainPendingOpenDirectories` grafts a session into the last-active window
+  via `AppActions.openSession(atDirectory:)` (which mirrors `newSession()` — note-activity + select +
+  focus — but seeds the cwd from the path and targets `library.activeStore`, the SAME window the control
+  channel's `session.new` defaults to).
+  The drain gates on `library.activeStore?.currentWorkspaceID != nil` and retries on a bounded 0.1 s
+  backoff (dropping the queue after 50 ticks so a stray folder can't wedge a timer); the scene `.task`
+  hands the delegate `actions` and calls the drain once, and `application(_:open:)` calls it inline for
+  the running instance.
+  `CFBundleDocumentTypes`/`LSItemContentTypes = public.folder` (role Viewer) in `Info.plist` is what puts
+  agterm in Finder's right-click **Open With ▸ agterm** for folders; it is NOT required for `open -a`
+  routing (odoc delivers the folder either way) — only for the Finder listing.
+  **The COLD case (agterm NOT running) is deliberately unsupported and flashes-then-quits, and this is a
+  hard SwiftUI-`WindowGroup` limitation, not a missing feature — do NOT re-attempt an in-process fix.**
+  On a cold `open -a agterm /path` (an `odoc` AppleEvent) SwiftUI auto-opens the `WindowGroup` window,
+  lets it FULLY initialize (it adopts a launch id, runs the scene `.task`, starts the control server,
+  runs `consumeReopen()` so `hasReopened` is already true), then RETRACTS the un-presented window
+  (SwiftUI's "don't keep an untitled window on a document launch" behavior) BEFORE delivering the open
+  event — and macOS then reaps the windowless odoc process (verified: `applicationShouldTerminateAfterLastWindowClosed`
+  returning `false` does NOT stop it, and no `applicationWillTerminate` fires).
+  This was proven NOT to be the deployed daily-driver twin (a fully-independent bundle id fails
+  identically) and is NOT fixable by the reference tricks: a forced `NSWorkspace.open` reopen never gets a
+  window-less moment and the claim queue strays the re-presented window (`adoptedLaunchID` is stuck +
+  `hasReopened` true); `applicationShouldOpenUntitledFile`/`applicationShouldHandleReopen` are never even
+  consulted on odoc; and `WindowGroup.defaultLaunchBehavior(.presented)` (the intended API) is macOS 15+
+  while the floor is macOS 14 and `SceneBuilder` rejects `if #available`.
+  The reference terminals confirm the shape: AppKit ones (Ghostty, iTerm, kitty, conterm) create
+  `NSWindow`s manually and never hit the retract; the SwiftUI-`WindowGroup` one that ships folder-open
+  (Muxy) routes it through its OWN CLI (socket when warm, argv/`oapp` when cold), never odoc.
+  The ONLY clean cold path is a relaunch (odoc → `oapp`), deliberately NOT taken (a double-launch flicker
+  for the rare not-running case; agterm is a daily driver, so warm covers ~all real use).
+  KEEP-IN-SYNC EXEMPT: `openSession(atDirectory:)` is the OS-`open` entry point onto a capability the
+  socket ALREADY exposes (`session.new --cwd <path>`, frontmost-defaulted), so it needs no new `Command`
+  case / `agtermctl` subcommand / `commands.html` entry — call it out as the exemption it is, like
+  `reveal`.
 
