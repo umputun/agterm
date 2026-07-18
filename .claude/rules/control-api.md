@@ -459,6 +459,11 @@ paths:
   passes `select: !noSelect` to `AppStore.addSession` (which gates `selectedSessionID`/`autoUnfocusIfOutsideFocus`/`recordRecency`
   on `select`) AND suppresses the `focusActiveSession()` call, so the current selection and focus are left
   untouched.
+  It ALSO threads through the workspace-focus filter: the `--create-workspace` path calls
+  `store.ensureWorkspace(named:, clearFocus: !options.noSelect)`, and `AppStore.addWorkspace`/`ensureWorkspace`
+  gained a `clearFocus: Bool = true` parameter gating the `focusedWorkspaceID = nil` auto-reveal — so a
+  `--no-select --create-workspace` create does NOT drop a focused workspace (all GUI/other `addWorkspace`
+  callers keep the default `clearFocus: true`, unchanged).
   It is the inverse of the overlay's `--follow` (overlay opens in the background by default and opts INTO
   selecting; `session.new` selects by default and opts OUT), and like `--follow` it rides the existing
   command as a new optional ARG — NO new `Command` case.

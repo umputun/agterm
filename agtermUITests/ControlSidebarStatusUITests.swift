@@ -168,6 +168,29 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertTrue((bad["error"] as? String ?? "").contains("invalid focus mode"), "should report invalid mode: \(bad)")
     }
 
+    // --no-select --create-workspace preserves the workspace-focus filter. A plain --create-workspace clears
+    // focusedWorkspaceID (addWorkspace's auto-reveal); --no-select threads clearFocus:false so a background
+    // create leaves the focused workspace (and the current session selection) untouched.
+    func testSessionNewNoSelectCreateWorkspacePreservesFocus() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
+
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let workspaces = try XCTUnwrap(((tree["result"] as? [String: Any])?["tree"] as? [String: Any])?["workspaces"] as? [[String: Any]],
+                                       "tree should carry workspaces")
+        let firstWsID = try XCTUnwrap(workspaces.first?["id"] as? String, "seeded workspace id")
+
+        // focus the seeded workspace.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"workspace.focus","target":"\#(firstWsID)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "workspace.focus on should succeed")
+        XCTAssertTrue(workspaceFocused(firstWsID, timeout: 5), "the seeded workspace should be focused")
+
+        // background-create a session in a brand-new workspace: the focus filter must survive.
+        let created = try sendCommand(#"{"cmd":"session.new","args":{"workspaceName":"bg","createWorkspace":true,"noSelect":true}}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true, "background create-workspace should succeed: \(created)")
+        XCTAssertTrue(workspaceFocused(firstWsID, timeout: 5),
+                      "--no-select --create-workspace must preserve the focused workspace (not clear it via auto-reveal)")
+    }
+
     // sidebar.collapse collapses every workspace except the active session's — the others' session rows
     // leave the AX tree while the active workspace's stay; sidebar.expand re-expands every workspace and
     // restores them.
@@ -632,6 +655,20 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
             }
         }
         return nil
+    }
+
+    // whether the workspace with `id` reports focused:true in the current tree (omitted/nil = not focused).
+    private func workspaceFocused(_ id: String, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            if let result = (try? sendCommand(#"{"cmd":"tree"}"#))?["result"] as? [String: Any],
+               let root = result["tree"] as? [String: Any],
+               let workspaces = root["workspaces"] as? [[String: Any]],
+               let ws = workspaces.first(where: { ($0["id"] as? String)?.lowercased() == id.lowercased() }),
+               ws["focused"] as? Bool == true { return true }
+            usleep(200_000)
+        } while Date() < deadline
+        return false
     }
 
     // notify posts a banner for the active session; a missing body errors.

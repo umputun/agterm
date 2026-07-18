@@ -148,7 +148,9 @@ All ten are read-only projections of GUI state.
   right after the current session in one round-trip. `--no-select` creates the session in the BACKGROUND:
   it is added to the sidebar but NOT selected or focused, so the current selection and focus are left
   untouched (the new node is not `active` in `tree` — that flag is the read-back); omit it for the default
-  select-and-focus behavior. Every other addressing/placement option composes with it.
+  select-and-focus behavior. Every other addressing/placement option composes with it, and a background
+  `--create-workspace` create does not clear a focused-workspace filter either (it leaves the sidebar view
+  put instead of revealing the new workspace).
 - `session duplicate [--target] [--window W]` — create a fresh session in the SAME workspace as the
   target, inserted directly AFTER it, rooted at the target's focused-pane working directory (the live
   OSC 7 cwd the sidebar row shows and `session reveal` opens); selects + focuses the new session and

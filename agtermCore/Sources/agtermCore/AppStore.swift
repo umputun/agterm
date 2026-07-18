@@ -238,15 +238,15 @@ public final class AppStore {
                            dashboardFontMode: dashboardFontMode())
     }
 
-    /// Creates a workspace and appends it. Clears any active focus so the new (empty)
-    /// workspace is immediately visible — without this `visibleWorkspaces` would still
-    /// return only the focused one and the new workspace would be silently hidden until
-    /// the user manually unfocuses (the same auto-reveal contract as `addSession`).
+    /// Creates a workspace and appends it. When `clearFocus` (the default) it clears any active focus so
+    /// the new (empty) workspace is immediately visible — else `visibleWorkspaces` returns only the
+    /// focused one and the new workspace is silently hidden (the auto-reveal contract, like `addSession`).
+    /// Pass `clearFocus: false` to keep the current focus — a background `session.new --no-select` create.
     @discardableResult
-    public func addWorkspace(name: String) -> Workspace {
+    public func addWorkspace(name: String, clearFocus: Bool = true) -> Workspace {
         let workspace = Workspace(name: name)
         workspaces.append(workspace)
-        focusedWorkspaceID = nil
+        if clearFocus { focusedWorkspaceID = nil }
         save()
         return workspace
     }
@@ -259,12 +259,12 @@ public final class AppStore {
         return workspaces.first { $0.name == needle }
     }
 
-    /// The workspace named `name`, created if none exists (idempotent reuse-or-create). Returns nil only
-    /// when `name` is blank. Backs `session.new --workspace-name … --create-workspace`.
+    /// The workspace named `name`, created if none exists (idempotent); `clearFocus` (default true) is
+    /// forwarded to `addWorkspace` on the create path. Nil only when blank. Backs `--workspace-name --create-workspace`.
     @discardableResult
-    public func ensureWorkspace(named name: String) -> Workspace? {
+    public func ensureWorkspace(named name: String, clearFocus: Bool = true) -> Workspace? {
         guard let needle = name.trimmedOrNil else { return nil }
-        return workspace(named: needle) ?? addWorkspace(name: needle)
+        return workspace(named: needle) ?? addWorkspace(name: needle, clearFocus: clearFocus)
     }
 
     /// Creates a session in the given workspace and, when `select` is true (the default), selects it;
