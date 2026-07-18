@@ -46,7 +46,8 @@ also no-ops with no session selected or an overlay already open.
 Causes, in order: a parse error (see the diagnostics); the chord conflicts with a built-in or another
 custom command and was dropped to palette-only (it still runs from `⌃⇧P`, tagged `custom`); a reserved
 chord (`ctrl+tab`, `ctrl+1`/`ctrl+2`); a modifier-less key (rejected — a custom chord needs a
-modifier); it only fires while a terminal pane has keyboard focus; it runs in a non-interactive
+modifier); it does not fire while a text field (inline rename, a palette, Settings) has keyboard focus,
+though it DOES fire from a terminal pane or an empty window (every session closed); it runs in a non-interactive
 `/bin/sh -c` (no aliases/functions, a smaller `PATH` — use absolute paths or `$SHELL -lc '…'`); a
 non-zero exit posts a failure banner (meaning it DID fire and failed). Reload after edits:
 `agtermctl keymap reload`.

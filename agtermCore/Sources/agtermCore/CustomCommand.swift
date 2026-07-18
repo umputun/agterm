@@ -93,6 +93,20 @@ public struct CommandContext: Equatable, Sendable {
         CommandContext().tokens.map(\.name)
     }
 
+    /// The token base names whose value comes from an active session/workspace/selection. In a
+    /// session-free context each expands EMPTY, which is dangerous — an empty `{AGT_SESSION_PWD}` turns
+    /// `rm -rf …/*` into a root glob. `AGT_SOCKET`/`AGT_WINDOW`/`AGT_PANE` are excluded: they resolve
+    /// with no session, which is what keeps a launcher command firable in an emptied window.
+    public static let sessionScopedTokenBases = ["AGT_SESSION", "AGT_WORKSPACE", "AGT_SELECTION"]
+
+    /// Whether `commandBody` references any session-scoped token (in `{AGT_X}`, `$AGT_X`, or `${AGT_X}`
+    /// form — a plain substring match, since these base names are specific enough not to occur by
+    /// accident). The empty-window keybind uses this to keep such a command inert with no active session
+    /// (matching the palette's no-op) instead of firing it with silently-empty tokens.
+    public static func referencesSessionScopedContext(_ commandBody: String) -> Bool {
+        sessionScopedTokenBases.contains { commandBody.contains($0) }
+    }
+
     /// Substitutes each `{AGT_X}` occurrence in `template` with its resolved value from this context.
     /// A token whose value is empty becomes an empty string; an unknown `{...}` is left untouched.
     ///

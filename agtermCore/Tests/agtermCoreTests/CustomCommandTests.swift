@@ -86,6 +86,18 @@ struct CustomCommandTests {
         #expect(ctx.expand("{AGT_PANE}") == "scratch")
     }
 
+    @Test func referencesSessionScopedContextDetectsSessionTokensButNotLaunchers() {
+        // session/workspace/selection tokens (in {AGT_X}, $AGT_X, or ${AGT_X} form) -> true.
+        #expect(CommandContext.referencesSessionScopedContext("echo {AGT_SESSION_PWD}"))
+        #expect(CommandContext.referencesSessionScopedContext(#"rm -rf "$AGT_SESSION_PWD"/*"#))
+        #expect(CommandContext.referencesSessionScopedContext("echo ${AGT_WORKSPACE_NAME}"))
+        #expect(CommandContext.referencesSessionScopedContext("printf %s {AGT_SELECTION}"))
+        // launcher tokens (socket/window/pane) and no tokens -> false, so a launcher stays firable.
+        #expect(!CommandContext.referencesSessionScopedContext(#"agtermctl session new --command "ssh work""#))
+        #expect(!CommandContext.referencesSessionScopedContext("agtermctl --socket {AGT_SOCKET} session new"))
+        #expect(!CommandContext.referencesSessionScopedContext("open -a Safari {AGT_WINDOW_ID} {AGT_PANE}"))
+    }
+
     @Test func environmentKeySetMatchesTheTokensExpandSubstitutes() {
         // the symmetric guarantee: every env key is a token expand replaces, and vice versa.
         let ctx = sampleContext()

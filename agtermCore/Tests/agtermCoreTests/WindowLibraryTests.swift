@@ -47,6 +47,15 @@ final class WindowLibraryTests {
         #expect(library.openIDs() == [library.windows[0].id])
     }
 
+    @Test func windowNameForIDReturnsNameOrEmpty() {
+        let library = WindowLibrary(directory: directory)
+        #expect(library.windowName(for: library.windows[0].id) == "window 1")
+        let work = library.newWindow(name: "work")
+        #expect(library.windowName(for: work.id) == "work")
+        #expect(library.windowName(for: nil) == "")       // nil id -> empty (the command-context default)
+        #expect(library.windowName(for: UUID()) == "")    // unknown id -> empty
+    }
+
     @Test func allOpenSessionsFlattensEverySessionAcrossWindows() {
         let library = WindowLibrary(directory: directory)
         #expect(library.allOpenSessions().count == 1) // the seeded window's one session

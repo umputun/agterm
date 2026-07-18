@@ -127,6 +127,53 @@ final class KeymapUITests: XCTestCase {
                       "the custom single chord ⌘⇧E should run its command and touch the marker file")
     }
 
+    // a custom command still fires when the window has NO sessions — the SSH-disconnect / "all my
+    // terminals closed" state, where every session's shell exited and no terminal surface holds first
+    // responder. bind ⌘⇧E to `touch <file>`, exit the only session so the window's tree is empty, then
+    // press the chord and assert it fires. regression guard for the empty-window first-responder gate in
+    // `CustomCommandRunner.handleKeyDown` (the runner used to fire ONLY with a focused terminal surface).
+    func testCustomCommandFiresWhenWindowHasNoSessions() throws {
+        // bind a command that expands {AGT_WINDOW_ID} into the touched filename: a file named
+        // `win-<uuid>` proves BOTH that the chord fired from the empty window AND that sessionlessContext()
+        // populated the window id — a degenerate empty context would create a bare `win-`.
+        seedKeymap("command \"Touch E\" cmd+shift+e touch '\(markerDir.path)/win-{AGT_WINDOW_ID}'\n")
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session should exist")
+
+        emptyTheOnlyWindow()
+
+        let created = chordCreatesFile(prefix: "win-") { app.typeKey("e", modifierFlags: [.command, .shift]) }
+        XCTAssertNotNil(created, "a custom command should fire from an empty window with no focused terminal surface")
+        XCTAssertGreaterThan((created ?? "").count, "win-".count,
+                             "sessionlessContext() should populate {AGT_WINDOW_ID}; got bare \"\(created ?? "nil")\"")
+    }
+
+    // a bound chord must NOT fire while a text field has focus — the runner's `responder is NSText` guard
+    // (Settings editor, inline rename, palette search). Without it, the terminal-window firing path would
+    // eat a keystroke meant for the field. Seed ⌘⇧E, open the action palette (its search field is a text
+    // field hosted IN the agterm window, so this also proves the NSText check wins over the
+    // WindowRegistry.contains terminal-window path), press the chord, assert the marker never appears.
+    func testCustomCommandDoesNotFireWhileTextFieldFocused() throws {
+        let marker = markerDir.appendingPathComponent("textfield-guard")
+        seedKeymap("command \"Touch F\" cmd+shift+e touch '\(marker.path)'\n")
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session should exist")
+
+        openPalette("Command Palette")
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "palette search field should appear")
+        field.click()
+        for _ in 0..<3 { app.typeKey("e", modifierFlags: [.command, .shift]) }
+        XCTAssertFalse(poll({ FileManager.default.fileExists(atPath: marker.path) }, timeout: 3),
+                       "a bound chord must not fire while a text field has focus")
+
+        // positive control (same launch): close the palette so the field yields focus, then the SAME
+        // chord must fire — proving the binding was live and the negative assertion above wasn't vacuous.
+        app.typeKey(.escape, modifierFlags: [])
+        XCTAssertTrue(chordFiresMarker(marker) { app.typeKey("e", modifierFlags: [.command, .shift]) },
+                      "after the palette closes, the same chord should fire (binding was live)")
+    }
+
     // a custom command bound to a SHIFTED-SYMBOL key fires: bind `shift+/` (the `?` key) to `touch
     // <file>`, focus the terminal, press Shift+/ (which types `?`), assert the file appears. Regression
     // guard for the base-key derivation in `CustomCommandRunner.chord(from:)`: the runner must normalize
@@ -267,8 +314,9 @@ final class KeymapUITests: XCTestCase {
 
     /// Click the (single) seeded session row to put the terminal surface (a `GhosttySurfaceView`) at
     /// first responder, then drain the run loop so the responder bounce (mouseDown → focusActiveTerminal)
-    /// settles. The custom-command runner only fires when the key window's first responder is a terminal
-    /// surface, so a chord test that didn't focus the terminal first would silently pass the chord through.
+    /// settles. The runner fires from a focused terminal surface OR an empty/unfocused agterm terminal
+    /// window; this helper focuses the terminal so a chord resolves context from THAT surface (the
+    /// runFromKeybind path) rather than the frontmost active-session fallback.
     private func focusTerminal() {
         let row = app.staticTexts["session-row"].firstMatch
         XCTAssertTrue(row.waitForHittable(timeout: 20), "seeded session should be hittable")
@@ -282,6 +330,22 @@ final class KeymapUITests: XCTestCase {
         }
     }
 
+    /// Exit the single seeded session's shell so the window's tree goes empty (the SSH-disconnect
+    /// state where every session closes). A login shell has no command, so on `exit` ghostty shows its
+    /// "Process exited. Press any key to close" prompt instead of auto-closing; each poll tick types
+    /// `exit`+Return, which runs `exit` at the prompt OR dismisses the press-any-key prompt afterwards,
+    /// converging until no session rows remain. Idempotent, so retrying past the close is harmless.
+    private func emptyTheOnlyWindow() {
+        focusTerminal()
+        let emptied = poll({
+            if sessionRowCount() == 0 { return true }
+            app.typeText("exit")
+            app.typeKey(.return, modifierFlags: [])
+            return false
+        }, timeout: 25)
+        XCTAssertTrue(emptied, "exiting the only session's shell should leave the window with no sessions")
+    }
+
     /// Run `press` (a chord/leader keystroke burst) and poll for `marker` to appear, retrying the press
     /// a few times. Focus return / shell readiness is async, so the first burst after focusTerminal can
     /// land before the surface is genuinely first responder and be dropped — re-pressing is idempotent
@@ -293,6 +357,23 @@ final class KeymapUITests: XCTestCase {
             if poll({ FileManager.default.fileExists(atPath: marker.path) }, timeout: perAttempt) { return true }
         }
         return false
+    }
+
+    /// Run `press` and poll `markerDir` for a file whose name starts with `prefix`, retrying the press a
+    /// few times (focus/shell readiness is async). Returns the created filename (so the caller can check
+    /// what a `{AGT_X}` token expanded to), or nil if none appeared.
+    private func chordCreatesFile(prefix: String, attempts: Int = 6, perAttempt: TimeInterval = 2.5,
+                                  press: () -> Void) -> String? {
+        for _ in 0..<attempts {
+            press()
+            let deadline = Date().addingTimeInterval(perAttempt)
+            while Date() < deadline {
+                if let name = (try? FileManager.default.contentsOfDirectory(atPath: markerDir.path))?
+                    .first(where: { $0.hasPrefix(prefix) }) { return name }
+                usleep(150_000)
+            }
+        }
+        return nil
     }
 
     private func openPalette(_ menuTitle: String) {

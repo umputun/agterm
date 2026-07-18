@@ -85,13 +85,30 @@ final class CustomCommandRunner {
     /// it). Esc while armed resets and is consumed; a `.fired` runs and is consumed; `.armed` arms the
     /// leader timer and is consumed; `.unmatched` passes through to the terminal.
     ///
-    /// Only acts when the key window's first responder is a terminal surface, so a bound chord never
-    /// eats keystrokes while a text field (Settings editor, inline rename, palette search) has focus.
-    /// A key repeat is ignored so a held-down shortcut spawns one process, not one per OS repeat.
+    /// Acts when the key window's first responder is a terminal surface (context from that surface), OR
+    /// when the key window is an agterm terminal window whose focus is NOT on a text field — including
+    /// one emptied to zero sessions (the SSH-disconnect state where every session's shell exited). It
+    /// passes through for a focused text field (Settings editor, inline rename, palette search) so a
+    /// bound chord never eats those keystrokes, and for an auxiliary window (Settings) whose focus is off
+    /// a text field. A key repeat is ignored so a held-down shortcut spawns one process, not one per OS
+    /// repeat.
     private func handleKeyDown(_ event: NSEvent) -> Bool {
         guard !event.isARepeat else { return false }
-        guard let focused = NSApp.keyWindow?.firstResponder as? GhosttySurfaceView else {
-            // focus is on a text field / non-terminal; drop any half-typed leader and pass through.
+        guard let keyWindow = NSApp.keyWindow else { return false }
+        let responder = keyWindow.firstResponder
+        // a focused text field (Settings editor, inline rename, palette search) becomes the window's
+        // NSText field editor; it must keep its keystrokes, so drop any half-typed leader and pass through.
+        if responder is NSText {
+            if commandEngine.isArmed {
+                commandEngine.reset()
+                cancelLeaderTimer()
+            }
+            return false
+        }
+        let focusedSurface = responder as? GhosttySurfaceView
+        // with no focused terminal surface, fire ONLY from an agterm terminal window (an empty one still
+        // qualifies) — never from an auxiliary window like Settings whose focus sits off a text field.
+        guard focusedSurface != nil || WindowRegistry.shared.contains(keyWindow) else {
             if commandEngine.isArmed {
                 commandEngine.reset()
                 cancelLeaderTimer()
@@ -113,10 +130,16 @@ final class CustomCommandRunner {
         switch commandEngine.advance(chord) {
         case .fired(let command):
             cancelLeaderTimer()
-            // resolve context from the surface that actually had focus at key-down time, NOT the
-            // frontmost active session — firing from a split/overlay/quick terminal (or during a
-            // window-switch race) must run against THAT surface's session/cwd/selection.
-            runFromKeybind(command, focusedSurface: focused)
+            if let focusedSurface {
+                // resolve context from the surface that actually had focus at key-down time, NOT the
+                // frontmost active session — firing from a split/overlay/quick terminal (or during a
+                // window-switch race) must run against THAT surface's session/cwd/selection.
+                runFromKeybind(command, focusedSurface: focusedSurface)
+            } else {
+                // no fired-from surface (an emptied window, or focus off any surface in a terminal
+                // window): use the active session if one exists, else the session-free launcher path.
+                runNoSurface(command)
+            }
             return true
         case .armed:
             startLeaderTimer()
@@ -173,9 +196,12 @@ final class CustomCommandRunner {
         leaderTimer = nil
     }
 
-    /// Run a command fired from the PALETTE: resolve context from the active session (the palette has
-    /// no first responder to key off). Detached `/bin/sh -c` with the `AGT_*` env, notifying on a spawn
-    /// error or non-zero exit. No-op when no window/session is active (the context can't be resolved).
+    /// Run a command fired from the PALETTE: resolve context from the active session (the palette has no
+    /// first responder to key off). Detached `/bin/sh -c` with the `AGT_*` env, notifying on a spawn
+    /// error or non-zero exit. No-op when no window/session is active — firing a session-scoped command
+    /// with silently-empty tokens is unsafe (an empty `{AGT_SESSION_PWD}` turns `rm -rf …/*` into a root
+    /// glob), so only the deliberate empty-window KEYBIND path (handleKeyDown) fires a session-free
+    /// launcher via `sessionlessContext()`.
     func run(_ command: CustomCommand) {
         guard let store = library.activeStore, let session = store.activeSession else {
             logger.notice("custom command \"\(command.name, privacy: .public)\" fired with no active session; ignored")
@@ -227,7 +253,32 @@ final class CustomCommandRunner {
             spawn(command, context: context)
             return
         }
-        run(command)
+        runNoSurface(command)
+    }
+
+    /// Run a command fired by keybind with NO usable fired-from session — an emptied window, or focus off
+    /// any surface (the dashboard key-catcher, a quick terminal / overlay with no owning session). Uses
+    /// the active session's context when one exists (like the palette), else the session-free launcher
+    /// path via `spawnSessionless`.
+    private func runNoSurface(_ command: CustomCommand) {
+        if library.activeStore?.activeSession != nil {
+            run(command)
+        } else {
+            spawnSessionless(command)
+        }
+    }
+
+    /// Fire `command` with a session-free context (the empty-window launcher path) — UNLESS its body
+    /// references session-scoped tokens, which expand dangerously empty with no session (an empty
+    /// `{AGT_SESSION_PWD}` makes `rm -rf …/*` a root glob, defeating even the quoted `$AGT_X` form). Such
+    /// a command NO-OPS with a notice, exactly like the palette's `run(_:)`; a launcher (referencing only
+    /// `AGT_SOCKET`/`AGT_WINDOW`/`AGT_PANE`, e.g. `agtermctl session new --command "ssh …"`) still fires.
+    private func spawnSessionless(_ command: CustomCommand) {
+        guard !CommandContext.referencesSessionScopedContext(command.command) else {
+            logger.notice("custom command \"\(command.name, privacy: .public)\" references session context but no session is active; ignored")
+            return
+        }
+        spawn(command, context: sessionlessContext())
     }
 
     /// Resolve every `{AGT_X}` token for the given session: ids + cwd from the model, the names from
@@ -237,7 +288,7 @@ final class CustomCommandRunner {
                          pane: CommandContext.Pane) -> CommandContext {
         let workspace = store.workspace(forSession: session.id)
         let windowID = library.windowID(forSession: session.id)
-        let windowName = windowID.flatMap { id in library.windows.first { $0.id == id }?.name } ?? ""
+        let windowName = library.windowName(for: windowID)
         return CommandContext(
             sessionID: session.id.uuidString,
             sessionName: session.displayName,
@@ -250,6 +301,16 @@ final class CustomCommandRunner {
             selection: selectionSurface?.readSelection() ?? "",
             socket: socketProvider()
         )
+    }
+
+    /// A session-free `CommandContext` for a command fired with no active session (an emptied window, or
+    /// none open): every `{AGT_SESSION_*}`/`{AGT_WORKSPACE_*}` token and the selection resolve empty, the
+    /// window id/name come from the frontmost window when there is one, and the socket lets a launcher
+    /// chord reach `agtermctl` to create a fresh session.
+    private func sessionlessContext() -> CommandContext {
+        let windowID = library.activeWindowID
+        return CommandContext(windowID: windowID?.uuidString ?? "", windowName: library.windowName(for: windowID),
+                              socket: socketProvider())
     }
 
     /// Spawn the expanded command as a detached `/bin/sh -c`, exporting `$AGT_*` on top of the app's

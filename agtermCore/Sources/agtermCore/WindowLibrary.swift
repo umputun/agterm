@@ -309,6 +309,13 @@ public final class WindowLibrary {
         openIDs().first { stores[$0] === store }
     }
 
+    /// The display name of the window with `id`, or "" when `id` is nil or no window has that id — the
+    /// name half of the `{AGT_WINDOW_NAME}`/`$AGT_WINDOW_NAME` command context.
+    public func windowName(for id: UUID?) -> String {
+        guard let id else { return "" }
+        return windows.first { $0.id == id }?.name ?? ""
+    }
+
     /// The auto-generated name for the next new window (`window 1`, `window 2`, …).
     public var defaultWindowName: String {
         "window \(windows.count + 1)"

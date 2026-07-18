@@ -50,10 +50,33 @@ paths:
   1.5 s leader timeout, key-repeat ignored), and on `.fired` spawns a detached `/bin/sh -c` with the
   focused pane's `CommandContext` (cwd + selection + `$AGT_*` env); a non-zero exit posts a failure banner
   via `NotificationManager.notifyCommandFailure`.
-  It only fires when a `GhosttySurfaceView` holds first responder (so a bound chord never eats keystrokes
-  in a text field) and rebuilds its matcher on `.agtermKeymapChanged`.
-  The runner also exposes a public `run(_:)` for the palette items, which resolve context from the active
-  session (no first responder to key off).
+  It fires when the key window's first responder is a `GhosttySurfaceView` (context from that surface) OR
+  when the key window is an agterm terminal window whose focus is NOT on a text field — INCLUDING one
+  emptied to zero sessions (the SSH-disconnect state where every session's shell exited, `closeSession`
+  leaves the window open + empty, and no surface holds first responder).
+  It passes through — never eating keystrokes — for a focused text field (the responder is the window's
+  `NSText` field editor: Settings editor, inline rename, palette search) and for an auxiliary window
+  (Settings) whose focus sits off a text field (`WindowRegistry.contains(keyWindow)` gates the
+  no-surface fire to agterm terminal windows only).
+  It rebuilds its matcher on `.agtermKeymapChanged`.
+  The runner exposes a public `run(_:)` for the palette items; it resolves context from the active session
+  and NO-OPS when none is active — firing a session-scoped command with silently-empty tokens is unsafe
+  (an empty `{AGT_SESSION_PWD}` turns `rm -rf …/*` into a root glob, defeating even the quoted `$AGT_X`
+  form).
+  A chord fired with NO focused surface routes through `runNoSurface`: it runs the active session's
+  `run(_:)` if one exists (e.g. the dashboard key-catcher holds first responder, or a quick terminal over
+  a live session), else `spawnSessionless` fires a session-free context (empty `{AGT_SESSION_*}`, the
+  frontmost window id, the socket) so a launcher chord like `agtermctl session new --command "ssh …"`
+  stays usable after every session closes (`session.new` defaults to the frontmost window, so no id is
+  needed).
+  `spawnSessionless` GATES on `CommandContext.referencesSessionScopedContext`: a command whose body names
+  a session/workspace/selection token (`AGT_SESSION`/`AGT_WORKSPACE`/`AGT_SELECTION`, in `{…}` or `$…`
+  form) NO-OPS with a notice rather than expanding those tokens dangerously empty (an empty
+  `{AGT_SESSION_PWD}` makes `rm -rf …/*` a root glob, defeating even the quoted `$AGT_X` form) — the same
+  protection the palette's no-op gives, extended to the keybind; a launcher references only
+  `AGT_SOCKET`/`AGT_WINDOW`/`AGT_PANE`, so it still fires.
+  The sessionless-surface fallback (a quick terminal focused in an emptied window) routes through the
+  SAME `runNoSurface`, so a launcher works there too and a session-scoped command is inert there too.
   `CommandContext.pane` (the `{AGT_PANE}`/`$AGT_PANE` token, `left`|`right`|`scratch`)
   carries the fired-from pane: the keybind path derives it from the focused SURFACE's identity
   (`splitSurface === focusedSurface` → `right`; the sessionless-surface branch `runFromSessionlessSurface`
