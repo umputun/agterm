@@ -145,7 +145,7 @@ paths:
   `ContentView` mirrors the color into `terminalColor` view state (the quick terminal's opaque backing
   re-renders with the new color) and `TitleProbeView` re-applies the window appearance.
   Without this the chrome only refreshed when the window next re-keyed.
-  UI is the standard SwiftUI `Settings` scene (Cmd+,) with a 6-tab `TabView` (frame 480×590).
+  UI is the standard SwiftUI `Settings` scene (Cmd+,) with a 6-tab `TabView` (frame 540×590).
   An explicit `TabView(selection:)` binding (`@State` default `.general`) suppresses SwiftUI's
   `com_apple_SwiftUI_Settings_selectedTabIndex` auto-persistence, so the window always opens on General
   instead of restoring the last-used tab.
@@ -160,10 +160,12 @@ paths:
   `.compact` mapping back to nil) + background opacity/blur sliders + the Sidebar Tint slider + the Sidebar
   Font Size stepper (`settings-sidebar-font-size`, 9...20, `AppSettings.defaultSidebarFontSize` 13 mapping
   back to nil, matching the terminal font-size stepper's style) + the inactive-pane-mute slider.
-  The formerly-separate **Panes** section was folded into **Window** so the tab still fits 480×590 without
+  The formerly-separate **Panes** section was folded into **Window** so the tab still fits 540×590 without
   scrolling after adding the font-size stepper).
   **Interface** (per-element chrome visibility, grouped into a **Title Bar** section and a **Sidebar**
-  section — one default-on Toggle per `InterfaceElement`; see the `hiddenInterfaceElements` bullet).
+  section — one default-on Toggle per `InterfaceElement`, laid out TWO per row (`twoColumnSection`) so the
+  tab keeps fitting 540×590 without scrolling as the element set grows; see the `hiddenInterfaceElements`
+  bullet).
   **Notifications** (a **Notifications** section with the banner / badge / attention-indicator toggles plus the Dock-bounce mode and notification-sound pickers).
   **Agent Status** (a **Colors** section with the three glyph color pickers, a **Sound** section with
   the blocked-sound picker, an **Auto-follow** section with the idle-timeout Picker
@@ -174,7 +176,7 @@ paths:
   Captions under controls are dropped for self-explanatory controls, which is nearly all of them.
   A caption is kept ONLY when it carries information the label can't — currently just two:
   `Blur needs opacity below 100%` (a functional dependency) and the Ghostty-config edit-path hint.
-  This keeps the busiest tab short enough that the 480×590 window fits every tab without scrolling.
+  This keeps the busiest tab short enough that the 540×590 window fits every tab without scrolling.
   The notification toggle (`AppSettings.notificationsEnabled`, nil = on) is mirrored to `NotificationManager.bannersEnabled`
   by `SettingsModel`; it gates only the OS banner, never the badge, and is NOT a ghostty config key (no
   reload).
@@ -420,7 +422,9 @@ paths:
   NOT a ghostty key (`ghosttyConfigLines()` never emits it).
   The toggleable elements are the host-free `InterfaceElement` enum (agtermCore): title bar —
   `sidebarToggle`/`sessionName`/`windowName`/`recentSessions`/`scratch`/`split`/`dashboard`/`quickTerminal`;
-  sidebar footer — `newWorkspace`/`newSession`/`flaggedView`.
+  sidebar — `newWorkspace`/`newSession`/`flaggedView` (the footer add/flag controls) + `workspaceAddSession`
+  (the hover-revealed "+" on each workspace ROW that adds a session there — a SEPARATE toggle from the
+  footer `newSession` button, though both run the same new-session action).
   Each case carries its `section` (Title Bar / Sidebar) and `displayName` (the toggle label), so the
   Interface tab iterates `InterfaceElement.allCases` grouped by section.
   The attention bell is NOT in the set — it keeps its own `attentionButtonEnabled` opt-in (default OFF, not
@@ -432,6 +436,11 @@ paths:
   `applyInterfaceElements` pushes `settings.resolvedHiddenInterfaceElements` into the
   `GhosttyApp.hiddenInterfaceElements` mirror, so a flip rides `.agtermAppearanceChanged` and every open
   window re-reads the mirror (`WindowContentView.shows(_:)`) to gate each element live.
+  The SwiftUI title-bar / sidebar-FOOTER elements gate via `WindowContentView.shows(_:)`; the sidebar-ROW
+  `workspaceAddSession` is AppKit, so it gates in `SidebarCellView.mouseEntered` — which reads the
+  `GhosttyApp.hiddenInterfaceElements` mirror before revealing the "+", so a live toggle takes effect on
+  the next hover (the sidebar is never hovered while the Settings window holds the pointer, so a mid-hover
+  flip can't strand a visible "+").
   The title-bar building moved to `WindowContentView+Titlebar.swift` (matching the `+Dashboard`/`+RecentSessions`/`+Zoom`
   split) to keep `WindowContentView.swift` under the 1000-line limit; the session-vs-window title split lives
   there in `titleText` (gated) vs `windowTitle` (always the OS window title), and the trailing button cluster
@@ -444,6 +453,11 @@ paths:
   Default + round-trip + tolerant-decode covered host-free in `AppSettingsTests`; the picker persistence in
   `SettingsUITests` (`testInterfaceElementTogglePersists`); the live gating is app-target (build/manually
   verified, no app unit-test host).
+  **Adding a new toggleable element:** add the `InterfaceElement` case (+ its `section`/`displayName`) and
+  gate its render site on the mirror; the Interface tab picks it up automatically via `allCases`, and the
+  round-trip/tolerant-decode tests already iterate `allCases`.
+  Do this only AFTER the user agrees the element should be user-toggleable — some chrome is intentionally
+  always-on — per the propose-then-ask working-norm in the root `CLAUDE.md` (never automatic).
 - **A Settings toggle's DESCRIPTION stays single-line short-form** — a terse hint, not a manual.
   No detailed multi-line explanation of what the toggle does and no cross-refs to other toggles;
   keep the minimal style (see also the flag-description convention).

@@ -23,7 +23,7 @@ public enum DockBounce: String, Codable, Sendable, CaseIterable {
     case untilFocused
 }
 
-/// A toggleable window-chrome element in the title bar or the sidebar footer. Persisted by raw name in
+/// A toggleable window-chrome element in the title bar or the sidebar. Persisted by raw name in
 /// `AppSettings.hiddenInterfaceElements`, so an unknown future case in a stored list decodes tolerantly
 /// (it is simply dropped) rather than failing the whole decode — the AppSettings forward-compat rule.
 /// Every element is shown by default; hiding one adds its raw name to the persisted list.
@@ -37,19 +37,20 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     case split
     case dashboard
     case quickTerminal
-    // sidebar footer
+    // sidebar
     case newWorkspace
     case newSession
     case flaggedView
+    case workspaceAddSession
 
     /// Which chrome surface the element belongs to — the Settings tab groups the toggles by this.
     public enum Section: Sendable { case titleBar, sidebar }
 
-    /// The surface this element lives on: the sidebar footer for the three add/flag controls, the title
-    /// bar for everything else.
+    /// The surface this element lives on: the sidebar for the add/flag controls (the footer buttons plus
+    /// the workspace-row add-session "+"), the title bar for everything else.
     public var section: Section {
         switch self {
-        case .newWorkspace, .newSession, .flaggedView: return .sidebar
+        case .newWorkspace, .newSession, .flaggedView, .workspaceAddSession: return .sidebar
         default: return .titleBar
         }
     }
@@ -68,6 +69,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         case .newWorkspace: return "New workspace"
         case .newSession: return "New session"
         case .flaggedView: return "Flagged view"
+        case .workspaceAddSession: return "Workspace add-session"
         }
     }
 
@@ -301,7 +303,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// sizes. Applied at the AppKit level when the sidebar draws, NOT a ghostty key — it never appears in
     /// `ghosttyConfigLines()`.
     public var sidebarFontSize: Double?
-    /// Raw names of title-bar / sidebar-footer chrome elements the user has HIDDEN (see `InterfaceElement`).
+    /// Raw names of title-bar / sidebar chrome elements the user has HIDDEN (see `InterfaceElement`).
     /// nil/empty means every element is shown (the default). Stored as raw strings so an unknown future
     /// element name decodes tolerantly (it is dropped by `resolvedHiddenInterfaceElements`) instead of
     /// failing the whole decode — the AppSettings forward-compat rule. A GUI-only chrome value applied at

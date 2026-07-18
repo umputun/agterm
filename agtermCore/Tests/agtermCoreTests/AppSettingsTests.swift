@@ -536,6 +536,15 @@ struct AppSettingsTests {
         #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
+    @Test func workspaceAddSessionIsADistinctSidebarInterfaceElement() {
+        // the workspace-row hover "+" is a separate, sidebar-section toggle from the footer newSession button.
+        #expect(InterfaceElement.workspaceAddSession.section == .sidebar)
+        #expect(InterfaceElement.workspaceAddSession.displayName == "Workspace add-session")
+        let hidden = AppSettings(hiddenInterfaceElements: ["workspaceAddSession"])
+        #expect(hidden.isInterfaceElementHidden(.workspaceAddSession))
+        #expect(!hidden.isInterfaceElementHidden(.newSession)) // hiding one does not hide the other
+    }
+
     @Test func unknownInterfaceElementDecodesTolerantly() throws {
         // a future-written element name must decode tolerantly (the forward-compat rule): the unknown name
         // is dropped from the resolved set, and it must NOT fail the whole decode and discard other fields.
@@ -553,7 +562,7 @@ struct AppSettingsTests {
         let titleBar = InterfaceElement.allCases.filter { $0.section == .titleBar }
         let sidebar = InterfaceElement.allCases.filter { $0.section == .sidebar }
         #expect(titleBar.count + sidebar.count == InterfaceElement.allCases.count)
-        #expect(sidebar == [.newWorkspace, .newSession, .flaggedView])
+        #expect(sidebar == [.newWorkspace, .newSession, .flaggedView, .workspaceAddSession])
         #expect(!titleBar.isEmpty)
     }
 
