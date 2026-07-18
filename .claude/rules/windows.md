@@ -267,6 +267,9 @@ never two bundles in one window.
   backoff (dropping the queue after 50 ticks so a stray folder can't wedge a timer); the scene `.task`
   hands the delegate `actions` and calls the drain once, and `application(_:open:)` calls it inline for
   the running instance.
+  After a session lands it `WindowRegistry.raise`s `library.activeWindowID` (deminiaturize + make-key) so
+  an "open here" into a MINIMIZED last-active window is actually visible — `NSApp.activate()` alone only
+  brings the app forward and would leave the window in the Dock; a no-op for an already-frontmost window.
   `CFBundleDocumentTypes`/`LSItemContentTypes = public.folder` (role Viewer) in `Info.plist` is what puts
   agterm in Finder's right-click **Open With ▸ agterm** for folders; it is NOT required for `open -a`
   routing (odoc delivers the folder either way) — only for the Finder listing.

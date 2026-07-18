@@ -99,7 +99,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// `OpenPathResolver`), which is queued and drained into a new session in the last-active window.
     /// This serves the WARM case — agterm already running (its daily-driver norm) — where the running
     /// instance has a window and grafts the session immediately.
-    func application(_ application: NSApplication, open urls: [URL]) {
+    func application(_: NSApplication, open urls: [URL]) {
         let directories = urls.compactMap { OpenPathResolver.directory(for: $0) }
         guard !directories.isEmpty else { return }
         pendingOpenDirectories.append(contentsOf: directories)
@@ -120,8 +120,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         NSApp.activate()
+        let beforeCount = pendingOpenDirectories.count
         while let directory = pendingOpenDirectories.first, actions.openSession(atDirectory: directory) {
             pendingOpenDirectories.removeFirst()
+        }
+        // raise/deminiaturize the window the session landed in — `NSApp.activate()` only brings the app
+        // forward, so an "open terminal here" into a minimized last-active window would otherwise leave it
+        // in the Dock and show nothing. `WindowRegistry.raise` deminiaturizes + makes key; a no-op for an
+        // already-frontmost window. Only when a session actually landed.
+        if pendingOpenDirectories.count < beforeCount, let windowID = library?.activeWindowID {
+            WindowRegistry.shared.raise(windowID)
         }
         if !pendingOpenDirectories.isEmpty, retry < 50 {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { [weak self] in
@@ -289,11 +297,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
-        // keep the app alive while an `open -a agterm /path` is still pending: on a COLD document launch
-        // SwiftUI discards the un-presented launch window, which trips last-window-closed before the drain's
-        // forced reopen can present a window and graft the session. Checked first (and independent of
-        // `library`, which the scene `.task` hasn't wired yet on that path). A plain launch never has a
-        // pending queue, and once the drain empties it normal quit semantics resume.
         // key termination off the model open-set, NOT AppKit's transient window count: closing one
         // window (or a re-render that briefly drops the surviving NSWindow) can leave a momentary
         // zero-window state while the library still has an open window, and quitting there would kill

@@ -164,9 +164,8 @@ final class AppActions {
     /// new-session-directory setting. Resolves `library.activeStore` (the frontmost/last-active window,
     /// the same target the control channel's `session.new` defaults to), so it is NOT gated on
     /// `uiActionsEnabled` — an external OS command, like a socket command, must land regardless of a
-    /// modal zoom/dashboard. Returns whether a session was created, so the delegate's cold-start drain
-    /// can retry until restore has settled the frontmost store.
-    @discardableResult
+    /// modal zoom/dashboard. Returns whether a session was created, so the delegate's drain can retry
+    /// until the frontmost store resolves.
     func openSession(atDirectory directory: String) -> Bool {
         guard let store, let workspaceID = store.currentWorkspaceID,
               let session = store.addSession(toWorkspace: workspaceID, cwd: directory)

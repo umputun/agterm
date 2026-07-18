@@ -5,10 +5,10 @@ import Foundation
 /// else its parent directory when it is an existing file. Returns nil for a non-file URL or a path that
 /// does not exist, so the caller opens no stray session.
 public enum OpenPathResolver {
-    public static func directory(for url: URL, fileManager: FileManager = .default) -> String? {
+    public static func directory(for url: URL) -> String? {
         guard url.isFileURL else { return nil }
         var isDirectory: ObjCBool = false
-        guard fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory) else { return nil }
+        guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory) else { return nil }
         return isDirectory.boolValue ? url.path : url.deletingLastPathComponent().path
     }
 }

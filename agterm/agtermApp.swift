@@ -113,8 +113,8 @@ struct agtermApp: App {
                     // remove the monitor on terminate.
                     appDelegate.customCommandRunner = customCommandRunner
                     appDelegate.settingsModel = settingsModel
-                    // hand the delegate the action hub and drain any folders queued by a cold-launch
-                    // `open -a agterm /path` now that a window store can resolve.
+                    // hand the delegate the action hub and drain any folders an `open -a agterm /path`
+                    // queued before the window store resolved.
                     appDelegate.actions = actions
                     appDelegate.drainPendingOpenDirectories()
                     customCommandRunner.start()
