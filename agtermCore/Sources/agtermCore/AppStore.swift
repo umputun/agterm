@@ -267,11 +267,11 @@ public final class AppStore {
         return workspace(named: needle) ?? addWorkspace(name: needle)
     }
 
-    /// Creates a session in the given workspace and selects it. An optional `name` seeds the session's
-    /// `customName` (trimmed; blank clears it to the auto basename, matching `renameSession`). With `at`
-    /// nil the session is appended (the default); with `at` set it is inserted at the clamped index
-    /// (`0...count`), backing the control `session.new --after`/`--before` placement. Returns nil if no
-    /// workspace matches.
+    /// Creates a session in the given workspace and, when `select` is true (the default), selects it;
+    /// `select: false` appends it in the background, leaving selection/focus/recency untouched (backs
+    /// `session.new --no-select`). An optional `name` seeds `customName` (trimmed; blank = the auto
+    /// basename, matching `renameSession`). `at` nil appends (default); `at` set inserts at the clamped
+    /// index (`0...count`), backing `session.new --after`/`--before`. Returns nil if no workspace matches.
     @discardableResult
     public func addSession(toWorkspace workspaceID: UUID, cwd: String, command: String? = nil,
                            name: String? = nil, at index: Int? = nil, select: Bool = true) -> Session? {

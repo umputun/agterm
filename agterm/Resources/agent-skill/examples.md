@@ -59,6 +59,14 @@ duplicate "servers" workspace on repeated calls):
 agtermctl session new --workspace-name servers --create-workspace --name "myhost" --command "ssh user@host"
 ```
 
+Create a session in the background — do NOT switch to it. The current selection and keyboard focus stay
+put; the new session appears in the sidebar but is not `active` in `tree` (the read-back). It is the
+inverse of the overlay's `--follow`:
+
+```bash
+agtermctl session new --cwd "$HOME/project" --no-select
+```
+
 ## Duplicate a session (a second shell in the same directory)
 
 `session duplicate` creates a fresh session — a plain login shell — in the SAME workspace as the target,
