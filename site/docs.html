@@ -1952,10 +1952,12 @@
               that blocks is easy to miss. Turn on
               <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Auto-follow blocked sessions</strong>
               (Disabled by default, or a 5s/10s/30s/60s/5m idle timeout) and, after you have been idle from input for that long,
-              the window selects and focuses the oldest blocked session, so you are pulled to whatever agent is waiting. It is
-              per-window and window-wide (crossing workspaces within the window), and always picks the oldest blocked session
-              first. Being parked on a blocked session suppresses further jumps until you type a reply, which clears its glyph
-              and re-arms the timer for the next one. The opt-in <strong style="color: #e6e1d7">Don't auto-follow away from a
+              the window selects and focuses the oldest waiting blocked session, so you are pulled to whatever agent is
+              waiting. It is per-window and window-wide (crossing workspaces within the window). Auto-follow pulls you to each
+              blocked session at most once: after you have been shown a block and moved on (even without replying), it will not
+              pull you back to it, so it walks the waiting blocks oldest-first, shows each once, then stays quiet. A session
+              becomes eligible again only after it leaves blocked and re-enters it. Being parked on a blocked session likewise
+              suppresses jumps while you stay on it. The opt-in <strong style="color: #e6e1d7">Don't auto-follow away from a
               running session</strong> (off by default) holds the selection put while the current session is
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span>. Over the control
               channel, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span>

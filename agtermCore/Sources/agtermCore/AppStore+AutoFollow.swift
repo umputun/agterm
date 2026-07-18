@@ -123,23 +123,27 @@ extension AppStore {
 
     /// The pure auto-follow decision (host-free, unit-tested): which session the window should jump to, or
     /// nil to stay put. Suppresses when the current session is already `blocked` (you're on it) or — when
-    /// `stayOnActive` is on — `active` (don't leave a running agent); otherwise returns the oldest `blocked`
-    /// session by `statusChangedAt` ascending (FIFO), or nil when `blocked` is empty. A missing stamp sorts
-    /// last, so a stamped session is always preferred. `blocked` is the window-wide blocked set the caller
-    /// supplies.
+    /// `stayOnActive` is on — `active` (don't leave a running agent); skips any blocked session already
+    /// `autoFollowConsumed` (a block the user was pulled to once and left, muted until it re-enters blocked);
+    /// otherwise returns the oldest remaining `blocked` session by `statusChangedAt` ascending (FIFO), or nil
+    /// when none remain. A missing stamp sorts last, so a stamped session is always preferred. `blocked` is
+    /// the window-wide blocked set the caller supplies.
     func autoFollowTarget(current: Session?, blocked: [Session], stayOnActive: Bool) -> UUID? {
         if current?.agentIndicator.status == .blocked { return nil }
         if stayOnActive, current?.agentIndicator.status == .active { return nil }
-        return blocked.min { ($0.statusChangedAt ?? .distantFuture) < ($1.statusChangedAt ?? .distantFuture) }?.id
+        return blocked.filter { !$0.autoFollowConsumed }
+            .min { ($0.statusChangedAt ?? .distantFuture) < ($1.statusChangedAt ?? .distantFuture) }?.id
     }
 
     /// Fires one auto-follow step: computes the window-wide blocked set (the non-idle `attentionSessions`
     /// filtered to `.blocked`), consults `autoFollowTarget`, and selects the target when there is one. A
     /// no-op (no target) does nothing and does NOT reschedule — being parked on the blocked session is
     /// itself the suppressor until a keystroke clears it and re-arms the timer. Selection here deliberately
-    /// does NOT note activity (that would reset the idle timer on the app's own jump). `internal` so tests
-    /// can drive it directly. Posts `.agtermAutoFollowed` after the select so the app target can move first
-    /// responder into the target (selection alone doesn't, per the eager deck) when its window is key.
+    /// does NOT note activity (that would reset the idle timer on the app's own jump). Marks the target
+    /// `autoFollowConsumed` so a later idle fire won't pull back to it until it re-enters blocked.
+    /// `internal` so tests can drive it directly. Posts `.agtermAutoFollowed` after the select so the app
+    /// target can move first responder into the target (selection alone doesn't, per the eager deck) when
+    /// its window is key.
     func autoFollowFire() {
         // a non-terminal editor/overlay (sidebar inline rename, command palette) owns first responder:
         // no-op so the jump can't interrupt a rename or reshuffle a palette's target. no reschedule — the
@@ -149,6 +153,9 @@ extension AppStore {
         guard let target = autoFollowTarget(current: activeSession, blocked: blocked,
                                             stayOnActive: autoFollowStayOnActive) else { return }
         selectSession(target)
+        // mute this block: a later idle fire won't yank the user back here after they leave, until the
+        // session re-enters blocked (setAgentIndicator resets the flag on that transition).
+        session(withID: target)?.autoFollowConsumed = true
         NotificationCenter.default.post(name: .agtermAutoFollowed, object: nil,
                                         userInfo: [Self.autoFollowSessionIDKey: target])
     }
