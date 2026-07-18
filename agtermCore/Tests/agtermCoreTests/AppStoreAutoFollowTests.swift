@@ -123,6 +123,85 @@ struct AppStoreAutoFollowTests {
         #expect(store.lastActivityAt == nil) // the app's own jump must not stamp activity (no self-reset)
     }
 
+    // MARK: - mute a block already followed (autoFollowConsumed)
+
+    @Test func autoFollowTargetSkipsConsumedBlocked() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "w")
+        let older = addBlocked(store, to: ws.id, cwd: "/older", at: 100)
+        let newer = addBlocked(store, to: ws.id, cwd: "/newer", at: 200)
+        older.autoFollowConsumed = true // already pulled to the older block once
+        #expect(store.autoFollowTarget(current: nil, blocked: [older, newer], stayOnActive: false) == newer.id)
+        newer.autoFollowConsumed = true // both consumed -> nothing left to follow
+        #expect(store.autoFollowTarget(current: nil, blocked: [older, newer], stayOnActive: false) == nil)
+    }
+
+    @Test func autoFollowFireMarksConsumedAndDoesNotReturn() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "w")
+        let idle = store.addSession(toWorkspace: ws.id, cwd: "/idle")!
+        let x = addBlocked(store, to: ws.id, cwd: "/x", at: 100)
+        store.selectSession(idle.id)
+        store.autoFollowFire()
+        #expect(store.selectedSessionID == x.id) // pulled to the block once
+        #expect(x.autoFollowConsumed == true)
+        // user looks, decides to do nothing, navigates back to another session, then goes idle again
+        store.selectSession(idle.id)
+        store.autoFollowFire()
+        #expect(store.selectedSessionID == idle.id) // NOT yanked back to the same still-blocked session
+    }
+
+    @Test func autoFollowFireWalksEachBlockOnceThenStops() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "w")
+        let idle = store.addSession(toWorkspace: ws.id, cwd: "/idle")!
+        let x = addBlocked(store, to: ws.id, cwd: "/x", at: 100)
+        let z = addBlocked(store, to: ws.id, cwd: "/z", at: 200)
+        store.selectSession(idle.id)
+        store.autoFollowFire()
+        #expect(store.selectedSessionID == x.id) // oldest unseen block first
+        store.selectSession(idle.id) // leave without acting
+        store.autoFollowFire()
+        #expect(store.selectedSessionID == z.id) // next unseen block
+        store.selectSession(idle.id) // leave again
+        store.autoFollowFire()
+        #expect(store.selectedSessionID == idle.id) // both blocks already followed -> quiet
+    }
+
+    @Test func autoFollowConsumedSurvivesBlockedReassert() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "w")
+        let idle = store.addSession(toWorkspace: ws.id, cwd: "/idle")!
+        let x = addBlocked(store, to: ws.id, cwd: "/x", at: 100)
+        store.selectSession(idle.id)
+        store.autoFollowFire()
+        #expect(x.autoFollowConsumed == true)
+        store.selectSession(idle.id)
+        // a hook re-asserts blocked OVER blocked (same value) -- not a new episode, so the mute holds
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: x.id)
+        #expect(x.autoFollowConsumed == true)
+        store.autoFollowFire()
+        #expect(store.selectedSessionID == idle.id) // still muted, no re-jump
+    }
+
+    @Test func autoFollowFireReturnsAfterBlockReenters() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "w")
+        let idle = store.addSession(toWorkspace: ws.id, cwd: "/idle")!
+        let x = addBlocked(store, to: ws.id, cwd: "/x", at: 100)
+        store.selectSession(idle.id)
+        store.autoFollowFire()
+        store.selectSession(idle.id)
+        store.autoFollowFire()
+        #expect(store.selectedSessionID == idle.id) // muted while it stays the same block
+        // the agent resumes (blocked -> active) then blocks again (active -> blocked): a new episode
+        store.setAgentIndicator(AgentIndicator(status: .active), forSession: x.id)
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: x.id)
+        #expect(x.autoFollowConsumed == false) // re-entering blocked cleared the mute
+        store.autoFollowFire()
+        #expect(store.selectedSessionID == x.id) // pulled once more for the fresh block
+    }
+
     @Test func selectSessionAloneDoesNotNoteActivity() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "w")

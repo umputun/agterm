@@ -123,14 +123,16 @@ extension AppStore {
 
     /// The pure auto-follow decision (host-free, unit-tested): which session the window should jump to, or
     /// nil to stay put. Suppresses when the current session is already `blocked` (you're on it) or — when
-    /// `stayOnActive` is on — `active` (don't leave a running agent); otherwise returns the oldest `blocked`
-    /// session by `statusChangedAt` ascending (FIFO), or nil when `blocked` is empty. A missing stamp sorts
-    /// last, so a stamped session is always preferred. `blocked` is the window-wide blocked set the caller
-    /// supplies.
+    /// `stayOnActive` is on — `active` (don't leave a running agent); skips any blocked session already
+    /// `autoFollowConsumed` (a block the user was pulled to once and left, muted until it re-enters blocked);
+    /// otherwise returns the oldest remaining `blocked` session by `statusChangedAt` ascending (FIFO), or nil
+    /// when none remain. A missing stamp sorts last, so a stamped session is always preferred. `blocked` is
+    /// the window-wide blocked set the caller supplies.
     func autoFollowTarget(current: Session?, blocked: [Session], stayOnActive: Bool) -> UUID? {
         if current?.agentIndicator.status == .blocked { return nil }
         if stayOnActive, current?.agentIndicator.status == .active { return nil }
-        return blocked.min { ($0.statusChangedAt ?? .distantFuture) < ($1.statusChangedAt ?? .distantFuture) }?.id
+        return blocked.filter { !$0.autoFollowConsumed }
+            .min { ($0.statusChangedAt ?? .distantFuture) < ($1.statusChangedAt ?? .distantFuture) }?.id
     }
 
     /// Fires one auto-follow step: computes the window-wide blocked set (the non-idle `attentionSessions`
@@ -149,6 +151,9 @@ extension AppStore {
         guard let target = autoFollowTarget(current: activeSession, blocked: blocked,
                                             stayOnActive: autoFollowStayOnActive) else { return }
         selectSession(target)
+        // mute this block: a later idle fire won't yank the user back here after they leave, until the
+        // session re-enters blocked (setAgentIndicator resets the flag on that transition).
+        session(withID: target)?.autoFollowConsumed = true
         NotificationCenter.default.post(name: .agtermAutoFollowed, object: nil,
                                         userInfo: [Self.autoFollowSessionIDKey: target])
     }
