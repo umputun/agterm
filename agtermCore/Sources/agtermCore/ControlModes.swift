@@ -95,10 +95,13 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
     public let after: String?
     /// Anchor session to place the new session right BEFORE, the mirror of `after`.
     public let before: String?
+    /// Create the session in the background: skip selecting and focusing it, leaving the current selection
+    /// untouched (the CLI's `--no-select`). Defaults to false — the normal select-and-focus behavior.
+    public let noSelect: Bool
 
     public init(window: String?, cwd: String?, workspace: String?, workspaceName: String?,
                 createWorkspace: Bool?, command: String?, name: String?,
-                after: String? = nil, before: String? = nil) {
+                after: String? = nil, before: String? = nil, noSelect: Bool = false) {
         self.window = window
         self.cwd = cwd
         self.workspace = workspace
@@ -108,6 +111,7 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
         self.name = name
         self.after = after
         self.before = before
+        self.noSelect = noSelect
     }
 }
 

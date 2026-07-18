@@ -110,6 +110,21 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.sessionNew(options)])
     }
 
+    @Test func sessionNewRoutesNoSelect() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextSessionNewResponse = ControlResponse(ok: true, result: ControlResult(id: "bg-session"))
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionNew, args: ControlArgs(noSelect: true)
+        ))
+
+        let options = ControlSessionCreateOptions(window: nil, cwd: nil, workspace: nil, workspaceName: nil,
+                                                  createWorkspace: nil, command: nil, name: nil, noSelect: true)
+        #expect(response == ControlResponse(ok: true, result: ControlResult(id: "bg-session")))
+        #expect(actions.calls == [.sessionNew(options)])
+    }
+
     @Test func sessionNewRejectsAmbiguousWorkspaceArguments() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

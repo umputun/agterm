@@ -218,6 +218,7 @@ agtermctl session new --command "sh -c 'clear; ssh user@host'"  # --command is a
 agtermctl session new --name "myhost" --command "ssh user@host"  # pre-name the session (sidebar label set at creation)
 agtermctl session new --workspace-name servers --create-workspace --name "myhost"  # open in the "servers" workspace, creating it if absent (idempotent)
 agtermctl session new --after active             # create right after the current session (--before to precede it); the anchor's workspace is used
+agtermctl session new --cwd ~/src/agterm --no-select  # create in the background without switching to it (the current session stays active)
 agtermctl session duplicate --target 9f3c        # a second plain shell in that session's workspace and cwd, right after it (only the directory carries over)
 agtermctl session type --target 9f3c $'make test\n'      # inject text into a session by id prefix
 echo 'make test' | agtermctl session type --target active --stdin

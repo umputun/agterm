@@ -34,6 +34,7 @@ struct Session: ParsableCommand {
         @Option(name: .long, help: "Initial session name (defaults to the auto basename).") var name: String?
         @Option(name: .long, help: "Place the new session right AFTER this anchor session (id/prefix/active); the anchor carries its own workspace, replacing --workspace.") var after: String?
         @Option(name: .long, help: "Place the new session right BEFORE this anchor session (id/prefix/active); mirror of --after.") var before: String?
+        @Flag(name: .long, help: "Create the session in the background without selecting or focusing it (leaves the current selection untouched).") var noSelect = false
         @OptionGroup var options: ClientOptions
         var echoesResultID: Bool { true }
 
@@ -56,8 +57,8 @@ struct Session: ParsableCommand {
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .sessionNew, args: options.withWindow(
                 ControlArgs(name: name, cwd: cwd, workspace: workspace, workspaceName: workspaceName,
-                            createWorkspace: createWorkspace ? true : nil, command: command,
-                            after: after, before: before)))
+                            createWorkspace: createWorkspace ? true : nil, noSelect: noSelect ? true : nil,
+                            command: command, after: after, before: before)))
         }
     }
 

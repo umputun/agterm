@@ -123,7 +123,7 @@ All ten are read-only projections of GUI state.
 
 ## session
 
-- `session new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--name NAME] [--after SID | --before SID] [--window W]`
+- `session new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--name NAME] [--after SID | --before SID] [--no-select] [--window W]`
   — create a session and focus it; returns the new id. `--cwd` sets the start directory (default
   `$HOME`). The destination workspace is addressed one of two mutually-exclusive ways: `--workspace`
   (id / unique prefix / `active`, the default) or `--workspace-name` (the sidebar label) — the latter
@@ -145,7 +145,10 @@ All ten are read-only projections of GUI state.
   across all workspaces), so it names the destination workspace itself — `--after`/`--before` are
   therefore mutually exclusive with each other and with `--workspace`/`--workspace-name` (the anchor
   already picks the workspace). `agtermctl session new --after active` is the headline case: create
-  right after the current session in one round-trip.
+  right after the current session in one round-trip. `--no-select` creates the session in the BACKGROUND:
+  it is added to the sidebar but NOT selected or focused, so the current selection and focus are left
+  untouched (the new node is not `active` in `tree` — that flag is the read-back); omit it for the default
+  select-and-focus behavior. Every other addressing/placement option composes with it.
 - `session duplicate [--target] [--window W]` — create a fresh session in the SAME workspace as the
   target, inserted directly AFTER it, rooted at the target's focused-pane working directory (the live
   OSC 7 cwd the sidebar row shows and `session reveal` opens); selects + focuses the new session and

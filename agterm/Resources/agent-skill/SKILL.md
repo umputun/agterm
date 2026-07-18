@@ -157,7 +157,7 @@ applied to the cells, omitted when untouched), and `dashboardFontMode` (`auto`|`
 focused from the tree workspace node's `focused` flag).
 
 **session**
-- `new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--name NAME] [--after SID | --before SID]` —
+- `new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--name NAME] [--after SID | --before SID] [--no-select]` —
   create (and focus) a session. Target the workspace by id/prefix (`--workspace`) OR by name
   (`--workspace-name`, mutually exclusive); add `--create-workspace` to reuse-or-create the named
   workspace when absent. `--command` runs that program as the session process instead of a login shell
@@ -166,7 +166,9 @@ focused from the tree workspace node's `focused` flag).
   `--name` seeds the sidebar label (default: the auto basename). `--after`/`--before` place it directly
   after/before an anchor session (id/prefix/`active`) instead of appending — the anchor carries its own
   workspace, so it's mutually exclusive with `--workspace`/`--workspace-name`. `new --after active` =
-  create right after the current session.
+  create right after the current session. `--no-select` creates the session in the BACKGROUND — it is
+  added to the sidebar but NOT selected or focused, leaving the current selection untouched (the new node
+  is not `active` in `tree`); omit it for the default select-and-focus behavior.
 - `duplicate [--target]` — create a fresh session (a plain login shell) in the target's workspace, right
   after it, rooted at the target's focused-pane cwd; selects + focuses it and returns the new id. ONLY the
   directory carries over — no custom name, command, split, scratch, status, flag, font size, or background.

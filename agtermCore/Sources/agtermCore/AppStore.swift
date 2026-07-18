@@ -274,7 +274,7 @@ public final class AppStore {
     /// workspace matches.
     @discardableResult
     public func addSession(toWorkspace workspaceID: UUID, cwd: String, command: String? = nil,
-                           name: String? = nil, at index: Int? = nil) -> Session? {
+                           name: String? = nil, at index: Int? = nil, select: Bool = true) -> Session? {
         guard let wsIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
         let session = Session(initialCwd: cwd, customName: name?.trimmedOrNil)
         session.initialCommand = command
@@ -284,9 +284,12 @@ public final class AppStore {
         } else {
             workspaces[wsIndex].sessions.append(session)
         }
-        selectedSessionID = session.id
-        autoUnfocusIfOutsideFocus(session.id) // a control-driven add into another workspace must reveal it
-        recordRecency()
+        // a background add (`session.new --no-select`) leaves selection/focus/recency untouched.
+        if select {
+            selectedSessionID = session.id
+            autoUnfocusIfOutsideFocus(session.id) // a control-driven add into another workspace must reveal it
+            recordRecency()
+        }
         save()
         return session
     }

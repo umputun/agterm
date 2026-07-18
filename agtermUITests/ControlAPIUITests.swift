@@ -517,6 +517,31 @@ final class ControlAPIUITests: ControlAPITestCase {
                       "a blank name should report must-not-be-blank, not suggest --create-workspace: \(blank)")
     }
 
+    // session.new --no-select creates the session in the background: it is added (a second row appears and
+    // the returned id resolves in the tree) but the ORIGINAL session stays active, so the read-back `active`
+    // flag confirms the selection was not pulled to the new one.
+    func testSessionNewNoSelectKeepsActiveSelection() throws {
+        let original = try activeSessionID()
+
+        let created = try sendCommand(#"{"cmd":"session.new","args":{"noSelect":true}}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true, "session.new --no-select should succeed: \(created)")
+        let newID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return an id")
+        XCTAssertNotEqual(newID.lowercased(), original.lowercased(), "the background session should be a new session")
+
+        // poll until the new session appears, then assert the ORIGINAL is still active and the new one is not.
+        var confirmed = false
+        for _ in 0..<20 {
+            let tree = try sendCommand(#"{"cmd":"tree"}"#)
+            if let newNode = sessionNode(tree, id: newID), let oldNode = sessionNode(tree, id: original),
+               oldNode["active"] as? Bool == true, newNode["active"] as? Bool == false {
+                confirmed = true
+                break
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.3))
+        }
+        XCTAssertTrue(confirmed, "the new session should exist while the original stays active (not the new one)")
+    }
+
     // workspace.new returns an id and the workspace appears; workspace.rename is reflected in json.
     func testWorkspaceNewAndRename() throws {
         let created = try sendCommand(#"{"cmd":"workspace.new","args":{"name":"control ws"}}"#)

@@ -455,12 +455,26 @@ paths:
   The fix is an absolute path or a LOGIN-shell wrapper (`zsh -lc '…'`); a plain `sh -c` gets shell
   operators but NOT the login PATH, so the overlay's built-in `sh -c` wrapper does not by itself solve it
   (the bundled agent-skill documents this caveat on the three `--command`/overlay entries).
+  `args.noSelect` (the CLI's `--no-select`) creates the session in the BACKGROUND — `makeSessionResponse`
+  passes `select: !noSelect` to `AppStore.addSession` (which gates `selectedSessionID`/`autoUnfocusIfOutsideFocus`/`recordRecency`
+  on `select`) AND suppresses the `focusActiveSession()` call, so the current selection and focus are left
+  untouched.
+  It is the inverse of the overlay's `--follow` (overlay opens in the background by default and opts INTO
+  selecting; `session.new` selects by default and opts OUT), and like `--follow` it rides the existing
+  command as a new optional ARG — NO new `Command` case.
+  It is state-mutating-with-read-back EXEMPT: `--no-select` is a creation-time behavior, not queryable
+  per-session state, and the read-back is the EXISTING `tree` `active` flag (the new node is not `active`),
+  so no new `ControlSessionNode` field is owed.
+  Do NOT overload the existing `ControlArgs.select` (that is `session.type --select`, opposite polarity) —
+  `noSelect` is its own opt-in-true bool, mirroring `createWorkspace`/`follow`.
   Keep-in-sync: the `.sessionNew` case carries `ControlArgs.command` plus `ControlArgs.name` (custom
-  name) and `ControlArgs.workspaceName` + `ControlArgs.createWorkspace` (name-addressing + ensure);
+  name) and `ControlArgs.workspaceName` + `ControlArgs.createWorkspace` (name-addressing + ensure) +
+  `ControlArgs.noSelect` (threaded into `ControlSessionCreateOptions.noSelect`);
   the arm pre-validates the mutual-exclusion / create-needs-name rules and shares `makeSessionResponse`
-  across the id- and name-addressed paths; the `session new` CLI carries `--command`/`--name`/`--workspace-name`/`--create-workspace`
-  (the last two also `validate()`-guarded); and round-trip + e2e (`testSessionNewWithCommandRunsAsProcess`,
-  `testSessionNewWithName`, `testSessionNewWorkspaceNameCreatesThenReuses`) cover them.
+  across the id- and name-addressed paths; the `session new` CLI carries `--command`/`--name`/`--workspace-name`/`--create-workspace`/`--no-select`
+  (the two workspace flags also `validate()`-guarded); and round-trip + e2e (`testSessionNewWithCommandRunsAsProcess`,
+  `testSessionNewWithName`, `testSessionNewWorkspaceNameCreatesThenReuses`, `testSessionNewNoSelectKeepsActiveSelection`)
+  cover them.
   `session.duplicate` (target = session) creates a fresh session in the SAME workspace as the target,
   inserted directly AFTER it, rooted at the target's focused-pane cwd (`Session.focusedCwd` — the live
   OSC 7 directory the sidebar row shows and `session.reveal` opens), then selects + focuses it and returns

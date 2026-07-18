@@ -95,6 +95,11 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// For `session.new` with `workspaceName`: create the named workspace when none exists (idempotent
     /// reuse-or-create). An error without `workspaceName` — there is nothing to create by id.
     public var createWorkspace: Bool?
+    /// For `session.new`: create the session in the background without selecting or focusing it, leaving
+    /// the current selection untouched (the CLI's `--no-select`). Omitted/`false` keeps the default
+    /// select-and-focus behavior. The read-back is the existing `tree` `active` flag — the new node is not
+    /// `active`.
+    public var noSelect: Bool?
     /// Text to inject for `session.type` / `quick.type`; the search needle for `session.search`.
     public var text: String?
     /// Whether `session.type` may select a never-shown session to realize its surface.
@@ -222,7 +227,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
 
     public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
                 workspace: String? = nil, workspaceName: String? = nil,
-                createWorkspace: Bool? = nil, text: String? = nil, select: Bool? = nil, mode: String? = nil,
+                createWorkspace: Bool? = nil, noSelect: Bool? = nil, text: String? = nil, select: Bool? = nil, mode: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
                 follow: Bool? = nil, window: String? = nil,
                 pane: String? = nil, paneID: String? = nil, to: String? = nil,
@@ -241,6 +246,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.workspace = workspace
         self.workspaceName = workspaceName
         self.createWorkspace = createWorkspace
+        self.noSelect = noSelect
         self.text = text
         self.select = select
         self.mode = mode

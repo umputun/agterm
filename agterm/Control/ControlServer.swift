@@ -561,15 +561,18 @@ final class ControlServer {
     /// optional command/name), focuses it when it lands in the frontmost window (so a keymap `session new`
     /// opens focused like the GUI New Session; a background `--window` target keeps focus), and returns the
     /// new id. Shared by the id- and name-addressed paths of the `.sessionNew` arm. `at` is the anchor-relative
-    /// insertion slot for `--after`/`--before` (clamped in `AppStore`); nil appends.
+    /// insertion slot for `--after`/`--before` (clamped in `AppStore`); nil appends. With `options.noSelect`
+    /// the session is created in the background — `addSession` skips selecting it and the focus call is
+    /// suppressed, leaving the current selection and focus untouched.
     func makeSessionResponse(in store: AppStore, workspaceID: UUID,
                              options: ControlSessionCreateOptions, at index: Int? = nil) -> ControlResponse {
         let cwd = options.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path
         guard let session = store.addSession(toWorkspace: workspaceID, cwd: cwd,
-                                             command: options.command, name: options.name, at: index) else {
+                                             command: options.command, name: options.name, at: index,
+                                             select: !options.noSelect) else {
             return ControlResponse(ok: false, error: "could not create session")
         }
-        if store === library.activeStore { actions.focusActiveSession() }
+        if !options.noSelect, store === library.activeStore { actions.focusActiveSession() }
         return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
     }
 

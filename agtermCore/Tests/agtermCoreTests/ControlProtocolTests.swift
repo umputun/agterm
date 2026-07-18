@@ -37,6 +37,7 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .sessionNew, args: ControlArgs(cwd: "/tmp", command: "ssh host -p 22")),
             ControlRequest(cmd: .sessionNew, args: ControlArgs(name: "myhost", command: "ssh host")),
             ControlRequest(cmd: .sessionNew, args: ControlArgs(workspaceName: "servers", createWorkspace: true)),
+            ControlRequest(cmd: .sessionNew, args: ControlArgs(noSelect: true)),
             ControlRequest(cmd: .sessionDuplicate, target: "9f3c"),
             ControlRequest(cmd: .sessionDuplicate, target: "active", args: ControlArgs(window: "win")),
             ControlRequest(cmd: .sessionClose, target: "9f3c"),
