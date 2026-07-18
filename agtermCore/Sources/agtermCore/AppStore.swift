@@ -238,15 +238,15 @@ public final class AppStore {
                            dashboardFontMode: dashboardFontMode())
     }
 
-    /// Creates a workspace and appends it. Clears any active focus so the new (empty)
-    /// workspace is immediately visible — without this `visibleWorkspaces` would still
-    /// return only the focused one and the new workspace would be silently hidden until
-    /// the user manually unfocuses (the same auto-reveal contract as `addSession`).
+    /// Creates a workspace and appends it. When `clearFocus` (the default) it clears any active focus so
+    /// the new (empty) workspace is immediately visible — else `visibleWorkspaces` returns only the
+    /// focused one and the new workspace is silently hidden (the auto-reveal contract, like `addSession`).
+    /// Pass `clearFocus: false` to keep the current focus — a background `session.new --no-select` create.
     @discardableResult
-    public func addWorkspace(name: String) -> Workspace {
+    public func addWorkspace(name: String, clearFocus: Bool = true) -> Workspace {
         let workspace = Workspace(name: name)
         workspaces.append(workspace)
-        focusedWorkspaceID = nil
+        if clearFocus { focusedWorkspaceID = nil }
         save()
         return workspace
     }
@@ -259,22 +259,22 @@ public final class AppStore {
         return workspaces.first { $0.name == needle }
     }
 
-    /// The workspace named `name`, created if none exists (idempotent reuse-or-create). Returns nil only
-    /// when `name` is blank. Backs `session.new --workspace-name … --create-workspace`.
+    /// The workspace named `name`, created if none exists (idempotent); `clearFocus` (default true) is
+    /// forwarded to `addWorkspace` on the create path. Nil only when blank. Backs `--workspace-name --create-workspace`.
     @discardableResult
-    public func ensureWorkspace(named name: String) -> Workspace? {
+    public func ensureWorkspace(named name: String, clearFocus: Bool = true) -> Workspace? {
         guard let needle = name.trimmedOrNil else { return nil }
-        return workspace(named: needle) ?? addWorkspace(name: needle)
+        return workspace(named: needle) ?? addWorkspace(name: needle, clearFocus: clearFocus)
     }
 
-    /// Creates a session in the given workspace and selects it. An optional `name` seeds the session's
-    /// `customName` (trimmed; blank clears it to the auto basename, matching `renameSession`). With `at`
-    /// nil the session is appended (the default); with `at` set it is inserted at the clamped index
-    /// (`0...count`), backing the control `session.new --after`/`--before` placement. Returns nil if no
-    /// workspace matches.
+    /// Creates a session in the given workspace and, when `select` is true (the default), selects it;
+    /// `select: false` appends it in the background, leaving selection/focus/recency untouched (backs
+    /// `session.new --no-select`). An optional `name` seeds `customName` (trimmed; blank = the auto
+    /// basename, matching `renameSession`). `at` nil appends (default); `at` set inserts at the clamped
+    /// index (`0...count`), backing `session.new --after`/`--before`. Returns nil if no workspace matches.
     @discardableResult
     public func addSession(toWorkspace workspaceID: UUID, cwd: String, command: String? = nil,
-                           name: String? = nil, at index: Int? = nil) -> Session? {
+                           name: String? = nil, at index: Int? = nil, select: Bool = true) -> Session? {
         guard let wsIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
         let session = Session(initialCwd: cwd, customName: name?.trimmedOrNil)
         session.initialCommand = command
@@ -284,9 +284,12 @@ public final class AppStore {
         } else {
             workspaces[wsIndex].sessions.append(session)
         }
-        selectedSessionID = session.id
-        autoUnfocusIfOutsideFocus(session.id) // a control-driven add into another workspace must reveal it
-        recordRecency()
+        // a background add (`session.new --no-select`) leaves selection/focus/recency untouched.
+        if select {
+            selectedSessionID = session.id
+            autoUnfocusIfOutsideFocus(session.id) // a control-driven add into another workspace must reveal it
+            recordRecency()
+        }
         save()
         return session
     }

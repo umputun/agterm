@@ -88,6 +88,12 @@ struct CommandsTests {
         #expect(try request(["session", "new", "--workspace-name", "servers", "--create-workspace"]) == expected)
     }
 
+    @Test func sessionNewWithNoSelect() throws {
+        // --no-select sets noSelect=true on the wire (omitted when the flag is absent).
+        let expected = ControlRequest(cmd: .sessionNew, args: ControlArgs(noSelect: true))
+        #expect(try request(["session", "new", "--no-select"]) == expected)
+    }
+
     @Test func sessionNewRejectsWorkspaceAndWorkspaceName() {
         // both addressing modes set — validate() rejects it before any request is built.
         #expect(validationMessage(["session", "new", "--workspace", "active", "--workspace-name", "servers"])

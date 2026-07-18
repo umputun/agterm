@@ -574,7 +574,7 @@
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session new [--cwd DIR] [--workspace W | --workspace-name NAME [--create-workspace]] [--command CMD]
-                [--name NAME] [--after SID | --before SID] [--window W]
+                [--name NAME] [--after SID | --before SID] [--no-select] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.new</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -613,6 +613,13 @@
                 fails with exit 127. Use an absolute path, or wrap it:
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #f2b45c; white-space: nowrap">--command "zsh -lc 'htop'"</span>. The
                 command is persisted and re-runs on restore when <em>Restore running commands on restart</em> is enabled.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--no-select</span> creates the session in the
+                background: it is added to the sidebar but not selected or focused, leaving the current selection untouched (the
+                new node is not <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> in
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> — that flag is the read-back). Omit it
+                for the default select-and-focus behavior.
               </p>
             </div>
 

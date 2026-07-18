@@ -64,6 +64,20 @@ struct AppStoreTests {
         #expect(store.activeSession?.id == unwrapped.id)
     }
 
+    @Test func addSessionWithoutSelectLeavesSelectionUntouched() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let first = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        #expect(store.selectedSessionID == first.id)
+        // a background add (control `session.new --no-select`) appends the session but keeps the current
+        // selection and recency, so `active` still points at the first session.
+        let background = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b", select: false))
+        #expect(store.workspaces[0].sessions.map(\.id) == [first.id, background.id])
+        #expect(store.selectedSessionID == first.id)
+        #expect(store.activeSession?.id == first.id)
+        #expect(store.sessionRecency.items == [first.id]) // the background add was not recorded
+    }
+
     @Test func addSessionCarriesInitialCommand() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

@@ -191,7 +191,8 @@ public struct ControlDispatcher {
                 command: args?.command,
                 name: args?.name,
                 after: args?.after,
-                before: args?.before
+                before: args?.before,
+                noSelect: args?.noSelect == true
             ))
         case .sessionDuplicate:
             // no options: the source session names its own workspace AND its cwd, so a duplicate is fully

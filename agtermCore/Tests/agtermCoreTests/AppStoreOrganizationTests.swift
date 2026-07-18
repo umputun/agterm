@@ -200,6 +200,26 @@ struct AppStoreOrganizationTests {
         #expect(store.focusedWorkspaceID == nil)
     }
 
+    @Test func ensureWorkspaceClearFocusFalsePreservesFocusOnCreate() {
+        let store = makeStore()
+        let ws1 = store.addWorkspace(name: "one")
+        store.setFocusedWorkspace(ws1.id)
+        #expect(store.focusedWorkspaceID == ws1.id)
+        // a normal create clears focus so the new workspace is revealed (addWorkspace auto-reveal contract).
+        _ = store.addWorkspace(name: "two")
+        #expect(store.focusedWorkspaceID == nil)
+        // re-focus, then a background create (clearFocus: false, backing session.new --no-select
+        // --create-workspace) leaves the focus filter untouched.
+        store.setFocusedWorkspace(ws1.id)
+        let created = store.ensureWorkspace(named: "bg", clearFocus: false)
+        #expect(created != nil)
+        #expect(store.focusedWorkspaceID == ws1.id)
+        // reusing an existing workspace never touches focus regardless of clearFocus.
+        let reused = store.ensureWorkspace(named: "bg", clearFocus: true)
+        #expect(reused?.id == created?.id)
+        #expect(store.focusedWorkspaceID == ws1.id)
+    }
+
     @Test func removeFocusedWorkspaceClearsFocus() {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
