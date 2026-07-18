@@ -412,6 +412,10 @@ private struct InterfaceSettingsView: View {
                     Toggle(element.displayName, isOn: binding(for: element))
                         .accessibilityIdentifier("settings-interface-\(element.rawValue)")
                 }
+                // opt-in (default OFF), unlike the show/hide element toggles above — so it is a
+                // dedicated AppSettings flag, not an InterfaceElement.
+                Toggle("Close button on hover", isOn: sessionCloseButtonEnabled)
+                    .accessibilityIdentifier("settings-session-close-button")
             }
         }
         .formStyle(.grouped)
@@ -423,6 +427,11 @@ private struct InterfaceSettingsView: View {
     private func binding(for element: InterfaceElement) -> Binding<Bool> {
         Binding(get: { !model.settings.isInterfaceElementHidden(element) },
                 set: { model.setInterfaceElementVisible(element, visible: $0) })
+    }
+
+    private var sessionCloseButtonEnabled: Binding<Bool> {
+        Binding(get: { model.settings.sessionCloseButtonEnabled ?? false },
+                set: { model.setSessionCloseButtonEnabled($0 ? true : nil) })
     }
 }
 

@@ -81,6 +81,7 @@ final class SettingsModel {
         applyAgentStatusColors()
         applyRestoreRunningCommand()
         applyAttentionButtonEnabled()
+        applySessionCloseButtonEnabled()
         applyInterfaceElements()
         // create the commented starter keymap on first launch, then load + parse it.
         ensureStarterKeymap()
@@ -240,6 +241,8 @@ final class SettingsModel {
     func setRestoreRunningCommand(_ value: Bool?) { settings.restoreRunningCommand = value; persistAndApply() }
     // chrome flag, not a ghostty key: persistAndApply() no-ops the config but rides .agtermAppearanceChanged.
     func setAttentionButtonEnabled(_ value: Bool?) { settings.attentionButtonEnabled = value; persistAndApply() }
+    // chrome flag, not a ghostty key; read live at hover time, so no re-render notification is needed.
+    func setSessionCloseButtonEnabled(_ value: Bool?) { settings.sessionCloseButtonEnabled = value; persistAndApply() }
 
     /// Show or hide a single title-bar / sidebar-footer chrome element, then persist. Toggling `visible`
     /// off adds the element to `hiddenInterfaceElements`, on removes it; an empty result maps back to nil so
@@ -662,6 +665,7 @@ final class SettingsModel {
         applyAgentStatusColors()
         applyRestoreRunningCommand()
         applyAttentionButtonEnabled()
+        applySessionCloseButtonEnabled()
         applyInterfaceElements()
         // refresh the app chrome (title bar + sidebar + quick terminal) with the new terminal color,
         // window translucency, and toolbar style immediately, rather than only when the window next
@@ -701,6 +705,10 @@ final class SettingsModel {
 
     private func applyAttentionButtonEnabled() {
         GhosttyApp.shared.setAttentionButtonEnabled(settings.attentionButtonEnabled ?? false)
+    }
+
+    private func applySessionCloseButtonEnabled() {
+        GhosttyApp.shared.setSessionCloseButtonEnabled(settings.sessionCloseButtonEnabled ?? false)
     }
 
     private func applyInterfaceElements() {

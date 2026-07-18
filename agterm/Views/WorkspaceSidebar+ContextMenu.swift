@@ -226,6 +226,15 @@ extension WorkspaceSidebar.Coordinator {
         addSession(toWorkspace: node.id, cwd: actions.resolvedNewSessionCwd())
     }
 
+    /// Inline "×" on a session row — same action as the right-click "Close Session" menu item.
+    /// Closes only the hovered row's session, resolved from the outline row at click time.
+    @objc func closeSessionButtonClicked(_ sender: NSButton) {
+        guard let outline = outlineView else { return }
+        let row = outline.row(for: sender)
+        guard row >= 0, let node = outline.item(atRow: row) as? SidebarNode, node.kind == .session else { return }
+        actions.closeSessions([node.id], in: store)
+    }
+
     @objc private func menuDeleteWorkspace(_ sender: NSMenuItem) {
         guard let node = sender.representedObject as? SidebarNode else { return }
         actions.deleteWorkspace(node.id)

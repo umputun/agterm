@@ -225,6 +225,92 @@ final class SidebarRowView: NSTableRowView {
     private static let keyAlpha: CGFloat = 0.13
     private static let inactiveAlpha: CGFloat = 0.07
 
+    private var closeButton: NSButton?
+    private var isSessionRow = false
+    private var hoverTrackingArea: NSTrackingArea?
+
+    /// Hover-revealed "×" for session rows, hosted on the row view: it sits in the indentation
+    /// gutter left of the cell's frame, so only the row view can host and hit-test it.
+    func configureCloseButton(isSession: Bool, target: AnyObject, action: Selector) {
+        isSessionRow = isSession
+        if isSession, closeButton == nil {
+            let btn = SessionCloseButton()
+            btn.translatesAutoresizingMaskIntoConstraints = false
+            btn.isBordered = false
+            let config = NSImage.SymbolConfiguration(pointSize: 8, weight: .regular)
+            btn.image = NSImage(systemSymbolName: "xmark", accessibilityDescription: "Close Session")?
+                .withSymbolConfiguration(config)
+            btn.image?.isTemplate = true
+            btn.imageScaling = .scaleNone // the button is only a click target; don't scale the glyph up
+            btn.setAccessibilityIdentifier("session-close")
+            btn.setAccessibilityLabel("Close Session")
+            addSubview(btn)
+            NSLayoutConstraint.activate([
+                btn.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+                btn.centerYAnchor.constraint(equalTo: centerYAnchor),
+                btn.widthAnchor.constraint(equalToConstant: 16),
+                btn.heightAnchor.constraint(equalToConstant: 16),
+            ])
+            closeButton = btn
+        }
+        closeButton?.target = target
+        closeButton?.action = action
+        closeButton?.isHidden = true
+        retintCloseButton()
+        updateTrackingAreas()
+    }
+
+    // `.mouseMoved` re-asserts hover on every move, so a missed enter/exit can't strand the state
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let hoverTrackingArea { removeTrackingArea(hoverTrackingArea); self.hoverTrackingArea = nil }
+        guard isSessionRow else { return }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .mouseMoved, .activeInKeyWindow, .inVisibleRect],
+            owner: self
+        )
+        addTrackingArea(area)
+        hoverTrackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        setHovered(true)
+    }
+
+    override func mouseMoved(with event: NSEvent) {
+        super.mouseMoved(with: event)
+        setHovered(true)
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        setHovered(false)
+    }
+
+    private var isHovered = false
+
+    private func setHovered(_ hovered: Bool) {
+        guard isSessionRow else { return }
+        // the opt-in gate is read live at hover time, so a Settings flip needs no row reload
+        let show = hovered && GhosttyApp.shared.sessionCloseButtonEnabled
+        if let closeButton, closeButton.isHidden == show { closeButton.isHidden = !show }
+        if isHovered != show {
+            isHovered = show
+            needsDisplay = true
+        }
+    }
+
+    private func retintCloseButton() {
+        guard let closeButton else { return }
+        let app = GhosttyApp.shared
+        let color = isSelected
+            ? (app.terminalSelectionForegroundColor ?? .white)
+            : (app.terminalForegroundColor ?? .labelColor)
+        closeButton.contentTintColor = color.withAlphaComponent(isSelected ? 0.55 : 0.38)
+    }
+
     override var isEmphasized: Bool {
         get { window?.isKeyWindow ?? false }
         // isEmphasized is derived from the window's key state; the setter only triggers a redraw.
@@ -252,11 +338,18 @@ final class SidebarRowView: NSTableRowView {
 
     private func retintCellViews() {
         for case let cell as SidebarCellView in subviews { cell.setColors(selected: isSelected) }
+        retintCloseButton()
     }
 
     override func drawBackground(in dirtyRect: NSRect) {
         super.drawBackground(in: dirtyRect)
-        guard isSelected else { return }
+        guard isSelected else {
+            if isHovered {
+                NSColor.labelColor.withAlphaComponent(0.07).setFill()
+                NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1.5), xRadius: 7, yRadius: 7).fill()
+            }
+            return
+        }
         if let selection = GhosttyApp.shared.terminalSelectionBackgroundColor {
             // the terminal's own selection color; dim it for a background (non-key) window.
             selection.withAlphaComponent(isEmphasized ? 1 : 0.55).setFill()
@@ -265,6 +358,57 @@ final class SidebarRowView: NSTableRowView {
             NSColor(white: 1, alpha: isEmphasized ? Self.keyAlpha : Self.inactiveAlpha).setFill()
         }
         NSBezierPath(roundedRect: bounds.insetBy(dx: 8, dy: 1.5), xRadius: 7, yRadius: 7).fill()
+    }
+}
+
+/// The session row's "×": a circular wash behind the glyph while the cursor is over the button,
+/// shown only on the selected row.
+final class SessionCloseButton: NSButton {
+    private var highlightTrackingArea: NSTrackingArea?
+
+    private var washVisible = false {
+        didSet { if washVisible != oldValue { needsDisplay = true } }
+    }
+
+    override var isHidden: Bool {
+        didSet { if isHidden { washVisible = false } } // a hidden button gets no mouseExited
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let highlightTrackingArea { removeTrackingArea(highlightTrackingArea); self.highlightTrackingArea = nil }
+        let area = NSTrackingArea(
+            rect: bounds,
+            options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
+            owner: self
+        )
+        addTrackingArea(area)
+        highlightTrackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) {
+        super.mouseEntered(with: event)
+        guard (superview as? NSTableRowView)?.isSelected == true else { return }
+        washVisible = true
+    }
+
+    override func mouseExited(with event: NSEvent) {
+        super.mouseExited(with: event)
+        washVisible = false
+    }
+
+    // path-drawn (not layer cornerRadius): the button's frame can be wider than its constrained
+    // alignment rect, which renders a layer-rounded "circle" visibly squashed
+    override func draw(_ dirtyRect: NSRect) {
+        if washVisible {
+            let diameter = min(bounds.width, bounds.height)
+            let circle = NSRect(x: (bounds.width - diameter) / 2,
+                                y: (bounds.height - diameter) / 2,
+                                width: diameter, height: diameter)
+            NSColor.labelColor.withAlphaComponent(0.16).setFill()
+            NSBezierPath(ovalIn: circle).fill()
+        }
+        super.draw(dirtyRect)
     }
 }
 

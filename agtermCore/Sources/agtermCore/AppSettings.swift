@@ -244,6 +244,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// a glance). nil means the default (off). An app-level chrome flag, NOT a ghostty key — it never
     /// appears in `ghosttyConfigLines()`; it only gates whether the titlebar builds the icon.
     public var attentionButtonEnabled: Bool?
+    /// Whether hovering a sidebar session row reveals the inline "×" close button (plus the row hover
+    /// wash). nil means the default (off). An app-level chrome flag, NOT a ghostty key — it never
+    /// appears in `ghosttyConfigLines()`; it only gates the sidebar row's hover affordance.
+    public var sessionCloseButtonEnabled: Bool?
     /// How a delivered notification bounces the Dock icon (`off`/`once`/`untilFocused`), stored as a
     /// `DockBounce` RAW STRING so an unknown future value decodes tolerantly to the default via
     /// `effectiveDockBounce` (the AppSettings forward-compat rule). nil means the default (`off`). An
@@ -317,6 +321,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 mouseScrollMultiplier: Double? = nil, inactivePaneMuteStrength: Int? = nil,
                 sidebarBackgroundShift: Int? = nil, restoreRunningCommand: Bool? = nil,
                 inheritGlobalGhosttyConfig: Bool? = nil, attentionButtonEnabled: Bool? = nil,
+                sessionCloseButtonEnabled: Bool? = nil,
                 dockBounce: String? = nil, notificationSoundName: String? = nil,
                 blockedStatusSoundName: String? = nil, rightClickPaste: Bool? = nil,
                 newSessionDirectory: String? = nil, newSessionCustomDirectory: String? = nil,
@@ -345,6 +350,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.restoreRunningCommand = restoreRunningCommand
         self.inheritGlobalGhosttyConfig = inheritGlobalGhosttyConfig
         self.attentionButtonEnabled = attentionButtonEnabled
+        self.sessionCloseButtonEnabled = sessionCloseButtonEnabled
         self.dockBounce = dockBounce
         self.notificationSoundName = notificationSoundName
         self.blockedStatusSoundName = blockedStatusSoundName

@@ -73,6 +73,10 @@ final class GhosttyApp {
     /// reads it (via `WindowContentView`'s mirrored chrome state), `SettingsModel` writes it. The
     /// re-render rides the `.agtermAppearanceChanged` notification, like `toolbarMode`. Defaults off.
     private(set) var attentionButtonEnabled: Bool = false
+    /// Whether hovering a sidebar session row reveals the inline "×" close button (plus the row hover
+    /// wash). NOT ghostty-resolved: `SidebarRowView` reads it live at hover time (no re-render
+    /// notification needed), `SettingsModel` writes it. Defaults off.
+    private(set) var sessionCloseButtonEnabled: Bool = false
     /// Which title-bar / sidebar-footer chrome elements are hidden (`AppSettings.hiddenInterfaceElements`).
     /// NOT ghostty-resolved: `WindowContentView` mirrors it into view state and gates each element,
     /// `SettingsModel` writes it. The re-render rides the `.agtermAppearanceChanged` notification, like
@@ -187,6 +191,12 @@ final class GhosttyApp {
     /// every change; the title-bar re-render rides the `.agtermAppearanceChanged` notification.
     func setAttentionButtonEnabled(_ enabled: Bool) {
         attentionButtonEnabled = enabled
+    }
+
+    /// Set whether sidebar session rows show the hover-revealed "×" close button. Called by
+    /// `SettingsModel` at launch and on every change; read live at hover time by `SidebarRowView`.
+    func setSessionCloseButtonEnabled(_ enabled: Bool) {
+        sessionCloseButtonEnabled = enabled
     }
 
     /// Set which title-bar / sidebar-footer chrome elements are hidden. Called by `SettingsModel` at launch

@@ -394,6 +394,19 @@ struct AppSettingsTests {
         #expect(legacy.attentionButtonEnabled == nil)
     }
 
+    @Test func sessionCloseButtonEnabledDefaultsOffAndIsNotAGhosttyKey() throws {
+        // default (nil) = off; an app-level chrome flag, so it adds NO ghostty config line.
+        #expect(AppSettings().sessionCloseButtonEnabled == nil)
+        #expect(AppSettings(sessionCloseButtonEnabled: true).ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
+        // round-trips each state; a legacy settings.json without the key decodes to nil (off).
+        for value: Bool? in [nil, true, false] {
+            let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(sessionCloseButtonEnabled: value)))
+            #expect(decoded.sessionCloseButtonEnabled == value)
+        }
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(legacy.sessionCloseButtonEnabled == nil)
+    }
+
     @Test func dockBounceDefaultsToOffResolvesTolerantlyAndIsNotAGhosttyKey() throws {
         // default (nil) resolves to off; an app-level attention setting, so it adds NO ghostty line.
         #expect(AppSettings().effectiveDockBounce == .off)

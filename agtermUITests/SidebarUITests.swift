@@ -24,6 +24,11 @@ final class SidebarUITests: XCTestCase {
         markerDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("agterm-sidebar-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: markerDir, withIntermediateDirectories: true)
+        // opt in to the hover "×" (default OFF) so testInlineCloseSessionButtonClosesSession can
+        // exercise it; inert for the other tests (a hover affordance nothing else touches).
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        try Data(#"{ "sessionCloseButtonEnabled": true }"#.utf8)
+            .write(to: stateDir.appendingPathComponent("settings.json"))
         app = XCUIApplication()
         app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
         app.launchForUITest()
@@ -402,6 +407,45 @@ final class SidebarUITests: XCTestCase {
         addBtn.click()
         XCTAssertTrue(pollSessionCount(workspace: "workspace 1", expected: 2, timeout: 5),
                       "workspace 1 should have 2 sessions after clicking the inline '+' button")
+    }
+
+    /// The hover-revealed "×" on a session row closes that session — the same action as the
+    /// right-click "Close Session" menu item. Every session row owns a (hidden) "×", so the test
+    /// hovers a specific row and clicks the one that became hittable.
+    func testInlineCloseSessionButtonClosesSession() throws {
+        XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
+        let ws = app.staticTexts["workspace 1"]
+        XCTAssertTrue(ws.waitForExistence(timeout: 5), "seeded workspace should exist")
+        // a second session, so the close leaves the workspace non-empty and unambiguous to assert
+        ws.rightClick()
+        let newSession = presentedMenuItem("New Session")
+        XCTAssertTrue(newSession.waitForExistence(timeout: 5), "New Session menu item should appear")
+        newSession.click()
+        XCTAssertTrue(pollSessionCount(workspace: "workspace 1", expected: 2, timeout: 5),
+                      "workspace 1 should have 2 sessions before the close")
+
+        let rows = app.staticTexts.matching(identifier: "session-row")
+        XCTAssertTrue(rows.element(boundBy: 1).waitForExistence(timeout: 5), "second session row should exist")
+        // the "×" lives on the ROW view's gutter, which AppKit's table accessibility does not
+        // expose as a child element (same limitation as popover buttons — see ui-tests notes),
+        // so drive it by COORDINATE anchored to the row's own text frame: the button center sits
+        // a fixed 42pt left of the label (gutter 14 + 8 to center, vs indent + icon + gaps).
+        // retry — the first synthesized move can land before the window is key, and a click that
+        // misses the not-yet-revealed button only selects the row, which is harmless. the close is
+        // asserted on the VISIBLE row count (the row vanishes immediately); the persisted snapshot
+        // lags behind it by the close-undo grace, so pollSessionCount would race.
+        let deadline = Date().addingTimeInterval(10)
+        while pollSessionRowCount(2, timeout: 0.5), Date() < deadline {
+            let secondRow = rows.element(boundBy: 1)
+            secondRow.hover()
+            usleep(300_000)
+            secondRow.coordinate(withNormalizedOffset: CGVector(dx: 0, dy: 0.5))
+                .withOffset(CGVector(dx: -42, dy: 0))
+                .click()
+            usleep(300_000)
+        }
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 3),
+                      "clicking the hover-revealed '×' should close the hovered session")
     }
 
     // Verifies the "Open Directory…" wiring: the menu item presents the native

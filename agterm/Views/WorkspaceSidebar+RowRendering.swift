@@ -20,9 +20,16 @@ extension WorkspaceSidebar.Coordinator {
 
     func outlineView(_ outlineView: NSOutlineView, rowViewForItem item: Any) -> NSTableRowView? {
         let identifier = NSUserInterfaceItemIdentifier("sidebar-row")
-        if let reused = outlineView.makeView(withIdentifier: identifier, owner: self) as? SidebarRowView { return reused }
-        let view = SidebarRowView()
-        view.identifier = identifier
+        let view: SidebarRowView
+        if let reused = outlineView.makeView(withIdentifier: identifier, owner: self) as? SidebarRowView {
+            view = reused
+        } else {
+            view = SidebarRowView()
+            view.identifier = identifier
+        }
+        view.configureCloseButton(isSession: (item as? SidebarNode)?.kind == .session,
+                                  target: self,
+                                  action: #selector(closeSessionButtonClicked(_:)))
         return view
     }
 
