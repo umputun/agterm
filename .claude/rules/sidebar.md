@@ -59,6 +59,9 @@ paths:
 - Add affordances live in a bottom bar in `WindowContentView`: a workspace button and a session menu (New Session
   / Open Directory…).
   The two session actions are also on each workspace row's right-click menu.
+  Each workspace ROW additionally carries a hover-revealed `+` (New Session) affordance (`SidebarCellView`'s
+  `addButton`, id `workspace-add-session`, shown on `mouseEntered`, same action as the footer New Session)
+  — a SEPARATE toggleable Interface element (`workspaceAddSession`, gated in `mouseEntered`; see [[settings]]).
 - **A single click anywhere on a workspace ROW toggles its expansion** (not just the disclosure triangle),
   so the whole row is the hit target.
   Wired via the outline's `action` (`Coordinator.handleSingleClick`) — which fires on a genuine click,

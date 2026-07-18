@@ -73,7 +73,7 @@ final class GhosttyApp {
     /// reads it (via `WindowContentView`'s mirrored chrome state), `SettingsModel` writes it. The
     /// re-render rides the `.agtermAppearanceChanged` notification, like `toolbarMode`. Defaults off.
     private(set) var attentionButtonEnabled: Bool = false
-    /// Which title-bar / sidebar-footer chrome elements are hidden (`AppSettings.hiddenInterfaceElements`).
+    /// Which title-bar / sidebar chrome elements are hidden (`AppSettings.hiddenInterfaceElements`).
     /// NOT ghostty-resolved: `WindowContentView` mirrors it into view state and gates each element,
     /// `SettingsModel` writes it. The re-render rides the `.agtermAppearanceChanged` notification, like
     /// `toolbarMode`. Empty by default (everything shown).

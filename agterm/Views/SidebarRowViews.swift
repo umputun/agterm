@@ -52,6 +52,12 @@ final class SidebarCellView: NSTableCellView {
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
+        // the workspace-row "+" is a toggleable Interface element; gate it here so a hover only reveals
+        // it when the element is shown. this is hover-time only: a live Settings flip takes effect on the
+        // next hover, and a "+" already on screen when the element is hidden lingers until the next mouse
+        // exit/enter (e.g. a keyboard-driven toggle while the pointer sits on the row). accepted — it's a
+        // hover-only affordance, so any stale "+" clears on the next mouse move.
+        guard !GhosttyApp.shared.hiddenInterfaceElements.contains(.workspaceAddSession) else { return }
         setAddButtonVisible(true)
     }
 
