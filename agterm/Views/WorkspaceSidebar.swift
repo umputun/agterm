@@ -204,6 +204,10 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// the scroll view above the document, hidden otherwise.
         private weak var emptyStateLabel: NSTextField?
 
+        /// Last-seen ACTIVE workspace id (the active session's owner), so `refreshActiveWorkspaceHighlight`
+        /// re-tints the workspace rows only when it actually moved.
+        private var lastActiveWorkspaceID: UUID?
+
         init(store: AppStore, actions: AppActions) {
             self.store = store
             self.actions = actions
@@ -381,6 +385,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// changes never rebuild — that full `reloadData` + re-expand re-lays-out every row and jitters
         /// their labels. A reload during an in-progress rename is skipped so a tick can't drop the edit.
         func reconcile() {
+            // the active-workspace tint rides every reconcile (selection changes re-invoke updateNSView),
+            // catching the same-row case where the selection delegate never re-fires.
+            defer { refreshActiveWorkspaceHighlight() }
             // a mode flip swaps the whole data source (tree ↔ flat flagged list), so rebuild regardless of
             // the shape diff; otherwise compare the mode-appropriate shape.
             let shape = currentShape()
@@ -392,6 +399,31 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 return
             }
             reloadChangedContentRows()
+        }
+
+        /// The ACTIVE workspace for the sidebar highlight: strictly the active session's owner (nil with
+        /// no selection). Deliberately NOT `currentWorkspaceID`, whose last-workspace fallback is a
+        /// new-session placement anchor — highlighting that would light up an arbitrary workspace.
+        var activeWorkspaceID: UUID? {
+            store.selectedSessionID.flatMap { store.workspace(forSession: $0)?.id }
+        }
+
+        /// Re-tints the visible workspace rows when the active workspace changed: the previously active
+        /// row dims to secondary, the newly active one returns to full strength. Needed because a click's
+        /// `selectSession` lands AFTER the selection delegate already repainted (same-row selection never
+        /// re-fires it), so the build-time flag alone would go stale.
+        private func refreshActiveWorkspaceHighlight() {
+            let activeID = activeWorkspaceID
+            guard activeID != lastActiveWorkspaceID else { return }
+            lastActiveWorkspaceID = activeID
+            guard let outline = outlineView else { return }
+            for row in 0 ..< outline.numberOfRows {
+                guard let node = outline.item(atRow: row) as? SidebarNode, node.kind == .workspace,
+                      let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: false) as? SidebarCellView
+                else { continue }
+                cell.isSecondary = node.id != activeID
+                cell.setColors(selected: outline.selectedRowIndexes.contains(row))
+            }
         }
 
         /// The structural shape for the current mode: the workspace tree (workspace id + ordered session

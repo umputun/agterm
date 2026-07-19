@@ -27,6 +27,26 @@ final class SidebarCellView: NSTableCellView {
     private static let addButtonWidth: CGFloat = 16
     private var hoverTrackingArea: NSTrackingArea?
 
+    /// True for a row whose name dims to the same tint as the leading icon so the active row reads
+    /// at full strength: a workspace cell whose workspace is NOT the active one (the active session's
+    /// owner), or any session cell (a non-selected session dims; the selected one is exempted by
+    /// `setColors`' selected check). Set by the cell builder; the coordinator refreshes workspace
+    /// cells when the active workspace changes.
+    var isSecondary = false
+
+    /// Whether the pointer is inside the cell (the same tracking area that reveals the workspace
+    /// "+"). While hovered, a secondary row's name shows the full default color — an instant swap,
+    /// no animation. Reset via `resetHover` when a reused cell is reconfigured.
+    private var isHovered = false
+
+    /// The selection state last applied by `setColors`, so the hover re-tint can re-run it without
+    /// re-deriving the row's selection.
+    private var lastSelected = false
+
+    /// Clears transient hover state on cell reuse (the old row's `mouseExited` may never fire for
+    /// the recycled cell).
+    func resetHover() { isHovered = false }
+
     /// Reveals or collapses the inline "+": the Finder/Xcode hover convention, so an idle row shows
     /// no button and the roll-up badge keeps its slot. Driven by `mouseEntered`/`mouseExited` and
     /// reset hidden when a reused cell is reconfigured in the row provider. No-op for session cells.
@@ -36,11 +56,11 @@ final class SidebarCellView: NSTableCellView {
         addButtonWidthConstraint.constant = visible ? Self.addButtonWidth : 0
     }
 
-    // hover tracking for the "+" reveal, workspace cells only (session cells have no button to show)
+    // hover tracking for the workspace "+" reveal and the secondary-row un-dim (every cell: session
+    // cells have no button, but their name un-dims under the pointer like a workspace's)
     override func updateTrackingAreas() {
         super.updateTrackingAreas()
         if let hoverTrackingArea { removeTrackingArea(hoverTrackingArea); self.hoverTrackingArea = nil }
-        guard addButton != nil else { return }
         let area = NSTrackingArea(
             rect: bounds,
             options: [.mouseEnteredAndExited, .activeInKeyWindow, .inVisibleRect],
@@ -52,6 +72,8 @@ final class SidebarCellView: NSTableCellView {
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
+        isHovered = true
+        if isSecondary { setColors(selected: lastSelected) }
         // the workspace-row "+" is a toggleable Interface element; gate it here so a hover only reveals
         // it when the element is shown. this is hover-time only: a live Settings flip takes effect on the
         // next hover, and a "+" already on screen when the element is hidden lingers until the next mouse
@@ -63,6 +85,8 @@ final class SidebarCellView: NSTableCellView {
 
     override func mouseExited(with event: NSEvent) {
         super.mouseExited(with: event)
+        isHovered = false
+        if isSecondary { setColors(selected: lastSelected) }
         setAddButtonVisible(false)
     }
 
@@ -73,12 +97,16 @@ final class SidebarCellView: NSTableCellView {
     /// table is first responder): the hosting `SidebarRowView` re-asserts it from its live `isSelected`
     /// on attach and on every selection flip, and the coordinator re-runs it on theme changes.
     func setColors(selected: Bool) {
+        lastSelected = selected
         let app = GhosttyApp.shared
         let color = selected
             ? (app.terminalSelectionForegroundColor ?? .white)
             : (app.terminalForegroundColor ?? .labelColor)
-        textField?.textColor = color
         let iconAlpha: CGFloat = selected ? 0.85 : 0.6
+        // a secondary row's name shares the icon's dimmed tint so the active workspace/session stands
+        // out; hovering the row restores the full color (see mouseEntered/mouseExited — instant swap).
+        let dimName = isSecondary && !isHovered && !selected
+        textField?.textColor = dimName ? color.withAlphaComponent(iconAlpha) : color
         imageView?.contentTintColor = color.withAlphaComponent(iconAlpha)
         addButton?.contentTintColor = color.withAlphaComponent(iconAlpha)
     }

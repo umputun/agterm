@@ -41,9 +41,13 @@ extension WorkspaceSidebar.Coordinator {
         applyBadge(toCell: cell, count: 0)
         cell.statusIcon.apply(AgentIndicator())
         cell.setAddButtonVisible(false)
+        cell.resetHover()
         switch node.kind {
         case .workspace:
             let workspace = store.workspaces.first(where: { $0.id == node.id })
+            // dim every workspace name except the active session's owner (see activeWorkspaceID);
+            // the coordinator re-tints these when the active workspace changes.
+            cell.isSecondary = node.id != activeWorkspaceID
             field.stringValue = workspace?.name ?? ""
             field.font = .systemFont(ofSize: GhosttyApp.shared.sidebarFontSize, weight: .medium)
             field.setAccessibilityIdentifier("workspace-row")
@@ -55,6 +59,9 @@ extension WorkspaceSidebar.Coordinator {
             cell.imageView?.image = workspaceIcon
             cell.imageView?.setAccessibilityIdentifier("workspace-icon")
         case .session:
+            // every session row dims when not selected (setColors exempts the selected row itself),
+            // so only the active session reads at full strength — matching the workspace treatment.
+            cell.isSecondary = true
             field.stringValue = rowLabel(forSession: node.id)
             field.font = .systemFont(ofSize: GhosttyApp.shared.sidebarFontSize)
             field.setAccessibilityIdentifier("session-row")
