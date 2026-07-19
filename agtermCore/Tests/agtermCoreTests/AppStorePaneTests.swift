@@ -470,8 +470,10 @@ struct AppStorePaneTests {
         let plain = store.addSession(toWorkspace: ws.id, cwd: "/b", command: "make test")!
         node = try #require(store.controlTree().workspaces[0].sessions.first { $0.id == plain.id.uuidString })
         #expect(node.commandWait == nil)
-        // a plain session (no command) omits it even if the flag were somehow set — gated on initialCommand.
+        // a plain session (no command) omits it even when the flag IS set — gated on initialCommand, so a
+        // mutant that drops the `initialCommand != nil` term would report true here and fail.
         let shell = store.addSession(toWorkspace: ws.id, cwd: "/c")!
+        shell.commandWait = true
         node = try #require(store.controlTree().workspaces[0].sessions.first { $0.id == shell.id.uuidString })
         #expect(node.commandWait == nil)
     }

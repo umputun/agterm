@@ -84,6 +84,21 @@ struct SnapshotRoundTripTests {
         #expect(restored.workspaces[0].sessions[0].commandWait == true)
     }
 
+    @Test func commandWaitFalseRoundTripsAsNilAndRestoresFalse() {
+        // a command session created WITHOUT --wait writes commandWait as nil (false is omitted), and restore
+        // maps that nil back to false via session(from:)'s `?? false` — not true. Exercises both the write
+        // gate and the nil->false restore mapping (a `?? true` mutant would restore true and fail here).
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a", command: "make test")!
+        #expect(session.commandWait == false)
+        let snap = store.snapshot()
+        #expect(snap.workspaces[0].sessions[0].commandWait == nil)
+        let restored = makeStore()
+        restored.restore(from: snap)
+        #expect(restored.workspaces[0].sessions[0].commandWait == false)
+    }
+
     @Test func legacySnapshotWithoutCommandWaitDecodesNil() throws {
         // a snapshot written before --wait existed has no commandWait key; it must decode as nil (not fail
         // the whole load), like every other post-v1 optional field; restore maps nil to false.

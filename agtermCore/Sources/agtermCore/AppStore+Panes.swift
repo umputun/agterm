@@ -96,8 +96,10 @@ extension AppStore {
         session.splitFocused = false
         session.splitRatio = nil // promoted to a single pane; a later split should open even, not stale
         // the command pane is gone — the promoted survivor is a plain shell, so drop the creation command
-        // or a restart would resurrect the exited command instead of restoring the promoted shell.
+        // (and its held-open flag) together or a restart would resurrect the exited command instead of the
+        // promoted shell, and a snapshot would persist commandWait with no initialCommand.
         session.initialCommand = nil
+        session.commandWait = false
         // migrate the split pane's live/persisted metadata up to the session (main) fields, then clear the
         // now-meaningless split fields so nothing still describes a pane that no longer exists.
         // cwd prefers the split's live PWD, then its restore-seed (`initialSplitCwd`, set for a restored
