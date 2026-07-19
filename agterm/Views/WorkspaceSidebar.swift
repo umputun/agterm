@@ -401,19 +401,12 @@ struct WorkspaceSidebar: NSViewRepresentable {
             reloadChangedContentRows()
         }
 
-        /// The ACTIVE workspace for the sidebar highlight: strictly the active session's owner (nil with
-        /// no selection). Deliberately NOT `currentWorkspaceID`, whose last-workspace fallback is a
-        /// new-session placement anchor — highlighting that would light up an arbitrary workspace.
-        var activeWorkspaceID: UUID? {
-            store.selectedSessionID.flatMap { store.workspace(forSession: $0)?.id }
-        }
-
         /// Re-tints the visible workspace rows when the active workspace changed: the previously active
         /// row dims to secondary, the newly active one returns to full strength. Needed because a click's
         /// `selectSession` lands AFTER the selection delegate already repainted (same-row selection never
         /// re-fires it), so the build-time flag alone would go stale.
         private func refreshActiveWorkspaceHighlight() {
-            let activeID = activeWorkspaceID
+            let activeID = store.activeWorkspaceID
             guard activeID != lastActiveWorkspaceID else { return }
             lastActiveWorkspaceID = activeID
             guard let outline = outlineView else { return }

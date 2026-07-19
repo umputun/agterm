@@ -171,6 +171,14 @@ public final class AppStore {
         return workspaces.last?.id
     }
 
+    /// The workspace to HIGHLIGHT in the sidebar: strictly the active session's owner, nil with no
+    /// selection. Deliberately NOT `currentWorkspaceID` — its last-workspace fallback is a
+    /// new-session placement anchor, and highlighting it would light up an arbitrary workspace row.
+    public var activeWorkspaceID: UUID? {
+        guard let selectedSessionID else { return nil }
+        return workspace(forSession: selectedSessionID)?.id
+    }
+
     /// The auto-generated name for the next new workspace (`workspace 1`, `workspace 2`, …).
     public var defaultWorkspaceName: String {
         "workspace \(workspaces.count + 1)"

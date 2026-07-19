@@ -45,9 +45,9 @@ extension WorkspaceSidebar.Coordinator {
         switch node.kind {
         case .workspace:
             let workspace = store.workspaces.first(where: { $0.id == node.id })
-            // dim every workspace name except the active session's owner (see activeWorkspaceID);
+            // dim every workspace name except the active session's owner (see AppStore.activeWorkspaceID);
             // the coordinator re-tints these when the active workspace changes.
-            cell.isSecondary = node.id != activeWorkspaceID
+            cell.isSecondary = node.id != store.activeWorkspaceID
             field.stringValue = workspace?.name ?? ""
             field.font = .systemFont(ofSize: GhosttyApp.shared.sidebarFontSize, weight: .medium)
             field.setAccessibilityIdentifier("workspace-row")

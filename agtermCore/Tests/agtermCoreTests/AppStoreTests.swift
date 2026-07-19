@@ -45,6 +45,29 @@ struct AppStoreTests {
         #expect(store.currentWorkspaceID == personal.id)
     }
 
+    @Test func activeWorkspaceFollowsSelectionWithNoFallback() {
+        let store = makeStore()
+        #expect(store.activeWorkspaceID == nil)
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        // unlike currentWorkspaceID, no selection means NO workspace is active — the sidebar
+        // highlight must not fall back to the last workspace.
+        store.selectSession(nil)
+        #expect(store.activeWorkspaceID == nil)
+        // a selected session pins its owning workspace, even with a later workspace present.
+        let session = try! #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        store.selectSession(session.id)
+        #expect(store.activeWorkspaceID == work.id)
+        // selection moving to another workspace moves the highlight with it.
+        let other = try! #require(store.addSession(toWorkspace: personal.id, cwd: "/b"))
+        store.selectSession(other.id)
+        #expect(store.activeWorkspaceID == personal.id)
+        // deselecting clears the highlight entirely (currentWorkspaceID would report personal here).
+        store.selectSession(nil)
+        #expect(store.activeWorkspaceID == nil)
+        #expect(store.currentWorkspaceID == personal.id)
+    }
+
     @Test func addWorkspaceAppends() {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
