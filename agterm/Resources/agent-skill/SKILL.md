@@ -135,7 +135,9 @@ unset or idle), `statusBlink`/`statusColor` (the status glyph's `--blink` flag a
 override from `session status`, omitted when idle / not blinking / default color), `background` (the background
 spec — image/text watermark or solid color — set via `session background`, omitted when none — the read side of set/clear),
 `unseen` (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session
-seen` — omitted when zero), `overlaySizePercent` (an open overlay's floating-panel percent 1–100,
+seen` — omitted when zero), `commandWait` (whether a `--command` session was created with `--wait` to
+hold open after the command exits — the read side of `session new --wait`, omitted for a plain or
+non-holding session), `overlaySizePercent` (an open overlay's floating-panel percent 1–100,
 omitted for a full-pane overlay or no overlay so gate on `overlay` first; the read side of `overlay
 resize` for a record-then-restore zoom), `splitRatio` (the left-pane divider fraction 0.05–0.95 of a
 session that has a split — shown or hidden; omitted when there's no split or the ratio was never set (at
@@ -157,12 +159,15 @@ applied to the cells, omitted when untouched), and `dashboardFontMode` (`auto`|`
 focused from the tree workspace node's `focused` flag).
 
 **session**
-- `new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--name NAME] [--after SID | --before SID] [--no-select]` —
+- `new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--wait] [--name NAME] [--after SID | --before SID] [--no-select]` —
   create (and focus) a session. Target the workspace by id/prefix (`--workspace`) OR by name
   (`--workspace-name`, mutually exclusive); add `--create-workspace` to reuse-or-create the named
   workspace when absent. `--command` runs that program as the session process instead of a login shell
   (argv-only, and with the app's GUI `PATH` — a Homebrew/non-default binary needs an absolute path or a
   `zsh -lc '…'` wrapper, else exit 127; same caveat for `scratch --command` and `overlay open` below);
+  `--wait` (with `--command`, else an error) HOLDS the session open after the command exits, showing the
+  press-any-key prompt with the final output intact instead of closing (persists across restart, unlike an
+  overlay's live-only wait; read back on `tree`'s `commandWait`);
   `--name` seeds the sidebar label (default: the auto basename). `--after`/`--before` place it directly
   after/before an anchor session (id/prefix/`active`) instead of appending — the anchor carries its own
   workspace, so it's mutually exclusive with `--workspace`/`--workspace-name`. `new --after active` =

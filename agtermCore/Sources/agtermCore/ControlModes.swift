@@ -89,6 +89,10 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
     public let workspaceName: String?
     public let createWorkspace: Bool?
     public let command: String?
+    /// Whether a `--command` session HOLDS its surface after the command exits (`--wait`) instead of
+    /// closing immediately. Meaningful only with `command`; the dispatcher rejects `--wait` without a
+    /// `--command`.
+    public let wait: Bool?
     public let name: String?
     /// Anchor session to place the new session right AFTER (id / prefix / `active`); the anchor carries
     /// its own workspace, so this bypasses `workspace`/`workspaceName`. Mutually exclusive with `before`.
@@ -100,7 +104,7 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
     public let noSelect: Bool
 
     public init(window: String?, cwd: String?, workspace: String?, workspaceName: String?,
-                createWorkspace: Bool?, command: String?, name: String?,
+                createWorkspace: Bool?, command: String?, wait: Bool? = nil, name: String?,
                 after: String? = nil, before: String? = nil, noSelect: Bool = false) {
         self.window = window
         self.cwd = cwd
@@ -108,6 +112,7 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
         self.workspaceName = workspaceName
         self.createWorkspace = createWorkspace
         self.command = command
+        self.wait = wait
         self.name = name
         self.after = after
         self.before = before

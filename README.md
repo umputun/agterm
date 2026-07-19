@@ -215,6 +215,7 @@ ws=$(agtermctl workspace new work)               # create a workspace, capture i
 agtermctl session new --workspace "$ws" --cwd ~/src/agterm  # open a session in it, print its id
 agtermctl session new --command "ssh user@host"  # run a command as the session's process (like kitty launch; no typed command, closes on exit)
 agtermctl session new --command "sh -c 'clear; ssh user@host'"  # --command is argv-style (no shell); wrap in sh -c for ;, $VAR, redirects
+agtermctl session new --command "zsh -lc 'make test'" --wait  # hold the session open after the command exits (press any key to close) so its final output stays readable; --wait needs --command
 agtermctl session new --name "myhost" --command "ssh user@host"  # pre-name the session (sidebar label set at creation)
 agtermctl session new --workspace-name servers --create-workspace --name "myhost"  # open in the "servers" workspace, creating it if absent (idempotent)
 agtermctl session new --after active             # create right after the current session (--before to precede it); the anchor's workspace is used

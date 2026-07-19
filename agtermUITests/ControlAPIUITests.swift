@@ -395,6 +395,30 @@ final class ControlAPIUITests: ControlAPITestCase {
         try? FileManager.default.removeItem(atPath: marker)
     }
 
+    // session.new --command --wait HOLDS the session open after the command exits (issue #254): the command
+    // `true` exits immediately, so WITHOUT --wait the session would vanish; WITH it the session stays on the
+    // press-any-key prompt and the tree reports commandWait=true (the read-back).
+    func testSessionNewCommandWaitHoldsSessionAfterExit() throws {
+        let created = try sendCommand(#"{"cmd":"session.new","args":{"command":"true","wait":true}}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true, "session.new --command --wait should succeed: \(created)")
+        let newID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return an id")
+
+        // let the command run and exit; the surface holds on the prompt rather than closing the session.
+        RunLoop.current.run(until: Date().addingTimeInterval(2))
+
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let node = try XCTUnwrap(sessionNode(tree, id: newID), "the held session must still exist after its command exited")
+        XCTAssertEqual(node["commandWait"] as? Bool, true, "the tree should report commandWait=true for a held session")
+    }
+
+    // --wait holds a command surface, so it is meaningless without a command; the dispatcher rejects it
+    // SERVER-SIDE (a raw socket client can't bypass the CLI validate()).
+    func testSessionNewWaitWithoutCommandRejectedServerSide() throws {
+        let resp = try sendCommand(#"{"cmd":"session.new","args":{"wait":true}}"#)
+        XCTAssertEqual(resp["ok"] as? Bool, false, "--wait without --command must be rejected: \(resp)")
+        XCTAssertEqual(resp["error"] as? String, "--wait requires --command")
+    }
+
     // a control session.new (frontmost window) FOCUSES the new session, so real keystrokes reach it: the
     // command is `head -n1 > marker` (captures one typed line), and we type via the keyboard — the text
     // only lands if the new session grabbed first responder. Guards the gate-command focus fix.

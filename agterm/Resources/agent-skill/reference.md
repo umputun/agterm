@@ -47,7 +47,10 @@ default 0.5) — the read side
 of `session resize`, record it to restore the exact divider position),
 `splitFocused` (which pane holds focus in a session that HAS a split — `true` = the split/right pane,
 `false` = the main/left pane; omitted when there's no split; the read side of `session focus`, record it
-to restore focus via `session focus --pane left|right`), `overlay` (overlay shown),
+to restore focus via `session focus --pane left|right`),
+`commandWait` (whether a `--command` session was created with `--wait` to hold open after the command
+exits — the read side of `session new --wait`; omitted for a plain or non-holding session),
+`overlay` (overlay shown),
 `overlaySizePercent` (an open overlay's size — the
 floating panel's percent of the pane, 1–100; omitted = a full-pane overlay or no overlay, so gate on
 `overlay` first; the read side of `session overlay resize`, e.g. record it before switching to `--full`
@@ -123,7 +126,7 @@ All ten are read-only projections of GUI state.
 
 ## session
 
-- `session new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--name NAME] [--after SID | --before SID] [--no-select] [--window W]`
+- `session new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--wait] [--name NAME] [--after SID | --before SID] [--no-select] [--window W]`
   — create a session and focus it; returns the new id. `--cwd` sets the start directory (default
   `$HOME`). The destination workspace is addressed one of two mutually-exclusive ways: `--workspace`
   (id / unique prefix / `active`, the default) or `--workspace-name` (the sidebar label) — the latter
@@ -135,6 +138,11 @@ All ten are read-only projections of GUI state.
   default — no `/opt/homebrew/bin`), so a bare Homebrew or other non-default binary fails with exit 127.
   Wrap in a login shell for both — `--command "zsh -lc 'htop'"` — or give an absolute path
   (`/opt/homebrew/bin/htop`).
+  `--wait` (only with `--command`, else an error) HOLDS the session open after the command exits —
+  showing libghostty's press-any-key prompt with the final output intact instead of closing immediately —
+  so you can read a build/test/deploy's final output or an early failure that would otherwise flash and
+  vanish. It persists across restart (unlike an overlay's live-only `--wait`), so a restored command
+  session that re-runs its command holds again; read it back on `tree`'s `commandWait`.
   The command is persisted (`SessionSnapshot.initialCommand`) and re-runs on restore when **Restore
   running commands on restart** is on (default off → a restored session is a plain shell); a live
   captured foreground takes precedence over it. `--name`

@@ -123,6 +123,15 @@ public final class Session: Identifiable {
     /// is gated by `restoreRunningCommand` (via `wasRestored`); a fresh session always runs it.
     @ObservationIgnored public var initialCommand: String?
 
+    /// Whether a `--command` session HOLDS its surface after the command exits (showing libghostty's
+    /// "press any key to close" prompt with the final output intact) instead of closing immediately, set
+    /// at creation via `session.new --command … --wait`. The same libghostty `wait_after_command` the
+    /// overlay's `overlayWait` uses, applied to the PRIMARY surface (`makeSurface` reads it). Meaningful
+    /// only with `initialCommand`; a plain shell has nothing to hold. `@ObservationIgnored`. Persisted via
+    /// `SessionSnapshot.commandWait` so a restored command session that re-runs its command holds again,
+    /// keeping the held/closed behavior consistent across restart.
+    @ObservationIgnored public var commandWait: Bool = false
+
     /// True when this session was rebuilt by `AppStore.restore(from:)` rather than freshly created. The
     /// surface factory reads it to gate the `initialCommand` re-run: a FRESH command session always runs
     /// its command, but a RESTORED one re-runs only when `restoreRunningCommand` is on (else a plain

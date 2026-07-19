@@ -94,6 +94,17 @@ struct CommandsTests {
         #expect(try request(["session", "new", "--no-select"]) == expected)
     }
 
+    @Test func sessionNewWithCommandWait() throws {
+        // --wait rides with --command to hold the session open after the command exits (omitted otherwise).
+        let expected = ControlRequest(cmd: .sessionNew, args: ControlArgs(command: "make test", wait: true))
+        #expect(try request(["session", "new", "--command", "make test", "--wait"]) == expected)
+    }
+
+    @Test func sessionNewRejectsWaitWithoutCommand() {
+        // --wait holds a command surface, so it is meaningless without --command — validate() rejects it.
+        #expect(validationMessage(["session", "new", "--wait"]) == "--wait requires --command")
+    }
+
     @Test func sessionNewRejectsWorkspaceAndWorkspaceName() {
         // both addressing modes set — validate() rejects it before any request is built.
         #expect(validationMessage(["session", "new", "--workspace", "active", "--workspace-name", "servers"])

@@ -44,6 +44,7 @@ Run a command AS the session's process (closes when it exits, no echoed command 
 ```bash
 agtermctl session new --command "ssh host -p 22"     # a default-PATH binary: argv-split (quotes respected), no shell, no echo
 agtermctl session new --command "zsh -lc 'htop'"     # Homebrew/non-default binary: --command has the app's GUI PATH, so wrap in a login shell (or use an absolute path); bare "htop" exits 127
+agtermctl session new --command "zsh -lc 'make test'" --wait   # HOLD the row open after the command exits (press any key to close) so its final output stays readable; --wait needs --command
 ```
 
 Create a session pre-named (label set at creation, no follow-up rename):

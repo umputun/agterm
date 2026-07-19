@@ -1195,7 +1195,9 @@
               ><br /><span style="color: #6d82f3">ws</span>=$(agtermctl workspace new work)<br />agtermctl session new --workspace
               <span style="color: #f2b45c">"$ws"</span> --cwd ~/src/agterm<br /><br /><span style="color: #6b727a"
                 ># run a command as the session's process (argv-style; wrap in sh -c for shell syntax)</span
-              ><br />agtermctl session new --command <span style="color: #f2b45c">"ssh user@host"</span><br />agtermctl session new
+              ><br />agtermctl session new --command <span style="color: #f2b45c">"ssh user@host"</span><br />agtermctl session new --command
+              <span style="color: #f2b45c">"zsh -lc 'make test'"</span> --wait
+              <span style="color: #6b727a">&nbsp;&nbsp;# hold open after the command exits (press any key to close); needs --command</span><br />agtermctl session new
               --name <span style="color: #f2b45c">myhost</span> --workspace-name
               <span style="color: #f2b45c">servers</span> --create-workspace<br /><br /><span style="color: #6b727a"
                 ># step / reorder / relocate</span

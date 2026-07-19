@@ -212,6 +212,7 @@ public final class AppStore {
                                           overlay: session.overlayActive,
                                           overlaySizePercent: session.overlayActive ? session.overlaySizePercent : nil,
                                           scratch: session.scratchActive, flagged: session.flagged,
+                                          commandWait: (session.initialCommand != nil && session.commandWait) ? true : nil,
                                           foreground: foreground(session),
                                           splitForeground: splitForeground(session), status: status,
                                           statusPane: statusPane,
@@ -274,10 +275,11 @@ public final class AppStore {
     /// index (`0...count`), backing `session.new --after`/`--before`. Returns nil if no workspace matches.
     @discardableResult
     public func addSession(toWorkspace workspaceID: UUID, cwd: String, command: String? = nil,
-                           name: String? = nil, at index: Int? = nil, select: Bool = true) -> Session? {
+                           name: String? = nil, wait: Bool = false, at index: Int? = nil, select: Bool = true) -> Session? {
         guard let wsIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
         let session = Session(initialCwd: cwd, customName: name?.trimmedOrNil)
         session.initialCommand = command
+        session.commandWait = wait
         if let index {
             let destination = max(0, min(index, workspaces[wsIndex].sessions.count))
             workspaces[wsIndex].sessions.insert(session, at: destination)
@@ -919,7 +921,7 @@ public final class AppStore {
                         flagged: session.flagged,
                         foregroundCommand: session.foregroundCommand,
                         splitForegroundCommand: session.splitForegroundCommand,
-                        initialCommand: session.initialCommand,
+                        initialCommand: session.initialCommand, commandWait: session.commandWait ? true : nil,
                         backgroundWatermark: session.backgroundWatermark)
     }
 
@@ -939,6 +941,7 @@ public final class AppStore {
         session.foregroundCommand = snapshot.foregroundCommand
         session.splitForegroundCommand = snapshot.splitForegroundCommand
         session.initialCommand = snapshot.initialCommand
+        session.commandWait = snapshot.commandWait ?? false
         session.wasRestored = true
         session.backgroundWatermark = snapshot.backgroundWatermark
         return session

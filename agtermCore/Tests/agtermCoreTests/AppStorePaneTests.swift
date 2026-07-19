@@ -459,6 +459,23 @@ struct AppStorePaneTests {
         #expect(session.overlayActive)
     }
 
+    @Test func controlTreeReportsCommandWait() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        // a held --command session reports the flag so a script can record and restore it.
+        store.addSession(toWorkspace: ws.id, cwd: "/a", command: "make test", wait: true)
+        var node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.commandWait == true)
+        // a non-holding command session omits it (nil).
+        let plain = store.addSession(toWorkspace: ws.id, cwd: "/b", command: "make test")!
+        node = try #require(store.controlTree().workspaces[0].sessions.first { $0.id == plain.id.uuidString })
+        #expect(node.commandWait == nil)
+        // a plain session (no command) omits it even if the flag were somehow set — gated on initialCommand.
+        let shell = store.addSession(toWorkspace: ws.id, cwd: "/c")!
+        node = try #require(store.controlTree().workspaces[0].sessions.first { $0.id == shell.id.uuidString })
+        #expect(node.commandWait == nil)
+    }
+
     @Test func controlTreeReportsOverlaySizePercent() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

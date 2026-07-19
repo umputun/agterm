@@ -539,6 +539,27 @@ struct ControlProtocolTests {
         #expect(decoded.unseen == nil)
     }
 
+    @Test func treeSessionNodeRoundTripsWithCommandWait() throws {
+        // the read side of session.new --wait: a held command session carries the flag so a script can
+        // record it and restore the session with --wait (it persists across restart, unlike overlay wait).
+        let session = ControlSessionNode(id: "s1", name: "build", cwd: "/tmp", active: false, split: false,
+                                         commandWait: true)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.commandWait == true)
+    }
+
+    @Test func treeSessionNodeOmitsCommandWaitWhenNil() throws {
+        // a plain session or a non-holding command session — the key must be omitted, not emitted as null.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("commandWait"), "a nil commandWait must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.commandWait == nil)
+    }
+
     @Test func treeSessionNodeRoundTripsWithOverlaySizePercent() throws {
         // the read side of session.overlay.resize: a floating overlay's percent rides the tree node so a
         // script can record it before resizing to full and restore the exact size afterwards.

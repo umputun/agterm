@@ -167,8 +167,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var body: String?
     /// The program the overlay terminal runs for `session.overlay.open` (e.g. `revdiff`).
     public var command: String?
-    /// Whether `session.overlay.open` keeps the overlay open after its command exits (showing the
-    /// "press any key to close" prompt) instead of closing immediately.
+    /// Whether a command surface keeps its "press any key to close" prompt after the command exits instead
+    /// of closing immediately: `session.overlay.open --wait` (the overlay) and `session.new --command …
+    /// --wait` (the primary session surface, held via `Session.commandWait`).
     public var wait: Bool?
     /// For `session.overlay.open`, the percent of the pane (1...100) a *floating* overlay panel
     /// occupies in both dimensions; omitted gives the default full-pane overlay. Also carries the new
@@ -355,6 +356,11 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let overlaySizePercent: Int?
     public let scratch: Bool
     public let flagged: Bool
+    /// For a `--command` session, whether it was created to HOLD its surface after the command exits
+    /// (`session.new --command … --wait`) rather than closing immediately; nil/omitted for a plain session
+    /// or a non-holding command session. The read side of `session.new --wait`, so a script can record and
+    /// restore the flag (it persists across restart, unlike an overlay's live-only wait).
+    public let commandWait: Bool?
     /// The LIVE foreground process command (full argv) in the main pane, or nil when the pane is at its
     /// shell prompt (omitted from the JSON). The same capture the restore-running-command feature uses,
     /// surfaced for introspection ("what is each pane running").
@@ -401,6 +407,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 splitRatio: Double? = nil, splitFocused: Bool? = nil,
                 overlay: Bool = false, overlaySizePercent: Int? = nil, scratch: Bool = false, flagged: Bool = false,
+                commandWait: Bool? = nil,
                 foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil,
                 statusPane: String? = nil, statusBlink: Bool? = nil, statusColor: String? = nil,
                 background: BackgroundWatermark? = nil, unseen: Int? = nil,
@@ -418,6 +425,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.overlaySizePercent = overlaySizePercent
         self.scratch = scratch
         self.flagged = flagged
+        self.commandWait = commandWait
         self.foreground = foreground
         self.splitForeground = splitForeground
         self.status = status

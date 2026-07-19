@@ -216,8 +216,8 @@ struct agtermApp: App {
                                               hadForeground: hadForeground, foregroundInput: restoreInput,
                                               initialCommand: session.initialCommand)
         let view = GhosttySurfaceView(workingDirectory: session.initialCwd, fontSize: session.fontSize.map(Float.init),
-                                      command: plan.command,
-                                      initialInput: plan.initialInput, env: env)
+                                      command: plan.command, initialInput: plan.initialInput,
+                                      waitAfterCommand: session.commandWait, env: env)
         view.session = session
         let sessionID = session.id
         view.onExit = { [weak view] in
