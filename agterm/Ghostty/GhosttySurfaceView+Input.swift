@@ -354,7 +354,11 @@ extension GhosttySurfaceView {
     }
 
     private func unshiftedCodepoint(from event: NSEvent) -> UInt32 {
-        guard let chars = event.characters(byApplyingModifiers: []),
+        // characters(byApplyingModifiers:) is valid only for key up/down events; on a FlagsChanged
+        // (bare modifier) event it raises an AppKit assertion. A modifier press carries no codepoint,
+        // so report 0 for any non-key event.
+        guard event.type == .keyDown || event.type == .keyUp,
+              let chars = event.characters(byApplyingModifiers: []),
               let scalar = chars.unicodeScalars.first
         else { return 0 }
         return scalar.value
