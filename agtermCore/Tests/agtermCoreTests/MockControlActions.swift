@@ -18,7 +18,7 @@ final class MockControlActions: ControlActions {
         case sessionCloseBatch(targets: [String], window: String?)
         case sessionRename(target: String?, window: String?, String)
         case sessionReveal(target: String?, window: String?)
-        case workspaceNew(window: String?, String?)
+        case workspaceNew(window: String?, String?, collapsed: Bool)
         case workspaceSelect(target: String?, window: String?)
         case workspaceRename(target: String?, window: String?, String)
         case workspaceDelete(target: String?, window: String?)
@@ -26,6 +26,7 @@ final class MockControlActions: ControlActions {
         case sessionMoveBatch(targets: [String], window: String?, ControlSessionMove)
         case workspaceMove(target: String?, window: String?, ReorderDirection)
         case workspaceFocus(target: String?, window: String?, String?)
+        case workspaceExpansion(target: String?, window: String?, expanded: Bool)
         case sessionFlag(target: String?, window: String?, String?)
         case markSessionSeen(target: String?, window: String?)
         case sessionStatus(target: String?, window: String?, ControlSessionStatusUpdate)
@@ -161,8 +162,8 @@ final class MockControlActions: ControlActions {
         return ControlResponse(ok: true)
     }
 
-    func createWorkspace(window: String?, name: String?) -> ControlResponse {
-        calls.append(.workspaceNew(window: window, name))
+    func createWorkspace(window: String?, name: String?, collapsed: Bool) -> ControlResponse {
+        calls.append(.workspaceNew(window: window, name, collapsed: collapsed))
         return ControlResponse(ok: true)
     }
 
@@ -198,6 +199,11 @@ final class MockControlActions: ControlActions {
 
     func focusWorkspace(_ target: String?, window: String?, mode: String?) -> ControlResponse {
         calls.append(.workspaceFocus(target: target, window: window, mode))
+        return ControlResponse(ok: true)
+    }
+
+    func setWorkspaceExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse {
+        calls.append(.workspaceExpansion(target: target, window: window, expanded: expanded))
         return ControlResponse(ok: true)
     }
 

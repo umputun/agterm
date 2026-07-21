@@ -1447,6 +1447,21 @@ struct AppStoreTests {
         #expect(store.controlTree().workspaces.allSatisfy { $0.focused == nil })
     }
 
+    @Test func controlTreeReportsCollapsedWorkspace() {
+        let store = makeStore()
+        let ws2 = store.addWorkspace(name: "second")
+        // all workspaces expanded by default: no node reports collapsed.
+        #expect(store.controlTree().workspaces.allSatisfy { $0.collapsed == nil })
+        // collapse the second workspace: ONLY its node reports collapsed == true.
+        store.setWorkspaceExpanded(ws2.id, expanded: false)
+        let nodes = store.controlTree().workspaces
+        #expect(nodes.first { $0.id == ws2.id.uuidString }?.collapsed == true)
+        #expect(nodes.filter { $0.collapsed == true }.count == 1)
+        // re-expanding it omits the field again.
+        store.setWorkspaceExpanded(ws2.id, expanded: true)
+        #expect(store.controlTree().workspaces.allSatisfy { $0.collapsed == nil })
+    }
+
     @Test func controlTreeReportsSidebarMode() {
         let store = makeStore()
         #expect(store.controlTree().sidebarMode == "tree") // default: the workspace tree

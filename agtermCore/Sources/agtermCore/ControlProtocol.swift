@@ -19,6 +19,8 @@ public enum Command: String, Codable, Sendable {
     case sessionMove = "session.move"
     case workspaceMove = "workspace.move"
     case workspaceFocus = "workspace.focus"
+    case workspaceCollapse = "workspace.collapse"
+    case workspaceExpand = "workspace.expand"
     case sessionType = "session.type"
     case sessionStatus = "session.status"
     case sessionFlag = "session.flag"
@@ -96,6 +98,11 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// For `session.new` with `workspaceName`: create the named workspace when none exists (idempotent
     /// reuse-or-create). An error without `workspaceName` — there is nothing to create by id.
     public var createWorkspace: Bool?
+    /// For `workspace.new`: create the workspace already COLLAPSED in the sidebar (the CLI's `--collapsed`)
+    /// instead of the default expanded state, so a script can build a workspace and fill it with
+    /// `session.new --no-select` without it opening. Omitted/`false` = expanded. The read-back is the
+    /// `tree` workspace node's `collapsed` field.
+    public var collapsed: Bool?
     /// For `session.new`: create the session in the background without selecting or focusing it, leaving
     /// the current selection untouched (the CLI's `--no-select`). Omitted/`false` keeps the default
     /// select-and-focus behavior. The read-back is the existing `tree` `active` flag — the new node is not
@@ -234,7 +241,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
 
     public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
                 workspace: String? = nil, workspaceName: String? = nil,
-                createWorkspace: Bool? = nil, noSelect: Bool? = nil, text: String? = nil, select: Bool? = nil, mode: String? = nil,
+                createWorkspace: Bool? = nil, collapsed: Bool? = nil, noSelect: Bool? = nil,
+                text: String? = nil, select: Bool? = nil, mode: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
                 follow: Bool? = nil, window: String? = nil,
                 pane: String? = nil, paneID: String? = nil, to: String? = nil,
@@ -253,6 +261,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.workspace = workspace
         self.workspaceName = workspaceName
         self.createWorkspace = createWorkspace
+        self.collapsed = collapsed
         self.noSelect = noSelect
         self.text = text
         self.select = select
@@ -469,13 +478,21 @@ public struct ControlWorkspaceNode: Codable, Sendable, Equatable {
     /// SELECTED workspace): focus collapses the sidebar to a single workspace. The read side of the
     /// write-only `workspace.focus` — so a script can record which workspace is focused and restore it.
     public let focused: Bool?
+    /// Whether this workspace is COLLAPSED in the sidebar tree (`true`), or nil when expanded — the
+    /// default — so an all-expanded tree omits the field (matching the persisted `WorkspaceSnapshot.collapsed`).
+    /// The read side of the write-only `workspace.collapse`/`workspace.expand` (and `workspace.new --collapsed`),
+    /// so a script can record a workspace's open/closed state and restore it, or toggle by reading it first.
+    /// Reports the persisted model state (`!isExpanded`), independent of a transient focus force-reveal.
+    public let collapsed: Bool?
     public let sessions: [ControlSessionNode]
 
-    public init(id: String, name: String, active: Bool, focused: Bool? = nil, sessions: [ControlSessionNode]) {
+    public init(id: String, name: String, active: Bool, focused: Bool? = nil,
+                collapsed: Bool? = nil, sessions: [ControlSessionNode]) {
         self.id = id
         self.name = name
         self.active = active
         self.focused = focused
+        self.collapsed = collapsed
         self.sessions = sessions
     }
 }

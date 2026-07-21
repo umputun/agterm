@@ -699,4 +699,81 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         }
         XCTFail("the notification-badges toggle never became hittable")
     }
+
+    func testWorkspaceCollapseAndExpand() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
+
+        // name the seeded session, then add a second workspace with its own named session.
+        let seededID = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.rename","target":"\#(seededID)","args":{"name":"stay"}}"#)["ok"] as? Bool,
+                       true, "renaming the seeded session should succeed")
+        let newWs = try sendCommand(#"{"cmd":"workspace.new","args":{"name":"second"}}"#)
+        let secondWsID = try XCTUnwrap((newWs["result"] as? [String: Any])?["id"] as? String, "workspace.new should return an id")
+        let created = try sendCommand(#"{"cmd":"session.new","args":{"workspace":"\#(secondWsID)"}}"#)
+        let newSessID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return an id")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.rename","target":"\#(newSessID)","args":{"name":"hidden"}}"#)["ok"] as? Bool,
+                       true, "renaming the new session should succeed")
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "both session rows should be present expanded")
+
+        // collapse ONLY the second workspace: its "hidden" row leaves the AX tree, "stay" stays — unlike
+        // sidebar.collapse, this targets one workspace and does not depend on which one is active.
+        let collapse = try sendCommand(#"{"cmd":"workspace.collapse","target":"\#(secondWsID)"}"#)
+        XCTAssertEqual(collapse["ok"] as? Bool, true, "workspace.collapse should succeed: \(collapse)")
+        XCTAssertEqual((collapse["result"] as? [String: Any])?["id"] as? String, secondWsID, "should echo the workspace id")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "collapse should hide the targeted workspace's rows")
+        XCTAssertTrue(sessionRowValueExists(containing: "stay"), "the untouched workspace's session should remain")
+        XCTAssertFalse(sessionRowValueExists(containing: "hidden"), "the collapsed workspace's session should be hidden")
+
+        // read-back: the collapsed workspace reports collapsed == true, the other omits the field.
+        let collapsedTree = try treeWorkspaces()
+        XCTAssertEqual(collapsedTree.first { $0["id"] as? String == secondWsID }?["collapsed"] as? Bool, true,
+                       "the collapsed workspace should read back collapsed == true")
+        XCTAssertNil(collapsedTree.first { $0["id"] as? String != secondWsID }?["collapsed"],
+                     "an expanded workspace should omit the collapsed field")
+
+        // expand it again: the "hidden" row returns and the field is omitted.
+        let expand = try sendCommand(#"{"cmd":"workspace.expand","target":"\#(secondWsID)"}"#)
+        XCTAssertEqual(expand["ok"] as? Bool, true, "workspace.expand should succeed: \(expand)")
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "expand should restore the workspace's rows")
+        XCTAssertTrue(sessionRowValueExists(containing: "hidden"), "the expanded workspace's session should return")
+        let expandedTree = try treeWorkspaces()
+        XCTAssertNil(expandedTree.first { $0["id"] as? String == secondWsID }?["collapsed"],
+                     "the re-expanded workspace should omit the collapsed field")
+    }
+
+    func testWorkspaceNewCollapsedStaysClosedWhenFilled() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
+        let seededID = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.rename","target":"\#(seededID)","args":{"name":"stay"}}"#)["ok"] as? Bool,
+                       true, "renaming the seeded session should succeed")
+
+        // create a COLLAPSED workspace, then fill it with a background (--no-select) session: it must NOT open.
+        let newWs = try sendCommand(#"{"cmd":"workspace.new","args":{"name":"quiet","collapsed":true}}"#)
+        let quietID = try XCTUnwrap((newWs["result"] as? [String: Any])?["id"] as? String, "workspace.new should return an id")
+        XCTAssertEqual(try treeWorkspaces().first { $0["id"] as? String == quietID }?["collapsed"] as? Bool, true,
+                       "a --collapsed workspace should read back collapsed == true")
+        let created = try sendCommand(#"{"cmd":"session.new","args":{"workspace":"\#(quietID)","noSelect":true}}"#)
+        let buriedID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return an id")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.rename","target":"\#(buriedID)","args":{"name":"buried"}}"#)["ok"] as? Bool,
+                       true, "renaming the buried session should succeed")
+
+        // the buried session stays hidden inside the collapsed workspace; the selection never left "stay".
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "the collapsed workspace's session should stay hidden")
+        XCTAssertFalse(sessionRowValueExists(containing: "buried"), "the buried session should not be visible")
+        XCTAssertEqual(try activeSessionID(), seededID, "the background add must not move the selection")
+
+        // expanding the workspace reveals the buried session.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"workspace.expand","target":"\#(quietID)"}"#)["ok"] as? Bool, true,
+                       "workspace.expand should succeed")
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "expanding should reveal the buried session")
+        XCTAssertTrue(sessionRowValueExists(containing: "buried"), "the buried session should now be visible")
+    }
+
+    /// The tree's workspace nodes, for read-back assertions.
+    private func treeWorkspaces() throws -> [[String: Any]] {
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        let result = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
+        let t = try XCTUnwrap(result["tree"] as? [String: Any], "result should carry a tree")
+        return try XCTUnwrap(t["workspaces"] as? [[String: Any]], "tree should carry workspaces")
+    }
 }

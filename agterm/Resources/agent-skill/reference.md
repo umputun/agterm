@@ -82,9 +82,12 @@ so a script can zoom them without changing split/scratch visibility first. Cavea
 derive from the session's own flags, not from zoom — and `visible` reads false for a pane behind a
 FLOATING overlay even though it is visually on screen; address by `id`/`kind`, and read the zoom state
 from the top-level `zoomedSurface`. Workspace nodes carry
-`id`, `name`, `active`, `sessions`, and `focused` (whether the sidebar
+`id`, `name`, `active`, `sessions`, `focused` (whether the sidebar
 tree is collapsed to this workspace — the read side of `workspace focus`, distinct from `active` the
-SELECTED workspace; omitted unless this is the focused one, and absent entirely when nothing is focused).
+SELECTED workspace; omitted unless this is the focused one, and absent entirely when nothing is focused),
+and `collapsed` (whether this workspace is COLLAPSED in the sidebar tree — the read side of
+`workspace collapse`/`workspace expand` and `workspace new --collapsed`; `true` when collapsed, omitted
+when expanded, so an all-expanded tree carries no `collapsed` keys).
 
 The tree object itself carries ten top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
@@ -111,8 +114,10 @@ All ten are read-only projections of GUI state.
 
 ## workspace
 
-- `workspace new [name] [--window W]` — create a workspace; returns its id. Name defaults to an
-  auto-generated one.
+- `workspace new [name] [--collapsed] [--window W]` — create a workspace; returns its id. Name defaults
+  to an auto-generated one. `--collapsed` creates it CLOSED in the sidebar tree so a script can build a
+  workspace and fill it with `session new --no-select` without it ever opening (a fresh workspace is
+  expanded by default). Read the state back from the tree workspace node's `collapsed` flag.
 - `workspace rename <name> [--target] [--window W]`.
 - `workspace delete [--target] [--window W]` — keep-at-least-one; deleting the last workspace errors.
 - `workspace select [--target] [--window W]`.
@@ -127,6 +132,15 @@ All ten are read-only projections of GUI state.
   While a workspace is focused, `session go` navigation is scoped to that workspace's sessions (and to
   the flagged set in flagged mode); an explicit `session select` of a session outside the focused
   workspace still auto-unfocuses to reveal it. An unknown mode errors.
+- `workspace collapse [--target] [--window W]` — collapse ONE workspace's subtree in the sidebar tree
+  (hide its sessions); returns the workspace id. The per-workspace counterpart of `sidebar collapse`
+  (which collapses ALL but the active workspace) — this targets exactly the addressed workspace and does
+  not depend on which one is active. Idempotent. Persisted. Read back from the tree workspace node's
+  `collapsed` flag.
+- `workspace expand [--target] [--window W]` — expand ONE workspace's subtree (show its sessions);
+  returns the workspace id. The inverse of `workspace collapse`, and the per-workspace counterpart of
+  `sidebar expand`. Idempotent. To TOGGLE a workspace, read its `collapsed` flag off `tree` first, then
+  call `expand` or `collapse`.
 
 ## session
 

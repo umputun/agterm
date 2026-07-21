@@ -190,6 +190,12 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// notifications (the documented value is the literal string `"NSObject"`).
         private static let outlineItemUserInfoKey = "NSObject"
 
+        /// `userInfo` keys for the `.agtermSetWorkspaceExpanded` per-workspace poke (the `workspace.collapse`/`workspace.expand`
+        /// control path): the target workspace `UUID` and the desired `Bool` expansion state. Read by
+        /// `setWorkspaceExpandedNotified`, written by `AppActions.setWorkspaceExpanded(_:expanded:in:)`.
+        static let workspaceIDUserInfoKey = "agterm.workspaceID"
+        static let expandedUserInfoKey = "agterm.expanded"
+
         /// Last-seen visible content (label, split icon, badge) per session and workspace id, so a
         /// reconcile reloads only the rows whose content changed. An absent key ≠ any real content.
         private var lastRowContent: [UUID: RowContent] = [:]
@@ -228,6 +234,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
                                                    name: .agtermExpandWorkspaces, object: store)
             NotificationCenter.default.addObserver(self, selector: #selector(collapseWorkspacesNotified),
                                                    name: .agtermCollapseWorkspaces, object: store)
+            // the per-workspace collapse/expand poke (workspace.collapse/expand) is store-scoped the same way.
+            NotificationCenter.default.addObserver(self, selector: #selector(setWorkspaceExpandedNotified(_:)),
+                                                   name: .agtermSetWorkspaceExpanded, object: store)
             // a theme change (new terminal foreground) re-tints the visible rows in place.
             NotificationCenter.default.addObserver(self, selector: #selector(appearanceChanged),
                                                    name: .agtermAppearanceChanged, object: nil)
@@ -334,6 +343,24 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// on tree mode itself, so flagged mode is a clean no-op.
         @objc private func collapseWorkspacesNotified() {
             collapseOthers()
+        }
+
+        /// Collapse or expand a SINGLE workspace (the `workspace.collapse`/`workspace.expand` control path).
+        /// Always writes the persisted `Workspace.isExpanded` (delta-guarded, idempotent) as the source of
+        /// truth and keeps the tracked `expandedWorkspaceIDs` in step — so the intent survives a collapsed
+        /// (flagged-mode / focused-away) row and a transient focus force-reveal. Then drives the LIVE outline
+        /// row when it is on screen (tree mode, row resolved), suppressing the expand/collapse callback's
+        /// re-persist since the store already holds the truth.
+        @objc private func setWorkspaceExpandedNotified(_ notification: Notification) {
+            guard let id = notification.userInfo?[Self.workspaceIDUserInfoKey] as? UUID,
+                  let expanded = notification.userInfo?[Self.expandedUserInfoKey] as? Bool else { return }
+            store.setWorkspaceExpanded(id, expanded: expanded)
+            if expanded { expandedWorkspaceIDs.insert(id) } else { expandedWorkspaceIDs.remove(id) }
+            guard store.sidebarMode == .tree, let outline = outlineView,
+                  let node = nodeCache[id], outline.row(forItem: node) >= 0 else { return }
+            suppressExpansionPersist = true
+            if expanded { outline.expandItem(node) } else { outline.collapseItem(node) }
+            suppressExpansionPersist = false
         }
 
         // MARK: - Model rebuild
@@ -833,6 +860,10 @@ extension Notification.Name {
     /// `WorkspaceSidebar.Coordinator` observes them scoped to that one window's sidebar.
     static let agtermExpandWorkspaces = Notification.Name("agterm.expandWorkspaces")
     static let agtermCollapseWorkspaces = Notification.Name("agterm.collapseWorkspaces")
+    /// Posted by the `workspace.collapse`/`workspace.expand` control arm to collapse or expand a SINGLE
+    /// workspace, with the target window's `AppStore` as the object and the workspace id + desired state in
+    /// `userInfo`. Object-scoped like the all-workspace pokes, so only the matching window's sidebar reacts.
+    static let agtermSetWorkspaceExpanded = Notification.Name("agterm.setWorkspaceExpanded")
     /// Posted by the `session.resize` control arm after it stores a new split-divider fraction, with the
     /// target `Session` as the object so the matching `SplitProbeView` (in `ContentView`) moves the live
     /// divider to `Session.splitRatio`. Object-scoped like the expand/collapse pokes, so only the one

@@ -138,7 +138,7 @@ prompt concatenates with yours, and the program starts on the merged line. (`--n
 focus, but the newline and shared-buffer hazards of `type`-as-launcher remain — `--command` is still the
 rule.) After `--command`, confirm in `tree --json` that the new node's `foreground` shows your program running, not a bare shell prompt.
 
-## Command summary (62 commands)
+## Command summary (64 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -174,9 +174,15 @@ a split pane, so a split session appears as both), `dashboardHighlighted` (the h
 the one Enter jumps into, focusing that exact pane), `dashboardFontSize` (the absolute font size in points
 applied to the cells, omitted when untouched), and `dashboardFontMode` (`auto`|`fixed`|`untouched`).
 
-**workspace** — `new [name]` · `rename <name>` · `delete` · `select` · `move --to up|down|top|bottom` ·
+**workspace** — `new [name] [--collapsed]` (`--collapsed` creates it closed in the sidebar so you can fill
+it with `session new --no-select` without it opening) · `rename <name>` · `delete` · `select` ·
+`move --to up|down|top|bottom` ·
 `focus [on|off|toggle]` (collapse the sidebar tree to a single workspace; read back which workspace is
-focused from the tree workspace node's `focused` flag).
+focused from the tree workspace node's `focused` flag) ·
+`collapse [--target W] [--window W]` · `expand [--target W] [--window W]` (collapse/expand ONE workspace
+in the sidebar tree — the per-workspace pair, distinct from the all-workspace `sidebar expand`/`collapse`;
+read the open/closed state back from the tree workspace node's `collapsed` flag, `true` when collapsed and
+omitted when expanded).
 
 **session**
 - `new [--cwd DIR] [--workspace W] [--workspace-name NAME] [--create-workspace] [--command CMD] [--wait] [--name NAME] [--after SID | --before SID] [--no-select]` —

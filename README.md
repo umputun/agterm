@@ -192,7 +192,7 @@ The theme picker (View ▸ Select Theme…, or the action palette) previews each
 
 To open a terminal at a directory without the CLI, `open -a agterm <path>` — or right-click a folder in Finder and choose **Open With ▸ agterm**. agterm adds a session in that directory to the last-active window. This works when agterm is already running (its usual state); if it isn't, launch agterm first, then run the command. The socket equivalent, and the way to place the session precisely, is `agtermctl session new --cwd <path>`.
 
-The sections below cover the common cases. All 62 commands, with every argument, return value, and error, are documented in the **[Command reference](https://agterm.com/commands)**.
+The sections below cover the common cases. All 64 commands, with every argument, return value, and error, are documented in the **[Command reference](https://agterm.com/commands)**.
 
 The app bundles `agtermctl` inside `agterm.app`. The easiest way to put it on your PATH is **Help ▸ Install Command Line Tool…**, which symlinks the bundled binary into `/usr/local/bin` (the first entry in macOS's default PATH). When that directory is user-writable it installs silently; otherwise it asks once for an administrator password.
 
@@ -230,6 +230,8 @@ agtermctl session move --after 9f3c              # place the active session righ
 agtermctl session move "$ws" --target 9f3c --target abcd  # move a batch as one ordered block; --after/--before also accept repeated --target
 agtermctl session close --target 9f3c --target abcd       # close a batch with one grace-period undo
 agtermctl workspace move --to top                # reorder a workspace among its siblings (up|down|top|bottom)
+agtermctl workspace new work --collapsed          # create a workspace closed in the sidebar (fill it with session new --no-select without it opening)
+agtermctl workspace collapse --target "$ws"       # collapse one workspace in the sidebar tree; workspace expand re-opens it (per-workspace, unlike sidebar expand/collapse)
 agtermctl session split toggle                   # split the active session
 agtermctl session resize --split-ratio 0.7       # set the split divider (left-pane fraction); or --grow-left/--grow-right D
 agtermctl session scratch toggle                 # show/hide the active session's scratch terminal (on|off|toggle)

@@ -14,7 +14,7 @@ public protocol ControlActions {
     func closeSessions(_ targets: [String], window: String?) -> ControlResponse
     func renameSession(_ target: String?, window: String?, name: String) -> ControlResponse
     func revealSession(_ target: String?, window: String?) -> ControlResponse
-    func createWorkspace(window: String?, name: String?) -> ControlResponse
+    func createWorkspace(window: String?, name: String?, collapsed: Bool) -> ControlResponse
     func selectWorkspace(_ target: String?, window: String?) -> ControlResponse
     func renameWorkspace(_ target: String?, window: String?, name: String) -> ControlResponse
     func deleteWorkspace(_ target: String?, window: String?) -> ControlResponse
@@ -22,6 +22,7 @@ public protocol ControlActions {
     func moveSessions(_ targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse
     func moveWorkspace(_ target: String?, window: String?, direction: ReorderDirection) -> ControlResponse
     func focusWorkspace(_ target: String?, window: String?, mode: String?) -> ControlResponse
+    func setWorkspaceExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse
     func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse
     func markSessionSeen(_ target: String?, window: String?) -> ControlResponse
     func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) -> ControlResponse
@@ -152,7 +153,7 @@ public struct ControlDispatcher {
                 .sessionText:
             return await dispatchSessionSurfaceCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete,
-                .workspaceMove, .workspaceFocus:
+                .workspaceMove, .workspaceFocus, .workspaceCollapse, .workspaceExpand:
             return dispatchWorkspaceCommand(request)
         case .quick, .fontInc, .fontDec, .fontReset, .keymapReload,
                 .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarExpand,
@@ -371,7 +372,8 @@ public struct ControlDispatcher {
     private func dispatchWorkspaceCommand(_ request: ControlRequest) -> ControlResponse {
         switch request.cmd {
         case .workspaceNew:
-            return actions.createWorkspace(window: request.args?.window, name: request.args?.name)
+            return actions.createWorkspace(window: request.args?.window, name: request.args?.name,
+                                           collapsed: request.args?.collapsed ?? false)
         case .workspaceSelect:
             return actions.selectWorkspace(request.target, window: request.args?.window)
         case .workspaceRename:
@@ -391,6 +393,10 @@ public struct ControlDispatcher {
             return actions.moveWorkspace(request.target, window: request.args?.window, direction: direction)
         case .workspaceFocus:
             return actions.focusWorkspace(request.target, window: request.args?.window, mode: request.args?.mode)
+        case .workspaceCollapse:
+            return actions.setWorkspaceExpansion(request.target, window: request.args?.window, expanded: false)
+        case .workspaceExpand:
+            return actions.setWorkspaceExpansion(request.target, window: request.args?.window, expanded: true)
         default:
             preconditionFailure("unexpected workspace command: \(request.cmd.rawValue)")
         }

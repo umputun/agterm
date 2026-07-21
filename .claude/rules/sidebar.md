@@ -72,8 +72,12 @@ paths:
   (instant-toggle was tried and rejected: AppKit commits the first click of a double before it knows a
   second is coming, so instant forces a visible toggle-then-revert flicker on rename).
   This is pure click-routing over the existing per-workspace `expandItem`/`collapseItem` (an exempt case
-  under the control keep-in-sync rule), so it adds NO control command — the ALL-workspaces
-  `sidebar.expand`/`sidebar.collapse` stay the control surface.
+  under the control keep-in-sync rule): the row click itself adds NO control command.
+  The per-workspace collapse/expand IS driven over the socket by `workspace.collapse`/`workspace.expand`
+  (distinct from the ALL-workspaces `sidebar.expand`/`sidebar.collapse`), but by a SEPARATE path — the
+  control arm posts `.agtermSetWorkspaceExpanded` and the Coordinator's `setWorkspaceExpandedNotified`
+  syncs the persisted `isExpanded` + the live outline row — NOT by routing through this click handler (see
+  the Control API rule).
   Covered by `SidebarUITests.testClickWorkspaceRowTogglesExpansion`.
 - **A session ROW click reveals a blocked session's pane-tagged pane.**
   `Coordinator.outlineViewSelectionDidChange` selects the clicked session (`selectSession`) then — async,

@@ -360,6 +360,27 @@ agtermctl sidebar collapse                               # collapse all but the 
 agtermctl sidebar collapse --window "$AGTERM_WINDOW_ID"  # collapse a specific window's sidebar
 ```
 
+## Build a collapsed workspace and fill it quietly
+
+Collapse or expand ONE workspace by id (the per-workspace pair, unlike `sidebar expand`/`collapse` which
+act on all of them). Create a workspace already collapsed with `workspace new --collapsed`, then add
+sessions with `session new --no-select` so it never opens or steals the current selection — the recipe
+for staging a batch of sessions out of the way. Read the open/closed state back from the tree workspace
+node's `collapsed` flag (`true` when collapsed, omitted when expanded).
+
+```bash
+ws=$(agtermctl workspace new "batch" --collapsed --json | jq -r '.result.id')
+for dir in ~/a ~/b ~/c; do
+  agtermctl session new --cwd "$dir" --workspace "$ws" --no-select   # added, but the workspace stays shut
+done
+agtermctl workspace expand --target "$ws"    # open it when you want to see the staged sessions
+agtermctl workspace collapse --target "$ws"  # fold it away again
+
+# toggle: read the flag first, then flip
+collapsed=$(agtermctl tree --json | jq -r --arg w "$ws" '.result.tree.workspaces[] | select(.id==$w) | .collapsed // false')
+[ "$collapsed" = true ] && agtermctl workspace expand --target "$ws" || agtermctl workspace collapse --target "$ws"
+```
+
 ## Copy a selection and reuse it
 
 `session copy` returns the selection as text (it does not use the system clipboard). Pipe it onward.

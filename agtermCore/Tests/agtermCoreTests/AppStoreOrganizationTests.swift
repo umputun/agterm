@@ -246,6 +246,13 @@ struct AppStoreOrganizationTests {
         #expect(store.workspaces[0].isExpanded)
     }
 
+    @Test func newWorkspaceCollapsedStartsCollapsed() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work", collapsed: true)
+        #expect(!work.isExpanded)
+        #expect(!store.workspaces[0].isExpanded)
+    }
+
     @Test func setWorkspacesExpandedTogglesAndPersists() {
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
         let persistence = PersistenceStore(directory: dir)

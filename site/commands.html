@@ -6,7 +6,7 @@
     <title>Command reference — agterm | agtermctl control API</title>
     <meta
       name="description"
-      content="Complete agtermctl reference: all 62 control commands for agterm — sessions, workspaces, windows, overlays, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
+      content="Complete agtermctl reference: all 64 control commands for agterm — sessions, workspaces, windows, overlays, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
     />
     <meta
       name="keywords"
@@ -18,7 +18,7 @@
     <meta property="og:title" content="Command reference — agterm" />
     <meta
       property="og:description"
-      content="All 62 agtermctl control commands with arguments, return values, and errors."
+      content="All 64 agtermctl control commands with arguments, return values, and errors."
     />
     <meta property="og:url" content="https://agterm.com/commands" />
     <meta property="og:image" content="https://agterm.com/assets/agterm-og.png" />
@@ -30,7 +30,7 @@
     <meta name="twitter:title" content="Command reference — agterm" />
     <meta
       name="twitter:description"
-      content="All 62 agtermctl control commands with arguments, return values, and errors."
+      content="All 64 agtermctl control commands with arguments, return values, and errors."
     />
     <meta name="twitter:image" content="https://agterm.com/assets/agterm-og.png" />
     <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
@@ -234,7 +234,7 @@
             Command reference
           </h1>
           <p style="font-size: 19px; line-height: 1.6; color: #bfbab0; margin: 0 0 8px">
-            All 62 commands of the agterm control API, with arguments and return values. Every one is reachable from the
+            All 64 commands of the agterm control API, with arguments and return values. Every one is reachable from the
             <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> CLI and from the local
             control socket.
           </p>
@@ -447,10 +447,13 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">id</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">name</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sessions</span>, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sessions</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">focused</span> (the read side of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace focus</span>, distinct from
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>).
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">collapsed</span> (the read side of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace collapse</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">expand</span>;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">true</span> when collapsed, omitted when expanded).
               </p>
               <p style="font-size: 14px; line-height: 1.65; color: #949ba4; margin: 8px 0 0">
                 <strong style="color: #bfbab0">Top level:</strong>
@@ -483,12 +486,15 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl workspace new [name] [--window W]
+                agtermctl workspace new [name] [--collapsed] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.new</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 Create a workspace. The name defaults to an auto-generated one.
-                <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--collapsed</span> creates it closed in the
+                sidebar tree, so a script can fill it with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --no-select</span> without it
+                opening. <strong style="color: #bfbab0">Returns</strong>
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
               </p>
             </div>
@@ -557,6 +563,45 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session select</span> of a session outside it
                 auto-unfocuses. Read back via the workspace node's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">focused</span> field.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl workspace collapse [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.collapse</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Collapse a single workspace's subtree in the sidebar tree, hiding its sessions. The per-workspace
+                counterpart of <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">sidebar collapse</span>
+                (which collapses every workspace but the active one) — this targets exactly the addressed workspace. Idempotent
+                and persisted. <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Read the open/closed state back via the workspace node's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">collapsed</span> field
+                (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">true</span> when collapsed, omitted when expanded).
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl workspace expand [--target T] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.expand</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Expand a single workspace's subtree, showing its sessions — the inverse of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace collapse</span> and the
+                per-workspace counterpart of <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">sidebar expand</span>.
+                Idempotent and persisted. <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                To toggle a workspace, read its <span style="font-family: &quot;JetBrains Mono&quot;, monospace">collapsed</span> field
+                off <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> first, then call
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">expand</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">collapse</span>.
               </p>
             </div>
           </section>

@@ -36,6 +36,11 @@ struct CommandsTests {
         #expect(try request(["workspace", "new"]) == ControlRequest(cmd: .workspaceNew, args: ControlArgs(name: nil)))
     }
 
+    @Test func workspaceNewCollapsed() throws {
+        let expected = ControlRequest(cmd: .workspaceNew, args: ControlArgs(name: "Work", collapsed: true))
+        #expect(try request(["workspace", "new", "Work", "--collapsed"]) == expected)
+    }
+
     @Test func workspaceRename() throws {
         let expected = ControlRequest(cmd: .workspaceRename, target: "9f3c", args: ControlArgs(name: "Renamed"))
         #expect(try request(["workspace", "rename", "Renamed", "--target", "9f3c"]) == expected)
@@ -70,6 +75,14 @@ struct CommandsTests {
 
     @Test func workspaceFocusRejectsBadMode() {
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["workspace", "focus", "sideways"]) }
+    }
+
+    @Test func workspaceCollapseDefaultsActive() throws {
+        #expect(try request(["workspace", "collapse"]) == ControlRequest(cmd: .workspaceCollapse, target: "active"))
+    }
+
+    @Test func workspaceExpandWithTarget() throws {
+        #expect(try request(["workspace", "expand", "--target", "9f3c"]) == ControlRequest(cmd: .workspaceExpand, target: "9f3c"))
     }
 
     @Test func sessionNewWithCwdAndWorkspace() throws {

@@ -412,7 +412,7 @@ struct ControlDispatcherTests {
         #expect(renamed == ControlResponse(ok: true))
         #expect(deleted == ControlResponse(ok: true))
         #expect(actions.calls == [
-            .workspaceNew(window: "win", "api"),
+            .workspaceNew(window: "win", "api", collapsed: false),
             .workspaceSelect(target: "workspace", window: "win"),
             .workspaceRename(target: "workspace", window: nil, "renamed"),
             .workspaceDelete(target: "workspace", window: nil)
@@ -564,6 +564,37 @@ struct ControlDispatcherTests {
 
         #expect(focused == ControlResponse(ok: true))
         #expect(actions.calls == [.workspaceFocus(target: "workspace", window: "win", "on")])
+    }
+
+    @Test func workspaceCollapseAndExpandRouteExpandedFlag() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let collapsed = await dispatcher.dispatch(ControlRequest(
+            cmd: .workspaceCollapse, target: "workspace", args: ControlArgs(window: "win")
+        ))
+        let expanded = await dispatcher.dispatch(ControlRequest(
+            cmd: .workspaceExpand, target: "active"
+        ))
+
+        #expect(collapsed == ControlResponse(ok: true))
+        #expect(expanded == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .workspaceExpansion(target: "workspace", window: "win", expanded: false),
+            .workspaceExpansion(target: "active", window: nil, expanded: true)
+        ])
+    }
+
+    @Test func workspaceNewRoutesCollapsedFlag() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let created = await dispatcher.dispatch(ControlRequest(
+            cmd: .workspaceNew, args: ControlArgs(name: "api", collapsed: true, window: "win")
+        ))
+
+        #expect(created == ControlResponse(ok: true))
+        #expect(actions.calls == [.workspaceNew(window: "win", "api", collapsed: true)])
     }
 
     @Test func sessionFlagRoutesModeForHostSideValidation() async {

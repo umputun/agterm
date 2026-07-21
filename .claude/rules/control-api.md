@@ -70,7 +70,8 @@ paths:
   `session.flag`/`flagged`, `session.focus`/`splitFocused`, `session.resize`/`splitRatio`,
   `session.restore`/`restoreCommand`+`splitRestoreCommand`,
   `session.overlay.resize`/`overlaySizePercent`, `sidebar`/`sidebarVisible` (top-level),
-  `sidebar.mode`/`sidebarMode`, `workspace.focus`/`focused` (workspace node), `quick`/`quickVisible` (top-level),
+  `sidebar.mode`/`sidebarMode`, `workspace.focus`/`focused` (workspace node),
+  `workspace.collapse`+`workspace.expand`/`collapsed` (workspace node), `quick`/`quickVisible` (top-level),
   `font.*`/`fontSize`+`splitFontSize`+`scratchFontSize` (the per-pane LIVE font size — the split/scratch
   panes' fonts are otherwise unobservable, being live-only; supplied to `controlTree` by app-side closures
   reading `GhosttySurfaceView.currentFontSize()`, since the host-free tree can't read a surface),
@@ -160,7 +161,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 62-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 64-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -238,9 +239,9 @@ paths:
   rules, then remaining targets resolve inside that same store so one command never mutates multiple windows.
   The top-level `target` also carries the first explicit batch target so a new CLI talking to a still-running
   pre-batch server degrades to a named session instead of accidentally acting on `active`.
-- **Command catalog (62 commands):**
+- **Command catalog (64 commands):**
   - `tree`
-  - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`
+  - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`/`workspace.collapse`/`workspace.expand`
   - `session.new`/`session.duplicate`/`session.close`/`session.select`/`session.rename`/`session.reveal`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.paste`/`session.selectall`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.restore`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.resize`/`session.overlay.result`
   - `surface.zoom`
   - `dashboard`
@@ -266,7 +267,7 @@ paths:
   Setting echoes the resulting effective side in `result.text`; the BARE form (no name) reads the side
   the last config feed applied (`SettingsModel.lastAppliedIsDark`), which the test polls to prove the
   flip actually drove the reload.
-  `AppearanceFlipUITests` is its only consumer; the public command count stays 62.
+  `AppearanceFlipUITests` is its only consumer; the public command count stays 64.
 
   `workspace.delete` honors keep-at-least-one and returns an error instead of the GUI confirm alert (nothing
   blocks on a modal).
@@ -1209,6 +1210,43 @@ paths:
   (3) the `workspace focus on|off|toggle` subcommand (`Focus`) in `agtermctlKit`,
   (4) round-trip in `ControlProtocolTests` + the e2e `testWorkspaceFocusHidesOtherWorkspaces` in `ControlSidebarStatusUITests`
   plus the `FocusWorkspaceUITests` XCUITest.
+  `workspace.collapse`/`workspace.expand` (target = workspace) collapse/expand ONE workspace's subtree in
+  the sidebar tree — the per-workspace analogue of the all-workspace `sidebar.expand`/`sidebar.collapse`
+  (scope by prefix: `sidebar.*` acts on every workspace, `workspace.*` on the addressed one).
+  They resolve the workspace via `resolveWorkspace` (honoring the global `--window` selector), drive
+  `setWorkspaceExpansion` → `AppActions.setWorkspaceExpanded(_:expanded:in:)`, and return the workspace id.
+  Unlike the GUI (a row click drives `expandItem`/`collapseItem` directly, keep-in-sync EXEMPT), there is
+  no GUI caller — the row click is the only GUI path — so this is a control-only pair.
+  The app-side arm posts `.agtermSetWorkspaceExpanded` carrying the target `AppStore` as the object + the
+  workspace id/desired-state in `userInfo`; `WorkspaceSidebar.Coordinator.setWorkspaceExpandedNotified`
+  ALWAYS writes the persisted `AppStore.setWorkspaceExpanded` (delta-guarded, the source of truth) + keeps
+  the tracked `expandedWorkspaceIDs` in step, THEN drives the live outline row with `suppressExpansionPersist`
+  when it is on screen (tree mode, row resolved) — so the intent survives a collapsed/focused-away/flagged
+  row and a transient focus force-reveal, and a redundant callback re-persist is avoided.
+  Idempotent.
+  Its READ side is `ControlWorkspaceNode.collapsed` (`workspace.isExpanded ? nil : true` in the tree
+  builder, mirroring the persisted `WorkspaceSnapshot.collapsed`): `true` when collapsed, omitted when
+  expanded, so a script can record a workspace's open/closed state, restore it, or toggle by reading it first.
+  `workspace.new` gains a `--collapsed` flag (`ControlArgs.collapsed`, threaded into `AppStore.addWorkspace(name:collapsed:)`
+  → `Workspace(isExpanded: !collapsed)`): a runtime-added workspace with `isExpanded == false` renders
+  collapsed (the reconcile's `formUnion(filter(\.isExpanded))` excludes it), so it can be built and filled
+  with `session.new --no-select` without opening.
+  Four-point keep-in-sync audit: (1) `case workspaceCollapse = "workspace.collapse"` + `case workspaceExpand = "workspace.expand"`
+  + `ControlArgs.collapsed` + `ControlWorkspaceNode.collapsed` in `ControlProtocol.swift`,
+  (2) the `.workspaceCollapse`/`.workspaceExpand` dispatch arms → `ControlActions.setWorkspaceExpansion`
+  (+ `createWorkspace(…collapsed:)`) in `ControlServer+WorkspaceCommands.swift`, the app-side
+  `AppActions.setWorkspaceExpanded(_:expanded:in:)` + `WorkspaceSidebar.Coordinator.setWorkspaceExpandedNotified`
+  (+ the `.agtermSetWorkspaceExpanded` name + the two userInfo keys) + the `collapsed` population in
+  `AppStore.controlTree`, (3) the `workspace collapse`/`workspace expand` subcommands + `workspace new --collapsed`
+  in `agtermctlKit`, (4) round-trip + omit-when-nil + raw-string decode in `ControlProtocolTests`,
+  dispatcher routing in `ControlDispatcherTests`, CLI mapping in `CommandsTests`,
+  `AppStoreTests.controlTreeReportsCollapsedWorkspace` + `AppStoreOrganizationTests.newWorkspaceCollapsedStartsCollapsed`,
+  and the e2e `testWorkspaceCollapseAndExpand` + `testWorkspaceNewCollapsedStaysClosedWhenFilled` in
+  `ControlSidebarStatusUITests`.
+  The workspace-command adapter arms (create/select/rename/delete/move/focus + this pair + the all-workspace
+  `expandWorkspaces`/`collapseWorkspaces` helpers) live in `ControlServer+WorkspaceCommands.swift`, split
+  out of `ControlServer+SessionActions.swift` (the `+WindowCommands.swift` family-split precedent) to keep
+  that file under the 1000-line limit; they still satisfy the `ControlActions` conformance declared there.
   `tree` now also surfaces, on each `ControlSessionNode`, `foreground`/`splitForeground` — the LIVE foreground-process
   argv of the main + split panes (nil/omitted at the shell prompt), the SAME `ForegroundProcess.command(for:shellBasename:)`
   capture the restore-running-command feature uses (`ghostty_surface_foreground_pid` → `sysctl(KERN_PROCARGS2)`
@@ -1445,12 +1483,12 @@ paths:
   (image/text/color set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
-  examples.md recipes) and the command count there is bumped to 62 to match.
+  examples.md recipes) and the command count there is bumped to 64 to match.
   **Website mirror (HARD keep-in-sync):** the site's per-command reference `site/commands.html` documents
   EVERY `agtermctl` control command — one inline-styled card per command carrying its invocation, its
   arguments, and the `tree` read-back field, grouped into its command family's section.
   A new `Command` case REQUIRES a new `site/commands.html` entry (a changed command an updated one, a
   removed command a deleted one), in lockstep with the agent skill above and `README.md`/`site/docs.html`;
-  the page's "62 commands" copy must track the catalog count.
+  the page's "64 commands" copy must track the catalog count.
   It drifted once because the site keep-in-sync convention named only `docs.html`/`index.html`, so
   `dashboard` and `surface.zoom` shipped undocumented here.

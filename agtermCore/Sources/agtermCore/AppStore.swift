@@ -232,6 +232,7 @@ public final class AppStore {
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,
                                         focused: workspace.id == focusedWorkspaceID ? true : nil,
+                                        collapsed: workspace.isExpanded ? nil : true,
                                         sessions: sessions)
         }
         return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs,
@@ -247,9 +248,12 @@ public final class AppStore {
     /// the new (empty) workspace is immediately visible — else `visibleWorkspaces` returns only the
     /// focused one and the new workspace is silently hidden (the auto-reveal contract, like `addSession`).
     /// Pass `clearFocus: false` to keep the current focus — a background `session.new --no-select` create.
+    /// Pass `collapsed: true` to create it already collapsed in the sidebar (backs `workspace.new --collapsed`):
+    /// a runtime add defaults `isExpanded == true` and renders open, so a collapsed workspace can be built
+    /// and filled with `addSession(select: false)` without opening.
     @discardableResult
-    public func addWorkspace(name: String, clearFocus: Bool = true) -> Workspace {
-        let workspace = Workspace(name: name)
+    public func addWorkspace(name: String, collapsed: Bool = false, clearFocus: Bool = true) -> Workspace {
+        let workspace = Workspace(name: name, isExpanded: !collapsed)
         workspaces.append(workspace)
         if clearFocus { focusedWorkspaceID = nil }
         save()

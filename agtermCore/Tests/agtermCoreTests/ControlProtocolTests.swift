@@ -835,6 +835,37 @@ struct ControlProtocolTests {
         #expect(decoded.focused == nil)
     }
 
+    @Test func workspaceNodeRoundTripsWithCollapsed() throws {
+        // the read side of workspace.collapse/expand: a collapsed workspace is flagged so a script can
+        // record its open/closed state and restore it, or toggle by reading it first.
+        let ws = ControlWorkspaceNode(id: "w1", name: "work", active: true, collapsed: true, sessions: [])
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(workspaces: [ws])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.collapsed == true)
+    }
+
+    @Test func workspaceNodeOmitsCollapsedWhenNil() throws {
+        // an expanded workspace (the default) omits the key rather than emitting null, so an all-expanded
+        // tree stays byte-compatible with a legacy response.
+        let ws = ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [])
+        let json = String(data: try JSONEncoder().encode(ws), encoding: .utf8) ?? ""
+        #expect(!json.contains("collapsed"), "a nil collapsed must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlWorkspaceNode.self, from: Data(json.utf8))
+        #expect(decoded.collapsed == nil)
+    }
+
+    @Test func workspaceCollapseExpandRawStringsMapToCommands() throws {
+        let collapse = try JSONDecoder().decode(ControlRequest.self,
+                                                from: Data(#"{"cmd":"workspace.collapse","target":"9f3c"}"#.utf8))
+        #expect(collapse.cmd == .workspaceCollapse)
+        #expect(collapse.target == "9f3c")
+        let expand = try JSONDecoder().decode(ControlRequest.self,
+                                              from: Data(#"{"cmd":"workspace.expand","target":"active"}"#.utf8))
+        #expect(expand.cmd == .workspaceExpand)
+        #expect(expand.target == "active")
+    }
+
     @Test func treeRoundTripsWithSidebarMode() throws {
         // the read side of sidebar.mode: the sidebar view mode (tree/flagged) rides the tree top level.
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(

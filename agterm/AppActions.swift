@@ -567,6 +567,19 @@ final class AppActions {
         NotificationCenter.default.post(name: .agtermCollapseWorkspaces, object: store)
     }
 
+    /// Collapse or expand a SINGLE workspace in `store`'s window sidebar — the per-workspace control path
+    /// (`workspace.collapse`/`workspace.expand`), distinct from the all-workspace `expandAllWorkspaces`/`collapseOtherWorkspaces`
+    /// above. Posts a store-scoped notification carrying the workspace id + desired state; the matching
+    /// window's `WorkspaceSidebar.Coordinator` syncs both the persisted `Workspace.isExpanded` and the live
+    /// outline row (see its `setWorkspaceExpandedNotified`). There is no GUI caller — a row click drives the
+    /// outline directly — so this exists only for the control channel.
+    func setWorkspaceExpanded(_ id: UUID, expanded: Bool, in store: AppStore) {
+        NotificationCenter.default.post(
+            name: .agtermSetWorkspaceExpanded, object: store,
+            userInfo: [WorkspaceSidebar.Coordinator.workspaceIDUserInfoKey: id,
+                       WorkspaceSidebar.Coordinator.expandedUserInfoKey: expanded])
+    }
+
     // MARK: - Flagged working-set
 
     /// Toggle a session's flagged membership (the durable flagged working-set the flat sidebar view
