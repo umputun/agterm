@@ -23,6 +23,7 @@ public enum Command: String, Codable, Sendable {
     case sessionStatus = "session.status"
     case sessionFlag = "session.flag"
     case sessionSeen = "session.seen"
+    case sessionRestore = "session.restore"
     case sessionBackground = "session.background"
     case sessionSplit = "session.split"
     case sessionScratch = "session.scratch"
@@ -107,7 +108,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// Mode for `session.split` / `quick` / `surface.zoom` (`on|off|toggle`,
     /// `show|hide|toggle` for quick/surface zoom),
     /// `session.flag` (`on|off|toggle|clear`), `sidebar.mode` (`tree|flagged|toggle`),
-    /// `workspace.focus` (`on|off|toggle`), and `session.background` (`image|text|color|clear`).
+    /// `workspace.focus` (`on|off|toggle`), `session.background` (`image|text|color|clear`), and
+    /// `session.restore` (`set|none|clear` — pin `command`, pin nothing, or drop the pin).
     public var mode: String?
     /// The image file path for `session.background` mode `image` (PNG or JPEG).
     public var path: String?
@@ -130,14 +132,17 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// Which split pane to focus for `session.focus` (`left`|`right`|`other`; `other` toggles); also
     /// which pane to read for `session.text` (`left`|`right`; omitted = the focused pane, no `other`),
     /// which pane `session.type` injects into (`left`|`right`; omitted = the left/main pane, the
-    /// pre-pane behavior), and which pane set `session.status` (`left`|`right`|`scratch`; omitted =
-    /// `left`/main, parsed to `StatusPane`).
+    /// pre-pane behavior), which pane set `session.status` (`left`|`right`|`scratch`; omitted =
+    /// `left`/main, parsed to `StatusPane`), and which pane `session.restore` pins (same `StatusPane`
+    /// spelling; omitted = `left`/main, `scratch` rejected app-side).
     public var pane: String?
-    /// A surface's STABLE spawn token for `session.status --pane-id` (the shell's baked `AGTERM_PANE_ID`,
-    /// forwarded by the agent-status hook). When it resolves against the session's live surfaces it
-    /// OVERRIDES the stale role `pane`, so a status set from a promoted-then-re-split pane lands on the
-    /// pane's CURRENT slot; an empty/unknown token falls back to `pane`. Opaque — validated only by whether
-    /// it resolves. See `Session.paneRole(forToken:)` and the #199 fix.
+    /// A surface's STABLE spawn token for `session.status --pane-id` and `session.restore --pane-id` (the
+    /// shell's baked `AGTERM_PANE_ID`, forwarded by the agent-status hook). When it resolves against the
+    /// session's live surfaces it OVERRIDES the stale role `pane`, so a status set from a
+    /// promoted-then-re-split pane lands on the pane's CURRENT slot; an empty/unknown token falls back to
+    /// `pane`. Opaque — validated only by whether it resolves. `session.restore` diverges on the fallback:
+    /// an unresolvable token with NO explicit `pane` is an error there rather than a silent `left`, since
+    /// pinning the wrong pane's restore command persists. See `Session.paneRole(forToken:)` and the #199 fix.
     public var paneID: String?
     /// Absolute left-pane split fraction (0...1) for `session.resize`, clamped server-side to
     /// `AppStore.splitRatioMin...splitRatioMax`. Mutually exclusive with `ratioDelta`.
@@ -165,7 +170,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var title: String?
     /// The desktop-notification body for `notify` (required).
     public var body: String?
-    /// The program the overlay terminal runs for `session.overlay.open` (e.g. `revdiff`).
+    /// The program the overlay terminal runs for `session.overlay.open` (e.g. `revdiff`); also the shell
+    /// line `session.restore` pins for the next launch (mode `set` only, typed verbatim — never re-quoted).
     public var command: String?
     /// Whether a command surface keeps its "press any key to close" prompt after the command exits instead
     /// of closing immediately: `session.overlay.open --wait` (the overlay) and `session.new --command …

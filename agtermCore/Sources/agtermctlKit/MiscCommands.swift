@@ -45,7 +45,15 @@ struct Restore: ParsableCommand {
     )
 
     struct Clear: RequestCommand {
-        static let configuration = CommandConfiguration(abstract: "Clear every session's saved foreground command so the next restart restores plain shells.")
+        static let configuration = CommandConfiguration(
+            abstract: "Clear every session's saved foreground command so the next restart restores plain shells.",
+            discussion: """
+            This is app-global and CAPTURE-scoped: it drops the foreground commands agterm captured at \
+            quit, across every open window, and leaves per-session restore-command overrides alone.
+
+            Not to be confused with `agtermctl session restore --clear`, which is per-session and \
+            OVERRIDE-scoped: it drops one pane's pinned command so that pane goes back to auto-capture.
+            """)
         // restore.clear is app-global (clears every open window), so no `--window` selector.
         @OptionGroup var options: BasicOptions
 

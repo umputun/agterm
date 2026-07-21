@@ -407,6 +407,65 @@ extension ControlServer: ControlActions {
         }
     }
 
+    /// Pin (or unpin) the target pane's restore-command override — the per-pane shell line that wins over
+    /// the captured foreground on the NEXT launch. Write-now, consume-next-launch: it touches only the
+    /// PERSISTED field, so nothing runs in the current session. `update.pin` maps to the tri-state stored
+    /// value (`pin(cmd)` → the line, `pinNone` → `""` = a plain shell, `unpin` → nil = back to
+    /// auto-capture) and `AppStore.setRestoreCommand` saves immediately, so a hook's write survives a
+    /// force-quit. That save is the ONE store write whose failure is reported rather than swallowed: the
+    /// arm answers `ok: false` when it did not land, since acking a `clear` that never reached disk would
+    /// leave the old command firing on every launch. The rolled-back value is still in effect, so the
+    /// caller retries the same request.
+    ///
+    /// The pane resolves like `setSessionStatus` — `update.paneID` against the session's LIVE surfaces
+    /// first, then the baked role `update.pane`, defaulting to the main pane — with ONE deliberate
+    /// divergence: an unresolvable `--pane-id` supplied WITHOUT an explicit `--pane` is an ERROR here. For
+    /// a status a bad fallback costs a glyph on the wrong row; here it would overwrite the MAIN pane's
+    /// persisted restore command when a hook meant the split. `.scratch` and a `.right` without a split are
+    /// rejected too. A `set` while the restore-running-command setting is off still succeeds, with a note
+    /// in `result.text` so a hook author can see why nothing will fire; `none` and `clear` get no note —
+    /// their outcome (a plain shell / back to auto-capture) is delivered regardless of the setting.
+    func setSessionRestore(_ target: String?, window: String?,
+                           update: ControlSessionRestoreUpdate) -> ControlResponse {
+        return resolver.resolveSession(target, window: window) { store, id in
+            guard let session = store.session(withID: id) else {
+                return ControlResponse(ok: false, error: "no such session: \(target ?? "active")")
+            }
+            let pane: StatusPane
+            // an EMPTY token counts as absent (an older shell exporting no `AGTERM_PANE_ID`), so it takes
+            // the plain `--pane`/main-pane path rather than erroring.
+            if let token = update.paneID, !token.isEmpty {
+                guard let resolved = session.paneRole(forToken: token) ?? update.pane else {
+                    return ControlResponse(ok: false, error: "unknown pane id: \(token)")
+                }
+                pane = resolved
+            } else {
+                pane = update.pane ?? .left
+            }
+            guard pane != .scratch else {
+                return ControlResponse(ok: false, error: "the scratch terminal is never restored")
+            }
+            guard pane != .right || session.hasSplit else {
+                return ControlResponse(ok: false, error: "session has no split")
+            }
+            let value: String?
+            switch update.pin {
+            case .pin(let command): value = command
+            case .pinNone: value = ""
+            case .unpin: value = nil
+            }
+            guard store.setRestoreCommand(value, pane: pane, forSession: id) else {
+                return ControlResponse(ok: false,
+                                       error: "failed to save the restore override, the previous value is still in effect")
+            }
+            var result = ControlResult(id: id.uuidString)
+            if case .pin = update.pin, self.settingsModel.settings.restoreRunningCommand != true {
+                result.text = "saved, but \"Restore running commands on restart\" is off, so the override will not run"
+            }
+            return ControlResponse(ok: true, result: result)
+        }
+    }
+
     /// Flag/unflag the target session for the flagged working-set view (the durable `Session.flagged`
     /// membership the flat sidebar mode projects). `mode` is `on|off|toggle|clear`, computed against the
     /// session's current `flagged` so `on`/`off` are idempotent. `clear` ignores the target and unflags

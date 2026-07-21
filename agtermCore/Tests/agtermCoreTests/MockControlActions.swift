@@ -29,6 +29,7 @@ final class MockControlActions: ControlActions {
         case sessionFlag(target: String?, window: String?, String?)
         case markSessionSeen(target: String?, window: String?)
         case sessionStatus(target: String?, window: String?, ControlSessionStatusUpdate)
+        case sessionRestore(target: String?, window: String?, ControlSessionRestoreUpdate)
         case sessionSplit(target: String?, window: String?, String?)
         case sessionScratch(target: String?, window: String?, String?, command: String?)
         case sessionFocus(target: String?, window: String?, String?)
@@ -113,6 +114,7 @@ final class MockControlActions: ControlActions {
     var nextWindowZoomResponse = ControlResponse(ok: true)
     var nextWindowFullscreenResponse = ControlResponse(ok: true)
     var nextRestoreClearResponse = ControlResponse(ok: true)
+    var nextSessionRestoreResponse = ControlResponse(ok: true)
 
     func controlTree(window: String?) -> ControlResponse {
         calls.append(.tree(window: window))
@@ -213,6 +215,12 @@ final class MockControlActions: ControlActions {
                           update: ControlSessionStatusUpdate) -> ControlResponse {
         calls.append(.sessionStatus(target: target, window: window, update))
         return ControlResponse(ok: true)
+    }
+
+    func setSessionRestore(_ target: String?, window: String?,
+                           update: ControlSessionRestoreUpdate) -> ControlResponse {
+        calls.append(.sessionRestore(target: target, window: window, update))
+        return nextSessionRestoreResponse
     }
 
     func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse {

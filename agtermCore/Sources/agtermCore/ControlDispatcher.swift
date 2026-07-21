@@ -25,6 +25,12 @@ public protocol ControlActions {
     func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse
     func markSessionSeen(_ target: String?, window: String?) -> ControlResponse
     func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) -> ControlResponse
+    /// Write a pane's PERSISTED restore-command override (consumed on the NEXT launch, never this run).
+    /// The host resolves the target session and the live pane slot, then stores the tri-state value; it
+    /// also owns the pane rejections that need a session (`scratch`, `right` without a split, an
+    /// unresolvable `paneID` given without an explicit `pane`).
+    func setSessionRestore(_ target: String?, window: String?,
+                           update: ControlSessionRestoreUpdate) -> ControlResponse
     func splitSession(_ target: String?, window: String?, mode: String?) -> ControlResponse
     func scratchSession(_ target: String?, window: String?, mode: String?, command: String?) -> ControlResponse
     func focusSessionPane(_ target: String?, window: String?, pane: String?) -> ControlResponse
@@ -138,7 +144,7 @@ public struct ControlDispatcher {
         case .tree:
             return actions.controlTree(window: request.args?.window)
         case .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
-                .sessionReveal, .sessionMove, .sessionFlag, .sessionSeen, .sessionStatus:
+                .sessionReveal, .sessionMove, .sessionFlag, .sessionSeen, .sessionStatus, .sessionRestore:
             return dispatchSessionCommand(request)
         case .sessionSplit, .sessionScratch, .sessionFocus, .sessionResize, .surfaceZoom, .sessionType,
                 .sessionCopy, .sessionPaste, .sessionSelectAll, .sessionSearch, .sessionOverlayOpen,
@@ -277,21 +283,79 @@ public struct ControlDispatcher {
             if let color = request.args?.color, !WatermarkConfig.isValidColorHex(color) {
                 return ControlResponse(ok: false, error: "invalid color (expected #rrggbb)")
             }
-            var pane: StatusPane?
-            if let rawPane = request.args?.pane {
-                guard let parsed = StatusPane(rawValue: rawPane) else {
-                    return ControlResponse(ok: false, error: "--pane must be left, right, or scratch")
-                }
-                pane = parsed
+            let pane: StatusPane?
+            switch parsePane(request.args?.pane) {
+            case .pane(let parsed): pane = parsed
+            case .rejected(let rejection): return rejection
             }
             let update = ControlSessionStatusUpdate(status: status, blink: request.args?.blink,
                                                     autoReset: request.args?.autoReset,
                                                     sound: request.args?.sound, color: request.args?.color,
                                                     pane: pane, paneID: request.args?.paneID)
             return actions.setSessionStatus(request.target, window: request.args?.window, update: update)
+        case .sessionRestore:
+            return dispatchSessionRestore(request)
         default:
             preconditionFailure("unexpected session command: \(request.cmd.rawValue)")
         }
+    }
+
+    /// `session.restore`: parse the `set`|`none`|`clear` mode into a `ControlRestoreOverride` and the pane
+    /// selector into a `StatusPane`, then hand both to the host. A pinned command is validated but NEVER
+    /// rewritten — it is a shell line, so metacharacters are the point; it is rejected only for being
+    /// absent, carrying control characters, or exceeding the storage cap. An EMPTY command is the same
+    /// pinned-to-nothing state as `none`. `paneID` rides through opaquely (the dispatcher has no session
+    /// to resolve it against).
+    private func dispatchSessionRestore(_ request: ControlRequest) -> ControlResponse {
+        let args = request.args
+        let pin: ControlRestoreOverride
+        switch args?.mode ?? "" {
+        case "set":
+            guard let command = args?.command else {
+                return ControlResponse(ok: false, error: "session.restore set requires a command")
+            }
+            // a control character would smuggle an extra line (or an escape sequence) into the shell the
+            // override is typed into, so the whole class is rejected — tab included.
+            guard !command.unicodeScalars.contains(where: { $0.value < 0x20 || $0.value == 0x7f }) else {
+                return ControlResponse(ok: false, error: "command must not contain control characters")
+            }
+            guard command.utf8.count <= ControlRestoreOverride.maxCommandBytes else {
+                return ControlResponse(ok: false,
+                                       error: "command too long (max \(ControlRestoreOverride.maxCommandBytes) bytes)")
+            }
+            pin = .pin(command)
+        case "none":
+            pin = .pinNone
+        case "clear":
+            pin = .unpin
+        default:
+            return ControlResponse(ok: false,
+                                   error: "invalid restore mode: \(args?.mode ?? "") (set|none|clear)")
+        }
+        let pane: StatusPane?
+        switch parsePane(args?.pane) {
+        case .pane(let parsed): pane = parsed
+        case .rejected(let rejection): return rejection
+        }
+        let update = ControlSessionRestoreUpdate(pin: pin, pane: pane, paneID: args?.paneID)
+        return actions.setSessionRestore(request.target, window: args?.window, update: update)
+    }
+
+    /// The outcome of parsing a `--pane` selector: the pane (nil when the selector was absent), or the
+    /// rejection response the arm returns as-is.
+    private enum PaneSelection {
+        case pane(StatusPane?)
+        case rejected(ControlResponse)
+    }
+
+    /// The shared `--pane` role selector (`session.status`, `session.restore`): nil when absent, the parsed
+    /// pane when valid, and the pinned rejection when the token names no pane.
+    private func parsePane(_ raw: String?) -> PaneSelection {
+        guard let raw else { return .pane(nil) }
+        guard let parsed = StatusPane(rawValue: raw) else {
+            return .rejected(ControlResponse(ok: false, error: "--pane must be left, right, or scratch"))
+        }
+        return .pane(parsed)
     }
 
     private func dispatchSessionMove(targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse {

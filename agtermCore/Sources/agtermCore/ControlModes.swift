@@ -150,3 +150,39 @@ public struct ControlSessionStatusUpdate: Equatable, Sendable {
         self.paneID = paneID
     }
 }
+
+/// The three forms of the `session.restore` per-pane restore-command override, parsed from the wire
+/// tokens `set` / `none` / `clear`. `pinNone` is deliberately NOT spelled `none`: a bare `case none`
+/// makes the compiler warn "assuming you mean Optional<T>.none" wherever the enum appears in an
+/// Optional context, which the dispatcher's parse step does.
+public enum ControlRestoreOverride: Equatable, Sendable {
+    /// wire `set` — pin this shell line, run verbatim on the next launch.
+    case pin(String)
+    /// wire `none` — pin the pane to nothing, so it restores a plain shell.
+    case pinNone
+    /// wire `clear` — drop the pin, back to the captured-foreground auto-restore.
+    case unpin
+
+    /// The storage bound on a pinned command, in UTF-8 BYTES (not graphemes) — the value persists in
+    /// `windows/<id>.json`, so the cap guards the snapshot, not the display width.
+    public static let maxCommandBytes = 1024
+}
+
+/// Parsed `session.restore` payload. The pane resolution stays host-side: `paneID` is carried through
+/// opaquely and resolved app-side against the session's LIVE surfaces (`Session.paneRole(forToken:)`),
+/// falling back to the baked role `pane` — and, unlike `session.status`, an unresolvable token with no
+/// explicit `pane` is an error rather than a silent main-pane default.
+public struct ControlSessionRestoreUpdate: Equatable, Sendable {
+    public let pin: ControlRestoreOverride
+    /// Which pane to pin (`left`=main, `right`=split; `scratch` is rejected app-side — the scratch
+    /// terminal is never restored), or nil for the main pane.
+    public let pane: StatusPane?
+    /// The surface's STABLE spawn token (the shell's baked `AGTERM_PANE_ID`), forwarded as `--pane-id`.
+    public let paneID: String?
+
+    public init(pin: ControlRestoreOverride, pane: StatusPane? = nil, paneID: String? = nil) {
+        self.pin = pin
+        self.pane = pane
+        self.paneID = paneID
+    }
+}

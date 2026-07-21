@@ -535,6 +535,71 @@ struct CommandsTests {
         #expect(validationMessage(["session", "status", "blocked", "--pane", "other"]) == "--pane must be left, right, or scratch")
     }
 
+    @Test func sessionRestorePinsCommand() throws {
+        let expected = ControlRequest(cmd: .sessionRestore, target: "s1",
+                                      args: ControlArgs(mode: "set", command: "claude --resume abc"))
+        #expect(try request(["session", "restore", "claude --resume abc", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionRestoreCarriesShellLineVerbatim() throws {
+        // the pinned value is a shell line, so metacharacters must reach the wire untouched.
+        let line = "cd /tmp && claude --resume abc | tee out"
+        let req = try request(["session", "restore", line])
+        #expect(req.args?.command == line)
+    }
+
+    @Test func sessionRestoreNone() throws {
+        let expected = ControlRequest(cmd: .sessionRestore, target: "active", args: ControlArgs(mode: "none"))
+        let req = try request(["session", "restore", "--none"])
+        #expect(req == expected)
+        #expect(req.args?.command == nil)
+    }
+
+    @Test func sessionRestoreClear() throws {
+        let expected = ControlRequest(cmd: .sessionRestore, target: "active", args: ControlArgs(mode: "clear"))
+        let req = try request(["session", "restore", "--clear"])
+        #expect(req == expected)
+        #expect(req.args?.command == nil)
+    }
+
+    @Test func sessionRestoreWithPaneAndPaneID() throws {
+        let expected = ControlRequest(cmd: .sessionRestore, target: "s1",
+                                      args: ControlArgs(mode: "set", command: "claude -c",
+                                                        pane: "right", paneID: "pane-tok"))
+        #expect(try request(["session", "restore", "claude -c", "--pane", "right",
+                             "--pane-id", "pane-tok", "--target", "s1"]) == expected)
+    }
+
+    @Test func sessionRestoreWithoutPaneOmitsBoth() throws {
+        let req = try request(["session", "restore", "--clear"])
+        #expect(req.args?.pane == nil)
+        #expect(req.args?.paneID == nil)
+    }
+
+    @Test func sessionRestoreCarriesWindow() throws {
+        let expected = ControlRequest(cmd: .sessionRestore, target: "active",
+                                      args: ControlArgs(mode: "none", window: "w1"))
+        #expect(try request(["session", "restore", "--none", "--window", "w1"]) == expected)
+    }
+
+    @Test func sessionRestoreRequiresOneForm() {
+        #expect(validationMessage(["session", "restore"]) == "provide exactly one of a COMMAND, --none, or --clear")
+    }
+
+    @Test func sessionRestoreRejectsCommandWithNone() {
+        #expect(validationMessage(["session", "restore", "claude", "--none"])
+            == "provide exactly one of a COMMAND, --none, or --clear")
+    }
+
+    @Test func sessionRestoreRejectsNoneWithClear() {
+        #expect(validationMessage(["session", "restore", "--none", "--clear"])
+            == "provide exactly one of a COMMAND, --none, or --clear")
+    }
+
+    @Test func sessionRestoreRejectsBadPane() {
+        #expect(validationMessage(["session", "restore", "--clear", "--pane", "other"]) == "--pane must be left, right, or scratch")
+    }
+
     @Test func sessionSearchWithNeedle() throws {
         let expected = ControlRequest(cmd: .sessionSearch, target: "active", args: ControlArgs(text: "error"))
         #expect(try request(["session", "search", "error"]) == expected)
