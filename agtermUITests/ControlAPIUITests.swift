@@ -136,6 +136,147 @@ final class ControlAPIUITests: ControlAPITestCase {
     func testRestoreClearSucceeds() throws {
         let resp = try sendCommand(#"{"cmd":"restore.clear"}"#)
         XCTAssertEqual(resp["ok"] as? Bool, true, "restore.clear should succeed: \(resp)")
+
+        // the two verbs are easy to confuse: `restore clear` is app-global and CAPTURE-scoped, so it must
+        // leave a per-session `session.restore` override pinned.
+        let sessionID = try activeSessionID()
+        XCTAssertEqual(try sendRestore(target: sessionID, mode: "set", command: "echo kept")["ok"] as? Bool, true,
+                       "pinning an override should succeed")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"restore.clear"}"#)["ok"] as? Bool, true, "restore.clear should succeed")
+        XCTAssertEqual(try restoreNode(sessionID)["restoreCommand"] as? String, "echo kept",
+                       "restore.clear captures only — the per-session override must survive it")
+    }
+
+    // the two `--pane-id` FALLBACK paths, the other half of the deliberate divergence from session.status:
+    // an EMPTY token counts as ABSENT (an older shell exporting no $AGTERM_PANE_ID), and an unresolvable
+    // token supplied WITH an explicit `--pane` falls back to that pane instead of erroring.
+    func testSessionRestorePaneIDFallsBackWhenEmptyOrUnresolvable() throws {
+        let sessionID = try activeSessionID()
+        let empty = try sendRestore(target: sessionID, mode: "set", command: "echo empty-token", paneID: "")
+        XCTAssertEqual(empty["ok"] as? Bool, true, "an empty pane id must be treated as absent: \(empty)")
+        XCTAssertEqual(try restoreNode(sessionID)["restoreCommand"] as? String, "echo empty-token",
+                       "an empty token takes the main-pane path")
+
+        let withPane = try sendRestore(target: sessionID, mode: "set", command: "echo fallback",
+                                       pane: "left", paneID: "not-a-real-token")
+        XCTAssertEqual(withPane["ok"] as? Bool, true,
+                       "an unresolvable token with an explicit --pane must fall back, not error: \(withPane)")
+        XCTAssertEqual(try restoreNode(sessionID)["restoreCommand"] as? String, "echo fallback",
+                       "the explicit --pane is the intended fallback")
+    }
+
+    // the read side of session.restore: a pinned command reads back verbatim, `--none` reads back as an
+    // EMPTY string (the key is present — the tri-state depends on it), and `--clear` omits the key.
+    // Whether the override actually RE-RUNS is a relaunch matter, covered by RestoreCommandUITests.
+    func testSessionRestoreReadsBackOnTree() throws {
+        let sessionID = try activeSessionID()
+        XCTAssertNil(try restoreNode(sessionID)["restoreCommand"], "a fresh session has no override pinned")
+
+        XCTAssertEqual(try sendRestore(target: sessionID, mode: "set", command: "echo pinned")["ok"] as? Bool, true,
+                       "session.restore set should succeed")
+        XCTAssertEqual(try restoreNode(sessionID)["restoreCommand"] as? String, "echo pinned",
+                       "tree should report the pinned command")
+
+        XCTAssertEqual(try sendRestore(target: sessionID, mode: "none")["ok"] as? Bool, true,
+                       "session.restore --none should succeed")
+        XCTAssertEqual(try restoreNode(sessionID)["restoreCommand"] as? String, "",
+                       "pinned-to-nothing reads back as an empty string, not an omitted key")
+
+        XCTAssertEqual(try sendRestore(target: sessionID, mode: "clear")["ok"] as? Bool, true,
+                       "session.restore --clear should succeed")
+        XCTAssertNil(try restoreNode(sessionID)["restoreCommand"], "a cleared override omits the key entirely")
+    }
+
+    // `--pane-id` addresses the pane's LIVE slot, which is the whole point of the token: after the MAIN
+    // pane exits, the split survivor is PROMOTED into the main slot, so its own $AGTERM_PANE_ID (baked
+    // when it was the right pane) must pin `restoreCommand`, not `splitRestoreCommand`.
+    func testSessionRestorePaneIDFollowsPromotedPane() throws {
+        let sessionID = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sessionID)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "split on should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the session should report split:true")
+        let rightToken = try readPaneToken(target: sessionID, pane: "right")
+
+        // prove the main pane's shell is READING keystrokes before sending `exit` — a dropped injection
+        // can't be retried here, since a second `exit` would land on the promoted survivor and close the
+        // session outright.
+        XCTAssertNotNil(try pollPaneText(target: sessionID, pane: "left", contains: "MAINRDY-42", retype: {
+            _ = try self.sendCommand(self.typeRequest(text: "echo MAINRDY-$((6*7))\n", target: sessionID,
+                                                      select: false, pane: "left"))
+        }), "the main pane's shell should be reading keystrokes")
+
+        // exiting the main pane promotes the survivor into the main slot (session stays, split:false).
+        _ = try sendCommand(typeRequest(text: "exit\n", target: sessionID, select: false, pane: "left"))
+        XCTAssertTrue(pollActiveSessionSplit(false, timeout: 15), "the session should collapse to a single pane")
+
+        XCTAssertEqual(try sendRestore(target: sessionID, mode: "set", command: "echo promoted",
+                                       paneID: rightToken)["ok"] as? Bool, true,
+                       "pinning via the survivor's own pane id should succeed")
+        let node = try restoreNode(sessionID)
+        XCTAssertEqual(node["restoreCommand"] as? String, "echo promoted",
+                       "the promoted survivor's token must resolve to the MAIN pane")
+        XCTAssertNil(node["splitRestoreCommand"], "nothing may be pinned on the vacated split slot")
+    }
+
+    // the pane-resolution rejections: a right pane that does not exist, a token that resolves to the
+    // scratch (never restored), and an unresolvable token with no `--pane` fallback — the last is where
+    // session.restore deliberately diverges from session.status, which would silently fall back to left.
+    func testSessionRestoreRejectsUnrestorablePanes() throws {
+        let sessionID = try activeSessionID()
+        let noSplit = try sendRestore(target: sessionID, mode: "set", command: "echo x", pane: "right")
+        XCTAssertEqual(noSplit["ok"] as? Bool, false, "the right pane of a split-less session should be rejected")
+        XCTAssertEqual(noSplit["error"] as? String, "session has no split", "the error should name the cause: \(noSplit)")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.scratch","target":"\#(sessionID)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "scratch on should succeed")
+        let scratchToken = try readPaneToken(target: sessionID, pane: "scratch")
+        let scratch = try sendRestore(target: sessionID, mode: "set", command: "echo x", paneID: scratchToken)
+        XCTAssertEqual(scratch["ok"] as? Bool, false, "a token resolving to the scratch should be rejected")
+        XCTAssertEqual(scratch["error"] as? String, "the scratch terminal is never restored",
+                       "the error should name the cause: \(scratch)")
+
+        let unknown = try sendRestore(target: sessionID, mode: "set", command: "echo x", paneID: "not-a-real-token")
+        XCTAssertEqual(unknown["ok"] as? Bool, false, "an unresolvable token with no --pane fallback should be rejected")
+        XCTAssertEqual(unknown["error"] as? String, "unknown pane id: not-a-real-token",
+                       "the error should name the cause: \(unknown)")
+
+        XCTAssertNil(try restoreNode(sessionID)["restoreCommand"], "a rejected pin must leave the main pane untouched")
+    }
+
+    /// Send a `session.restore` request, returning the raw response. `mode` is `set` | `none` | `clear`.
+    private func sendRestore(target: String, mode: String, command: String? = nil,
+                             pane: String? = nil, paneID: String? = nil) throws -> [String: Any] {
+        var args: [String: Any] = ["mode": mode]
+        if let command { args["command"] = command }
+        if let pane { args["pane"] = pane }
+        if let paneID { args["paneID"] = paneID }
+        let obj: [String: Any] = ["cmd": "session.restore", "target": target, "args": args]
+        return try sendCommand(String(decoding: try JSONSerialization.data(withJSONObject: obj), as: UTF8.self))
+    }
+
+    /// The `tree` node of the session with `id`, for reading the restore-override fields back.
+    private func restoreNode(_ id: String) throws -> [String: Any] {
+        let response = try sendCommand(#"{"cmd":"tree"}"#)
+        return try XCTUnwrap(sessionNode(response, id: id), "the tree should carry the session's node: \(response)")
+    }
+
+    /// Read a pane's stable spawn token straight from its shell's `$AGTERM_PANE_ID` — the value a hook
+    /// forwards as `--pane-id`. Echoes `<tag>-42[<token>]`, where the arithmetic 42 (from `$((6*7))`)
+    /// proves the shell RAN the line, then extracts the token between the brackets.
+    private func readPaneToken(target: String, pane: String) throws -> String {
+        let tag = "RSTR-\(UUID().uuidString.prefix(8))"
+        let needle = "\(tag)-42["
+        let buffer = try pollPaneText(target: target, pane: pane, contains: needle, retype: {
+            _ = try self.sendCommand(self.typeRequest(
+                text: "printf '\(tag)-%s[%s]\\n' \"$((6*7))\" \"$AGTERM_PANE_ID\"\n",
+                target: target, select: false, pane: pane))
+        })
+        let text = try XCTUnwrap(buffer, "reading the \(pane) pane's AGTERM_PANE_ID should land in its buffer")
+        let pattern = NSRegularExpression.escapedPattern(for: needle) + "([-0-9A-Fa-f]+)\\]"
+        let regex = try NSRegularExpression(pattern: pattern)
+        let match = try XCTUnwrap(regex.firstMatch(in: text, range: NSRange(text.startIndex..., in: text)),
+                                  "the \(pane) pane should echo a non-empty AGTERM_PANE_ID")
+        return String(text[try XCTUnwrap(Range(match.range(at: 1), in: text))])
     }
 
     // session.reveal resolves the active session and drives the same focused-cwd Finder action as the
