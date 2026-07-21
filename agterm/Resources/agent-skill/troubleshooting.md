@@ -85,6 +85,34 @@ To remap a shortcut ghostty still owns: a physical key name (`key_c`, `key_v`, �
 any layout; a bare letter (`c`, `v`) matches the produced character. Edit `~/.config/agterm/ghostty.conf`,
 then `agtermctl config reload`.
 
+### "My session restore override didn't fire"
+
+You set `session restore` but the pane came back as a plain shell (or re-ran the old captured command).
+Check, in order:
+
+- **The "Restore running commands on restart" setting is off.** The override obeys the same master switch
+  as the rest of restore; a `set`/`--none` while it is off succeeds but nothing runs on relaunch (the
+  response says so in `result.text`). Turn it on in General settings.
+- **The pane resolved to the scratch, or you pinned `--pane right` on a session with no split.** Both are
+  rejected at set time (`the scratch terminal is never restored` / `session has no split`), so nothing was
+  pinned — re-read the command's output.
+- **It already fired once this launch.** The override is consumed once per launch: after it runs, a second
+  surface for the same pane in the SAME session (e.g. opening a fresh split with ⌘D) gets a plain shell. It
+  is still pinned — `tree` reports `restoreCommand` — and fires again on the NEXT restart.
+- **The split was hidden at quit.** A hidden split is not restored at all, so its override describes a pane
+  that no longer exists: the pin is DROPPED on that launch (`tree` stops reporting `splitRestoreCommand`)
+  rather than left to fire into a later manual ⌘D split. Show the split before quitting, and re-pin after a
+  launch that dropped it.
+- **You reopened a closed session or a closed window, not relaunched the app.** The override fires only on
+  an app-launch restore — Reopen Closed Item and reopening a closed window deliberately do NOT arm it. Quit
+  and relaunch agterm to see it fire.
+- **It is not the denylist.** `restore-denylist.conf` is deliberately bypassed for overrides — an override
+  names its command on purpose — so a denylisted basename is never the reason it did not run.
+
+Confirm what is pinned from `tree --json`: the node's `restoreCommand` (main pane) / `splitRestoreCommand`
+(split pane) reports the persisted value, which survives after the override fires, so a read at any point
+shows the truth.
+
 ### "The agent-status glyph does not update"
 
 Install the hooks from Help ▸ Install Agent Status Hooks…. For shell-integrated agents, start a fresh shell

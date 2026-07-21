@@ -22,6 +22,50 @@ Clear those saved commands so the next launch restores plain shells:
 agtermctl restore clear
 ```
 
+## Pin what a pane restores (per-session override)
+
+`session restore` pins a shell line that a pane re-runs on the NEXT launch, overriding the captured
+foreground. It is written now and consumed at the next launch (it never touches the running session), and
+it is sticky — it fires again on every restart until cleared. Read it back on `tree` as the node's
+`restoreCommand` / `splitRestoreCommand`.
+
+```bash
+agtermctl session restore "claude --resume abc123" --target "$AGTERM_SESSION_ID"  # pin a shell line
+agtermctl session restore --none  --target "$AGTERM_SESSION_ID"   # pin nothing: restore a plain shell
+agtermctl session restore --clear --target "$AGTERM_SESSION_ID"   # drop the override, back to auto-capture
+agtermctl session restore "npm run dev" --target "$AGTERM_SESSION_ID" --pane-id "$AGTERM_PANE_ID"  # a split pane by its live slot
+```
+
+The pinned value is SHELL CODE: it persists in the window's state file (`windows/<id>.json`), is readable
+via `tree`, and may enter shell history when it runs — so it must not carry secrets, and only
+safely-interpolated values (a UUID-shaped session id) belong in it.
+
+## Keep a forking agent session reattaching across restarts (a SessionStart hook)
+
+`claude --resume <id> --fork-session` mints a NEW claude session on every agterm restart, so restoring it
+verbatim never reattaches the session you were in. Fix it by rewriting the override to the LIVE session id
+on every start, from a Claude Code `SessionStart` hook — it runs inside the session's shell, where
+`$AGTERM_SESSION_ID` and `$AGTERM_PANE_ID` are exported:
+
+```bash
+# in the SessionStart hook (the selector is --target; there is no --session).
+# the hook's stdin JSON carries the live id as `session_id` — there is NO $CLAUDE_SESSION_ID variable.
+sid=$(jq -r '.session_id // empty')
+[ -n "$sid" ] || exit 0   # no id: leave the existing pin alone rather than pinning a broken line
+agtermctl session restore "claude --resume $sid" \
+    --target "$AGTERM_SESSION_ID" --pane-id "$AGTERM_PANE_ID"
+```
+
+Because the hook rewrites the override on every start, it always tracks the live child, so the next
+restart reattaches instead of forking. Ownership flips to whoever sets it: write it once by hand and forget,
+and it stays pinned to a STALE id — that is why this is a hook-driven override, not a set-once setting.
+
+Read the id from the hook's stdin (`$CLAUDE_CODE_SESSION_ID` is exported in the session's environment as
+well, but the stdin `session_id` is what the hook is handed). GUARD against an empty value before pinning:
+a pin is sticky and persisted, so `claude --resume ` with an empty argument would be re-typed on every
+launch until cleared. The id is UUID-shaped and safe to interpolate; never build the pinned line from
+untrusted or secret values.
+
 ## Create a session and type into it
 
 `session new` returns the new id and focuses the session. Capture the id, then type. The session is

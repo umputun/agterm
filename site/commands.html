@@ -6,7 +6,7 @@
     <title>Command reference — agterm | agtermctl control API</title>
     <meta
       name="description"
-      content="Complete agtermctl reference: all 61 control commands for agterm — sessions, workspaces, windows, overlays, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
+      content="Complete agtermctl reference: all 62 control commands for agterm — sessions, workspaces, windows, overlays, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
     />
     <meta
       name="keywords"
@@ -18,7 +18,7 @@
     <meta property="og:title" content="Command reference — agterm" />
     <meta
       property="og:description"
-      content="All 61 agtermctl control commands with arguments, return values, and errors."
+      content="All 62 agtermctl control commands with arguments, return values, and errors."
     />
     <meta property="og:url" content="https://agterm.com/commands" />
     <meta property="og:image" content="https://agterm.com/assets/agterm-og.png" />
@@ -30,7 +30,7 @@
     <meta name="twitter:title" content="Command reference — agterm" />
     <meta
       name="twitter:description"
-      content="All 61 agtermctl control commands with arguments, return values, and errors."
+      content="All 62 agtermctl control commands with arguments, return values, and errors."
     />
     <meta name="twitter:image" content="https://agterm.com/assets/agterm-og.png" />
     <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
@@ -234,7 +234,7 @@
             Command reference
           </h1>
           <p style="font-size: 19px; line-height: 1.6; color: #bfbab0; margin: 0 0 8px">
-            All 61 commands of the agterm control API, with arguments and return values. Every one is reachable from the
+            All 62 commands of the agterm control API, with arguments and return values. Every one is reachable from the
             <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> CLI and from the local
             control socket.
           </p>
@@ -434,6 +434,9 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitForeground</span> (each pane's live foreground
                 argv, omitted at the shell prompt or for a setuid program like top/sudo),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">background</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restoreCommand</span> /
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitRestoreCommand</span> (each pane's pinned
+                restore override, omitted when none and an empty string when pinned to nothing),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commandWait</span> (a held
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> session created with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new --wait</span>; omitted otherwise), and
@@ -1040,6 +1043,55 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">image</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">text</span>
                 watermark instead forces the pane opaque. Read the current spec back from the node's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">background</span> object.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl session restore (&lt;command&gt; | --none | --clear) [--pane left|right] [--pane-id TOKEN] [--target T]
+                [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.restore</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Pin the command a pane re-runs on the next launch, overriding the captured foreground. Provide exactly one form: a
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">&lt;command&gt;</span> shell line to pin,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--none</span> to pin nothing (the pane restores a plain
+                shell, suppressing the captured command), or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--clear</span> to drop the override and go back to
+                auto-capture. Read back as the session node's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restoreCommand</span> (main pane) or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitRestoreCommand</span> (split pane).
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                The override is written now and consumed on the <em>next</em> launch — it never touches the running session — and it is
+                <em>sticky</em>: it fires again on every restart until cleared. It wins over the session's own
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session new --command</span> as well
+                as the captured foreground — a pinned line (or <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--none</span>)
+                suppresses it, so a restored command session no longer takes the exec path or its
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--wait</span> close-on-exit behavior. It is gated on the
+                <em>Restore running commands on restart</em> setting (a pinned command while the setting is off succeeds with a note
+                that nothing will run; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--none</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">--clear</span>
+                get no note, since their outcome is delivered either way) but bypasses
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">restore-denylist.conf</span>,
+                since it names its command deliberately. A split hidden at quit is not restored, so its pin is dropped on that
+                launch rather than left to fire into a later manual split. It exists for non-idempotent commands like
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">claude --resume … --fork-session</span>:
+                a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">SessionStart</span> hook can rewrite it to the live
+                session id on every start so the next restart reattaches instead of forking.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> (default
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">left</span>) picks the pane;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">right</span> needs a split, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span> is rejected (the scratch is never restored).
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> (the shell's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$AGTERM_PANE_ID</span>) resolves the pane's live slot; unlike
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session status</span>, a token that does
+                not resolve is an error unless <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> is also given
+                as the fallback. The pinned value is shell code stored in the window's state file and readable via
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>, so it must not carry secrets. Not to be confused
+                with <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">restore clear</span>, which is
+                app-global and clears every session's <em>captured</em> command.
               </p>
             </div>
           </section>
@@ -2221,6 +2273,97 @@
                     white-space: nowrap;
                   "
                   >invalid color (expected #rrggbb)</span
+                >
+                <span
+                  style="
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                    font-size: 12.5px;
+                    color: #cbc6bc;
+                    background: #191d20;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 6px;
+                    padding: 4px 9px;
+                    white-space: nowrap;
+                  "
+                  >invalid restore mode<span style="color: #6b727a; font-family: &quot;IBM Plex Sans&quot;, sans-serif"> (session restore)</span></span
+                >
+                <span
+                  style="
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                    font-size: 12.5px;
+                    color: #cbc6bc;
+                    background: #191d20;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 6px;
+                    padding: 4px 9px;
+                    white-space: nowrap;
+                  "
+                  >session.restore set requires a command</span
+                >
+                <span
+                  style="
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                    font-size: 12.5px;
+                    color: #cbc6bc;
+                    background: #191d20;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 6px;
+                    padding: 4px 9px;
+                    white-space: nowrap;
+                  "
+                  >command must not contain control characters</span
+                >
+                <span
+                  style="
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                    font-size: 12.5px;
+                    color: #cbc6bc;
+                    background: #191d20;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 6px;
+                    padding: 4px 9px;
+                    white-space: nowrap;
+                  "
+                  >command too long (max 1024 bytes)</span
+                >
+                <span
+                  style="
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                    font-size: 12.5px;
+                    color: #cbc6bc;
+                    background: #191d20;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 6px;
+                    padding: 4px 9px;
+                    white-space: nowrap;
+                  "
+                  >the scratch terminal is never restored</span
+                >
+                <span
+                  style="
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                    font-size: 12.5px;
+                    color: #cbc6bc;
+                    background: #191d20;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 6px;
+                    padding: 4px 9px;
+                    white-space: nowrap;
+                  "
+                  >unknown pane id: &lt;token&gt;</span
+                >
+                <span
+                  style="
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                    font-size: 12.5px;
+                    color: #cbc6bc;
+                    background: #191d20;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 6px;
+                    padding: 4px 9px;
+                    white-space: nowrap;
+                  "
+                  >failed to save the restore override</span
                 >
                 <span
                   style="

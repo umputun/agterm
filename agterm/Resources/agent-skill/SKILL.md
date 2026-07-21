@@ -138,7 +138,7 @@ prompt concatenates with yours, and the program starts on the merged line. (`--n
 focus, but the newline and shared-buffer hazards of `type`-as-launcher remain — `--command` is still the
 rule.) After `--command`, confirm in `tree --json` that the new node's `foreground` shows your program running, not a bare shell prompt.
 
-## Command summary (61 commands)
+## Command summary (62 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -146,7 +146,9 @@ Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.
 **tree** — print the workspace/session tree (`--json` for structured). Each session node carries
 `foreground`/`splitForeground` (the live argv of each pane's foreground process, omitted when the pane
 is at its shell prompt, or running a setuid/setgid program like `top` or `sudo` whose argv macOS won't
-expose) — i.e. what each pane is currently running — `status` (the agent-status set
+expose) — i.e. what each pane is currently running — `restoreCommand`/`splitRestoreCommand` (each pane's
+persisted restore-command override set via `session restore` — the read side: omitted = auto-capture, `""`
+= pinned to nothing (a plain shell), a command = the shell line that runs on the next launch), `status` (the agent-status set
 via `session status`: `active`|`completed`|`blocked`, omitted when idle), `statusPane` (which pane set
 that status: `left` (main) | `right` (split) | `scratch`, from `session status --pane`, omitted when
 unset or idle), `statusBlink`/`statusColor` (the status glyph's `--blink` flag and `--color` `#rrggbb`
@@ -237,6 +239,19 @@ focused from the tree workspace node's `focused` flag).
   selection or focus (the focus-free counterpart to `notify`, which raises the badge). Idempotent — a
   no-op when already zero. Read the current count from the tree node's `unseen` field. Use it so an
   orchestrator can acknowledge a driven session's notifications without pulling focus to it.
+- `restore ("cmd" | --none | --clear) [--pane left|right] [--pane-id TOKEN]` — pin what a pane re-runs on
+  the NEXT launch, overriding the captured foreground command. A `"cmd"` shell line pins it, `--none` pins
+  nothing (a plain shell), `--clear` drops the override back to auto-capture. Written now, consumed on the
+  next launch (it never touches the running session), and STICKY — fires again on every restart until
+  cleared. Gated on the "Restore running commands on restart" setting (a set while it is off succeeds with
+  a note that nothing will run) but bypasses `restore-denylist.conf`. Read back as the tree node's
+  `restoreCommand`/`splitRestoreCommand`. `--pane right` needs a split; `scratch` is rejected. `--pane-id`
+  (the shell's `$AGTERM_PANE_ID`) resolves the pane's live slot — unlike `session status`, a token that
+  does not resolve errors unless `--pane` is also given. For a non-idempotent command like
+  `claude --resume … --fork-session` (which mints a new session on every restart), a Claude Code
+  `SessionStart` hook rewrites the override to the live id on every start so the next restart reattaches
+  instead of forking. The pinned value is shell code stored in the state file and readable via `tree`, so
+  it must not carry secrets. See examples.md.
 - `background image <path> [--opacity F] [--fit contain|cover|stretch|none] [--position P] [--repeat]` ·
   `background text <text> [--color #rrggbb] [--opacity F] [--fit ...] [--position ...]` ·
   `background color <#rrggbb>` · `background clear` — composite an image (PNG/JPEG) or rasterized text

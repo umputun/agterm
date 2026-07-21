@@ -68,6 +68,7 @@ paths:
   Existing pairs to mirror: `session.background`/`background`, `notify`+`session.seen`/`unseen`,
   `session.status`/`status`+`statusPane` (+`statusBlink`/`statusColor` for `--blink`/`--color`),
   `session.flag`/`flagged`, `session.focus`/`splitFocused`, `session.resize`/`splitRatio`,
+  `session.restore`/`restoreCommand`+`splitRestoreCommand`,
   `session.overlay.resize`/`overlaySizePercent`, `sidebar`/`sidebarVisible` (top-level),
   `sidebar.mode`/`sidebarMode`, `workspace.focus`/`focused` (workspace node), `quick`/`quickVisible` (top-level),
   `font.*`/`fontSize`+`splitFontSize`+`scratchFontSize` (the per-pane LIVE font size — the split/scratch
@@ -159,7 +160,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 61-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 62-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -237,10 +238,10 @@ paths:
   rules, then remaining targets resolve inside that same store so one command never mutates multiple windows.
   The top-level `target` also carries the first explicit batch target so a new CLI talking to a still-running
   pre-batch server degrades to a named session instead of accidentally acting on `active`.
-- **Command catalog (61 commands):**
+- **Command catalog (62 commands):**
   - `tree`
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`
-  - `session.new`/`session.duplicate`/`session.close`/`session.select`/`session.rename`/`session.reveal`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.paste`/`session.selectall`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.resize`/`session.overlay.result`
+  - `session.new`/`session.duplicate`/`session.close`/`session.select`/`session.rename`/`session.reveal`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.paste`/`session.selectall`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.restore`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.resize`/`session.overlay.result`
   - `surface.zoom`
   - `dashboard`
   - `quick`/`quick.type`/`quick.text`
@@ -265,7 +266,7 @@ paths:
   Setting echoes the resulting effective side in `result.text`; the BARE form (no name) reads the side
   the last config feed applied (`SettingsModel.lastAppliedIsDark`), which the test polls to prove the
   flip actually drove the reload.
-  `AppearanceFlipUITests` is its only consumer; the public command count stays 61.
+  `AppearanceFlipUITests` is its only consumer; the public command count stays 62.
 
   `workspace.delete` honors keep-at-least-one and returns an error instead of the GUI confirm alert (nothing
   blocks on a modal).
@@ -1090,7 +1091,7 @@ paths:
   View ▸ Show/Hide Sidebar, the ⌃⇧P palette "Toggle Sidebar", and the ⌃⌘S keymap action (`BuiltinAction.toggleSidebar`,
   expressible so pure-`defaultChord`-driven).
   Four-point keep-in-sync audit: (1) `case sidebar` in `ControlProtocol.swift` (reuses `ControlArgs.mode`),
-  (2) the `.sidebar` dispatch arm (`setSidebar`) in `ControlServer`, (3) the `sidebar` subcommand in
+  (2) the `.sidebar` dispatch arm (`setSidebarVisibility`) in `ControlServer`, (3) the `sidebar` subcommand in
   `agtermctlKit`, (4) round-trip in `ControlProtocolTests` + the e2e `testSidebarShowHideToggle` (sidebar
   hide removes the `session-row`s from the AX tree) in `ControlSidebarStatusUITests`.
   `theme.set` sets + persists a theme (see the Theme picker section) PER SLOT, mirroring the two Settings pickers over the shared `SettingsModel.setLightTheme`/`setDarkTheme`/`setSystemThemes`.
@@ -1186,7 +1187,7 @@ paths:
   (tree-mode only).
   Four-point keep-in-sync audit: (1) `case sidebarExpand = "sidebar.expand"` + `case sidebarCollapse = "sidebar.collapse"`
   in `ControlProtocol.swift` (reuse `ControlArgs.window`, no new field),
-  (2) the `.sidebarExpand`/`.sidebarCollapse` dispatch arms (`expandWorkspaces(window:)`/`collapseWorkspaces(window:)`)
+  (2) the `.sidebarExpand`/`.sidebarCollapse` dispatch arms (`expandSidebar(window:)`/`collapseSidebar(window:)`)
   in `ControlServer`, (3) the `sidebar expand`/`sidebar collapse` subcommands (`Expand`/`Collapse` on
   `ClientOptions` for `--window`, alongside the `Visibility` default + `Mode`) in `agtermctlKit`,
   (4) round-trip (incl. the windowed variant) in `ControlProtocolTests` + the e2e `testSidebarExpandCollapse`
@@ -1289,6 +1290,106 @@ paths:
   (4) round-trip (`restoreClearRoundTrips` + `treeSessionNodeRoundTripsWithForeground`/`…OmitsForegroundWhenNil`)
   in `ControlProtocolTests` + the e2e (`testTreeExposesForegroundProcess`,
   `testRestoreClearSucceeds`) in `ControlAPIUITests`.
+  `session.restore` (target = session) is the PER-SESSION, per-pane restore-command OVERRIDE — distinct
+  from the app-global `restore.clear`, which touches only the captured foreground.
+  It pins persisted state that WINS over the captured foreground at the next restore, and is the fix for
+  NON-IDEMPOTENT commands: `claude --resume <id> --fork-session` mints a NEW session on every restart, so
+  restoring it verbatim never reattaches the session the user was in (discussion #264).
+  Tri-state on a single `String?` per pane — `nil` = auto-capture (today's behavior), `""` = pinned to
+  nothing (a plain shell, suppressing both the capture and `initialCommand`), a command = run that shell
+  line — mapped from the wire `mode` `set`/`none`/`clear` via `ControlRestoreOverride`
+  (`pin(String)`/`pinNone`/`unpin`; `pinNone` is NOT spelled `none` to avoid the `Optional<T>.none` compiler
+  warning at the dispatcher's parse step).
+  It is SET now and CONSUMED on the next launch — writing it never touches the running session — and it is
+  STICKY: the override persists across restores and fires again on every restart until cleared, because a
+  `SessionStart` hook rewrites it to the live child id on every start.
+  This is the load-bearing safety property, split across two slots on `Session`: the PERSISTED
+  `restoreCommand`/`splitRestoreCommand` (its own slot, never the capture's — sharing `foregroundCommand`
+  would let the quit-time capture of the live `--fork-session` process clobber it) and the TRANSIENT
+  `pendingRestoreCommand`/`pendingSplitRestoreCommand`.
+  The surface factories read ONLY the pending slots (via `Session.takePendingRestoreOverride(pane:)`,
+  take-and-nil so a second split this launch is a plain shell); `setSessionRestore` writes ONLY the
+  persisted slots; and ONLY an app-bootstrap restore copies persisted → pending.
+  An implementation where the factory falls back to the persisted field reintroduces every re-fire hazard
+  (a socket write between `session.new` and the SwiftUI factory run would execute immediately).
+  Precedence lives in host-free `CommandRestore`: `restorePlan(_ inputs: RestoreInputs)` (an options struct,
+  since a 6th parameter fails `make lint --strict`) short-circuits on a present override — `command` is
+  always nil (never the exec path), `initialInput` comes from
+  `restoreInput(restoreEnabled:restoreOverride:capturedInput:)` — and reproduces today's logic byte-for-byte
+  when the override is nil.
+  It obeys the `restoreRunningCommand` setting (like `initialCommand`, so the toggle stays the single master
+  switch) but BYPASSES the denylist: `restore-denylist.conf` is a basename heuristic for BLIND capture,
+  while an override names its command deliberately, so it wins — the bypass is structural (the override
+  never routes through the app-side `restoreInitialInput` denylist gate).
+  The value is typed VERBATIM (never `shellQuotedLine`), so `cd x && claude --resume y` works as written; it
+  is arbitrary shell code that persists in `windows/<id>.json` and reads back via `tree`, so the docs say
+  plainly it may enter shell history and must not carry secrets (no privilege boundary — a same-UID client
+  can already inject keystrokes via `session.type` — but a buggy writer's mistake becomes durable).
+  Wire args reuse `ControlArgs.command` + `mode` + `pane` + `paneID` (no new wire args).
+  Dispatcher rejections (host-free, unit-tested): unknown or missing `mode` →
+  `invalid restore mode: <x> (set|none|clear)`; `set` with
+  no `command` → `session.restore set requires a command` (an EMPTY command is accepted, and is the same
+  pinned-to-nothing state as `none`); a `command` with control characters (tab included) →
+  `command must not contain control characters`; a `command` over `ControlRestoreOverride.maxCommandBytes` (1024 UTF-8
+  bytes via `command.utf8.count`) → `command too long (max 1024 bytes)`; a bad `pane` → the shared
+  `--pane must be left, right, or scratch`.
+  Shell metacharacters are deliberately NOT rejected — verbatim shell syntax is the point.
+  The app-side `setSessionRestore` (`ControlServer+SessionActions.swift`) resolves the session, then the
+  pane: `paneID` → `session.paneRole(forToken:)` first, else the baked `pane`, as `setSessionStatus` does —
+  with ONE deliberate divergence: an unresolvable `--pane-id` supplied WITHOUT an explicit `--pane` is an
+  ERROR (`unknown pane id: <token>`), not a silent `.left` fallback, because a silent default here would
+  overwrite the MAIN pane's persisted command when a hook meant the split (an EMPTY token counts as absent).
+  A `.scratch` pane (`the scratch terminal is never restored`) and a `.right` on a split-less session
+  (`session has no split`) are rejected; otherwise it calls `store.setRestoreCommand(value, pane:forSession:)`
+  (`AppStore+Restore.swift`), which persists immediately — the override must survive a SIGKILL
+  or a hook's write is lost — and does NOT touch the pending slots.
+  That write is the ONE store mutation whose failure is REPORTED rather than swallowed: `setRestoreCommand`
+  saves through the internal `AppStore.saveChecked()` (`save()` with the `Bool` kept, so the two can't drift),
+  ROLLS the in-memory field back to its previous value when the write throws, and returns whether the
+  requested value reached disk; the arm answers `failed to save the restore override, the previous value is
+  still in effect` when it did not.
+  The payload is what makes this different from `setFlag` and the rest of the swallow-and-log store: an
+  arbitrary shell line re-typed on every launch, so acking a `clear` that never landed would leave the old
+  command firing forever — and without the rollback the unchanged-value guard would swallow the retry as a
+  no-op success.
+  A successful `set` while `restoreRunningCommand` is OFF returns `ok` with a note in `result.text` so
+  a hook author sees why nothing will fire; `none`/`clear` carry no note, since their outcome (a plain shell
+  / back to auto-capture) is delivered regardless of the setting.
+  The `--pane` selector for both `session.status` and `session.restore` is parsed by the shared
+  `ControlDispatcher.parsePane`, so the rejection string cannot drift between them.
+  Pane lifecycle: `closePrimaryPane` migrates BOTH the persisted and pending right-pane values into the main
+  slots (mirroring the `foregroundCommand` migration); `closeSplit` clears both split slots; all three
+  soft-close entry points (`softCloseSession`/`softCloseSessions`/`softRemoveWorkspace`) clear the pending
+  slots via `clearPendingRestoreOverrides(of:)` before retaining the objects for undo; `session.duplicate`
+  copies neither.
+  Bootstrap seeding is gated by a `launchRestore` flag threaded through
+  `WindowLibrary.loadStore(for:launchRestore:)` → `AppStore.restore(from:launchRestore:)` →
+  `session(from:launchRestore:)`, passed `true` from ONLY the three `WindowLibrary` bootstrap sites (reopen,
+  its frontmost fallback, orphan recovery) so a mid-process window reload (`ContentView.resolveStore`) and
+  Reopen Closed Item arm nothing; and `pendingSplitRestoreCommand` is seeded only when
+  `snapshot.isSplit == true` (a hidden split has no right surface at bootstrap, so a pending payload would
+  fire on a later manual ⌘D — the same case the quit capture already dodges).
+  A hidden split's PERSISTED pin is DROPPED by the same rebuild rather than kept: the split is not restored
+  at all (`hasSplit` follows `isSplit`), so the pin describes a pane that no longer exists — keeping it
+  would leave a value `tree` reports but no write can clear (`--pane right` is rejected without a split) and
+  would re-arm into an unrelated fresh ⌘D split at the next quit.
+  This is the `closeSplit` rule (pane gone → drop the pin) applied to the restore path.
+  READ-BACK: `ControlSessionNode.restoreCommand`/`splitRestoreCommand`, populated in the tree builder from
+  the PERSISTED fields (never the pending slots), so a read after the override fired still reports what is
+  pinned; the tri-state survives JSON since `encodeIfPresent` omits `nil` while `""` emits an empty string.
+  Four-point keep-in-sync audit for `session.restore`: (1) `case sessionRestore = "session.restore"` +
+  `ControlRestoreOverride`/`ControlSessionRestoreUpdate` in `ControlProtocol.swift`/`ControlModes.swift`
+  (reusing `command`/`mode`/`pane`/`paneID`) + `restoreCommand`/`splitRestoreCommand` on `ControlSessionNode`
+  + the `Session`/`SessionSnapshot` persisted fields + `CommandRestore.RestoreInputs`/`restoreInput`,
+  (2) the `.sessionRestore` dispatcher arm (parse + validate + response shape) → the app-side
+  `ControlActions.setSessionRestore` (session/pane resolution + `AppStore.setRestoreCommand` + the off-setting
+  note) + the `controlTree` population, (3) the `session restore` subcommand (`Restore`, `validate()`-guarded
+  exactly-one-form) in `agtermctlKit/SessionCommands.swift`, (4) round-trip in `ControlProtocolTests` +
+  dispatcher happy/rejection/byte-cap paths in `ControlDispatcherTests` + `CommandRestoreTests` (precedence)
+  + `AppStoreRestoreTests`/`AppStoreRestoreSeedTests`/`AppStorePaneTests` (set/seed/lifecycle) +
+  `SessionTests` (`takePendingRestoreOverride` + stickiness) + `SnapshotRoundTripTests` + `CommandsTests`
+  (CLI mapping/validation) + the e2e in `RestoreCommandUITests` (incl. the two-relaunch stickiness and
+  force-quit persistence cases) and the `tree` read-back/error cases in `ControlAPIUITests`.
   `session.background` (target = session) sets or clears a per-session background composited behind the
   terminal grid — `args.mode` is `image`/`text`/`color`/`clear`.
   `image`/`text` are watermarks driven by libghostty `background-image*` keys:
@@ -1344,12 +1445,12 @@ paths:
   (image/text/color set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
-  examples.md recipes) and the command count there is bumped to 61 to match.
+  examples.md recipes) and the command count there is bumped to 62 to match.
   **Website mirror (HARD keep-in-sync):** the site's per-command reference `site/commands.html` documents
   EVERY `agtermctl` control command — one inline-styled card per command carrying its invocation, its
   arguments, and the `tree` read-back field, grouped into its command family's section.
   A new `Command` case REQUIRES a new `site/commands.html` entry (a changed command an updated one, a
   removed command a deleted one), in lockstep with the agent skill above and `README.md`/`site/docs.html`;
-  the page's "61 commands" copy must track the catalog count.
+  the page's "62 commands" copy must track the catalog count.
   It drifted once because the site keep-in-sync convention named only `docs.html`/`index.html`, so
   `dashboard` and `surface.zoom` shipped undocumented here.

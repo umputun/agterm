@@ -63,7 +63,11 @@ set to blink — the `--blink` value; omitted when idle or not blinking) and `st
 glyph-tint override — the `--color` value; omitted when idle or using the default color),
 `foreground`/`splitForeground` (the live argv of each pane's foreground
 process — what it is running — omitted when the pane sits at its shell prompt, and also for a
-setuid/setgid foreground process like `top` or `sudo`, whose argv macOS refuses to expose), `background` (the
+setuid/setgid foreground process like `top` or `sudo`, whose argv macOS refuses to expose),
+`restoreCommand`/`splitRestoreCommand` (each pane's persisted restore-command override — the read side of
+`session restore`: omitted = no override (auto-capture), `""` = pinned to nothing (a plain shell), a
+command string = the shell line that runs on the next launch; reported from persisted state, so a read
+after the override already fired still reports what is pinned), `background` (the
 background spec set via `session background` — a `{kind, text?, imagePath?, colorHex?, opacity?, fit?,
 position?, repeats?}` object; `kind` is `image`/`text`/`color` — omitted when none is set), `unseen`
 (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session seen` — omitted
@@ -303,6 +307,41 @@ All ten are read-only projections of GUI state.
   session. Idempotent — a no-op when the badge is already zero. Read the current count from the tree node's
   `unseen` field. This lets an orchestrator acknowledge a driven session's notifications over the socket
   while keeping the badge a real attention signal on the sessions a human tends.
+- `session restore (<command> | --none | --clear) [--pane left|right] [--pane-id TOKEN] [--target] [--window W]`
+  — pin the command a pane re-runs on the NEXT launch, overriding the captured foreground. Provide exactly
+  one of: a `<command>` shell line to pin, `--none` to pin nothing (the pane restores a plain shell,
+  suppressing the captured command), or `--clear` to drop the override and fall back to auto-capture.
+  Tri-state, read back on the tree node as `restoreCommand` (main pane) / `splitRestoreCommand` (split
+  pane): omitted = auto-capture, `""` = pinned to nothing, a command = the pinned line.
+  The override is written NOW and consumed on the next launch — it never touches the running session — and
+  it is STICKY: it fires again on every restart until cleared. It wins over EVERYTHING else the pane could
+  restore: the captured foreground AND the session's own `session new --command`, which a pinned line (or
+  `--none`) suppresses — so a restored `--command` session runs the pinned line instead, as typed input
+  rather than the exec path, and its `--wait` close-on-exit behavior no longer applies.
+  It is gated on the **Restore running commands on restart** setting (a pinned command while the setting is
+  off succeeds with a note in `result.text` that nothing will run; `--none`/`--clear` get no note, since
+  their outcome is delivered either way), and bypasses `restore-denylist.conf`
+  (it names its command deliberately, so the denylist is never the reason it does not fire). It is typed
+  verbatim as a shell line, so `cd x && claude --resume y` works as written.
+  A split HIDDEN at quit is not restored, so its pin is dropped on that launch rather than left to fire
+  into a later manual split.
+  It exists for NON-IDEMPOTENT commands — `claude --resume <id> --fork-session` mints a NEW session on every
+  restart, so restoring it verbatim never reattaches the session the user was in. A Claude Code
+  `SessionStart` hook that rewrites the override to the live session id on every start makes the next
+  restart reattach instead of fork (see examples.md). Ownership flips to whoever sets it: write once and
+  forget, and it stays pinned to a stale id — that is the deliberate hook-driven tradeoff.
+  `--pane` (default `left`) picks the pane; `--pane right` errors when the session has no split, and
+  `scratch` is rejected (`the scratch terminal is never restored`). `--pane-id` (the shell's
+  `$AGTERM_PANE_ID`) resolves the pane's LIVE slot, so a hook in a promoted-then-re-split pane still pins
+  the right one; UNLIKE `session status`, a token that does not resolve is an error unless `--pane` is also
+  given as the fallback (a silent main-pane default here would overwrite the wrong pane).
+  The pinned value is SHELL CODE: it persists in the window's state file (`windows/<id>.json`), is readable
+  via `tree`, and may enter shell history when it runs — so it must not carry secrets, and only
+  safely-interpolated values (a UUID-shaped session id) belong in it. It persists immediately, so a
+  force-quit does not lose a hook's write; if that write fails the command answers with an ERROR rather
+  than `ok` (the previous override is still in effect and still fires, so re-issue the same request to
+  retry). Not to be confused with the app-global `restore clear`, which
+  clears every session's CAPTURED foreground command; this is per-session and clears only the override.
 - `session background image <path> [--opacity F] [--fit contain|cover|stretch|none] [--position P] [--repeat] [--target] [--window W]`
   — composite the image at `path` (PNG or JPEG only) behind the terminal as a watermark. libghostty
   auto-fits it to the surface and re-fits on every window resize. `--opacity` is 0.0–1.0 (default 1.0);
@@ -654,6 +693,11 @@ Which programs are NOT re-run is controlled by `restore-denylist.conf` in the co
 command name per line, seeded with the terminal multiplexers `tmux`/`screen`/`zellij`). It is a plain
 user-edited file read at launch — there is no control command for it.
 
+For a PER-SESSION, per-pane override that pins (or suppresses) what a pane restores, use
+`session restore` (in the session section above): it wins over the captured foreground, bypasses the
+denylist, and is what a `SessionStart` hook rewrites to reattach a non-idempotent command. `restore clear`
+here is app-global and touches only the captured commands, not those overrides.
+
 ## Errors you may see
 
 `notFound` / `ambiguous` (target resolution), `no such session`, `invalid split mode` /
@@ -663,7 +707,12 @@ user-edited file read at launch — there is no control command for it.
 `unsupported image (PNG or JPEG only)` / `no such image file` / `image path must not contain control characters` / `invalid background mode` (session background),
 `invalid sidebar mode` (sidebar), `invalid focus mode` (workspace focus),
 `no open window` (quick/sidebar), `quick terminal not open` / `quick terminal not realized` (quick type) /
-`failed to read surface buffer` (quick text / session text), `window not open`
+`failed to read surface buffer` (quick text / session text),
+`invalid restore mode` / `session.restore set requires a command` / `command must not contain control characters` /
+`command too long (max 1024 bytes)` / `the scratch terminal is never restored` / `unknown pane id` /
+`failed to save the restore override, the previous value is still in effect` (session
+restore; a `session restore --pane right` on a session with no split also returns `session has no split`),
+`window not open`
 (resize/move/`--window`), `unknown theme: <name>` (theme set), `unknown sound: <name>` (session status --sound),
 `invalid color (expected #rrggbb)` (session status --color),
 `--pane must be left, right, or scratch` (the `--pane` value check — the `agtermctl` CLI rejects a bad pane

@@ -1128,7 +1128,7 @@
               "
             >
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0">
-                Looking for the full list? All 61 commands, with every argument, return value, and error, live on the
+                Looking for the full list? All 62 commands, with every argument, return value, and error, live on the
                 <a href="/commands" style="color: #6d82f3; font-weight: 500">Command reference →</a>
               </p>
             </div>
@@ -2025,7 +2025,21 @@
                 default) re-runs the command each pane had in the foreground at the last clean quit — a re-run, not a reattach.
                 Only a single-process command restores faithfully; a force-quit or crash captures nothing; and the multiplexers in
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">restore-denylist.conf</span>
-                (seeded with tmux/screen/zellij) start fresh.
+                (seeded with tmux/screen/zellij) start fresh. A per-session override,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl session restore</span>, pins what a
+                pane restores (or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--none</span> for a plain
+                shell, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--clear</span> to drop it) —
+                consumed on the next launch, sticky across restarts, winning over both the captured command and the session's own
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--command</span>, and reading back on
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span>. It obeys the same setting
+                but bypasses the denylist, since it names its command deliberately. The pinned value is shell code stored in the
+                window's state file and readable via
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span>, so it must not carry
+                secrets. A
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">SessionStart</span> hook can rewrite it so a
+                non-idempotent command like
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">claude --resume … --fork-session</span>
+                reattaches on restart instead of forking.
               </li>
               <li style="font-size: 15px; line-height: 1.65; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
