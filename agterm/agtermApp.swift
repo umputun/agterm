@@ -208,13 +208,18 @@ struct agtermApp: App {
         // (nil), so it is never captured and restores via the exec `command` path (preserving close-on-exit).
         // The gate + precedence (fresh-always-runs, restored-honors-toggle, a captured foreground preempts
         // `initialCommand` even when denylist-suppressed) is the host-free `CommandRestore.restorePlan`.
+        // A pinned override (`session.restore`) wins over BOTH the capture and `initialCommand`; it is read
+        // from the TRANSIENT pending slot (seeded only by an app-bootstrap restore), never from the sticky
+        // persisted field, and taking it clears it so a second surface for this pane runs a plain shell.
         let hadForeground = session.foregroundCommand != nil
         let restoreInput = Self.restoreInitialInput(session.foregroundCommand)
         session.foregroundCommand = nil
-        let plan = CommandRestore.restorePlan(wasRestored: session.wasRestored,
-                                              restoreEnabled: GhosttyApp.shared.restoreRunningCommand,
-                                              hadForeground: hadForeground, foregroundInput: restoreInput,
-                                              initialCommand: session.initialCommand)
+        let inputs = CommandRestore.RestoreInputs(wasRestored: session.wasRestored,
+                                                  restoreEnabled: GhosttyApp.shared.restoreRunningCommand,
+                                                  hadForeground: hadForeground, foregroundInput: restoreInput,
+                                                  initialCommand: session.initialCommand,
+                                                  restoreOverride: session.takePendingRestoreOverride(pane: .left))
+        let plan = CommandRestore.restorePlan(inputs)
         let view = GhosttySurfaceView(workingDirectory: session.initialCwd, fontSize: session.fontSize.map(Float.init),
                                       command: plan.command, initialInput: plan.initialInput,
                                       waitAfterCommand: session.commandWait, env: env)
@@ -370,9 +375,16 @@ struct agtermApp: App {
         // split. Font size matches the primary; its own cmd +/- changes aren't persisted. It inherits
         // the parent session's window/workspace/session ids in the env.
         // restore-running-command: re-run the split pane's captured foreground command via initial_input
-        // (consumed run-once). Splits never carry an `initialCommand`, so no mutual-exclusion guard.
-        let restoreInput = Self.restoreInitialInput(session.splitForegroundCommand)
+        // (consumed run-once). Splits never carry an `initialCommand`, so no mutual-exclusion guard and no
+        // `restorePlan` — `restoreInput` alone decides. A pinned override (`session.restore`) wins over the
+        // capture; it comes from the TRANSIENT pending slot (seeded only by an app-bootstrap restore whose
+        // split was shown), never the sticky persisted field, and taking it clears it — this factory runs
+        // again when a split shell exits and the user opens a fresh ⌘D split, which must be a plain shell.
+        let capturedInput = Self.restoreInitialInput(session.splitForegroundCommand)
         session.splitForegroundCommand = nil
+        let restoreInput = CommandRestore.restoreInput(restoreEnabled: GhosttyApp.shared.restoreRunningCommand,
+                                                       restoreOverride: session.takePendingRestoreOverride(pane: .right),
+                                                       capturedInput: capturedInput)
         let view = GhosttySurfaceView(workingDirectory: session.initialSplitCwd ?? session.effectiveCwd,
                                       fontSize: session.fontSize.map(Float.init), initialInput: restoreInput, env: env)
         view.session = session

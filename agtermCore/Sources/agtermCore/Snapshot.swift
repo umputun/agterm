@@ -138,12 +138,21 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     /// of failing the load and wiping the saved tree, like the fields above. A `.text` watermark
     /// re-renders its PNG on restore.
     public var backgroundWatermark: BackgroundWatermark?
+    /// The main pane's restore-command override (`session.restore`), which wins over `foregroundCommand`
+    /// and `initialCommand` on the next launch. Tri-state: nil = no override, `""` = pinned to nothing (a
+    /// plain shell), a command = run that shell line. Sticky — unlike `foregroundCommand` it is not
+    /// consumed on restore, so it fires again after every restart. Optional for forward-compat like the
+    /// fields above.
+    public var restoreCommand: String?
+    /// The split (right) pane's restore-command override, the split analogue of `restoreCommand`.
+    public var splitRestoreCommand: String?
 
     public init(id: UUID, customName: String?, cwd: String, isSplit: Bool? = nil, fontSize: Double? = nil,
                 splitCwd: String? = nil, splitRatio: Double? = nil, flagged: Bool? = nil,
                 foregroundCommand: [String]? = nil, splitForegroundCommand: [String]? = nil,
                 initialCommand: String? = nil, commandWait: Bool? = nil,
-                backgroundWatermark: BackgroundWatermark? = nil) {
+                backgroundWatermark: BackgroundWatermark? = nil,
+                restoreCommand: String? = nil, splitRestoreCommand: String? = nil) {
         self.id = id
         self.customName = customName
         self.cwd = cwd
@@ -157,11 +166,14 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         self.initialCommand = initialCommand
         self.commandWait = commandWait
         self.backgroundWatermark = backgroundWatermark
+        self.restoreCommand = restoreCommand
+        self.splitRestoreCommand = splitRestoreCommand
     }
 
     enum CodingKeys: String, CodingKey {
         case id, customName, cwd, isSplit, fontSize, splitCwd, splitRatio, flagged
         case foregroundCommand, splitForegroundCommand, initialCommand, commandWait, backgroundWatermark
+        case restoreCommand, splitRestoreCommand
     }
 
     /// Custom decode so `backgroundWatermark` is LOSSY: a present-but-invalid spec (an unknown
@@ -185,5 +197,7 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
         initialCommand = try c.decodeIfPresent(String.self, forKey: .initialCommand)
         commandWait = try c.decodeIfPresent(Bool.self, forKey: .commandWait)
         backgroundWatermark = (try? c.decodeIfPresent(BackgroundWatermark.self, forKey: .backgroundWatermark)) ?? nil
+        restoreCommand = try c.decodeIfPresent(String.self, forKey: .restoreCommand)
+        splitRestoreCommand = try c.decodeIfPresent(String.self, forKey: .splitRestoreCommand)
     }
 }

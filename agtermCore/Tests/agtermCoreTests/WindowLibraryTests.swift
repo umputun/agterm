@@ -558,6 +558,28 @@ final class WindowLibraryTests {
         #expect(store.workspaces.count == 1)
     }
 
+    @Test func bootstrapLoadArmsRestoreOverridesButAMidProcessReloadDoesNot() throws {
+        // closeWindow drops the store, so reopening the window calls loadStore -> a full restore(from:)
+        // mid-process. Arming there would execute every sticky override with no app restart, so only the
+        // bootstrap load (reopen/recovery) passes launchRestore.
+        let id = UUID()
+        let sessionID = UUID()
+        let session = SessionSnapshot(id: sessionID, customName: nil, cwd: "/a",
+                                      restoreCommand: "claude --resume abc")
+        try writeWindowFile(id, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [session])]))
+        try writeIndex(WindowsIndex(frontmost: id, windows: [WindowEntry(id: id, name: "work", isOpen: true)]))
+
+        let library = WindowLibrary(directory: directory)
+        let bootstrapped = try #require(library.store(for: id)?.session(withID: sessionID))
+        #expect(bootstrapped.pendingRestoreCommand == "claude --resume abc")
+
+        library.closeWindow(id)
+        let reloaded = try #require(library.loadStore(for: id)?.session(withID: sessionID))
+        #expect(reloaded.pendingRestoreCommand == nil)
+        // the persisted override survives the reload, so `tree` still reports it and the next launch fires.
+        #expect(reloaded.restoreCommand == "claude --resume abc")
+    }
+
     @Test func loadStoreUnknownIdReturnsNil() {
         let library = WindowLibrary(directory: directory)
         #expect(library.loadStore(for: UUID()) == nil)
@@ -899,6 +921,36 @@ final class WindowLibraryTests {
         #expect(FileManager.default.fileExists(atPath: indexURL.path))
         // the legacy file is left in place.
         #expect(FileManager.default.fileExists(atPath: legacyURL.path))
+    }
+
+    @Test func legacyMigrationArmsRestoreOverridesLikeTheOtherBootstrapPaths() throws {
+        // migration runs only at bootstrap, so it seeds like reopen/recovery do. A legacy file predates
+        // the override fields, so nothing arms in practice — this pins the seeding flag rather than
+        // leaving the one bootstrap path that takes the safe default silently divergent.
+        let sessionID = UUID()
+        let session = SessionSnapshot(id: sessionID, customName: nil, cwd: "/legacy",
+                                      restoreCommand: "claude --resume abc")
+        try PersistenceStore(directory: directory)
+            .save(Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "legacy", sessions: [session])]))
+
+        let library = WindowLibrary(directory: directory)
+        let migrated = try #require(library.store(for: library.windows[0].id)?.session(withID: sessionID))
+        #expect(migrated.pendingRestoreCommand == "claude --resume abc")
+    }
+
+    @Test func orphanRecoveryArmsRestoreOverrides() throws {
+        // recovery is a bootstrap path too: a window file rescued after a corrupt index must restore its
+        // sessions exactly as reopen would, overrides included.
+        let id = UUID()
+        let sessionID = UUID()
+        let session = SessionSnapshot(id: sessionID, customName: nil, cwd: "/a",
+                                      restoreCommand: "claude --resume abc")
+        try writeWindowFile(id, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "work", sessions: [session])]))
+        try Data("not json".utf8).write(to: indexURL) // corrupt index → recoverOrphanedWindows
+
+        let library = WindowLibrary(directory: directory)
+        let recovered = try #require(library.store(for: id)?.session(withID: sessionID))
+        #expect(recovered.pendingRestoreCommand == "claude --resume abc")
     }
 
     @Test func emptyLegacyFileSeedsInsteadOfMigrating() throws {

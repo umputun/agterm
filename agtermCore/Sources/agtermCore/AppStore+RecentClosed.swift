@@ -73,7 +73,7 @@ extension AppStore {
             // the recent entry on success — their only copy. rebuild the ones that exist nowhere: not in
             // the tree, and not held by a pending close whose undo would reinsert the original.
             let taken = Set(workspaces.flatMap(\.sessions).map(\.id)).union(pendingHeldSessionIDs())
-            let missing = recent.snapshot.sessions.filter { !taken.contains($0.id) }.map(session(from:))
+            let missing = recent.snapshot.sessions.filter { !taken.contains($0.id) }.map { session(from: $0) }
             workspaces[index].sessions.append(contentsOf: missing)
             let target = recent.selectedSessionID.flatMap { id in
                 workspaces[index].sessions.contains { $0.id == id } ? id : nil

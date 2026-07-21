@@ -56,6 +56,10 @@ extension AppStore {
         let workspace = workspaces[location.workspaceIndex]
         let wasActive = selectedSessionID == sessionID
         let session = workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex)
+        // undo reinserts THIS object, so an override payload armed at bootstrap and never consumed would
+        // survive the round trip and fire when the restored session's surface is built. Drop it here; the
+        // persisted pin is untouched and still fires on the next launch.
+        session.clearPendingRestoreOverrides()
         let closeID = UUID()
         let close = PendingSessionClose(
             session: session,
@@ -111,6 +115,7 @@ extension AppStore {
             }
         }
         guard !closes.isEmpty else { return false }
+        for close in closes { close.session.clearPendingRestoreOverrides() } // same undo hazard as the singular close
 
         let previousSelection = selectedSessionID
         let removingActive = previousSelection.map { targetIDs.contains($0) } ?? false
@@ -159,6 +164,7 @@ extension AppStore {
     public func softRemoveWorkspace(_ workspaceID: UUID, grace: TimeInterval = AppStore.pendingCloseGraceInterval) -> Bool {
         guard canRemoveWorkspace, let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return false }
         let workspace = foldingPendingCloses(of: workspaces.remove(at: index))
+        for session in workspace.sessions { session.clearPendingRestoreOverrides() } // same undo hazard
         let removingActive = selectedSessionID.map { id in workspace.sessions.contains { $0.id == id } } ?? false
         let restoringSelection = removingActive ? selectedSessionID : nil
         if focusedWorkspaceID == workspaceID { focusedWorkspaceID = nil }

@@ -367,6 +367,15 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let foreground: [String]?
     /// The split (right) pane's live foreground command (full argv), the split analogue of `foreground`.
     public let splitForeground: [String]?
+    /// The main pane's PERSISTED restore-command override, the read side of `session.restore`. Tri-state:
+    /// omitted = no override (the auto-capture behavior), `""` = pinned to nothing (a plain shell), a
+    /// command = that shell line runs on the next launch. Reported from the persisted state, so a read
+    /// after the override already fired still reports what is pinned — record-then-restore works at any
+    /// point in the launch. Unrelated to `foreground`, which is the LIVE process the capture would take.
+    public let restoreCommand: String?
+    /// The split (right) pane's persisted restore-command override, the split analogue of `restoreCommand`
+    /// (the read side of `session.restore --pane right`).
+    public let splitRestoreCommand: String?
     /// The session's agent status (`active`/`completed`/`blocked`) as the `AgentStatus` raw value, or nil
     /// when the session is idle (omitted from the JSON). The read side of `session.status`.
     public let status: String?
@@ -408,7 +417,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 splitRatio: Double? = nil, splitFocused: Bool? = nil,
                 overlay: Bool = false, overlaySizePercent: Int? = nil, scratch: Bool = false, flagged: Bool = false,
                 commandWait: Bool? = nil,
-                foreground: [String]? = nil, splitForeground: [String]? = nil, status: String? = nil,
+                foreground: [String]? = nil, splitForeground: [String]? = nil,
+                restoreCommand: String? = nil, splitRestoreCommand: String? = nil, status: String? = nil,
                 statusPane: String? = nil, statusBlink: Bool? = nil, statusColor: String? = nil,
                 background: BackgroundWatermark? = nil, unseen: Int? = nil,
                 fontSize: Double? = nil, splitFontSize: Double? = nil, scratchFontSize: Double? = nil,
@@ -428,6 +438,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.commandWait = commandWait
         self.foreground = foreground
         self.splitForeground = splitForeground
+        self.restoreCommand = restoreCommand
+        self.splitRestoreCommand = splitRestoreCommand
         self.status = status
         self.statusPane = statusPane
         self.statusBlink = statusBlink

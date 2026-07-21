@@ -138,39 +138,99 @@ struct CommandRestoreTests {
     @Test func freshCommandSessionAlwaysRunsItsCommand() {
         // a freshly created --command session runs its command via the exec path, toggle irrelevant
         for enabled in [true, false] {
-            let plan = CommandRestore.restorePlan(wasRestored: false, restoreEnabled: enabled,
-                                                  hadForeground: false, foregroundInput: nil, initialCommand: "ssh host")
+            let plan = CommandRestore.restorePlan(.init(wasRestored: false, restoreEnabled: enabled, hadForeground: false,
+                                                        foregroundInput: nil, initialCommand: "ssh host", restoreOverride: nil))
             #expect(plan == CommandRestore.RestorePlan(command: "ssh host", initialInput: nil))
         }
     }
 
     @Test func restoredCommandSessionRunsCommandOnlyWhenEnabled() {
-        let on = CommandRestore.restorePlan(wasRestored: true, restoreEnabled: true, hadForeground: false,
-                                            foregroundInput: nil, initialCommand: "ssh host")
+        let on = CommandRestore.restorePlan(.init(wasRestored: true, restoreEnabled: true, hadForeground: false,
+                                                  foregroundInput: nil, initialCommand: "ssh host", restoreOverride: nil))
         #expect(on == CommandRestore.RestorePlan(command: "ssh host", initialInput: nil))
-        let off = CommandRestore.restorePlan(wasRestored: true, restoreEnabled: false, hadForeground: false,
-                                             foregroundInput: nil, initialCommand: "ssh host")
+        let off = CommandRestore.restorePlan(.init(wasRestored: true, restoreEnabled: false, hadForeground: false,
+                                                   foregroundInput: nil, initialCommand: "ssh host", restoreOverride: nil))
         #expect(off == CommandRestore.RestorePlan(command: nil, initialInput: nil)) // opt-out → plain shell
     }
 
     @Test func capturedForegroundPreemptsInitialCommand() {
         // a live child captured at quit wins over the persisted creation command (typed, not exec)
-        let plan = CommandRestore.restorePlan(wasRestored: true, restoreEnabled: true, hadForeground: true,
-                                              foregroundInput: "top\n", initialCommand: "ssh host")
+        let plan = CommandRestore.restorePlan(.init(wasRestored: true, restoreEnabled: true, hadForeground: true,
+                                                    foregroundInput: "top\n", initialCommand: "ssh host", restoreOverride: nil))
         #expect(plan == CommandRestore.RestorePlan(command: nil, initialInput: "top\n"))
     }
 
     @Test func suppressedForegroundYieldsPlainShellNotStaleCommand() {
         // a foreground was captured but suppressed (denylisted/off → nil input): a plain shell, NOT a
         // fall-through to the stale creation command
-        let plan = CommandRestore.restorePlan(wasRestored: true, restoreEnabled: true, hadForeground: true,
-                                              foregroundInput: nil, initialCommand: "ssh host")
+        let plan = CommandRestore.restorePlan(.init(wasRestored: true, restoreEnabled: true, hadForeground: true,
+                                                    foregroundInput: nil, initialCommand: "ssh host", restoreOverride: nil))
         #expect(plan == CommandRestore.RestorePlan(command: nil, initialInput: nil))
     }
 
     @Test func noCommandAndNoForegroundIsPlainShell() {
-        let plan = CommandRestore.restorePlan(wasRestored: true, restoreEnabled: true, hadForeground: false,
-                                              foregroundInput: nil, initialCommand: nil)
+        let plan = CommandRestore.restorePlan(.init(wasRestored: true, restoreEnabled: true, hadForeground: false,
+                                                    foregroundInput: nil, initialCommand: nil, restoreOverride: nil))
+        #expect(plan == CommandRestore.RestorePlan(command: nil, initialInput: nil))
+    }
+
+    // MARK: - restoreInput (the pinned-override precedence)
+
+    @Test func restoreInputFallsThroughWithoutOverride() {
+        // nil override = today's behavior: the captured input passes through untouched, gate irrelevant
+        // (the app side already applied the toggle + denylist to it)
+        for enabled in [true, false] {
+            #expect(CommandRestore.restoreInput(restoreEnabled: enabled, restoreOverride: nil,
+                                                capturedInput: "top\n") == "top\n")
+            #expect(CommandRestore.restoreInput(restoreEnabled: enabled, restoreOverride: nil, capturedInput: nil) == nil)
+        }
+    }
+
+    @Test func restoreInputRunsPinnedCommandOnlyWhenEnabled() {
+        // pinned + enabled: typed verbatim with a newline, never re-quoted, and it beats the capture
+        #expect(CommandRestore.restoreInput(restoreEnabled: true, restoreOverride: "cd x && claude --resume y",
+                                            capturedInput: "top\n") == "cd x && claude --resume y\n")
+        // the toggle stays the master switch: pinned but disabled → a plain shell, capture ignored too
+        #expect(CommandRestore.restoreInput(restoreEnabled: false, restoreOverride: "claude --resume y",
+                                            capturedInput: "top\n") == nil)
+    }
+
+    @Test func restoreInputTreatsEmptyOverrideAsPinnedToNothing() {
+        for enabled in [true, false] {
+            #expect(CommandRestore.restoreInput(restoreEnabled: enabled, restoreOverride: "", capturedInput: "top\n") == nil)
+            #expect(CommandRestore.restoreInput(restoreEnabled: enabled, restoreOverride: "", capturedInput: nil) == nil)
+        }
+    }
+
+    @Test func overrideNeverTakesExecPathAndBeatsInitialCommand() {
+        // an override is typed into the login shell, never exec'd — even for a fresh --command session
+        let fresh = CommandRestore.restorePlan(.init(wasRestored: false, restoreEnabled: true, hadForeground: false,
+                                                     foregroundInput: nil, initialCommand: "ssh host",
+                                                     restoreOverride: "claude --resume y"))
+        #expect(fresh == CommandRestore.RestorePlan(command: nil, initialInput: "claude --resume y\n"))
+        // and it wins over a captured foreground too
+        let captured = CommandRestore.restorePlan(.init(wasRestored: true, restoreEnabled: true, hadForeground: true,
+                                                        foregroundInput: "top\n", initialCommand: nil,
+                                                        restoreOverride: "claude --resume y"))
+        #expect(captured == CommandRestore.RestorePlan(command: nil, initialInput: "claude --resume y\n"))
+    }
+
+    @Test func emptyOverrideSuppressesInitialCommandAndCapture() {
+        // "" pins the pane to nothing: neither the creation command nor the captured foreground runs
+        let withInitial = CommandRestore.restorePlan(.init(wasRestored: false, restoreEnabled: true, hadForeground: false,
+                                                           foregroundInput: nil, initialCommand: "ssh host",
+                                                           restoreOverride: ""))
+        #expect(withInitial == CommandRestore.RestorePlan(command: nil, initialInput: nil))
+        let withCapture = CommandRestore.restorePlan(.init(wasRestored: true, restoreEnabled: true, hadForeground: true,
+                                                           foregroundInput: "top\n", initialCommand: "ssh host",
+                                                           restoreOverride: ""))
+        #expect(withCapture == CommandRestore.RestorePlan(command: nil, initialInput: nil))
+    }
+
+    @Test func disabledSettingSuppressesOverrideEvenOverACapture() {
+        let plan = CommandRestore.restorePlan(.init(wasRestored: true, restoreEnabled: false, hadForeground: true,
+                                                    foregroundInput: "top\n", initialCommand: "ssh host",
+                                                    restoreOverride: "claude --resume y"))
         #expect(plan == CommandRestore.RestorePlan(command: nil, initialInput: nil))
     }
 }

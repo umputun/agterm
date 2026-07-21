@@ -164,6 +164,53 @@ struct SnapshotRoundTripTests {
         #expect(restored.workspaces[0].sessions[0].splitRatio == 0.63)
     }
 
+    @Test func restoreCommandRoundTripsThroughSnapshot() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.isSplit = true // a split pin only survives a rebuild that rebuilds the split
+        session.restoreCommand = "claude --resume abc"
+        session.splitRestoreCommand = "tail -f /var/log/x"
+        let snap = store.snapshot()
+        let snapped = snap.workspaces[0].sessions[0]
+        #expect(snapped.restoreCommand == "claude --resume abc")
+        #expect(snapped.splitRestoreCommand == "tail -f /var/log/x")
+        let restored = makeStore()
+        restored.restore(from: snap)
+        let r = restored.workspaces[0].sessions[0]
+        #expect(r.restoreCommand == "claude --resume abc")
+        #expect(r.splitRestoreCommand == "tail -f /var/log/x")
+    }
+
+    @Test func emptyRestoreCommandRoundTripsAsEmptyNotNil() throws {
+        // "" is the "pinned to nothing" state of the tri-state and must survive JSON as an empty string —
+        // collapsing it to nil would silently turn the opt-out back into auto-capture.
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.isSplit = true // a split pin only survives a rebuild that rebuilds the split
+        session.restoreCommand = ""
+        session.splitRestoreCommand = ""
+        let data = try JSONEncoder().encode(store.snapshot())
+        let decoded = try JSONDecoder().decode(Snapshot.self, from: data)
+        #expect(decoded.workspaces[0].sessions[0].restoreCommand == "")
+        #expect(decoded.workspaces[0].sessions[0].splitRestoreCommand == "")
+        let restored = makeStore()
+        restored.restore(from: decoded)
+        #expect(restored.workspaces[0].sessions[0].restoreCommand == "")
+        #expect(restored.workspaces[0].sessions[0].splitRestoreCommand == "")
+    }
+
+    @Test func legacySnapshotWithoutRestoreCommandDecodesNil() throws {
+        // a snapshot written before the override existed must still decode (nil = no override, the
+        // auto-capture behavior) rather than throwing and wiping the saved tree.
+        let json = #"{"id":"\#(UUID().uuidString)","cwd":"/tmp","foregroundCommand":["claude"]}"#
+        let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
+        #expect(snap.restoreCommand == nil)
+        #expect(snap.splitRestoreCommand == nil)
+        #expect(snap.foregroundCommand == ["claude"])
+    }
+
     @Test func sessionSnapshotDecodesWithoutSplitRatio() throws {
         // a SessionSnapshot persisted before splitRatio existed (the key absent) must decode to nil, not
         // fail the load — the forward-compat contract the optional field documents.

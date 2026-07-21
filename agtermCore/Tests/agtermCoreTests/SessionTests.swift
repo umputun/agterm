@@ -445,6 +445,88 @@ struct SessionTests {
         #expect(session.paneRole(forToken: "agent-tok") == .left)
         #expect(session.paneRole(forToken: "helper-tok") == .right)
     }
+
+    @Test func takePendingRestoreOverrideReturnsEachPaneValueOnce() {
+        let session = Session(initialCwd: "/repo")
+        session.pendingRestoreCommand = "claude --resume main"
+        session.pendingSplitRestoreCommand = "tail -f /var/log/x"
+
+        // each pane hands back its own payload, independently...
+        #expect(session.takePendingRestoreOverride(pane: .left) == "claude --resume main")
+        #expect(session.pendingSplitRestoreCommand == "tail -f /var/log/x") // taking left leaves right alone
+        #expect(session.takePendingRestoreOverride(pane: .right) == "tail -f /var/log/x")
+        // ...and only once: a second surface for the same pane this launch gets a plain shell.
+        #expect(session.takePendingRestoreOverride(pane: .left) == nil)
+        #expect(session.takePendingRestoreOverride(pane: .right) == nil)
+    }
+
+    @Test func takePendingRestoreOverrideIsNilWhenNothingPending() {
+        let session = Session(initialCwd: "/repo")
+        #expect(session.takePendingRestoreOverride(pane: .left) == nil)
+        #expect(session.takePendingRestoreOverride(pane: .right) == nil)
+    }
+
+    @Test func takePendingRestoreOverrideReturnsEmptyStringAsAValue() {
+        // "" is "pinned to nothing" — a real tri-state value, not an absent override, so the first take
+        // must return it (the caller maps it to a plain shell) rather than collapsing it to nil.
+        let session = Session(initialCwd: "/repo")
+        session.pendingRestoreCommand = ""
+        session.pendingSplitRestoreCommand = ""
+        #expect(session.takePendingRestoreOverride(pane: .left) == "")
+        #expect(session.takePendingRestoreOverride(pane: .right) == "")
+        #expect(session.takePendingRestoreOverride(pane: .left) == nil)
+        #expect(session.takePendingRestoreOverride(pane: .right) == nil)
+    }
+
+    @Test func takePendingRestoreOverrideIgnoresTheScratchPane() {
+        // the scratch terminal is never restored, so it has no override slot to take.
+        let session = Session(initialCwd: "/repo")
+        session.pendingRestoreCommand = "claude --resume main"
+        #expect(session.takePendingRestoreOverride(pane: .scratch) == nil)
+        // and the take must not have drained another pane's payload.
+        #expect(session.takePendingRestoreOverride(pane: .left) == "claude --resume main")
+    }
+
+    @Test func clearPendingRestoreOverridesDropsBothPayloadsAndKeepsThePins() {
+        // the soft-close teardown: the same object comes back on undo, so an unconsumed payload must not
+        // survive the round trip — while the persisted pins stay, to fire on the next launch.
+        let session = Session(initialCwd: "/repo")
+        session.restoreCommand = "claude --resume main"
+        session.splitRestoreCommand = "tail -f /var/log/x"
+        session.pendingRestoreCommand = session.restoreCommand
+        session.pendingSplitRestoreCommand = session.splitRestoreCommand
+
+        session.clearPendingRestoreOverrides()
+        #expect(session.takePendingRestoreOverride(pane: .left) == nil)
+        #expect(session.takePendingRestoreOverride(pane: .right) == nil)
+        #expect(session.restoreCommand == "claude --resume main")
+        #expect(session.splitRestoreCommand == "tail -f /var/log/x")
+    }
+
+    @Test func takePendingRestoreOverrideLeavesThePersistedValueIntact() {
+        // the override is STICKY: consuming this launch's payload must not clear the persisted field, or
+        // it would fire once and never again (the capture's consume-on-read semantics, wrongly mirrored).
+        let session = Session(initialCwd: "/repo")
+        session.restoreCommand = "claude --resume main"
+        session.splitRestoreCommand = "tail -f /var/log/x"
+        session.pendingRestoreCommand = session.restoreCommand
+        session.pendingSplitRestoreCommand = session.splitRestoreCommand
+
+        _ = session.takePendingRestoreOverride(pane: .left)
+        _ = session.takePendingRestoreOverride(pane: .right)
+        #expect(session.restoreCommand == "claude --resume main")
+        #expect(session.splitRestoreCommand == "tail -f /var/log/x")
+    }
+
+    @Test func takePendingRestoreOverrideNeverReadsThePersistedValue() {
+        // the factory path can only reach the transient payload: a persisted override with nothing armed
+        // (a mid-process window reload, a socket write during this run) must not fire.
+        let session = Session(initialCwd: "/repo")
+        session.restoreCommand = "claude --resume main"
+        session.splitRestoreCommand = "tail -f /var/log/x"
+        #expect(session.takePendingRestoreOverride(pane: .left) == nil)
+        #expect(session.takePendingRestoreOverride(pane: .right) == nil)
+    }
 }
 
 private final class FakeSurface: TerminalSurface {

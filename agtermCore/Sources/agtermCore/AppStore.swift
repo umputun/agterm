@@ -214,7 +214,11 @@ public final class AppStore {
                                           scratch: session.scratchActive, flagged: session.flagged,
                                           commandWait: (session.initialCommand != nil && session.commandWait) ? true : nil,
                                           foreground: foreground(session),
-                                          splitForeground: splitForeground(session), status: status,
+                                          splitForeground: splitForeground(session),
+                                          // the PERSISTED overrides, never the transient pending payloads,
+                                          // so a read after one fired still reports what stays pinned.
+                                          restoreCommand: session.restoreCommand,
+                                          splitRestoreCommand: session.splitRestoreCommand, status: status,
                                           statusPane: statusPane,
                                           statusBlink: idle ? nil : (session.agentIndicator.blink ? true : nil),
                                           statusColor: idle ? nil : session.agentIndicator.color,
@@ -797,7 +801,12 @@ public final class AppStore {
     /// so re-persisting it would be a pointless write (and the only mutator that
     /// skips `save()` for that reason). If the persisted `selectedSessionID` points
     /// at a session that no longer exists, it is cleared to keep selection valid.
-    public func restore(from snapshot: Snapshot) {
+    ///
+    /// `launchRestore` marks an APP-BOOTSTRAP restore and is threaded down to `session(from:launchRestore:)`,
+    /// where it is the only thing that arms a persisted `session.restore` override for this launch. It
+    /// defaults to false because this method has a RUNTIME caller too: reopening a closed window
+    /// mid-process reloads its store through here, and that must not execute anything.
+    public func restore(from snapshot: Snapshot, launchRestore: Bool = false) {
         // fold workspaces sharing an id into the first occurrence, and keep only the first snapshot of any
         // repeated session id, wherever it sits: a file written by a build that could duplicate either
         // stays unreachable past the first match otherwise, and re-saves the corruption.
@@ -805,7 +814,7 @@ public final class AppStore {
         workspaces = snapshot.workspaces.reduce(into: [Workspace]()) { restored, workspaceSnapshot in
             let sessions = workspaceSnapshot.sessions
                 .filter { seenSessionIDs.insert($0.id).inserted }
-                .map(session(from:))
+                .map { session(from: $0, launchRestore: launchRestore) }
             if let existing = restored.firstIndex(where: { $0.id == workspaceSnapshot.id }) {
                 restored[existing].sessions.append(contentsOf: sessions)
                 return
@@ -842,11 +851,23 @@ public final class AppStore {
     /// fire afterward. A write failure is logged and swallowed — a transient disk error
     /// must not bring down the model.
     public func save() {
+        saveChecked()
+    }
+
+    /// `save()` that REPORTS whether the write landed instead of swallowing the failure, for a caller
+    /// whose acknowledgement must not outrun the disk. `setRestoreCommand` is the one today: its payload
+    /// is an arbitrary shell line re-typed on every launch, so a "cleared" ack that never reached disk
+    /// would leave the old command armed forever. `save()` is this with the result discarded, so the two
+    /// can't drift.
+    @discardableResult
+    func saveChecked() -> Bool {
         saveDebouncer.cancel()
         do {
             try persistence.save(snapshot())
+            return true
         } catch {
             log("save failed: \(error)")
+            return false
         }
     }
 
@@ -922,7 +943,9 @@ public final class AppStore {
                         foregroundCommand: session.foregroundCommand,
                         splitForegroundCommand: session.splitForegroundCommand,
                         initialCommand: session.initialCommand, commandWait: session.commandWait ? true : nil,
-                        backgroundWatermark: session.backgroundWatermark)
+                        backgroundWatermark: session.backgroundWatermark,
+                        restoreCommand: session.restoreCommand,
+                        splitRestoreCommand: session.splitRestoreCommand)
     }
 
     func workspaceSnapshot(_ workspace: Workspace) -> WorkspaceSnapshot {
@@ -930,7 +953,17 @@ public final class AppStore {
                           collapsed: workspace.isExpanded ? nil : true)
     }
 
-    func session(from snapshot: SessionSnapshot) -> Session {
+    /// Rebuilds one session from its snapshot. `launchRestore` marks an APP-BOOTSTRAP restore, the only
+    /// path allowed to arm a persisted `restoreCommand` override for this launch by copying it into the
+    /// transient `pendingRestoreCommand` the surface factory consumes; it defaults to false so any other
+    /// rebuild (a mid-process window reload, Reopen Closed Item) comes back with nothing armed.
+    ///
+    /// A split hidden at the last quit is NOT rebuilt (`hasSplit` follows `isSplit`), so its pinned
+    /// override describes a pane that no longer exists: it is DROPPED here, the same rule `closeSplit`
+    /// applies when the pane goes away. Keeping it would leave a value `tree` reports but no write can
+    /// clear (`session.restore --pane right` is rejected without a split), and a fresh ⌘D split shown at
+    /// the next quit would inherit and run it.
+    func session(from snapshot: SessionSnapshot, launchRestore: Bool = false) -> Session {
         let session = Session(id: snapshot.id, initialCwd: snapshot.cwd, customName: snapshot.customName)
         session.isSplit = snapshot.isSplit ?? false
         session.hasSplit = session.isSplit
@@ -944,11 +977,17 @@ public final class AppStore {
         session.commandWait = snapshot.commandWait ?? false
         session.wasRestored = true
         session.backgroundWatermark = snapshot.backgroundWatermark
+        session.restoreCommand = snapshot.restoreCommand
+        session.splitRestoreCommand = session.isSplit ? snapshot.splitRestoreCommand : nil
+        if launchRestore {
+            session.pendingRestoreCommand = snapshot.restoreCommand
+            if session.isSplit { session.pendingSplitRestoreCommand = session.splitRestoreCommand }
+        }
         return session
     }
 
     func workspace(from snapshot: WorkspaceSnapshot) -> Workspace {
-        Workspace(id: snapshot.id, name: snapshot.name, sessions: snapshot.sessions.map(session(from:)),
+        Workspace(id: snapshot.id, name: snapshot.name, sessions: snapshot.sessions.map { session(from: $0) },
                   isExpanded: !(snapshot.collapsed ?? false))
     }
 

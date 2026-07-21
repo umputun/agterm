@@ -68,6 +68,27 @@ final class RecentClosedTests {
         #expect(RecentClosedStore(directory: directory).load().isEmpty)
     }
 
+    /// Reopen Closed Item rebuilds the session from its snapshot through `session(from:)`, which defaults
+    /// to arming nothing: the persisted pin comes back (so `tree` reads it and the next launch fires it),
+    /// but no payload is pending, so reopening cannot execute a sticky override mid-process.
+    @MainActor
+    @Test func reopeningAClosedSessionRestoresThePinWithoutArmingIt() throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        store.setRestoreCommand("claude --resume abc", pane: .left, forSession: session.id)
+        store.closeSession(session.id)
+
+        let item = try #require(recentClosed.load().first { $0.session?.snapshot.id == session.id })
+        #expect(store.restoreRecentClosed(item))
+
+        let reopened = try #require(store.session(withID: session.id))
+        #expect(reopened !== session) // rebuilt from the snapshot, not the original object
+        #expect(reopened.restoreCommand == "claude --resume abc")
+        #expect(reopened.pendingRestoreCommand == nil)
+        #expect(reopened.pendingSplitRestoreCommand == nil)
+    }
+
     private func sessionItem(id: UUID = UUID(), snapshotID: UUID = UUID(), title: String) -> RecentClosedItem {
         RecentClosedItem(
             id: id,

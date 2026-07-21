@@ -346,13 +346,18 @@ public final class WindowLibrary {
     /// Lazily builds (or returns the cached) `AppStore` for a window, loading its persisted
     /// `windows/<id>.json` (an empty `Snapshot` when missing/corrupt, per the recovery contract).
     /// No-op returning nil for an id with no index entry. Marks the window open and persists.
+    ///
+    /// `launchRestore` marks an APP-BOOTSTRAP load — passed only by `reopen`/`recoverOrphanedWindows`,
+    /// and the only thing that arms a session's persisted `session.restore` override for this launch. It
+    /// defaults to false because `ContentView.resolveStore()` calls this at RUNTIME when a closed window
+    /// is reopened mid-process, which must not execute anything.
     @discardableResult
-    public func loadStore(for id: UUID) -> AppStore? {
+    public func loadStore(for id: UUID, launchRestore: Bool = false) -> AppStore? {
         guard windows.contains(where: { $0.id == id }) else { return nil }
         if let existing = stores[id] { return existing }
         let persistence = persistenceStore(for: id)
         let store = makeStore(persistence: persistence)
-        store.restore(from: persistence.load())
+        store.restore(from: persistence.load(), launchRestore: launchRestore)
         stores[id] = store
         saveIndex()
         return store
@@ -537,11 +542,11 @@ public final class WindowLibrary {
     /// frontmost (pointing at a deleted window) would otherwise no-op `loadStore` and leave the app
     /// windowless; in that case fall through to the first window.
     private func reopen(_ index: WindowsIndex) {
-        for entry in index.windows where entry.isOpen { loadStore(for: entry.id) }
+        for entry in index.windows where entry.isOpen { loadStore(for: entry.id, launchRestore: true) }
         guard openIDs().isEmpty else { return }
         let frontmostExists = index.frontmost.map { id in windows.contains { $0.id == id } } ?? false
         let fallback = (frontmostExists ? index.frontmost : nil) ?? windows.first?.id
-        if let fallback { loadStore(for: fallback) }
+        if let fallback { loadStore(for: fallback, launchRestore: true) }
     }
 
     /// When `windows.json` is unreadable/version-mismatched but per-window `windows/<id>.json` files
@@ -566,7 +571,7 @@ public final class WindowLibrary {
         // append ALL infos FIRST — loadStore(for:) guards on `windows.contains(id)`, so loading a
         // store before the append would silently no-op.
         windows.append(contentsOf: infos)
-        for info in infos { loadStore(for: info.id) }
+        for info in infos { loadStore(for: info.id, launchRestore: true) }
         frontmostWindowID = infos.first?.id
         saveIndex()
         return true
@@ -583,7 +588,7 @@ public final class WindowLibrary {
         // first window, so `defaultWindowName` yields "window 1" (windows is empty at this point).
         let info = WindowInfo(name: defaultWindowName)
         let store = makeStore(persistence: persistenceStore(for: info.id))
-        store.restore(from: snapshot)
+        store.restore(from: snapshot, launchRestore: true)
         store.save()
         windows = [info]
         stores[info.id] = store

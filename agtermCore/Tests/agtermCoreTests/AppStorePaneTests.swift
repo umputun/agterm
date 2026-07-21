@@ -289,6 +289,73 @@ struct AppStorePaneTests {
         #expect(split.teardownCount == 1)
     }
 
+    @Test func closePrimaryPaneMigratesBothRestoreOverrideHalvesUp() {
+        // the survivor's restore-command override follows it into the main slot: the persisted pin (so the
+        // next launch restores the promoted pane's command, not the dead primary's) AND any payload still
+        // armed for this launch (so a surface built after promotion still runs it).
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.surface = SpySurface()
+        session.splitSurface = SpySurface()
+        session.isSplit = true
+        session.hasSplit = true
+        session.restoreCommand = "claude --resume primary"
+        session.pendingRestoreCommand = "claude --resume primary"
+        session.splitRestoreCommand = "tail -f /var/log/x"
+        session.pendingSplitRestoreCommand = "tail -f /var/log/x"
+
+        store.closePrimaryPane(session.id)
+
+        #expect(session.restoreCommand == "tail -f /var/log/x")        // the survivor's pin replaces the dead primary's
+        #expect(session.pendingRestoreCommand == "tail -f /var/log/x")
+        #expect(session.splitRestoreCommand == nil)                    // nothing still describes the gone pane
+        #expect(session.pendingSplitRestoreCommand == nil)
+    }
+
+    @Test func closePrimaryPaneMigratesAnAbsentSplitOverrideAsAClear() {
+        // migration replaces OUTRIGHT (like foregroundCommand): a survivor with no override must not
+        // inherit the exited primary's pin, or the next launch would run a command in the wrong pane's shell.
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.surface = SpySurface()
+        session.splitSurface = SpySurface()
+        session.isSplit = true
+        session.hasSplit = true
+        session.restoreCommand = "claude --resume primary"
+        session.pendingRestoreCommand = "claude --resume primary"
+
+        store.closePrimaryPane(session.id)
+
+        #expect(session.restoreCommand == nil)
+        #expect(session.pendingRestoreCommand == nil)
+    }
+
+    @Test func closeSplitClearsBothRestoreOverrideHalves() {
+        // the right pane is gone, so its override describes nothing — and a payload left armed would fire
+        // on the next manual ⌘D instead of the launch it was seeded for.
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.surface = SpySurface()
+        session.splitSurface = SpySurface()
+        session.isSplit = true
+        session.hasSplit = true
+        session.restoreCommand = "claude --resume main"
+        session.pendingRestoreCommand = "claude --resume main"
+        session.splitRestoreCommand = "tail -f /var/log/x"
+        session.pendingSplitRestoreCommand = "tail -f /var/log/x"
+
+        store.closeSplit(session.id)
+
+        #expect(session.splitRestoreCommand == nil)
+        #expect(session.pendingSplitRestoreCommand == nil)
+        // the surviving main pane keeps both of its halves
+        #expect(session.restoreCommand == "claude --resume main")
+        #expect(session.pendingRestoreCommand == "claude --resume main")
+    }
+
     @Test func closeSplitClearsStuckSearchOnSurvivingSession() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
@@ -520,6 +587,38 @@ struct AppStorePaneTests {
         node = try #require(store.controlTree().workspaces[0].sessions.first)
         #expect(node.split == false)
         #expect(node.splitRatio == 0.3)
+    }
+
+    @Test func controlTreeReportsRestoreCommand() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.toggleSplit(session.id)
+        // no override: both fields are omitted (nil).
+        var node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.restoreCommand == nil)
+        #expect(node.splitRestoreCommand == nil)
+        // both panes pinned, the split one to nothing — "" must read back as an empty string, not as nil.
+        store.setRestoreCommand("claude --resume abc", pane: .left, forSession: session.id)
+        store.setRestoreCommand("", pane: .right, forSession: session.id)
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.restoreCommand == "claude --resume abc")
+        #expect(node.splitRestoreCommand == "")
+        // the override is STICKY: consuming this launch's pending payloads (what the surface factories do
+        // at bootstrap) must not change the read-back — a builder wired to the pending slots reports nil here.
+        session.pendingRestoreCommand = session.restoreCommand
+        session.pendingSplitRestoreCommand = session.splitRestoreCommand
+        #expect(session.takePendingRestoreOverride(pane: .left) == "claude --resume abc")
+        #expect(session.takePendingRestoreOverride(pane: .right) == "")
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.restoreCommand == "claude --resume abc")
+        #expect(node.splitRestoreCommand == "")
+        // unpinning drops the fields back to omitted.
+        store.setRestoreCommand(nil, pane: .left, forSession: session.id)
+        store.setRestoreCommand(nil, pane: .right, forSession: session.id)
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.restoreCommand == nil)
+        #expect(node.splitRestoreCommand == nil)
     }
 
     @Test func controlTreeThreadsFontSizesFromClosures() throws {

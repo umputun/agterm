@@ -75,6 +75,26 @@ struct AppStoreDuplicateTests {
         #expect(dupe.id != source.id)
     }
 
+    /// A duplicate is a fresh `Session` from `addSession`, so it inherits no restore-command override —
+    /// neither the persisted pin (which names the SOURCE's command) nor an armed payload.
+    @Test func duplicateSessionCopiesNoRestoreOverride() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let source = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        source.restoreCommand = "claude --resume abc"
+        source.splitRestoreCommand = "tail -f /var/log/x"
+        source.pendingRestoreCommand = "claude --resume abc"
+        source.pendingSplitRestoreCommand = "tail -f /var/log/x"
+
+        let dupe = try! #require(store.duplicateSession(source.id))
+
+        #expect(dupe.restoreCommand == nil)
+        #expect(dupe.splitRestoreCommand == nil)
+        #expect(dupe.pendingRestoreCommand == nil)
+        #expect(dupe.pendingSplitRestoreCommand == nil)
+        #expect(source.restoreCommand == "claude --resume abc") // the source keeps its own
+    }
+
     @Test func duplicateSessionOfUnknownSessionReturnsNil() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
