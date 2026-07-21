@@ -302,6 +302,8 @@ navigation is scoped to that workspace's sessions; unfocusing restores stepping 
 agtermctl workspace focus on --target "$AGTERM_WORKSPACE_ID"  # zoom to this workspace
 agtermctl workspace focus toggle --target a1b2                # flip focus on another workspace
 agtermctl workspace focus off                                 # restore the full tree
+agtermctl workspace root ~/src/myproject --target "$AGTERM_WORKSPACE_ID"  # new sessions here open in ~/src/myproject
+agtermctl workspace root --clear --target "$AGTERM_WORKSPACE_ID"          # back to the global setting
 ```
 
 ## Expand or collapse the sidebar tree

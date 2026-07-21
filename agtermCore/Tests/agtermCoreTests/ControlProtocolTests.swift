@@ -25,10 +25,21 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .workspaceRename, target: "active", args: ControlArgs(name: "renamed")),
             ControlRequest(cmd: .workspaceDelete, target: "9f3c"),
             ControlRequest(cmd: .workspaceSelect, target: "9f3c"),
+            ControlRequest(cmd: .workspaceRoot, target: "9f3c", args: ControlArgs(path: "/proj/root")),
         ]
         for request in cases {
             #expect(try roundTrip(request) == request)
         }
+    }
+
+    @Test func workspaceNodeRootRoundTripsAndOmitsWhenNil() throws {
+        let withRoot = ControlWorkspaceNode(id: "w1", name: "work", active: true, root: "/proj", sessions: [])
+        let data = try JSONEncoder().encode(withRoot)
+        #expect(try JSONDecoder().decode(ControlWorkspaceNode.self, from: data) == withRoot)
+        #expect(String(decoding: data, as: UTF8.self).contains("\"root\""))
+        // no root → the key is omitted from the JSON (synthesized encodeIfPresent for the optional).
+        let noRoot = ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [])
+        #expect(!String(decoding: try JSONEncoder().encode(noRoot), as: UTF8.self).contains("\"root\""))
     }
 
     @Test func sessionCommandsRoundTrip() throws {

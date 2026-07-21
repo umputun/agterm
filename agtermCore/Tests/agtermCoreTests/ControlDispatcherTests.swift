@@ -419,6 +419,27 @@ struct ControlDispatcherTests {
         ])
     }
 
+    @Test func workspaceRootRoutesPathAndClearThroughActions() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let set = await dispatcher.dispatch(ControlRequest(
+            cmd: .workspaceRoot, target: "workspace", args: ControlArgs(window: "win", path: "/proj/root")))
+        let clearExplicit = await dispatcher.dispatch(ControlRequest(
+            cmd: .workspaceRoot, target: "workspace", args: ControlArgs(path: "clear")))
+        let clearMissing = await dispatcher.dispatch(ControlRequest(cmd: .workspaceRoot, target: "workspace"))
+
+        #expect(set == ControlResponse(ok: true))
+        #expect(clearExplicit == ControlResponse(ok: true))
+        #expect(clearMissing == ControlResponse(ok: true))
+        // a path passes through verbatim; `clear` and a missing path both normalize to nil (unset).
+        #expect(actions.calls == [
+            .setWorkspaceRoot(target: "workspace", window: "win", "/proj/root"),
+            .setWorkspaceRoot(target: "workspace", window: nil, nil),
+            .setWorkspaceRoot(target: "workspace", window: nil, nil)
+        ])
+    }
+
     @Test func workspaceRenameRejectsMissingOrBlankNameWithoutCallingActions() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

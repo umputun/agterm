@@ -366,6 +366,7 @@ final class ControlServer {
         case .tree, .sessionNew, .sessionDuplicate, .sessionSelect, .sessionGo, .sessionClose, .sessionRename,
                 .sessionReveal, .sessionMove,
                 .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete, .workspaceMove, .workspaceFocus,
+                .workspaceRoot,
                 .sessionSplit, .sessionScratch, .sessionFocus, .sessionResize, .surfaceZoom,
                 .sessionStatus, .sessionFlag, .sessionSeen, .notify,
                 .fontInc, .fontDec, .fontReset, .keymapReload, .configReload, .themeSet, .themeList,
@@ -566,7 +567,8 @@ final class ControlServer {
     /// suppressed, leaving the current selection and focus untouched.
     func makeSessionResponse(in store: AppStore, workspaceID: UUID,
                              options: ControlSessionCreateOptions, at index: Int? = nil) -> ControlResponse {
-        let cwd = options.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path
+        let root = existingDirectory(store.workspaces.first { $0.id == workspaceID }?.root)
+        let cwd = options.cwd ?? root ?? FileManager.default.homeDirectoryForCurrentUser.path
         guard let session = store.addSession(toWorkspace: workspaceID, cwd: cwd,
                                              command: options.command, name: options.name,
                                              wait: options.wait ?? false, at: index, select: !options.noSelect) else {
@@ -576,11 +578,27 @@ final class ControlServer {
         return ControlResponse(ok: true, result: ControlResult(id: session.id.uuidString))
     }
 
+    func setWorkspaceRoot(_ target: String?, window: String?, path: String?) -> ControlResponse {
+        resolver.resolveWorkspace(target, window: window) { store, id in
+            store.setWorkspaceRoot(id, path: path) // verbatim path; empty → nil; delta-guarded + save
+            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
     /// `value` trimmed of surrounding whitespace, or nil if absent or blank after trimming.
     func trimmed(_ value: String?) -> String? {
         guard let value else { return nil }
         let result = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return result.isEmpty ? nil : result
+    }
+
+    /// The path back only if it names an existing directory, else nil — a stale/deleted workspace root
+    /// silently falls back to $HOME (mirroring the GUI's spawn-time check).
+    private func existingDirectory(_ path: String?) -> String? {
+        guard let path, !path.isEmpty else { return nil }
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else { return nil }
+        return path
     }
 
     private func log(_ message: @autoclosure () -> String) {

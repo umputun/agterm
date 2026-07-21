@@ -26,6 +26,7 @@ final class MockControlActions: ControlActions {
         case sessionMoveBatch(targets: [String], window: String?, ControlSessionMove)
         case workspaceMove(target: String?, window: String?, ReorderDirection)
         case workspaceFocus(target: String?, window: String?, String?)
+        case setWorkspaceRoot(target: String?, window: String?, String?)
         case sessionFlag(target: String?, window: String?, String?)
         case markSessionSeen(target: String?, window: String?)
         case sessionStatus(target: String?, window: String?, ControlSessionStatusUpdate)
@@ -196,6 +197,11 @@ final class MockControlActions: ControlActions {
 
     func focusWorkspace(_ target: String?, window: String?, mode: String?) -> ControlResponse {
         calls.append(.workspaceFocus(target: target, window: window, mode))
+        return ControlResponse(ok: true)
+    }
+
+    func setWorkspaceRoot(_ target: String?, window: String?, path: String?) -> ControlResponse {
+        calls.append(.setWorkspaceRoot(target: target, window: window, path))
         return ControlResponse(ok: true)
     }
 

@@ -117,7 +117,7 @@ final class AppActions {
     func newSession() {
         guard uiActionsEnabled else { return }
         guard let store, let workspaceID = store.currentWorkspaceID,
-              let session = store.addSession(toWorkspace: workspaceID, cwd: resolvedNewSessionCwd())
+              let session = store.addSession(toWorkspace: workspaceID, cwd: resolvedNewSessionCwd(inWorkspace: workspaceID))
         else { return }
         // creating + selecting a session is a user-initiated selection: note activity so it buys the full
         // idle grace before auto-follow can pull the selection away from the just-made session.
@@ -132,10 +132,22 @@ final class AppActions {
     /// the setting. Falls back to home when `settingsModel` isn't wired yet (before the scene `.task`) or
     /// the setting resolves there. Read as the `addSession` argument, so it captures the active session's
     /// cwd BEFORE the new session exists.
-    func resolvedNewSessionCwd() -> String {
+    func resolvedNewSessionCwd(inWorkspace workspaceID: UUID? = nil) -> String {
         let home = FileManager.default.homeDirectoryForCurrentUser.path
+        // A workspace root (if set AND it still exists on disk) hard-overrides the global new-session
+        // policy; a missing/deleted root falls through to the setting.
+        let root = existingDirectory(workspaceID.flatMap { id in store?.workspaces.first { $0.id == id }?.root })
         return settingsModel?.settings.resolveNewSessionCwd(
-            currentSessionCwd: store?.activeSession?.focusedCwd, home: home) ?? home
+            workspaceRoot: root, currentSessionCwd: store?.activeSession?.focusedCwd, home: home) ?? (root ?? home)
+    }
+
+    /// Returns the path only if it names an existing directory, else nil — so a stale/deleted workspace
+    /// root silently falls back to the global new-session policy at spawn time.
+    private func existingDirectory(_ path: String?) -> String? {
+        guard let path, !path.isEmpty else { return nil }
+        var isDir: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), isDir.boolValue else { return nil }
+        return path
     }
 
     func openDirectory() {

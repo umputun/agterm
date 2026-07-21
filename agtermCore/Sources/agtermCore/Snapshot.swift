@@ -79,12 +79,18 @@ public struct WorkspaceSnapshot: Codable, Equatable, Sendable {
     /// `SessionSnapshot`. Only a collapsed workspace writes it (`true`); an expanded one omits it, so an
     /// all-expanded tree serializes byte-identically to a legacy snapshot.
     public var collapsed: Bool?
+    /// The workspace's root directory (new sessions open there), or nil for none. Optional so a snapshot
+    /// already on disk before this field was added still decodes (missing → nil → no root) instead of
+    /// failing the load and wiping the saved tree, like `collapsed`.
+    public var root: String?
 
-    public init(id: UUID, name: String, sessions: [SessionSnapshot], collapsed: Bool? = nil) {
+    public init(id: UUID, name: String, sessions: [SessionSnapshot], collapsed: Bool? = nil,
+                root: String? = nil) {
         self.id = id
         self.name = name
         self.sessions = sessions
         self.collapsed = collapsed
+        self.root = root
     }
 }
 

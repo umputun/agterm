@@ -441,28 +441,43 @@ struct AppSettingsTests {
 
     @Test func resolveNewSessionCwdHomeIsDefault() {
         // nil mode (default) and an explicit "home" both resolve to home, ignoring the session cwd.
-        #expect(AppSettings().resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
-        #expect(AppSettings(newSessionDirectory: "home").resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
+        #expect(AppSettings().resolveNewSessionCwd(workspaceRoot: nil, currentSessionCwd: "/proj", home: "/home") == "/home")
+        #expect(AppSettings(newSessionDirectory: "home").resolveNewSessionCwd(workspaceRoot: nil, currentSessionCwd: "/proj", home: "/home") == "/home")
         // an unknown future mode falls back to home rather than crashing.
-        #expect(AppSettings(newSessionDirectory: "future").resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
+        #expect(AppSettings(newSessionDirectory: "future").resolveNewSessionCwd(workspaceRoot: nil, currentSessionCwd: "/proj", home: "/home") == "/home")
     }
 
     @Test func resolveNewSessionCwdCurrentSessionInheritsOrFallsBack() {
         let settings = AppSettings(newSessionDirectory: "currentSession")
-        #expect(settings.resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/proj")
+        #expect(settings.resolveNewSessionCwd(workspaceRoot: nil, currentSessionCwd: "/proj", home: "/home") == "/proj")
         // no active session (nil cwd) or a blank cwd falls back to home.
-        #expect(settings.resolveNewSessionCwd(currentSessionCwd: nil, home: "/home") == "/home")
-        #expect(settings.resolveNewSessionCwd(currentSessionCwd: "", home: "/home") == "/home")
+        #expect(settings.resolveNewSessionCwd(workspaceRoot: nil, currentSessionCwd: nil, home: "/home") == "/home")
+        #expect(settings.resolveNewSessionCwd(workspaceRoot: nil, currentSessionCwd: "", home: "/home") == "/home")
     }
 
     @Test func resolveNewSessionCwdCustomUsesPathElseHome() {
         #expect(AppSettings(newSessionDirectory: "custom", newSessionCustomDirectory: "/fixed")
-            .resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/fixed")
+            .resolveNewSessionCwd(workspaceRoot: nil, currentSessionCwd: "/proj", home: "/home") == "/fixed")
         // custom mode with an unset or blank path falls back to home.
         #expect(AppSettings(newSessionDirectory: "custom")
-            .resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
+            .resolveNewSessionCwd(workspaceRoot: nil, currentSessionCwd: "/proj", home: "/home") == "/home")
         #expect(AppSettings(newSessionDirectory: "custom", newSessionCustomDirectory: "")
-            .resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
+            .resolveNewSessionCwd(workspaceRoot: nil, currentSessionCwd: "/proj", home: "/home") == "/home")
+    }
+
+    @Test func resolveNewSessionCwdWorkspaceRootOverridesEveryMode() {
+        // a non-empty workspace root wins over EVERY newSessionDirectory mode (home/currentSession/custom).
+        for mode in [nil, "home", "currentSession", "custom"] {
+            let settings = AppSettings(newSessionDirectory: mode, newSessionCustomDirectory: "/fixed")
+            #expect(settings.resolveNewSessionCwd(workspaceRoot: "/proj/root", currentSessionCwd: "/cur", home: "/home") == "/proj/root")
+        }
+    }
+
+    @Test func resolveNewSessionCwdBlankWorkspaceRootFallsThroughToTheMode() {
+        // a nil or empty workspace root falls through to the global new-session-directory policy.
+        let settings = AppSettings(newSessionDirectory: "currentSession")
+        #expect(settings.resolveNewSessionCwd(workspaceRoot: nil, currentSessionCwd: "/cur", home: "/home") == "/cur")
+        #expect(settings.resolveNewSessionCwd(workspaceRoot: "", currentSessionCwd: "/cur", home: "/home") == "/cur")
     }
 
     @Test func autoFollowAttentionUnknownDecodesToOff() {

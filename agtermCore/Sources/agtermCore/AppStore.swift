@@ -228,6 +228,7 @@ public final class AppStore {
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,
                                         focused: workspace.id == focusedWorkspaceID ? true : nil,
+                                        root: workspace.root,
                                         sessions: sessions)
         }
         return ControlTree(workspaces: nodes, idleMs: idleMs(), autoFollowMs: autoFollowMs,
@@ -371,6 +372,16 @@ public final class AppStore {
     public func renameWorkspace(_ workspaceID: UUID, to name: String) {
         guard let trimmed = name.trimmedOrNil, let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return }
         workspaces[index].name = trimmed
+        save()
+    }
+
+    /// Sets or clears a workspace's root directory (new sessions open there). Stored verbatim; an empty
+    /// path normalizes to nil (cleared). Delta-guarded so a no-op set doesn't rewrite the snapshot.
+    public func setWorkspaceRoot(_ workspaceID: UUID, path: String?) {
+        guard let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return }
+        let normalized = path?.trimmedOrNil
+        guard workspaces[index].root != normalized else { return }
+        workspaces[index].root = normalized
         save()
     }
 
@@ -927,7 +938,7 @@ public final class AppStore {
 
     func workspaceSnapshot(_ workspace: Workspace) -> WorkspaceSnapshot {
         WorkspaceSnapshot(id: workspace.id, name: workspace.name, sessions: workspace.sessions.map(sessionSnapshot),
-                          collapsed: workspace.isExpanded ? nil : true)
+                          collapsed: workspace.isExpanded ? nil : true, root: workspace.root)
     }
 
     func session(from snapshot: SessionSnapshot) -> Session {
@@ -949,7 +960,7 @@ public final class AppStore {
 
     func workspace(from snapshot: WorkspaceSnapshot) -> Workspace {
         Workspace(id: snapshot.id, name: snapshot.name, sessions: snapshot.sessions.map(session(from:)),
-                  isExpanded: !(snapshot.collapsed ?? false))
+                  isExpanded: !(snapshot.collapsed ?? false), root: snapshot.root)
     }
 
 }

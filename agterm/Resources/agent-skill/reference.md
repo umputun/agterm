@@ -112,6 +112,11 @@ All ten are read-only projections of GUI state.
 - `workspace rename <name> [--target] [--window W]`.
 - `workspace delete [--target] [--window W]` — keep-at-least-one; deleting the last workspace errors.
 - `workspace select [--target] [--window W]`.
+- `workspace root <dir|--clear> [--target] [--window W]` — set the workspace's root directory, or
+  `--clear`/`clear` to unset. When set, every new session created in that workspace opens in the root,
+  a hard override of the global new-session-directory setting; when unset, new sessions follow that
+  setting. A relative/`~` path is absolutized against the CLI's cwd. The read side is the `root` field on
+  each `tree` workspace node (omitted when unset). A non-existent root falls back at spawn time.
 - `workspace move --to up|down|top|bottom [--target] [--window W]` — reorder among siblings. Missing
   or invalid `--to` errors. Note: `--target active` resolves to the current workspace, which with no
   selected session falls back to the last workspace; address a specific workspace by id to step the

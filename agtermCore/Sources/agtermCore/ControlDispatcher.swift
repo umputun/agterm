@@ -22,6 +22,7 @@ public protocol ControlActions {
     func moveSessions(_ targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse
     func moveWorkspace(_ target: String?, window: String?, direction: ReorderDirection) -> ControlResponse
     func focusWorkspace(_ target: String?, window: String?, mode: String?) -> ControlResponse
+    func setWorkspaceRoot(_ target: String?, window: String?, path: String?) -> ControlResponse
     func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse
     func markSessionSeen(_ target: String?, window: String?) -> ControlResponse
     func setSessionStatus(_ target: String?, window: String?, update: ControlSessionStatusUpdate) -> ControlResponse
@@ -146,7 +147,7 @@ public struct ControlDispatcher {
                 .sessionText:
             return await dispatchSessionSurfaceCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete,
-                .workspaceMove, .workspaceFocus:
+                .workspaceMove, .workspaceFocus, .workspaceRoot:
             return dispatchWorkspaceCommand(request)
         case .quick, .fontInc, .fontDec, .fontReset, .keymapReload,
                 .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarExpand,
@@ -327,6 +328,11 @@ public struct ControlDispatcher {
             return actions.moveWorkspace(request.target, window: request.args?.window, direction: direction)
         case .workspaceFocus:
             return actions.focusWorkspace(request.target, window: request.args?.window, mode: request.args?.mode)
+        case .workspaceRoot:
+            // `clear`, an empty path, or a missing path unsets the root; anything else sets it verbatim.
+            let trimmed = request.args?.path?.trimmedOrNil
+            let path = trimmed == "clear" ? nil : trimmed
+            return actions.setWorkspaceRoot(request.target, window: request.args?.window, path: path)
         default:
             preconditionFailure("unexpected workspace command: \(request.cmd.rawValue)")
         }

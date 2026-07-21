@@ -19,6 +19,7 @@ public enum Command: String, Codable, Sendable {
     case sessionMove = "session.move"
     case workspaceMove = "workspace.move"
     case workspaceFocus = "workspace.focus"
+    case workspaceRoot = "workspace.root"
     case sessionType = "session.type"
     case sessionStatus = "session.status"
     case sessionFlag = "session.flag"
@@ -451,13 +452,18 @@ public struct ControlWorkspaceNode: Codable, Sendable, Equatable {
     /// SELECTED workspace): focus collapses the sidebar to a single workspace. The read side of the
     /// write-only `workspace.focus` — so a script can record which workspace is focused and restore it.
     public let focused: Bool?
+    /// The workspace's root directory (new sessions open there), omitted from the JSON when nil. The read
+    /// side of the write-only `workspace.root` — so a script can record a workspace's root and restore it.
+    public let root: String?
     public let sessions: [ControlSessionNode]
 
-    public init(id: String, name: String, active: Bool, focused: Bool? = nil, sessions: [ControlSessionNode]) {
+    public init(id: String, name: String, active: Bool, focused: Bool? = nil, root: String? = nil,
+                sessions: [ControlSessionNode]) {
         self.id = id
         self.name = name
         self.active = active
         self.focused = focused
+        self.root = root
         self.sessions = sessions
     }
 }

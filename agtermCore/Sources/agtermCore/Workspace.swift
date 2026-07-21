@@ -10,19 +10,25 @@ public struct Workspace: Identifiable {
     /// Whether the sidebar row is expanded (its session rows shown). Defaults true so a freshly created
     /// workspace opens; persisted per workspace so the collapse state survives a relaunch.
     public var isExpanded: Bool
+    /// The workspace's root directory: when set, every new session created in this workspace opens there
+    /// (a hard override of the global `AppSettings.newSessionDirectory`). nil (the default) falls through to
+    /// the global new-session-directory policy. Persisted per workspace.
+    public var root: String?
 
-    public init(name: String, sessions: [Session] = [], isExpanded: Bool = true) {
+    public init(name: String, sessions: [Session] = [], isExpanded: Bool = true, root: String? = nil) {
         id = UUID()
         self.name = name
         self.sessions = sessions
         self.isExpanded = isExpanded
+        self.root = root
     }
 
-    public init(id: UUID, name: String, sessions: [Session] = [], isExpanded: Bool = true) {
+    public init(id: UUID, name: String, sessions: [Session] = [], isExpanded: Bool = true, root: String? = nil) {
         self.id = id
         self.name = name
         self.sessions = sessions
         self.isExpanded = isExpanded
+        self.root = root
     }
 
     /// Total unseen-notification count across this workspace's sessions, for the badge on a

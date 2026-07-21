@@ -394,7 +394,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// nil/blank `currentSessionCwd`, or a nil/blank custom path all fall back to `home`: `home` → home;
     /// `currentSession` → `currentSessionCwd` (else home); `custom` → `newSessionCustomDirectory` (else
     /// home). Host-free so `AppActions.newSession()` and the tests share one resolution.
-    public func resolveNewSessionCwd(currentSessionCwd: String?, home: String) -> String {
+    public func resolveNewSessionCwd(workspaceRoot: String?, currentSessionCwd: String?, home: String) -> String {
+        // A workspace root (when set) is a HARD override of the global new-session-directory policy.
+        if let root = workspaceRoot, !root.isEmpty { return root }
         switch NewSessionDirectory(rawValue: newSessionDirectory ?? "") ?? .home {
         case .home:
             return home

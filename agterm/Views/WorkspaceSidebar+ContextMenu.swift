@@ -143,6 +143,16 @@ extension WorkspaceSidebar.Coordinator {
             focus.target = self
             focus.representedObject = node
             menu.addItem(focus)
+            let setRoot = NSMenuItem(title: "Set Root Directory…", action: #selector(menuSetWorkspaceRoot(_:)), keyEquivalent: "")
+            setRoot.target = self
+            setRoot.representedObject = node
+            menu.addItem(setRoot)
+            if store.workspaces.first(where: { $0.id == node.id })?.root != nil {
+                let clearRoot = NSMenuItem(title: "Clear Root Directory", action: #selector(menuClearWorkspaceRoot(_:)), keyEquivalent: "")
+                clearRoot.target = self
+                clearRoot.representedObject = node
+                menu.addItem(clearRoot)
+            }
             menu.addItem(.separator())
             let delete = NSMenuItem(title: "Delete Workspace", action: #selector(menuDeleteWorkspace(_:)), keyEquivalent: "")
             delete.target = self
@@ -210,7 +220,7 @@ extension WorkspaceSidebar.Coordinator {
         guard let node = sender.representedObject as? SidebarNode else { return }
         // resolve the cwd via the same new-session-directory setting as AppActions.newSession(), so the
         // workspace-row New Session honors it too (home / current session's cwd / a fixed custom dir).
-        addSession(toWorkspace: node.id, cwd: actions.resolvedNewSessionCwd())
+        addSession(toWorkspace: node.id, cwd: actions.resolvedNewSessionCwd(inWorkspace: node.id))
     }
 
     /// Inline "+" button on a workspace row — same action as the right-click "New Session" menu item.
@@ -223,7 +233,7 @@ extension WorkspaceSidebar.Coordinator {
         guard let outline = outlineView else { return }
         let row = outline.row(for: sender)
         guard row >= 0, let node = outline.item(atRow: row) as? SidebarNode, node.kind == .workspace else { return }
-        addSession(toWorkspace: node.id, cwd: actions.resolvedNewSessionCwd())
+        addSession(toWorkspace: node.id, cwd: actions.resolvedNewSessionCwd(inWorkspace: node.id))
     }
 
     @objc private func menuDeleteWorkspace(_ sender: NSMenuItem) {
@@ -234,6 +244,27 @@ extension WorkspaceSidebar.Coordinator {
     @objc private func menuFocusWorkspace(_ sender: NSMenuItem) {
         guard let node = sender.representedObject as? SidebarNode else { return }
         actions.focusWorkspace(node.id)
+    }
+
+    /// "Set Root Directory…": pick a folder that becomes the workspace's root (new sessions open there).
+    @objc private func menuSetWorkspaceRoot(_ sender: NSMenuItem) {
+        guard let node = sender.representedObject as? SidebarNode else { return }
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = DirectoryPanelDefaults.url(paths: store.workspaces.first(where: { $0.id == node.id })?.root
+            ?? store.activeSession?.focusedCwd)
+        panel.prompt = "Set Root"
+        panel.message = "Choose a root directory for this workspace"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        store.setWorkspaceRoot(node.id, path: url.path)
+    }
+
+    /// "Clear Root Directory": unset the workspace's root so new sessions follow the global setting again.
+    @objc private func menuClearWorkspaceRoot(_ sender: NSMenuItem) {
+        guard let node = sender.representedObject as? SidebarNode else { return }
+        store.setWorkspaceRoot(node.id, path: nil)
     }
 
     /// "Open Directory…": pick a folder and add a session rooted there.

@@ -1,4 +1,5 @@
 import ArgumentParser
+import Foundation
 import agtermCore
 
 // MARK: - workspace
@@ -6,7 +7,7 @@ import agtermCore
 struct Workspace: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Workspace commands.",
-        subcommands: [New.self, Rename.self, Delete.self, Select.self, Move.self, Focus.self]
+        subcommands: [New.self, Rename.self, Delete.self, Select.self, Move.self, Focus.self, Root.self]
     )
 
     struct New: RequestCommand {
@@ -76,6 +77,34 @@ struct Workspace: ParsableCommand {
 
         func makeRequest() throws -> ControlRequest {
             ControlRequest(cmd: .workspaceFocus, target: target.target, args: options.withWindow(ControlArgs(mode: mode)))
+        }
+    }
+
+    struct Root: RequestCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Set a workspace's root directory (new sessions open there), or clear it.")
+        @Argument(help: "A directory path, or `clear` to unset the root.") var dir: String?
+        @Flag(help: "Clear the workspace's root directory.") var clear = false
+        @OptionGroup var target: TargetOptions
+        @OptionGroup var options: ClientOptions
+
+        func validate() throws {
+            let hasDir = !(dir?.trimmingCharacters(in: .whitespaces).isEmpty ?? true)
+            guard clear || hasDir else {
+                throw ValidationError("provide a directory path, or --clear")
+            }
+        }
+
+        func makeRequest() throws -> ControlRequest {
+            var path: String?
+            if !clear, let raw = dir, raw != "clear" {
+                // absolutize a relative/~ path — the app resolves it in ITS own cwd, not the CLI's.
+                let expanded = (raw as NSString).expandingTildeInPath
+                let base = expanded.hasPrefix("/") ? expanded
+                    : FileManager.default.currentDirectoryPath + "/" + expanded
+                path = URL(fileURLWithPath: base).standardizedFileURL.path
+            }
+            return ControlRequest(cmd: .workspaceRoot, target: target.target, args: options.withWindow(ControlArgs(path: path)))
         }
     }
 }

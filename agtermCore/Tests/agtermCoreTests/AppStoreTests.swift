@@ -1447,6 +1447,19 @@ struct AppStoreTests {
         #expect(store.controlTree().workspaces.allSatisfy { $0.focused == nil })
     }
 
+    @Test func setWorkspaceRootPersistsAndReportsOnTree() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "proj")
+        func root() -> String? { store.controlTree().workspaces.first { $0.id == ws.id.uuidString }?.root }
+        #expect(root() == nil)
+        store.setWorkspaceRoot(ws.id, path: "/proj/root")
+        #expect(root() == "/proj/root")
+        store.setWorkspaceRoot(ws.id, path: nil) // clear
+        #expect(root() == nil)
+        store.setWorkspaceRoot(ws.id, path: "   ") // blank normalizes to nil
+        #expect(root() == nil)
+    }
+
     @Test func controlTreeReportsSidebarMode() {
         let store = makeStore()
         #expect(store.controlTree().sidebarMode == "tree") // default: the workspace tree
