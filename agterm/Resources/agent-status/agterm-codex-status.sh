@@ -4,7 +4,7 @@
 # Codex fires PermissionRequest before Auto Review decides whether a person must approve. Treating
 # that raw event as blocked therefore false-flags automatically reviewed tools. This hook keeps the
 # agent-specific workaround inside the installed hook package: one watcher per agterm pane reads the
-# live visible footer and reports blocked only after Codex displays an approval or question dialog.
+# live visible footer for dialogs, while Stop inspects the final assistant message for a trailing question.
 set -u
 
 [ -n "${AGTERM_SESSION_ID:-}" ] || exit 0
@@ -23,6 +23,12 @@ socket_args=()
 
 report_status() {
   "$status_wrapper" "$@" >/dev/null 2>&1 || true
+}
+
+assistant_asked_question() {
+  local message
+  message=$(/usr/bin/plutil -extract last_assistant_message raw -o - - 2>/dev/null) || return 1
+  [[ "$message" =~ \?[[:space:]]*$ ]]
 }
 
 read_visible_screen() {
@@ -120,7 +126,11 @@ case "$action" in
     ;;
   stop)
     stop_watcher
-    report_status completed --auto-reset
+    if assistant_asked_question; then
+      report_status blocked
+    else
+      report_status completed --auto-reset
+    fi
     ;;
 esac
 exit 0

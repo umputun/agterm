@@ -15,7 +15,8 @@ struct CodexStatusHookTests {
     }
 
     private func run(_ action: String, screen: String = "", screens: [String] = [], worker: Bool = false,
-                     supersedeTokenOnRead: Bool = false) throws -> (statusCalls: [String], controlCalls: [String], exit: Int32) {
+                     supersedeTokenOnRead: Bool = false,
+                     input: String = "") throws -> (statusCalls: [String], controlCalls: [String], exit: Int32) {
         let fm = FileManager.default
         let dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("agterm-codex-hook-\(UUID().uuidString)")
         try fm.createDirectory(at: dir, withIntermediateDirectories: true)
@@ -66,9 +67,13 @@ struct CodexStatusHookTests {
         ]
         if supersedeTokenOnRead { environment["SUPERSEDE_ON_READ"] = "1" }
         proc.environment = environment
+        let standardInput = Pipe()
+        proc.standardInput = standardInput
         proc.standardOutput = Pipe()
         proc.standardError = Pipe()
         try proc.run()
+        standardInput.fileHandleForWriting.write(Data(input.utf8))
+        try standardInput.fileHandleForWriting.close()
         proc.waitUntilExit()
 
         func lines(_ url: URL) -> [String] {
@@ -90,6 +95,21 @@ struct CodexStatusHookTests {
         let result = try run("permission-request")
         #expect(result.statusCalls.isEmpty)
         #expect(result.exit == 0)
+    }
+
+    @Test func stopReportsBlockedWhenAssistantMessageEndsInQuestionMark() throws {
+        let input = #"{"hook_event_name":"Stop","last_assistant_message":"Which branch? \n\n"}"#
+        #expect(try run("stop", input: input).statusCalls == ["blocked"])
+    }
+
+    @Test func stopReportsCompletedWhenQuestionMarkIsNotTrailing() throws {
+        let input = #"{"hook_event_name":"Stop","last_assistant_message":"Did it work?\nYes, it did."}"#
+        #expect(try run("stop", input: input).statusCalls == ["completed --auto-reset"])
+    }
+
+    @Test func stopReportsCompletedWhenAssistantMessageIsUnavailable() throws {
+        let input = #"{"hook_event_name":"Stop","last_assistant_message":null}"#
+        #expect(try run("stop", input: input).statusCalls == ["completed --auto-reset"])
     }
 
     @Test func hookIsSilentNoOpOutsideAgterm() throws {

@@ -113,15 +113,17 @@ paths:
   is the first hook afterwards), and merges SIX Codex lifecycle hooks into `~/.codex/config.toml` with a
   `.bak`.
   Those six events call the dedicated `agterm-codex-status.sh` adapter with lifecycle actions.
-  The adapter maps SessionStart to `idle`, UserPromptSubmit/PreToolUse/PostToolUse to `active --blink`,
-  and Stop to `completed --auto-reset` through the generic wrapper.
+  The adapter maps SessionStart to `idle` and UserPromptSubmit/PreToolUse/PostToolUse to `active --blink`.
+  On Stop it reads Codex's final assistant message: ignoring trailing whitespace, a message ending in `?`
+  maps to `blocked`; every other message maps to `completed --auto-reset` through the generic wrapper.
   `PermissionRequest` is only a candidate signal because Codex fires it before Auto Review decides whether
   a person is needed.
   A per-session/pane watcher reads the visible terminal footer through `agtermctl session text` and reports
   `blocked` only after a real approval or structured-question dialog appears.
   Automatic approvals and denials never become `blocked`.
-  This replaces a retired `codex-notify.sh` that keyword-matched the turn's final message and misfired both
-  ways (issue #193; the merge also strips the old `notify = [...codex-notify.sh...]` line).
+  This replaces a retired `codex-notify.sh` that broadly keyword-matched the turn's final message and
+  misfired both ways (issue #193; the merge also strips the old
+  `notify = [...codex-notify.sh...]` line).
   The Codex merge PARSES the config with `TOMLDecoder` (a pure-Swift, spec-compliant parser — the one
   dependency `agtermCore` links besides swift-argument-parser) to decide the outcome
   (`AgentHooksInstall.CodexMergeOutcome`): a marker block carrying an older agterm wrapper is refreshed
