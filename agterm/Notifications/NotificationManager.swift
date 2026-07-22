@@ -71,6 +71,9 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         // strict first-responder check: suppress only when you are actually typing in this pane.
         let firingIsFocused = surface === (NSApp.keyWindow?.firstResponder as? GhosttySurfaceView)
         guard TerminalNotification.shouldDeliver(firingIsFocused: firingIsFocused, appActive: NSApp.isActive) else { return }
+        guard let effectiveTitle = library?.store(forSession: session.id)?.recordNotificationEvent(
+            forSession: session.id, title: title, body: body
+        ) else { return }
 
         // the badge always tracks the unseen notification; the macOS banner is gated by the toggle.
         session.unseenCount += 1
@@ -78,7 +81,7 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         guard bannersEnabled else { return }
 
         let content = UNMutableNotificationContent()
-        content.title = title.isEmpty ? session.displayName : title
+        content.title = effectiveTitle
         content.body = body
         content.sound = notificationSound
         // the request identifier is the identity (`<windowID>:<sessionID>:<pane>`): it both coalesces
@@ -97,11 +100,14 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     @discardableResult
     func send(toSession session: Session, title: String, body: String) -> Bool {
         guard let windowID = library?.windowID(forSession: session.id) else { return false }
+        guard let effectiveTitle = library?.store(forSession: session.id)?.recordNotificationEvent(
+            forSession: session.id, title: title, body: body
+        ) else { return false }
         session.unseenCount += 1
         bounceDock()
         guard bannersEnabled else { return true }
         let content = UNMutableNotificationContent()
-        content.title = title.isEmpty ? session.displayName : title
+        content.title = effectiveTitle
         content.body = body
         content.sound = notificationSound
         let identity = TerminalNotification.identity(windowID: windowID, sessionID: session.id, pane: .main)

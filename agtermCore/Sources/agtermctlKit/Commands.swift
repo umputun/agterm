@@ -90,7 +90,7 @@ public struct Agtermctl: ParsableCommand {
     public static let configuration = CommandConfiguration(
         commandName: "agtermctl",
         abstract: "Drive agterm over its control socket.",
-        subcommands: [Tree.self, Workspace.self, Session.self, Surface.self, Dashboard.self, Window.self, Quick.self,
+        subcommands: [Tree.self, Events.self, Workspace.self, Session.self, Surface.self, Dashboard.self, Window.self, Quick.self,
                       Sidebar.self, Notify.self, Font.self, Keymap.self, Config.self, Theme.self, Restore.self]
     )
 

@@ -10,14 +10,15 @@ description: >
   select, close, resize, move); change font size; or reload and edit the keymap and the agterm-scoped
   ghostty config. Also covers the
   window/workspace/session addressing model and the AGTERM_* environment a spawned shell sees, plus
-  diagnosing problems (keymap editor, custom actions, logs) and filing a bug as a GitHub issue or a
+  subscribe to status, notification, session lifecycle, and tree-change events; diagnose problems
+  (keymap editor, custom actions, logs); and file a bug as a GitHub issue or a
   feature request / question as a GitHub Discussion.
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.scratch, session.focus, session.resize, surface.zoom, dashboard, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
   session.flag, session.seen, session.reveal, session.duplicate, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
-  theme.set, theme.list, select theme, edit keymap, show an image, display an image inline, show-image,
+  theme.set, theme.list, events, events.read, event subscription, select theme, edit keymap, show an image, display an image inline, show-image,
   AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: troubleshoot agterm,
   keymap editor won't open, custom action / custom command not working, agterm logs, file an agterm
   bug, report an agterm issue, open an agterm discussion / feature request.
@@ -30,8 +31,9 @@ allowed-tools: Bash(agtermctl *)
 
 agterm is a native macOS terminal. It exposes a programmatic control channel over a local unix
 socket, driven by the companion CLI `agtermctl`. Use it to build and steer terminal layouts, run
-programs in overlays, type into sessions, and notify the user in the exact session you are working
-in. Fire-and-forget commands only: there is no terminal-output streaming and no event subscription.
+programs in overlays, type into sessions, notify the user in the exact session you are working in,
+and subscribe to control events. Events cover status, notifications, session lifecycle, and
+structural tree changes. They do not stream terminal output; use `session text` to read a buffer.
 
 ## Am I inside agterm?
 
@@ -71,9 +73,10 @@ is not on PATH, the user can install it, or you invoke it by absolute path.
 - Add `--json` to any command to get the raw JSON response (machine-readable). Without it, ordinary
   mutations print `ok`, batch close/move prints the affected session count, and `tree`/`list` print a
   human listing.
-- One request per invocation. Mutating commands return the affected/new id; batch session mutations return
-  the number actually changed. Create commands (`session new`, `session duplicate`, `workspace new`, `window new`)
-  print the new id.
+- Commands other than `events` make one request per invocation. `events` polls with a fresh connection
+  for each request. Mutating commands return the affected/new id; batch session mutations return the
+  number actually changed. Create commands (`session new`, `session duplicate`, `workspace new`,
+  `window new`) print the new id.
 
 ## The model
 
@@ -138,7 +141,7 @@ prompt concatenates with yours, and the program starts on the merged line. (`--n
 focus, but the newline and shared-buffer hazards of `type`-as-launcher remain — `--command` is still the
 rule.) After `--command`, confirm in `tree --json` that the new node's `foreground` shows your program running, not a bare shell prompt.
 
-## Command summary (64 commands)
+## Command summary (65 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -173,6 +176,13 @@ the open dashboard shows, in grid order — `<session-id>:left` for a primary pa
 a split pane, so a split session appears as both), `dashboardHighlighted` (the highlighted cell's pane ref —
 the one Enter jumps into, focusing that exact pane), `dashboardFontSize` (the absolute font size in points
 applied to the cells, omitted when untouched), and `dashboardFontMode` (`auto`|`fixed`|`untouched`).
+
+**events**: continuously print control events, subscribing from the current tail when no cursor is
+given. Use `--json` for one bare event object per line; filter with repeatable or comma-separated
+`--kind status|notify|session.created|session.closed|tree.changed`; resume with paired
+`--run RUN --after SEQ`; and set page size with `--limit 1...1000`. The app retains 4,096 events for
+one process run. Cursor run changes, expiry, and ahead-of-tail errors are fatal and are never silently
+rebaselined. There is no terminal-output event stream.
 
 **workspace** — `new [name] [--collapsed]` (`--collapsed` creates it closed in the sidebar so you can fill
 it with `session new --no-select` without it opening) · `rename <name>` · `delete` · `select` ·

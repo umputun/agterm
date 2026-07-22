@@ -1,5 +1,18 @@
 import Foundation
 
+/// Host-facing `events.read` options after dispatcher validation and normalization.
+public struct ControlEventReadOptions: Equatable, Sendable {
+    public let cursor: ControlEventCursor?
+    public let kinds: Set<ControlEventKind>?
+    public let limit: Int
+
+    public init(cursor: ControlEventCursor?, kinds: Set<ControlEventKind>?, limit: Int) {
+        self.cursor = cursor
+        self.kinds = kinds
+        self.limit = limit
+    }
+}
+
 /// Parsed binary control mode with the shared default/toggle semantics used by mode-bearing commands.
 public enum ControlToggleMode: Equatable, Sendable {
     case on

@@ -13,6 +13,10 @@ extension ControlServer {
         }
     }
 
+    func readEvents(_ options: ControlEventReadOptions) -> ControlResponse {
+        library.readEvents(options)
+    }
+
     // MARK: - Sidebar
 
     /// Show / hide / toggle the frontmost window's sidebar (the custom split owns visibility, so there's

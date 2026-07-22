@@ -449,6 +449,53 @@ agtermctl notify "build finished" --title "CI"                 # active session
 agtermctl notify "tests failed" --target "$sid"               # a specific session
 ```
 
+## Wait for a session status
+
+Subscribe before starting the work, then select the first matching status event. The initial read
+subscribes from now, so an old completed state is not mistaken for a new completion.
+
+```bash
+export target="$AGTERM_SESSION_ID"
+agtermctl events --json --kind status |
+  jq --unbuffered -e 'select(.session == env.target and .payload.status == "completed")' |
+  head -n 1
+```
+
+The pipeline ends after the match. A transport or cursor failure makes `agtermctl events` exit
+non-zero; preserve pipeline status in automation that must distinguish a match from a failed stream.
+
+## Relay accepted notifications
+
+The notification event exists even when desktop banners are disabled. Forward each accepted event as
+NDJSON to another process without parsing human output:
+
+```bash
+agtermctl events --json --kind notify |
+  jq --unbuffered -c '{at: .ts, window, workspace, session, title: .payload.title, body: .payload.body}' |
+  ./notification-relay
+```
+
+Foreground OSC notifications suppressed by agterm do not appear in this stream.
+
+## Clean up after sessions close
+
+Lifecycle events follow visible tree membership. A soft close emits `session.closed` immediately, and
+an undo later emits `session.created` for the same id. Delay irreversible cleanup if undo matters.
+
+```bash
+agtermctl events --json --kind session.closed |
+  jq --unbuffered -r '.session' |
+  while IFS= read -r sid; do
+    ./release-session-resources "$sid"
+  done
+```
+
+For resumable consumers, save the `run` and `next` fields from raw `events.read` batch responses and
+restart with `agtermctl events --run "$run" --after "$next" --json`. The streaming JSON lines are bare
+events and do not include the run id. If the command reports `event run changed`, `event cursor
+expired`, or `event cursor is ahead of the current sequence`, stop loudly. Rebootstrap only after the
+caller accepts that events may have been lost; never replace the cursor automatically.
+
 ## Agent status glyph
 
 ```bash

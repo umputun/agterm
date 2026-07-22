@@ -56,6 +56,7 @@ extension AppStore {
         let workspace = workspaces[location.workspaceIndex]
         let wasActive = selectedSessionID == sessionID
         let session = workspaces[location.workspaceIndex].sessions.remove(at: location.sessionIndex)
+        emitSessionClosed(session, workspace: workspace.id)
         // undo reinserts THIS object, so an override payload armed at bootstrap and never consumed would
         // survive the round trip and fire when the restored session's surface is built. Drop it here; the
         // persisted pin is untouched and still fires on the next launch.
@@ -129,6 +130,7 @@ extension AppStore {
             recordRecentClosedSession(close.session, workspaceID: close.workspaceID, workspaceName: close.workspaceName,
                                       workspaceIndex: close.workspaceIndex, sessionIndex: close.sessionIndex,
                                       id: close.recentID)
+            emitSessionClosed(close.session, workspace: close.workspaceID)
         }
         if removingActive {
             let activeClose = previousSelection.flatMap { id in closes.first { $0.session.id == id } }
@@ -163,7 +165,10 @@ extension AppStore {
     @discardableResult
     public func softRemoveWorkspace(_ workspaceID: UUID, grace: TimeInterval = AppStore.pendingCloseGraceInterval) -> Bool {
         guard canRemoveWorkspace, let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return false }
-        let workspace = foldingPendingCloses(of: workspaces.remove(at: index))
+        let visibleWorkspace = workspaces.remove(at: index)
+        for session in visibleWorkspace.sessions { emitSessionClosed(session, workspace: visibleWorkspace.id) }
+        if visibleWorkspace.sessions.isEmpty { scheduleTreeChanged() }
+        let workspace = foldingPendingCloses(of: visibleWorkspace)
         for session in workspace.sessions { session.clearPendingRestoreOverrides() } // same undo hazard
         let removingActive = selectedSessionID.map { id in workspace.sessions.contains { $0.id == id } } ?? false
         let restoringSelection = removingActive ? selectedSessionID : nil
@@ -329,6 +334,7 @@ extension AppStore {
         }
         let insertAt = max(0, min(close.sessionIndex, workspaces[workspaceIndex].sessions.count))
         workspaces[workspaceIndex].sessions.insert(close.session, at: insertAt)
+        emitSessionCreated(close.session, workspace: close.workspaceID)
     }
 
     private func restorePendingSessions(_ close: PendingSessionsClose, selecting requestedSessionID: UUID?) {
@@ -361,10 +367,14 @@ extension AppStore {
         // session held by this record cannot already be live elsewhere.
         if let existing = workspaces.firstIndex(where: { $0.id == close.workspace.id }) {
             let live = Set(workspaces.flatMap(\.sessions).map(\.id))
-            workspaces[existing].sessions.append(contentsOf: close.workspace.sessions.filter { !live.contains($0.id) })
+            let restored = close.workspace.sessions.filter { !live.contains($0.id) }
+            workspaces[existing].sessions.append(contentsOf: restored)
+            for session in restored { emitSessionCreated(session, workspace: workspaces[existing].id) }
         } else {
             let insertAt = max(0, min(close.workspaceIndex, workspaces.count))
             workspaces.insert(close.workspace, at: insertAt)
+            for session in close.workspace.sessions { emitSessionCreated(session, workspace: close.workspace.id) }
+            if close.workspace.sessions.isEmpty { scheduleTreeChanged() }
         }
         guard let target = close.selectedSessionID ?? close.workspace.sessions.first?.id else { return }
         selectedSessionID = target
