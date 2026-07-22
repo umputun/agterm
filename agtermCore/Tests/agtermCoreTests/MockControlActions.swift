@@ -10,6 +10,7 @@ import Testing
 final class MockControlActions: ControlActions {
     enum Call: Equatable {
         case tree(window: String?)
+        case eventsRead(ControlEventReadOptions)
         case sessionNew(ControlSessionCreateOptions)
         case sessionDuplicate(target: String?, window: String?)
         case sessionSelect(target: String?, window: String?)
@@ -76,6 +77,7 @@ final class MockControlActions: ControlActions {
 
     var calls: [Call] = []
     var nextTreeResponse = ControlResponse(ok: false, error: "tree not stubbed")
+    var nextEventsReadResponse = ControlResponse(ok: false, error: "events.read not stubbed")
     var nextSessionNewResponse = ControlResponse(ok: true)
     var nextSessionDuplicateResponse = ControlResponse(ok: true)
     var nextSidebarVisibilityResponse = ControlResponse(ok: true)
@@ -120,6 +122,11 @@ final class MockControlActions: ControlActions {
     func controlTree(window: String?) -> ControlResponse {
         calls.append(.tree(window: window))
         return nextTreeResponse
+    }
+
+    func readEvents(_ options: ControlEventReadOptions) -> ControlResponse {
+        calls.append(.eventsRead(options))
+        return nextEventsReadResponse
     }
 
     func createSession(_ options: ControlSessionCreateOptions) -> ControlResponse {

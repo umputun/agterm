@@ -15,6 +15,7 @@ extension AppStore {
     /// triggers a `save()`.
     public func setAgentIndicator(_ indicator: AgentIndicator, forSession id: UUID) {
         guard let session = session(withID: id) else { return }
+        let previous = session.agentIndicator
         let wasBlocked = session.agentIndicator.status == .blocked
         var indicator = indicator
         // normalize a `.right` tag to `.left` when the session has NO split. A promoted survivor's
@@ -38,6 +39,19 @@ extension AppStore {
         // this session, so it can pull the user here once more; a re-asserted blocked-over-blocked is not a
         // new episode and stays muted (see Session.autoFollowConsumed).
         if !wasBlocked, indicator.status == .blocked { session.autoFollowConsumed = false }
+        guard previous != indicator else { return }
+        emitControlEvent(
+            .status,
+            workspace: workspace(forSession: id)?.id,
+            session: id,
+            payload: ControlEventPayload(
+                name: session.displayName,
+                status: indicator.status.rawValue,
+                pane: indicator.statusPane?.rawValue,
+                blink: indicator.blink,
+                color: indicator.color
+            )
+        )
     }
 
     /// The window-wide non-idle sessions, the single source of truth for the titlebar attention icon

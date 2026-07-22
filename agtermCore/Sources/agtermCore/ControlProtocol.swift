@@ -5,6 +5,7 @@ import Foundation
 /// turns into an "unknown command" error rather than a crash.
 public enum Command: String, Codable, Sendable {
     case tree
+    case eventsRead = "events.read"
     case workspaceNew = "workspace.new"
     case workspaceRename = "workspace.rename"
     case workspaceDelete = "workspace.delete"
@@ -173,6 +174,13 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var after: String?
     /// Anchor session to place a session right BEFORE, the mirror of `after` (mutually exclusive with it).
     public var before: String?
+    /// App-run UUID paired with `after` for `events.read`. Both fields are omitted for a bootstrap read.
+    public var run: String?
+    /// Raw event-kind filters for `events.read`. Validation deliberately happens in the dispatcher so
+    /// unknown future kinds produce a normal control error rather than making the request undecodable.
+    public var kinds: [String]?
+    /// Maximum matching events returned by `events.read`; omitted uses the dispatcher default.
+    public var limit: Int?
     /// The desktop-notification title for `notify` (optional; defaults to the target session's name).
     public var title: String?
     /// The desktop-notification body for `notify` (required).
@@ -246,7 +254,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
                 follow: Bool? = nil, window: String? = nil,
                 pane: String? = nil, paneID: String? = nil, to: String? = nil,
-                after: String? = nil, before: String? = nil,
+                after: String? = nil, before: String? = nil, run: String? = nil,
+                kinds: [String]? = nil, limit: Int? = nil,
                 title: String? = nil, body: String? = nil,
                 width: Int? = nil, height: Int? = nil, x: Int? = nil, y: Int? = nil, display: Int? = nil,
                 status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil, sound: String? = nil,
@@ -277,6 +286,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.to = to
         self.after = after
         self.before = before
+        self.run = run
+        self.kinds = kinds
+        self.limit = limit
         self.title = title
         self.body = body
         self.width = width
@@ -675,12 +687,15 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var sync: Bool?
     public var light: String?
     public var dark: String?
+    /// A page from the app-run event ring, present for `events.read` success and cursor errors.
+    public var events: ControlEventBatch?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
                 affected: Int? = nil,
                 theme: String? = nil, themes: [String]? = nil, ratio: Double? = nil,
-                sync: Bool? = nil, light: String? = nil, dark: String? = nil) {
+                sync: Bool? = nil, light: String? = nil, dark: String? = nil,
+                events: ControlEventBatch? = nil) {
         self.id = id
         self.tree = tree
         self.text = text
@@ -694,6 +709,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
         self.sync = sync
         self.light = light
         self.dark = dark
+        self.events = events
     }
 }
 

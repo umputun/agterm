@@ -93,6 +93,10 @@ public final class WindowLibrary {
     /// the `windows/` subdirectory.
     @ObservationIgnored private let directory: URL
     @ObservationIgnored private let recentClosedStore: RecentClosedStore
+    /// One bounded run-identified ring shared by every window store for this library/app lifetime.
+    @ObservationIgnored private let controlEventRing: ControlEventRing
+    @ObservationIgnored private var treeEventDebouncers: [UUID: Debouncer]
+    @ObservationIgnored private var isBootstrapping = true
 
     /// Set once the launch reopen-all has run, so the scene `.task` (which fires per window) drives
     /// it exactly once. `@ObservationIgnored`: a launch-flow latch, not view state.
@@ -123,14 +127,18 @@ public final class WindowLibrary {
 
     /// Creates the library rooted at `directory`, running migration/recovery so the resulting
     /// window set is always valid and non-empty.
-    public init(directory: URL = PersistenceStore.defaultDirectory) {
+    public init(directory: URL = PersistenceStore.defaultDirectory,
+                controlEventRing: ControlEventRing? = nil) {
         self.directory = directory
         self.recentClosedStore = RecentClosedStore(directory: directory)
+        self.controlEventRing = controlEventRing ?? ControlEventRing()
+        self.treeEventDebouncers = [:]
         self.stores = [:]
         self.windows = []
         self.recentClosedItems = recentClosedStore.load()
         self.frontmostWindowID = nil
         bootstrap()
+        isBootstrapping = false
     }
 
     // MARK: - Lookup
@@ -184,6 +192,22 @@ public final class WindowLibrary {
                                      geometry: geometry($0.id),
                                      fullscreen: live?.fullscreen, zoomed: live?.zoomed)
         }
+    }
+
+    /// Reads the app-wide ring and maps both pages and cursor failures onto the stable control response.
+    public func readEvents(_ options: ControlEventReadOptions) -> ControlResponse {
+        switch controlEventRing.read(cursor: options.cursor, kinds: options.kinds, limit: options.limit) {
+        case .batch(let batch):
+            return ControlResponse(ok: true, result: ControlResult(events: batch))
+        case .failure(let error, let anchor):
+            return ControlResponse(ok: false, result: ControlResult(events: anchor), error: error.rawValue)
+        }
+    }
+
+    /// Test/quit seam: synchronously fires every pending per-window structural invalidation,
+    /// including one queued for a window that has just been removed from the catalog.
+    func flushTreeEvents() {
+        for debouncer in treeEventDebouncers.values { debouncer.flush() }
     }
 
     /// Resolve a control window target against the library's ordered window set. All known windows are
@@ -329,7 +353,7 @@ public final class WindowLibrary {
     @discardableResult
     public func newWindow(name: String? = nil) -> WindowInfo {
         let info = WindowInfo(name: name?.trimmedOrNil ?? defaultWindowName)
-        let store = makeStore(persistence: persistenceStore(for: info.id))
+        let store = makeStore(for: info.id, persistence: persistenceStore(for: info.id))
         let workspace = store.addWorkspace(name: "workspace 1")
         store.addSession(toWorkspace: workspace.id, cwd: FileManager.default.homeDirectoryForCurrentUser.path)
         windows.append(info)
@@ -356,9 +380,15 @@ public final class WindowLibrary {
         guard windows.contains(where: { $0.id == id }) else { return nil }
         if let existing = stores[id] { return existing }
         let persistence = persistenceStore(for: id)
-        let store = makeStore(persistence: persistence)
+        let store = makeStore(for: id, persistence: persistence)
         store.restore(from: persistence.load(), launchRestore: launchRestore)
         stores[id] = store
+        if !launchRestore {
+            for workspace in store.workspaces {
+                for session in workspace.sessions { store.emitSessionCreated(session, workspace: workspace.id) }
+            }
+            store.scheduleTreeChanged()
+        }
         saveIndex()
         return store
     }
@@ -395,7 +425,11 @@ public final class WindowLibrary {
         // cancel any queued claim for this id so a window still attaching can't re-open it after a
         // close that raced its registration (window.new immediately followed by window.close).
         pendingClaim.removeAll { $0 == id }
-        guard stores[id] != nil else { return }
+        guard let store = stores[id] else { return }
+        for workspace in store.workspaces {
+            for session in workspace.sessions { store.emitSessionClosed(session, workspace: workspace.id) }
+        }
+        store.scheduleTreeChanged()
         stores[id] = nil
         if frontmostWindowID == id { frontmostWindowID = activeWindowID }
         saveIndex()
@@ -405,7 +439,9 @@ public final class WindowLibrary {
     /// An empty/whitespace-only name is ignored. Persists the index.
     public func renameWindow(_ id: UUID, to name: String) {
         guard let trimmed = name.trimmedOrNil, let index = windows.firstIndex(where: { $0.id == id }) else { return }
+        guard windows[index].name != trimmed else { return }
         windows[index].name = trimmed
+        scheduleTreeChanged(for: id)
         saveIndex()
     }
 
@@ -418,6 +454,12 @@ public final class WindowLibrary {
     /// `frontmostWindowID` if it pointed at the removed window.
     public func removeWindow(_ id: UUID) {
         guard canRemoveWindow, let index = windows.firstIndex(where: { $0.id == id }) else { return }
+        if let store = stores[id] {
+            for workspace in store.workspaces {
+                for session in workspace.sessions { store.emitSessionClosed(session, workspace: workspace.id) }
+            }
+        }
+        scheduleTreeChanged(for: id)
         // cancel the store's pending debounced save BEFORE deleting the file — a save scheduled by a
         // just-before-delete selectSession/setFontSize captures the store weakly and fires ~0.3 s out;
         // since the delete-path willClose teardown skips its own save() (the window is no longer open),
@@ -587,7 +629,7 @@ public final class WindowLibrary {
         guard !snapshot.workspaces.isEmpty else { return false }
         // first window, so `defaultWindowName` yields "window 1" (windows is empty at this point).
         let info = WindowInfo(name: defaultWindowName)
-        let store = makeStore(persistence: persistenceStore(for: info.id))
+        let store = makeStore(for: info.id, persistence: persistenceStore(for: info.id))
         store.restore(from: snapshot, launchRestore: true)
         store.save()
         windows = [info]
@@ -609,9 +651,34 @@ public final class WindowLibrary {
         PersistenceStore(directory: windowsDirectory, fileName: "\(id.uuidString).json")
     }
 
-    private func makeStore(persistence: PersistenceStore) -> AppStore {
-        AppStore(persistence: persistence, recentClosedStore: recentClosedStore) { [weak self] in
-            self?.refreshRecentClosedItems()
+    private func makeStore(for windowID: UUID, persistence: PersistenceStore) -> AppStore {
+        AppStore(
+            persistence: persistence,
+            recentClosedStore: recentClosedStore,
+            recentClosedDidChange: { [weak self] in self?.refreshRecentClosedItems() },
+            controlEventSink: { [weak self] draft in
+                guard let self else { return }
+                guard !self.isBootstrapping else { return }
+                if draft.kind == .treeChanged {
+                    self.scheduleTreeChanged(for: windowID)
+                    return
+                }
+                self.controlEventRing.append(ControlEventDraft(
+                    kind: draft.kind,
+                    window: windowID.uuidString,
+                    workspace: draft.workspace,
+                    session: draft.session,
+                    payload: draft.payload
+                ))
+            }
+        )
+    }
+
+    private func scheduleTreeChanged(for windowID: UUID) {
+        let debouncer = treeEventDebouncers[windowID] ?? Debouncer()
+        treeEventDebouncers[windowID] = debouncer
+        debouncer.schedule(after: 0.1) { [weak self] in
+            self?.controlEventRing.append(ControlEventDraft(kind: .treeChanged, window: windowID.uuidString))
         }
     }
 

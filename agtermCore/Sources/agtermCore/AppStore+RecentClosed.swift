@@ -18,6 +18,7 @@ extension AppStore {
             let session = session(from: recent.snapshot)
             let insertAt = max(0, min(recent.sessionIndex, workspaces[index].sessions.count))
             workspaces[index].sessions.insert(session, at: insertAt)
+            emitSessionCreated(session, workspace: workspaces[index].id)
             selectedSessionID = session.id
             replaceSidebarSelection(with: selectedSessionID)
             autoUnfocusIfOutsideFocus(selectedSessionID)
@@ -35,6 +36,8 @@ extension AppStore {
             // Persistent Open Recent appends like most editors' recent-project flow:
             // reopening brings the workspace back without reshuffling current workspaces.
             workspaces.append(workspace)
+            for session in workspace.sessions { emitSessionCreated(session, workspace: workspace.id) }
+            if workspace.sessions.isEmpty { scheduleTreeChanged() }
             selectedSessionID = recent.selectedSessionID.flatMap { sessionID in
                 workspace.sessions.contains { $0.id == sessionID } ? sessionID : nil
             } ?? workspace.sessions.first?.id
@@ -75,6 +78,7 @@ extension AppStore {
             let taken = Set(workspaces.flatMap(\.sessions).map(\.id)).union(pendingHeldSessionIDs())
             let missing = recent.snapshot.sessions.filter { !taken.contains($0.id) }.map { session(from: $0) }
             workspaces[index].sessions.append(contentsOf: missing)
+            for session in missing { emitSessionCreated(session, workspace: workspaces[index].id) }
             let target = recent.selectedSessionID.flatMap { id in
                 workspaces[index].sessions.contains { $0.id == id } ? id : nil
             } ?? workspaces[index].sessions.first?.id

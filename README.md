@@ -179,11 +179,11 @@ The theme picker (View ▸ Select Theme…, or the action palette) previews each
 
 ## Scripting agterm
 
-`agterm` can be driven from a script over a local unix-domain socket through a companion CLI, `agtermctl`. This is for personal scripting — fire-and-forget commands that manage workspaces and sessions, inject text, and invoke control actions. There is no terminal-output streaming and no event subscription.
+`agterm` can be driven from a script over a local unix-domain socket through a companion CLI, `agtermctl`. This is for personal scripting: commands manage workspaces and sessions, inject text, invoke control actions, and subscribe to control events. Terminal output is not streamed; use `session text` when a script needs to read a terminal buffer.
 
 To open a terminal at a directory without the CLI, `open -a agterm <path>` — or right-click a folder in Finder and choose **Open With ▸ agterm**. agterm adds a session in that directory to the last-active window. This works when agterm is already running (its usual state); if it isn't, launch agterm first, then run the command. The socket equivalent, and the way to place the session precisely, is `agtermctl session new --cwd <path>`.
 
-The sections below cover the common cases. All 64 commands, with every argument, return value, and error, are documented in the **[Command reference](https://agterm.com/commands)**.
+The sections below cover the common cases. All 65 commands, with every argument, return value, and error, are documented in the **[Command reference](https://agterm.com/commands)**.
 
 The app bundles `agtermctl` inside `agterm.app`. The easiest way to put it on your PATH is **Help ▸ Install Command Line Tool…**, which symlinks the bundled binary into `/usr/local/bin` (the first entry in macOS's default PATH). When that directory is user-writable it installs silently; otherwise it asks once for an administrator password.
 
@@ -197,6 +197,22 @@ cd agtermCore && swift build -c release
 ```
 
 Each command targets a session or workspace by its UUID, a unique prefix of that UUID (git-style), or the keyword `active` (the selected session / current workspace). `--target` defaults to `active`, so the current one rarely needs to be named. Mutating commands normally print the affected id; batch `session close` and `session move` accept repeated `--target` options and print the number of sessions actually changed. `tree` prints the workspace and session tree. Add `--json` for the raw response, or `--socket PATH` to override the socket path. The exit code is zero on success, non-zero on error.
+
+### Control events
+
+`agtermctl events` continuously prints app control events. It subscribes from the current tail, so events that happened before the command started are not replayed. Human output is concise; `--json` writes one bare JSON event per line and flushes it promptly for pipelines:
+
+```sh
+agtermctl events
+agtermctl events --json --kind status --kind notify
+agtermctl events --json --kind session.created,session.closed --limit 250
+```
+
+The event kinds are `status`, `notify`, `session.created`, `session.closed`, and `tree.changed`. Every event has an app-wide `seq`, a Unix `ts`, its `kind`, applicable `window`/`workspace`/`session` ids, and a kind-specific `payload`. Status payloads carry the session name, normalized status including explicit `idle` clears, a `blink` boolean, and optional pane and color fields. Notification payloads carry the effective title and body. Session lifecycle payloads carry the session name. `tree.changed` is a 100 ms coalesced signal that a window's workspace/session names, membership, or ordering changed; read `tree --json` for the new snapshot.
+
+The app retains the latest 4,096 events for its current process run. A raw `events.read` request with no cursor returns an empty batch whose `run` and `next` fields anchor a subscribe-from-now cursor. Resume with the pair using `agtermctl events --run RUN --after NEXT`; both options are required together. `--kind` may be repeated or comma-separated, `--limit` defaults to 100 and accepts 1 through 1,000, and filtered reads still advance the global cursor past nonmatching events. The streaming CLI polls immediately while draining events and waits 250 ms only after an empty page.
+
+The `--json` stream contains bare event objects, not the batch envelope, so a client that needs restart-safe resume must save `run` and `next` from raw `events.read` responses. A changed app run, expired cursor, or cursor ahead of the current sequence is a hard error with the current anchor in the raw response. `agtermctl events` exits non-zero for these cursor errors, server errors, or a missing app/socket; it never silently starts over. Stop a healthy stream with the usual SIGINT or SIGTERM behavior.
 
 `--workspace`/`--target` take an id, a unique id prefix, or `active` — never a name. (`session new` also accepts `--workspace-name <name>` to target a workspace by its sidebar label, plus `--create-workspace` to make it when none matches — the two are mutually exclusive with `--workspace`.) To create a workspace and then open a session in it, capture the printed id:
 

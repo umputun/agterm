@@ -14,6 +14,24 @@ import agtermCore
 // test's output lands in the other's pipe). serial execution keeps the redirect exclusive.
 @Suite(.serialized)
 struct SocketClientTests {
+    @Test func consecutiveEventReadsUseIndependentOneShotConnections() throws {
+        let run = UUID(uuidString: "CBB5E3D0-7A9B-4C96-9EA2-18B14380DDB1")!
+        let script = EventReadScript(run: run)
+        let server = ScriptedStubServer(responder: script.respond)
+        try server.start()
+        defer { server.stop() }
+        let client = SocketClient(path: server.path)
+
+        let first = try client.send(ControlRequest(cmd: .eventsRead))
+        let anchor = try #require(first.result?.events)
+        let second = try client.send(ControlRequest(
+            cmd: .eventsRead, args: ControlArgs(after: String(anchor.next), run: anchor.run.uuidString)
+        ))
+
+        #expect(second.result?.events?.next == 8)
+        #expect(script.requests().map { $0.args?.after } == [nil, "7"])
+    }
+
     @Test func roundTripOkResponse() throws {
         let canned = ControlResponse(ok: true, result: ControlResult(id: "9f3c"))
         let server = StubServer(response: canned)
@@ -327,6 +345,25 @@ struct SocketClientTests {
         #expect(lines.contains("* Builtin Light"))
         #expect(lines.contains("  Nord"))
         #expect(lines.contains("  default ghostty")) // unmarked while syncing
+    }
+}
+
+private final class EventReadScript: @unchecked Sendable {
+    private let lock = NSLock()
+    private var seen: [ControlRequest] = []
+    private let run: UUID
+
+    init(run: UUID) { self.run = run }
+
+    func respond(_ request: ControlRequest) -> ControlResponse {
+        lock.lock(); seen.append(request); let count = seen.count; lock.unlock()
+        let next: UInt64 = count == 1 ? 7 : 8
+        return ControlResponse(ok: true, result: ControlResult(events: ControlEventBatch(run: run, next: next, items: [])))
+    }
+
+    func requests() -> [ControlRequest] {
+        lock.lock(); defer { lock.unlock() }
+        return seen
     }
 }
 

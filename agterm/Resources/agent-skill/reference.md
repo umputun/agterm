@@ -19,6 +19,55 @@ Full detail for every `agtermctl` command. See `SKILL.md` for the model and addr
   `ok` is false.
 - **Options go after the subcommand**: `agtermctl session type "ls" --target active`, never before it.
 
+## events
+
+`agtermctl events [--json] [--kind KIND ...] [--run UUID --after SEQ] [--limit N]` continuously
+prints control events. Each poll is one ordinary socket connection and one `events.read` response.
+The CLI immediately reads again after a non-empty page and waits 250 ms only after an empty page.
+
+With no cursor, the first read subscribes from now: it returns an empty batch anchored at the current
+tail, and the CLI prints only later events. The app keeps a non-destructive ring of the latest 4,096
+events for its current process run. Independent readers do not consume one another's events.
+
+The five event kinds and payloads are:
+
+- `status`: `name`, normalized `status` (`idle`|`active`|`blocked`|`completed`), a `blink` boolean,
+  and optional `pane` and `color`. Reasserting the same normalized status emits nothing; clearing emits
+  `idle`.
+- `notify`: `name`, effective `title`, and `body`. It is emitted after target and foreground-focus
+  suppression checks, including when desktop banners are disabled.
+- `session.created` / `session.closed`: session `name`, emitted when the session enters or leaves a
+  visible window tree. Undo emits a new `session.created`; grace-period finalization does not emit a
+  second close.
+- `tree.changed`: an empty payload and the affected window id. Name, membership, and ordering changes
+  are coalesced for 100 ms per window. Read `tree --json` for the current snapshot.
+
+Every event has `seq` (app-wide sequence), `ts` (Unix timestamp), `kind`, optional
+`window`/`workspace`/`session` ids, and `payload`. Human mode prints one compact line. `--json` emits
+one bare `ControlEvent` JSON object per line and flushes promptly.
+
+`--kind` may be repeated or comma-separated. Unknown kinds are errors. Filtering advances the global
+cursor across nonmatching events, so changing a filter does not replay skipped history. `--limit`
+defaults to 100 and accepts 1 through 1,000.
+
+The raw `events.read` response stores the batch under `result.events`:
+
+```json
+{"ok":true,"result":{"events":{"run":"01234567-89AB-CDEF-0123-456789ABCDEF","next":42,"items":[]}}}
+```
+
+A no-cursor response supplies the `run` and `next` anchor. Resume with both values:
+`agtermctl events --run RUN --after NEXT`. The options must appear together. The streaming `--json`
+format contains bare events rather than this batch envelope, so a restart-safe client must retain the
+cursor from raw `events.read` responses.
+
+Cursor failures return `ok: false`, one of `event run changed`, `event cursor expired`, or
+`event cursor is ahead of the current sequence`, plus the current empty anchor under
+`result.events`. Treat them as data-loss boundaries. Do not silently use the supplied anchor unless
+the caller explicitly accepts dropping the missing interval. `agtermctl events` exits non-zero on a
+cursor, transport, or server error and does not retry forever while the app is absent. SIGINT and
+SIGTERM use normal process behavior.
+
 ## Addressing
 
 - `--target` defaults to `active` (the selected session / current workspace). Accepts a full UUID
