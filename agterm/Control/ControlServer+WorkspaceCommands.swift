@@ -81,9 +81,10 @@ extension ControlServer {
     /// Collapse (`expanded: false`) or expand (`expanded: true`) a SINGLE workspace in a window's sidebar
     /// tree — the per-workspace analogue of the all-workspace `sidebar.expand`/`sidebar.collapse`. Resolves
     /// the target workspace via `resolveWorkspace` (honoring the global `--window` selector), then drives
-    /// `AppActions.setWorkspaceExpanded(_:expanded:in:)`, which posts a store-scoped notification so ONLY
-    /// that window's sidebar Coordinator syncs both the persisted `Workspace.isExpanded` and the live outline
-    /// row. Idempotent (the store mutator is delta-guarded). Returns the workspace id; the read-back is the
+    /// `AppActions.setWorkspaceExpanded(_:expanded:in:)`, which persists `Workspace.isExpanded` on the store
+    /// directly (the source of truth for the `collapsed` read-back, so it works even when the target
+    /// window's sidebar is hidden) and posts a store-scoped notification for the live outline sync.
+    /// Idempotent (the store mutator is delta-guarded). Returns the workspace id; the read-back is the
     /// `tree` workspace node's `collapsed` field.
     func setWorkspaceExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse {
         resolver.resolveWorkspace(target, window: window) { store, id in

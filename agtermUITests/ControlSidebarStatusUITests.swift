@@ -769,11 +769,53 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertTrue(sessionRowValueExists(containing: "buried"), "the buried session should now be visible")
     }
 
+    func testWorkspaceCollapsePersistsWithSidebarHidden() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
+        // add a second workspace to target.
+        let newWs = try sendCommand(#"{"cmd":"workspace.new","args":{"name":"target"}}"#)
+        let wsID = try XCTUnwrap((newWs["result"] as? [String: Any])?["id"] as? String, "workspace.new should return an id")
+
+        // HIDE the sidebar: WindowContentView mounts WorkspaceSidebar only while sidebarVisible, so hiding
+        // tears down its Coordinator and the .agtermSetWorkspaceExpanded observer. A notification-only
+        // persist would silently drop here — the store write must happen in the control arm regardless.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"sidebar","args":{"mode":"hide"}}"#)["ok"] as? Bool, true,
+                       "sidebar hide should succeed")
+        XCTAssertTrue(pollTreeSidebarHidden(timeout: 10), "the sidebar should report hidden")
+
+        // collapse the target with the sidebar hidden: the read-back must reflect it IMMEDIATELY.
+        let collapse = try sendCommand(#"{"cmd":"workspace.collapse","target":"\#(wsID)"}"#)
+        XCTAssertEqual(collapse["ok"] as? Bool, true, "workspace.collapse should succeed: \(collapse)")
+        XCTAssertEqual(try treeWorkspaces().first { $0["id"] as? String == wsID }?["collapsed"] as? Bool, true,
+                       "collapse must persist with the sidebar hidden — collapsed reads back true immediately")
+
+        // expand it again while still hidden: the field clears.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"workspace.expand","target":"\#(wsID)"}"#)["ok"] as? Bool, true,
+                       "workspace.expand should succeed")
+        XCTAssertNil(try treeWorkspaces().first { $0["id"] as? String == wsID }?["collapsed"],
+                     "expand must persist with the sidebar hidden — collapsed omitted")
+    }
+
     /// The tree's workspace nodes, for read-back assertions.
     private func treeWorkspaces() throws -> [[String: Any]] {
         let tree = try sendCommand(#"{"cmd":"tree"}"#)
         let result = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
         let t = try XCTUnwrap(result["tree"] as? [String: Any], "result should carry a tree")
         return try XCTUnwrap(t["workspaces"] as? [[String: Any]], "tree should carry workspaces")
+    }
+
+    /// Polls until the tree's top-level `sidebarVisible` reads false (draining the run loop so SwiftUI can
+    /// tear the sidebar down), proving the Coordinator observer is gone before the collapse.
+    private func pollTreeSidebarHidden(timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let tree = try? sendCommand(#"{"cmd":"tree"}"#),
+               let result = tree["result"] as? [String: Any],
+               let t = result["tree"] as? [String: Any],
+               (t["sidebarVisible"] as? Bool) == false {
+                return true
+            }
+            usleep(200_000)
+        }
+        return false
     }
 }

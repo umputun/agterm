@@ -345,16 +345,17 @@ struct WorkspaceSidebar: NSViewRepresentable {
             collapseOthers()
         }
 
-        /// Collapse or expand a SINGLE workspace (the `workspace.collapse`/`workspace.expand` control path).
-        /// Always writes the persisted `Workspace.isExpanded` (delta-guarded, idempotent) as the source of
-        /// truth and keeps the tracked `expandedWorkspaceIDs` in step — so the intent survives a collapsed
-        /// (flagged-mode / focused-away) row and a transient focus force-reveal. Then drives the LIVE outline
-        /// row when it is on screen (tree mode, row resolved), suppressing the expand/collapse callback's
-        /// re-persist since the store already holds the truth.
+        /// Sync the sidebar to a SINGLE workspace's collapse/expand (the `workspace.collapse`/`workspace.expand`
+        /// control path). The persisted `Workspace.isExpanded` is ALREADY written by
+        /// `AppActions.setWorkspaceExpanded` before this notification is posted (that write is the source of
+        /// truth and does not depend on this Coordinator being alive), so this handler only keeps the tracked
+        /// `expandedWorkspaceIDs` in step — so the intent survives a collapsed (flagged-mode / focused-away)
+        /// row and a transient focus force-reveal — and drives the LIVE outline row when it is on screen
+        /// (tree mode, row resolved), suppressing the expand/collapse callback's re-persist since the store
+        /// already holds the truth.
         @objc private func setWorkspaceExpandedNotified(_ notification: Notification) {
             guard let id = notification.userInfo?[Self.workspaceIDUserInfoKey] as? UUID,
                   let expanded = notification.userInfo?[Self.expandedUserInfoKey] as? Bool else { return }
-            store.setWorkspaceExpanded(id, expanded: expanded)
             if expanded { expandedWorkspaceIDs.insert(id) } else { expandedWorkspaceIDs.remove(id) }
             guard store.sidebarMode == .tree, let outline = outlineView,
                   let node = nodeCache[id], outline.row(forItem: node) >= 0 else { return }

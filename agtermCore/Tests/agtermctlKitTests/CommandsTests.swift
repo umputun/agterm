@@ -85,6 +85,16 @@ struct CommandsTests {
         #expect(try request(["workspace", "expand", "--target", "9f3c"]) == ControlRequest(cmd: .workspaceExpand, target: "9f3c"))
     }
 
+    @Test func workspaceCollapseThreadsWindow() throws {
+        let expected = ControlRequest(cmd: .workspaceCollapse, target: "9f3c", args: ControlArgs(window: "win"))
+        #expect(try request(["workspace", "collapse", "--target", "9f3c", "--window", "win"]) == expected)
+    }
+
+    @Test func workspaceExpandThreadsWindow() throws {
+        let expected = ControlRequest(cmd: .workspaceExpand, target: "active", args: ControlArgs(window: "win"))
+        #expect(try request(["workspace", "expand", "--window", "win"]) == expected)
+    }
+
     @Test func sessionNewWithCwdAndWorkspace() throws {
         let expected = ControlRequest(cmd: .sessionNew, args: ControlArgs(cwd: "/tmp", workspace: "ws1"))
         #expect(try request(["session", "new", "--cwd", "/tmp", "--workspace", "ws1"]) == expected)

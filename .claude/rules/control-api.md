@@ -1217,12 +1217,20 @@ paths:
   `setWorkspaceExpansion` → `AppActions.setWorkspaceExpanded(_:expanded:in:)`, and return the workspace id.
   Unlike the GUI (a row click drives `expandItem`/`collapseItem` directly, keep-in-sync EXEMPT), there is
   no GUI caller — the row click is the only GUI path — so this is a control-only pair.
-  The app-side arm posts `.agtermSetWorkspaceExpanded` carrying the target `AppStore` as the object + the
-  workspace id/desired-state in `userInfo`; `WorkspaceSidebar.Coordinator.setWorkspaceExpandedNotified`
-  ALWAYS writes the persisted `AppStore.setWorkspaceExpanded` (delta-guarded, the source of truth) + keeps
-  the tracked `expandedWorkspaceIDs` in step, THEN drives the live outline row with `suppressExpansionPersist`
-  when it is on screen (tree mode, row resolved) — so the intent survives a collapsed/focused-away/flagged
-  row and a transient focus force-reveal, and a redundant callback re-persist is avoided.
+  The app-side flow keeps the source-of-truth persist OUT of the view: `AppActions.setWorkspaceExpanded(_:expanded:in:)`
+  writes `AppStore.setWorkspaceExpanded` (delta-guarded) FIRST, THEN posts `.agtermSetWorkspaceExpanded`
+  carrying the target `AppStore` as the object + the workspace id/desired-state in `userInfo`.
+  The persist must NOT ride the notification alone: `WindowContentView` mounts `WorkspaceSidebar` only
+  while `sidebarVisible`, so with the sidebar HIDDEN the Coordinator is torn down (its `.agtermSetWorkspaceExpanded`
+  observer removed in `isolated deinit`) and a notification-only write would silently drop, leaving the
+  `collapsed` read-back stale while the command still returns `ok` — the record-then-restore/toggle
+  contract the feature exists for.
+  So `WorkspaceSidebar.Coordinator.setWorkspaceExpandedNotified` is VIEW-SYNC ONLY: it keeps the tracked
+  `expandedWorkspaceIDs` in step — so the intent survives a collapsed/focused-away/flagged row and a
+  transient focus force-reveal — and drives the live outline row with `suppressExpansionPersist` when it
+  is on screen (tree mode, row resolved).
+  This mirrors `workspace.focus` (persists `setFocusedWorkspace` in the arm) and `session.resize`
+  (persists `applySplitRatio` in the arm, posts only to move the live divider).
   Idempotent.
   Its READ side is `ControlWorkspaceNode.collapsed` (`workspace.isExpanded ? nil : true` in the tree
   builder, mirroring the persisted `WorkspaceSnapshot.collapsed`): `true` when collapsed, omitted when

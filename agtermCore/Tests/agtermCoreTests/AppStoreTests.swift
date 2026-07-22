@@ -1462,6 +1462,23 @@ struct AppStoreTests {
         #expect(store.controlTree().workspaces.allSatisfy { $0.collapsed == nil })
     }
 
+    @Test func controlTreeCollapsedIsIdempotentAndFocusIndependent() {
+        let store = makeStore()
+        let ws2 = store.addWorkspace(name: "second")
+        // idempotent: collapsing twice leaves exactly one collapsed node reporting true (delta-guarded).
+        store.setWorkspaceExpanded(ws2.id, expanded: false)
+        store.setWorkspaceExpanded(ws2.id, expanded: false)
+        let afterTwice = store.controlTree().workspaces
+        #expect(afterTwice.filter { $0.collapsed == true }.count == 1)
+        #expect(afterTwice.first { $0.id == ws2.id.uuidString }?.collapsed == true)
+        // focus-independent: focusing the collapsed workspace force-reveals it in the sidebar but must NOT
+        // flip the persisted model, so the `collapsed` read-back still reports true.
+        store.setFocusedWorkspace(ws2.id)
+        let focused = store.controlTree().workspaces.first { $0.id == ws2.id.uuidString }
+        #expect(focused?.collapsed == true)
+        #expect(focused?.focused == true)
+    }
+
     @Test func controlTreeReportsSidebarMode() {
         let store = makeStore()
         #expect(store.controlTree().sidebarMode == "tree") // default: the workspace tree

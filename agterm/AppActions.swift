@@ -569,11 +569,17 @@ final class AppActions {
 
     /// Collapse or expand a SINGLE workspace in `store`'s window sidebar — the per-workspace control path
     /// (`workspace.collapse`/`workspace.expand`), distinct from the all-workspace `expandAllWorkspaces`/`collapseOtherWorkspaces`
-    /// above. Posts a store-scoped notification carrying the workspace id + desired state; the matching
-    /// window's `WorkspaceSidebar.Coordinator` syncs both the persisted `Workspace.isExpanded` and the live
-    /// outline row (see its `setWorkspaceExpandedNotified`). There is no GUI caller — a row click drives the
-    /// outline directly — so this exists only for the control channel.
+    /// above. Persists `Workspace.isExpanded` DIRECTLY on the store (the source of truth for the `collapsed`
+    /// read-back, delta-guarded so it's idempotent), THEN posts a store-scoped notification so the matching
+    /// window's `WorkspaceSidebar.Coordinator` syncs the live outline row + its tracked expansion set (see
+    /// `setWorkspaceExpandedNotified`). The persist must NOT depend on the sidebar Coordinator: it is torn
+    /// down when the window's sidebar is hidden (`WindowContentView` mounts it only while `sidebarVisible`),
+    /// so a notification-only write would silently drop with the sidebar hidden and leave the read-back stale.
+    /// Mirrors `workspace.focus`/`session.resize`, which likewise persist in the arm and post only for the
+    /// live view. There is no GUI caller — a row click drives the outline directly — so this exists only for
+    /// the control channel.
     func setWorkspaceExpanded(_ id: UUID, expanded: Bool, in store: AppStore) {
+        store.setWorkspaceExpanded(id, expanded: expanded)
         NotificationCenter.default.post(
             name: .agtermSetWorkspaceExpanded, object: store,
             userInfo: [WorkspaceSidebar.Coordinator.workspaceIDUserInfoKey: id,

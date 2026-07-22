@@ -74,10 +74,11 @@ paths:
   This is pure click-routing over the existing per-workspace `expandItem`/`collapseItem` (an exempt case
   under the control keep-in-sync rule): the row click itself adds NO control command.
   The per-workspace collapse/expand IS driven over the socket by `workspace.collapse`/`workspace.expand`
-  (distinct from the ALL-workspaces `sidebar.expand`/`sidebar.collapse`), but by a SEPARATE path — the
-  control arm posts `.agtermSetWorkspaceExpanded` and the Coordinator's `setWorkspaceExpandedNotified`
-  syncs the persisted `isExpanded` + the live outline row — NOT by routing through this click handler (see
-  the Control API rule).
+  (distinct from the ALL-workspaces `sidebar.expand`/`sidebar.collapse`), but by a SEPARATE path that does
+  NOT route through this click handler: `AppActions.setWorkspaceExpanded` persists `isExpanded` on the
+  store DIRECTLY (source of truth, so it survives a hidden sidebar whose Coordinator is torn down), THEN
+  posts `.agtermSetWorkspaceExpanded` for the Coordinator's `setWorkspaceExpandedNotified` to sync only the
+  live outline row + tracked set (see the Control API rule).
   Covered by `SidebarUITests.testClickWorkspaceRowTogglesExpansion`.
 - **A session ROW click reveals a blocked session's pane-tagged pane.**
   `Coordinator.outlineViewSelectionDidChange` selects the clicked session (`selectSession`) then — async,
