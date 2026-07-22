@@ -136,10 +136,10 @@ extension ControlServer {
         }
     }
 
-    /// Apply a session's current watermark spec to its realized main + split surfaces. A never-realized
+    /// Apply a session's current watermark spec to its realized main + split + scratch surfaces. A never-realized
     /// surface (nil) is skipped — it applies the spec itself on creation (`GhosttySurfaceView.createSurface`).
     private func applyWatermark(to session: Session) {
-        for surface in [session.surface, session.splitSurface] {
+        for surface in [session.surface, session.splitSurface, session.scratchSurface] {
             (surface as? GhosttySurfaceView)?.applyWatermarkFromSession()
         }
     }

@@ -452,8 +452,9 @@ struct agtermApp: App {
     }
 
     /// Scratch-terminal surface factory: a third per-session shell, full-overlay rendered. Like the
-    /// overlay it is NOT wired to the session (no `view.session`/`isSplitPane`), so its PWD/title never
-    /// clobber the session's sidebar name; unlike the overlay it is kept alive when hidden. Runs a plain
+    /// overlay it is NOT operationally wired to the session (no `view.session`/`isSplitPane`), so its
+    /// PWD/title never clobber the session's sidebar name. It does retain a weak visual-config link so the
+    /// session watermark renders on it; unlike the overlay it is kept alive when hidden. Runs a plain
     /// login shell, or `session.scratchCommand` when set (`session.scratch --command`) — RUN-ONCE: the
     /// command is consumed here so a respawn after it exits is a plain shell. `autoFocus` grabs first
     /// responder on show (winning the SwiftUI/AppKit responder race); on the shell's `exit`, `closeScratch`
@@ -472,6 +473,7 @@ struct agtermApp: App {
                                       fontSize: session.fontSize.map(Float.init),
                                       command: command,
                                       autoFocus: !suppressAutoFocus, env: env)
+        view.watermarkSession = session
         let sessionID = session.id
         view.onExit = { store.closeScratch(sessionID) }
         Self.wireStatusClear(view, store: store, sessionID: sessionID, fixedPane: .scratch)

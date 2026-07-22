@@ -362,8 +362,10 @@ paths:
   (still false for a FLOATING overlay, preserving the NSSplitView-overrun invariant).
   GUI half: ⌘J (`BuiltinAction.toggleScratch`), title-bar `scratch-toggle` button,
   View ▸ Show/Hide Scratch, the ⌃⇧P palette "Toggle Scratch" — all through `AppActions.toggleScratch()`.
-  The scratch surface is NOT wired to the session (no `view.session`, like the overlay) so its PWD/title
-  never clobber the sidebar name; `autoFocus` grabs first responder on show,
+  The scratch surface is NOT operationally wired to the session (no `view.session`, like the overlay) so
+  its PWD/title never clobber the sidebar name; a separate weak `watermarkSession` link carries only the
+  owning session's visual config, so its background watermark/color renders on the scratch too. `autoFocus`
+  grabs first responder on show,
   the detail pane's `.onChange(of: scratchActive)` reclaims it on hide.
   Four-point keep-in-sync audit: (1) `case sessionScratch = "session.scratch"` + the new `ControlSessionNode.scratch`
   flag in `ControlProtocol.swift` (reuses `ControlArgs.mode`), (2) the `.sessionScratch` dispatch arm
@@ -1450,7 +1452,7 @@ paths:
   opacity/color/fit/position validated against the shared host-free `WatermarkConfig`,
   used by BOTH the CLI `validate()` and the server.
   The `BackgroundWatermark` spec (host-free, `Codable`) is persisted in `SessionSnapshot` (survives restart)
-  via `AppStore.setBackgroundWatermark`, then applied to the session main + split surfaces as a PER-SURFACE
+  via `AppStore.setBackgroundWatermark`, then applied to the session main + split + scratch surfaces as a PER-SURFACE
   ghostty config overlay: `GhosttyApp.configWithOverlay` builds the same base files + an overlay file
   (`WatermarkConfig.overlayText`: for image/text the `background-image*` lines + `background-opacity = 1`
   so the image shows even under window translucency, which pins the global `background-opacity` to 0;

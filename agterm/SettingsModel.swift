@@ -764,9 +764,9 @@ final class SettingsModel {
         return true
     }
 
-    /// All live ghostty surfaces across every open window: each session's primary + split surface in
-    /// every open window's store, plus every open window's quick terminal. A config reload therefore
-    /// broadcasts to all windows, not just the frontmost one.
+    /// All live ghostty surfaces across every open window: each session's primary + split + scratch
+    /// surfaces in every open window's store, plus every open window's quick terminal. A config reload
+    /// therefore broadcasts to all windows, not just the frontmost one.
     private func liveSurfaces() -> [GhosttySurfaceView] {
         var views = library.openIDs()
             .compactMap { library.store(for: $0) }

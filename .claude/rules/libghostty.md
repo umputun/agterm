@@ -272,8 +272,8 @@ paths:
   the window backing, the pane shows the theme background, and a later `printf` OSC 11 re-renders (the latch
   was released).
   `session.background color X` instead bumps the opacity back to `windowOpacity`, so the still-live OSC
-  override RESURFACES and masks X; and because `session.background` is session-scoped, both split panes are
-  affected even though the OSC tint was per-pane.
+  override RESURFACES and masks X; and because `session.background` is session-scoped, every realized
+  session surface (main, split, and scratch) is affected even though the OSC tint was per-pane.
   Only BACKGROUND is wired — OSC 10/12 (fg/cursor) render regardless of translucency.
   A per-prompt OSC re-emit is deduped in the `COLOR_CHANGE` caller (skip when the hex is unchanged) so a
   shell re-asserting OSC 11 every prompt does not rebuild the surface config each time.
