@@ -27,9 +27,10 @@ extension ControlServer: ControlActions {
     func openSessionOverlay(_ target: String?, window: String?,
                             options: ControlSessionOverlayOpenOptions) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
-            guard store.openOverlay(id, command: options.command, cwd: options.cwd,
-                                    wait: options.wait, sizePercent: options.sizePercent,
-                                    backgroundColor: options.backgroundColor) else {
+            guard store.openOverlay(id, options: OverlayOpenOptions(
+                command: options.command, cwd: options.cwd, wait: options.wait,
+                size: options.size, anchor: options.anchor,
+                backgroundColor: options.backgroundColor)) else {
                 return ControlResponse(ok: false, error: "overlay already open")
             }
             // Both overlay kinds mount and run in the per-session eager deck regardless of which session
@@ -52,9 +53,10 @@ extension ControlServer: ControlActions {
         }
     }
 
-    func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse {
+    func resizeSessionOverlay(_ target: String?, window: String?,
+                              size: OverlaySize?, anchor: OverlayAnchor?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
-            guard store.resizeOverlay(id, sizePercent: sizePercent) else {
+            guard store.resizeOverlay(id, size: size, anchor: anchor) else {
                 return ControlResponse(ok: false, error: "no overlay")
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))

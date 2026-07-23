@@ -136,6 +136,20 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// off the CELL_SIZE action and reads the size via `ghostty_surface_inherited_config`.
     var onFontSizeChange: ((Double) -> Void)?
 
+    /// For an OVERLAY surface: called on the main actor with the surface's live cell metrics (POINTS) and
+    /// its realized grid (columns, rows) whenever they change — surface realization, `GHOSTTY_ACTION_CELL_SIZE`,
+    /// and any backing-size/scale change. The overlay carries no `view.session`, so the factory wires this to
+    /// write `session.overlayCellMetrics`/`overlayAppliedCols`/`overlayAppliedRows`, which drive the `.cells`
+    /// panel layout and the `tree` read-back. Nil for main/split/scratch surfaces. Nilled in `destroySurface`.
+    var onOverlayMetrics: ((OverlayCellMetrics, Int, Int) -> Void)?
+
+    /// Last overlay metrics reported through `onOverlayMetrics`, so `refreshOverlayMetrics` skips a redundant
+    /// write — the observed session state would otherwise re-invalidate the panel every layout pass, and the
+    /// `.cells` panel (which converges in one resize step) would keep re-writing at the fixed point.
+    private var lastOverlayCell: OverlayCellMetrics?
+    private var lastOverlayCols: Int?
+    private var lastOverlayRows: Int?
+
     /// Called on the main actor when libghostty enters search mode (START_SEARCH), carrying the current
     /// needle (nil when none). The factory wires this to toggle the session's search bar — if the bar is
     /// already visible it sends `end_search` (the ⌘F-again close), else it opens the bar and seeds the
@@ -498,6 +512,50 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         onFontSizeChange?(size) // the store no-ops a same-value write.
     }
 
+    /// The overlay surface's live cell + padding + grid metrics from `ghostty_surface_size`, all in BACKING
+    /// PIXELS (cell width/height and the derived non-cell padding remainder, plus the realized columns/rows).
+    /// A struct (not a tuple) because swiftlint caps tuples at 3 members.
+    struct OverlayPixelMetrics {
+        let cellW: Double, cellH: Double, padW: Double, padH: Double
+        let cols: Int, rows: Int
+    }
+
+    /// Reads the overlay surface's live pixel metrics from `ghostty_surface_size`. nil when the surface isn't
+    /// realized or has no cell size yet. The caller converts px→points via `backingScaleFactor` before handing
+    /// them to the host-free layout resolver (which works in the point space `GeometryReader`/`WindowGeometry.Size`
+    /// use). Padding is the total non-cell remainder — an estimate, per the padding-drift note in the overlay plan.
+    func overlayPixelMetrics() -> OverlayPixelMetrics? {
+        guard let surface else { return nil }
+        let size = ghostty_surface_size(surface)
+        let cellW = Double(size.cell_width_px)
+        let cellH = Double(size.cell_height_px)
+        guard cellW > 0, cellH > 0 else { return nil }
+        let cols = Int(size.columns)
+        let rows = Int(size.rows)
+        let padW = Double(size.width_px) - Double(cols) * cellW
+        let padH = Double(size.height_px) - Double(rows) * cellH
+        return OverlayPixelMetrics(cellW: cellW, cellH: cellH, padW: padW, padH: padH, cols: cols, rows: rows)
+    }
+
+    /// Refreshes the OVERLAY surface's cell metrics + realized grid onto the owning session (via the factory
+    /// closure — the overlay has no `view.session`). No-op unless this is an overlay surface (`onOverlayMetrics`
+    /// wired) with a realized surface. Reads BACKING PIXELS from `ghostty_surface_size` and converts to POINTS
+    /// via the window's `backingScaleFactor` — the Retina conversion is load-bearing, since the resolver and
+    /// the SwiftUI pane size are in points. Skips a redundant write so it can be called freely on realization,
+    /// `CELL_SIZE`, and every backing-size change without re-invalidating the panel at the `.cells` fixed point.
+    func refreshOverlayMetrics() {
+        guard let report = onOverlayMetrics, let px = overlayPixelMetrics() else { return }
+        let scale = Double(window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0)
+        guard scale > 0 else { return }
+        let cell = OverlayCellMetrics(cellWidth: px.cellW / scale, cellHeight: px.cellH / scale,
+                                      padWidth: px.padW / scale, padHeight: px.padH / scale)
+        guard cell != lastOverlayCell || px.cols != lastOverlayCols || px.rows != lastOverlayRows else { return }
+        lastOverlayCell = cell
+        lastOverlayCols = px.cols
+        lastOverlayRows = px.rows
+        report(cell, px.cols, px.rows)
+    }
+
     /// Draws the surface now, servicing libghostty's `GHOSTTY_ACTION_RENDER` demand. Main-actor.
     func renderNow() {
         guard let surface else { return }
@@ -619,6 +677,12 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         // the overlay grabs first responder itself (TerminalView's once-on-attach grab misses the
         // deferred overlay surface); a bounded run-loop retry beats the SwiftUI/AppKit responder race.
         requestAutoFocus(in: window)
+
+        // capture the overlay surface's initial cell metrics + grid so a `.cells` panel can snap to whole
+        // cells (no-op for non-overlay surfaces). The first realization is at the full-pane fallback size
+        // (metrics are nil until now); the follow-up resize to the `.cells` size refreshes the applied grid
+        // via updateMetalLayerSize.
+        refreshOverlayMetrics()
     }
 
     /// Marks the surface focused in libghostty after a retried `makeFirstResponder` (the overlay/reparent
@@ -721,6 +785,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         onUserInputClearsStatus = nil
         onUserInput = nil
         onFontSizeChange = nil
+        onOverlayMetrics = nil
         onSearchStart = nil
         onSearchEnd = nil
         onSearchTotal = nil
@@ -798,6 +863,9 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         // an unchanged grid is a no-op and the 120Hz `ghostty_app_tick` only draws surfaces flagged dirty,
         // so without this the re-hosted pane keeps a blank drawable even though its terminal buffer is intact.
         ghostty_surface_refresh(surface)
+        // a resize (incl. the post-realization settle to the `.cells` size) or a backing-scale change moves
+        // the overlay surface's grid/metrics, so refresh the read-back off the new size (no-op otherwise).
+        refreshOverlayMetrics()
     }
 
     // MARK: - First responder

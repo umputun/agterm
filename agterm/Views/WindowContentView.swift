@@ -365,8 +365,8 @@ struct WindowContentView: View {
     /// INSIDE them), so the NSSplitView never re-layouts on a zoom toggle and the divider stays put;
     /// `SplitRatioAccessor` rides the primary wrapper as one persistent instance, suspended while zoomed.
     @ViewBuilder private func sessionDetail(_ session: Session, isActive: Bool) -> some View {
-        // a FULL overlay (no size) hides the session beneath it (opacity 0) and draws translucent; a
-        // FLOATING overlay (overlaySizePercent set) leaves the session VISIBLE and draws a smaller
+        // a FULL overlay (`.full` size) hides the session beneath it (opacity 0) and draws translucent; a
+        // FLOATING overlay (a non-`.full` `overlaySize`) leaves the session VISIBLE and draws a smaller
         // opaque framed panel on top. Either way the pane(s) stay non-interactive while an overlay is up.
         let fullOverlay = session.fullOverlayActive
         // While zoomed OR while the dashboard is open, the normal deck stays mounted only to realize
@@ -524,28 +524,34 @@ struct WindowContentView: View {
     /// never changes when an overlay opens/closes (constant shape = no NSSplitView re-host = no titlebar
     /// overrun), and BOTH variants share this single surface host, so `session.overlay.resize` switching
     /// full<->% only re-flows the frame — it never re-parents the NSView (which would blank its Metal drawable).
-    /// A nil `overlaySizePercent` fills the detail area translucent (no opaque backing/frame) with the pane(s)
-    /// hidden by `hideForOverlay`; a percent draws an opaque, framed panel at that size, centered, with the
-    /// pane(s) visible around it. Per-session in the eager deck, so the surface mounts + program runs even when
-    /// the session isn't active.
+    /// A `.full` `overlaySize` fills the detail area translucent (no opaque backing/frame) with the pane(s)
+    /// hidden by `hideForOverlay`; a floating size (`.percent`/`.cells`) draws an opaque, framed panel sized by
+    /// `OverlayLayout.panelSize` and anchored by `overlayAnchor` (nine positions, default center), with the
+    /// pane(s) visible around it. Only the frame parameters and the ZStack `alignment` change across
+    /// full/floating/anchor — the child count is constant (no anchor-specific view branches), so the
+    /// NSSplitView is never re-hosted. Per-session in the eager deck, so the surface mounts + program runs even
+    /// when the session isn't active.
     @ViewBuilder private func overlayPanel(session: Session, isActive: Bool) -> some View {
         GeometryReader { geo in
-            ZStack {
+            let floating = session.floatingOverlayActive
+            let panel = OverlayLayout.panelSize(session.overlaySize,
+                                                pane: WindowGeometry.Size(width: Double(geo.size.width),
+                                                                          height: Double(geo.size.height)),
+                                                cell: session.overlayCellMetrics)
+            ZStack(alignment: floating ? session.overlayAnchor.swiftUIAlignment : .center) {
                 if session.overlayActive, deckHostsSurface(session: session, surface: .overlay) {
-                    let floating = session.overlaySizePercent != nil
-                    let fraction = session.overlaySizePercent.map { CGFloat($0) / 100 } ?? 1
                     // transparent click-catcher over the whole detail area: absorbs clicks AROUND a floating
                     // panel so they can't reach the still-hit-testable panes and steal the overlay's first
                     // responder (the full variant hides the panes, so it's covered either way).
                     Color.clear.contentShape(Rectangle())
                     TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                  makeSurface: makeOverlaySurface, isActive: isActive, deckVisible: isActive && !quickTerminal.isVisible)
-                        .frame(width: geo.size.width * fraction, height: geo.size.height * fraction)
+                        .frame(width: CGFloat(panel.width), height: CGFloat(panel.height))
                         // floating = opaque backing + hairline frame + shadow so it reads as a distinct window
                         // over the still-visible session; full = translucent, no chrome (libghostty draws only
                         // the terminal, so the window backing shows through). The modifier CHAIN stays constant
-                        // across both variants — only the parameters go inert for full — so a full<->% resize
-                        // keeps the same view tree and never re-hosts the surface NSView.
+                        // across both variants — only the parameters go inert for full — so a full<->floating
+                        // resize keeps the same view tree and never re-hosts the surface NSView.
                         .background(floating ? terminalColor : Color.clear)
                         .clipShape(RoundedRectangle(cornerRadius: floating ? 12 : 0))
                         .overlay(
@@ -553,6 +559,7 @@ struct WindowContentView: View {
                                 .strokeBorder(floating ? Color.white.opacity(0.18) : Color.clear, lineWidth: 1)
                         )
                         .shadow(radius: floating ? 24 : 0)
+                        .accessibilityIdentifier("overlay-floating-panel")
                         .id("\(session.id.uuidString)-overlay")
                 }
             }
@@ -829,4 +836,24 @@ struct WindowContentView: View {
         // through), so a `.bar` material here would paint a mismatched darker strip.
     }
 
+}
+
+extension OverlayAnchor {
+    /// The SwiftUI `Alignment` a floating overlay panel takes inside the detail-area ZStack — the 9-point
+    /// anchor mapped to a `(horizontal, vertical)` pair. The host-free `unitX`/`unitY` (0/0.5/1) can't name
+    /// SwiftUI's alignment guides, so this app-side mapping bridges them; `.center` reproduces today's
+    /// centered placement.
+    var swiftUIAlignment: Alignment {
+        switch self {
+        case .topLeft: return .topLeading
+        case .top: return .top
+        case .topRight: return .topTrailing
+        case .left: return .leading
+        case .center: return .center
+        case .right: return .trailing
+        case .bottomLeft: return .bottomLeading
+        case .bottom: return .bottom
+        case .bottomRight: return .bottomTrailing
+        }
+    }
 }

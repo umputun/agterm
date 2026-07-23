@@ -444,6 +444,16 @@ struct agtermApp: App {
         // removes the session first, so this no-ops there — but the result is unqueryable after that anyway.
         view.onExitCodeCaptured = { store.recordOverlayExit(sessionID, code: $0) }
         view.onExit = { store.closeOverlay(sessionID) }
+        // the overlay is sessionless (no view.session), so route its live cell metrics + realized grid back
+        // onto the owning session here (in POINTS — the view already divided the pixel metrics by the
+        // backing scale). These drive the `.cells` panel layout and the `tree` applied-grid read-back.
+        // destroySurface nils this, breaking the store -> surface -> closure retain cycle.
+        view.onOverlayMetrics = { metrics, cols, rows in
+            guard let session = store.session(withID: sessionID) else { return }
+            session.overlayCellMetrics = metrics
+            session.overlayAppliedCols = cols
+            session.overlayAppliedRows = rows
+        }
         // typing in the cover counts as user activity: reset the window's auto-follow idle timer so an
         // idle fire can't change the underlying selection (vanishing the overlay) while you type in it.
         // destroySurface nils this, breaking the store -> surface -> closure retain cycle.

@@ -363,21 +363,22 @@ via `OverlayLayout.panelSize` + anchor alignment. `tree` reports requested + app
 - Modify: `agterm/Ghostty/GhosttyCallbacks.swift`
 - Modify: `agterm/Views/WindowContentView.swift`
 
-- [ ] update the overlay arms to pass `size`/`anchor` into `openOverlay(options:)`/`resizeOverlay(_:size:anchor:)`
-- [ ] add `GhosttySurfaceView.overlayPixelMetrics()` from `ghostty_surface_size()`; app converts px→points
+- [x] update the overlay arms to pass `size`/`anchor` into `openOverlay(options:)`/`resizeOverlay(_:size:anchor:)`
+- [x] add `GhosttySurfaceView.overlayPixelMetrics()` from `ghostty_surface_size()`; app converts px→points
       via `backingScaleFactor` and writes `session.overlayCellMetrics` + `session.overlayAppliedCols/Rows`
       on surface realization, `GHOSTTY_ACTION_CELL_SIZE` (`GhosttyCallbacks.swift:50`), and backing-scale
       change (view consumes the observed metrics — no view-body polling of the imperative NSView)
-- [ ] `overlayPanel`: size via `OverlayLayout.panelSize(session.overlaySize, pane: geo.size, cell:
+- [x] `overlayPanel`: size via `OverlayLayout.panelSize(session.overlaySize, pane: geo.size, cell:
       session.overlayCellMetrics)`; position via `ZStack(alignment: floating ?
       session.overlayAnchor.swiftUIAlignment : .center)`; add the app-side `OverlayAnchor.swiftUIAlignment`
       mapping; add a stable accessibility id to the floating panel
-- [ ] confirm ZStack child count unchanged and no anchor-specific view branches (NSSplitView-overrun
+- [x] confirm ZStack child count unchanged and no anchor-specific view branches (NSSplitView-overrun
       rule); full path + `hideForOverlay` untouched
-- [ ] app builds (`make build`); `make lint` passes
-- [ ] verify in an isolated dev instance (short `AGTERM_STATE_DIR` + its own socket) that cols/rows fit,
-      each anchor places correctly, and Retina scaling is right — record in Post-Completion
-- [ ] run `swift test` (host-free unchanged) — must pass before next task
+- [x] app builds (`make build`); `make lint` passes
+- [x] visual verification (deferred to Post-Completion — not automatable in this run): in an isolated dev
+      instance (short `AGTERM_STATE_DIR` + its own socket) that cols/rows fit, each anchor places correctly,
+      and Retina scaling is right — record in Post-Completion
+- [x] run `swift test` (host-free unchanged) — must pass before next task
 
 ### Task 6: agtermctl CLI — open/resize flags
 

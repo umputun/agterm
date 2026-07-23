@@ -50,9 +50,13 @@ final class GhosttyCallbacks: @unchecked Sendable {
         case GHOSTTY_ACTION_CELL_SIZE:
             // fires when the cell pixel size changes (font-size change via cmd +/-, or DPI
             // change). used only as a trigger: the view reads the live font size and the app
-            // persists it.
+            // persists it, and (for an overlay surface) refreshes the overlay cell metrics so a
+            // `.cells` panel re-snaps to whole cells. each call self-guards on its own wiring.
             guard let view = surfaceView(from: target) else { return true }
-            DispatchQueue.main.async { view.reportFontSize() }
+            DispatchQueue.main.async {
+                view.reportFontSize()
+                view.refreshOverlayMetrics()
+            }
             return true
         case GHOSTTY_ACTION_RENDER:
             // libghostty signals this surface has a frame ready to paint. agterm is demand-driven (no poll
