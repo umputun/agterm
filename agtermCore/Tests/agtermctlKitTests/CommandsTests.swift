@@ -773,6 +773,74 @@ struct CommandsTests {
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "overlay", "resize", "--size-percent", "0"]) }
     }
 
+    @Test func sessionOverlayOpenWithCellsAndAnchor() throws {
+        let expected = ControlRequest(cmd: .sessionOverlayOpen, target: "active",
+                                      args: ControlArgs(command: "htop", cols: 80, rows: 24, anchor: "top-left"))
+        #expect(try request(["session", "overlay", "open", "htop", "--cols", "80", "--rows", "24",
+                             "--anchor", "top-left"]) == expected)
+    }
+
+    @Test func sessionOverlayOpenPercentWithAnchor() throws {
+        let expected = ControlRequest(cmd: .sessionOverlayOpen, target: "active",
+                                      args: ControlArgs(command: "htop", sizePercent: 50, anchor: "bottom-right"))
+        #expect(try request(["session", "overlay", "open", "htop", "--size-percent", "50",
+                             "--anchor", "bottom-right"]) == expected)
+    }
+
+    @Test func sessionOverlayOpenValidatesSizeAndAnchor() {
+        // Decision 3: open now hard-errors on an out-of-range percent (previously silently clamped), and
+        // mirrors the dispatcher's one-of / pairing / anchor rules.
+        #expect(validationMessage(["session", "overlay", "open", "htop", "--size-percent", "0"])
+            == "session.overlay.open: --size-percent must be 1...100")
+        #expect(validationMessage(["session", "overlay", "open", "htop", "--size-percent", "101"])
+            == "session.overlay.open: --size-percent must be 1...100")
+        #expect(validationMessage(["session", "overlay", "open", "htop", "--cols", "80"])
+            == "provide both --cols and --rows")
+        #expect(validationMessage(["session", "overlay", "open", "htop", "--rows", "24"])
+            == "provide both --cols and --rows")
+        #expect(validationMessage(["session", "overlay", "open", "htop", "--cols", "0", "--rows", "24"])
+            == "--cols and --rows must be >= 1")
+        #expect(validationMessage(["session", "overlay", "open", "htop", "--size-percent", "50", "--cols", "5", "--rows", "5"])
+            == "session.overlay.open: use only one of --size-percent or --cols/--rows")
+        #expect(validationMessage(["session", "overlay", "open", "htop", "--size-percent", "50", "--anchor", "bogus"])
+            == "unknown anchor: bogus (top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right)")
+        #expect(validationMessage(["session", "overlay", "open", "htop", "--anchor", "top-left"])
+            == "--anchor requires a floating overlay: use --size-percent or --cols/--rows")
+    }
+
+    @Test func sessionOverlayResizeWithCells() throws {
+        let expected = ControlRequest(cmd: .sessionOverlayResize, target: "active", args: ControlArgs(cols: 100, rows: 30))
+        #expect(try request(["session", "overlay", "resize", "--cols", "100", "--rows", "30"]) == expected)
+    }
+
+    @Test func sessionOverlayResizeAnchorOnly() throws {
+        // an --anchor with no size keeps the current size and just re-anchors (nil size on the wire).
+        let expected = ControlRequest(cmd: .sessionOverlayResize, target: "active", args: ControlArgs(anchor: "top"))
+        #expect(try request(["session", "overlay", "resize", "--anchor", "top"]) == expected)
+    }
+
+    @Test func sessionOverlayResizeCellsWithAnchor() throws {
+        let expected = ControlRequest(cmd: .sessionOverlayResize, target: "9f3c",
+                                      args: ControlArgs(cols: 40, rows: 12, anchor: "left"))
+        #expect(try request(["session", "overlay", "resize", "--cols", "40", "--rows", "12",
+                             "--anchor", "left", "--target", "9f3c"]) == expected)
+    }
+
+    @Test func sessionOverlayResizeValidatesSizeAndAnchor() {
+        #expect(validationMessage(["session", "overlay", "resize"])
+            == "session.overlay.resize requires a size (--full, --size-percent, --cols/--rows) or --anchor")
+        #expect(validationMessage(["session", "overlay", "resize", "--full", "--anchor", "top-left"])
+            == "--full cannot be combined with --anchor")
+        #expect(validationMessage(["session", "overlay", "resize", "--full", "--cols", "5", "--rows", "5"])
+            == "session.overlay.resize: use only one of --full, --size-percent, or --cols/--rows")
+        #expect(validationMessage(["session", "overlay", "resize", "--cols", "5"])
+            == "provide both --cols and --rows")
+        #expect(validationMessage(["session", "overlay", "resize", "--size-percent", "150"])
+            == "session.overlay.resize: --size-percent must be 1...100")
+        #expect(validationMessage(["session", "overlay", "resize", "--anchor", "bogus"])
+            == "unknown anchor: bogus (top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right)")
+    }
+
     @Test func sessionOverlayBlockRejectsWait() {
         // validate() enforces the mutually-exclusive flags at parse time (before any connection).
         #expect(throws: (any Error).self) {

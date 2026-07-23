@@ -597,6 +597,50 @@ struct Session: ParsableCommand {
             subcommands: [Open.self, Close.self, Resize.self, Result.self]
         )
 
+        /// Which overlay verb is validating: carries the error-message prefix and whether `--full` is a
+        /// valid size mode (resize only). Keeps `validateSize` to five params by folding the correlated
+        /// command-name/allow-full pair.
+        enum SizeContext {
+            case open, resize
+            var name: String { self == .open ? "session.overlay.open" : "session.overlay.resize" }
+            var allowsFull: Bool { self == .resize }
+        }
+
+        /// Shared overlay size validation for `open` and `resize`, mirroring the dispatcher's one-of /
+        /// range / pairing rules so a CLI user and a raw socket client see the same wording: at most one
+        /// of {--size-percent, --cols/--rows, --full (resize only)}; --size-percent 1...100 (a hard error
+        /// now enforced on open too — Decision 3); --cols and --rows both-or-neither, each >= 1.
+        static func validateSize(_ context: SizeContext, full: Bool, sizePercent: Int?, cols: Int?, rows: Int?) throws {
+            let hasCells = cols != nil || rows != nil
+            let modeCount = (full ? 1 : 0) + (sizePercent != nil ? 1 : 0) + (hasCells ? 1 : 0)
+            if modeCount > 1 {
+                let modes = context.allowsFull ? "--full, --size-percent, or --cols/--rows" : "--size-percent or --cols/--rows"
+                throw ValidationError("\(context.name): use only one of \(modes)")
+            }
+            if let sizePercent, !(1...100).contains(sizePercent) {
+                throw ValidationError("\(context.name): --size-percent must be 1...100")
+            }
+            if hasCells {
+                guard cols != nil, rows != nil else {
+                    throw ValidationError("provide both --cols and --rows")
+                }
+                guard (cols ?? 0) >= 1, (rows ?? 0) >= 1 else {
+                    throw ValidationError("--cols and --rows must be >= 1")
+                }
+            }
+        }
+
+        /// Parses `--anchor` to an `OverlayAnchor`, throwing the dispatcher's `unknown anchor` message
+        /// (listing the nine positions) when it is not one of them. Returns nil when absent.
+        static func parseAnchor(_ raw: String?) throws -> OverlayAnchor? {
+            guard let raw else { return nil }
+            guard let parsed = OverlayAnchor(rawValue: raw) else {
+                let valid = OverlayAnchor.allCases.map(\.rawValue).joined(separator: "|")
+                throw ValidationError("unknown anchor: \(raw) (\(valid))")
+            }
+            return parsed
+        }
+
         struct Open: RequestCommand {
             static let configuration = CommandConfiguration(abstract: "Open an overlay running COMMAND; it closes when COMMAND exits.")
             @Argument(help: "Program to run in the overlay (e.g. revdiff).") var command: String
@@ -605,23 +649,32 @@ struct Session: ParsableCommand {
             @Flag(name: .long, help: "Block until COMMAND exits and exit with its status (the program renders normally; capture its output via the program's own output file).") var block = false
             @Flag(name: .long, help: "Select (switch to) the target session after opening the overlay (default: open without switching).") var follow = false
             @Option(name: .long, help: "Render a floating, framed panel at PERCENT (1-100) of the pane instead of full-size.") var sizePercent: Int?
+            @Option(name: .long, help: "Render a floating panel exactly COLS columns wide (needs --rows); sized to the grid, clamped to fit the pane.") var cols: Int?
+            @Option(name: .long, help: "Render a floating panel exactly ROWS rows tall (needs --cols); sized to the grid, clamped to fit the pane.") var rows: Int?
+            @Option(name: .long, help: "Anchor a floating panel: top-left, top, top-right, left, center (default), right, bottom-left, bottom, bottom-right.") var anchor: String?
             @Option(name: .long, help: "Solid background color (#rrggbb) for the overlay pane, independent of the session's own.") var backgroundColor: String?
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
-            // reject the mutually-exclusive combo + a malformed color at parse time (before any connection),
-            // so it's a clean usage error and is unit-testable without a socket.
+            // reject the mutually-exclusive combos, a bad size/anchor, and a malformed color at parse time
+            // (before any connection), so it's a clean usage error and is unit-testable without a socket.
             func validate() throws {
                 if block && wait { throw ValidationError("--block cannot be combined with --wait") }
                 if let backgroundColor, !WatermarkConfig.isValidColorHex(backgroundColor) {
                     throw ValidationError("background-color must be a #rrggbb hex value")
+                }
+                try Overlay.validateSize(.open, full: false, sizePercent: sizePercent, cols: cols, rows: rows)
+                // an --anchor is only meaningful for a floating overlay (open with no size = full-pane).
+                if try Overlay.parseAnchor(anchor) != nil, sizePercent == nil, cols == nil, rows == nil {
+                    throw ValidationError("--anchor requires a floating overlay: use --size-percent or --cols/--rows")
                 }
             }
 
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionOverlayOpen, target: target.target,
                                args: options.withWindow(ControlArgs(cwd: cwd, command: command, wait: wait ? true : nil,
-                                                                     sizePercent: sizePercent, follow: follow ? true : nil,
+                                                                     sizePercent: sizePercent, cols: cols, rows: rows,
+                                                                     anchor: anchor, follow: follow ? true : nil,
                                                                      color: backgroundColor)))
             }
 
@@ -630,7 +683,8 @@ struct Session: ParsableCommand {
                 let client = SocketClient(path: options.socketPath())
                 // open via the same `makeRequest()` the non-block path uses (DRY): in block mode `validate()`
                 // guarantees `!wait`, so its `wait` is nil — identical to opening non-wait, and the floating
-                // `--size-percent` is carried through the single source instead of a duplicated ControlArgs.
+                // size (`--size-percent`/`--cols`/`--rows`) + `--anchor` are carried through the single
+                // source instead of a duplicated ControlArgs.
                 let opened = try client.send(makeRequest())
                 guard opened.ok, let id = opened.result?.id else {
                     SocketClient.printResponse(opened, json: options.json)
@@ -671,25 +725,35 @@ struct Session: ParsableCommand {
         }
 
         struct Resize: RequestCommand {
-            static let configuration = CommandConfiguration(abstract: "Resize an open overlay: floating at a percent, or back to full-pane.")
+            static let configuration = CommandConfiguration(
+                abstract: "Resize or re-anchor an open overlay: a floating percent or exact cols/rows, full-pane, or a 9-point anchor.")
             @Option(name: .long, help: "Resize to a floating, framed panel at PERCENT (1-100) of the pane.") var sizePercent: Int?
+            @Option(name: .long, help: "Resize to a floating panel exactly COLS columns wide (needs --rows); clamped to fit the pane.") var cols: Int?
+            @Option(name: .long, help: "Resize to a floating panel exactly ROWS rows tall (needs --cols); clamped to fit the pane.") var rows: Int?
+            @Option(name: .long, help: "Re-anchor the floating panel: top-left, top, top-right, left, center, right, bottom-left, bottom, bottom-right.") var anchor: String?
             @Flag(name: .long, help: "Resize to full-pane (translucent, hides the session).") var full = false
             @OptionGroup var target: TargetOptions
             @OptionGroup var options: ClientOptions
 
-            // require exactly one of --size-percent / --full at parse time (before any connection), so it is a
-            // clean usage error and unit-testable without a socket; the dispatcher re-checks the same rules.
+            // validate at parse time (before any connection) so it's a clean usage error, unit-testable
+            // without a socket; the dispatcher re-checks the same rules. One-of {--full, --size-percent,
+            // --cols/--rows} OR none, at least one of {a size mode, --anchor}, and --full ⊥ --anchor.
             func validate() throws {
-                if full && sizePercent != nil { throw ValidationError("--full cannot be combined with --size-percent") }
-                if !full && sizePercent == nil { throw ValidationError("provide --size-percent PERCENT or --full") }
-                if let sizePercent, !(1...100).contains(sizePercent) {
-                    throw ValidationError("--size-percent must be between 1 and 100")
+                try Overlay.validateSize(.resize, full: full, sizePercent: sizePercent, cols: cols, rows: rows)
+                let parsedAnchor = try Overlay.parseAnchor(anchor)
+                if full, parsedAnchor != nil {
+                    throw ValidationError("--full cannot be combined with --anchor")
+                }
+                let hasSize = full || sizePercent != nil || cols != nil || rows != nil
+                if !hasSize, parsedAnchor == nil {
+                    throw ValidationError("session.overlay.resize requires a size (--full, --size-percent, --cols/--rows) or --anchor")
                 }
             }
 
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionOverlayResize, target: target.target,
-                               args: options.withWindow(ControlArgs(sizePercent: sizePercent, full: full ? true : nil)))
+                               args: options.withWindow(ControlArgs(sizePercent: sizePercent, full: full ? true : nil,
+                                                                     cols: cols, rows: rows, anchor: anchor)))
             }
         }
 

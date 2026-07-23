@@ -386,15 +386,15 @@ via `OverlayLayout.panelSize` + anchor alignment. `tree` reports requested + app
 - Modify: `agtermCore/Sources/agtermctlKit/SessionCommands.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/CommandsTests.swift`
 
-- [ ] `session overlay open`: add `--cols`/`--rows`/`--anchor`; `validate()` mirrors dispatcher (one-of
+- [x] `session overlay open`: add `--cols`/`--rows`/`--anchor`; `validate()` mirrors dispatcher (one-of
       size, cols&rows together, **percent 1…100 now enforced on open**, anchor value, anchor-requires-
       floating); map into `ControlArgs`
-- [ ] `session overlay resize`: add `--cols`/`--rows`/`--anchor`; extend `validate()` to one-of size or
+- [x] `session overlay resize`: add `--cols`/`--rows`/`--anchor`; extend `validate()` to one-of size or
       none, at-least-one of {size, anchor}, `full` ⊥ `anchor`
-- [ ] update help text
-- [ ] write tests: request mapping for each open/resize mode; `validate()` accepts valid combos and
+- [x] update help text
+- [x] write tests: request mapping for each open/resize mode; `validate()` accepts valid combos and
       rejects each invalid one (incl. the new open percent-range error) with the expected message
-- [ ] run `swift test` — must pass before next task
+- [x] run `swift test` — must pass before next task
 
 ### Task 7: End-to-end XCUITests (wire + actual grid + frame)
 
