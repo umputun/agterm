@@ -174,8 +174,10 @@ the read side of `session resize`, record it to restore the exact divider), `spl
 when there's no split; the read side of `session focus`, record it to restore focus),
 `canvasCols`/`canvasRows` (the session's terminal CONTENT AREA — the "overlay canvas" — in whole cells at
 the base font, so a script sizes a floating overlay as a fraction of the canvas: `overlay open <cmd> --cols
-$canvasCols --rows $((canvasRows*30/100)) --anchor top` is a 30%-tall top strip; split-agnostic — full
-height, full width across the whole detail area; omitted when no surface is realized), and `surfaces`
+$canvasCols --rows $((canvasRows*30/100)) --anchor top` is a ~30%-tall top strip; split-agnostic — full
+height, full width across the whole detail area. A floating overlay is inset by a uniform one-line-height
+safe-area margin, so `--cols $canvasCols` CLAMPS to the usable width (read the realized grid back on
+`overlayColsApplied`/`overlayRowsApplied`); omitted when no surface is realized), and `surfaces`
 (`id`, `kind`, `active`, `visible`) for `surface zoom`. The tree top level carries `zoomedSurface`
 (the control id of the currently zoomed surface, omitted when nothing is zoomed — the read side of
 `surface zoom`, so a script can check the zoom state and record-then-restore). It also carries the read

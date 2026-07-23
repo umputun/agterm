@@ -560,15 +560,17 @@ final class ControlServer {
     }
 
     /// The session's terminal content-area grid (columns × rows) for the `tree` `canvasCols`/`canvasRows`
-    /// read-back — the whole detail region a floating overlay fills, measured at the session's base font from
-    /// the live `ghostty_surface_size()` grid (unitless cell counts, no Retina conversion). The primary pane's
-    /// grid when NOT split (exact). When the split is shown side-by-side, `canvasCols` is the WHOLE detail
-    /// width measured from BOTH panes' pixel widths at ONE cell size (`OverlayLayout.splitCanvasCols`) —
-    /// floored once, not the sum of each pane's already-floored (possibly different-font) column count — so
-    /// it is the true grid `--cols` fills (the thin divider is uncounted, a fraction of a cell). `canvasRows`
-    /// is the main pane's rows (a left/right split keeps full height). A hidden split maximized on the split
-    /// pane reports that pane's own full-width grid. nil when no surface is realized (the overlay-metrics nil
-    /// convention).
+    /// read-back — the whole detail region an overlay is placed within, measured at the session's base font
+    /// from the live `ghostty_surface_size()` grid (unitless cell counts, no Retina conversion). The primary
+    /// pane's grid when NOT split (exact). When the split is shown side-by-side, `canvasCols` is the WHOLE
+    /// detail width measured from BOTH panes' backing-pixel widths at ONE cell size
+    /// (`OverlayLayout.splitCanvasCols`) — floored once, not the sum of each pane's already-floored
+    /// (possibly different-font) column count — so the per-pane inner padding IS counted and only the thin
+    /// divider (a fraction of a cell) is uncounted. `canvasRows` is the main pane's rows (a left/right split
+    /// keeps full height). A hidden split maximized on the split pane reports that pane's own full-width grid.
+    /// A floating overlay is inset by a uniform one-line-height safe-area margin, so a `--cols canvasCols`
+    /// request clamps to the usable area (read `overlayColsApplied`/`overlayRowsApplied` for the realized
+    /// grid). nil when no surface is realized (the overlay-metrics nil convention).
     private func sessionCanvasGrid(_ session: Session) -> (cols: Int, rows: Int)? {
         let mainView = session.surface as? GhosttySurfaceView
         let splitView = session.splitSurface as? GhosttySurfaceView

@@ -450,8 +450,11 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">canvasRows</span> (the terminal content area — the overlay
                 "canvas" — in whole cells at the base font, the coordinate system
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">overlay open --cols/--rows</span> land in,
-                so a script can size a floating overlay as a fraction of the canvas; split-agnostic full height and full width,
-                omitted when no surface is realized).
+                so a script can size a floating overlay as a fraction of the canvas; split-agnostic full height and full width. A floating
+                overlay is inset by a uniform one-line-height safe-area margin, so a
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--cols canvasCols</span> request clamps to the
+                usable area — read <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlayColsApplied</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlayRowsApplied</span>
+                back for the realized grid. Omitted when no surface is realized).
               </p>
               <p style="font-size: 14px; line-height: 1.65; color: #949ba4; margin: 8px 0 0">
                 <strong style="color: #bfbab0">Workspace node:</strong>

@@ -470,17 +470,20 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let surfaces: [ControlSurfaceNode]?
     /// The session's terminal CONTENT AREA (the overlay "canvas") in whole cells at the session's BASE font
     /// — the font a fresh `session.overlay.open` uses — so a script can size a floating overlay as a
-    /// fraction of the canvas: `overlay open --cols canvasCols --rows canvasRows` fills it, `--rows
-    /// round(0.30 * canvasRows)` is 30% of the height. It is the WHOLE detail region an overlay fills
-    /// (everything except the sidebar and title bar) taken as ONE area, SPLIT-AGNOSTIC: `canvasRows` is the
-    /// full height in cells (a left/right split keeps full height) and `canvasCols` is the full width across
-    /// the whole detail area — the primary pane's columns when NOT split, and the SUM of the two panes'
-    /// columns when the split is shown side-by-side. Exact for the unsplit case; for a side-by-side split
-    /// the thin divider and per-pane inner padding are not counted, so `canvasCols` slightly UNDERESTIMATES a
-    /// single full-width surface (best-effort — it never over-reports the full width). nil/omitted when no
-    /// surface is realized / the grid is unknown. Measured app-side from the live `ghostty_surface_size()`
-    /// grid (unitless cell counts — no Retina conversion), which tracks the main pane's cmd-+/- zoom exactly
-    /// as the base overlay font does.
+    /// fraction of the canvas: `--rows round(0.30 * canvasRows)` is a 30%-tall strip. It reports the
+    /// coordinate system `session.overlay.open --cols/--rows` land in, taken as ONE area and SPLIT-AGNOSTIC:
+    /// `canvasRows` is the full height in cells (a left/right split keeps full height) and `canvasCols` is the
+    /// full width across the whole detail area — the primary pane's columns when NOT split (exact), and for a
+    /// side-by-side split the whole detail width measured from BOTH panes' BACKING-PIXEL widths at ONE cell
+    /// size (the primary pane's), floored ONCE — so the per-pane inner padding IS counted and only the thin
+    /// divider (a fraction of a cell) is uncounted, slightly UNDERESTIMATING a single full-width surface
+    /// (best-effort — it never over-reports). A floating overlay does NOT fill the canvas edge-to-edge: every
+    /// floating overlay is inset by a uniform one-line-height SAFE-AREA margin on all four sides, so a request
+    /// as large as the canvas (`--cols canvasCols`) CLAMPS to the usable area (canvas minus the margins). Read
+    /// the realized grid back on `overlayColsApplied`/`overlayRowsApplied` for the exact result, or request
+    /// within (canvas − margin) for an exact fit. nil/omitted when no surface is realized / the grid is
+    /// unknown. Measured app-side from the live `ghostty_surface_size()` grid (unitless cell counts — no
+    /// Retina conversion), which tracks the main pane's cmd-+/- zoom exactly as the base overlay font does.
     public let canvasCols: Int?
     public let canvasRows: Int?
 

@@ -137,14 +137,17 @@ default/left target (the main pane, or the promoted split survivor once the prim
 promoted survivor are live-only — read them back here rather than from the snapshot),
 `canvasCols`/`canvasRows` (the session's terminal CONTENT AREA — the "overlay canvas" — in whole cells at
 the session's BASE font, the coordinate system `overlay open --cols/--rows` land in; so a script sizes a
-floating overlay as a fraction of the canvas: `overlay open <cmd> --cols $canvasCols --rows $canvasRows`
-fills it, `--rows $((canvasRows*30/100))` is 30% of the height. It is the WHOLE detail region an overlay
-fills (everything except the sidebar and title bar) taken as ONE area, split-AGNOSTIC: `canvasRows` is the
-full height (a left/right split keeps full height) and `canvasCols` the full width — the primary pane's
-columns unsplit (exact), and when split side-by-side the whole detail width measured from both panes'
-pixel widths at ONE cell size (floored once, not a sum of per-pane floored columns; a split `canvasCols`
-underestimates a single full-width surface only by the thin divider, a fraction of a cell). Omitted when
-no surface is realized), and `surfaces` (array
+floating overlay as a fraction of the canvas: `--rows $((canvasRows*30/100))` is 30% of the height. It is
+the WHOLE detail region an overlay is placed within (everything except the sidebar and title bar) taken as
+ONE area, split-AGNOSTIC: `canvasRows` is the full height (a left/right split keeps full height) and
+`canvasCols` the full width — the primary pane's columns unsplit (exact), and when split side-by-side the
+whole detail width measured from both panes' pixel widths at ONE cell size (floored once, so the per-pane
+padding IS counted, not a sum of per-pane floored columns; a split `canvasCols` underestimates a single
+full-width surface only by the thin divider, a fraction of a cell). A floating overlay does NOT fill the
+canvas edge-to-edge: it is inset by a uniform one-line-height safe-area margin on all four sides, so a
+`--cols $canvasCols` request CLAMPS to the usable area — read the realized grid back on
+`overlayColsApplied`/`overlayRowsApplied`, or request within (canvas − margin) for an exact fit. Omitted
+when no surface is realized), and `surfaces` (array
 of `{id, kind, active, visible}` where `kind` is `left`|`right`|`scratch`|`overlay`).
 The surface `id` is the address for `surface zoom`; hidden-but-alive split/scratch surfaces are included
 so a script can zoom them without changing split/scratch visibility first. Caveat: `active`/`visible`

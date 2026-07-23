@@ -1371,7 +1371,12 @@ paths:
   documented in the field's godoc.
   Because the main surface's live font tracks `session.fontSize` (cmd-+/-) and a fresh overlay is created
   with the SAME `session.fontSize`, the grid measured at the main pane's live font equals the base overlay
-  font by construction — so `overlay open --cols canvasCols --rows canvasRows` fills the canvas.
+  font by construction.
+  A floating overlay does NOT fill the canvas edge-to-edge, though: every floating overlay is inset by a
+  uniform one-line-height SAFE-AREA margin on all four sides, so `overlay open --cols canvasCols` CLAMPS to
+  the usable area (canvas minus the margins) rather than filling it.
+  A script wanting an exact fit reads the realized grid back on `overlayColsApplied`/`overlayRowsApplied`,
+  or requests within (canvas − margin).
   Omitted when no surface is realized (the overlay-metrics nil convention).
   `tree` ALSO carries, at the TOP level (alongside `idleMs`/`autoFollowMs`), `sidebarVisible` — the read
   side of the write-only `sidebar` command (per-window sidebar visibility), populated LIVE from the

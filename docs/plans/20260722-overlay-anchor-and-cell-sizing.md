@@ -223,7 +223,8 @@ maintainer decisions are folded in below:
 ➕ **Follow-on addition (post-completion scope): canvas grid read-back on `tree`.**
 A separate, maintainer-confirmed addition beyond the original ten tasks: report the terminal CONTENT AREA
 size in cells on each `tree` session node so a script can compute concrete `overlay open --cols/--rows` as a
-fraction of the canvas (`--rows canvasRows` fills the height, `--rows round(0.30*canvasRows)` is 30%).
+fraction of the canvas (`--rows round(0.30*canvasRows)` is a ~30%-tall strip; note a floating overlay is
+inset by a one-line-height safe-area margin, so a full-canvas request clamps to the usable area).
 - Two new `ControlSessionNode` fields `canvasCols`/`canvasRows` (`ControlProtocol.swift`), optional +
   omit-when-nil, measured at the session's BASE font (the font a fresh overlay uses) so the reported grid is
   exactly the coordinate system `--cols/--rows` land in.
@@ -234,10 +235,12 @@ fraction of the canvas (`--rows canvasRows` fills the height, `--rows round(0.30
   px→point Retina conversion, unlike the overlay cell metrics).
 - **Split handling (measurement decision):** split-agnostic — the whole detail region taken as ONE area.
   `canvasRows` = the main pane's rows (full height; a left/right split keeps full height).
-  `canvasCols` = the primary pane's columns when NOT split (exact), the SUM of both panes' columns when the
-  split is shown side-by-side (`isSplit`), or the split pane's own full-width grid for a hidden split
-  maximized on it (`hasSplit && splitFocused`). A side-by-side split `canvasCols` slightly underestimates a
-  single full-width surface (the divider + per-pane inner padding are uncounted) — the confirmed
+  `canvasCols` = the primary pane's columns when NOT split (exact), the whole detail width measured from BOTH
+  panes' BACKING-PIXEL widths at ONE cell size (the primary pane's) and floored ONCE
+  (`OverlayLayout.splitCanvasCols`) when the split is shown side-by-side (`isSplit`), or the split pane's own
+  full-width grid for a hidden split maximized on it (`hasSplit && splitFocused`). A side-by-side split
+  `canvasCols` slightly underestimates a single full-width surface by ONLY the thin divider (a fraction of a
+  cell; the per-pane inner padding IS counted, riding in each pane's pixel width) — the confirmed
   "exact-unsplit, as-close-as-possible-for-split" trade, documented in the field godoc; never the half-width
   main pane alone.
 - Tests: round-trip + omit-when-nil in `ControlProtocolTests`; a `controlTree` populate test
