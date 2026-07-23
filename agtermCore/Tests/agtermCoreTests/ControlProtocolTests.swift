@@ -714,6 +714,31 @@ struct ControlProtocolTests {
         #expect(decoded.overlayAnchor == nil)
     }
 
+    @Test func treeSessionNodeRoundTripsWithCanvasGrid() throws {
+        // the terminal content area (overlay canvas) in cells at the base font, so a script can size a
+        // floating overlay as a fraction of the canvas (`--cols canvasCols --rows canvasRows` fills it).
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         canvasCols: 132, canvasRows: 43)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        let node = decoded.result?.tree?.workspaces.first?.sessions.first
+        #expect(node?.canvasCols == 132)
+        #expect(node?.canvasRows == 43)
+    }
+
+    @Test func treeSessionNodeOmitsCanvasGridWhenNil() throws {
+        // no realized surface (grid unknown) — both keys must be omitted, not emitted as null.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("canvasCols"), "a nil canvas grid must omit canvasCols; got \(json)")
+        #expect(!json.contains("canvasRows"), "a nil canvas grid must omit canvasRows; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.canvasCols == nil)
+        #expect(decoded.canvasRows == nil)
+    }
+
     @Test func treeSessionNodeRoundTripsWithRestoreCommand() throws {
         // the read side of session.restore: the pinned shell line rides the tree node per pane so a script
         // can record what is pinned, change it, and restore the original.

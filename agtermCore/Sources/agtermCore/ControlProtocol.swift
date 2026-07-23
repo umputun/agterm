@@ -468,6 +468,21 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// addition uses, keeping Codable synthesized). Hidden-but-alive surfaces are included so control
     /// clients can zoom them without mutating split/scratch visibility first.
     public let surfaces: [ControlSurfaceNode]?
+    /// The session's terminal CONTENT AREA (the overlay "canvas") in whole cells at the session's BASE font
+    /// — the font a fresh `session.overlay.open` uses — so a script can size a floating overlay as a
+    /// fraction of the canvas: `overlay open --cols canvasCols --rows canvasRows` fills it, `--rows
+    /// round(0.30 * canvasRows)` is 30% of the height. It is the WHOLE detail region an overlay fills
+    /// (everything except the sidebar and title bar) taken as ONE area, SPLIT-AGNOSTIC: `canvasRows` is the
+    /// full height in cells (a left/right split keeps full height) and `canvasCols` is the full width across
+    /// the whole detail area — the primary pane's columns when NOT split, and the SUM of the two panes'
+    /// columns when the split is shown side-by-side. Exact for the unsplit case; for a side-by-side split
+    /// the thin divider and per-pane inner padding are not counted, so `canvasCols` slightly UNDERESTIMATES a
+    /// single full-width surface (best-effort — it never over-reports the full width). nil/omitted when no
+    /// surface is realized / the grid is unknown. Measured app-side from the live `ghostty_surface_size()`
+    /// grid (unitless cell counts — no Retina conversion), which tracks the main pane's cmd-+/- zoom exactly
+    /// as the base overlay font does.
+    public let canvasCols: Int?
+    public let canvasRows: Int?
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 splitRatio: Double? = nil, splitFocused: Bool? = nil,
@@ -481,7 +496,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 statusPane: String? = nil, statusBlink: Bool? = nil, statusColor: String? = nil,
                 background: BackgroundWatermark? = nil, unseen: Int? = nil,
                 fontSize: Double? = nil, splitFontSize: Double? = nil, scratchFontSize: Double? = nil,
-                surfaces: [ControlSurfaceNode]? = nil) {
+                surfaces: [ControlSurfaceNode]? = nil,
+                canvasCols: Int? = nil, canvasRows: Int? = nil) {
         self.id = id
         self.name = name
         self.cwd = cwd
@@ -514,6 +530,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.splitFontSize = splitFontSize
         self.scratchFontSize = scratchFontSize
         self.surfaces = surfaces
+        self.canvasCols = canvasCols
+        self.canvasRows = canvasRows
     }
 }
 

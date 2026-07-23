@@ -237,6 +237,18 @@ agtermctl session overlay open "zsh -lc 'htop'" --target "$AGTERM_SESSION_ID" --
 agtermctl tree --json | jq '.. | objects | select(.overlay == true) | {overlayCols, overlayRows, overlayColsApplied, overlayRowsApplied, overlayAnchor}'
 ```
 
+Size an overlay as a FRACTION of the canvas: read `canvasCols`/`canvasRows` off `tree` (the terminal
+content area in cells at the base font — the coordinate system `--cols/--rows` land in), then compute a
+concrete grid. A 30%-tall top strip spanning the full width:
+
+```bash
+read -r cols rows < <(agtermctl tree --json \
+  | jq -r --arg id "$AGTERM_SESSION_ID" '.result.tree.workspaces[].sessions[] | select(.id|ascii_downcase == ($id|ascii_downcase)) | "\(.canvasCols) \(.canvasRows)"')
+# a top strip 30% of the height, full width, parked at the top
+agtermctl session overlay open "zsh -lc 'tail -f /var/log/system.log'" --target "$AGTERM_SESSION_ID" \
+  --cols "$cols" --rows "$(( rows * 30 / 100 ))" --anchor top
+```
+
 Re-anchor an open floating panel in place — no size change, program keeps running (`--anchor` alone keeps
 the current size; a size mode alone keeps the current anchor):
 

@@ -444,8 +444,14 @@
                 restore override, omitted when none and an empty string when pinned to nothing),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commandWait</span> (a held
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--command</span> session created with
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new --wait</span>; omitted otherwise), and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unseen</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session new --wait</span>; omitted otherwise),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unseen</span>, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">canvasCols</span> /
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">canvasRows</span> (the terminal content area — the overlay
+                "canvas" — in whole cells at the base font, the coordinate system
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">overlay open --cols/--rows</span> land in,
+                so a script can size a floating overlay as a fraction of the canvas; split-agnostic full height and full width,
+                omitted when no surface is realized).
               </p>
               <p style="font-size: 14px; line-height: 1.65; color: #949ba4; margin: 8px 0 0">
                 <strong style="color: #bfbab0">Workspace node:</strong>

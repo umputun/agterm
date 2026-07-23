@@ -533,6 +533,7 @@ final class ControlServer {
             fontSize: { ($0.addressableSurface as? GhosttySurfaceView)?.currentFontSize() },
             splitFontSize: { ($0.splitSurface as? GhosttySurfaceView)?.currentFontSize() },
             scratchFontSize: { ($0.scratchSurface as? GhosttySurfaceView)?.currentFontSize() },
+            canvasGrid: { self.sessionCanvasGrid($0) },
             quickVisible: { windowID.flatMap { QuickTerminalRegistry.shared.controller(for: $0)?.isVisible } ?? false },
             zoomedSurface: { windowID.flatMap { TerminalZoomRegistry.shared.controller(for: $0)?.target?.controlID } },
             dashboardMembers: {
@@ -556,6 +557,25 @@ final class ControlServer {
                 }
             }
         )
+    }
+
+    /// The session's terminal content-area grid (columns × rows) for the `tree` `canvasCols`/`canvasRows`
+    /// read-back — the whole detail region a floating overlay fills, measured at the session's base font from
+    /// the live `ghostty_surface_size()` grid (unitless cell counts, no Retina conversion). The primary pane's
+    /// grid when NOT split; the split pane's columns are ADDED when the split is shown side-by-side (the full
+    /// detail width, split-agnostic). A hidden split maximized on the split pane reports that pane's own
+    /// full-width grid. nil when no surface is realized (the overlay-metrics nil convention).
+    private func sessionCanvasGrid(_ session: Session) -> (cols: Int, rows: Int)? {
+        let main = (session.surface as? GhosttySurfaceView)?.liveGrid()
+        let split = (session.splitSurface as? GhosttySurfaceView)?.liveGrid()
+        if session.isSplit, let main, let split {
+            return (cols: main.cols + split.cols, rows: main.rows)
+        }
+        // a hidden (maximized-one-pane) split focused on the split pane: that pane fills the detail width.
+        if session.hasSplit, session.splitFocused, let split {
+            return split
+        }
+        return main
     }
 
     /// Creates a session in `workspaceID` of `store` with the `session.new` args (cwd default $HOME,

@@ -755,6 +755,21 @@ struct AppStorePaneTests {
         #expect(node.scratchFontSize == 11)
     }
 
+    @Test func controlTreeThreadsCanvasGridFromClosure() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        _ = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        // default closure (host-free / no realized surface): both canvas fields omitted (nil).
+        var node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.canvasCols == nil)
+        #expect(node.canvasRows == nil)
+        // the host supplies the content-area grid via the closure (app reads it off the live surface).
+        node = try #require(store.controlTree(canvasGrid: { _ in (cols: 132, rows: 43) })
+            .workspaces[0].sessions.first)
+        #expect(node.canvasCols == 132)
+        #expect(node.canvasRows == 43)
+    }
+
     @Test func controlTreeFontSizeReadsPromotedSurvivorViaAddressableSurface() throws {
         // regression: after the primary pane exits, the fontSize read-back must resolve through
         // addressableSurface — the same surface the font default/left WRITE path targets. With true

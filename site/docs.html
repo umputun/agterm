@@ -1338,6 +1338,11 @@
               the cols/rows grid clamps to the whole cells that fit and a percent panel simply never exceeds the pane; the realized grid reads back on
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree</span> as
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlayColsApplied</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlayRowsApplied</span>.
+              To size relative to the pane,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree</span> also reports
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">canvasCols</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">canvasRows</span>
+              — the terminal content area in whole cells at the base font, the coordinate system
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--cols/--rows</span> land in — so a script can compute a concrete grid as a fraction of the canvas.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--anchor</span> parks it at one of nine positions
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center</span> is the default), inset one line-height off each anchored edge.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay resize</span> changes an

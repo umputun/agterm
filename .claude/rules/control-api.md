@@ -1335,6 +1335,28 @@ paths:
   It is the READ side of `session.focus` (write-only), so a script can record which pane was focused and
   restore it via `session.focus --pane left|right` (a `false` is emitted, distinct from the nil no-split
   case — the left pane being focused is real state).
+  It ALSO surfaces `canvasCols`/`canvasRows` on each node — the session's terminal CONTENT AREA (the overlay
+  "canvas") in whole cells at the BASE font, the exact coordinate system `session.overlay.open --cols/--rows`
+  land in, so a script can size a floating overlay as a fraction of the canvas
+  (`--rows round(0.30*canvasRows)` is a 30%-tall strip).
+  It has NO write command — it is a pure DERIVED read (the max whole-cell grid that fills the detail area),
+  so it is NOT a state-mutating read-back pair; it is supplied APP-SIDE like `fontSize`
+  (the host-free tree can't read a surface), via a `canvasGrid: (Session) -> (cols: Int, rows: Int)?` closure
+  on `AppStore.controlTree` that `ControlServer.buildTree` fills from `GhosttySurfaceView.liveGrid()`
+  (`ghostty_surface_size().columns/.rows` — UNITLESS cell counts, so unlike the overlay cell metrics there is
+  NO px→point Retina conversion).
+  It is SPLIT-AGNOSTIC — the whole detail region an overlay fills, taken as ONE area:
+  `canvasRows` is the full height (`ControlServer.sessionCanvasGrid` reads the main pane's rows, since a
+  left/right split keeps full height), and `canvasCols` is the full width — the primary pane's columns when
+  NOT split, the SUM of both panes' columns when the split is shown side-by-side (`session.isSplit`), and the
+  split pane's own full-width grid for a hidden split maximized on it (`hasSplit && splitFocused`).
+  A side-by-side split `canvasCols` slightly UNDERESTIMATES a single full-width surface (the thin divider and
+  per-pane inner padding are uncounted), exact for the unsplit case — the "as-close-as-possible for split,
+  exact unsplit" trade documented in the field's godoc.
+  Because the main surface's live font tracks `session.fontSize` (cmd-+/-) and a fresh overlay is created
+  with the SAME `session.fontSize`, the grid measured at the main pane's live font equals the base overlay
+  font by construction — so `overlay open --cols canvasCols --rows canvasRows` fills the canvas.
+  Omitted when no surface is realized (the overlay-metrics nil convention).
   `tree` ALSO carries, at the TOP level (alongside `idleMs`/`autoFollowMs`), `sidebarVisible` — the read
   side of the write-only `sidebar` command (per-window sidebar visibility), populated LIVE from the
   projected window's store in `AppStore.controlTree`.

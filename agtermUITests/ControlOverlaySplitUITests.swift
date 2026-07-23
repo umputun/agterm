@@ -773,6 +773,39 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
     }
 
+    // tree canvasCols/canvasRows report the session's terminal CONTENT AREA in cells at the base font, so a
+    // script can size a floating overlay as a fraction of the canvas. Sizing an overlay to the WHOLE canvas
+    // (`--cols canvasCols --rows canvasRows`) must FILL it: the realized (applied) grid matches
+    // canvasCols/canvasRows within the whole-cell padding drift. A canvas reported ~2x off (a Retina cell-count
+    // miss) would size the overlay ~2x off and this comparison would catch it.
+    func testTreeReportsCanvasGridAndOverlayFillsIt() throws {
+        let id = try activeSessionID()
+        try resizeWindow(width: 1100, height: 750)
+
+        let node = try XCTUnwrap(pollCanvasGrid(id: id, timeout: 12),
+                                 "the tree should report the terminal content area (canvasCols/canvasRows)")
+        let canvasCols = try XCTUnwrap(node["canvasCols"] as? Int, "canvasCols should be present: \(node)")
+        let canvasRows = try XCTUnwrap(node["canvasRows"] as? Int, "canvasRows should be present: \(node)")
+        XCTAssertGreaterThan(canvasCols, 0, "canvasCols should be a real grid: \(node)")
+        XCTAssertGreaterThan(canvasRows, 0, "canvasRows should be a real grid: \(node)")
+
+        // open an overlay sized to the whole canvas; the realized grid should fill it (no clamp headroom left).
+        let open = try sendOverlayOpen(target: id, command: "cat", args: ["cols": canvasCols, "rows": canvasRows])
+        XCTAssertEqual(open["ok"] as? Bool, true, "overlay open filling the canvas should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the overlay should be up")
+
+        let applied = try XCTUnwrap(pollOverlayApplied(id: id, timeout: 12), "the tree should report the realized grid")
+        let appliedCols = try XCTUnwrap(applied["overlayColsApplied"] as? Int, "applied cols should be present: \(applied)")
+        let appliedRows = try XCTUnwrap(applied["overlayRowsApplied"] as? Int, "applied rows should be present: \(applied)")
+        XCTAssertTrue(abs(appliedCols - canvasCols) <= 2,
+                      "an overlay sized to the canvas (\(canvasCols) cols) should fill it: applied \(appliedCols)")
+        XCTAssertTrue(abs(appliedRows - canvasRows) <= 2,
+                      "an overlay sized to the canvas (\(canvasRows) rows) should fill it: applied \(appliedRows)")
+
+        let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
+    }
+
     // The floating panel follows its corner anchor AND sits ONE LINE-HEIGHT off the anchored edges (the anchor
     // margin), never flush against the border. The detail area is captured from a FULL overlay (its panel fills
     // the pane exactly with NO inset) via the same `overlay-floating-panel` marker; the floating panel's inset
@@ -1084,6 +1117,14 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
     private func pollOverlayApplied(id: String, timeout: TimeInterval) -> [String: Any]? {
         pollOverlayNode(id: id, timeout: timeout) {
             ($0["overlayColsApplied"] as? Int) != nil && ($0["overlayRowsApplied"] as? Int) != nil
+        }
+    }
+
+    /// Polls the `tree` node for `id` until BOTH `canvasCols` and `canvasRows` are present (the content-area
+    /// grid is reported once the session surface is realized), returning the node, or nil on timeout.
+    private func pollCanvasGrid(id: String, timeout: TimeInterval) -> [String: Any]? {
+        pollOverlayNode(id: id, timeout: timeout) {
+            ($0["canvasCols"] as? Int) != nil && ($0["canvasRows"] as? Int) != nil
         }
     }
 

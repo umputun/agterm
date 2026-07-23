@@ -134,7 +134,16 @@ when zero), `fontSize`/`splitFontSize`/`scratchFontSize` (the LIVE font size in 
 the read side of `font --pane`; each omitted when that pane isn't realized. `fontSize` tracks the
 default/left target (the main pane, or the promoted split survivor once the primary exits — the same pane
 `font --pane left` writes); only the main pane's size survives a relaunch, so the split/scratch sizes and a
-promoted survivor are live-only — read them back here rather than from the snapshot), and `surfaces` (array
+promoted survivor are live-only — read them back here rather than from the snapshot),
+`canvasCols`/`canvasRows` (the session's terminal CONTENT AREA — the "overlay canvas" — in whole cells at
+the session's BASE font, the coordinate system `overlay open --cols/--rows` land in; so a script sizes a
+floating overlay as a fraction of the canvas: `overlay open <cmd> --cols $canvasCols --rows $canvasRows`
+fills it, `--rows $((canvasRows*30/100))` is 30% of the height. It is the WHOLE detail region an overlay
+fills (everything except the sidebar and title bar) taken as ONE area, split-AGNOSTIC: `canvasRows` is the
+full height (a left/right split keeps full height) and `canvasCols` the full width — the primary pane's
+columns unsplit, the SUM of both panes' columns when split side-by-side (a split `canvasCols` slightly
+underestimates a single full-width surface, since the divider and per-pane padding are uncounted; exact
+unsplit). Omitted when no surface is realized), and `surfaces` (array
 of `{id, kind, active, visible}` where `kind` is `left`|`right`|`scratch`|`overlay`).
 The surface `id` is the address for `surface zoom`; hidden-but-alive split/scratch surfaces are included
 so a script can zoom them without changing split/scratch visibility first. Caveat: `active`/`visible`

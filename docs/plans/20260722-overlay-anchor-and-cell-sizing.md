@@ -214,6 +214,35 @@ maintainer decisions are folded in below:
   ZStack child count stays constant per the NSSplitView-overrun invariant), applied AFTER the a11y marker
   so the marker still reports the panel's own frame. Applies to ANY floating overlay (percent or cells).
 
+➕ **Follow-on addition (post-completion scope): canvas grid read-back on `tree`.**
+A separate, maintainer-confirmed addition beyond the original ten tasks: report the terminal CONTENT AREA
+size in cells on each `tree` session node so a script can compute concrete `overlay open --cols/--rows` as a
+fraction of the canvas (`--rows canvasRows` fills the height, `--rows round(0.30*canvasRows)` is 30%).
+- Two new `ControlSessionNode` fields `canvasCols`/`canvasRows` (`ControlProtocol.swift`), optional +
+  omit-when-nil, measured at the session's BASE font (the font a fresh overlay uses) so the reported grid is
+  exactly the coordinate system `--cols/--rows` land in.
+- Populated app-side (the host-free tree can't read a surface), the `fontSize`-closure pattern: a
+  `canvasGrid: (Session) -> (cols: Int, rows: Int)?` closure on `AppStore.controlTree`, filled in
+  `ControlServer.buildTree` from `ControlServer.sessionCanvasGrid` reading the new
+  `GhosttySurfaceView.liveGrid()` (`ghostty_surface_size().columns/.rows` — UNITLESS cell counts, so NO
+  px→point Retina conversion, unlike the overlay cell metrics).
+- **Split handling (measurement decision):** split-agnostic — the whole detail region taken as ONE area.
+  `canvasRows` = the main pane's rows (full height; a left/right split keeps full height).
+  `canvasCols` = the primary pane's columns when NOT split (exact), the SUM of both panes' columns when the
+  split is shown side-by-side (`isSplit`), or the split pane's own full-width grid for a hidden split
+  maximized on it (`hasSplit && splitFocused`). A side-by-side split `canvasCols` slightly underestimates a
+  single full-width surface (the divider + per-pane inner padding are uncounted) — the confirmed
+  "exact-unsplit, as-close-as-possible-for-split" trade, documented in the field godoc; never the half-width
+  main pane alone.
+- Tests: round-trip + omit-when-nil in `ControlProtocolTests`; a `controlTree` populate test
+  (`controlTreeThreadsCanvasGridFromClosure`) in `AppStorePaneTests` (closure-based, like the fontSize
+  populate test); and the e2e `testTreeReportsCanvasGridAndOverlayFillsIt` in `ControlOverlaySplitUITests`
+  (reads `canvasCols`/`canvasRows` off `tree`, asserts > 0, then `overlay open --cols canvasCols --rows
+  canvasRows` yields `overlayColsApplied`/`overlayRowsApplied` ≈ the canvas — catching a ~2x cell-count miss).
+- Keep-in-sync surfaces updated: agent-skill `reference.md`/`SKILL.md`/`examples.md`, `site/commands.html`,
+  `site/docs.html`, `README.md`, and `.claude/rules/control-api.md`. No new `Command` case (a pure derived
+  read), so the command count stays 64.
+
 ## Technical Details
 
 **Host-free types (`agtermCore/Sources/agtermCore/OverlayLayout.swift`):**

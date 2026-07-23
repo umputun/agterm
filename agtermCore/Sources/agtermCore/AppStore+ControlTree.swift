@@ -8,6 +8,7 @@ extension AppStore {
                             fontSize: (Session) -> Double? = { _ in nil },
                             splitFontSize: (Session) -> Double? = { _ in nil },
                             scratchFontSize: (Session) -> Double? = { _ in nil },
+                            canvasGrid: (Session) -> (cols: Int, rows: Int)? = { _ in nil },
                             quickVisible: () -> Bool? = { nil },
                             zoomedSurface: () -> String? = { nil },
                             dashboardMembers: () -> [String]? = { nil },
@@ -40,6 +41,9 @@ extension AppStore {
                 let overlayColsApplied = session.floatingOverlayActive ? session.overlayAppliedCols : nil
                 let overlayRowsApplied = session.floatingOverlayActive ? session.overlayAppliedRows : nil
                 let overlayAnchor = session.overlayActive ? session.overlayAnchor.rawValue : nil
+                // the terminal content area (overlay canvas) in cells at the base font — supplied app-side
+                // (the host-free tree can't read a surface), omitted when no surface is realized.
+                let canvas = canvasGrid(session)
                 let surfaces = TerminalZoomSurface.allCases.compactMap { surface -> ControlSurfaceNode? in
                     guard surface.isAvailable(in: session) else { return nil }
                     let id = TerminalSurfaceID(sessionID: session.id, surface: surface).rawValue
@@ -74,7 +78,8 @@ extension AppStore {
                                           fontSize: fontSize(session),
                                           splitFontSize: splitFontSize(session),
                                           scratchFontSize: scratchFontSize(session),
-                                          surfaces: surfaces)
+                                          surfaces: surfaces,
+                                          canvasCols: canvas?.cols, canvasRows: canvas?.rows)
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,

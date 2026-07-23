@@ -519,6 +519,20 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         let cols: Int, rows: Int
     }
 
+    /// The surface's live terminal grid (columns × rows) from `ghostty_surface_size`, or nil when the surface
+    /// isn't realized or has no size yet. Unlike `overlayPixelMetrics`, this returns the raw cell COUNTS — a
+    /// grid count is unitless, so there is no px→point (Retina) conversion. Feeds the `tree`
+    /// `canvasCols`/`canvasRows` content-area read-back; measured at the surface's current font, which tracks
+    /// the session's base overlay font (both follow `session.fontSize`).
+    func liveGrid() -> (cols: Int, rows: Int)? {
+        guard let surface else { return nil }
+        let size = ghostty_surface_size(surface)
+        let cols = Int(size.columns)
+        let rows = Int(size.rows)
+        guard cols > 0, rows > 0 else { return nil }
+        return (cols: cols, rows: rows)
+    }
+
     /// Reads the overlay surface's live pixel metrics from `ghostty_surface_size`. nil when the surface isn't
     /// realized or has no cell size yet. The caller converts px→points via `backingScaleFactor` before handing
     /// them to the host-free layout resolver (which works in the point space `GeometryReader`/`WindowGeometry.Size`
