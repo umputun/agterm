@@ -402,20 +402,38 @@ struct SessionTests {
     }
 
     @Test func fullOverlayActiveOnlyForFullCoverageOverlay() {
-        // the full-coverage overlay (no size) hides the session content beneath it — panes AND scratch —
+        // the full-coverage overlay (.full) hides the session content beneath it — panes AND scratch —
         // so its translucent background reveals the window backing, never the covered surfaces.
         let session = Session(initialCwd: "/repo")
         // no overlay: nothing to hide behind.
         #expect(session.fullOverlayActive == false)
-        // full-coverage overlay (no size percent): active.
+        #expect(session.floatingOverlayActive == false)
+        // full-coverage overlay (.full size): active and not floating.
         session.overlayActive = true
         #expect(session.fullOverlayActive == true)
-        // floating (sized) overlay: draws an opaque panel over visible content, not a full cover.
-        session.overlaySizePercent = 80
+        #expect(session.floatingOverlayActive == false)
+        // floating (percent) overlay: draws an opaque panel over visible content, not a full cover.
+        session.overlaySize = .percent(80)
         #expect(session.fullOverlayActive == false)
-        // overlay closed with a stale size percent lingering: still not a cover.
+        #expect(session.floatingOverlayActive == true)
+        // a cells-mode floating overlay is likewise not a full cover.
+        session.overlaySize = .cells(cols: 80, rows: 24)
+        #expect(session.fullOverlayActive == false)
+        #expect(session.floatingOverlayActive == true)
+        // overlay closed with a stale non-full size lingering: neither predicate fires.
         session.overlayActive = false
         #expect(session.fullOverlayActive == false)
+        #expect(session.floatingOverlayActive == false)
+    }
+
+    @Test func overlayStateDefaultsToFullCenterNilMetrics() {
+        // a fresh session carries the full/center/nil overlay defaults until an open sets them.
+        let session = Session(initialCwd: "/repo")
+        #expect(session.overlaySize == .full)
+        #expect(session.overlayAnchor == .center)
+        #expect(session.overlayCellMetrics == nil)
+        #expect(session.overlayAppliedCols == nil)
+        #expect(session.overlayAppliedRows == nil)
     }
 
     @Test func paneRoleResolvesTokenToItsCurrentSlot() {

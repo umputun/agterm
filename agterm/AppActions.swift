@@ -354,7 +354,8 @@ final class AppActions {
     func editKeymap() {
         guard uiActionsEnabled else { return }
         guard let store, let id = store.selectedSessionID, let path = settingsModel?.keymapPath else { return }
-        if store.openOverlay(id, command: ConfigPaths.editorCommand(forPath: path), sizePercent: 95) {
+        if store.openOverlay(id, options: .init(command: ConfigPaths.editorCommand(forPath: path),
+                                                size: .percent(95), anchor: .center)) {
             keymapEditOverlaySession = id
         }
     }
@@ -387,7 +388,8 @@ final class AppActions {
     func editGhosttyConfig() {
         guard uiActionsEnabled else { return }
         guard let store, let id = store.selectedSessionID, let path = settingsModel?.ghosttyConfigPath else { return }
-        if store.openOverlay(id, command: ConfigPaths.editorCommand(forPath: path), sizePercent: 95) {
+        if store.openOverlay(id, options: .init(command: ConfigPaths.editorCommand(forPath: path),
+                                                size: .percent(95), anchor: .center)) {
             ghosttyEditOverlaySession = id
             ghosttyEditOverlaySnapshot = try? String(contentsOfFile: path, encoding: .utf8)
         }

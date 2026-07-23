@@ -300,21 +300,21 @@ via `OverlayLayout.panelSize` + anchor alignment. `tree` reports requested + app
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStorePaneTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/TerminalZoomTests.swift`
 
-- [ ] replace `Session.overlaySizePercent` with `overlaySize: OverlaySize = .full`; add `overlayAnchor:
+- [x] replace `Session.overlaySizePercent` with `overlaySize: OverlaySize = .full`; add `overlayAnchor:
       OverlayAnchor = .center`, observed `overlayCellMetrics: OverlayCellMetrics?`, `overlayAppliedCols:
       Int?`, `overlayAppliedRows: Int?`; re-express `fullOverlayActive`/`floatingOverlayActive`
-- [ ] add `OverlayOpenOptions`; `AppStore.openOverlay(_:options:)` (defensive percent clamp retained);
+- [x] add `OverlayOpenOptions`; `AppStore.openOverlay(_:options:)` (defensive percent clamp retained);
       `resizeOverlay(_:size:anchor:)` (nil = keep; `.full` keeps anchor); `closeOverlay` resets
       size/anchor/metrics/applied
-- [ ] migrate `AppStore.controlTree` percent read to derive from `overlaySize` (keep `overlaySizePercent`
+- [x] migrate `AppStore.controlTree` percent read to derive from `overlaySize` (keep `overlaySizePercent`
       wire field populated); migrate `AppActions.swift:357/390` to `openOverlay(options:
       .init(... size: .percent(95) ...))`
-- [ ] update `AppStorePaneTests` (open/resize via new API; keep the 250→100 / 0→1 defensive-clamp cases)
+- [x] update `AppStorePaneTests` (open/resize via new API; keep the 250→100 / 0→1 defensive-clamp cases)
       and `TerminalZoomTests:104`
-- [ ] write tests: open sets size/anchor; resize percent→cells→full; resize anchor-only keeps size;
+- [x] write tests: open sets size/anchor; resize percent→cells→full; resize anchor-only keeps size;
       size-only keeps anchor; **`--full` preserves the anchor**; predicates per mode; close resets to
       full/center/nil
-- [ ] run `cd agtermCore && swift test` — must pass before next task (app target not yet built)
+- [x] run `cd agtermCore && swift test` — must pass before next task (app target not yet built)
 
 ### Task 3: Wire protocol — args + read-back node (requested + applied + anchor)
 

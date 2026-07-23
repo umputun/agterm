@@ -101,7 +101,7 @@ struct TerminalZoomTests {
         store.closeScratch(session.id)
         #expect(!TerminalZoomController.isTargetValid(.session(session.id, .scratch), in: store, quickTerminalVisible: false))
 
-        #expect(store.openOverlay(session.id, command: "top"))
+        #expect(store.openOverlay(session.id, options: .init(command: "top")))
         #expect(TerminalZoomController.isTargetValid(.session(session.id, .overlay), in: store, quickTerminalVisible: false))
         #expect(store.closeOverlay(session.id))
         #expect(!TerminalZoomController.isTargetValid(.session(session.id, .overlay), in: store, quickTerminalVisible: false))

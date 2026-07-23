@@ -1,5 +1,26 @@
 import Foundation
 
+/// Options for opening a session overlay, grouped into a struct per the 4-plus-parameter rule. Host-free;
+/// the app-target arms and the internal editor-overlay callers build one and hand it to `openOverlay`.
+public struct OverlayOpenOptions: Sendable {
+    public let command: String
+    public let cwd: String?
+    public let wait: Bool
+    public let size: OverlaySize
+    public let anchor: OverlayAnchor
+    public let backgroundColor: String?
+
+    public init(command: String, cwd: String? = nil, wait: Bool = false, size: OverlaySize = .full,
+                anchor: OverlayAnchor = .center, backgroundColor: String? = nil) {
+        self.command = command
+        self.cwd = cwd
+        self.wait = wait
+        self.size = size
+        self.anchor = anchor
+        self.backgroundColor = backgroundColor
+    }
+}
+
 // MARK: - Split, overlay, and scratch panes
 
 extension AppStore {
@@ -167,40 +188,51 @@ extension AppStore {
         closeSplit(sessionID)
     }
 
-    /// Opens an ephemeral overlay terminal on a session running `command` (e.g. a TUI). The overlay
-    /// surface is created lazily by the detail pane and runs the command as its process; when the
-    /// program exits, `closeOverlay` tears it down. No-op (returns false) when the session is unknown
-    /// or already has an overlay open. NOT persisted — the overlay never survives a relaunch.
+    /// Opens an ephemeral overlay terminal on a session running `options.command` (e.g. a TUI). The overlay
+    /// surface is created lazily by the detail pane and runs the command as its process; when the program
+    /// exits, `closeOverlay` tears it down. No-op (returns false) when the session is unknown or already
+    /// has an overlay open. NOT persisted — the overlay never survives a relaunch.
     ///
-    /// `sizePercent` (clamped to 1...100) requests a *floating* overlay: an opaque, framed panel sized
-    /// to that percent of the pane, with the session still visible behind it. nil gives the default
-    /// full-pane overlay that hides the session.
+    /// `options.size` chooses the layout: `.full` gives the default full-pane overlay that hides the
+    /// session; `.percent`/`.cells` request a *floating* overlay, an opaque framed panel with the session
+    /// still visible behind it, placed by `options.anchor`. A `.percent` is defensively clamped to 1...100
+    /// for internal callers; the dispatcher/CLI hard-error out-of-range values before reaching here.
     ///
-    /// `backgroundColor` (`#rrggbb`) gives the overlay pane its own solid background, independent of the
-    /// session's; nil leaves the default theme background. Read by the overlay surface factory at creation.
-    @discardableResult public func openOverlay(_ sessionID: UUID, command: String, cwd: String? = nil,
-                                               wait: Bool = false, sizePercent: Int? = nil,
-                                               backgroundColor: String? = nil) -> Bool {
+    /// `options.backgroundColor` (`#rrggbb`) gives the overlay pane its own solid background, independent
+    /// of the session's; nil leaves the default theme background. Read by the surface factory at creation.
+    @discardableResult public func openOverlay(_ sessionID: UUID, options: OverlayOpenOptions) -> Bool {
         guard let session = session(withID: sessionID), !session.overlayActive else { return false }
-        session.overlayCommand = command
-        session.overlayCwd = cwd
-        session.overlayWait = wait
+        session.overlayCommand = options.command
+        session.overlayCwd = options.cwd
+        session.overlayWait = options.wait
         session.overlayExitCode = nil
-        session.overlaySizePercent = sizePercent.map { min(100, max(1, $0)) }
-        session.overlayBackgroundColor = backgroundColor
+        session.overlaySize = AppStore.clampedOverlaySize(options.size)
+        session.overlayAnchor = options.anchor
+        session.overlayBackgroundColor = options.backgroundColor
         session.overlayActive = true
         return true
     }
 
-    /// Resizes an already-open overlay in place. `sizePercent` (clamped to 1...100) switches it to a
-    /// *floating* opaque framed panel at that percent of the pane with the session visible behind it;
-    /// nil switches it to the full-pane overlay that hides the session and draws translucent. The overlay
-    /// surface stays mounted (the detail pane hosts both variants in one place), so this only re-flows the
-    /// layout — the program keeps running, never re-spawns. No-op (returns false) with no overlay open.
-    @discardableResult public func resizeOverlay(_ sessionID: UUID, sizePercent: Int?) -> Bool {
+    /// Resizes and/or re-anchors an already-open overlay in place. `size` switches the layout — `.full`
+    /// to the full-pane overlay that hides the session, `.percent`/`.cells` to a floating panel over the
+    /// still-visible session; `anchor` moves the floating panel. Either may be nil to KEEP the current
+    /// value, so a resize, an in-place re-anchor, or both are one call; a `.full` size keeps the anchor
+    /// (only `closeOverlay` resets it). The overlay surface stays mounted, so this only re-flows the layout
+    /// — the program keeps running, never re-spawns. No-op (returns false) with no overlay open.
+    @discardableResult public func resizeOverlay(_ sessionID: UUID, size: OverlaySize? = nil,
+                                                 anchor: OverlayAnchor? = nil) -> Bool {
         guard let session = session(withID: sessionID), session.overlayActive else { return false }
-        session.overlaySizePercent = sizePercent.map { min(100, max(1, $0)) }
+        if let size { session.overlaySize = AppStore.clampedOverlaySize(size) }
+        if let anchor { session.overlayAnchor = anchor }
         return true
+    }
+
+    /// Clamps a `.percent` overlay size into 1...100 — the defensive internal clamp retained from the old
+    /// `overlaySizePercent` setter, so a raw internal caller can't set an out-of-range percent. `.full` and
+    /// `.cells` pass through unchanged (their bounds are enforced at the dispatcher/CLI boundary).
+    static func clampedOverlaySize(_ size: OverlaySize) -> OverlaySize {
+        guard case .percent(let percent) = size else { return size }
+        return .percent(min(100, max(1, percent)))
     }
 
     /// Records the overlay program's exit status (parsed app-side from the wrapper's temp file on the
@@ -221,7 +253,11 @@ extension AppStore {
         session.overlayCommand = nil
         session.overlayCwd = nil
         session.overlayWait = false
-        session.overlaySizePercent = nil
+        session.overlaySize = .full
+        session.overlayAnchor = .center
+        session.overlayCellMetrics = nil
+        session.overlayAppliedCols = nil
+        session.overlayAppliedRows = nil
         session.overlayBackgroundColor = nil
         return true
     }

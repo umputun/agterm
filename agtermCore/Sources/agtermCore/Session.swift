@@ -206,25 +206,43 @@ public final class Session: Identifiable {
     /// In-memory only (absent from `snapshot()`), so it never persists.
     @ObservationIgnored public var overlayExitCode: Int?
 
-    /// For a *floating* overlay, the percent of the pane (both width and height) the panel occupies,
-    /// 1...100; nil for the default full-pane overlay. A floating overlay renders as an opaque, framed
-    /// panel centered in the pane with the session still VISIBLE behind it (the full overlay instead
-    /// hides the session and draws translucent). Observed, so the detail pane picks the right layout.
-    /// Set at open, cleared on close; never persisted.
-    public var overlaySizePercent: Int?
+    /// The requested size mode for the overlay panel: `.full` (the default full-pane overlay that hides
+    /// the session and draws translucent), `.percent(1...100)`, or `.cells(cols, rows)` — the latter two
+    /// floating, an opaque framed panel over the still-visible session placed by `overlayAnchor`. Host-free;
+    /// the app resolves it to a concrete frame via `OverlayLayout.panelSize`. Observed, so the detail pane
+    /// re-flows when it changes. Set at open/resize, reset to `.full` on close; never persisted.
+    public var overlaySize: OverlaySize = .full
 
-    /// Whether a FULL-coverage overlay is up: `overlayActive` with no size percent. A full overlay hides
-    /// the session content beneath it — the pane(s) AND a shown scratch — so its translucent background
-    /// reveals the window backing, never a covered surface (under window translucency every surface
-    /// renders a fully transparent background, so anything left visible below would bleed through).
+    /// Where a *floating* overlay panel anchors within the pane — one of nine positions, default `.center`
+    /// (today's placement). Observed, so the detail pane re-positions when it changes. Preserved across a
+    /// `.full` round-trip (only `closeOverlay` resets it to `.center`); never persisted.
+    public var overlayAnchor: OverlayAnchor = .center
+
+    /// The overlay surface's live cell + padding metrics in POINTS, app-maintained (written on surface
+    /// realization, `GHOSTTY_ACTION_CELL_SIZE`, and backing-scale change) so a `.cells` layout can snap to
+    /// whole cells. Observed, so the panel re-lays-out when the metrics change — the imperative
+    /// `overlaySurface` can't drive the view. nil before the surface reports; reset on close.
+    public var overlayCellMetrics: OverlayCellMetrics?
+
+    /// The overlay surface's REALIZED grid (columns/rows actually rendered after clamping), app-maintained
+    /// from the live surface for the `tree` read-back, so a script can detect a clamp or drift vs the
+    /// request. Observed; nil before the surface reports or when no overlay is open; reset on close.
+    public var overlayAppliedCols: Int?
+    /// The overlay surface's realized row count — the row analogue of `overlayAppliedCols`.
+    public var overlayAppliedRows: Int?
+
+    /// Whether a FULL-coverage overlay is up: `overlayActive` with `overlaySize == .full`. A full overlay
+    /// hides the session content beneath it — the pane(s) AND a shown scratch — so its translucent
+    /// background reveals the window backing, never a covered surface (under window translucency every
+    /// surface renders a fully transparent background, so anything left visible below would bleed through).
     /// A floating (sized) overlay is not a cover: it draws an opaque panel over still-visible content.
-    public var fullOverlayActive: Bool { overlayActive && overlaySizePercent == nil }
+    public var fullOverlayActive: Bool { overlayActive && overlaySize == .full }
 
-    /// Whether a FLOATING overlay is up: `overlayActive` WITH a size percent — the complement of
-    /// `fullOverlayActive`. A floating overlay draws an opaque, framed panel sized to `overlaySizePercent`%
-    /// over the still-visible session rather than covering it, so it is not a cover. Read by the detail
-    /// pane to gate the floating panel.
-    public var floatingOverlayActive: Bool { overlayActive && overlaySizePercent != nil }
+    /// Whether a FLOATING overlay is up: `overlayActive` with a non-`.full` `overlaySize` — the complement
+    /// of `fullOverlayActive`. A floating overlay draws an opaque, framed panel sized to `overlaySize` over
+    /// the still-visible session rather than covering it, so it is not a cover. Read by the detail pane to
+    /// gate the floating panel.
+    public var floatingOverlayActive: Bool { overlayActive && overlaySize != .full }
 
     /// Whether the scratch terminal is shown on top of this session (full single-pane size, hiding
     /// the single/split content underneath, like a full overlay). The scratch is a third per-session

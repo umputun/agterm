@@ -198,6 +198,10 @@ public final class AppStore {
                 let idle = session.agentIndicator.status == .idle
                 let status = idle ? nil : session.agentIndicator.status.rawValue
                 let statusPane = idle ? nil : session.agentIndicator.statusPane?.rawValue
+                // `overlaySizePercent` (back-compat wire field) derives from `overlaySize`: the percent for
+                // a `.percent` floating overlay, omitted for full or cells (and when no overlay is open).
+                let overlayPercent: Int? = if session.overlayActive,
+                    case .percent(let percent) = session.overlaySize { percent } else { nil }
                 let surfaces = TerminalZoomSurface.allCases.compactMap { surface -> ControlSurfaceNode? in
                     guard surface.isAvailable(in: session) else { return nil }
                     let id = TerminalSurfaceID(sessionID: session.id, surface: surface).rawValue
@@ -212,7 +216,7 @@ public final class AppStore {
                                           splitRatio: session.hasSplit ? session.splitRatio : nil,
                                           splitFocused: session.hasSplit ? session.splitFocused : nil,
                                           overlay: session.overlayActive,
-                                          overlaySizePercent: session.overlayActive ? session.overlaySizePercent : nil,
+                                          overlaySizePercent: overlayPercent,
                                           scratch: session.scratchActive, flagged: session.flagged,
                                           commandWait: (session.initialCommand != nil && session.commandWait) ? true : nil,
                                           foreground: foreground(session),

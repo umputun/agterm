@@ -425,28 +425,42 @@ struct AppStorePaneTests {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
-        #expect(store.openOverlay(session.id, command: "revdiff", cwd: "/b") == true)
+        #expect(store.openOverlay(session.id, options: .init(command: "revdiff", cwd: "/b")) == true)
         #expect(session.overlayActive == true)
         #expect(session.overlayCommand == "revdiff")
         #expect(session.overlayCwd == "/b")
-        // no size given → the default full-pane overlay, not a floating one.
-        #expect(session.overlaySizePercent == nil)
+        // no size given → the default full-pane overlay, not a floating one, centered.
+        #expect(session.overlaySize == .full)
+        #expect(session.overlayAnchor == .center)
+        #expect(session.fullOverlayActive)
         // a second open while one is active is a no-op.
-        #expect(store.openOverlay(session.id, command: "other") == false)
+        #expect(store.openOverlay(session.id, options: .init(command: "other")) == false)
         #expect(session.overlayCommand == "revdiff")
+    }
+
+    @Test func openOverlaySetsSizeAndAnchor() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        // a floating cells-mode overlay parked in a corner: size and anchor both land on the session.
+        #expect(store.openOverlay(session.id, options: .init(command: "htop", size: .cells(cols: 80, rows: 24),
+                                                             anchor: .bottomRight)) == true)
+        #expect(session.overlaySize == .cells(cols: 80, rows: 24))
+        #expect(session.overlayAnchor == .bottomRight)
+        #expect(session.floatingOverlayActive)
     }
 
     @Test func openOverlayCarriesBackgroundColorAndCloseClears() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
-        #expect(store.openOverlay(session.id, command: "revdiff", backgroundColor: "#2a1a3a") == true)
+        #expect(store.openOverlay(session.id, options: .init(command: "revdiff", backgroundColor: "#2a1a3a")) == true)
         #expect(session.overlayBackgroundColor == "#2a1a3a")
         // close clears the overlay's color back to nil, like the other ephemeral overlay fields.
         store.closeOverlay(session.id)
         #expect(session.overlayBackgroundColor == nil)
         // omitting the color leaves it nil (default theme background, unchanged behavior).
-        #expect(store.openOverlay(session.id, command: "revdiff") == true)
+        #expect(store.openOverlay(session.id, options: .init(command: "revdiff")) == true)
         #expect(session.overlayBackgroundColor == nil)
     }
 
@@ -454,14 +468,14 @@ struct AppStorePaneTests {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
-        store.openOverlay(session.id, command: "revdiff")
+        store.openOverlay(session.id, options: .init(command: "revdiff"))
         #expect(session.overlayExitCode == nil)
         store.recordOverlayExit(session.id, code: 10)
         #expect(store.closeOverlay(session.id) == true)
         // the exit code survives close (read by session.overlay.result after the overlay vanishes)...
         #expect(session.overlayExitCode == 10)
         // ...and is reset when a new overlay opens.
-        #expect(store.openOverlay(session.id, command: "revdiff") == true)
+        #expect(store.openOverlay(session.id, options: .init(command: "revdiff")) == true)
         #expect(session.overlayExitCode == nil)
     }
 
@@ -474,56 +488,101 @@ struct AppStorePaneTests {
         #expect(session.overlayExitCode == nil)
     }
 
-    @Test func openOverlayFloatingClampsSizePercent() {
+    @Test func openOverlayFloatingClampsPercent() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
-        #expect(store.openOverlay(session.id, command: "htop", sizePercent: 70) == true)
-        #expect(session.overlaySizePercent == 70)
-        // close clears the floating size back to nil.
+        #expect(store.openOverlay(session.id, options: .init(command: "htop", size: .percent(70))) == true)
+        #expect(session.overlaySize == .percent(70))
+        // close resets the size back to .full (and the anchor to center).
         store.closeOverlay(session.id)
-        #expect(session.overlaySizePercent == nil)
-        // out-of-range values clamp to 1...100, including negatives; the exact bounds pass through.
-        store.openOverlay(session.id, command: "htop", sizePercent: 250)
-        #expect(session.overlaySizePercent == 100)
+        #expect(session.overlaySize == .full)
+        #expect(session.overlayAnchor == .center)
+        // the defensive internal clamp: out-of-range percents clamp to 1...100, including negatives; the
+        // exact bounds pass through. (the dispatcher/CLI hard-error these — this guards the store's clamp.)
+        store.openOverlay(session.id, options: .init(command: "htop", size: .percent(250)))
+        #expect(session.overlaySize == .percent(100))
         store.closeOverlay(session.id)
-        store.openOverlay(session.id, command: "htop", sizePercent: 0)
-        #expect(session.overlaySizePercent == 1)
+        store.openOverlay(session.id, options: .init(command: "htop", size: .percent(0)))
+        #expect(session.overlaySize == .percent(1))
         store.closeOverlay(session.id)
-        store.openOverlay(session.id, command: "htop", sizePercent: -5)
-        #expect(session.overlaySizePercent == 1)
+        store.openOverlay(session.id, options: .init(command: "htop", size: .percent(-5)))
+        #expect(session.overlaySize == .percent(1))
         store.closeOverlay(session.id)
-        store.openOverlay(session.id, command: "htop", sizePercent: 100)
-        #expect(session.overlaySizePercent == 100)
+        store.openOverlay(session.id, options: .init(command: "htop", size: .percent(100)))
+        #expect(session.overlaySize == .percent(100))
         store.closeOverlay(session.id)
-        store.openOverlay(session.id, command: "htop", sizePercent: 1)
-        #expect(session.overlaySizePercent == 1)
+        store.openOverlay(session.id, options: .init(command: "htop", size: .percent(1)))
+        #expect(session.overlaySize == .percent(1))
     }
 
-    @Test func resizeOverlaySwitchesFullAndFloatingAndClamps() {
+    @Test func resizeOverlayNoOpWithoutOverlay() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
-        // no overlay open → no-op, leaves size untouched.
-        #expect(store.resizeOverlay(session.id, sizePercent: 50) == false)
-        #expect(session.overlaySizePercent == nil)
-        // open full, then resize it to a floating percent (nil → 60).
-        store.openOverlay(session.id, command: "htop")
-        #expect(session.overlaySizePercent == nil)
-        #expect(store.resizeOverlay(session.id, sizePercent: 60) == true)
-        #expect(session.overlaySizePercent == 60)
+        // no overlay open → no-op, leaves the size at its .full default.
+        #expect(store.resizeOverlay(session.id, size: .percent(50)) == false)
+        #expect(session.overlaySize == .full)
+    }
+
+    @Test func resizeOverlayPercentThenCellsThenFullAndClamps() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openOverlay(session.id, options: .init(command: "htop"))
+        #expect(session.overlaySize == .full)
+        // full → floating percent.
+        #expect(store.resizeOverlay(session.id, size: .percent(60)) == true)
+        #expect(session.overlaySize == .percent(60))
         #expect(session.floatingOverlayActive)
-        // resize back to full (nil).
-        #expect(store.resizeOverlay(session.id, sizePercent: nil) == true)
-        #expect(session.overlaySizePercent == nil)
+        // percent → exact cells.
+        #expect(store.resizeOverlay(session.id, size: .cells(cols: 100, rows: 30)) == true)
+        #expect(session.overlaySize == .cells(cols: 100, rows: 30))
+        #expect(session.floatingOverlayActive)
+        // cells → back to full.
+        #expect(store.resizeOverlay(session.id, size: .full) == true)
+        #expect(session.overlaySize == .full)
         #expect(session.fullOverlayActive)
-        // out-of-range percents clamp to 1...100.
-        store.resizeOverlay(session.id, sizePercent: 250)
-        #expect(session.overlaySizePercent == 100)
-        store.resizeOverlay(session.id, sizePercent: 0)
-        #expect(session.overlaySizePercent == 1)
+        // out-of-range percents clamp to 1...100 on resize too.
+        store.resizeOverlay(session.id, size: .percent(250))
+        #expect(session.overlaySize == .percent(100))
+        store.resizeOverlay(session.id, size: .percent(0))
+        #expect(session.overlaySize == .percent(1))
         // the overlay program keeps running across every resize (no re-spawn).
         #expect(session.overlayActive)
+    }
+
+    @Test func resizeOverlayAnchorOnlyKeepsSize() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openOverlay(session.id, options: .init(command: "htop", size: .percent(80), anchor: .center))
+        // a nil size = keep the current size; only the anchor moves.
+        #expect(store.resizeOverlay(session.id, anchor: .topRight) == true)
+        #expect(session.overlaySize == .percent(80))
+        #expect(session.overlayAnchor == .topRight)
+    }
+
+    @Test func resizeOverlaySizeOnlyKeepsAnchor() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openOverlay(session.id, options: .init(command: "htop", size: .percent(80), anchor: .bottomLeft))
+        // a nil anchor = keep the current anchor; only the size changes.
+        #expect(store.resizeOverlay(session.id, size: .cells(cols: 40, rows: 12)) == true)
+        #expect(session.overlaySize == .cells(cols: 40, rows: 12))
+        #expect(session.overlayAnchor == .bottomLeft)
+    }
+
+    @Test func resizeOverlayFullPreservesAnchor() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openOverlay(session.id, options: .init(command: "htop", size: .percent(80), anchor: .top))
+        // resizing to .full keeps the anchor — only closeOverlay resets it to center (Decision 2).
+        #expect(store.resizeOverlay(session.id, size: .full) == true)
+        #expect(session.overlaySize == .full)
+        #expect(session.overlayAnchor == .top)
     }
 
     @Test func controlTreeReportsCommandWait() throws {
@@ -553,13 +612,18 @@ struct AppStorePaneTests {
         var node = try #require(store.controlTree().workspaces[0].sessions.first)
         #expect(node.overlay == false)
         #expect(node.overlaySizePercent == nil)
-        // floating overlay: the percent rides the node so a script can record it before zooming.
-        store.openOverlay(session.id, command: "htop", sizePercent: 95)
+        // floating percent overlay: the percent rides the node so a script can record it before zooming.
+        store.openOverlay(session.id, options: .init(command: "htop", size: .percent(95)))
         node = try #require(store.controlTree().workspaces[0].sessions.first)
         #expect(node.overlay == true)
         #expect(node.overlaySizePercent == 95)
-        // full-pane overlay: open but no size (nil = full).
-        store.resizeOverlay(session.id, sizePercent: nil)
+        // a cells-mode overlay is floating but NOT percent, so the percent wire field is omitted.
+        store.resizeOverlay(session.id, size: .cells(cols: 80, rows: 24))
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.overlay == true)
+        #expect(node.overlaySizePercent == nil)
+        // full-pane overlay: open but no percent (full).
+        store.resizeOverlay(session.id, size: .full)
         node = try #require(store.controlTree().workspaces[0].sessions.first)
         #expect(node.overlay == true)
         #expect(node.overlaySizePercent == nil)
@@ -716,7 +780,7 @@ struct AppStorePaneTests {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
-        store.openOverlay(session.id, command: "revdiff")
+        store.openOverlay(session.id, options: .init(command: "revdiff"))
         let overlay = SpySurface()
         session.overlaySurface = overlay
         #expect(store.closeOverlay(session.id) == true)
@@ -728,11 +792,30 @@ struct AppStorePaneTests {
         #expect(store.closeOverlay(session.id) == false)
     }
 
+    @Test func closeOverlayResetsSizeAnchorAndMetrics() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openOverlay(session.id, options: .init(command: "htop", size: .cells(cols: 80, rows: 24),
+                                                     anchor: .bottomRight))
+        // simulate the app-maintained live metrics + realized grid that the surface would populate.
+        session.overlayCellMetrics = OverlayCellMetrics(cellWidth: 8, cellHeight: 16, padWidth: 4, padHeight: 4)
+        session.overlayAppliedCols = 80
+        session.overlayAppliedRows = 24
+        #expect(store.closeOverlay(session.id) == true)
+        // close resets the whole floating-overlay state to full/center/nil.
+        #expect(session.overlaySize == .full)
+        #expect(session.overlayAnchor == .center)
+        #expect(session.overlayCellMetrics == nil)
+        #expect(session.overlayAppliedCols == nil)
+        #expect(session.overlayAppliedRows == nil)
+    }
+
     @Test func closeSessionTearsDownOverlaySurface() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
-        store.openOverlay(session.id, command: "revdiff")
+        store.openOverlay(session.id, options: .init(command: "revdiff"))
         let overlay = SpySurface()
         session.overlaySurface = overlay
         store.closeSession(session.id)
