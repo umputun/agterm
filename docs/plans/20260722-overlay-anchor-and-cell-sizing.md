@@ -343,17 +343,17 @@ via `OverlayLayout.panelSize` + anchor alignment. `tree` reports requested + app
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/MockControlActions.swift`
 
-- [ ] extend `ControlActions.openSessionOverlay`/`resizeSessionOverlay` + `ControlSessionOverlayOpenOptions`
+- [x] extend `ControlActions.openSessionOverlay`/`resizeSessionOverlay` + `ControlSessionOverlayOpenOptions`
       to carry `OverlaySize`/`OverlayAnchor`; update `MockControlActions`
-- [ ] `.sessionOverlayOpen`: parse size (percent/cells, no `--full`), validate one-of + cols·rows pairing
+- [x] `.sessionOverlayOpen`: parse size (percent/cells, no `--full`), validate one-of + cols·rows pairing
       + **percent 1…100 hard-error (Decision 3)** + anchor parse + anchor-requires-floating; build options
-- [ ] `.sessionOverlayResize`: validate one-of {full/percent/cells} or none, at-least-one-of {size,
+- [x] `.sessionOverlayResize`: validate one-of {full/percent/cells} or none, at-least-one-of {size,
       anchor}, `full` ⊥ `anchor`; pass `size: OverlaySize?`/`anchor: OverlayAnchor?`
-- [ ] factor size/anchor parsing into shared pure helpers used by both arms
-- [ ] write tests: each valid open/resize mode routes correctly (assert mock call args); each error
+- [x] factor size/anchor parsing into shared pure helpers used by both arms
+- [x] write tests: each valid open/resize mode routes correctly (assert mock call args); each error
       (both cols/rows required, **percent out-of-range now errors on open**, unknown anchor,
       anchor-without-floating, full+anchor, resize-with-nothing)
-- [ ] run `swift test` — must pass before next task
+- [x] run `swift test` — must pass before next task
 
 ### Task 5: App-side arms + observable metrics + overlayPanel rendering
 

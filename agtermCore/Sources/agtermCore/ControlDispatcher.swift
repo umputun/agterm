@@ -62,7 +62,10 @@ public protocol ControlActions {
     func openSessionOverlay(_ target: String?, window: String?,
                             options: ControlSessionOverlayOpenOptions) -> ControlResponse
     func closeSessionOverlay(_ target: String?, window: String?) -> ControlResponse
-    func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse
+    /// Resize/re-anchor an open overlay. `size` nil keeps the current size, `anchor` nil keeps the current
+    /// anchor; the dispatcher guarantees at least one is non-nil.
+    func resizeSessionOverlay(_ target: String?, window: String?,
+                              size: OverlaySize?, anchor: OverlayAnchor?) -> ControlResponse
     func sessionOverlayResult(_ target: String?, window: String?) -> ControlResponse
     func setSessionBackground(_ target: String?, window: String?,
                               options: ControlSessionBackgroundOptions) -> ControlResponse
@@ -96,16 +99,18 @@ public struct ControlSessionOverlayOpenOptions: Equatable, Sendable {
     public let command: String
     public let cwd: String?
     public let wait: Bool
-    public let sizePercent: Int?
+    public let size: OverlaySize
+    public let anchor: OverlayAnchor
     public let backgroundColor: String?
     public let follow: Bool
 
-    public init(command: String, cwd: String?, wait: Bool, sizePercent: Int?, backgroundColor: String?,
-                follow: Bool = false) {
+    public init(command: String, cwd: String?, wait: Bool, size: OverlaySize = .full,
+                anchor: OverlayAnchor = .center, backgroundColor: String?, follow: Bool = false) {
         self.command = command
         self.cwd = cwd
         self.wait = wait
-        self.sizePercent = sizePercent
+        self.size = size
+        self.anchor = anchor
         self.backgroundColor = backgroundColor
         self.follow = follow
     }
@@ -487,37 +492,11 @@ public struct ControlDispatcher {
             return await actions.searchSession(request.target, window: request.args?.window,
                                                text: request.args?.text, to: request.args?.to)
         case .sessionOverlayOpen:
-            guard let command = request.args?.command, !command.isEmpty else {
-                return ControlResponse(ok: false, error: "session.overlay.open requires a command")
-            }
-            if let color = request.args?.color, !WatermarkConfig.isValidColorHex(color) {
-                return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
-            }
-            return actions.openSessionOverlay(request.target, window: request.args?.window,
-                                              options: ControlSessionOverlayOpenOptions(
-                                                command: command,
-                                                cwd: request.args?.cwd,
-                                                wait: request.args?.wait ?? false,
-                                                sizePercent: request.args?.sizePercent,
-                                                backgroundColor: request.args?.color,
-                                                follow: request.args?.follow ?? false
-                                              ))
+            return dispatchSessionOverlayOpen(request)
         case .sessionOverlayClose:
             return actions.closeSessionOverlay(request.target, window: request.args?.window)
         case .sessionOverlayResize:
-            let wantsFull = request.args?.full == true
-            let percent = request.args?.sizePercent
-            if wantsFull, percent != nil {
-                return ControlResponse(ok: false, error: "session.overlay.resize: --full is mutually exclusive with --size-percent")
-            }
-            if !wantsFull, percent == nil {
-                return ControlResponse(ok: false, error: "session.overlay.resize requires --size-percent or --full")
-            }
-            if let percent, !(1...100).contains(percent) {
-                return ControlResponse(ok: false, error: "session.overlay.resize: --size-percent must be 1...100")
-            }
-            return actions.resizeSessionOverlay(request.target, window: request.args?.window,
-                                                sizePercent: wantsFull ? nil : percent)
+            return dispatchSessionOverlayResize(request)
         case .sessionOverlayResult:
             return actions.sessionOverlayResult(request.target, window: request.args?.window)
         case .sessionBackground:
@@ -527,6 +506,128 @@ public struct ControlDispatcher {
         default:
             preconditionFailure("unexpected session surface command: \(request.cmd.rawValue)")
         }
+    }
+
+    /// `session.overlay.open`: build the overlay open options. Absence of any size arg means a full-pane
+    /// overlay (open has no `--full`); an `--anchor` is only meaningful for a floating overlay.
+    private func dispatchSessionOverlayOpen(_ request: ControlRequest) -> ControlResponse {
+        let args = request.args
+        guard let command = args?.command, !command.isEmpty else {
+            return ControlResponse(ok: false, error: "session.overlay.open requires a command")
+        }
+        if let color = args?.color, !WatermarkConfig.isValidColorHex(color) {
+            return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
+        }
+        let size: OverlaySize
+        switch parseOverlaySize(args, command: "session.overlay.open", allowFull: false) {
+        case .rejected(let rejection): return rejection
+        case .unspecified: size = .full
+        case .size(let parsed): size = parsed
+        }
+        let anchor: OverlayAnchor
+        switch parseOverlayAnchor(args?.anchor) {
+        case .rejected(let rejection): return rejection
+        case .anchor(let parsed):
+            if parsed != nil, size == .full {
+                return ControlResponse(ok: false,
+                                       error: "--anchor requires a floating overlay: use --size-percent or --cols/--rows")
+            }
+            anchor = parsed ?? .center
+        }
+        return actions.openSessionOverlay(request.target, window: args?.window,
+                                          options: ControlSessionOverlayOpenOptions(
+                                            command: command,
+                                            cwd: args?.cwd,
+                                            wait: args?.wait ?? false,
+                                            size: size,
+                                            anchor: anchor,
+                                            backgroundColor: args?.color,
+                                            follow: args?.follow ?? false
+                                          ))
+    }
+
+    /// `session.overlay.resize`: a nil `size`/`anchor` keeps the current one, so at least one must be set;
+    /// `--full` reverts to the full-pane overlay and cannot carry an anchor.
+    private func dispatchSessionOverlayResize(_ request: ControlRequest) -> ControlResponse {
+        let args = request.args
+        let size: OverlaySize?
+        switch parseOverlaySize(args, command: "session.overlay.resize", allowFull: true) {
+        case .rejected(let rejection): return rejection
+        case .unspecified: size = nil
+        case .size(let parsed): size = parsed
+        }
+        let anchor: OverlayAnchor?
+        switch parseOverlayAnchor(args?.anchor) {
+        case .rejected(let rejection): return rejection
+        case .anchor(let parsed): anchor = parsed
+        }
+        if case .some(.full) = size, anchor != nil {
+            return ControlResponse(ok: false, error: "--full cannot be combined with --anchor")
+        }
+        if size == nil, anchor == nil {
+            return ControlResponse(ok: false,
+                                   error: "session.overlay.resize requires a size (--full, --size-percent, --cols/--rows) or --anchor")
+        }
+        return actions.resizeSessionOverlay(request.target, window: args?.window, size: size, anchor: anchor)
+    }
+
+    /// The outcome of parsing the overlay size args: a resolved size, no size arg present (open → full,
+    /// resize → keep current), or the rejection to return as-is.
+    private enum OverlaySizeParse {
+        case size(OverlaySize)
+        case unspecified
+        case rejected(ControlResponse)
+    }
+
+    /// Shared parse + validation of the overlay size args (`--size-percent` / `--cols` / `--rows`, and
+    /// `--full` on resize) for both open and resize. At most one size mode may be set; a percent is a hard
+    /// `1...100` error (Decision 3); cols/rows are both-or-neither and each `>= 1`. `command` prefixes the
+    /// per-command errors; `allowFull` enables the resize-only `--full` mode.
+    private func parseOverlaySize(_ args: ControlArgs?, command: String, allowFull: Bool) -> OverlaySizeParse {
+        let full = allowFull && (args?.full == true)
+        let percent = args?.sizePercent
+        let cols = args?.cols
+        let rows = args?.rows
+        let hasCells = cols != nil || rows != nil
+        let modeCount = (full ? 1 : 0) + (percent != nil ? 1 : 0) + (hasCells ? 1 : 0)
+        if modeCount > 1 {
+            let modes = allowFull ? "--full, --size-percent, or --cols/--rows" : "--size-percent or --cols/--rows"
+            return .rejected(ControlResponse(ok: false, error: "\(command): use only one of \(modes)"))
+        }
+        if full { return .size(.full) }
+        if let percent {
+            guard (1...100).contains(percent) else {
+                return .rejected(ControlResponse(ok: false, error: "\(command): --size-percent must be 1...100"))
+            }
+            return .size(.percent(percent))
+        }
+        if hasCells {
+            guard let cols, let rows else {
+                return .rejected(ControlResponse(ok: false, error: "provide both --cols and --rows"))
+            }
+            guard cols >= 1, rows >= 1 else {
+                return .rejected(ControlResponse(ok: false, error: "--cols and --rows must be >= 1"))
+            }
+            return .size(.cells(cols: cols, rows: rows))
+        }
+        return .unspecified
+    }
+
+    /// The outcome of parsing the `--anchor` selector: the anchor (nil when absent), or the rejection.
+    private enum OverlayAnchorParse {
+        case anchor(OverlayAnchor?)
+        case rejected(ControlResponse)
+    }
+
+    /// Shared `--anchor` parse for both overlay arms: nil when absent, the parsed anchor when valid, or an
+    /// `unknown anchor` rejection listing the nine positions.
+    private func parseOverlayAnchor(_ raw: String?) -> OverlayAnchorParse {
+        guard let raw else { return .anchor(nil) }
+        guard let parsed = OverlayAnchor(rawValue: raw) else {
+            let valid = OverlayAnchor.allCases.map(\.rawValue).joined(separator: "|")
+            return .rejected(ControlResponse(ok: false, error: "unknown anchor: \(raw) (\(valid))"))
+        }
+        return .anchor(parsed)
     }
 
     private func dispatchAppCommand(_ request: ControlRequest) -> ControlResponse {

@@ -1178,7 +1178,7 @@ struct ControlDispatcherTests {
         #expect(actions.calls.isEmpty)
     }
 
-    @Test func sessionOverlayOpenRoutesOptionsAndEchoesActionResponse() async {
+    @Test func sessionOverlayOpenRoutesPercentOptionsAndEchoesActionResponse() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
         actions.nextOverlayOpenResponse = ControlResponse(ok: false, error: "overlay already open")
@@ -1187,19 +1187,39 @@ struct ControlDispatcherTests {
             cmd: .sessionOverlayOpen,
             target: "session",
             args: ControlArgs(cwd: "/tmp", command: "cat", wait: true,
-                              sizePercent: 70, follow: true, window: "win", color: "#2a1a3a")
+                              sizePercent: 70, anchor: "top-right", follow: true, window: "win", color: "#2a1a3a")
         ))
 
         #expect(response == ControlResponse(ok: false, error: "overlay already open"))
         #expect(actions.calls == [
             .overlayOpen(target: "session", window: "win",
                          ControlSessionOverlayOpenOptions(command: "cat", cwd: "/tmp", wait: true,
-                                                          sizePercent: 70, backgroundColor: "#2a1a3a",
-                                                          follow: true))
+                                                          size: .percent(70), anchor: .topRight,
+                                                          backgroundColor: "#2a1a3a", follow: true))
         ])
     }
 
-    @Test func sessionOverlayOpenDefaultsFollowToFalseWhenOmitted() async {
+    @Test func sessionOverlayOpenRoutesCellsAndAnchor() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        actions.nextOverlayOpenResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen,
+            target: "session",
+            args: ControlArgs(command: "htop", cols: 80, rows: 24, anchor: "bottom-left")
+        ))
+
+        #expect(response == ControlResponse(ok: true, result: ControlResult(id: "session")))
+        #expect(actions.calls == [
+            .overlayOpen(target: "session", window: nil,
+                         ControlSessionOverlayOpenOptions(command: "htop", cwd: nil, wait: false,
+                                                          size: .cells(cols: 80, rows: 24), anchor: .bottomLeft,
+                                                          backgroundColor: nil, follow: false))
+        ])
+    }
+
+    @Test func sessionOverlayOpenDefaultsToFullCenterWhenSizeOmitted() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
         actions.nextOverlayOpenResponse = ControlResponse(ok: true, result: ControlResult(id: "session"))
@@ -1214,9 +1234,44 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [
             .overlayOpen(target: "session", window: nil,
                          ControlSessionOverlayOpenOptions(command: "cat", cwd: nil, wait: false,
-                                                          sizePercent: nil, backgroundColor: nil,
-                                                          follow: false))
+                                                          size: .full, anchor: .center,
+                                                          backgroundColor: nil, follow: false))
         ])
+    }
+
+    @Test func sessionOverlayOpenRejectsSizeAndAnchorErrors() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let colsWithoutRows = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen, target: "session", args: ControlArgs(command: "cat", cols: 80)))
+        let percentTooBig = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen, target: "session", args: ControlArgs(command: "cat", sizePercent: 150)))
+        let percentTooSmall = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen, target: "session", args: ControlArgs(command: "cat", sizePercent: 0)))
+        let percentAndCells = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen, target: "session",
+            args: ControlArgs(command: "cat", sizePercent: 50, cols: 80, rows: 24)))
+        let badCells = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen, target: "session", args: ControlArgs(command: "cat", cols: 0, rows: 24)))
+        let unknownAnchor = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen, target: "session",
+            args: ControlArgs(command: "cat", sizePercent: 50, anchor: "sideways")))
+        let anchorWithoutFloating = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayOpen, target: "session", args: ControlArgs(command: "cat", anchor: "top-left")))
+
+        #expect(colsWithoutRows == ControlResponse(ok: false, error: "provide both --cols and --rows"))
+        #expect(percentTooBig == ControlResponse(ok: false, error: "session.overlay.open: --size-percent must be 1...100"))
+        #expect(percentTooSmall == ControlResponse(ok: false, error: "session.overlay.open: --size-percent must be 1...100"))
+        #expect(percentAndCells == ControlResponse(
+            ok: false, error: "session.overlay.open: use only one of --size-percent or --cols/--rows"))
+        #expect(badCells == ControlResponse(ok: false, error: "--cols and --rows must be >= 1"))
+        #expect(unknownAnchor == ControlResponse(
+            ok: false,
+            error: "unknown anchor: sideways (top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right)"))
+        #expect(anchorWithoutFloating == ControlResponse(
+            ok: false, error: "--anchor requires a floating overlay: use --size-percent or --cols/--rows"))
+        #expect(actions.calls.isEmpty)
     }
 
     @Test func sessionOverlayCloseAndResultRouteTargetAndWindow() async {
@@ -1266,10 +1321,10 @@ struct ControlDispatcherTests {
         ))
 
         #expect(response == ControlResponse(ok: true, result: ControlResult(id: "session")))
-        #expect(actions.calls == [.overlayResize(target: "session", window: "win", sizePercent: 60)])
+        #expect(actions.calls == [.overlayResize(target: "session", window: "win", size: .percent(60), anchor: nil)])
     }
 
-    @Test func sessionOverlayResizeFullRoutesNilSizePercent() async {
+    @Test func sessionOverlayResizeFullRoutesFullSize() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
 
@@ -1278,7 +1333,34 @@ struct ControlDispatcherTests {
         ))
 
         #expect(response?.ok == true)
-        #expect(actions.calls == [.overlayResize(target: "session", window: nil, sizePercent: nil)])
+        #expect(actions.calls == [.overlayResize(target: "session", window: nil, size: .full, anchor: nil)])
+    }
+
+    @Test func sessionOverlayResizeRoutesCellsWithAnchor() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayResize, target: "session",
+            args: ControlArgs(cols: 100, rows: 30, anchor: "right")
+        ))
+
+        #expect(response?.ok == true)
+        #expect(actions.calls == [
+            .overlayResize(target: "session", window: nil, size: .cells(cols: 100, rows: 30), anchor: .right)
+        ])
+    }
+
+    @Test func sessionOverlayResizeAnchorOnlyKeepsSize() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayResize, target: "session", args: ControlArgs(anchor: "center")
+        ))
+
+        #expect(response?.ok == true)
+        #expect(actions.calls == [.overlayResize(target: "session", window: nil, size: nil, anchor: .center)])
     }
 
     @Test func sessionOverlayResizeRejectsMissingConflictingAndOutOfRange() async {
@@ -1292,11 +1374,20 @@ struct ControlDispatcherTests {
             cmd: .sessionOverlayResize, target: "session", args: ControlArgs(sizePercent: 101)))
         let tooSmall = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionOverlayResize, target: "session", args: ControlArgs(sizePercent: 0)))
+        let fullAndAnchor = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayResize, target: "session", args: ControlArgs(full: true, anchor: "top-left")))
+        let colsWithoutRows = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionOverlayResize, target: "session", args: ControlArgs(cols: 80)))
 
-        #expect(missing == ControlResponse(ok: false, error: "session.overlay.resize requires --size-percent or --full"))
-        #expect(both == ControlResponse(ok: false, error: "session.overlay.resize: --full is mutually exclusive with --size-percent"))
+        #expect(missing == ControlResponse(
+            ok: false,
+            error: "session.overlay.resize requires a size (--full, --size-percent, --cols/--rows) or --anchor"))
+        #expect(both == ControlResponse(
+            ok: false, error: "session.overlay.resize: use only one of --full, --size-percent, or --cols/--rows"))
         #expect(tooBig == ControlResponse(ok: false, error: "session.overlay.resize: --size-percent must be 1...100"))
         #expect(tooSmall == ControlResponse(ok: false, error: "session.overlay.resize: --size-percent must be 1...100"))
+        #expect(fullAndAnchor == ControlResponse(ok: false, error: "--full cannot be combined with --anchor"))
+        #expect(colsWithoutRows == ControlResponse(ok: false, error: "provide both --cols and --rows"))
         #expect(actions.calls.isEmpty)
     }
 
