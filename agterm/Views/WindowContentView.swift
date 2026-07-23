@@ -525,23 +525,24 @@ struct WindowContentView: View {
     /// overrun), and BOTH variants share this single surface host, so `session.overlay.resize` switching
     /// full<->floating only re-flows the frame — it never re-parents the NSView (which would blank its Metal drawable).
     /// A `.full` `overlaySize` fills the detail area translucent (no opaque backing/frame) with the pane(s)
-    /// hidden by `hideForOverlay`; a floating size (`.percent`/`.cells`) draws an opaque, framed panel sized by
-    /// `OverlayLayout.panelSize` and anchored by `overlayAnchor` (nine positions, default center), with the
-    /// pane(s) visible around it. Only the frame parameters and the ZStack `alignment` change across
-    /// full/floating/anchor — the child count is constant (no anchor-specific view branches), so the
-    /// NSSplitView is never re-hosted. Per-session in the eager deck, so the surface mounts + program runs even
-    /// when the session isn't active.
+    /// hidden by `hideForOverlay`; a floating size (`.percent`/`.cells`) draws an opaque, framed panel sized and
+    /// placed by `OverlayLayout.panelRect` inside a uniform SAFE AREA — the pane inset by one line-height on all
+    /// four sides — anchored by `overlayAnchor` (nine positions, default center), with the pane(s) visible
+    /// around it. Only the frame size and the top-leading padding origin change across full/floating/anchor —
+    /// the ZStack alignment is a constant `.topLeading` and the child count is constant (no anchor-specific view
+    /// branches), so the NSSplitView is never re-hosted. Per-session in the eager deck, so the surface mounts +
+    /// program runs even when the session isn't active.
     @ViewBuilder private func overlayPanel(session: Session, isActive: Bool) -> some View {
         GeometryReader { geo in
             let floating = session.floatingOverlayActive
             let paneSize = WindowGeometry.Size(width: Double(geo.size.width), height: Double(geo.size.height))
-            let panel = OverlayLayout.panelSize(session.overlaySize, pane: paneSize, cell: session.overlayCellMetrics)
-            // a floating panel sits one cell off the pane edge(s) it anchors to (a corner insets both sides,
-            // an edge one, center none), so it never reads as flush against the border; full/center -> .zero.
-            let insets = floating
-                ? OverlayLayout.anchorInsets(session.overlayAnchor, panel: panel, pane: paneSize, cell: session.overlayCellMetrics)
-                : .zero
-            ZStack(alignment: floating ? session.overlayAnchor.swiftUIAlignment : .center) {
+            // ONE unified safe-area size+placement: a floating panel is sized then CLAMPED to the pane inset by
+            // a uniform one-line-height margin on ALL FOUR sides, and placed at its anchor WITHIN that safe area
+            // (so a full-width band is inset left/right exactly like the top, independent of the anchor); a full
+            // overlay fills the whole pane at origin (0,0) with no margin.
+            let rect = OverlayLayout.panelRect(session.overlaySize, pane: paneSize,
+                                               cell: session.overlayCellMetrics, anchor: session.overlayAnchor)
+            ZStack(alignment: .topLeading) {
                 if session.overlayActive, deckHostsSurface(session: session, surface: .overlay) {
                     // transparent click-catcher over the whole detail area: absorbs clicks AROUND a floating
                     // panel so they can't reach the still-hit-testable panes and steal the overlay's first
@@ -549,7 +550,7 @@ struct WindowContentView: View {
                     Color.clear.contentShape(Rectangle())
                     TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                  makeSurface: makeOverlaySurface, isActive: isActive, deckVisible: isActive && !quickTerminal.isVisible)
-                        .frame(width: CGFloat(panel.width), height: CGFloat(panel.height))
+                        .frame(width: CGFloat(rect.size.width), height: CGFloat(rect.size.height))
                         // floating = opaque backing + hairline frame + shadow so it reads as a distinct window
                         // over the still-visible session; full = translucent, no chrome (libghostty draws only
                         // the terminal, so the window backing shows through). The modifier CHAIN stays constant
@@ -562,24 +563,26 @@ struct WindowContentView: View {
                                 .strokeBorder(floating ? Color.white.opacity(0.18) : Color.clear, lineWidth: 1)
                         )
                         .shadow(radius: floating ? 24 : 0)
-                        // the Metal-backed surface is not in the a11y tree, so expose the FLOATING panel's frame
-                        // via a zero-content overlay marker (the dashboard-cell pattern) that the e2e reads. As
-                        // an .overlay it adds NO ZStack child, so the constant-child-count NSSplitView-overrun
-                        // invariant holds; allowsHitTesting(false) keeps it off the overlay's own input. Only a
-                        // floating panel carries the id — a full overlay covers the whole detail area, not a
-                        // panel — and the id string flips as a VALUE (no view branch), so the chain stays constant.
+                        // the Metal-backed surface is not in the a11y tree, so expose the panel's frame via a
+                        // zero-content overlay marker (the dashboard-cell pattern) that the e2e reads. As an
+                        // .overlay it adds NO ZStack child, so the constant-child-count NSSplitView-overrun
+                        // invariant holds; allowsHitTesting(false) keeps it off the overlay's own input. The
+                        // floating panel carries `overlay-floating-panel`, the full one `overlay-full-panel`
+                        // (its frame is the detail-area reference the e2e measures floating margins against) —
+                        // the id string flips as a VALUE (no view branch), so the chain stays constant.
                         .overlay(
                             Color.clear
                                 .allowsHitTesting(false)
                                 .accessibilityElement()
-                                .accessibilityIdentifier(floating ? "overlay-floating-panel" : "")
+                                .accessibilityIdentifier(floating ? "overlay-floating-panel" : "overlay-full-panel")
                         )
-                        // push the panel one cell off its anchored edge(s) — the padding wraps the panel AND
-                        // its a11y marker, so the marker still reports the panel's own frame while the whole
-                        // group is offset within the ZStack. A constant modifier (values-only, no anchor
-                        // branch), so the ZStack child count never changes (NSSplitView-overrun invariant).
-                        .padding(EdgeInsets(top: CGFloat(insets.top), leading: CGFloat(insets.leading),
-                                            bottom: CGFloat(insets.bottom), trailing: CGFloat(insets.trailing)))
+                        // place the panel at its safe-area origin: a constant top-leading ZStack + leading/top
+                        // padding by the computed origin pushes the panel (AND its a11y marker, so the marker
+                        // still reports the panel's own frame) in from the top-left. A values-only modifier (no
+                        // anchor-specific view branch), so the ZStack child count never changes and the
+                        // NSSplitView is never re-hosted (NSSplitView-overrun invariant).
+                        .padding(EdgeInsets(top: CGFloat(rect.origin.y), leading: CGFloat(rect.origin.x),
+                                            bottom: 0, trailing: 0))
                         .id("\(session.id.uuidString)-overlay")
                 }
             }
@@ -856,16 +859,4 @@ struct WindowContentView: View {
         // through), so a `.bar` material here would paint a mismatched darker strip.
     }
 
-}
-
-extension OverlayAnchor {
-    /// The SwiftUI `Alignment` a floating overlay panel takes inside the detail-area ZStack. DERIVED from
-    /// the host-free, unit-tested `unitX`/`unitY` (0 = leading/top, 0.5 = center, 1 = trailing/bottom) so a
-    /// per-anchor transposition is structurally impossible — the axis mapping cannot disagree with the same
-    /// unit coordinates the resolver/insets use; `.center` reproduces today's centered placement.
-    var swiftUIAlignment: Alignment {
-        let horizontal: HorizontalAlignment = unitX == 0 ? .leading : (unitX == 1 ? .trailing : .center)
-        let vertical: VerticalAlignment = unitY == 0 ? .top : (unitY == 1 ? .bottom : .center)
-        return Alignment(horizontal: horizontal, vertical: vertical)
-    }
 }

@@ -773,11 +773,13 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
     }
 
-    // tree canvasCols/canvasRows report the session's terminal CONTENT AREA in cells at the base font, so a
-    // script can size a floating overlay as a fraction of the canvas. Sizing an overlay to the WHOLE canvas
-    // (`--cols canvasCols --rows canvasRows`) must FILL it: the realized (applied) grid matches
-    // canvasCols/canvasRows within the whole-cell padding drift. A canvas reported ~2x off (a Retina cell-count
-    // miss) would size the overlay ~2x off and this comparison would catch it.
+    // tree canvasCols/canvasRows report the session's terminal CONTENT AREA in cells at the base font (the RAW
+    // grid — the read-back semantics are UNCHANGED by the safe-area margin), so a script can size a floating
+    // overlay as a fraction of the canvas. Sizing an overlay to the WHOLE canvas (`--cols canvasCols --rows
+    // canvasRows`) now CLAMPS to the safe area (the canvas inset by one line-height on all sides), so the
+    // realized (applied) grid is a FEW cells smaller than the canvas — but still CLOSE to it. This stays
+    // discriminating against a Retina ~2x cell-count miss: a canvas reported ~2x off would size the overlay at
+    // ~half or ~double the canvas, both far outside the narrow "canvas minus the margin" window asserted here.
     func testTreeReportsCanvasGridAndOverlayFillsIt() throws {
         let id = try activeSessionID()
         try resizeWindow(width: 1100, height: 750)
@@ -789,7 +791,8 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertGreaterThan(canvasCols, 0, "canvasCols should be a real grid: \(node)")
         XCTAssertGreaterThan(canvasRows, 0, "canvasRows should be a real grid: \(node)")
 
-        // open an overlay sized to the whole canvas; the realized grid should fill it (no clamp headroom left).
+        // open an overlay sized to the whole canvas; the realized grid fills the SAFE AREA (canvas minus the
+        // one-line-height margin on each side), so it lands just below the canvas grid, not at it.
         let open = try sendOverlayOpen(target: id, command: "cat", args: ["cols": canvasCols, "rows": canvasRows])
         XCTAssertEqual(open["ok"] as? Bool, true, "overlay open filling the canvas should succeed: \(open)")
         XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the overlay should be up")
@@ -797,44 +800,50 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         let applied = try XCTUnwrap(pollOverlayApplied(id: id, timeout: 12), "the tree should report the realized grid")
         let appliedCols = try XCTUnwrap(applied["overlayColsApplied"] as? Int, "applied cols should be present: \(applied)")
         let appliedRows = try XCTUnwrap(applied["overlayRowsApplied"] as? Int, "applied rows should be present: \(applied)")
-        XCTAssertTrue(abs(appliedCols - canvasCols) <= 2,
-                      "an overlay sized to the canvas (\(canvasCols) cols) should fill it: applied \(appliedCols)")
-        XCTAssertTrue(abs(appliedRows - canvasRows) <= 2,
-                      "an overlay sized to the canvas (\(canvasRows) rows) should fill it: applied \(appliedRows)")
+        // clamped by the safe-area margin: a few cells below the canvas, never above it, and nowhere near a
+        // ~2x miss (~half or ~double). the horizontal margin drops ~4 cols (2 line-heights / cell width), the
+        // vertical ~2 rows (2 line-heights / cell height).
+        XCTAssertLessThanOrEqual(appliedCols, canvasCols,
+                                 "the safe-area-clamped overlay never exceeds the canvas: applied \(appliedCols), canvas \(canvasCols)")
+        XCTAssertGreaterThan(appliedCols, canvasCols - 12,
+                             "the overlay nearly fills the canvas width minus the margin (a ~2x miss would be far off): applied \(appliedCols), canvas \(canvasCols)")
+        XCTAssertLessThanOrEqual(appliedRows, canvasRows,
+                                 "the safe-area-clamped overlay never exceeds the canvas: applied \(appliedRows), canvas \(canvasRows)")
+        XCTAssertGreaterThan(appliedRows, canvasRows - 10,
+                             "the overlay nearly fills the canvas height minus the margin (a ~2x miss would be far off): applied \(appliedRows), canvas \(canvasRows)")
 
         let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
         XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
     }
 
-    // The floating panel follows its corner anchor AND sits ONE LINE-HEIGHT off the anchored edges (the anchor
-    // margin), never flush against the border. The detail area is captured from a FULL overlay (its panel fills
-    // the pane exactly with NO inset) via the same `overlay-floating-panel` marker; the floating panel's inset
-    // from that reference is then asserted to be a small, positive, roughly-uniform margin. This is
-    // discriminating: flush placement (margin 0) fails the > assertions, and centered placement (a large
-    // half-slack offset) fails the < assertions. The horizontal and vertical margins are approximately EQUAL
-    // because BOTH anchored sides inset by the cell HEIGHT (one line-height), so the left/right gap matches the
-    // top/bottom gap. The Metal surface is not in the a11y tree, so the panel exposes the stable
-    // `overlay-floating-panel` marker whose frame the test reads.
+    // A floating panel sits inside a uniform SAFE AREA — the pane inset by one line-height on ALL FOUR sides,
+    // independent of the anchor. This test proves three things against a FULL-overlay detail-area reference:
+    // (1) a corner-anchored panel insets off BOTH anchored edges by a small, ~equal, positive margin (NOT
+    // flush, NOT a centered half-slack offset); (2) re-anchoring to the opposite corner mirrors the margin to
+    // the other two edges; (3) a FULL-WIDTH band (cols == canvasCols) is inset off the LEFT and RIGHT too — the
+    // maintainer fix (the margin is a base-level default on every side, so a full-width band is inset left/right
+    // exactly like the top, never flush against the side borders). The full overlay carries the
+    // `overlay-full-panel` marker (its frame is the whole detail area, the reference), the floating panel
+    // `overlay-floating-panel`; the Metal surface itself is not in the a11y tree.
     func testFloatingOverlayPanelFrameFollowsCornerAnchor() throws {
         let id = try activeSessionID()
         try resizeWindow(width: 1100, height: 750)
 
-        // a 100% FLOATING overlay fills the detail area exactly (centered, so no anchor inset), so its marker
-        // frame is the pane the floating margin is measured against. (A FULL overlay no longer carries the
-        // `overlay-floating-panel` marker — that id is floating-only — so the reference is taken from a
-        // full-size FLOATING panel instead.)
-        let reference = try sendOverlayOpen(target: id, command: "cat", args: ["sizePercent": 100])
-        XCTAssertEqual(reference["ok"] as? Bool, true, "reference overlay open should succeed: \(reference)")
+        // a FULL overlay fills the detail area exactly (origin 0,0, size = the pane) with NO margin, so its
+        // `overlay-full-panel` marker frame is the reference the floating safe-area margins are measured against.
+        let reference = try sendOverlayOpen(target: id, command: "cat", args: [:])
+        XCTAssertEqual(reference["ok"] as? Bool, true, "reference full overlay open should succeed: \(reference)")
         XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the reference overlay should be up")
 
-        let panel = app.descendants(matching: .any).matching(identifier: "overlay-floating-panel").firstMatch
-        XCTAssertTrue(panel.waitForExistence(timeout: 10), "the overlay panel should be in the a11y tree")
-        let detail = panel.frame
+        let full = app.descendants(matching: .any).matching(identifier: "overlay-full-panel").firstMatch
+        XCTAssertTrue(full.waitForExistence(timeout: 10), "the full overlay panel should be in the a11y tree")
+        let detail = full.frame
 
-        // resize to a 40% floating panel anchored top-left: it shrinks well below the pane and insets from the
-        // top-left corner by ~1 cell.
+        // resize to a 40% floating panel anchored top-left: it shrinks well below the pane and insets one
+        // line-height off BOTH the top and the left inside the safe area.
         let toFloating = try sendOverlayResize(target: id, args: ["sizePercent": 40, "anchor": "top-left"])
         XCTAssertEqual(toFloating["ok"] as? Bool, true, "resize to floating top-left should succeed: \(toFloating)")
+        let panel = app.descendants(matching: .any).matching(identifier: "overlay-floating-panel").firstMatch
         let tl = try XCTUnwrap(pollPanelWidth(panel: panel, below: detail.width * 0.6, timeout: 8),
                                "the panel should shrink to the floating size")
         XCTAssertLessThan(tl.height, detail.height * 0.6, "a 40% floating panel should be much shorter than the pane")
@@ -865,6 +874,29 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertGreaterThan(marginBottom, 4, "bottom-right panel should inset a cell off the bottom (marginBottom=\(marginBottom))")
         XCTAssertLessThan(marginRight, 30, "the right margin should be ~1 cell (marginRight=\(marginRight))")
         XCTAssertLessThan(marginBottom, 45, "the bottom margin should be ~1 cell (marginBottom=\(marginBottom))")
+
+        // a FULL-WIDTH band (cols == canvasCols) anchored top must now be inset from the LEFT and the RIGHT too
+        // — the maintainer fix: the safe-area margin is a base-level default on all sides, so a full-width band
+        // is inset left/right exactly like the top, never flush against the side borders (the OLD anchor-edge
+        // model left a full-width band flush left/right, which these > assertions now catch).
+        let canvasNode = try XCTUnwrap(pollCanvasGrid(id: id, timeout: 12), "the tree should report the canvas grid")
+        let canvasCols = try XCTUnwrap(canvasNode["canvasCols"] as? Int, "canvasCols should be present: \(canvasNode)")
+        let band = try sendOverlayResize(target: id, args: ["cols": canvasCols, "rows": 6, "anchor": "top"])
+        XCTAssertEqual(band["ok"] as? Bool, true, "resize to a full-width band should succeed: \(band)")
+        let bandFrame = try XCTUnwrap(pollPanelWidth(panel: panel, above: detail.width * 0.8, timeout: 8),
+                                      "the band should widen to nearly the full detail width")
+        let bandLeft = bandFrame.minX - detail.minX
+        let bandRight = detail.maxX - bandFrame.maxX
+        let bandTop = bandFrame.minY - detail.minY
+        XCTAssertGreaterThan(bandLeft, 2, "a full-width band must have a LEFT margin, not sit flush (bandLeft=\(bandLeft))")
+        XCTAssertGreaterThan(bandRight, 2, "a full-width band must have a RIGHT margin, not sit flush (bandRight=\(bandRight))")
+        XCTAssertGreaterThan(bandTop, 2, "a top-anchored band still has a top margin (bandTop=\(bandTop))")
+        XCTAssertLessThan(bandLeft, 30, "the band's left margin should be ~1 line-height (bandLeft=\(bandLeft))")
+        XCTAssertLessThan(bandRight, 30, "the band's right margin should be ~1 line-height (bandRight=\(bandRight))")
+        XCTAssertEqual(bandLeft, bandRight, accuracy: 3,
+                       "the band's left and right margins should be ~equal (symmetric): left=\(bandLeft) right=\(bandRight)")
+        XCTAssertLessThan(bandFrame.width, detail.width,
+                          "the band must be narrower than the full detail area (inset on both sides): band=\(bandFrame.width) detail=\(detail.width)")
 
         let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
         XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
@@ -1154,6 +1186,19 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         }
         let frame = panel.frame
         return frame.width < threshold ? frame : nil
+    }
+
+    /// Polls `panel`'s frame until its width RISES above `threshold` (a resize to a wide band widens it),
+    /// returning the new frame, or nil if it never widened within `timeout`.
+    private func pollPanelWidth(panel: XCUIElement, above threshold: CGFloat, timeout: TimeInterval) -> CGRect? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            let frame = panel.frame
+            if frame.width > threshold { return frame }
+            usleep(200_000)
+        }
+        let frame = panel.frame
+        return frame.width > threshold ? frame : nil
     }
 
     /// Polls `panel`'s frame until it has moved meaningfully from `original` (a re-anchor is async), returning

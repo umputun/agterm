@@ -65,28 +65,8 @@ public struct OverlayCellMetrics: Equatable, Sendable {
     public var isUsable: Bool { cellWidth > 0 && cellHeight > 0 }
 }
 
-/// Per-edge insets (in points) applied to an anchored floating overlay panel so it sits one cell off the
-/// pane edge(s) it anchors to, instead of flush against the border. The app maps these onto a SwiftUI
-/// `padding(EdgeInsets)` on the panel; the centered axes carry a zero inset.
-public struct OverlayInsets: Equatable, Sendable {
-    public let leading: Double
-    public let top: Double
-    public let trailing: Double
-    public let bottom: Double
-
-    public init(leading: Double, top: Double, trailing: Double, bottom: Double) {
-        self.leading = leading
-        self.top = top
-        self.trailing = trailing
-        self.bottom = bottom
-    }
-
-    /// No inset on any edge (`center`, full overlay, or unusable metrics).
-    public static let zero = OverlayInsets(leading: 0, top: 0, trailing: 0, bottom: 0)
-}
-
-/// Pure resolver turning an `OverlaySize` request into a concrete panel size within a pane. Host-free and
-/// unit-tested; the app applies the result as a SwiftUI frame. All sizes are in points.
+/// Pure resolver turning an `OverlaySize` request into a concrete panel rect within a pane. Host-free and
+/// unit-tested; the app applies the result as a SwiftUI frame + placement. All sizes are in points.
 public enum OverlayLayout {
     /// Resolves `size` against `pane` and (for cells mode) the live `cell` metrics.
     ///
@@ -120,23 +100,37 @@ public enum OverlayLayout {
         return Swift.min(Double(usedCount) * cellSize + pad, available)
     }
 
-    /// The one-line-height margin a floating overlay panel takes off the pane edge(s) its `anchor` sits
-    /// against, so an edge/corner-anchored panel is not flush with the border. BOTH anchored sides — the
-    /// horizontal one (`unitX` 0 = leading, 1 = trailing) and the vertical one (`unitY` 0 = top, 1 = bottom)
-    /// — inset by one `cell.cellHeight` (the line height), so the left/right gaps equal the top/bottom gaps
-    /// and the margin looks uniform; a terminal cell is ~2x taller than wide, so using the cell width for the
-    /// horizontal side would read as about half the vertical gap. A centered axis (`0.5`) gets none. Each
-    /// inset is capped at the slack on its axis (`min(oneCell, pane - panel)`), so a near-full-pane panel
-    /// never overflows, and nil or unusable `cell` metrics yield no inset. `center` (both axes 0.5) always
-    /// yields `.zero`.
-    public static func anchorInsets(_ anchor: OverlayAnchor, panel: WindowGeometry.Size,
-                                    pane: WindowGeometry.Size, cell: OverlayCellMetrics?) -> OverlayInsets {
-        guard let cell, cell.isUsable else { return .zero }
-        let hInset = Swift.min(cell.cellHeight, Swift.max(0, pane.width - panel.width))
-        let vInset = Swift.min(cell.cellHeight, Swift.max(0, pane.height - panel.height))
-        return OverlayInsets(leading: anchor.unitX == 0 ? hInset : 0,
-                             top: anchor.unitY == 0 ? vInset : 0,
-                             trailing: anchor.unitX == 1 ? hInset : 0,
-                             bottom: anchor.unitY == 1 ? vInset : 0)
+    /// The concrete panel RECT (origin + size, in points) for `size` within `pane`, anchored by `anchor`
+    /// inside a uniform SAFE AREA — the pane inset by a base-level margin `m` on ALL FOUR sides. `m` is one
+    /// line-height (`cell.cellHeight`) when the cell metrics are usable, else 0. The margin is a DEFAULT on
+    /// every side, symmetric and independent of the anchor: a full-usable-size band carries an equal margin
+    /// on every edge (a full-width top band is inset left/right exactly like the top).
+    ///
+    /// - `.full` fills the whole pane at origin `(0, 0)` with NO margin (the translucent session-hiding cover).
+    /// - a FLOATING size (`.percent`/`.cells`) is sized by `panelSize`, then CLAMPED to the safe area per axis
+    ///   (`panelW = min(requestedW, paneW - 2m)`, same for height), and PLACED at the anchor's unit position
+    ///   within the safe area (`originX = m + anchor.unitX * (usableW - panelW)`, same for y) — so the panel is
+    ///   never closer than `m` to any edge, a full-usable-size panel fills the safe area with an `m` margin all
+    ///   around, and the anchor positions a smaller panel within it.
+    public static func panelRect(_ size: OverlaySize, pane: WindowGeometry.Size,
+                                 cell: OverlayCellMetrics?, anchor: OverlayAnchor) -> WindowGeometry.Rect {
+        if case .full = size {
+            return WindowGeometry.Rect(origin: WindowGeometry.Point(x: 0, y: 0), size: pane)
+        }
+        let margin: Double
+        if let cell, cell.isUsable {
+            margin = cell.cellHeight
+        } else {
+            margin = 0
+        }
+        let usableWidth = Swift.max(0, pane.width - 2 * margin)
+        let usableHeight = Swift.max(0, pane.height - 2 * margin)
+        let requested = panelSize(size, pane: pane, cell: cell)
+        let width = Swift.min(requested.width, usableWidth)
+        let height = Swift.min(requested.height, usableHeight)
+        let originX = margin + anchor.unitX * (usableWidth - width)
+        let originY = margin + anchor.unitY * (usableHeight - height)
+        return WindowGeometry.Rect(origin: WindowGeometry.Point(x: originX, y: originY),
+                                   size: WindowGeometry.Size(width: width, height: height))
     }
 }

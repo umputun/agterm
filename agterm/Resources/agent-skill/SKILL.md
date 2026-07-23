@@ -291,8 +291,9 @@ omitted when expanded).
   `--cols N --rows M` (exact grid). `--cols/--rows` clamps to the whole cells that fit; `--size-percent` is a
   fraction of the pane (never larger). Either way the realized grid reads back as
   `overlayColsApplied`/`overlayRowsApplied`. `--anchor POS` parks a floating panel at one of nine positions
-  (`top-left` … `center` (default) … `bottom-right`), inset one line-height off each anchored edge; it needs
-  a floating size. `overlay resize` changes an ALREADY-OPEN overlay in place (the program keeps running, no
+  (`top-left` … `center` (default) … `bottom-right`) inside a uniform safe-area margin of one line-height on
+  all four sides (never flush with a border; symmetric and anchor-independent, so a full-width band is inset
+  left/right like the top); it needs a floating size. `overlay resize` changes an ALREADY-OPEN overlay in place (the program keeps running, no
   re-spawn): pass a size mode (`--size-percent`/`--cols`+`--rows`/`--full`) and/or `--anchor` (at least one);
   `--anchor` alone re-anchors keeping the size, `--full` reverts to full-pane but preserves the anchor and
   cannot be combined with `--anchor`.

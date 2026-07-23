@@ -231,7 +231,7 @@ and park it out of the way. A cols/rows request larger than the pane clamps to t
 read the realized grid back off `tree`:
 
 ```bash
-# an 80x24 panel parked in the bottom-right corner (one line-height off each anchored edge, not flush)
+# an 80x24 panel parked in the bottom-right corner (inset one line-height off every edge — a uniform safe-area margin)
 agtermctl session overlay open "zsh -lc 'htop'" --target "$AGTERM_SESSION_ID" --cols 80 --rows 24 --anchor bottom-right
 # what actually rendered (requested vs clamped): overlayCols/Rows = requested, overlayColsApplied/RowsApplied = realized
 agtermctl tree --json | jq '.. | objects | select(.overlay == true) | {overlayCols, overlayRows, overlayColsApplied, overlayRowsApplied, overlayAnchor}'

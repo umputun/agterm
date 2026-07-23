@@ -690,9 +690,14 @@ paths:
   (`top-left`/`top`/`top-right`/`left`/`center`/`right`/`bottom-left`/`bottom`/`bottom-right`, default
   `center` = today's centered placement); it requires a floating size, so an anchor on a full-pane open is a
   dispatcher error.
-  An edge/corner-anchored floating panel is NOT flush with the pane border: it insets one line-height
-  (`cell.cellHeight`) off EACH anchored side (a corner insets both, an edge one, `center` none), host-free in
-  `OverlayLayout.anchorInsets`, each inset capped at the axis slack so a near-full panel never overflows.
+  A floating panel is NEVER flush with the pane border: it sits inside a uniform SAFE AREA — the pane inset by
+  a base-level margin of one line-height (`cell.cellHeight`) on ALL FOUR sides, symmetric and INDEPENDENT of
+  the anchor (a full-width band is inset left/right exactly like the top; `center` keeps it centered within the
+  safe area).
+  Host-free in `OverlayLayout.panelRect`: the requested size is clamped to the safe area per axis
+  (`panelW = min(requested, paneW - 2m)`) and placed at the anchor's unit position within it
+  (`originX = m + anchor.unitX * (usableW - panelW)`); nil/unusable cell metrics → `m = 0` (no margin).
+  A `.full` overlay is unchanged (fills the whole pane, no margin).
   `args.color` (`#rrggbb`, REUSING the `session.background` field — no new arg — validated by the shared
   `WatermarkConfig.isValidColorHex` at BOTH the CLI `validate()` and the server arm) gives the overlay
   pane its OWN solid background color, independent of the session's `session.background color`;
@@ -721,13 +726,15 @@ paths:
   + `.allowsHitTesting(false)` via `hideForOverlay` (= `fullOverlay || scratchActive`; kept MOUNTED, shells
   alive like the deck's inactive sessions), so its transparency reveals the window backing (desktop, tint +
   blur), not the session.
-  FLOATING (`overlaySize != .full`, i.e. `.percent` or `.cells`): sized by `OverlayLayout.panelSize` (the
-  percent fraction or the whole-cell-clamped grid), drawn as an opaque `terminalColor`-backed, hairline-framed,
-  shadowed panel PLACED by its `overlayAnchor` — `ZStack(alignment: anchor.swiftUIAlignment)` plus the
-  `OverlayLayout.anchorInsets` line-height margin — with the pane(s) VISIBLE around it (`center` reproduces the
-  original dead-center placement).
+  FLOATING (`overlaySize != .full`, i.e. `.percent` or `.cells`): sized AND placed by a single
+  `OverlayLayout.panelRect` (percent fraction or whole-cell-clamped grid, clamped to the safe area, positioned
+  at the anchor's unit point within it), drawn as an opaque `terminalColor`-backed, hairline-framed, shadowed
+  panel with the pane(s) VISIBLE around it (`center` reproduces the original dead-center placement, now within
+  the safe area).
+  Placement is a CONSTANT `ZStack(alignment: .topLeading)` plus a leading/top `padding` by the computed
+  `rect.origin` — no anchor-specific `swiftUIAlignment` branch, so the anchor axis mapping cannot desync.
   The modifier CHAIN is IDENTICAL across both variants and every anchor — only the parameter VALUES flip
-  (backing color, corner radius, shadow radius, frame size, ZStack alignment, padding insets) — so
+  (backing color, corner radius, shadow radius, frame size, padding origin) — so
   `session.overlay.resize` switching full<->floating or re-anchoring is a value-update, never a child
   add/remove or a re-parent of the overlay surface NSView (a re-parent would blank its Metal drawable).
   Hit-testing on the PANES stays gated on `.allowsHitTesting(!hideForOverlay)` and must NOT flip when a

@@ -12,6 +12,13 @@ struct OverlayLayoutTests {
         #expect(size.height == height)
     }
 
+    private func expectRect(_ rect: WindowGeometry.Rect, x: Double, y: Double, width: Double, height: Double) {
+        #expect(rect.origin.x == x)
+        #expect(rect.origin.y == y)
+        #expect(rect.size.width == width)
+        #expect(rect.size.height == height)
+    }
+
     // mirrors the app-side px->points conversion: every pixel metric divided by the backing scale.
     private func metrics(cellWpx: Double, cellHpx: Double, padWpx: Double, padHpx: Double,
                          scale: Double) -> OverlayCellMetrics {
@@ -160,62 +167,89 @@ struct OverlayLayoutTests {
         #expect(OverlayAnchor(rawValue: "diagonal") == nil)
     }
 
-    // MARK: - anchorInsets (1-cell anchor margin)
+    // MARK: - panelRect (uniform base-level safe-area size + placement)
 
-    private func insetsCell() -> OverlayCellMetrics {
+    // margin = cellHeight = 16, so a 800x600 pane has a usable safe area of 768x568 (16pt inset per side).
+    private func marginCell() -> OverlayCellMetrics {
         OverlayCellMetrics(cellWidth: 8, cellHeight: 16, padWidth: 0, padHeight: 0)
     }
 
-    @Test func cornerAnchorInsetsBothAnchoredSidesOneCell() {
-        // top-left: one line-height off the leading edge AND off the top (both use cellHeight); trailing/
-        // bottom untouched.
-        let insets = OverlayLayout.anchorInsets(.topLeft, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
-        #expect(insets == OverlayInsets(leading: 16, top: 16, trailing: 0, bottom: 0))
-
-        // bottom-right: one line-height off the trailing edge AND off the bottom.
-        let br = OverlayLayout.anchorInsets(.bottomRight, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
-        #expect(br == OverlayInsets(leading: 0, top: 0, trailing: 16, bottom: 16))
+    @Test func fullOverlayFillsWholePaneNoMarginOnEveryAnchor() {
+        // a full overlay ignores the safe-area margin on every anchor: origin (0,0), size == pane.
+        for anchor in OverlayAnchor.allCases {
+            let rect = OverlayLayout.panelRect(.full, pane: pane(800, 600), cell: marginCell(), anchor: anchor)
+            expectRect(rect, x: 0, y: 0, width: 800, height: 600)
+        }
     }
 
-    @Test func edgeAnchorInsetsOnlyTheAnchoredAxis() {
-        // top edge: inset the top only, the centered horizontal axis gets nothing.
-        let top = OverlayLayout.anchorInsets(.top, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
-        #expect(top == OverlayInsets(leading: 0, top: 16, trailing: 0, bottom: 0))
-
-        // left edge: inset the leading only, the centered vertical axis gets nothing.
-        let left = OverlayLayout.anchorInsets(.left, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
-        #expect(left == OverlayInsets(leading: 16, top: 0, trailing: 0, bottom: 0))
-
-        // right edge: inset the trailing only.
-        let right = OverlayLayout.anchorInsets(.right, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
-        #expect(right == OverlayInsets(leading: 0, top: 0, trailing: 16, bottom: 0))
-
-        // bottom edge: inset the bottom only.
-        let bottom = OverlayLayout.anchorInsets(.bottom, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
-        #expect(bottom == OverlayInsets(leading: 0, top: 0, trailing: 0, bottom: 16))
+    @Test func floatingFullSizeRequestFillsSafeAreaOnEveryAnchor() {
+        // a >= usable request (100%) clamps to the safe area (768x568) and, with no slack left, lands at
+        // origin (m, m) = (16, 16) regardless of the anchor — an equal margin on all four sides.
+        for anchor in OverlayAnchor.allCases {
+            let rect = OverlayLayout.panelRect(.percent(100), pane: pane(800, 600), cell: marginCell(), anchor: anchor)
+            expectRect(rect, x: 16, y: 16, width: 768, height: 568)
+        }
     }
 
-    @Test func centerAnchorHasNoInset() {
-        let insets = OverlayLayout.anchorInsets(.center, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
-        #expect(insets == .zero)
+    @Test func cornerAnchorPlacesSmallPanelAtMargin() {
+        // top-left: a small floating panel sits exactly one line-height off the leading + top edges.
+        let tl = OverlayLayout.panelRect(.percent(10), pane: pane(800, 600), cell: marginCell(), anchor: .topLeft)
+        expectRect(tl, x: 16, y: 16, width: 80, height: 60)
+
+        // bottom-right: one line-height off the trailing + bottom edges (mirrored via the anchor unit point).
+        // originX = 16 + (768-80) = 704, originY = 16 + (568-60) = 524; the right + bottom margins are both 16.
+        let br = OverlayLayout.panelRect(.percent(10), pane: pane(800, 600), cell: marginCell(), anchor: .bottomRight)
+        expectRect(br, x: 704, y: 524, width: 80, height: 60)
+        #expect(800 - (br.origin.x + br.size.width) == 16)
+        #expect(600 - (br.origin.y + br.size.height) == 16)
     }
 
-    @Test func anchorInsetsCapAtAvailableSlack() {
-        // a near-full-pane panel: only 3pt of horizontal slack and 5pt of vertical slack remain, so the
-        // one-line-height (16pt) inset is capped to that slack on each axis and the panel never overflows.
-        let insets = OverlayLayout.anchorInsets(.topLeft, panel: pane(797, 595), pane: pane(800, 600), cell: insetsCell())
-        #expect(insets == OverlayInsets(leading: 3, top: 5, trailing: 0, bottom: 0))
+    @Test func centerAnchorCentersWithinSafeArea() {
+        // center: a small panel is centered, so the left/right and top/bottom margins are symmetric.
+        let rect = OverlayLayout.panelRect(.percent(10), pane: pane(800, 600), cell: marginCell(), anchor: .center)
+        expectRect(rect, x: 360, y: 270, width: 80, height: 60)
+        #expect(rect.origin.x == 800 - (rect.origin.x + rect.size.width)) // left margin == right margin
+        #expect(rect.origin.y == 600 - (rect.origin.y + rect.size.height)) // top margin == bottom margin
     }
 
-    @Test func anchorInsetsCapAtZeroWhenPanelFillsPane() {
-        // a panel exactly the pane size (or larger) has no slack, so an anchored inset is clamped to zero.
-        let insets = OverlayLayout.anchorInsets(.bottomRight, panel: pane(800, 600), pane: pane(800, 600), cell: insetsCell())
-        #expect(insets == .zero)
+    @Test func fullWidthBandIsInsetOnAllFourSides() {
+        // a full-usable-width top band (cols far exceeding the pane, few rows) is clamped to the safe-area
+        // WIDTH and, anchored top, carries an EQUAL one-line-height margin on the left, right, AND top (the
+        // maintainer fix: a full-width band is inset left/right exactly like the top, independent of anchor),
+        // with the bottom free.
+        let rect = OverlayLayout.panelRect(.cells(cols: 200, rows: 5), pane: pane(800, 600), cell: marginCell(), anchor: .top)
+        let leftMargin = rect.origin.x
+        let rightMargin = 800 - (rect.origin.x + rect.size.width)
+        let topMargin = rect.origin.y
+        #expect(leftMargin == 16)
+        #expect(rightMargin == 16)
+        #expect(topMargin == 16)
+        #expect(leftMargin == rightMargin) // symmetric horizontal margins for a full-width band
+        #expect(leftMargin == topMargin)   // horizontal margin equals the vertical margin (uniform)
+        #expect(rect.size.width == 768)    // the band fills the whole safe-area width
     }
 
-    @Test func anchorInsetsAreZeroWithoutUsableMetrics() {
-        #expect(OverlayLayout.anchorInsets(.topLeft, panel: pane(200, 200), pane: pane(800, 600), cell: nil) == .zero)
+    @Test func nilCellMetricsYieldNoMarginPanelMayFillPane() {
+        // nil cell metrics -> m = 0: a 100% floating panel fills the pane (no safe-area inset).
+        let rect = OverlayLayout.panelRect(.percent(100), pane: pane(800, 600), cell: nil, anchor: .center)
+        expectRect(rect, x: 0, y: 0, width: 800, height: 600)
+    }
+
+    @Test func unusableCellMetricsYieldNoMargin() {
+        // a zero-width cell is unusable -> m = 0, no inset, panel may fill the pane.
         let zeroWidth = OverlayCellMetrics(cellWidth: 0, cellHeight: 16, padWidth: 0, padHeight: 0)
-        #expect(OverlayLayout.anchorInsets(.topLeft, panel: pane(200, 200), pane: pane(800, 600), cell: zeroWidth) == .zero)
+        let rect = OverlayLayout.panelRect(.percent(100), pane: pane(800, 600), cell: zeroWidth, anchor: .topLeft)
+        expectRect(rect, x: 0, y: 0, width: 800, height: 600)
+    }
+
+    @Test func cellsBandInsetFromEverySideEvenAnchoredTopLeft() {
+        // a cells band that exactly fills the safe area sits at (m, m) with an m margin on all sides, even at
+        // top-left: originX = m + 0*(usableW - panelW) = m, and panelW == usableW leaves an m gap on the right.
+        let cell = OverlayCellMetrics(cellWidth: 8, cellHeight: 16, padWidth: 0, padHeight: 0)
+        let rect = OverlayLayout.panelRect(.cells(cols: 200, rows: 200), pane: pane(800, 600), cell: cell, anchor: .topLeft)
+        // usableW = 768 (96 whole cells of 8pt), usableH = 568.
+        expectRect(rect, x: 16, y: 16, width: 768, height: 568)
+        #expect(800 - (rect.origin.x + rect.size.width) == 16) // right margin present despite top-left anchor
+        #expect(600 - (rect.origin.y + rect.size.height) == 16) // bottom margin present too
     }
 }

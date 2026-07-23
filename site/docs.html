@@ -1344,7 +1344,8 @@
               — the terminal content area in whole cells at the base font, the coordinate system
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--cols/--rows</span> land in — so a script can compute a concrete grid as a fraction of the canvas.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--anchor</span> parks it at one of nine positions
-              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center</span> is the default), inset one line-height off each anchored edge.
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center</span> is the default) inside a uniform safe-area margin of one
+              line-height on all four sides, so it is never flush with a border — the margin is symmetric and anchor-independent, so a full-width band is inset left/right exactly like the top.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay resize</span> changes an
               open overlay in place — a size mode
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent</span>,

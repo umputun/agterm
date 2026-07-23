@@ -461,8 +461,10 @@ All ten are read-only projections of GUI state.
   rendered is read back on `tree` as `overlayColsApplied`/`overlayRowsApplied`. `--size-percent` must be
   1–100 — an out-of-range value is a hard error (it is no longer silently clamped on open).
   `--anchor POS` places a floating panel at one of nine positions — `top-left`, `top`, `top-right`, `left`,
-  `center` (default), `right`, `bottom-left`, `bottom`, `bottom-right`. An edge/corner-anchored panel sits
-  one line-height off each side it anchors to (so it is not flush with the border); `center` is unchanged.
+  `center` (default), `right`, `bottom-left`, `bottom`, `bottom-right` — inside a uniform safe-area margin of
+  one line-height on ALL FOUR sides, so the panel is never flush with any border. The margin is symmetric and
+  independent of the anchor: a full-width band (`--cols $canvasCols`) is inset off the left and right exactly
+  like the top, and `center` keeps the panel dead-centered within that safe area.
   `--anchor` requires a floating size (`--size-percent` or `--cols/--rows`) — on a full-pane overlay it is an
   error. **By default the overlay does NOT switch the active session** — full
   and floating both open on `--target` and run their program in the background, appearing when the user
