@@ -118,7 +118,9 @@ paths:
   when `backgroundOpacity < 1`, `ghosttyConfigLines()` pins `background-opacity = 0` + `background-blur = 0`
   so ghostty draws fully transparent and the window's tinted background is the single translucent layer
   (no double-tint); at full opacity those lines are omitted and the renderer paints its own background
-  as before.
+  as before. macOS Reduce Transparency is an effective presentation override only: it temporarily makes
+  the window and floating material panels opaque and unblurred while the saved opacity/blur and generated
+  renderer config stay unchanged, so disabling the system setting restores the requested presentation.
 - The app target's `SettingsModel` (`@Observable`) loads `AppSettings`, and on every change:
   saves (the opacity/blur sliders are the exception — see the end of this bullet),
   writes `ghostty-settings.conf` (loaded LAST in `GhosttyApp.loadConfig`,
@@ -174,8 +176,10 @@ paths:
   **Key Mapping** (the config directory holding `keymap.conf` + a read-only diagnostics list + a Reload
   button — see the Keymap section).
   Captions under controls are dropped for self-explanatory controls, which is nearly all of them.
-  A caption is kept ONLY when it carries information the label can't — currently just two:
-  `Blur needs opacity below 100%` (a functional dependency) and the Ghostty-config edit-path hint.
+  A caption is kept ONLY when it carries information the label can't — currently just two positions:
+  the blur hint (`Blur needs opacity below 100%`, replaced while Reduce Transparency is on by
+  `Reduce Transparency is on; saved opacity and blur apply when it is off.`) and the Ghostty-config
+  edit-path hint.
   This keeps the busiest tab short enough that the 540×590 window fits every tab without scrolling.
   The notification toggle (`AppSettings.notificationsEnabled`, nil = on) is mirrored to `NotificationManager.bannersEnabled`
   by `SettingsModel`; it gates only the OS banner, never the badge, and is NOT a ghostty config key (no
@@ -191,7 +195,10 @@ paths:
   (the single tinted layer), applies the blur via the private `CGSSetWindowBackgroundBlurRadius` SPI
   (`dlsym`-resolved once, no-op if absent — adapted from macterm, its `fatalError` softened to a graceful
   return), and hides `NSTitlebarBackgroundView` so the tint runs continuously under the titlebar;
-  at full opacity it restores the original opaque/solid path and clears the blur.
+  at full opacity it restores the original opaque/solid path and clears the blur. The same opaque branch
+  wins whenever `NSWorkspace.shared.accessibilityDisplayShouldReduceTransparency` is true, without
+  mutating `WindowAppearance.Chrome` or `AppSettings`, so the saved opacity/blur return when the system
+  setting is disabled.
   The macOS-26 `NavigationSplitView` sidebar is a Liquid Glass container (`NSContainerConcentricGlassEffectView : NSGlassEffectView`)
   that WRAPS the sidebar content (an ancestor, so it can't be hidden), and is NOT flattenable to the
   window tint; `sidebarGlass(in:)` finds it by walking up from the tagged `agterm-sidebar-scroll` view,
@@ -199,7 +206,14 @@ paths:
   so the sidebar reads as the same translucent surface (its blur stays Liquid Glass,
   not the window CGS blur — close, not pixel-identical).
   All of this re-applies on every `sync`, which `TitleProbeView` already drives on window key/main/fullscreen
-  transitions + `.agtermAppearanceChanged`.
+  transitions + `.agtermAppearanceChanged`. For live system-setting changes,
+  `SystemAccessibilityObserver.start()` observes
+  `NSWorkspace.accessibilityDisplayOptionsDidChangeNotification` on `NSWorkspace.notificationCenter`
+  and posts app-local `.agtermAccessibilityDisplayOptionsChanged`; each `WindowAccessor.Coordinator`
+  observes that on `NotificationCenter.default` and re-runs `applyTitlebarBlend`. SwiftUI's
+  `accessibilityReduceTransparency` environment value independently swaps the command palette and
+  Ctrl-Tab session switcher from `.regularMaterial` to opaque `.windowBackgroundColor`, and drives the
+  conditional Settings hint. All open windows and panels therefore update without a relaunch.
 - **`configDirectory` + the keymap (see the Keymap section).**
   `AppSettings.configDirectory: String?` (nil = the default) holds the directory that contains `keymap.conf`.
   `SettingsModel` resolves it through the host-free `ConfigPaths.configDirectory(setting:stateDir:home:)`
@@ -461,4 +475,3 @@ paths:
 - **A Settings toggle's DESCRIPTION stays single-line short-form** — a terse hint, not a manual.
   No detailed multi-line explanation of what the toggle does and no cross-refs to other toggles;
   keep the minimal style (see also the flag-description convention).
-

@@ -331,8 +331,10 @@ All ten are read-only projections of GUI state.
   under `--json`). Errors when the session has no split. Resizing a hidden split updates the stored
   fraction; it takes effect when the split is next shown.
 - `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb] [--pane left|right|scratch] [--pane-id TOKEN] [--target] [--window W]` —
-  set the sidebar agent-status glyph. `--blink` pulses it (for attention). `--auto-reset` clears it
-  back to idle once the session is visited (use for a one-shot completion flash). `--sound` plays a
+  set the sidebar agent-status glyph. `--blink` requests an attention pulse; macOS Reduce Motion
+  suppresses the repeating sidebar and dashboard animation while keeping the status visible, and the
+  pulse resumes when Reduce Motion is disabled. `--auto-reset` clears it back to idle once the session
+  is visited (use for a one-shot completion flash). `--sound` plays a
   one-shot sound when the status is set: `default` (the system alert sound) or a system sound name
   (`Basso`, `Blow`, `Bottle`, `Frog`, `Funk`, `Glass`, `Hero`, `Morse`, `Ping`, `Pop`, `Purr`,
   `Sosumi`, `Submarine`, `Tink`; also any custom sound in `~/Library/Sounds`) — an unknown name errors.
@@ -420,8 +422,10 @@ All ten are read-only projections of GUI state.
 - `session background color <#rrggbb> [--target] [--window W]` — set a SOLID terminal background color
   (the `background` key, not an image). Takes no opacity: the color is drawn at the Settings window
   translucency (solid when translucency is off; blurred/translucent when on), so it honors your
-  opacity/blur instead of forcing the pane opaque like the image/text watermark. Errors on a malformed
-  color (must be a `#rrggbb` hex value).
+  opacity/blur instead of forcing the pane opaque like the image/text watermark. macOS Reduce
+  Transparency temporarily presents it as opaque and unblurred without changing the saved opacity/blur;
+  the requested presentation returns when Reduce Transparency is disabled. Errors on a malformed color
+  (must be a `#rrggbb` hex value).
 - `session background clear [--target] [--window W]` — remove the session's background.
   Per session (applies to the session's pane(s)); persisted, so it survives a relaunch. An image/text
   watermark makes the pane render OPAQUE, overriding window translucency (an image is invisible at 0

@@ -728,7 +728,8 @@
                   Watch several agents or builds at once: sessions' live output in one grid overlaid on the window. The cell unit is a
                   session+pane — a non-split session is one cell, a split session is two (its left and right panes), capped at nine
                   cells. Each cell's name chip also reflects the session's agent status, filling with the status color and pulsing
-                  while it blinks, so a session that needs attention stands out in the grid. It is view-only — no cell's terminal
+                  while it blinks, unless macOS Reduce Motion is enabled; the status color and text remain visible without the
+                  repeating animation. It is view-only — no cell's terminal
                   takes input; the arrow keys move a highlight, Enter (or a single mouse click on a cell) jumps into that
                   session and focuses that exact pane, and Esc closes. Opened over the control channel with
                   <code style="color: #e6e1d7">agtermctl dashboard &lt;ids…&gt;</code>, or
@@ -1018,6 +1019,10 @@
                 ><strong style="color: #e6e1d7">Appearance</strong> — terminal font and theme, the toolbar mode (Normal with the
                 working directory, Compact, or Hidden for a full-bleed terminal with no titlebar or traffic lights), window
                 background opacity and blur, the sidebar tint, the sidebar font size, and how much the inactive split pane dims.
+                With macOS Reduce Transparency enabled, agterm temporarily presents translucent windows, command palettes, and
+                session switchers as opaque and unblurred without changing the saved opacity or blur; disabling it restores those
+                settings. Reduce Motion keeps status colors and glyphs visible but suppresses their repeating sidebar and dashboard
+                pulses.
               </div>
               <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
@@ -1874,7 +1879,9 @@
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--auto-reset</span> clears the
               indicator the moment you visit the session;
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--blink</span> pulses the glyph; and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--blink</span> requests an attention
+              pulse; macOS Reduce Motion suppresses the repeating sidebar and dashboard animation while keeping the status visible,
+              and the pulse resumes when Reduce Motion is disabled;
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--sound</span> plays a one-shot sound
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">default</span>, or a system sound
               name like <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">Basso</span>/<span

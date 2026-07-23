@@ -26,7 +26,9 @@ enum WindowAppearance {
     /// At full opacity the window is opaque with a solid background (the original behavior). Below
     /// full opacity the window goes non-opaque and its background carries the alpha: the renderer is
     /// pinned transparent (see `AppSettings.ghosttyConfigLines`) and the chrome paints nothing, so
-    /// the whole interior reads as one continuous translucent surface, optionally blurred.
+    /// the whole interior reads as one continuous translucent surface, optionally blurred. When macOS
+    /// Reduce Transparency is enabled, the saved chrome inputs stay unchanged but the effective
+    /// presentation is temporarily opaque and unblurred; disabling it restores those inputs.
     static func sync(window: NSWindow, background: NSColor, chrome: Chrome) {
         window.titlebarAppearsTransparent = true
         window.titlebarSeparatorStyle = .none

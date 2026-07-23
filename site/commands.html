@@ -993,7 +993,9 @@
                 Set the sidebar agent-status glyph. Setting a non-idle status is for agents and hooks;
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">idle</span> clears it (also available in the GUI). An
                 unknown state errors.
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--blink</span> pulses the glyph;
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--blink</span> requests an attention pulse; macOS
+                Reduce Motion suppresses the repeating sidebar and dashboard animation while keeping the status visible, and the
+                pulse resumes when Reduce Motion is disabled;
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--auto-reset</span> clears it back to idle once the
                 session is visited (a one-shot completion flash).
               </p>
@@ -1084,7 +1086,9 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <strong style="color: #bfbab0">color</strong> — a solid terminal background color, taking no opacity: it is drawn at
-                the Settings window translucency, so it honors your opacity and blur. An
+                the Settings window translucency, so it honors your opacity and blur. macOS Reduce Transparency temporarily
+                presents it as opaque and unblurred without changing the saved opacity or blur; the requested presentation returns
+                when Reduce Transparency is disabled. An
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">image</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">text</span>
                 watermark instead forces the pane opaque. Read the current spec back from the node's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">background</span> object.

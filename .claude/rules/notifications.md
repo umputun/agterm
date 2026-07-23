@@ -150,7 +150,15 @@ paths:
   with accessibility role `.staticText`, id `agent-status`, value = the state name (so XCUITest matches `app.staticTexts["agent-status"]`;
   the glyph TINT, per-call or not, is NOT accessibility-observable),
   and a `CABasicAnimation` `opacity` pulse added only while visible AND `blink` (the install's `UserPromptSubmit→active --blink`
-  hook pulses the in-progress glyph).
+  hook pulses the in-progress glyph). `StatusIconView.apply` also requires
+  `!NSWorkspace.shared.accessibilityDisplayShouldReduceMotion`, so Reduce Motion keeps the glyph/color
+  visible but suppresses the indefinite pulse. `SystemAccessibilityObserver.start()` observes
+  `NSWorkspace.accessibilityDisplayOptionsDidChangeNotification` on `NSWorkspace.notificationCenter`
+  and posts app-local `.agtermAccessibilityDisplayOptionsChanged`; the sidebar Coordinator observes that
+  on `NotificationCenter.default` and calls `reapplyStatusGlyphs()` so every visible row updates live.
+  The dashboard's `DashboardCaptionPill` uses SwiftUI's `accessibilityReduceMotion` environment value to
+  gate its matching `repeatForever` wash, preserving the filled status pill without animation. Because
+  the model's `blink` request is retained, both pulses resume if Reduce Motion is disabled.
   The glyph shows on EVERY non-idle session, the selected one INCLUDED — there is NO visibility gate.
   (An earlier `isFrontmostWindow`-driven hide-on-the-selected-session gate was removed:
   blanking the status on the row you're viewing read as confusing, since every other row carried a state;
@@ -254,4 +262,3 @@ paths:
   refreshed on `.agtermAppearanceChanged`), NOT from `model.settings`.
   The bell is pure visual chrome (it opens the attention popover, a mouse form of the already-controllable
   attention list / `session.select`) — keep-in-sync EXEMPT, like the other titlebar buttons.
-
