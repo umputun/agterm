@@ -202,6 +202,15 @@ maintainer decisions are folded in below:
   `overlayPanel` sizes via `OverlayLayout.panelSize(session.overlaySize, pane: geo.size, cell:
   session.overlayCellMetrics)` and positions via `ZStack(alignment: floating ? anchor.swiftUIAlignment :
   .center)`; a stable accessibility id on the floating panel enables the e2e frame assertion.
+- **1-cell anchor margin (maintainer feedback)**: an edge/corner-anchored floating panel is NOT flush with
+  the pane border — it sits one cell off each anchored side (a corner insets both, an edge one, `center`
+  none). The margin is host-free in `OverlayLayout.anchorInsets(_:panel:pane:cell:) -> OverlayInsets`
+  (leading/top/trailing/bottom in points): the anchored horizontal side gets `cellWidth`, the anchored
+  vertical side `cellHeight`, each capped at the axis slack (`min(oneCell, pane − panel)`) so a near-full
+  panel never overflows, and nil/unusable metrics → `.zero`. `overlayPanel` maps it to a single
+  `padding(EdgeInsets)` on the panel (a values-only modifier — no anchor-specific view branch — so the
+  ZStack child count stays constant per the NSSplitView-overrun invariant), applied AFTER the a11y marker
+  so the marker still reports the panel's own frame. Applies to ANY floating overlay (percent or cells).
 
 ## Technical Details
 
@@ -419,6 +428,18 @@ is NOT exposed in the a11y tree — the frame e2e failed with "panel should be i
 moving the id onto a zero-content `.overlay(Color.clear …)` marker sized to the panel (the dashboard-cell
 pattern). As an `.overlay` modifier it adds NO ZStack child, so the constant-child-count NSSplitView-overrun
 invariant is preserved. All 5 e2e methods pass after the fix.
+
+➕ **Deviation (maintainer feedback — 1-cell anchor margin):** an edge/corner-anchored floating panel used
+to sit FLUSH against the pane border, which looked bad. Per maintainer feedback the panel now insets one
+cell off each anchored side (a corner insets both, an edge one, `center` none). Added the host-free
+`OverlayLayout.anchorInsets(_:panel:pane:cell:) -> OverlayInsets` (leading/top/trailing/bottom in points;
+anchored horizontal side = `cellWidth`, vertical = `cellHeight`, each capped at the axis slack, nil/unusable
+metrics → `.zero`) with `OverlayLayoutTests` (corner/edge/center/slack-cap/nil cases); `overlayPanel` maps
+it to a single `padding(EdgeInsets)` on the panel — a values-only modifier (no anchor branch), applied AFTER
+the a11y marker so the marker keeps reporting the panel's own frame, preserving the NSSplitView-overrun
+invariant. The frame e2e was rewritten to assert the ~1-cell margin (inset from a full-overlay detail-area
+reference), discriminating against both flush (margin 0) and centered (large half-slack) placement. Applies
+to ANY floating overlay (percent or cells). All 5 e2e methods still pass.
 
 ### Task 8: Keep-in-sync documentation surfaces
 

@@ -65,6 +65,26 @@ public struct OverlayCellMetrics: Equatable, Sendable {
     public var isUsable: Bool { cellWidth > 0 && cellHeight > 0 }
 }
 
+/// Per-edge insets (in points) applied to an anchored floating overlay panel so it sits one cell off the
+/// pane edge(s) it anchors to, instead of flush against the border. The app maps these onto a SwiftUI
+/// `padding(EdgeInsets)` on the panel; the centered axes carry a zero inset.
+public struct OverlayInsets: Equatable, Sendable {
+    public let leading: Double
+    public let top: Double
+    public let trailing: Double
+    public let bottom: Double
+
+    public init(leading: Double, top: Double, trailing: Double, bottom: Double) {
+        self.leading = leading
+        self.top = top
+        self.trailing = trailing
+        self.bottom = bottom
+    }
+
+    /// No inset on any edge (`center`, full overlay, or unusable metrics).
+    public static let zero = OverlayInsets(leading: 0, top: 0, trailing: 0, bottom: 0)
+}
+
 /// Pure resolver turning an `OverlaySize` request into a concrete panel size within a pane. Host-free and
 /// unit-tested; the app applies the result as a SwiftUI frame. All sizes are in points.
 public enum OverlayLayout {
@@ -98,5 +118,22 @@ public enum OverlayLayout {
         let fitCount = Int(((available - pad) / cellSize).rounded(.down))
         let usedCount = Swift.max(1, Swift.min(count, fitCount))
         return Swift.min(Double(usedCount) * cellSize + pad, available)
+    }
+
+    /// The one-cell margin a floating overlay panel takes off the pane edge(s) its `anchor` sits against, so
+    /// an edge/corner-anchored panel is not flush with the border. The anchored horizontal side (`unitX` 0 =
+    /// leading, 1 = trailing) gets one `cell.cellWidth` inset and the anchored vertical side (`unitY` 0 =
+    /// top, 1 = bottom) one `cell.cellHeight` inset; a centered axis (`0.5`) gets none. Each inset is capped
+    /// at the slack on its axis (`min(oneCell, pane - panel)`), so a near-full-pane panel never overflows,
+    /// and nil or unusable `cell` metrics yield no inset. `center` (both axes 0.5) always yields `.zero`.
+    public static func anchorInsets(_ anchor: OverlayAnchor, panel: WindowGeometry.Size,
+                                    pane: WindowGeometry.Size, cell: OverlayCellMetrics?) -> OverlayInsets {
+        guard let cell, cell.isUsable else { return .zero }
+        let hInset = Swift.min(cell.cellWidth, Swift.max(0, pane.width - panel.width))
+        let vInset = Swift.min(cell.cellHeight, Swift.max(0, pane.height - panel.height))
+        return OverlayInsets(leading: anchor.unitX == 0 ? hInset : 0,
+                             top: anchor.unitY == 0 ? vInset : 0,
+                             trailing: anchor.unitX == 1 ? hInset : 0,
+                             bottom: anchor.unitY == 1 ? vInset : 0)
     }
 }

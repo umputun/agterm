@@ -739,39 +739,60 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
     }
 
-    // The floating panel's on-screen FRAME follows its corner anchor: a top-left-anchored 40% panel is smaller
-    // than the window and sits in its upper-left region; re-anchoring to bottom-right shifts the panel right AND
-    // down. The Metal surface is not in the a11y tree, so the panel exposes a stable `overlay-floating-panel`
-    // element whose frame the test reads.
+    // The floating panel follows its corner anchor AND sits ONE CELL off the anchored edges (the 1-cell anchor
+    // margin), never flush against the border. The detail area is captured from a FULL overlay (its panel fills
+    // the pane exactly with NO inset) via the same `overlay-floating-panel` marker; the floating panel's inset
+    // from that reference is then asserted to be a small, positive, cell-sized margin. This is discriminating:
+    // flush placement (margin 0) fails the > assertions, and centered placement (a large half-slack offset)
+    // fails the < assertions. The vertical margin exceeds the horizontal one because a terminal cell is taller
+    // than it is wide (each axis insets by its OWN cell dimension). The Metal surface is not in the a11y tree,
+    // so the panel exposes the stable `overlay-floating-panel` marker whose frame the test reads.
     func testFloatingOverlayPanelFrameFollowsCornerAnchor() throws {
         let id = try activeSessionID()
         try resizeWindow(width: 1100, height: 750)
 
-        let open = try sendOverlayOpen(target: id, command: "cat", args: ["sizePercent": 40, "anchor": "top-left"])
-        XCTAssertEqual(open["ok"] as? Bool, true, "floating overlay open should succeed: \(open)")
-        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the floating overlay should be up")
+        // a FULL overlay fills the detail area exactly (no anchor inset), so its marker frame is the pane the
+        // floating margin is measured against.
+        let full = try sendOverlayOpen(target: id, command: "cat", args: [:])
+        XCTAssertEqual(full["ok"] as? Bool, true, "full overlay open should succeed: \(full)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the full overlay should be up")
 
-        let window = app.windows.firstMatch
-        XCTAssertTrue(window.waitForExistence(timeout: 5), "window should exist")
         let panel = app.descendants(matching: .any).matching(identifier: "overlay-floating-panel").firstMatch
-        XCTAssertTrue(panel.waitForExistence(timeout: 10), "the floating overlay panel should be in the a11y tree")
+        XCTAssertTrue(panel.waitForExistence(timeout: 10), "the overlay panel should be in the a11y tree")
+        let detail = panel.frame
 
-        let win = window.frame
-        let topLeft = panel.frame
-        // floating => the panel is much smaller than the whole window (a full overlay fills the pane).
-        XCTAssertLessThan(topLeft.width, win.width * 0.85, "a 40% floating panel should be much narrower than the window")
-        XCTAssertLessThan(topLeft.height, win.height * 0.85, "a 40% floating panel should be much shorter than the window")
-        // top-left anchor => the panel's center is left of and above the window center (XCUITest frames are y-down).
-        XCTAssertLessThan(topLeft.midX, win.midX, "a top-left panel's center should be left of the window center")
-        XCTAssertLessThan(topLeft.midY, win.midY, "a top-left panel's center should be above the window center")
+        // resize to a 40% floating panel anchored top-left: it shrinks well below the pane and insets from the
+        // top-left corner by ~1 cell.
+        let toFloating = try sendOverlayResize(target: id, args: ["sizePercent": 40, "anchor": "top-left"])
+        XCTAssertEqual(toFloating["ok"] as? Bool, true, "resize to floating top-left should succeed: \(toFloating)")
+        let tl = try XCTUnwrap(pollPanelWidth(panel: panel, below: detail.width * 0.6, timeout: 8),
+                               "the panel should shrink to the floating size")
+        XCTAssertLessThan(tl.height, detail.height * 0.6, "a 40% floating panel should be much shorter than the pane")
 
-        // re-anchor to the opposite corner: the panel must move right AND down, proving the anchor drives placement.
+        // top-left => a small POSITIVE margin off the pane's left and top (NOT flush at 0, NOT the large
+        // half-slack offset a centered panel would show). one cell is ~8pt wide, ~17pt tall at the default font.
+        let marginX = tl.minX - detail.minX
+        let marginY = tl.minY - detail.minY
+        XCTAssertGreaterThan(marginX, 2, "top-left panel should inset a cell off the left, not sit flush (marginX=\(marginX))")
+        XCTAssertGreaterThan(marginY, 4, "top-left panel should inset a cell off the top, not sit flush (marginY=\(marginY))")
+        XCTAssertLessThan(marginX, 30, "the left margin should be ~1 cell, not a centered half-slack offset (marginX=\(marginX))")
+        XCTAssertLessThan(marginY, 45, "the top margin should be ~1 cell, not a centered half-slack offset (marginY=\(marginY))")
+        XCTAssertGreaterThan(marginY, marginX, "the vertical margin (cell height) should exceed the horizontal one (cell width)")
+
+        // re-anchor to the opposite corner: the panel must move right AND down, and now insets a cell off the
+        // pane's RIGHT and BOTTOM edges by the same ~1-cell margin (mirrored to the anchored side).
         let reanchor = try sendOverlayResize(target: id, args: ["anchor": "bottom-right"])
         XCTAssertEqual(reanchor["ok"] as? Bool, true, "re-anchor should succeed: \(reanchor)")
-        let bottomRight = try XCTUnwrap(pollPanelMoved(panel: panel, from: topLeft, timeout: 8),
-                                        "the panel should move after re-anchoring to bottom-right")
-        XCTAssertGreaterThan(bottomRight.minX, topLeft.minX + 20, "bottom-right anchor should shift the panel right")
-        XCTAssertGreaterThan(bottomRight.minY, topLeft.minY + 20, "bottom-right anchor should shift the panel down")
+        let br = try XCTUnwrap(pollPanelMoved(panel: panel, from: tl, timeout: 8),
+                               "the panel should move after re-anchoring to bottom-right")
+        XCTAssertGreaterThan(br.minX, tl.minX + 20, "bottom-right anchor should shift the panel right")
+        XCTAssertGreaterThan(br.minY, tl.minY + 20, "bottom-right anchor should shift the panel down")
+        let marginRight = detail.maxX - br.maxX
+        let marginBottom = detail.maxY - br.maxY
+        XCTAssertGreaterThan(marginRight, 2, "bottom-right panel should inset a cell off the right (marginRight=\(marginRight))")
+        XCTAssertGreaterThan(marginBottom, 4, "bottom-right panel should inset a cell off the bottom (marginBottom=\(marginBottom))")
+        XCTAssertLessThan(marginRight, 30, "the right margin should be ~1 cell (marginRight=\(marginRight))")
+        XCTAssertLessThan(marginBottom, 45, "the bottom margin should be ~1 cell (marginBottom=\(marginBottom))")
 
         let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
         XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
@@ -1040,6 +1061,19 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
             if abs(size.width - CGFloat(width)) < 12, abs(size.height - CGFloat(height)) < 12 { return }
             usleep(150_000)
         }
+    }
+
+    /// Polls `panel`'s frame until its width drops below `threshold` (a full->floating resize shrinks it),
+    /// returning the new frame, or nil if it never shrank within `timeout`.
+    private func pollPanelWidth(panel: XCUIElement, below threshold: CGFloat, timeout: TimeInterval) -> CGRect? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            let frame = panel.frame
+            if frame.width < threshold { return frame }
+            usleep(200_000)
+        }
+        let frame = panel.frame
+        return frame.width < threshold ? frame : nil
     }
 
     /// Polls `panel`'s frame until it has moved meaningfully from `original` (a re-anchor is async), returning

@@ -153,4 +153,62 @@ struct OverlayLayoutTests {
         #expect(OverlayAnchor.top.rawValue == "top")
         #expect(OverlayAnchor(rawValue: "diagonal") == nil)
     }
+
+    // MARK: - anchorInsets (1-cell anchor margin)
+
+    private func insetsCell() -> OverlayCellMetrics {
+        OverlayCellMetrics(cellWidth: 8, cellHeight: 16, padWidth: 0, padHeight: 0)
+    }
+
+    @Test func cornerAnchorInsetsBothAnchoredSidesOneCell() {
+        // top-left: one cell off the leading edge AND one cell off the top; trailing/bottom untouched.
+        let insets = OverlayLayout.anchorInsets(.topLeft, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
+        #expect(insets == OverlayInsets(leading: 8, top: 16, trailing: 0, bottom: 0))
+
+        // bottom-right: one cell off the trailing edge AND one cell off the bottom.
+        let br = OverlayLayout.anchorInsets(.bottomRight, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
+        #expect(br == OverlayInsets(leading: 0, top: 0, trailing: 8, bottom: 16))
+    }
+
+    @Test func edgeAnchorInsetsOnlyTheAnchoredAxis() {
+        // top edge: inset the top only, the centered horizontal axis gets nothing.
+        let top = OverlayLayout.anchorInsets(.top, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
+        #expect(top == OverlayInsets(leading: 0, top: 16, trailing: 0, bottom: 0))
+
+        // left edge: inset the leading only, the centered vertical axis gets nothing.
+        let left = OverlayLayout.anchorInsets(.left, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
+        #expect(left == OverlayInsets(leading: 8, top: 0, trailing: 0, bottom: 0))
+
+        // right edge: inset the trailing only.
+        let right = OverlayLayout.anchorInsets(.right, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
+        #expect(right == OverlayInsets(leading: 0, top: 0, trailing: 8, bottom: 0))
+
+        // bottom edge: inset the bottom only.
+        let bottom = OverlayLayout.anchorInsets(.bottom, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
+        #expect(bottom == OverlayInsets(leading: 0, top: 0, trailing: 0, bottom: 16))
+    }
+
+    @Test func centerAnchorHasNoInset() {
+        let insets = OverlayLayout.anchorInsets(.center, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
+        #expect(insets == .zero)
+    }
+
+    @Test func anchorInsetsCapAtAvailableSlack() {
+        // a near-full-pane panel: only 3pt of horizontal slack and 5pt of vertical slack remain, so the
+        // one-cell (8x16) inset is capped to that slack and the panel never overflows the pane.
+        let insets = OverlayLayout.anchorInsets(.topLeft, panel: pane(797, 595), pane: pane(800, 600), cell: insetsCell())
+        #expect(insets == OverlayInsets(leading: 3, top: 5, trailing: 0, bottom: 0))
+    }
+
+    @Test func anchorInsetsCapAtZeroWhenPanelFillsPane() {
+        // a panel exactly the pane size (or larger) has no slack, so an anchored inset is clamped to zero.
+        let insets = OverlayLayout.anchorInsets(.bottomRight, panel: pane(800, 600), pane: pane(800, 600), cell: insetsCell())
+        #expect(insets == .zero)
+    }
+
+    @Test func anchorInsetsAreZeroWithoutUsableMetrics() {
+        #expect(OverlayLayout.anchorInsets(.topLeft, panel: pane(200, 200), pane: pane(800, 600), cell: nil) == .zero)
+        let zeroWidth = OverlayCellMetrics(cellWidth: 0, cellHeight: 16, padWidth: 0, padHeight: 0)
+        #expect(OverlayLayout.anchorInsets(.topLeft, panel: pane(200, 200), pane: pane(800, 600), cell: zeroWidth) == .zero)
+    }
 }

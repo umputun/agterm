@@ -534,10 +534,13 @@ struct WindowContentView: View {
     @ViewBuilder private func overlayPanel(session: Session, isActive: Bool) -> some View {
         GeometryReader { geo in
             let floating = session.floatingOverlayActive
-            let panel = OverlayLayout.panelSize(session.overlaySize,
-                                                pane: WindowGeometry.Size(width: Double(geo.size.width),
-                                                                          height: Double(geo.size.height)),
-                                                cell: session.overlayCellMetrics)
+            let paneSize = WindowGeometry.Size(width: Double(geo.size.width), height: Double(geo.size.height))
+            let panel = OverlayLayout.panelSize(session.overlaySize, pane: paneSize, cell: session.overlayCellMetrics)
+            // a floating panel sits one cell off the pane edge(s) it anchors to (a corner insets both sides,
+            // an edge one, center none), so it never reads as flush against the border; full/center -> .zero.
+            let insets = floating
+                ? OverlayLayout.anchorInsets(session.overlayAnchor, panel: panel, pane: paneSize, cell: session.overlayCellMetrics)
+                : .zero
             ZStack(alignment: floating ? session.overlayAnchor.swiftUIAlignment : .center) {
                 if session.overlayActive, deckHostsSurface(session: session, surface: .overlay) {
                     // transparent click-catcher over the whole detail area: absorbs clicks AROUND a floating
@@ -569,6 +572,12 @@ struct WindowContentView: View {
                                 .accessibilityElement()
                                 .accessibilityIdentifier("overlay-floating-panel")
                         )
+                        // push the panel one cell off its anchored edge(s) — the padding wraps the panel AND
+                        // its a11y marker, so the marker still reports the panel's own frame while the whole
+                        // group is offset within the ZStack. A constant modifier (values-only, no anchor
+                        // branch), so the ZStack child count never changes (NSSplitView-overrun invariant).
+                        .padding(EdgeInsets(top: CGFloat(insets.top), leading: CGFloat(insets.leading),
+                                            bottom: CGFloat(insets.bottom), trailing: CGFloat(insets.trailing)))
                         .id("\(session.id.uuidString)-overlay")
                 }
             }
