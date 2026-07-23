@@ -476,14 +476,24 @@ placement. Applies to ANY floating overlay (percent or cells). All 5 e2e methods
 > is out of scope for this doc pass.
 
 ### Task 9: Verify acceptance criteria
-- [ ] verify Overview: cols/rows sizing, 9 anchors, size clamp, percent/full unchanged, default center,
-      requested+applied+anchor read-back, Decision-3 open tightening
-- [ ] verify edge cases: cols/rows > pane (clamped, applied reflects it), 1×1, Retina 2× correct,
+- [x] verify Overview: cols/rows sizing, 9 anchors, size clamp, percent/full unchanged, default center,
+      requested+applied+anchor read-back, Decision-3 open tightening — all confirmed in code:
+      `OverlaySize.cells` + `OverlayLayout.panelSize`/`cellExtent` (clamp); `OverlayAnchor` 9 cases,
+      `Session.overlayAnchor = .center` default, preserved on `--full` (`resizeOverlay`), reset only in
+      `closeOverlay`; anchor emitted on tree whenever `overlayActive` (`AppStore+ControlTree`);
+      Decision-3 percent `1...100` hard-error for open in `parseOverlaySize`/CLI `validateSize`
+- [x] verify edge cases: cols/rows > pane (clamped, applied reflects it), 1×1, Retina 2× correct,
       anchor with no floating size (error), resize anchor-only, `--full` preserves anchor, no new
-      `Command` case (count 64), no persistence changes
-- [ ] run full host-free suite: `cd agtermCore && swift test`
-- [ ] run e2e: the `ControlOverlaySplitUITests` overlay cases (incl. `stty size` + frame assertions)
-- [ ] `make lint` clean; app builds (`make build`)
+      `Command` case (count 64), no persistence changes — all confirmed: `cellExtent` floors at 1 cell /
+      caps at fit / never exceeds pane; Retina px→point via `refreshOverlayMetrics` ÷ `backingScaleFactor`;
+      `git diff d597d05..HEAD` adds ZERO `Command` cases; `Snapshot.swift` has no overlay fields and was
+      untouched by the branch
+- [x] run full host-free suite: `cd agtermCore && swift test` — 1780 tests in 74 suites passed
+- [x] run e2e: the `ControlOverlaySplitUITests` overlay cases (incl. `stty size` + frame assertions) —
+      5/5 passed (`testOverlayOpenColsRowsAnchorReadBack`, `testOverlayColsRowsRealizedGridMatchesRequest`,
+      `testFloatingOverlayPanelFrameFollowsCornerAnchor`, `testOverlayResizeTransitionsCycleWhileSplit`,
+      `testOverlaySizingAnchorErrorsOverSocket`)
+- [x] `make lint` clean; app builds (`make build`) — lint exit 0 with 0 findings; Debug BUILD SUCCEEDED
 
 ### Task 10: Final documentation + close-out
 - [ ] update `CLAUDE.md`/`.claude/rules` only if a genuinely new pattern emerged (e.g. the observed-
