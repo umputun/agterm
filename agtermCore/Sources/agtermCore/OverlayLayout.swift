@@ -133,4 +133,19 @@ public enum OverlayLayout {
         return WindowGeometry.Rect(origin: WindowGeometry.Point(x: originX, y: originY),
                                    size: WindowGeometry.Size(width: width, height: height))
     }
+
+    /// Whole-cell column count spanning a side-by-side split's full detail WIDTH, measured from the two
+    /// panes' backing-pixel widths at ONE cell size (the primary pane's) and floored ONCE. This is the
+    /// true single full-detail grid a floating overlay's `--cols` fills — it avoids the double-floor and the
+    /// mixed-font error of summing each pane's already-floored column count (the panes can carry different
+    /// live font sizes). The thin divider between the panes is uncounted, so it underestimates the whole
+    /// detail width by a fraction of a cell. Unitless (px / px), so no Retina conversion. nil when the
+    /// primary cell width or the total width is non-positive.
+    public static func splitCanvasCols(primaryWidthPx: Double, splitWidthPx: Double,
+                                       primaryCellWidthPx: Double) -> Int? {
+        guard primaryCellWidthPx > 0 else { return nil }
+        let totalWidthPx = primaryWidthPx + splitWidthPx
+        guard totalWidthPx > 0 else { return nil }
+        return Int((totalWidthPx / primaryCellWidthPx).rounded(.down))
+    }
 }

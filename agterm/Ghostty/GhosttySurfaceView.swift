@@ -533,6 +533,18 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         return (cols: cols, rows: rows)
     }
 
+    /// The surface's live content WIDTH and cell WIDTH in backing pixels from `ghostty_surface_size`, or nil
+    /// when the surface isn't realized or has no cell size yet. Feeds `sessionCanvasGrid`'s split measurement,
+    /// which spans both panes' pixel widths at ONE cell size — a px/px ratio, so no Retina conversion.
+    func liveWidthPx() -> (widthPx: Double, cellWidthPx: Double)? {
+        guard let surface else { return nil }
+        let size = ghostty_surface_size(surface)
+        let cellW = Double(size.cell_width_px)
+        let widthPx = Double(size.width_px)
+        guard cellW > 0, widthPx > 0 else { return nil }
+        return (widthPx: widthPx, cellWidthPx: cellW)
+    }
+
     /// Reads the overlay surface's live pixel metrics from `ghostty_surface_size`. nil when the surface isn't
     /// realized or has no cell size yet. The caller converts px→points via `backingScaleFactor` before handing
     /// them to the host-free layout resolver (which works in the point space `GeometryReader`/`WindowGeometry.Size`

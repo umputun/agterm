@@ -562,20 +562,27 @@ final class ControlServer {
     /// The session's terminal content-area grid (columns × rows) for the `tree` `canvasCols`/`canvasRows`
     /// read-back — the whole detail region a floating overlay fills, measured at the session's base font from
     /// the live `ghostty_surface_size()` grid (unitless cell counts, no Retina conversion). The primary pane's
-    /// grid when NOT split; the split pane's columns are ADDED when the split is shown side-by-side (the full
-    /// detail width, split-agnostic). A hidden split maximized on the split pane reports that pane's own
-    /// full-width grid. nil when no surface is realized (the overlay-metrics nil convention).
+    /// grid when NOT split (exact). When the split is shown side-by-side, `canvasCols` is the WHOLE detail
+    /// width measured from BOTH panes' pixel widths at ONE cell size (`OverlayLayout.splitCanvasCols`) —
+    /// floored once, not the sum of each pane's already-floored (possibly different-font) column count — so
+    /// it is the true grid `--cols` fills (the thin divider is uncounted, a fraction of a cell). `canvasRows`
+    /// is the main pane's rows (a left/right split keeps full height). A hidden split maximized on the split
+    /// pane reports that pane's own full-width grid. nil when no surface is realized (the overlay-metrics nil
+    /// convention).
     private func sessionCanvasGrid(_ session: Session) -> (cols: Int, rows: Int)? {
-        let main = (session.surface as? GhosttySurfaceView)?.liveGrid()
-        let split = (session.splitSurface as? GhosttySurfaceView)?.liveGrid()
-        if session.isSplit, let main, let split {
-            return (cols: main.cols + split.cols, rows: main.rows)
+        let mainView = session.surface as? GhosttySurfaceView
+        let splitView = session.splitSurface as? GhosttySurfaceView
+        if session.isSplit, let mainView, let splitView, let main = mainView.liveGrid(),
+           let mainPx = mainView.liveWidthPx(), let splitPx = splitView.liveWidthPx(),
+           let cols = OverlayLayout.splitCanvasCols(primaryWidthPx: mainPx.widthPx, splitWidthPx: splitPx.widthPx,
+                                                    primaryCellWidthPx: mainPx.cellWidthPx) {
+            return (cols: cols, rows: main.rows)
         }
         // a hidden (maximized-one-pane) split focused on the split pane: that pane fills the detail width.
-        if session.hasSplit, session.splitFocused, let split {
+        if session.hasSplit, session.splitFocused, let split = splitView?.liveGrid() {
             return split
         }
-        return main
+        return mainView?.liveGrid()
     }
 
     /// Creates a session in `workspaceID` of `store` with the `session.new` args (cwd default $HOME,

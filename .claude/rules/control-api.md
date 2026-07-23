@@ -1322,9 +1322,14 @@ paths:
   change); omitted for a full overlay or none.
   Distinct from the requested `overlayCols`/`overlayRows`, so an oversized request comes back smaller here and
   a script can detect the clamp.
-  The applied grid is EVENTUALLY CONSISTENT: the app refreshes it ASYNC off the realized surface, and a
-  size-changing `session.overlay.resize` nils it (`resizeOverlay` clears `overlayAppliedCols/Rows` on a size
-  change) so a read before the refresh returns nil rather than the PRIOR size's grid.
+  The applied grid is EVENTUALLY CONSISTENT: the app refreshes it ASYNC off the realized surface after an
+  open/resize, so a read right after a `session.overlay.resize` can briefly report the PRIOR size's grid
+  until the settle-resize re-reports.
+  `resizeOverlay` deliberately KEEPS the old applied value across a resize (it does NOT nil it): when the new
+  size actually changes the physical grid the app re-reports it, and when it does not (e.g. two oversized
+  cell requests both clamping to the same grid) the old value is already the correct realized grid — niling
+  it would strand the read-back at nil forever, because the app's last-value dedup suppresses re-reporting an
+  unchanged grid.
   So a script must POLL `tree` for the applied fields after an open/resize (mirroring the e2e's
   `pollOverlayApplied`), not read once, before comparing against the request.
   `overlayAnchor` — the anchor rawValue of ANY open overlay including a full one
@@ -1355,11 +1360,15 @@ paths:
   It is SPLIT-AGNOSTIC — the whole detail region an overlay fills, taken as ONE area:
   `canvasRows` is the full height (`ControlServer.sessionCanvasGrid` reads the main pane's rows, since a
   left/right split keeps full height), and `canvasCols` is the full width — the primary pane's columns when
-  NOT split, the SUM of both panes' columns when the split is shown side-by-side (`session.isSplit`), and the
-  split pane's own full-width grid for a hidden split maximized on it (`hasSplit && splitFocused`).
-  A side-by-side split `canvasCols` slightly UNDERESTIMATES a single full-width surface (the thin divider and
-  per-pane inner padding are uncounted), exact for the unsplit case — the "as-close-as-possible for split,
-  exact unsplit" trade documented in the field's godoc.
+  NOT split (exact), and for a side-by-side split (`session.isSplit`) the WHOLE detail width measured from
+  BOTH panes' backing-pixel widths at ONE cell size (the primary pane's), floored ONCE
+  (`OverlayLayout.splitCanvasCols`) — NOT the sum of each pane's already-floored (and possibly different-font)
+  column count, which double-floors and mixes cell sizes.
+  A hidden split maximized on the split pane reports that pane's own full-width grid (`hasSplit && splitFocused`).
+  A side-by-side split `canvasCols` slightly UNDERESTIMATES a single full-width surface only by the thin
+  divider between the panes (a fraction of a cell; the per-pane inner padding IS now counted, riding in each
+  pane's pixel width), exact for the unsplit case — the "as-close-as-possible for split, exact unsplit" trade
+  documented in the field's godoc.
   Because the main surface's live font tracks `session.fontSize` (cmd-+/-) and a fresh overlay is created
   with the SAME `session.fontSize`, the grid measured at the main pane's live font equals the base overlay
   font by construction — so `overlay open --cols canvasCols --rows canvasRows` fills the canvas.

@@ -574,7 +574,7 @@ struct AppStorePaneTests {
         #expect(session.overlayAnchor == .bottomLeft)
     }
 
-    @Test func resizeOverlaySizeChangeClearsStaleAppliedGrid() {
+    @Test func resizeOverlayKeepsAppliedGridForAppToReReport() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
@@ -582,16 +582,17 @@ struct AppStorePaneTests {
         // simulate the app-maintained realized grid from the first size.
         session.overlayAppliedCols = 72
         session.overlayAppliedRows = 20
-        // a SIZE-changing resize nils the stale realized grid so a read before the async refresh returns nil.
+        // a SIZE-changing resize does NOT nil the realized grid: the app re-reports it on the settle-resize
+        // when the grid actually changes, and if the grid stays identical (e.g. two oversized requests both
+        // clamping to the same grid) the old value is still correct — niling it would strand the read-back at
+        // nil forever because the app's last-value dedup suppresses re-reporting an unchanged grid.
         #expect(store.resizeOverlay(session.id, size: .cells(cols: 30, rows: 10)) == true)
-        #expect(session.overlayAppliedCols == nil)
-        #expect(session.overlayAppliedRows == nil)
-        // a re-anchor-only resize (nil size) does NOT touch the realized grid.
-        session.overlayAppliedCols = 28
-        session.overlayAppliedRows = 9
+        #expect(session.overlayAppliedCols == 72)
+        #expect(session.overlayAppliedRows == 20)
+        // a re-anchor-only resize (nil size) also leaves the realized grid untouched.
         #expect(store.resizeOverlay(session.id, anchor: .topLeft) == true)
-        #expect(session.overlayAppliedCols == 28)
-        #expect(session.overlayAppliedRows == 9)
+        #expect(session.overlayAppliedCols == 72)
+        #expect(session.overlayAppliedRows == 20)
     }
 
     @Test func resizeOverlayFullPreservesAnchor() {

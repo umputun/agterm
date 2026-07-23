@@ -252,4 +252,26 @@ struct OverlayLayoutTests {
         #expect(800 - (rect.origin.x + rect.size.width) == 16) // right margin present despite top-left anchor
         #expect(600 - (rect.origin.y + rect.size.height) == 16) // bottom margin present too
     }
+
+    @Test func splitCanvasColsFloorsCombinedWidthOnce() {
+        // two 800px panes at an 8px cell: 1600/8 = 200 columns spanning the whole detail width.
+        #expect(OverlayLayout.splitCanvasCols(primaryWidthPx: 800, splitWidthPx: 800, primaryCellWidthPx: 8) == 200)
+    }
+
+    @Test func splitCanvasColsFloorsOnceNotPerPane() {
+        // each pane holds 12.5 cells (100/8); summing per-pane floored counts gives 12+12 = 24, but the whole
+        // detail width is 200/8 = 25 — flooring ONCE recovers the cell straddling the (uncounted) divider.
+        #expect(OverlayLayout.splitCanvasCols(primaryWidthPx: 100, splitWidthPx: 100, primaryCellWidthPx: 8) == 25)
+    }
+
+    @Test func splitCanvasColsUsesPrimaryCellSizeIgnoringSplitFont() {
+        // the split pane's own (larger) font is irrelevant — the combined width is measured at the PRIMARY
+        // cell size: (400 + 320) / 8 = 90, not a mix of 8px and 16px cells.
+        #expect(OverlayLayout.splitCanvasCols(primaryWidthPx: 400, splitWidthPx: 320, primaryCellWidthPx: 8) == 90)
+    }
+
+    @Test func splitCanvasColsNilForNonPositiveInputs() {
+        #expect(OverlayLayout.splitCanvasCols(primaryWidthPx: 800, splitWidthPx: 800, primaryCellWidthPx: 0) == nil)
+        #expect(OverlayLayout.splitCanvasCols(primaryWidthPx: 0, splitWidthPx: 0, primaryCellWidthPx: 8) == nil)
+    }
 }
