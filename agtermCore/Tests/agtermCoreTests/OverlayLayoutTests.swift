@@ -161,13 +161,14 @@ struct OverlayLayoutTests {
     }
 
     @Test func cornerAnchorInsetsBothAnchoredSidesOneCell() {
-        // top-left: one cell off the leading edge AND one cell off the top; trailing/bottom untouched.
+        // top-left: one line-height off the leading edge AND off the top (both use cellHeight); trailing/
+        // bottom untouched.
         let insets = OverlayLayout.anchorInsets(.topLeft, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
-        #expect(insets == OverlayInsets(leading: 8, top: 16, trailing: 0, bottom: 0))
+        #expect(insets == OverlayInsets(leading: 16, top: 16, trailing: 0, bottom: 0))
 
-        // bottom-right: one cell off the trailing edge AND one cell off the bottom.
+        // bottom-right: one line-height off the trailing edge AND off the bottom.
         let br = OverlayLayout.anchorInsets(.bottomRight, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
-        #expect(br == OverlayInsets(leading: 0, top: 0, trailing: 8, bottom: 16))
+        #expect(br == OverlayInsets(leading: 0, top: 0, trailing: 16, bottom: 16))
     }
 
     @Test func edgeAnchorInsetsOnlyTheAnchoredAxis() {
@@ -177,11 +178,11 @@ struct OverlayLayoutTests {
 
         // left edge: inset the leading only, the centered vertical axis gets nothing.
         let left = OverlayLayout.anchorInsets(.left, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
-        #expect(left == OverlayInsets(leading: 8, top: 0, trailing: 0, bottom: 0))
+        #expect(left == OverlayInsets(leading: 16, top: 0, trailing: 0, bottom: 0))
 
         // right edge: inset the trailing only.
         let right = OverlayLayout.anchorInsets(.right, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
-        #expect(right == OverlayInsets(leading: 0, top: 0, trailing: 8, bottom: 0))
+        #expect(right == OverlayInsets(leading: 0, top: 0, trailing: 16, bottom: 0))
 
         // bottom edge: inset the bottom only.
         let bottom = OverlayLayout.anchorInsets(.bottom, panel: pane(200, 200), pane: pane(800, 600), cell: insetsCell())
@@ -195,7 +196,7 @@ struct OverlayLayoutTests {
 
     @Test func anchorInsetsCapAtAvailableSlack() {
         // a near-full-pane panel: only 3pt of horizontal slack and 5pt of vertical slack remain, so the
-        // one-cell (8x16) inset is capped to that slack and the panel never overflows the pane.
+        // one-line-height (16pt) inset is capped to that slack on each axis and the panel never overflows.
         let insets = OverlayLayout.anchorInsets(.topLeft, panel: pane(797, 595), pane: pane(800, 600), cell: insetsCell())
         #expect(insets == OverlayInsets(leading: 3, top: 5, trailing: 0, bottom: 0))
     }

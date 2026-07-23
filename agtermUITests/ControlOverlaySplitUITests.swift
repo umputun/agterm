@@ -739,14 +739,15 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
     }
 
-    // The floating panel follows its corner anchor AND sits ONE CELL off the anchored edges (the 1-cell anchor
+    // The floating panel follows its corner anchor AND sits ONE LINE-HEIGHT off the anchored edges (the anchor
     // margin), never flush against the border. The detail area is captured from a FULL overlay (its panel fills
     // the pane exactly with NO inset) via the same `overlay-floating-panel` marker; the floating panel's inset
-    // from that reference is then asserted to be a small, positive, cell-sized margin. This is discriminating:
-    // flush placement (margin 0) fails the > assertions, and centered placement (a large half-slack offset)
-    // fails the < assertions. The vertical margin exceeds the horizontal one because a terminal cell is taller
-    // than it is wide (each axis insets by its OWN cell dimension). The Metal surface is not in the a11y tree,
-    // so the panel exposes the stable `overlay-floating-panel` marker whose frame the test reads.
+    // from that reference is then asserted to be a small, positive, roughly-uniform margin. This is
+    // discriminating: flush placement (margin 0) fails the > assertions, and centered placement (a large
+    // half-slack offset) fails the < assertions. The horizontal and vertical margins are approximately EQUAL
+    // because BOTH anchored sides inset by the cell HEIGHT (one line-height), so the left/right gap matches the
+    // top/bottom gap. The Metal surface is not in the a11y tree, so the panel exposes the stable
+    // `overlay-floating-panel` marker whose frame the test reads.
     func testFloatingOverlayPanelFrameFollowsCornerAnchor() throws {
         let id = try activeSessionID()
         try resizeWindow(width: 1100, height: 750)
@@ -770,14 +771,16 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertLessThan(tl.height, detail.height * 0.6, "a 40% floating panel should be much shorter than the pane")
 
         // top-left => a small POSITIVE margin off the pane's left and top (NOT flush at 0, NOT the large
-        // half-slack offset a centered panel would show). one cell is ~8pt wide, ~17pt tall at the default font.
+        // half-slack offset a centered panel would show). the margin is one line-height (~17pt at the default
+        // font) on BOTH the left and the top, so the two are approximately equal.
         let marginX = tl.minX - detail.minX
         let marginY = tl.minY - detail.minY
-        XCTAssertGreaterThan(marginX, 2, "top-left panel should inset a cell off the left, not sit flush (marginX=\(marginX))")
-        XCTAssertGreaterThan(marginY, 4, "top-left panel should inset a cell off the top, not sit flush (marginY=\(marginY))")
-        XCTAssertLessThan(marginX, 30, "the left margin should be ~1 cell, not a centered half-slack offset (marginX=\(marginX))")
-        XCTAssertLessThan(marginY, 45, "the top margin should be ~1 cell, not a centered half-slack offset (marginY=\(marginY))")
-        XCTAssertGreaterThan(marginY, marginX, "the vertical margin (cell height) should exceed the horizontal one (cell width)")
+        XCTAssertGreaterThan(marginX, 2, "top-left panel should inset a line-height off the left, not sit flush (marginX=\(marginX))")
+        XCTAssertGreaterThan(marginY, 4, "top-left panel should inset a line-height off the top, not sit flush (marginY=\(marginY))")
+        XCTAssertLessThan(marginX, 30, "the left margin should be ~1 line-height, not a centered half-slack offset (marginX=\(marginX))")
+        XCTAssertLessThan(marginY, 45, "the top margin should be ~1 line-height, not a centered half-slack offset (marginY=\(marginY))")
+        XCTAssertEqual(marginX, marginY, accuracy: 3,
+                       "the horizontal and vertical margins should be ~equal (both one line-height): marginX=\(marginX) marginY=\(marginY)")
 
         // re-anchor to the opposite corner: the panel must move right AND down, and now insets a cell off the
         // pane's RIGHT and BOTTOM edges by the same ~1-cell margin (mirrored to the anchored side).
