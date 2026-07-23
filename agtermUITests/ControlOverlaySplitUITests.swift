@@ -786,11 +786,13 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         let id = try activeSessionID()
         try resizeWindow(width: 1100, height: 750)
 
-        // a FULL overlay fills the detail area exactly (no anchor inset), so its marker frame is the pane the
-        // floating margin is measured against.
-        let full = try sendOverlayOpen(target: id, command: "cat", args: [:])
-        XCTAssertEqual(full["ok"] as? Bool, true, "full overlay open should succeed: \(full)")
-        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the full overlay should be up")
+        // a 100% FLOATING overlay fills the detail area exactly (centered, so no anchor inset), so its marker
+        // frame is the pane the floating margin is measured against. (A FULL overlay no longer carries the
+        // `overlay-floating-panel` marker — that id is floating-only — so the reference is taken from a
+        // full-size FLOATING panel instead.)
+        let reference = try sendOverlayOpen(target: id, command: "cat", args: ["sizePercent": 100])
+        XCTAssertEqual(reference["ok"] as? Bool, true, "reference overlay open should succeed: \(reference)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the reference overlay should be up")
 
         let panel = app.descendants(matching: .any).matching(identifier: "overlay-floating-panel").firstMatch
         XCTAssertTrue(panel.waitForExistence(timeout: 10), "the overlay panel should be in the a11y tree")
@@ -913,7 +915,7 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         // only one of --cols/--rows is a usage error.
         let colsOnly = try sendOverlayOpen(target: id, command: "cat", args: ["cols": 40])
         XCTAssertEqual(colsOnly["ok"] as? Bool, false, "cols without rows should fail: \(colsOnly)")
-        XCTAssertEqual(colsOnly["error"] as? String, "provide both --cols and --rows", "\(colsOnly)")
+        XCTAssertEqual(colsOnly["error"] as? String, "session.overlay.open: provide both --cols and --rows", "\(colsOnly)")
 
         // an out-of-range percent now hard-errors on OPEN too (Decision 3 — open validation matches resize).
         let badPercent = try sendOverlayOpen(target: id, command: "cat", args: ["sizePercent": 150])

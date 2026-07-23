@@ -597,27 +597,6 @@ struct Session: ParsableCommand {
             subcommands: [Open.self, Close.self, Resize.self, Result.self]
         )
 
-        /// Shared overlay size validation for `open` and `resize`, delegating to the host-free
-        /// `OverlayArgs.parseSize` so the CLI and the dispatcher share ONE set of one-of / range / pairing
-        /// rules and error strings. Throws the canonical message on a rejection; the parsed size is
-        /// discarded here (the dispatcher re-parses the raw args on the wire).
-        static func validateSize(_ command: OverlayArgs.Command, full: Bool, sizePercent: Int?, cols: Int?, rows: Int?) throws {
-            if case .invalid(let message) = OverlayArgs.parseSize(sizePercent: sizePercent, cols: cols, rows: rows,
-                                                                  full: full, command: command) {
-                throw ValidationError(message)
-            }
-        }
-
-        /// Parses `--anchor` to an `OverlayAnchor` via the host-free `OverlayArgs.parseAnchor`, throwing the
-        /// canonical `unknown anchor` message. Returns nil when absent.
-        static func parseAnchor(_ raw: String?) throws -> OverlayAnchor? {
-            switch OverlayArgs.parseAnchor(raw) {
-            case .invalid(let message): throw ValidationError(message)
-            case .absent: return nil
-            case .anchor(let parsed): return parsed
-            }
-        }
-
         struct Open: RequestCommand {
             static let configuration = CommandConfiguration(abstract: "Open an overlay running COMMAND; it closes when COMMAND exits.")
             @Argument(help: "Program to run in the overlay (e.g. revdiff).") var command: String
@@ -635,15 +614,16 @@ struct Session: ParsableCommand {
 
             // reject the mutually-exclusive combos, a bad size/anchor, and a malformed color at parse time
             // (before any connection), so it's a clean usage error and is unit-testable without a socket.
+            // the host-free OverlayArgs.resolveOpen owns the size + anchor rules (incl. anchor-requires-a-
+            // floating-size), shared verbatim with the dispatcher.
             func validate() throws {
                 if block && wait { throw ValidationError("--block cannot be combined with --wait") }
                 if let backgroundColor, !WatermarkConfig.isValidColorHex(backgroundColor) {
                     throw ValidationError("background-color must be a #rrggbb hex value")
                 }
-                try Overlay.validateSize(.open, full: false, sizePercent: sizePercent, cols: cols, rows: rows)
-                // an --anchor is only meaningful for a floating overlay (open with no size = full-pane).
-                if try Overlay.parseAnchor(anchor) != nil, sizePercent == nil, cols == nil, rows == nil {
-                    throw ValidationError("--anchor requires a floating overlay: use --size-percent or --cols/--rows")
+                if case .invalid(let message) = OverlayArgs.resolveOpen(sizePercent: sizePercent, cols: cols,
+                                                                        rows: rows, anchor: anchor) {
+                    throw ValidationError(message)
                 }
             }
 
@@ -713,17 +693,13 @@ struct Session: ParsableCommand {
             @OptionGroup var options: ClientOptions
 
             // validate at parse time (before any connection) so it's a clean usage error, unit-testable
-            // without a socket; the dispatcher re-checks the same rules. One-of {--full, --size-percent,
-            // --cols/--rows} OR none, at least one of {a size mode, --anchor}, and --full ⊥ --anchor.
+            // without a socket; the dispatcher re-checks the same rules. The host-free OverlayArgs.resolveResize
+            // owns them all: one-of {--full, --size-percent, --cols/--rows} OR none, at least one of {a size
+            // mode, --anchor}, and --full ⊥ --anchor.
             func validate() throws {
-                try Overlay.validateSize(.resize, full: full, sizePercent: sizePercent, cols: cols, rows: rows)
-                let parsedAnchor = try Overlay.parseAnchor(anchor)
-                if full, parsedAnchor != nil {
-                    throw ValidationError("--full cannot be combined with --anchor")
-                }
-                let hasSize = full || sizePercent != nil || cols != nil || rows != nil
-                if !hasSize, parsedAnchor == nil {
-                    throw ValidationError("session.overlay.resize requires a size (--full, --size-percent, --cols/--rows) or --anchor")
+                if case .invalid(let message) = OverlayArgs.resolveResize(sizePercent: sizePercent, cols: cols,
+                                                                          rows: rows, full: full, anchor: anchor) {
+                    throw ValidationError(message)
                 }
             }
 

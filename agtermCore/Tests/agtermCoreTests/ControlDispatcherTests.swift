@@ -1260,12 +1260,12 @@ struct ControlDispatcherTests {
         let anchorWithoutFloating = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionOverlayOpen, target: "session", args: ControlArgs(command: "cat", anchor: "top-left")))
 
-        #expect(colsWithoutRows == ControlResponse(ok: false, error: "provide both --cols and --rows"))
+        #expect(colsWithoutRows == ControlResponse(ok: false, error: "session.overlay.open: provide both --cols and --rows"))
         #expect(percentTooBig == ControlResponse(ok: false, error: "session.overlay.open: --size-percent must be 1...100"))
         #expect(percentTooSmall == ControlResponse(ok: false, error: "session.overlay.open: --size-percent must be 1...100"))
         #expect(percentAndCells == ControlResponse(
             ok: false, error: "session.overlay.open: use only one of --size-percent or --cols/--rows"))
-        #expect(badCells == ControlResponse(ok: false, error: "--cols and --rows must be >= 1"))
+        #expect(badCells == ControlResponse(ok: false, error: "session.overlay.open: --cols and --rows must be >= 1"))
         #expect(unknownAnchor == ControlResponse(
             ok: false,
             error: "unknown anchor: sideways (top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right)"))
@@ -1387,7 +1387,7 @@ struct ControlDispatcherTests {
         #expect(tooBig == ControlResponse(ok: false, error: "session.overlay.resize: --size-percent must be 1...100"))
         #expect(tooSmall == ControlResponse(ok: false, error: "session.overlay.resize: --size-percent must be 1...100"))
         #expect(fullAndAnchor == ControlResponse(ok: false, error: "--full cannot be combined with --anchor"))
-        #expect(colsWithoutRows == ControlResponse(ok: false, error: "provide both --cols and --rows"))
+        #expect(colsWithoutRows == ControlResponse(ok: false, error: "session.overlay.resize: provide both --cols and --rows"))
         #expect(actions.calls.isEmpty)
     }
 

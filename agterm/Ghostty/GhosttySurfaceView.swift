@@ -514,7 +514,6 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
     /// The overlay surface's live cell + padding + grid metrics from `ghostty_surface_size`, all in BACKING
     /// PIXELS (cell width/height and the derived non-cell padding remainder, plus the realized columns/rows).
-    /// A struct (not a tuple) because swiftlint caps tuples at 3 members.
     struct OverlayPixelMetrics {
         let cellW: Double, cellH: Double, padW: Double, padH: Double
         let cols: Int, rows: Int

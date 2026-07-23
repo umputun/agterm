@@ -50,14 +50,14 @@ struct OverlayArgsTests {
 
     @Test func sizeRejectsColsWithoutRows() {
         let colsOnly = OverlayArgs.parseSize(sizePercent: nil, cols: 40, rows: nil, full: false, command: .open)
-        #expect(colsOnly == .invalid("provide both --cols and --rows"))
-        let rowsOnly = OverlayArgs.parseSize(sizePercent: nil, cols: nil, rows: 12, full: false, command: .open)
-        #expect(rowsOnly == .invalid("provide both --cols and --rows"))
+        #expect(colsOnly == .invalid("session.overlay.open: provide both --cols and --rows"))
+        let rowsOnly = OverlayArgs.parseSize(sizePercent: nil, cols: nil, rows: 12, full: false, command: .resize)
+        #expect(rowsOnly == .invalid("session.overlay.resize: provide both --cols and --rows"))
     }
 
     @Test func sizeRejectsNonPositiveCells() {
         let result = OverlayArgs.parseSize(sizePercent: nil, cols: 0, rows: 12, full: false, command: .open)
-        #expect(result == .invalid("--cols and --rows must be >= 1"))
+        #expect(result == .invalid("session.overlay.open: --cols and --rows must be >= 1"))
     }
 
     // MARK: - parseAnchor
@@ -75,5 +75,69 @@ struct OverlayArgsTests {
     @Test func anchorRejectsUnknownWithNinePositions() {
         let result = OverlayArgs.parseAnchor("middle")
         #expect(result == .invalid("unknown anchor: middle (top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right)"))
+    }
+
+    // MARK: - resolveOpen
+
+    @Test func openResolvesFullCenterWhenNothingSet() {
+        #expect(OverlayArgs.resolveOpen(sizePercent: nil, cols: nil, rows: nil, anchor: nil)
+            == .resolved(size: .full, anchor: .center))
+    }
+
+    @Test func openResolvesPercentWithAnchor() {
+        #expect(OverlayArgs.resolveOpen(sizePercent: 50, cols: nil, rows: nil, anchor: "bottom-right")
+            == .resolved(size: .percent(50), anchor: .bottomRight))
+    }
+
+    @Test func openResolvesCellsWithAnchor() {
+        #expect(OverlayArgs.resolveOpen(sizePercent: nil, cols: 40, rows: 12, anchor: "top-left")
+            == .resolved(size: .cells(cols: 40, rows: 12), anchor: .topLeft))
+    }
+
+    @Test func openRejectsAnchorWithoutFloating() {
+        #expect(OverlayArgs.resolveOpen(sizePercent: nil, cols: nil, rows: nil, anchor: "top-left")
+            == .invalid("--anchor requires a floating overlay: use --size-percent or --cols/--rows"))
+    }
+
+    @Test func openPropagatesSizeAndAnchorRejections() {
+        #expect(OverlayArgs.resolveOpen(sizePercent: 0, cols: nil, rows: nil, anchor: nil)
+            == .invalid("session.overlay.open: --size-percent must be 1...100"))
+        #expect(OverlayArgs.resolveOpen(sizePercent: nil, cols: 40, rows: nil, anchor: nil)
+            == .invalid("session.overlay.open: provide both --cols and --rows"))
+        #expect(OverlayArgs.resolveOpen(sizePercent: 50, cols: nil, rows: nil, anchor: "middle")
+            == .invalid("unknown anchor: middle (top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right)"))
+    }
+
+    // MARK: - resolveResize
+
+    @Test func resizeResolvesAnchorOnlyKeepingSize() {
+        #expect(OverlayArgs.resolveResize(sizePercent: nil, cols: nil, rows: nil, full: false, anchor: "top")
+            == .resolved(size: nil, anchor: .top))
+    }
+
+    @Test func resizeResolvesPercentFullAndCells() {
+        #expect(OverlayArgs.resolveResize(sizePercent: 60, cols: nil, rows: nil, full: false, anchor: nil)
+            == .resolved(size: .percent(60), anchor: nil))
+        #expect(OverlayArgs.resolveResize(sizePercent: nil, cols: nil, rows: nil, full: true, anchor: nil)
+            == .resolved(size: .full, anchor: nil))
+        #expect(OverlayArgs.resolveResize(sizePercent: nil, cols: 40, rows: 12, full: false, anchor: "left")
+            == .resolved(size: .cells(cols: 40, rows: 12), anchor: .left))
+    }
+
+    @Test func resizeRejectsFullWithAnchor() {
+        #expect(OverlayArgs.resolveResize(sizePercent: nil, cols: nil, rows: nil, full: true, anchor: "top-left")
+            == .invalid("--full cannot be combined with --anchor"))
+    }
+
+    @Test func resizeRejectsNothingSet() {
+        #expect(OverlayArgs.resolveResize(sizePercent: nil, cols: nil, rows: nil, full: false, anchor: nil)
+            == .invalid("session.overlay.resize requires a size (--full, --size-percent, --cols/--rows) or --anchor"))
+    }
+
+    @Test func resizePropagatesSizeAndAnchorRejections() {
+        #expect(OverlayArgs.resolveResize(sizePercent: nil, cols: 5, rows: nil, full: false, anchor: nil)
+            == .invalid("session.overlay.resize: provide both --cols and --rows"))
+        #expect(OverlayArgs.resolveResize(sizePercent: nil, cols: nil, rows: nil, full: false, anchor: "bogus")
+            == .invalid("unknown anchor: bogus (top-left|top|top-right|left|center|right|bottom-left|bottom|bottom-right)"))
     }
 }

@@ -562,15 +562,17 @@ struct WindowContentView: View {
                                 .strokeBorder(floating ? Color.white.opacity(0.18) : Color.clear, lineWidth: 1)
                         )
                         .shadow(radius: floating ? 24 : 0)
-                        // the Metal-backed surface is not in the a11y tree, so expose the panel's frame via a
-                        // zero-content overlay marker (the dashboard-cell pattern) that the e2e reads. As an
-                        // .overlay it adds NO ZStack child, so the constant-child-count NSSplitView-overrun
-                        // invariant holds; allowsHitTesting(false) keeps it off the overlay's own input.
+                        // the Metal-backed surface is not in the a11y tree, so expose the FLOATING panel's frame
+                        // via a zero-content overlay marker (the dashboard-cell pattern) that the e2e reads. As
+                        // an .overlay it adds NO ZStack child, so the constant-child-count NSSplitView-overrun
+                        // invariant holds; allowsHitTesting(false) keeps it off the overlay's own input. Only a
+                        // floating panel carries the id — a full overlay covers the whole detail area, not a
+                        // panel — and the id string flips as a VALUE (no view branch), so the chain stays constant.
                         .overlay(
                             Color.clear
                                 .allowsHitTesting(false)
                                 .accessibilityElement()
-                                .accessibilityIdentifier("overlay-floating-panel")
+                                .accessibilityIdentifier(floating ? "overlay-floating-panel" : "")
                         )
                         // push the panel one cell off its anchored edge(s) — the padding wraps the panel AND
                         // its a11y marker, so the marker still reports the panel's own frame while the whole

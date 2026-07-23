@@ -519,22 +519,13 @@ public struct ControlDispatcher {
             return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
         }
         let size: OverlaySize
-        switch OverlayArgs.parseSize(sizePercent: args?.sizePercent, cols: args?.cols, rows: args?.rows,
-                                     full: args?.full ?? false, command: .open) {
-        case .invalid(let message): return ControlResponse(ok: false, error: message)
-        case .unspecified: size = .full
-        case .size(let parsed): size = parsed
-        }
         let anchor: OverlayAnchor
-        switch OverlayArgs.parseAnchor(args?.anchor) {
+        switch OverlayArgs.resolveOpen(sizePercent: args?.sizePercent, cols: args?.cols, rows: args?.rows,
+                                       anchor: args?.anchor) {
         case .invalid(let message): return ControlResponse(ok: false, error: message)
-        case .absent: anchor = .center
-        case .anchor(let parsed):
-            guard size != .full else {
-                return ControlResponse(ok: false,
-                                       error: "--anchor requires a floating overlay: use --size-percent or --cols/--rows")
-            }
-            anchor = parsed
+        case .resolved(let parsedSize, let parsedAnchor):
+            size = parsedSize
+            anchor = parsedAnchor
         }
         return actions.openSessionOverlay(request.target, window: args?.window,
                                           options: ControlSessionOverlayOpenOptions(
@@ -553,24 +544,13 @@ public struct ControlDispatcher {
     private func dispatchSessionOverlayResize(_ request: ControlRequest) -> ControlResponse {
         let args = request.args
         let size: OverlaySize?
-        switch OverlayArgs.parseSize(sizePercent: args?.sizePercent, cols: args?.cols, rows: args?.rows,
-                                     full: args?.full ?? false, command: .resize) {
-        case .invalid(let message): return ControlResponse(ok: false, error: message)
-        case .unspecified: size = nil
-        case .size(let parsed): size = parsed
-        }
         let anchor: OverlayAnchor?
-        switch OverlayArgs.parseAnchor(args?.anchor) {
+        switch OverlayArgs.resolveResize(sizePercent: args?.sizePercent, cols: args?.cols, rows: args?.rows,
+                                         full: args?.full ?? false, anchor: args?.anchor) {
         case .invalid(let message): return ControlResponse(ok: false, error: message)
-        case .absent: anchor = nil
-        case .anchor(let parsed): anchor = parsed
-        }
-        if case .some(.full) = size, anchor != nil {
-            return ControlResponse(ok: false, error: "--full cannot be combined with --anchor")
-        }
-        if size == nil, anchor == nil {
-            return ControlResponse(ok: false,
-                                   error: "session.overlay.resize requires a size (--full, --size-percent, --cols/--rows) or --anchor")
+        case .resolved(let parsedSize, let parsedAnchor):
+            size = parsedSize
+            anchor = parsedAnchor
         }
         return actions.resizeSessionOverlay(request.target, window: args?.window, size: size, anchor: anchor)
     }
