@@ -160,4 +160,11 @@ struct AgentStatusTests {
         // idle never renders a glyph
         #expect(AgentStatus.idle.symbolName == "")
     }
+
+    @Test func tooltipTextNamesVisibleStatusesAndOmitsIdle() {
+        #expect(AgentStatus.active.tooltipText == "Agent status: Active")
+        #expect(AgentStatus.blocked.tooltipText == "Agent status: Blocked")
+        #expect(AgentStatus.completed.tooltipText == "Agent status: Completed")
+        #expect(AgentStatus.idle.tooltipText == nil)
+    }
 }

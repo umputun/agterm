@@ -59,6 +59,11 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
         case .idle: return ""
         }
     }
+
+    /// Tooltip for a visible status glyph. Idle renders no glyph and therefore has no tooltip.
+    public var tooltipText: String? {
+        self == .idle ? nil : "Agent status: \(rawValue.capitalized)"
+    }
 }
 
 /// StatusPane records which pane of a session set the current agent status, using the same
