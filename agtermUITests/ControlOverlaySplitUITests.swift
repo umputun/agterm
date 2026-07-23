@@ -677,6 +677,204 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(empty["ok"] as? Bool, false, "resize with no fraction should fail: \(empty)")
     }
 
+    // session.overlay.open --cols/--rows/--anchor: the tree read-back reports the REQUESTED grid
+    // (overlayCols/Rows), the realized grid after clamping (overlayColsApplied/RowsApplied), and the anchor.
+    // The window is given headroom first so a 40x12 grid fits without clamping (applied == requested).
+    func testOverlayOpenColsRowsAnchorReadBack() throws {
+        let id = try activeSessionID()
+        try resizeWindow(width: 1100, height: 750)
+
+        let open = try sendOverlayOpen(target: id, command: "cat", args: ["cols": 40, "rows": 12, "anchor": "top-right"])
+        XCTAssertEqual(open["ok"] as? Bool, true, "overlay open with cols/rows/anchor should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the overlay should be up")
+
+        let node = try XCTUnwrap(pollOverlayApplied(id: id, timeout: 12),
+                                 "the tree should report the realized overlay grid (overlayColsApplied/RowsApplied)")
+        // the requested grid is echoed verbatim.
+        XCTAssertEqual(node["overlayCols"] as? Int, 40, "tree should echo the requested cols: \(node)")
+        XCTAssertEqual(node["overlayRows"] as? Int, 12, "tree should echo the requested rows: \(node)")
+        // the applied grid reflects the realized surface; with headroom it matches the request within padding
+        // drift (a 2x Retina px->point miss would size the grid ~2x off).
+        let appliedCols = try XCTUnwrap(node["overlayColsApplied"] as? Int, "applied cols should be present: \(node)")
+        let appliedRows = try XCTUnwrap(node["overlayRowsApplied"] as? Int, "applied rows should be present: \(node)")
+        XCTAssertTrue(abs(appliedCols - 40) <= 2, "applied cols \(appliedCols) should match the requested 40 (2x would be ~80): \(node)")
+        XCTAssertTrue(abs(appliedRows - 12) <= 2, "applied rows \(appliedRows) should match the requested 12 (2x would be ~24): \(node)")
+        XCTAssertEqual(node["overlayAnchor"] as? String, "top-right", "tree should report the anchor: \(node)")
+
+        let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
+    }
+
+    // The ACTUAL grid check that a wire/echo round-trip alone can't make: run `stty size` inside the overlay
+    // and assert the pty's realized rows/cols match the requested cols/rows. libghostty sizes the pty from the
+    // panel's POINT dimensions, so a Retina px->point miss would size the grid ~2x off and this marker catches
+    // it. `cat` holds the overlay open so the tree read-back can be compared against stty's report.
+    func testOverlayColsRowsRealizedGridMatchesRequest() throws {
+        let id = try activeSessionID()
+        try resizeWindow(width: 1100, height: 750)
+
+        let marker = markerDir.appendingPathComponent("overlay-grid")
+        // the overlay wraps its command in `sh -c`, so `stty size` (prints "rows cols") then `cat` work directly.
+        let cmd = "stty size > \(marker.path); cat"
+        let open = try sendOverlayOpen(target: id, command: cmd, args: ["cols": 40, "rows": 12])
+        XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the overlay should be up")
+
+        let sizeText = try XCTUnwrap(pollMarker(marker, timeout: 15), "the overlay command should write its grid size")
+        let numbers = sizeText.split(separator: " ").compactMap { Int($0) }
+        XCTAssertEqual(numbers.count, 2, "stty size should report two integers (rows cols): \(sizeText)")
+        let rows = numbers[0], cols = numbers[1]
+        // the realized grid must match the request within padding drift; a 2x Retina error would be ~80x24.
+        XCTAssertTrue(abs(cols - 40) <= 2, "the overlay's actual columns \(cols) should match the requested 40 (2x would be ~80)")
+        XCTAssertTrue(abs(rows - 12) <= 2, "the overlay's actual rows \(rows) should match the requested 12 (2x would be ~24)")
+
+        // the tree read-back's APPLIED grid reflects the same realized surface stty reads.
+        let node = try XCTUnwrap(pollOverlayApplied(id: id, timeout: 12), "the tree should report the realized grid")
+        let appliedCols = try XCTUnwrap(node["overlayColsApplied"] as? Int, "applied cols should be present: \(node)")
+        let appliedRows = try XCTUnwrap(node["overlayRowsApplied"] as? Int, "applied rows should be present: \(node)")
+        XCTAssertTrue(abs(appliedCols - cols) <= 1, "applied cols \(appliedCols) should match stty's \(cols): \(node)")
+        XCTAssertTrue(abs(appliedRows - rows) <= 1, "applied rows \(appliedRows) should match stty's \(rows): \(node)")
+
+        let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
+    }
+
+    // The floating panel's on-screen FRAME follows its corner anchor: a top-left-anchored 40% panel is smaller
+    // than the window and sits in its upper-left region; re-anchoring to bottom-right shifts the panel right AND
+    // down. The Metal surface is not in the a11y tree, so the panel exposes a stable `overlay-floating-panel`
+    // element whose frame the test reads.
+    func testFloatingOverlayPanelFrameFollowsCornerAnchor() throws {
+        let id = try activeSessionID()
+        try resizeWindow(width: 1100, height: 750)
+
+        let open = try sendOverlayOpen(target: id, command: "cat", args: ["sizePercent": 40, "anchor": "top-left"])
+        XCTAssertEqual(open["ok"] as? Bool, true, "floating overlay open should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the floating overlay should be up")
+
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 5), "window should exist")
+        let panel = app.descendants(matching: .any).matching(identifier: "overlay-floating-panel").firstMatch
+        XCTAssertTrue(panel.waitForExistence(timeout: 10), "the floating overlay panel should be in the a11y tree")
+
+        let win = window.frame
+        let topLeft = panel.frame
+        // floating => the panel is much smaller than the whole window (a full overlay fills the pane).
+        XCTAssertLessThan(topLeft.width, win.width * 0.85, "a 40% floating panel should be much narrower than the window")
+        XCTAssertLessThan(topLeft.height, win.height * 0.85, "a 40% floating panel should be much shorter than the window")
+        // top-left anchor => the panel's center is left of and above the window center (XCUITest frames are y-down).
+        XCTAssertLessThan(topLeft.midX, win.midX, "a top-left panel's center should be left of the window center")
+        XCTAssertLessThan(topLeft.midY, win.midY, "a top-left panel's center should be above the window center")
+
+        // re-anchor to the opposite corner: the panel must move right AND down, proving the anchor drives placement.
+        let reanchor = try sendOverlayResize(target: id, args: ["anchor": "bottom-right"])
+        XCTAssertEqual(reanchor["ok"] as? Bool, true, "re-anchor should succeed: \(reanchor)")
+        let bottomRight = try XCTUnwrap(pollPanelMoved(panel: panel, from: topLeft, timeout: 8),
+                                        "the panel should move after re-anchoring to bottom-right")
+        XCTAssertGreaterThan(bottomRight.minX, topLeft.minX + 20, "bottom-right anchor should shift the panel right")
+        XCTAssertGreaterThan(bottomRight.minY, topLeft.minY + 20, "bottom-right anchor should shift the panel down")
+
+        let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
+    }
+
+    // The full transition cycle over the socket, driven while a SPLIT is visible to guard the NSSplitView-overrun
+    // invariant (the overlay panel must keep a constant ZStack shape across every resize/re-anchor). Open
+    // --size-percent, resize to --cols/--rows, re-anchor with --anchor only (size retained), resize to --full
+    // (cols/rows cleared, anchor RETAINED per Decision 2), then back to a floating percent. The read-back is
+    // asserted after each step, and the split surviving the cycle is the no-crash/no-overrun oracle.
+    func testOverlayResizeTransitionsCycleWhileSplit() throws {
+        let id = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "opening the split should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the split should be up")
+
+        // open a floating percent overlay: default (center) anchor, no cols/rows.
+        let open = try sendOverlayOpen(target: id, command: "cat", args: ["sizePercent": 50])
+        XCTAssertEqual(open["ok"] as? Bool, true, "floating overlay open should succeed: \(open)")
+        let atPercent = try XCTUnwrap(pollOverlayNode(id: id, timeout: 10) { $0["overlaySizePercent"] as? Int == 50 },
+                                      "tree should report the 50% floating overlay")
+        XCTAssertEqual(atPercent["overlayAnchor"] as? String, "center", "the default anchor is center: \(atPercent)")
+        XCTAssertNil(atPercent["overlayCols"] as? Int, "a percent overlay reports no requested cols: \(atPercent)")
+
+        // resize to an exact grid with a corner anchor: percent clears, cols/rows + anchor set.
+        let toCells = try sendOverlayResize(target: id, args: ["cols": 30, "rows": 10, "anchor": "bottom-left"])
+        XCTAssertEqual(toCells["ok"] as? Bool, true, "resize to cols/rows should succeed: \(toCells)")
+        let atCells = try XCTUnwrap(pollOverlayNode(id: id, timeout: 10) { $0["overlayCols"] as? Int == 30 },
+                                    "tree should report the requested cols after resize")
+        XCTAssertEqual(atCells["overlayRows"] as? Int, 10, "tree should report the requested rows: \(atCells)")
+        XCTAssertEqual(atCells["overlayAnchor"] as? String, "bottom-left", "tree should report the new anchor: \(atCells)")
+        XCTAssertNil(atCells["overlaySizePercent"] as? Int, "a cells overlay reports no percent: \(atCells)")
+
+        // re-anchor ONLY: the size (cols/rows) is retained, just the anchor moves.
+        let reanchor = try sendOverlayResize(target: id, args: ["anchor": "top"])
+        XCTAssertEqual(reanchor["ok"] as? Bool, true, "re-anchor only should succeed: \(reanchor)")
+        let atTop = try XCTUnwrap(pollOverlayNode(id: id, timeout: 10) { $0["overlayAnchor"] as? String == "top" },
+                                  "tree should report the re-anchored overlay")
+        XCTAssertEqual(atTop["overlayCols"] as? Int, 30, "re-anchor keeps the requested cols: \(atTop)")
+        XCTAssertEqual(atTop["overlayRows"] as? Int, 10, "re-anchor keeps the requested rows: \(atTop)")
+
+        // resize to full: cols/rows + applied clear, but the anchor is PRESERVED across --full (Decision 2).
+        let toFull = try sendOverlayResize(target: id, args: ["full": true])
+        XCTAssertEqual(toFull["ok"] as? Bool, true, "resize to full should succeed: \(toFull)")
+        let atFull = try XCTUnwrap(pollOverlayNode(id: id, timeout: 10) {
+            ($0["overlay"] as? Bool == true) && ($0["overlayCols"] as? Int == nil) && ($0["overlaySizePercent"] as? Int == nil)
+        }, "tree should report a full overlay with cleared cols/rows")
+        XCTAssertNil(atFull["overlayColsApplied"] as? Int, "a full overlay reports no applied cols: \(atFull)")
+        XCTAssertEqual(atFull["overlayAnchor"] as? String, "top", "--full must PRESERVE the anchor (Decision 2): \(atFull)")
+
+        // back to a floating percent with a new anchor: the overlay never re-spawned and the split is intact.
+        let backToPercent = try sendOverlayResize(target: id, args: ["sizePercent": 60, "anchor": "bottom-right"])
+        XCTAssertEqual(backToPercent["ok"] as? Bool, true, "resize back to percent should succeed: \(backToPercent)")
+        let atPercent2 = try XCTUnwrap(pollOverlayNode(id: id, timeout: 10) { $0["overlaySizePercent"] as? Int == 60 },
+                                       "tree should report the 60% floating overlay")
+        XCTAssertEqual(atPercent2["overlayAnchor"] as? String, "bottom-right", "tree should report the new anchor: \(atPercent2)")
+
+        // the split survived every transition (the NSSplitView-overrun guard: no crash, no re-host).
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 5), "the split must survive the resize/re-anchor cycle")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 5), "the session must survive the cycle")
+
+        let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: false, timeout: 10), "the overlay should be gone")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 5), "the split remains after the overlay closes")
+    }
+
+    // The dispatcher rejects the invalid size/anchor combinations server-side (a raw client bypasses the CLI
+    // validate()): --anchor with no floating size, only one of --cols/--rows, an out-of-range OPEN percent
+    // (now a hard error, Decision 3), and --full combined with --anchor on resize.
+    func testOverlaySizingAnchorErrorsOverSocket() throws {
+        let id = try activeSessionID()
+
+        // --anchor without a floating size on open is rejected, and opens nothing.
+        let anchorNoSize = try sendOverlayOpen(target: id, command: "cat", args: ["anchor": "top-left"])
+        XCTAssertEqual(anchorNoSize["ok"] as? Bool, false, "anchor without a floating size should fail: \(anchorNoSize)")
+        XCTAssertEqual(anchorNoSize["error"] as? String,
+                       "--anchor requires a floating overlay: use --size-percent or --cols/--rows", "\(anchorNoSize)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: false, timeout: 5), "the rejected open must not open an overlay")
+
+        // only one of --cols/--rows is a usage error.
+        let colsOnly = try sendOverlayOpen(target: id, command: "cat", args: ["cols": 40])
+        XCTAssertEqual(colsOnly["ok"] as? Bool, false, "cols without rows should fail: \(colsOnly)")
+        XCTAssertEqual(colsOnly["error"] as? String, "provide both --cols and --rows", "\(colsOnly)")
+
+        // an out-of-range percent now hard-errors on OPEN too (Decision 3 — open validation matches resize).
+        let badPercent = try sendOverlayOpen(target: id, command: "cat", args: ["sizePercent": 150])
+        XCTAssertEqual(badPercent["ok"] as? Bool, false, "an out-of-range open percent should fail: \(badPercent)")
+        XCTAssertEqual(badPercent["error"] as? String, "session.overlay.open: --size-percent must be 1...100", "\(badPercent)")
+
+        // open a real floating overlay, then --full + --anchor on resize is rejected.
+        let open = try sendOverlayOpen(target: id, command: "cat", args: ["sizePercent": 50])
+        XCTAssertEqual(open["ok"] as? Bool, true, "floating overlay open should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the overlay should be up")
+
+        let fullAndAnchor = try sendOverlayResize(target: id, args: ["full": true, "anchor": "bottom-right"])
+        XCTAssertEqual(fullAndAnchor["ok"] as? Bool, false, "--full with --anchor should fail: \(fullAndAnchor)")
+        XCTAssertEqual(fullAndAnchor["error"] as? String, "--full cannot be combined with --anchor", "\(fullAndAnchor)")
+
+        let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
+    }
+
     /// Creates a session via `session.new` and returns its id as a `UUID`. `session.new` focuses the new
     /// session, so the returned session becomes the active one.
     private func newSession() throws -> UUID {
@@ -778,5 +976,82 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
             usleep(200_000)
         }
         return false
+    }
+
+    // MARK: - Overlay sizing/anchor helpers
+
+    /// Sends a `session.overlay.open` for `target` running `command`, merging `extra` (cols/rows/anchor/
+    /// sizePercent/…) into the args. Built via JSONSerialization so numeric args stay numbers on the wire.
+    private func sendOverlayOpen(target: String, command: String, args extra: [String: Any]) throws -> [String: Any] {
+        var args: [String: Any] = ["command": command]
+        for (key, value) in extra { args[key] = value }
+        let obj: [String: Any] = ["cmd": "session.overlay.open", "target": target, "args": args]
+        return try sendCommand(String(data: JSONSerialization.data(withJSONObject: obj), encoding: .utf8)!)
+    }
+
+    /// Sends a `session.overlay.resize` for `target` with `extra` as the args (size and/or anchor).
+    private func sendOverlayResize(target: String, args extra: [String: Any]) throws -> [String: Any] {
+        let obj: [String: Any] = ["cmd": "session.overlay.resize", "target": target, "args": extra]
+        return try sendCommand(String(data: JSONSerialization.data(withJSONObject: obj), encoding: .utf8)!)
+    }
+
+    /// The `tree` session node for `id` (case-insensitive), scanning all workspaces, or nil if not found.
+    private func sessionNode(id: String) throws -> [String: Any]? {
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        guard let result = tree["result"] as? [String: Any],
+              let t = result["tree"] as? [String: Any],
+              let workspaces = t["workspaces"] as? [[String: Any]] else { return nil }
+        for ws in workspaces {
+            for s in (ws["sessions"] as? [[String: Any]] ?? [])
+            where (s["id"] as? String)?.lowercased() == id.lowercased() { return s }
+        }
+        return nil
+    }
+
+    /// Polls the `tree` node for `id` until `predicate` holds, returning the matching node, or nil on timeout.
+    private func pollOverlayNode(id: String, timeout: TimeInterval,
+                                 until predicate: ([String: Any]) -> Bool) -> [String: Any]? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let node = try? sessionNode(id: id), predicate(node) { return node }
+            usleep(200_000)
+        }
+        return nil
+    }
+
+    /// Polls the `tree` node for `id` until BOTH `overlayColsApplied` and `overlayRowsApplied` are present
+    /// (the realized grid is reported once the overlay surface has come up), returning the node, or nil.
+    private func pollOverlayApplied(id: String, timeout: TimeInterval) -> [String: Any]? {
+        pollOverlayNode(id: id, timeout: timeout) {
+            ($0["overlayColsApplied"] as? Int) != nil && ($0["overlayRowsApplied"] as? Int) != nil
+        }
+    }
+
+    /// Resizes the frontmost window to `width`x`height` and waits until the on-screen frame reflects it, so a
+    /// subsequently opened overlay sizes against a known pane.
+    private func resizeWindow(width: Int, height: Int) throws {
+        let resized = try sendCommand(#"{"cmd":"window.resize","args":{"width":\#(width),"height":\#(height)}}"#)
+        XCTAssertEqual(resized["ok"] as? Bool, true, "window.resize should succeed: \(resized)")
+        let window = app.windows.firstMatch
+        XCTAssertTrue(window.waitForExistence(timeout: 5), "window should exist")
+        let deadline = Date().addingTimeInterval(5)
+        while Date() < deadline {
+            let size = window.frame.size
+            if abs(size.width - CGFloat(width)) < 12, abs(size.height - CGFloat(height)) < 12 { return }
+            usleep(150_000)
+        }
+    }
+
+    /// Polls `panel`'s frame until it has moved meaningfully from `original` (a re-anchor is async), returning
+    /// the new frame, or nil if it never moved within `timeout`.
+    private func pollPanelMoved(panel: XCUIElement, from original: CGRect, timeout: TimeInterval) -> CGRect? {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            let frame = panel.frame
+            if abs(frame.minX - original.minX) > 20 || abs(frame.minY - original.minY) > 20 { return frame }
+            usleep(200_000)
+        }
+        let frame = panel.frame
+        return (abs(frame.minX - original.minX) > 20 || abs(frame.minY - original.minY) > 20) ? frame : nil
     }
 }

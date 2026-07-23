@@ -400,17 +400,25 @@ via `OverlayLayout.panelSize` + anchor alignment. `tree` reports requested + app
 
 **Files:**
 - Modify: `agtermUITests/ControlOverlaySplitUITests.swift`
+- ➕ Modify: `agterm/Views/WindowContentView.swift` (Task-5 follow-up surfaced by the frame e2e — see note)
 
-- [ ] e2e: open a floating overlay with `--cols/--rows` + `--anchor`; assert `tree` read-back (requested
+- [x] e2e: open a floating overlay with `--cols/--rows` + `--anchor`; assert `tree` read-back (requested
       `overlayCols/Rows`, applied `overlayColsApplied/RowsApplied`, `overlayAnchor`)
-- [ ] e2e: assert the **actual grid** — run `stty size > marker; cat` in the overlay and assert the
+- [x] e2e: assert the **actual grid** — run `stty size > marker; cat` in the overlay and assert the
       marker reports the requested (or clamped) rows/cols (would catch the Retina bug)
-- [ ] e2e: assert the floating panel's **frame vs the pane** via its accessibility id for a corner anchor
-- [ ] e2e: open `--size-percent`, resize to `--cols/--rows`, re-anchor with `--anchor` only, resize back
+- [x] e2e: assert the floating panel's **frame vs the pane** via its accessibility id for a corner anchor
+- [x] e2e: open `--size-percent`, resize to `--cols/--rows`, re-anchor with `--anchor` only, resize back
       to `--full` (read-back: cols/rows cleared, anchor retained); cycle these while a split is visible
-- [ ] e2e: error cases over the socket (anchor without floating, both cols/rows required, full+anchor,
+- [x] e2e: error cases over the socket (anchor without floating, both cols/rows required, full+anchor,
       **open --size-percent out of range now errors**)
-- [ ] run the overlay e2e target — must pass before next task
+- [x] run the overlay e2e target — must pass before next task
+
+➕ **Deviation (Task-5 follow-up):** the `overlay-floating-panel` accessibility id added in Task 5 was on
+the Metal-backed `TerminalView`, which the codebase precedent (`dashboard-cell`, `quick-terminal`) confirms
+is NOT exposed in the a11y tree — the frame e2e failed with "panel should be in the a11y tree". Fixed by
+moving the id onto a zero-content `.overlay(Color.clear …)` marker sized to the panel (the dashboard-cell
+pattern). As an `.overlay` modifier it adds NO ZStack child, so the constant-child-count NSSplitView-overrun
+invariant is preserved. All 5 e2e methods pass after the fix.
 
 ### Task 8: Keep-in-sync documentation surfaces
 
