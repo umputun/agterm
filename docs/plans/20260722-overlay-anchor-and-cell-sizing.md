@@ -281,13 +281,13 @@ via `OverlayLayout.panelSize` + anchor alignment. `tree` reports requested + app
 - Create: `agtermCore/Sources/agtermCore/OverlayLayout.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/OverlayLayoutTests.swift`
 
-- [ ] add `OverlaySize`, `OverlayAnchor` (with `unitX`/`unitY`), `OverlayCellMetrics` (points, `isUsable`)
-- [ ] add `OverlayLayout.panelSize(_:pane:cell:)` — full/percent/whole-cell-clamp with guards: nil or
+- [x] add `OverlaySize`, `OverlayAnchor` (with `unitX`/`unitY`), `OverlayCellMetrics` (points, `isUsable`)
+- [x] add `OverlayLayout.panelSize(_:pane:cell:)` — full/percent/whole-cell-clamp with guards: nil or
       unusable cell → pane; pane smaller than one cell + padding → clamp to >=1 cell but never exceed pane
-- [ ] write tests: percent (incl. 100), cells within pane, cells wider/taller than pane (whole-cell
+- [x] write tests: percent (incl. 100), cells within pane, cells wider/taller than pane (whole-cell
       clamp), **1× and 2× (Retina) metrics producing the correct point size**, sub-pixel rounding cases,
       nil/unusable metrics fallback, min-1-cell floor, all-9 anchor unit points
-- [ ] run `cd agtermCore && swift test` — must pass before next task
+- [x] run `cd agtermCore && swift test` — must pass before next task
 
 ### Task 2: Session state + store API + controlTree percent migration (single compiling unit)
 
