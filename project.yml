@@ -19,6 +19,9 @@ settings:
     ARCHS: arm64
     ONLY_ACTIVE_ARCH: NO
     SWIFT_STRICT_CONCURRENCY: complete
+    # The agterm scheme intentionally builds serially so the app's deep-sign phase
+    # finishes before Xcode places its hosted test bundle inside the app.
+    DISABLE_MANUAL_TARGET_ORDER_BUILD_WARNING: YES
     DEAD_CODE_STRIPPING: YES
     ENABLE_HARDENED_RUNTIME: YES
     CODE_SIGN_STYLE: Manual
@@ -176,17 +179,39 @@ targets:
         # a Team-ID mismatch when the runner loads the xctest bundle.
         ENABLE_HARDENED_RUNTIME: NO
 
+  agtermTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - agtermTests
+    dependencies:
+      - target: agterm
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.umputun.agtermTests
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/agterm.app/Contents/MacOS/agterm"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+        CODE_SIGN_IDENTITY: "-"
+        SWIFT_STRICT_CONCURRENCY: minimal
+        ENABLE_HARDENED_RUNTIME: NO
+
 schemes:
   agterm:
     build:
+      # `agtermTests.xctest` is hosted inside agterm.app; parallel construction can
+      # expose its half-built bundle to the app target's final deep-sign phase.
+      parallelizeBuild: false
       targets:
         agterm: all
+        agtermTests: [test]
         agtermUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
       targets:
+        - agtermTests
         - agtermUITests
     archive:
       config: Release

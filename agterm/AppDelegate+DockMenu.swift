@@ -33,8 +33,6 @@ private enum DockSessionGroup {
         case .attention: "No Sessions Need Attention"
         }
     }
-
-    var needsAttention: Bool { self == .attention }
 }
 
 extension AppDelegate {
@@ -92,7 +90,8 @@ extension AppDelegate {
         guard let store else { return [] }
         var valid = Set(store.navigableSessions.map(\.id))
         if let activeID = store.activeSession?.id { valid.remove(activeID) }
-        return store.sessionRecency.top(10, in: valid).compactMap(store.session(withID:))
+        return store.sessionRecency.top(SessionSwitcher.maxCandidates, in: valid)
+            .compactMap(store.session(withID:))
     }
 
     private func addSessionSubmenu(
@@ -116,7 +115,7 @@ extension AppDelegate {
                     ?? session.displayName
                 addDockMenuItem(title, enabled: enabled, to: submenu) { [weak self, weak store] in
                     guard let store else { return }
-                    self?.activate(session.id, in: store, needsAttention: group.needsAttention)
+                    self?.activate(session.id, in: store)
                 }
             }
         }
@@ -157,8 +156,8 @@ extension AppDelegate {
 
     /// Selects a session captured when the Dock menu was built. The store is captured as well, so the action
     /// remains correctly window-scoped; synchronously marking that window frontmost lets the shared action
-    /// hub focus the selected session (and, for attention rows, reveal the pane that raised the status).
-    private func activate(_ sessionID: UUID, in store: AppStore, needsAttention: Bool) {
+    /// hub focus the selected session and reveal the pane that raised its status, when present.
+    private func activate(_ sessionID: UUID, in store: AppStore) {
         guard store.session(withID: sessionID) != nil,
               let library,
               let windowID = library.windowID(for: store),
@@ -178,10 +177,6 @@ extension AppDelegate {
         }
         store.noteUserActivity()
         store.selectSession(sessionID)
-        if needsAttention {
-            actions?.revealActiveBlockedPane()
-        } else {
-            actions?.focusActiveSession()
-        }
+        actions?.revealActiveBlockedPane()
     }
 }

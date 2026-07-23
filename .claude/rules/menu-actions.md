@@ -1,6 +1,7 @@
 ---
 paths:
   - "agterm/AppActions*.swift"
+  - "agterm/AppDelegate+DockMenu.swift"
   - "agterm/agtermApp*.swift"
   - "agterm/Views/Palette.swift"
   - "agterm/Views/PaneShortcuts.swift"
@@ -12,6 +13,7 @@ paths:
   - "agtermUITests/SessionNavUITests.swift"
   - "agtermUITests/SessionSwitcherUITests.swift"
   - "agtermUITests/SplitUITests.swift"
+  - "agtermTests/DockMenuTests.swift"
 ---
 
 ## Menu bar and actions
@@ -22,6 +24,20 @@ paths:
   Trivial one-liners (quick-terminal toggle) call the controller/store directly;
   `AppActions` owns the ones with real logic — new-session placement, the directory picker,
   split + focus, and font.
+- **Application Dock menu (`AppDelegate.applicationDockMenu`).**
+  AppKit asks for a fresh menu when the Dock icon is right-clicked. The menu exposes New Session,
+  Quick Terminal, Dashboard, the last-active window's MRU sessions (the current session removed,
+  capped by `SessionSwitcher.maxCandidates`), and that window's `attentionSessions` ordering.
+  `NSMenuItem.target` is non-owning and AppKit sends Dock actions with a nil sender, so
+  `AppDelegate.dockMenuActionTargets` strongly retains one closure-backed target per dynamic item until
+  the next menu build. A session row captures its `AppStore` when the menu is built; on invocation it
+  resolves the owning window, rechecks that window's terminal-zoom/dashboard modal gate through
+  `AppActions.uiActionsEnabled(for:)`, raises it, synchronously publishes
+  `WindowLibrary.frontmostWindowID` plus `.agtermWindowFrontmostChanged`, and only then selects and calls
+  `revealActiveBlockedPane()`. The synchronous publication is load-bearing because shared `AppActions`
+  resolve through the frontmost store, while AppKit can keep tracking a menu after another window becomes
+  frontmost. Hosted AppKit coverage lives in `agtermTests/DockMenuTests.swift`, including nil-sender
+  dispatch, stale modal actions, and captured-window selection.
 - **Menu split: View vs Navigate.**
   The menu bar has TWO custom menus (besides File/Help).
   **View** (`CommandGroup(after: .toolbar)`) holds appearance + what-is-shown:
@@ -397,4 +413,3 @@ paths:
   So the e2e (`RecentSessionsButtonUITests`, `AttentionButtonUITests.testAttentionButtonOpensPopoverListingAttention`)
   asserts the popover OPENS and lists the right sessions; the click→select is verified by hand and covered
   host-free by the selection APIs (see [[ui-tests]]).
-
