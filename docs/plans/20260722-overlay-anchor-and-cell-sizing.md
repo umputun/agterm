@@ -456,19 +456,24 @@ placement. Applies to ANY floating overlay (percent or cells). All 5 e2e methods
 - Modify: `README.md`
 - Modify: `.claude/rules/control-api.md`
 
-- [ ] agent-skill `reference.md`: update the `session overlay open`/`resize` entries with
+- [x] agent-skill `reference.md`: update the `session overlay open`/`resize` entries with
       `--cols/--rows/--anchor`, the tightened open validation, the clamp/adaptive note, and the read-back
       fields (requested + applied + anchor); command count stays 64
-- [ ] agent-skill `SKILL.md`: update the overlay invocation line + the `overlaySizePercent` schema note
+- [x] agent-skill `SKILL.md`: update the overlay invocation line + the `overlaySizePercent` schema note
       (NOT optional — it carries the overlay schema)
-- [ ] agent-skill `examples.md`: add a cols/rows + anchor recipe and a re-anchor-only example
-- [ ] `site/commands.html`: update the overlay entries (invocation, args, `tree` read-back fields)
-- [ ] `README.md` + `site/docs.html`: update the overlay section (mirror each other)
-- [ ] `.claude/rules/control-api.md`: update the overlay command **args** doc (not only the read-back
+- [x] agent-skill `examples.md`: add a cols/rows + anchor recipe and a re-anchor-only example
+- [x] `site/commands.html`: update the overlay entries (invocation, args, `tree` read-back fields)
+- [x] `README.md` + `site/docs.html`: update the overlay section (mirror each other)
+- [x] `.claude/rules/control-api.md`: update the overlay command **args** doc (not only the read-back
       note) — new flags, tightened open validation, requested+applied read-back, anchor-preserved-on-full
-- [ ] grep the skill + `control-api.md` for stale percent-only / "centered" / old-state-shape wording and
+- [x] grep the skill + `control-api.md` for stale percent-only / "centered" / old-state-shape wording and
       fix; note in the plan that `site/index.html` is intentionally untouched (non-major, non-release)
-- [ ] re-run `make lint` to confirm nothing regressed
+- [x] re-run `make lint` to confirm nothing regressed
+
+> **Note:** `site/index.html` is intentionally left untouched. This change is a per-command / per-arg
+> addition (overlay `--cols/--rows/--anchor` + read-back fields), not a major feature or a release;
+> `site/index.html` tracks major features and the current release version (`softwareVersion` JSON-LD), so it
+> is out of scope for this doc pass.
 
 ### Task 9: Verify acceptance criteria
 - [ ] verify Overview: cols/rows sizing, 9 anchors, size clamp, percent/full unchanged, default center,

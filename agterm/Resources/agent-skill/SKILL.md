@@ -160,9 +160,13 @@ spec — image/text watermark or solid color — set via `session background`, o
 `unseen` (the unseen-notification badge count — raised by `notify`/OSC 9/777, cleared by `session
 seen` — omitted when zero), `commandWait` (whether a `--command` session was created with `--wait` to
 hold open after the command exits — the read side of `session new --wait`, omitted for a plain or
-non-holding session), `overlaySizePercent` (an open overlay's floating-panel percent 1–100,
-omitted for a full-pane overlay or no overlay so gate on `overlay` first; the read side of `overlay
-resize` for a record-then-restore zoom), `splitRatio` (the left-pane divider fraction 0.05–0.95 of a
+non-holding session), `overlaySizePercent` (a `--size-percent` overlay's floating-panel percent 1–100,
+omitted for a cells-mode, full-pane, or absent overlay so gate on `overlay` first; the read side of
+`overlay resize` for a record-then-restore zoom), `overlayCols`/`overlayRows` (a cells-mode overlay's
+REQUESTED grid), `overlayColsApplied`/`overlayRowsApplied` (the REALIZED grid any floating overlay rendered
+after clamping — compare to the requested grid to detect a clamp), `overlayAnchor` (which of the nine
+positions any open overlay anchors to, reported even for a full overlay — the anchor survives `--full`),
+`splitRatio` (the left-pane divider fraction 0.05–0.95 of a
 session that has a split — shown or hidden; omitted when there's no split or the ratio was never set (at
 the default 0.5) —
 the read side of `session resize`, record it to restore the exact divider), `splitFocused`
@@ -275,12 +279,18 @@ omitted when expanded).
   terminal background color. Per session; survives restart. `--opacity` 0.0–1.0. (An image/text watermark
   renders the pane opaque, overriding window translucency, so it shows; a `color` takes no opacity and
   honors the Settings window translucency instead.)
-- `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow]` ·
-  `overlay resize (--size-percent N | --full)` ·
+- `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N | --cols N --rows M] [--anchor POS] [--background-color #rrggbb] [--follow]` ·
+  `overlay resize [--size-percent N | --cols N --rows M | --full] [--anchor POS]` ·
   `overlay close` ·
   `overlay result` — run a program on top of a session; `--block` waits and exits with its status.
-  `overlay resize` changes an ALREADY-OPEN overlay: `--size-percent N` (1-100) makes it a floating panel,
-  `--full` switches it back to the full-pane overlay; the program keeps running (no re-spawn).
+  Full by default; make it a floating panel with `--size-percent N` (1–100, hard error out of range) or
+  `--cols N --rows M` (exact grid). Both clamp to the whole cells that fit; the realized grid reads back as
+  `overlayColsApplied`/`overlayRowsApplied`. `--anchor POS` parks a floating panel at one of nine positions
+  (`top-left` … `center` (default) … `bottom-right`), inset one line-height off each anchored edge; it needs
+  a floating size. `overlay resize` changes an ALREADY-OPEN overlay in place (the program keeps running, no
+  re-spawn): pass a size mode (`--size-percent`/`--cols`+`--rows`/`--full`) and/or `--anchor` (at least one);
+  `--anchor` alone re-anchors keeping the size, `--full` reverts to full-pane but preserves the anchor and
+  cannot be combined with `--anchor`.
   Target with `--target "$AGTERM_SESSION_ID"` for YOUR session (default `active` is the user's selection).
   **By default `overlay open` does NOT switch the user** — full and floating (`--size-percent`) both open
   on `--target` and run their program in the background; the panel appears when the user visits that

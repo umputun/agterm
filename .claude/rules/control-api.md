@@ -69,7 +69,8 @@ paths:
   `session.status`/`status`+`statusPane` (+`statusBlink`/`statusColor` for `--blink`/`--color`),
   `session.flag`/`flagged`, `session.focus`/`splitFocused`, `session.resize`/`splitRatio`,
   `session.restore`/`restoreCommand`+`splitRestoreCommand`,
-  `session.overlay.resize`/`overlaySizePercent`, `sidebar`/`sidebarVisible` (top-level),
+  `session.overlay.open`+`session.overlay.resize`/`overlaySizePercent`+`overlayCols`/`overlayRows` (requested)
+  +`overlayColsApplied`/`overlayRowsApplied` (realized)+`overlayAnchor`, `sidebar`/`sidebarVisible` (top-level),
   `sidebar.mode`/`sidebarMode`, `workspace.focus`/`focused` (workspace node),
   `workspace.collapse`+`workspace.expand`/`collapsed` (workspace node), `quick`/`quickVisible` (top-level),
   `font.*`/`fontSize`+`splitFontSize`+`scratchFontSize` (the per-pane LIVE font size — the split/scratch
@@ -674,8 +675,24 @@ paths:
   in `ControlAPIUITests`.
   `session.overlay.open`/`session.overlay.close` run an ephemeral terminal on top of a session executing
   one program (`args.command`, e.g. a TUI); by default it is full single-pane size,
-  hiding the single/split underneath, but `args.sizePercent` (1–100, clamped in `openOverlay`) makes
-  it a *floating* opaque framed panel at that percent of the pane with the session still visible.
+  hiding the single/split underneath, but a *floating* opaque framed panel with the session still visible is
+  requested one of two ways.
+  `args.sizePercent` (1–100) sizes it to that percent of the pane in both dimensions;
+  `args.cols`+`args.rows` (both required, each >= 1) size it to an EXACT terminal grid via the live cell
+  metrics.
+  Both are ADAPTIVE: a percent or cols/rows request larger than the pane is clamped to the whole cells that
+  fit (the host-free `OverlayLayout.panelSize` in `agtermCore`), and the realized grid rides back on `tree`
+  as `overlayColsApplied`/`overlayRowsApplied` (below), so a script sees any clamp.
+  Open no longer silently clamps an out-of-range `sizePercent` — Decision 3 tightened it to a HARD error in
+  the dispatcher + CLI `validate()`, matching resize; the store keeps its defensive clamp for internal
+  callers only.
+  `args.anchor` places a floating panel at one of nine `OverlayAnchor` positions
+  (`top-left`/`top`/`top-right`/`left`/`center`/`right`/`bottom-left`/`bottom`/`bottom-right`, default
+  `center` = today's centered placement); it requires a floating size, so an anchor on a full-pane open is a
+  dispatcher error.
+  An edge/corner-anchored floating panel is NOT flush with the pane border: it insets one line-height
+  (`cell.cellHeight`) off EACH anchored side (a corner insets both, an edge one, `center` none), host-free in
+  `OverlayLayout.anchorInsets`, each inset capped at the axis slack so a near-full panel never overflows.
   `args.color` (`#rrggbb`, REUSING the `session.background` field — no new arg — validated by the shared
   `WatermarkConfig.isValidColorHex` at BOTH the CLI `validate()` and the server arm) gives the overlay
   pane its OWN solid background color, independent of the session's `session.background color`;
@@ -684,7 +701,7 @@ paths:
   honoring window translucency), built in `GhosttySurfaceView.applyOverlayBackgroundColor` from the
   view's `overlayBackgroundColorHex` in `createSurface` — works identically for the full + floating variants.
   `AppStore.openOverlay`/`closeOverlay` set non-persisted `Session.overlay*` state (incl.
-  `overlaySizePercent`, nil = full / non-nil = floating; and `overlayBackgroundColor`,
+  `overlaySize`: `.full` = full / `.percent`|`.cells` = floating; `overlayAnchor`; and `overlayBackgroundColor`,
   set at open / cleared at close), and the surface runs `config.command` with
   `onExit → closeOverlay`.
   Both variants render IN the per-session eager deck, so the overlay program runs regardless of which
@@ -699,17 +716,20 @@ paths:
   keeps the AppKit `NSSplitView` from re-hosting and overrunning UP into the transparent titlebar.
   (The panel used to mount OUTSIDE `sessionDetail` as a `detailPane` `.overlay` for exactly this reason;
   the always-present constant-shape sibling holds the same invariant IN-deck.)
-  FULL (`overlaySizePercent` nil): fraction 1.0, drawn translucent + blurred with NO opaque backing and NO
+  FULL (`overlaySize == .full`): the whole pane, drawn translucent + blurred with NO opaque backing and NO
   chrome (`Color.clear` backing, 0 corner radius, 0 shadow), and the pane(s) behind hidden at `.opacity(0)`
   + `.allowsHitTesting(false)` via `hideForOverlay` (= `fullOverlay || scratchActive`; kept MOUNTED, shells
   alive like the deck's inactive sessions), so its transparency reveals the window backing (desktop, tint +
   blur), not the session.
-  FLOATING (`overlaySizePercent` set): fraction = `percent/100`, drawn as an opaque `terminalColor`-backed,
-  hairline-framed, shadowed panel centered in the detail area with the pane(s) VISIBLE around it.
-  The modifier CHAIN is IDENTICAL across both variants — only the parameter VALUES flip (backing color,
-  corner radius, shadow radius, frame fraction) — so `session.overlay.resize` switching full<->% is a
-  value-update, never a child add/remove or a re-parent of the overlay surface NSView (a re-parent would
-  blank its Metal drawable).
+  FLOATING (`overlaySize != .full`, i.e. `.percent` or `.cells`): sized by `OverlayLayout.panelSize` (the
+  percent fraction or the whole-cell-clamped grid), drawn as an opaque `terminalColor`-backed, hairline-framed,
+  shadowed panel PLACED by its `overlayAnchor` — `ZStack(alignment: anchor.swiftUIAlignment)` plus the
+  `OverlayLayout.anchorInsets` line-height margin — with the pane(s) VISIBLE around it (`center` reproduces the
+  original dead-center placement).
+  The modifier CHAIN is IDENTICAL across both variants and every anchor — only the parameter VALUES flip
+  (backing color, corner radius, shadow radius, frame size, ZStack alignment, padding insets) — so
+  `session.overlay.resize` switching full<->floating or re-anchoring is a value-update, never a child
+  add/remove or a re-parent of the overlay surface NSView (a re-parent would blank its Metal drawable).
   Hit-testing on the PANES stays gated on `.allowsHitTesting(!hideForOverlay)` and must NOT flip when a
   FLOATING overlay opens: changing the panes' OWN `allowsHitTesting` on overlay-open (e.g. to
   `!session.overlayActive`) ALSO triggers the NSSplitView titlebar-overrun — the SAME class of perturbation
@@ -727,8 +747,8 @@ paths:
   transparent titlebar, painting the split over the header (Codex-confirmed;
   the quick terminal renders at this level for the same reason and never hit it).
   `overlayPanel`'s `GeometryReader` reports the detail area EXACTLY — no manual sidebar/titlebar insets
-  (computing those at the window level mis-centered the panel one line low) — so it sizes the floating panel
-  to `sizePercent`% and centers it in the detail area, the pane(s) visible around it.
+  (computing those at the window level mis-placed the panel one line off) — so it sizes the floating panel via
+  `OverlayLayout.panelSize` and places it by its anchor in the detail area, the pane(s) visible around it.
   `isActive` gates the overlay surface's focus, so a background floating overlay RUNS but does not steal
   focus (mirrors the full overlay).
   Because both kinds mount in the eager deck, `ControlServer` does NOT select on open by default; it SELECTS
@@ -775,31 +795,48 @@ paths:
   at parse via `validate()`); the program's OUTPUT is its own concern — a TUI like revdiff renders in
   the overlay and writes results to its own `--output` file, which the caller reads (the control channel
   does NOT capture stdout).
-  `session.overlay.resize` (target = session) resizes an ALREADY-OPEN overlay IN PLACE between full and
-  floating — the way to change size without closing and re-running the program.
-  Exactly one of `sizePercent` (1...100 → floating) or `full: true` (→ the full-pane overlay) must be set;
-  both, neither, or a percent outside 1...100 is a dispatcher error (mirrored by the CLI `validate()`), and
-  `no overlay` when none is open.
+  `session.overlay.resize` (target = session) resizes AND/OR re-anchors an ALREADY-OPEN overlay IN PLACE —
+  the way to change size or position without closing and re-running the program.
+  It takes at most one size mode — `sizePercent` (1...100 → floating), `cols`+`rows` (→ an exact grid, clamped
+  to fit), or `full: true` (→ the full-pane overlay) — and/or an `anchor`: a nil size keeps the current size
+  and a nil anchor keeps the current anchor, so `--anchor` alone re-anchors in place while a size mode alone
+  keeps the anchor.
+  At least one of {a size mode, `anchor`} must be set (a bare resize is a dispatcher error); more than one
+  size mode, a percent outside 1...100, or `cols` without `rows` (or vice versa) is a dispatcher error
+  (mirrored by the CLI `validate()`); `full` ⊥ `anchor` (a full overlay is not anchored); and `no overlay`
+  when none is open.
   It is a NEW `Command` case (unlike the `--follow` arg, which rode the existing `overlay.open`) because it
-  needs its own arg validation, and `full` is a NEW `ControlArgs` field added to distinguish "switch to
-  full" (nil `overlaySizePercent`) from "unset" on the wire.
-  The arm mutates the non-persisted `Session.overlaySizePercent` via `AppStore.resizeOverlay` (clamping
-  1...100, guarding `overlayActive`), and the detail pane re-flows the SAME surface host: the unified
-  `WindowContentView.overlayPanel` now renders BOTH variants (full = translucent, no chrome, panes hidden by
-  `hideForOverlay`; floating = opaque framed panel over visible panes), so a full<->% switch never re-parents
-  the overlay NSView (which would blank its Metal drawable) nor changes the ZStack shape — the old
-  `if fullOverlay` z2 sibling is gone, and the always-present `overlayPanel` at z3 is the single host.
-  Four-point keep-in-sync audit for `session.overlay.resize`: (1) `case sessionOverlayResize = "session.overlay.resize"`
-  + `ControlArgs.full` in `ControlProtocol.swift`, (2) the `.sessionOverlayResize` dispatcher arm (exactly-one
-  + range validation) → the app-side `resizeSessionOverlay` (→ `AppStore.resizeOverlay`) behind `ControlActions`,
-  (3) the `session overlay resize --size-percent|--full` subcommand (`Resize`, `validate()`-guarded) in
-  `agtermctlKit`, (4) round-trip in `ControlProtocolTests` + dispatcher routing/validation in `ControlDispatcherTests`
-  + `AppStorePaneTests` (resize clamp/switch/no-overlay) + CLI mapping in `CommandsTests` + the e2e
-  `testOverlayResizeSwitchesFloatingAndFull` in `ControlOverlaySplitUITests`.
-  The READ side is `ControlSessionNode.overlaySizePercent` on each `tree` node (see the `tree` read-side
-  fields below) — populated in `AppStore.controlTree`, round-tripped by `treeSessionNodeRoundTripsWithOverlaySizePercent`/`…OmitsOverlaySizePercentWhenNil`
-  and `AppStorePaneTests.controlTreeReportsOverlaySizePercent`, and mirrored in the agent-skill `reference.md`
-  tree schema — so a script can record an overlay's size before zooming to `--full` and restore it exactly.
+  needs its own arg validation, and `full` is a distinct `ControlArgs` field so the wire can tell "switch to
+  full" apart from "keep the current size".
+  The arm calls `AppStore.resizeOverlay(_:size:anchor:)` (mutating the non-persisted `Session.overlaySize`/
+  `overlayAnchor`, retaining a defensive percent clamp, guarding `overlayActive`), and the detail pane
+  re-flows the SAME surface host: the unified `WindowContentView.overlayPanel` renders BOTH variants and every
+  anchor (full = translucent, no chrome, panes hidden by `hideForOverlay`; floating = opaque framed panel over
+  visible panes, placed by its anchor), so a full<->floating switch or a re-anchor never re-parents the overlay
+  NSView (which would blank its Metal drawable) nor changes the ZStack shape — the old `if fullOverlay` z2
+  sibling is gone, and the always-present `overlayPanel` at z3 is the single host.
+  A `--full` round-trip PRESERVES the anchor (Decision 2 — only `closeOverlay` resets it to `.center`), so a
+  later re-float returns to where it was.
+  Keep-in-sync for `session.overlay.resize`: (1) `case sessionOverlayResize = "session.overlay.resize"` +
+  `ControlArgs.full`/`cols`/`rows`/`anchor` in `ControlProtocol.swift`, (2) the `.sessionOverlayResize`
+  dispatcher arm (one-of + range + cols·rows pairing + `full`⊥`anchor` + at-least-one validation) → the
+  app-side `resizeSessionOverlay(…size:anchor:)` (→ `AppStore.resizeOverlay`) behind `ControlActions`, (3) the
+  `session overlay resize --size-percent|--cols/--rows|--full|--anchor` subcommand (`Resize`,
+  `validate()`-guarded) in `agtermctlKit`, (4) round-trip in `ControlProtocolTests` + dispatcher
+  routing/validation in `ControlDispatcherTests` + `AppStorePaneTests` (resize
+  clamp/switch/re-anchor/no-overlay) + CLI mapping in `CommandsTests` + the e2e
+  (`testOverlayResizeSwitchesFloatingAndFull` plus the cols/rows + anchor cases) in `ControlOverlaySplitUITests`.
+  The READ side is on each `tree` node (see the `tree` read-side fields below), populated in
+  `AppStore.controlTree`: `overlaySizePercent` (a `.percent` overlay's percent),
+  `overlayCols`/`overlayRows` (a `.cells` overlay's REQUESTED grid),
+  `overlayColsApplied`/`overlayRowsApplied` (the REALIZED grid any floating overlay rendered after clamping —
+  exposes a clamp/drift), and `overlayAnchor` (any open overlay's anchor, incl. full).
+  Round-tripped by `treeSessionNodeRoundTripsWithOverlaySizePercent`/`…OmitsOverlaySizePercentWhenNil`,
+  `treeSessionNodeRoundTripsWithOverlayCellsAppliedAndAnchor`/`…WithOverlayPercentAppliedAndAnchor`,
+  `treeSessionNodeKeepsAnchorButOmitsGridForFullOverlay`/`…OmitsOverlayGridAndAnchorWhenNoOverlay`, and the
+  `AppStorePaneTests` populate tests (`controlTreeReportsOverlaySizePercent`/`…OverlayColsRowsAndAnchor`);
+  mirrored in the agent-skill `reference.md` tree schema — so a script can record an overlay's exact size AND
+  position before zooming to `--full` and restore both.
   `surface.zoom` (mode `show`|`hide`|`toggle`) fills the target window with ONE terminal surface,
   hiding the sidebar and collapsing the title bar to a slim strip (traffic lights + an exit button;
   the zoomed terminal is inset below `titlebarHeight`, NOT borderless) — the control half of
@@ -1266,12 +1303,21 @@ paths:
   is each pane running".
   It ALSO surfaces `background` on each node — the `BackgroundWatermark` spec set via `session.background`
   (omitted when none), the read side of set/clear so a script can query the current watermark.
-  It ALSO surfaces `overlaySizePercent` on each node — an OPEN overlay's size (`session.overlayActive ? session.overlaySizePercent : nil`
-  in the tree builder): nil/omitted = the full-pane overlay OR no overlay (so gate on `overlay` first),
-  else the floating panel's percent (1...100).
-  It is the READ side of `session.overlay.resize` (which had only the write side), so a tmux-style zoom
-  script can record the current size before switching to `--full` and restore the EXACT original on un-zoom
-  (not a guessed default).
+  It ALSO surfaces the OPEN overlay's size + position on each node, all gated on `overlay` first — the READ
+  side of `session.overlay.open`/`.resize`, so a tmux-style zoom script can record the exact geometry before
+  switching to `--full` and restore the ORIGINAL on un-zoom (not a guessed default):
+  `overlaySizePercent` — a `.percent` overlay's floating-panel percent (1...100); omitted for cells, full, or
+  no overlay.
+  `overlayCols`/`overlayRows` — a `.cells` overlay's REQUESTED grid (the restore key); omitted otherwise.
+  `overlayColsApplied`/`overlayRowsApplied` — the REALIZED grid any floating overlay actually rendered after
+  the whole-cell clamp (`session.floatingOverlayActive ? session.overlayAppliedCols/Rows : nil`, the app
+  writing the realized grid into observed `Session` state on surface realization / `CELL_SIZE` / backing-scale
+  change); omitted for a full overlay or none.
+  Distinct from the requested `overlayCols`/`overlayRows`, so an oversized request comes back smaller here and
+  a script can detect the clamp.
+  `overlayAnchor` — the anchor rawValue of ANY open overlay including a full one
+  (`session.overlayActive ? session.overlayAnchor.rawValue : nil`), since the anchor is preserved across a
+  `--full` round-trip (Decision 2); omitted when no overlay is open.
   It ALSO surfaces `splitRatio` on each node — the left-pane divider fraction of a session that HAS a split
   (`session.hasSplit ? session.splitRatio : nil` in the tree builder, so shown OR hidden splits report it),
   nil/omitted when there is no split or the ratio was never explicitly set (divider then at the default 0.5).

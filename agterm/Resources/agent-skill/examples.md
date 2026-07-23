@@ -226,6 +226,25 @@ agtermctl session overlay resize --full --target "$AGTERM_SESSION_ID"
 agtermctl session overlay close
 ```
 
+Exact terminal-grid sizing + a corner anchor (instead of a percent): size the panel to a known TUI layout
+and park it out of the way. A cols/rows request larger than the pane clamps to the whole cells that fit —
+read the realized grid back off `tree`:
+
+```bash
+# an 80x24 panel parked in the bottom-right corner (one line-height off each anchored edge, not flush)
+agtermctl session overlay open "zsh -lc 'htop'" --target "$AGTERM_SESSION_ID" --cols 80 --rows 24 --anchor bottom-right
+# what actually rendered (requested vs clamped): overlayCols/Rows = requested, overlayColsApplied/RowsApplied = realized
+agtermctl tree --json | jq '.. | objects | select(.overlay == true) | {overlayCols, overlayRows, overlayColsApplied, overlayRowsApplied, overlayAnchor}'
+```
+
+Re-anchor an open floating panel in place — no size change, program keeps running (`--anchor` alone keeps
+the current size; a size mode alone keeps the current anchor):
+
+```bash
+agtermctl session overlay resize --anchor top-left --target "$AGTERM_SESSION_ID"   # move it to the top-left, same size
+agtermctl session overlay resize --anchor center --target "$AGTERM_SESSION_ID"     # back to centered
+```
+
 Manual open + poll for status instead of `--block`:
 
 ```bash

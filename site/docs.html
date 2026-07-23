@@ -1306,14 +1306,18 @@
               ><br />agtermctl session overlay open <span style="color: #f2b45c">"htop"</span> --size-percent 70<br />agtermctl
               session overlay open <span style="color: #f2b45c">"revdiff HEAD~3"</span> --size-percent 80 --background-color
               <span style="color: #f2b45c">"#2a1a3a"</span><br /><br /><span style="color: #6b727a"
+                ># an exact 80x24 grid, parked in the bottom-right corner (clamped to fit)</span
+              ><br />agtermctl session overlay open <span style="color: #f2b45c">"htop"</span> --cols 80 --rows 24 --anchor
+              bottom-right<br /><br /><span style="color: #6b727a"
                 ># switch the user to the target as the overlay opens</span
               ><br />agtermctl session overlay open <span style="color: #f2b45c">"revdiff HEAD~3"</span> --size-percent 80
               --target 9f3c --follow<br /><br /><span style="color: #6b727a"
                 ># keep it open after exit, or block until it exits and inherit its status</span
               ><br />agtermctl session overlay open <span style="color: #f2b45c">"make test"</span> --wait<br />agtermctl session
               overlay open <span style="color: #f2b45c">"make test"</span> --block<br /><br /><span style="color: #6b727a"
-                ># resize an open overlay in place — floating percent, or back to full (the program keeps running)</span
-              ><br />agtermctl session overlay resize --size-percent 60 --target 9f3c<br />agtermctl session overlay resize --full
+                ># resize/re-anchor an open overlay in place — a size mode and/or --anchor (the program keeps running)</span
+              ><br />agtermctl session overlay resize --size-percent 60 --target 9f3c<br />agtermctl session overlay resize --anchor
+              top-left --target 9f3c<br />agtermctl session overlay resize --full
               --target 9f3c<br /><br />agtermctl session overlay close --target
               9f3c<br />agtermctl session overlay result
               <span style="color: #6b727a">&nbsp;&nbsp;# last overlay's exit status</span>
@@ -1323,17 +1327,26 @@
               to close" prompt so you can read the final output;
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--block</span> reports only the exit
               status (the overlay never captures stdout — a TUI writes its own result file). By default an overlay opens on its
-              target without switching the active session (full and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
-                >--size-percent</span
-              >
-              floating alike);
+              target without switching the active session (full and floating alike);
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--follow</span> switches the user to
               the target.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 12px 0 0">
+              Size a floating panel with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent N</span> (1–100 of the pane) or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--cols N --rows M</span> (an exact terminal grid);
+              both clamp to the whole cells that fit, and the realized grid reads back on
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree</span> as
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlayColsApplied</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlayRowsApplied</span>.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--anchor</span> parks it at one of nine positions
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">center</span> is the default), inset one line-height off each anchored edge.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session overlay resize</span> changes an
-              open overlay in place —
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent</span> makes it floating,
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--full</span> switches it back — without
-              restarting the program. A
+              open overlay in place — a size mode
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--cols</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--rows</span>, or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--full</span>) and/or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--anchor</span> — without restarting the program;
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--full</span> preserves the anchor for a later re-float. A
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">(overlay)</span> tag in
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree</span> marks a session
               whose overlay is open.

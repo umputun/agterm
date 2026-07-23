@@ -100,10 +100,20 @@ to restore focus via `session focus --pane left|right`),
 `commandWait` (whether a `--command` session was created with `--wait` to hold open after the command
 exits — the read side of `session new --wait`; omitted for a plain or non-holding session),
 `overlay` (overlay shown),
-`overlaySizePercent` (an open overlay's size — the
-floating panel's percent of the pane, 1–100; omitted = a full-pane overlay or no overlay, so gate on
-`overlay` first; the read side of `session overlay resize`, e.g. record it before switching to `--full`
-to restore the exact size), `scratch` (scratch shown), `flagged` (in the
+`overlaySizePercent` (an open PERCENT-mode overlay's size — the
+floating panel's percent of the pane, 1–100; omitted for a cells-mode overlay, a full-pane overlay, or no
+overlay, so gate on `overlay` first; the read side of a `--size-percent` overlay, e.g. record it before
+switching to `--full` to restore the exact size),
+`overlayCols`/`overlayRows` (the REQUESTED grid of a cells-mode overlay opened/resized with
+`--cols N --rows M`; omitted for a percent, full, or absent overlay — the restore key for a cells overlay),
+`overlayColsApplied`/`overlayRowsApplied` (the REALIZED grid an open floating overlay actually rendered
+after whole-cell clamping — set for both percent and cells floating overlays, omitted for a full overlay or
+none; an oversized `--cols/--rows` request comes back smaller here, so compare against the requested grid to
+detect a clamp),
+`overlayAnchor` (which of the nine positions an open overlay anchors to — `top-left` … `center` …
+`bottom-right`; reported for ANY open overlay including a full one (the anchor is preserved across `--full`),
+omitted when no overlay is open — the read side of the overlay `--anchor`),
+`scratch` (scratch shown), `flagged` (in the
 flagged working-set), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
 idle), `statusPane` (which pane set that status — `left` (main) | `right` (split) | `scratch` — the
 `--pane` value from `session status`, omitted when unset or idle; gated on the same non-idle condition
@@ -428,14 +438,23 @@ All ten are read-only projections of GUI state.
   background-opacity); a `color` instead honors the Settings window translucency. Read the current
   background back from a session's `background` field in `tree --json` (a `{kind, colorHex, …}` object,
   omitted when none).
-- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--target] [--window W]`
+- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N | --cols N --rows M] [--anchor POS] [--background-color #rrggbb] [--follow] [--target] [--window W]`
   — run `command` in an ephemeral terminal on top of the session; it closes when the command exits.
   `command` runs through `sh -c` (so shell operators DO work here) but with the app's GUI `PATH` (no
   `/opt/homebrew/bin`), so a bare Homebrew or other non-default binary fails with exit 127 — the overlay
   flashes open then vanishes and `overlay result` reports 127; give an absolute path or wrap in
   `"zsh -lc '…'"`.
-  Full-size by default (hides the session); `--size-percent N` (1–100) makes it a floating framed panel
-  with the session visible behind. **By default the overlay does NOT switch the active session** — full
+  Full-size by default (hides the session). Give it a *floating* framed panel — the session still visible
+  behind it — one of two ways: `--size-percent N` sizes it to N% of the pane in both dimensions, or
+  `--cols N --rows M` sizes it to an exact terminal grid (both required, each ≥ 1). Both are ADAPTIVE: a
+  request larger than the pane is clamped down to the whole cells that fit, and the grid that actually
+  rendered is read back on `tree` as `overlayColsApplied`/`overlayRowsApplied`. `--size-percent` must be
+  1–100 — an out-of-range value is a hard error (it is no longer silently clamped on open).
+  `--anchor POS` places a floating panel at one of nine positions — `top-left`, `top`, `top-right`, `left`,
+  `center` (default), `right`, `bottom-left`, `bottom`, `bottom-right`. An edge/corner-anchored panel sits
+  one line-height off each side it anchors to (so it is not flush with the border); `center` is unchanged.
+  `--anchor` requires a floating size (`--size-percent` or `--cols/--rows`) — on a full-pane overlay it is an
+  error. **By default the overlay does NOT switch the active session** — full
   and floating both open on `--target` and run their program in the background, appearing when the user
   visits that session. **Pass `--follow` to select the target after opening** (a no-op if it is already
   active); use it when you want the user pulled to the overlay, omit it to open quietly. `--background-color #rrggbb` gives the overlay pane its own solid
@@ -446,12 +465,17 @@ All ten are read-only projections of GUI state.
   own output file, not the control channel. Returns the overlay's session id. `--target` defaults to
   `active`, so an automated caller should pass `--target "$AGTERM_SESSION_ID"` — otherwise a (usually
   blocking, full-pane) overlay lands on whatever session is currently active, not the calling one.
-- `session overlay resize (--size-percent N | --full) [--target] [--window W]` — resize an ALREADY-OPEN
-  overlay in place. Exactly one of `--size-percent N` (1–100, makes it a floating framed panel) or
-  `--full` (switches it back to the full-pane overlay that hides the session) is required; passing both
-  or neither, or a percent outside 1–100, is an error. The overlay program keeps running across the
-  resize — it is a layout re-flow, never a re-spawn. Errors `no overlay` when none is open. Returns the
-  session id.
+- `session overlay resize [--size-percent N | --cols N --rows M | --full] [--anchor POS] [--target] [--window W]`
+  — resize and/or re-anchor an ALREADY-OPEN overlay in place. Give at most one size mode —
+  `--size-percent N` (1–100) or `--cols N --rows M` (exact grid, clamped to fit) for a floating panel, or
+  `--full` to switch back to the full-pane overlay that hides the session — and/or `--anchor POS` to move a
+  floating panel to one of the nine positions. At least one of a size mode or `--anchor` is required (a bare
+  resize with neither is an error); `--anchor` alone re-anchors in place keeping the current size, and a size
+  mode alone keeps the current anchor. `--full` cannot be combined with `--anchor` (a full overlay is not
+  anchored), but a `--full` round-trip PRESERVES the anchor, so a later re-float returns to where it was.
+  Passing more than one size mode, a percent outside 1–100, or `--cols` without `--rows` (or vice versa), is
+  an error. The overlay program keeps running across the resize — it is a layout re-flow, never a re-spawn.
+  Errors `no overlay` when none is open. Returns the session id.
 - `session overlay close [--target] [--window W]` — close (destroy) the overlay.
 - `session overlay result [--target] [--window W]` — returns `result.exitCode` once the overlay has
   closed. Errors `still running` while up, `no result` if none ran.
