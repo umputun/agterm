@@ -222,7 +222,14 @@ extension AppStore {
     @discardableResult public func resizeOverlay(_ sessionID: UUID, size: OverlaySize? = nil,
                                                  anchor: OverlayAnchor? = nil) -> Bool {
         guard let session = session(withID: sessionID), session.overlayActive else { return false }
-        if let size { session.overlaySize = AppStore.clampedOverlaySize(size) }
+        if let size {
+            session.overlaySize = AppStore.clampedOverlaySize(size)
+            // the realized grid is stale until the surface re-settles at the new size (refreshed async by
+            // the app), so nil it — a `tree` read between the resize and the refresh reports nil (unknown)
+            // rather than the PRIOR size's grid. A re-anchor-only resize (size nil) leaves it untouched.
+            session.overlayAppliedCols = nil
+            session.overlayAppliedRows = nil
+        }
         if let anchor { session.overlayAnchor = anchor }
         return true
     }

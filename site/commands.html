@@ -1175,7 +1175,7 @@
                 Full-size by default, hiding the session. Make it a floating framed panel — the session visible behind — with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--size-percent N</span> (1–100 of the pane) or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--cols N --rows M</span> (an exact terminal grid, both required).
-                Both are adaptive: a request larger than the pane clamps to the whole cells that fit, and the realized grid reads back on
+                Both are adaptive: a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--cols/--rows</span> request larger than the pane clamps to the whole cells that fit (a <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--size-percent</span> panel is a fraction of the pane, never larger), and the realized grid reads back on
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> as
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlayColsApplied</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlayRowsApplied</span>.
                 An out-of-range <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--size-percent</span> is a hard error (no longer silently clamped on open).

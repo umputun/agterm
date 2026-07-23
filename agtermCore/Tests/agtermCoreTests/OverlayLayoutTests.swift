@@ -65,7 +65,13 @@ struct OverlayLayoutTests {
         expectSize(result, 196, 198)
     }
 
-    @Test func retina2xAndNonRetina1xYieldSamePointSize() {
+    // guards ONLY that the resolver is scale-agnostic — it works in POINT space, so a 1x surface and the
+    // same physical surface at 2x, once BOTH are converted to points (the app divides pixels by the backing
+    // scale before constructing the metrics, mirrored by `metrics(scale:)`), produce identical point
+    // metrics and thus an identical panel. The resolver itself takes no scale, so this cannot catch a bug in
+    // the actual px÷backingScaleFactor conversion — that is app-side and is guarded end to end by the e2e
+    // `stty size` check (`testOverlayColsRowsRealizedGridMatchesRequest`).
+    @Test func equalPointMetricsFromDifferentPixelScalesResolveIdentically() {
         // a surface at 1x: 8px/16px cells, 4px/2px total padding.
         let oneX = metrics(cellWpx: 8, cellHpx: 16, padWpx: 4, padHpx: 2, scale: 1)
         // the same physical surface at 2x: pixel metrics double, backing scale is 2.

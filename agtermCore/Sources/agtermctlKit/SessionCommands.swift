@@ -597,48 +597,25 @@ struct Session: ParsableCommand {
             subcommands: [Open.self, Close.self, Resize.self, Result.self]
         )
 
-        /// Which overlay verb is validating: carries the error-message prefix and whether `--full` is a
-        /// valid size mode (resize only). Keeps `validateSize` to five params by folding the correlated
-        /// command-name/allow-full pair.
-        enum SizeContext {
-            case open, resize
-            var name: String { self == .open ? "session.overlay.open" : "session.overlay.resize" }
-            var allowsFull: Bool { self == .resize }
-        }
-
-        /// Shared overlay size validation for `open` and `resize`, mirroring the dispatcher's one-of /
-        /// range / pairing rules so a CLI user and a raw socket client see the same wording: at most one
-        /// of {--size-percent, --cols/--rows, --full (resize only)}; --size-percent 1...100 (a hard error
-        /// now enforced on open too — Decision 3); --cols and --rows both-or-neither, each >= 1.
-        static func validateSize(_ context: SizeContext, full: Bool, sizePercent: Int?, cols: Int?, rows: Int?) throws {
-            let hasCells = cols != nil || rows != nil
-            let modeCount = (full ? 1 : 0) + (sizePercent != nil ? 1 : 0) + (hasCells ? 1 : 0)
-            if modeCount > 1 {
-                let modes = context.allowsFull ? "--full, --size-percent, or --cols/--rows" : "--size-percent or --cols/--rows"
-                throw ValidationError("\(context.name): use only one of \(modes)")
-            }
-            if let sizePercent, !(1...100).contains(sizePercent) {
-                throw ValidationError("\(context.name): --size-percent must be 1...100")
-            }
-            if hasCells {
-                guard cols != nil, rows != nil else {
-                    throw ValidationError("provide both --cols and --rows")
-                }
-                guard (cols ?? 0) >= 1, (rows ?? 0) >= 1 else {
-                    throw ValidationError("--cols and --rows must be >= 1")
-                }
+        /// Shared overlay size validation for `open` and `resize`, delegating to the host-free
+        /// `OverlayArgs.parseSize` so the CLI and the dispatcher share ONE set of one-of / range / pairing
+        /// rules and error strings. Throws the canonical message on a rejection; the parsed size is
+        /// discarded here (the dispatcher re-parses the raw args on the wire).
+        static func validateSize(_ command: OverlayArgs.Command, full: Bool, sizePercent: Int?, cols: Int?, rows: Int?) throws {
+            if case .invalid(let message) = OverlayArgs.parseSize(sizePercent: sizePercent, cols: cols, rows: rows,
+                                                                  full: full, command: command) {
+                throw ValidationError(message)
             }
         }
 
-        /// Parses `--anchor` to an `OverlayAnchor`, throwing the dispatcher's `unknown anchor` message
-        /// (listing the nine positions) when it is not one of them. Returns nil when absent.
+        /// Parses `--anchor` to an `OverlayAnchor` via the host-free `OverlayArgs.parseAnchor`, throwing the
+        /// canonical `unknown anchor` message. Returns nil when absent.
         static func parseAnchor(_ raw: String?) throws -> OverlayAnchor? {
-            guard let raw else { return nil }
-            guard let parsed = OverlayAnchor(rawValue: raw) else {
-                let valid = OverlayAnchor.allCases.map(\.rawValue).joined(separator: "|")
-                throw ValidationError("unknown anchor: \(raw) (\(valid))")
+            switch OverlayArgs.parseAnchor(raw) {
+            case .invalid(let message): throw ValidationError(message)
+            case .absent: return nil
+            case .anchor(let parsed): return parsed
             }
-            return parsed
         }
 
         struct Open: RequestCommand {

@@ -194,10 +194,11 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var wait: Bool?
     /// For `session.overlay.open`, the percent of the pane (1...100) a *floating* overlay panel
     /// occupies in both dimensions; omitted gives the default full-pane overlay. Also carries the new
-    /// size for `session.overlay.resize` (mutually exclusive with `full`).
+    /// size for `session.overlay.resize`. Mutually exclusive with `cols`/`rows` and (on resize) `full`.
     public var sizePercent: Int?
     /// For `session.overlay.resize`, requests the full-pane (translucent, session-hidden) overlay —
-    /// the way to switch a floating overlay back to full. Mutually exclusive with `sizePercent`.
+    /// the way to switch a floating overlay back to full. Mutually exclusive with `sizePercent`/`cols`/`rows`,
+    /// and cannot be combined with `anchor` (a full overlay is not anchored).
     public var full: Bool?
     /// For `session.overlay.open`/`.resize`, the exact terminal grid a *floating* overlay panel sizes to
     /// via the surface's live cell metrics: `cols` columns × `rows` rows, both or neither, mutually

@@ -574,6 +574,26 @@ struct AppStorePaneTests {
         #expect(session.overlayAnchor == .bottomLeft)
     }
 
+    @Test func resizeOverlaySizeChangeClearsStaleAppliedGrid() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openOverlay(session.id, options: .init(command: "htop", size: .cells(cols: 80, rows: 24), anchor: .center))
+        // simulate the app-maintained realized grid from the first size.
+        session.overlayAppliedCols = 72
+        session.overlayAppliedRows = 20
+        // a SIZE-changing resize nils the stale realized grid so a read before the async refresh returns nil.
+        #expect(store.resizeOverlay(session.id, size: .cells(cols: 30, rows: 10)) == true)
+        #expect(session.overlayAppliedCols == nil)
+        #expect(session.overlayAppliedRows == nil)
+        // a re-anchor-only resize (nil size) does NOT touch the realized grid.
+        session.overlayAppliedCols = 28
+        session.overlayAppliedRows = 9
+        #expect(store.resizeOverlay(session.id, anchor: .topLeft) == true)
+        #expect(session.overlayAppliedCols == 28)
+        #expect(session.overlayAppliedRows == 9)
+    }
+
     @Test func resizeOverlayFullPreservesAnchor() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

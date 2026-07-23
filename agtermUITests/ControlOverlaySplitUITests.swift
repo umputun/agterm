@@ -739,6 +739,40 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
     }
 
+    // The requested-vs-applied CLAMP path end to end: a deliberately OVERSIZED grid (500x200) cannot fit any
+    // real pane, so the whole-cell clamp must produce a realized grid SMALLER than the request. The tree echoes
+    // the requested grid verbatim (overlayCols/Rows == 500/200) while the APPLIED grid
+    // (overlayColsApplied/RowsApplied) — read from the REALIZED surface, not the request — must be strictly
+    // less on BOTH axes. This is the case the fitting tests can't reach (they give headroom so applied ==
+    // requested): a bug populating applied from the request instead of the realized surface would pass those
+    // but FAIL here.
+    func testOverlayColsRowsClampReportsAppliedBelowRequested() throws {
+        let id = try activeSessionID()
+        // a modest window so 500x200 vastly exceeds the pane and the clamp definitely binds on both axes.
+        try resizeWindow(width: 900, height: 650)
+
+        let open = try sendOverlayOpen(target: id, command: "cat", args: ["cols": 500, "rows": 200])
+        XCTAssertEqual(open["ok"] as? Bool, true, "oversized overlay open should succeed: \(open)")
+        XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the overlay should be up")
+
+        let node = try XCTUnwrap(pollOverlayApplied(id: id, timeout: 12),
+                                 "the tree should report the realized overlay grid after clamping")
+        // the requested grid is echoed verbatim (the restore key), unclamped.
+        XCTAssertEqual(node["overlayCols"] as? Int, 500, "tree should echo the requested cols verbatim: \(node)")
+        XCTAssertEqual(node["overlayRows"] as? Int, 200, "tree should echo the requested rows verbatim: \(node)")
+        // the applied grid reflects the realized surface, clamped strictly below the impossible request.
+        let appliedCols = try XCTUnwrap(node["overlayColsApplied"] as? Int, "applied cols should be present: \(node)")
+        let appliedRows = try XCTUnwrap(node["overlayRowsApplied"] as? Int, "applied rows should be present: \(node)")
+        XCTAssertLessThan(appliedCols, 500, "applied cols \(appliedCols) must be clamped below the requested 500: \(node)")
+        XCTAssertLessThan(appliedRows, 200, "applied rows \(appliedRows) must be clamped below the requested 200: \(node)")
+        // sanity: the realized grid is still a real, positive grid (not zero/degenerate).
+        XCTAssertGreaterThan(appliedCols, 0, "applied cols should be a real grid: \(node)")
+        XCTAssertGreaterThan(appliedRows, 0, "applied rows should be a real grid: \(node)")
+
+        let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)"}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
+    }
+
     // The floating panel follows its corner anchor AND sits ONE LINE-HEIGHT off the anchored edges (the anchor
     // margin), never flush against the border. The detail area is captured from a FULL overlay (its panel fills
     // the pane exactly with NO inset) via the same `overlay-floating-panel` marker; the floating panel's inset

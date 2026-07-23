@@ -1335,7 +1335,7 @@
               Size a floating panel with
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--size-percent N</span> (1–100 of the pane) or
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--cols N --rows M</span> (an exact terminal grid);
-              both clamp to the whole cells that fit, and the realized grid reads back on
+              the cols/rows grid clamps to the whole cells that fit and a percent panel simply never exceeds the pane; the realized grid reads back on
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree</span> as
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlayColsApplied</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">overlayRowsApplied</span>.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--anchor</span> parks it at one of nine positions

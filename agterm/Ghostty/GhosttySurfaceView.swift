@@ -545,7 +545,11 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// `CELL_SIZE`, and every backing-size change without re-invalidating the panel at the `.cells` fixed point.
     func refreshOverlayMetrics() {
         guard let report = onOverlayMetrics, let px = overlayPixelMetrics() else { return }
-        let scale = Double(window?.backingScaleFactor ?? NSScreen.main?.backingScaleFactor ?? 2.0)
+        // require the surface's OWN window for a real backing scale. Without one (not yet in a window) skip
+        // the refresh and leave the metrics unchanged rather than converting px->points with a guessed scale;
+        // a later realization/CELL_SIZE refresh reports the right value once the window is available.
+        guard let window else { return }
+        let scale = Double(window.backingScaleFactor)
         guard scale > 0 else { return }
         let cell = OverlayCellMetrics(cellWidth: px.cellW / scale, cellHeight: px.cellH / scale,
                                       padWidth: px.padW / scale, padHeight: px.padH / scale)

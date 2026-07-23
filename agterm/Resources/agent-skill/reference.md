@@ -446,8 +446,9 @@ All ten are read-only projections of GUI state.
   `"zsh -lc '…'"`.
   Full-size by default (hides the session). Give it a *floating* framed panel — the session still visible
   behind it — one of two ways: `--size-percent N` sizes it to N% of the pane in both dimensions, or
-  `--cols N --rows M` sizes it to an exact terminal grid (both required, each ≥ 1). Both are ADAPTIVE: a
-  request larger than the pane is clamped down to the whole cells that fit, and the grid that actually
+  `--cols N --rows M` sizes it to an exact terminal grid (both required, each ≥ 1). Both are ADAPTIVE — a
+  `--cols/--rows` request larger than the pane is clamped down to the whole cells that fit, while a
+  `--size-percent` panel is a fraction of the pane and never exceeds it — and the grid that actually
   rendered is read back on `tree` as `overlayColsApplied`/`overlayRowsApplied`. `--size-percent` must be
   1–100 — an out-of-range value is a hard error (it is no longer silently clamped on open).
   `--anchor POS` places a floating panel at one of nine positions — `top-left`, `top`, `top-right`, `left`,

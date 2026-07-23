@@ -491,7 +491,7 @@ struct WindowContentView: View {
             // closing, OR resizing an overlay never re-hosts the NSSplitView (the titlebar-overrun trigger)
             // and never re-parents the surface (which would blank its Metal drawable). Full fills the area
             // translucent with the pane(s) hidden by `hideForOverlay`; floating draws an opaque framed panel
-            // over the still-visible pane(s). Switching full<->% (session.overlay.resize) only re-flows the frame.
+            // over the still-visible pane(s). Switching full<->floating (session.overlay.resize) only re-flows the frame.
             overlayPanel(session: session, isActive: deckInteractive && isActive)
                 .zIndex(3)
         }
@@ -523,7 +523,7 @@ struct WindowContentView: View {
     /// ALWAYS-PRESENT sibling. The content is gated INSIDE the GeometryReader, so the ZStack's child count
     /// never changes when an overlay opens/closes (constant shape = no NSSplitView re-host = no titlebar
     /// overrun), and BOTH variants share this single surface host, so `session.overlay.resize` switching
-    /// full<->% only re-flows the frame — it never re-parents the NSView (which would blank its Metal drawable).
+    /// full<->floating only re-flows the frame — it never re-parents the NSView (which would blank its Metal drawable).
     /// A `.full` `overlaySize` fills the detail area translucent (no opaque backing/frame) with the pane(s)
     /// hidden by `hideForOverlay`; a floating size (`.percent`/`.cells`) draws an opaque, framed panel sized by
     /// `OverlayLayout.panelSize` and anchored by `overlayAnchor` (nine positions, default center), with the
@@ -857,21 +857,13 @@ struct WindowContentView: View {
 }
 
 extension OverlayAnchor {
-    /// The SwiftUI `Alignment` a floating overlay panel takes inside the detail-area ZStack — the 9-point
-    /// anchor mapped to a `(horizontal, vertical)` pair. The host-free `unitX`/`unitY` (0/0.5/1) can't name
-    /// SwiftUI's alignment guides, so this app-side mapping bridges them; `.center` reproduces today's
-    /// centered placement.
+    /// The SwiftUI `Alignment` a floating overlay panel takes inside the detail-area ZStack. DERIVED from
+    /// the host-free, unit-tested `unitX`/`unitY` (0 = leading/top, 0.5 = center, 1 = trailing/bottom) so a
+    /// per-anchor transposition is structurally impossible — the axis mapping cannot disagree with the same
+    /// unit coordinates the resolver/insets use; `.center` reproduces today's centered placement.
     var swiftUIAlignment: Alignment {
-        switch self {
-        case .topLeft: return .topLeading
-        case .top: return .top
-        case .topRight: return .topTrailing
-        case .left: return .leading
-        case .center: return .center
-        case .right: return .trailing
-        case .bottomLeft: return .bottomLeading
-        case .bottom: return .bottom
-        case .bottomRight: return .bottomTrailing
-        }
+        let horizontal: HorizontalAlignment = unitX == 0 ? .leading : (unitX == 1 ? .trailing : .center)
+        let vertical: VerticalAlignment = unitY == 0 ? .top : (unitY == 1 ? .bottom : .center)
+        return Alignment(horizontal: horizontal, vertical: vertical)
     }
 }

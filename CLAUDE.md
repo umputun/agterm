@@ -356,7 +356,8 @@ always in context:
   `session.background`/`background`, `notify`+`session.seen`/`unseen`,
   `session.status`/`status`+`statusPane` (+`statusBlink`/`statusColor` for `--blink`/`--color`),
   `session.flag`/`flagged`, `session.focus`/`splitFocused`, `session.resize`/`splitRatio`,
-  `session.overlay.resize`/`overlaySizePercent`, `sidebar`/`sidebarVisible`, `sidebar.mode`/`sidebarMode`,
+  `session.overlay.open`+`session.overlay.resize`/`overlaySizePercent`+`overlayCols`/`overlayRows` (requested)+`overlayColsApplied`/`overlayRowsApplied` (realized)+`overlayAnchor`,
+  `sidebar`/`sidebarVisible`, `sidebar.mode`/`sidebarMode`,
   `workspace.focus`/`focused`, `quick`/`quickVisible`,
   `window.move`+`window.resize`/`geometry`, `window.fullscreen`+`window.zoom`/`fullscreen`+`zoomed`.
   When adding a state-mutating command, ask "how does a script read back what I just set?" and add that

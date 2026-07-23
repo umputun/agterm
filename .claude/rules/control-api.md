@@ -1315,6 +1315,11 @@ paths:
   change); omitted for a full overlay or none.
   Distinct from the requested `overlayCols`/`overlayRows`, so an oversized request comes back smaller here and
   a script can detect the clamp.
+  The applied grid is EVENTUALLY CONSISTENT: the app refreshes it ASYNC off the realized surface, and a
+  size-changing `session.overlay.resize` nils it (`resizeOverlay` clears `overlayAppliedCols/Rows` on a size
+  change) so a read before the refresh returns nil rather than the PRIOR size's grid.
+  So a script must POLL `tree` for the applied fields after an open/resize (mirroring the e2e's
+  `pollOverlayApplied`), not read once, before comparing against the request.
   `overlayAnchor` — the anchor rawValue of ANY open overlay including a full one
   (`session.overlayActive ? session.overlayAnchor.rawValue : nil`), since the anchor is preserved across a
   `--full` round-trip (Decision 2); omitted when no overlay is open.

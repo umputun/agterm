@@ -519,20 +519,22 @@ public struct ControlDispatcher {
             return ControlResponse(ok: false, error: "invalid color: \(color) (#rrggbb)")
         }
         let size: OverlaySize
-        switch parseOverlaySize(args, command: "session.overlay.open", allowFull: false) {
-        case .rejected(let rejection): return rejection
+        switch OverlayArgs.parseSize(sizePercent: args?.sizePercent, cols: args?.cols, rows: args?.rows,
+                                     full: args?.full ?? false, command: .open) {
+        case .invalid(let message): return ControlResponse(ok: false, error: message)
         case .unspecified: size = .full
         case .size(let parsed): size = parsed
         }
         let anchor: OverlayAnchor
-        switch parseOverlayAnchor(args?.anchor) {
-        case .rejected(let rejection): return rejection
+        switch OverlayArgs.parseAnchor(args?.anchor) {
+        case .invalid(let message): return ControlResponse(ok: false, error: message)
+        case .absent: anchor = .center
         case .anchor(let parsed):
-            if parsed != nil, size == .full {
+            guard size != .full else {
                 return ControlResponse(ok: false,
                                        error: "--anchor requires a floating overlay: use --size-percent or --cols/--rows")
             }
-            anchor = parsed ?? .center
+            anchor = parsed
         }
         return actions.openSessionOverlay(request.target, window: args?.window,
                                           options: ControlSessionOverlayOpenOptions(
@@ -551,14 +553,16 @@ public struct ControlDispatcher {
     private func dispatchSessionOverlayResize(_ request: ControlRequest) -> ControlResponse {
         let args = request.args
         let size: OverlaySize?
-        switch parseOverlaySize(args, command: "session.overlay.resize", allowFull: true) {
-        case .rejected(let rejection): return rejection
+        switch OverlayArgs.parseSize(sizePercent: args?.sizePercent, cols: args?.cols, rows: args?.rows,
+                                     full: args?.full ?? false, command: .resize) {
+        case .invalid(let message): return ControlResponse(ok: false, error: message)
         case .unspecified: size = nil
         case .size(let parsed): size = parsed
         }
         let anchor: OverlayAnchor?
-        switch parseOverlayAnchor(args?.anchor) {
-        case .rejected(let rejection): return rejection
+        switch OverlayArgs.parseAnchor(args?.anchor) {
+        case .invalid(let message): return ControlResponse(ok: false, error: message)
+        case .absent: anchor = nil
         case .anchor(let parsed): anchor = parsed
         }
         if case .some(.full) = size, anchor != nil {
@@ -569,65 +573,6 @@ public struct ControlDispatcher {
                                    error: "session.overlay.resize requires a size (--full, --size-percent, --cols/--rows) or --anchor")
         }
         return actions.resizeSessionOverlay(request.target, window: args?.window, size: size, anchor: anchor)
-    }
-
-    /// The outcome of parsing the overlay size args: a resolved size, no size arg present (open → full,
-    /// resize → keep current), or the rejection to return as-is.
-    private enum OverlaySizeParse {
-        case size(OverlaySize)
-        case unspecified
-        case rejected(ControlResponse)
-    }
-
-    /// Shared parse + validation of the overlay size args (`--size-percent` / `--cols` / `--rows`, and
-    /// `--full` on resize) for both open and resize. At most one size mode may be set; a percent is a hard
-    /// `1...100` error (Decision 3); cols/rows are both-or-neither and each `>= 1`. `command` prefixes the
-    /// per-command errors; `allowFull` enables the resize-only `--full` mode.
-    private func parseOverlaySize(_ args: ControlArgs?, command: String, allowFull: Bool) -> OverlaySizeParse {
-        let full = allowFull && (args?.full == true)
-        let percent = args?.sizePercent
-        let cols = args?.cols
-        let rows = args?.rows
-        let hasCells = cols != nil || rows != nil
-        let modeCount = (full ? 1 : 0) + (percent != nil ? 1 : 0) + (hasCells ? 1 : 0)
-        if modeCount > 1 {
-            let modes = allowFull ? "--full, --size-percent, or --cols/--rows" : "--size-percent or --cols/--rows"
-            return .rejected(ControlResponse(ok: false, error: "\(command): use only one of \(modes)"))
-        }
-        if full { return .size(.full) }
-        if let percent {
-            guard (1...100).contains(percent) else {
-                return .rejected(ControlResponse(ok: false, error: "\(command): --size-percent must be 1...100"))
-            }
-            return .size(.percent(percent))
-        }
-        if hasCells {
-            guard let cols, let rows else {
-                return .rejected(ControlResponse(ok: false, error: "provide both --cols and --rows"))
-            }
-            guard cols >= 1, rows >= 1 else {
-                return .rejected(ControlResponse(ok: false, error: "--cols and --rows must be >= 1"))
-            }
-            return .size(.cells(cols: cols, rows: rows))
-        }
-        return .unspecified
-    }
-
-    /// The outcome of parsing the `--anchor` selector: the anchor (nil when absent), or the rejection.
-    private enum OverlayAnchorParse {
-        case anchor(OverlayAnchor?)
-        case rejected(ControlResponse)
-    }
-
-    /// Shared `--anchor` parse for both overlay arms: nil when absent, the parsed anchor when valid, or an
-    /// `unknown anchor` rejection listing the nine positions.
-    private func parseOverlayAnchor(_ raw: String?) -> OverlayAnchorParse {
-        guard let raw else { return .anchor(nil) }
-        guard let parsed = OverlayAnchor(rawValue: raw) else {
-            let valid = OverlayAnchor.allCases.map(\.rawValue).joined(separator: "|")
-            return .rejected(ControlResponse(ok: false, error: "unknown anchor: \(raw) (\(valid))"))
-        }
-        return .anchor(parsed)
     }
 
     private func dispatchAppCommand(_ request: ControlRequest) -> ControlResponse {

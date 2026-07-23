@@ -284,7 +284,8 @@ omitted when expanded).
   `overlay close` ·
   `overlay result` — run a program on top of a session; `--block` waits and exits with its status.
   Full by default; make it a floating panel with `--size-percent N` (1–100, hard error out of range) or
-  `--cols N --rows M` (exact grid). Both clamp to the whole cells that fit; the realized grid reads back as
+  `--cols N --rows M` (exact grid). `--cols/--rows` clamps to the whole cells that fit; `--size-percent` is a
+  fraction of the pane (never larger). Either way the realized grid reads back as
   `overlayColsApplied`/`overlayRowsApplied`. `--anchor POS` parks a floating panel at one of nine positions
   (`top-left` … `center` (default) … `bottom-right`), inset one line-height off each anchored edge; it needs
   a floating size. `overlay resize` changes an ALREADY-OPEN overlay in place (the program keeps running, no
