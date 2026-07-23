@@ -47,7 +47,15 @@ final class AppActions {
     /// controls remain separate paths (they never gate on this), so the user is never trapped and can always
     /// dismiss the modal. `frontmostDashboard?.isOpen` mirrors `terminalZoomActive`, resolved on the frontmost
     /// window like the zoom target.
-    var uiActionsEnabled: Bool { !terminalZoomActive && !(frontmostDashboard?.isOpen ?? false) }
+    var uiActionsEnabled: Bool { uiActionsEnabled(for: library.activeWindowID) }
+
+    /// The modal gate for a specific window. Session-addressed entry points use this instead of the
+    /// frontmost-only property when their target may have changed while an external menu was tracking.
+    func uiActionsEnabled(for windowID: WindowInfo.ID?) -> Bool {
+        guard let windowID else { return false }
+        return TerminalZoomRegistry.shared.controller(for: windowID)?.target == nil
+            && DashboardControllerRegistry.shared.controller(for: windowID)?.isOpen != true
+    }
 
     /// Set briefly while a rename is being started, so the focus-restore that runs when a palette
     /// or the quick terminal closes doesn't steal first responder from the inline rename field.
@@ -771,7 +779,7 @@ final class AppActions {
 
     /// Toggle the frontmost window's quick terminal (each window owns its own controller).
     func toggleQuickTerminal() {
-        guard !terminalZoomActive else { return }
+        guard uiActionsEnabled else { return }
         frontmostQuickTerminal?.toggle()
     }
 
