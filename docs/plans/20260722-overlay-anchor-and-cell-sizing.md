@@ -496,9 +496,11 @@ placement. Applies to ANY floating overlay (percent or cells). All 5 e2e methods
 - [x] `make lint` clean; app builds (`make build`) — lint exit 0 with 0 findings; Debug BUILD SUCCEEDED
 
 ### Task 10: Final documentation + close-out
-- [ ] update `CLAUDE.md`/`.claude/rules` only if a genuinely new pattern emerged (e.g. the observed-
-      metrics-from-`CELL_SIZE` bridge, if worth recording)
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update `CLAUDE.md`/`.claude/rules` only if a genuinely new pattern emerged (e.g. the observed-
+      metrics-from-`CELL_SIZE` bridge, if worth recording) — added the "live libghostty surface metric
+      drives SwiftUI reactively by mirroring into observed `Session` state" note to
+      `.claude/rules/libghostty.md` (near the `updateMetalLayerSize` / rendering-plumbing notes)
+- [x] move this plan to `docs/plans/completed/` (performed by exec finalize — kept in place through review phases)
 
 ## Post-Completion
 *Items requiring manual intervention or external systems — no checkboxes, informational only*

@@ -299,6 +299,19 @@ paths:
   but is harder: it is NOT fixed by `refresh` or a forced `set_size` jitter,
   and a font change doesn't resize the view so this `updateMetalLayerSize` path never fires for it —
   still parked.
+- **A live libghostty surface metric drives SwiftUI reactively by MIRRORING it into OBSERVED `Session`
+  state, never by reading the imperative surface from the view body.**
+  `Session.overlaySurface` (and `GhosttySurfaceView` generally) is `@ObservationIgnored` and assigned in
+  `TerminalView.makeNSView`, so a view that read `ghostty_surface_size()` off it would not re-lay-out when
+  the metric changes.
+  Instead the app refreshes OBSERVED `Session.overlayCellMetrics` (points, px÷`backingScaleFactor`) and
+  `overlayAppliedCols/Rows` (the realized grid) from `GHOSTTY_ACTION_CELL_SIZE` (`GhosttyCallbacks.swift`),
+  surface realization, and `updateMetalLayerSize` (backing-scale change), and `overlayPanel` consumes those
+  observed values via `OverlayLayout.panelSize` — so a font/DPI change re-sizes the floating panel
+  reactively with no view-body poll of the imperative NSView.
+  Generalize this for any "get a live libghostty metric into SwiftUI": convert at the app boundary
+  (pixels→points), store on observed `Session` state, refresh from the relevant `GHOSTTY_ACTION_*`
+  callback, and read the observed value from the body.
 - **Dashboard grid = the N-PANE generalization of terminal-zoom's reparent, focus inverted.**
   Where `surface.zoom` reparents ONE session surface into the window and focuses it, the dashboard
   (`DashboardView` + `WindowContentView+Dashboard.swift`, driven by the host-free `DashboardController`)
