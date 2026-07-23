@@ -97,13 +97,25 @@ struct CodexStatusHookTests {
         #expect(result.exit == 0)
     }
 
-    @Test func stopReportsBlockedWhenAssistantMessageEndsInQuestionMark() throws {
+    @Test func stopReportsBlockedWhenAssistantMessageContainsQuestionMark() throws {
         let input = #"{"hook_event_name":"Stop","last_assistant_message":"Which branch? \n\n"}"#
         #expect(try run("stop", input: input).statusCalls == ["blocked"])
     }
 
-    @Test func stopReportsCompletedWhenQuestionMarkIsNotTrailing() throws {
+    @Test func stopReportsBlockedWhenQuestionPrecedesRecommendation() throws {
+        let input = """
+        {"hook_event_name":"Stop","last_assistant_message":"How deep should I review it? I recommend the full review.\\nAlternatives are focused or inline."}
+        """
+        #expect(try run("stop", input: input).statusCalls == ["blocked"])
+    }
+
+    @Test func stopReportsBlockedWhenAnsweredQuestionIsNotTrailing() throws {
         let input = #"{"hook_event_name":"Stop","last_assistant_message":"Did it work?\nYes, it did."}"#
+        #expect(try run("stop", input: input).statusCalls == ["blocked"])
+    }
+
+    @Test func stopReportsCompletedWhenAssistantMessageHasNoQuestionMark() throws {
+        let input = #"{"hook_event_name":"Stop","last_assistant_message":"Review completed."}"#
         #expect(try run("stop", input: input).statusCalls == ["completed --auto-reset"])
     }
 

@@ -114,7 +114,7 @@ paths:
   `.bak`.
   Those six events call the dedicated `agterm-codex-status.sh` adapter with lifecycle actions.
   The adapter maps SessionStart to `idle` and UserPromptSubmit/PreToolUse/PostToolUse to `active --blink`.
-  On Stop it reads Codex's final assistant message: ignoring trailing whitespace, a message ending in `?`
+  On Stop it reads Codex's final assistant message: a message containing `?`
   maps to `blocked`; every other message maps to `completed --auto-reset` through the generic wrapper.
   `PermissionRequest` is only a candidate signal because Codex fires it before Auto Review decides whether
   a person is needed.
