@@ -1407,7 +1407,7 @@ struct AppStoreTests {
             ControlSessionNode(id: b.id.uuidString, name: "remote:~/b", cwd: "/live/b",
                                title: "remote:~/b", active: true, split: true,
                                splitFocused: false,
-                               overlay: true, scratch: true, flagged: true,
+                               overlay: true, overlayAnchor: "center", scratch: true, flagged: true,
                                status: "blocked", statusPane: "right",
                                background: BackgroundWatermark(kind: .text, text: "PROD"),
                                surfaces: [

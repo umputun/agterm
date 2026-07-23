@@ -112,6 +112,37 @@ struct ControlProtocolTests {
         #expect(!json.contains("follow"), "a nil follow must be omitted from the JSON; got \(json)")
     }
 
+    @Test func sessionOverlayRoundTripsWithColsRowsAnchor() throws {
+        // the new overlay sizing args: an exact cols×rows grid and a 9-point anchor ride the request, so a
+        // cells-mode floating overlay parked in a corner round-trips (open), as does a re-anchor-only resize.
+        let open = ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c",
+                                  args: ControlArgs(command: "htop", cols: 80, rows: 24, anchor: "bottom-right"))
+        let decodedOpen = try roundTrip(open)
+        #expect(decodedOpen == open)
+        #expect(decodedOpen.args?.cols == 80)
+        #expect(decodedOpen.args?.rows == 24)
+        #expect(decodedOpen.args?.anchor == "bottom-right")
+
+        let resize = ControlRequest(cmd: .sessionOverlayResize, target: "9f3c", args: ControlArgs(anchor: "top-left"))
+        let decodedResize = try roundTrip(resize)
+        #expect(decodedResize == resize)
+        #expect(decodedResize.args?.anchor == "top-left")
+    }
+
+    @Test func sessionOverlayOmitsColsRowsAnchorWhenNil() throws {
+        let request = ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c", args: ControlArgs(command: "revdiff"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.cols == nil)
+        #expect(decoded.args?.rows == nil)
+        #expect(decoded.args?.anchor == nil)
+        // omit-when-nil WIRE contract: nil cols/rows/anchor must not encode at all, not emit as null.
+        let json = String(data: try JSONEncoder().encode(request), encoding: .utf8) ?? ""
+        #expect(!json.contains("cols"), "a nil cols must be omitted from the JSON; got \(json)")
+        #expect(!json.contains("rows"), "a nil rows must be omitted from the JSON; got \(json)")
+        #expect(!json.contains("anchor"), "a nil anchor must be omitted from the JSON; got \(json)")
+    }
+
     @Test func sessionTextRoundTripsWithAllLinesAndPane() throws {
         let request = ControlRequest(cmd: .sessionText, target: "9f3c",
                                      args: ControlArgs(pane: "left", all: true, lines: 50))
@@ -614,6 +645,73 @@ struct ControlProtocolTests {
         #expect(!json.contains("overlaySizePercent"), "a nil overlay size must be omitted from the JSON; got \(json)")
         let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
         #expect(decoded.overlaySizePercent == nil)
+    }
+
+    @Test func treeSessionNodeRoundTripsWithOverlayCellsAppliedAndAnchor() throws {
+        // a cells-mode floating overlay: the REQUESTED grid, the REALIZED (clamped) grid, and the anchor all
+        // ride the node so a script can record the request, detect a clamp, and restore the anchor.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         overlay: true, overlayCols: 80, overlayRows: 24,
+                                         overlayColsApplied: 72, overlayRowsApplied: 20, overlayAnchor: "bottom-right")
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        let node = decoded.result?.tree?.workspaces.first?.sessions.first
+        #expect(node?.overlayCols == 80)
+        #expect(node?.overlayRows == 24)
+        #expect(node?.overlayColsApplied == 72)
+        #expect(node?.overlayRowsApplied == 20)
+        #expect(node?.overlayAnchor == "bottom-right")
+    }
+
+    @Test func treeSessionNodeRoundTripsWithOverlayPercentAppliedAndAnchor() throws {
+        // a percent floating overlay: NO requested cols/rows, but the realized grid + anchor still ride the
+        // node (applied is set for ANY floating overlay, percent or cells).
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         overlay: true, overlaySizePercent: 70,
+                                         overlayColsApplied: 96, overlayRowsApplied: 28, overlayAnchor: "center")
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        let node = decoded.result?.tree?.workspaces.first?.sessions.first
+        #expect(node?.overlaySizePercent == 70)
+        #expect(node?.overlayCols == nil)
+        #expect(node?.overlayRows == nil)
+        #expect(node?.overlayColsApplied == 96)
+        #expect(node?.overlayRowsApplied == 28)
+        #expect(node?.overlayAnchor == "center")
+    }
+
+    @Test func treeSessionNodeKeepsAnchorButOmitsGridForFullOverlay() throws {
+        // a FULL overlay: no cols/rows/applied (those are floating-only), but the anchor IS emitted
+        // (Decision 2 — the anchor is preserved and reported even while full).
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         overlay: true, overlayAnchor: "top")
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("overlayCols"), "a full overlay must omit overlayCols/overlayColsApplied; got \(json)")
+        #expect(!json.contains("overlayRows"), "a full overlay must omit overlayRows/overlayRowsApplied; got \(json)")
+        #expect(json.contains("\"overlayAnchor\":\"top\""), "a full overlay must emit its anchor; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.overlayCols == nil)
+        #expect(decoded.overlayColsApplied == nil)
+        #expect(decoded.overlayAnchor == "top")
+    }
+
+    @Test func treeSessionNodeOmitsOverlayGridAndAnchorWhenNoOverlay() throws {
+        // no overlay open — every overlay grid/anchor key must be omitted, not emitted as null.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("overlayCols"), "no overlay must omit overlayCols/overlayColsApplied; got \(json)")
+        #expect(!json.contains("overlayRows"), "no overlay must omit overlayRows/overlayRowsApplied; got \(json)")
+        #expect(!json.contains("overlayAnchor"), "no overlay must omit overlayAnchor; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.overlayCols == nil)
+        #expect(decoded.overlayRows == nil)
+        #expect(decoded.overlayColsApplied == nil)
+        #expect(decoded.overlayRowsApplied == nil)
+        #expect(decoded.overlayAnchor == nil)
     }
 
     @Test func treeSessionNodeRoundTripsWithRestoreCommand() throws {

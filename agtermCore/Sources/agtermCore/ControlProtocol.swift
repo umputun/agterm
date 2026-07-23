@@ -199,6 +199,15 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// For `session.overlay.resize`, requests the full-pane (translucent, session-hidden) overlay —
     /// the way to switch a floating overlay back to full. Mutually exclusive with `sizePercent`.
     public var full: Bool?
+    /// For `session.overlay.open`/`.resize`, the exact terminal grid a *floating* overlay panel sizes to
+    /// via the surface's live cell metrics: `cols` columns × `rows` rows, both or neither, mutually
+    /// exclusive with `sizePercent`/`full`. The panel is clamped to whole cells that fit the pane.
+    public var cols: Int?
+    public var rows: Int?
+    /// For `session.overlay.open`/`.resize`, which of nine positions a *floating* overlay panel anchors to
+    /// within the pane (`OverlayAnchor` raw value, e.g. `top-left`/`center`/`bottom-right`); omitted =
+    /// `center` (today's behavior).
+    public var anchor: String?
     /// For `session.overlay.open`, whether to select/switch to the target after opening; omitted/false
     /// opens in the background without changing the active session (the default for both full and
     /// floating overlays).
@@ -252,6 +261,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 createWorkspace: Bool? = nil, collapsed: Bool? = nil, noSelect: Bool? = nil,
                 text: String? = nil, select: Bool? = nil, mode: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
+                cols: Int? = nil, rows: Int? = nil, anchor: String? = nil,
                 follow: Bool? = nil, window: String? = nil,
                 pane: String? = nil, paneID: String? = nil, to: String? = nil,
                 after: String? = nil, before: String? = nil, run: String? = nil,
@@ -279,6 +289,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.wait = wait
         self.sizePercent = sizePercent
         self.full = full
+        self.cols = cols
+        self.rows = rows
+        self.anchor = anchor
         self.follow = follow
         self.window = window
         self.pane = pane
@@ -381,6 +394,21 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// floating panel's percent of the pane (1...100). Absent when no overlay is open. The read side of
     /// `session.overlay.resize` — record the current size before resizing so a script can restore it exactly.
     public let overlaySizePercent: Int?
+    /// For a floating overlay opened in CELLS mode, the REQUESTED grid (`session.overlay.open`/`.resize
+    /// --cols N --rows M`); nil/omitted for a percent overlay, a full overlay, or no overlay. The restore
+    /// key of a cells-mode overlay — record it before resizing, restore it exactly afterwards.
+    public let overlayCols: Int?
+    public let overlayRows: Int?
+    /// The REALIZED grid an OPEN floating overlay actually rendered after whole-cell clamping — set for any
+    /// floating overlay (percent or cells), nil/omitted for a full overlay, no overlay, or before the
+    /// surface reports. Distinct from the requested `overlayCols`/`overlayRows`, so a script can detect a
+    /// clamp (an oversized cols/rows request comes back smaller here).
+    public let overlayColsApplied: Int?
+    public let overlayRowsApplied: Int?
+    /// For any OPEN overlay (floating OR full), which of nine positions the panel anchors to
+    /// (`OverlayAnchor` raw value); nil/omitted when no overlay is open. The read side of the overlay
+    /// `--anchor` — preserved across a `--full` round-trip, so it is reported even for a full overlay.
+    public let overlayAnchor: String?
     public let scratch: Bool
     public let flagged: Bool
     /// For a `--command` session, whether it was created to HOLD its surface after the command exits
@@ -442,7 +470,10 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 splitRatio: Double? = nil, splitFocused: Bool? = nil,
-                overlay: Bool = false, overlaySizePercent: Int? = nil, scratch: Bool = false, flagged: Bool = false,
+                overlay: Bool = false, overlaySizePercent: Int? = nil,
+                overlayCols: Int? = nil, overlayRows: Int? = nil,
+                overlayColsApplied: Int? = nil, overlayRowsApplied: Int? = nil, overlayAnchor: String? = nil,
+                scratch: Bool = false, flagged: Bool = false,
                 commandWait: Bool? = nil,
                 foreground: [String]? = nil, splitForeground: [String]? = nil,
                 restoreCommand: String? = nil, splitRestoreCommand: String? = nil, status: String? = nil,
@@ -460,6 +491,11 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.splitFocused = splitFocused
         self.overlay = overlay
         self.overlaySizePercent = overlaySizePercent
+        self.overlayCols = overlayCols
+        self.overlayRows = overlayRows
+        self.overlayColsApplied = overlayColsApplied
+        self.overlayRowsApplied = overlayRowsApplied
+        self.overlayAnchor = overlayAnchor
         self.scratch = scratch
         self.flagged = flagged
         self.commandWait = commandWait

@@ -629,6 +629,39 @@ struct AppStorePaneTests {
         #expect(node.overlaySizePercent == nil)
     }
 
+    @Test func controlTreeReportsOverlayColsRowsAndAnchor() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        // no overlay: every overlay grid/anchor field is omitted.
+        var node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.overlayCols == nil)
+        #expect(node.overlayColsApplied == nil)
+        #expect(node.overlayAnchor == nil)
+        // a cells-mode floating overlay parked in a corner: the REQUESTED grid + anchor ride the node, and
+        // the app-maintained REALIZED grid (overlayApplied*) exposes any clamp (here clamped smaller).
+        store.openOverlay(session.id, options: .init(command: "htop", size: .cells(cols: 80, rows: 24),
+                                                     anchor: .bottomRight))
+        session.overlayAppliedCols = 72
+        session.overlayAppliedRows = 20
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.overlayCols == 80)
+        #expect(node.overlayRows == 24)
+        #expect(node.overlayColsApplied == 72)
+        #expect(node.overlayRowsApplied == 20)
+        #expect(node.overlayAnchor == "bottom-right")
+        // resize to full keeps + reports the anchor (Decision 2) but drops the requested + realized grid
+        // (cols/rows/applied are floating-only).
+        store.resizeOverlay(session.id, size: .full)
+        node = try #require(store.controlTree().workspaces[0].sessions.first)
+        #expect(node.overlay == true)
+        #expect(node.overlayCols == nil)
+        #expect(node.overlayRows == nil)
+        #expect(node.overlayColsApplied == nil)
+        #expect(node.overlayRowsApplied == nil)
+        #expect(node.overlayAnchor == "bottom-right")
+    }
+
     @Test func controlTreeReportsSplitRatio() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

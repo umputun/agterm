@@ -324,17 +324,17 @@ via `OverlayLayout.panelSize` + anchor alignment. `tree` reports requested + app
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlProtocolTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStorePaneTests.swift`
 
-- [ ] add `ControlArgs.cols`/`rows`/`anchor`; thread through its init
-- [ ] add `ControlSessionNode.overlayCols`/`overlayRows`/`overlayColsApplied`/`overlayRowsApplied`/
+- [x] add `ControlArgs.cols`/`rows`/`anchor`; thread through its init
+- [x] add `ControlSessionNode.overlayCols`/`overlayRows`/`overlayColsApplied`/`overlayRowsApplied`/
       `overlayAnchor`; thread through its init (keep `overlaySizePercent`)
-- [ ] populate the new node fields in `AppStore.controlTree`: requested cols/rows when `.cells`; applied
+- [x] populate the new node fields in `AppStore.controlTree`: requested cols/rows when `.cells`; applied
       cols/rows from `overlayAppliedCols/Rows` when floating; `overlayAnchor` rawValue when
       `overlayActive`; all omitted when nil
-- [ ] write tests: `ControlArgs` round-trip with cols/rows/anchor; `ControlSessionNode` round-trip for
+- [x] write tests: `ControlArgs` round-trip with cols/rows/anchor; `ControlSessionNode` round-trip for
       cells+applied+anchor and for percent+applied+anchor; `…OmitsWhenNil` for full overlay and no
       overlay; a `controlTree` populate test in `AppStorePaneTests` (requested vs applied, anchor emitted
       while full)
-- [ ] run `swift test` — must pass before next task
+- [x] run `swift test` — must pass before next task
 
 ### Task 4: Dispatcher validation + routing (tightened open)
 
