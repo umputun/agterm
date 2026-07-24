@@ -1684,6 +1684,15 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session seen</span>. Control-native.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                The banner is gated by Settings ▸ Notifications ▸ Show notification banners; the badge is not. With banners off the
+                command still succeeds and still raises the badge, but nothing reaches macOS — so it answers
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ok</span> with an advisory
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.text</span> instead of a bare
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ok</span>. A delivered notification carries none, so treat
+                its presence as "no banner appeared". Read back:
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unseen</span> on the tree node.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 For agentic attention — waiting on input, or a finished result — prefer
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session status</span>. A notification is a one-shot
                 banner with no lasting state, while a status is typed and persistent, and drives the attention list, the title-bar

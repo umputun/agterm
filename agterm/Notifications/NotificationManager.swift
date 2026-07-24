@@ -70,7 +70,10 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
 
         // strict first-responder check: suppress only when you are actually typing in this pane.
         let firingIsFocused = surface === (NSApp.keyWindow?.firstResponder as? GhosttySurfaceView)
-        guard TerminalNotification.shouldDeliver(firingIsFocused: firingIsFocused, appActive: NSApp.isActive) else { return }
+        guard TerminalNotification.shouldDeliver(firingIsFocused: firingIsFocused, appActive: NSApp.isActive) else {
+            logger.notice("notify: session \(session.id, privacy: .public) is the focused pane; suppressed")
+            return
+        }
         guard let effectiveTitle = library?.store(forSession: session.id)?.recordNotificationEvent(
             forSession: session.id, title: title, body: body
         ) else { return }
@@ -78,7 +81,14 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         // the badge always tracks the unseen notification; the macOS banner is gated by the toggle.
         session.unseenCount += 1
         bounceDock()
-        guard bannersEnabled else { return }
+        guard bannersEnabled else {
+            logger.notice("""
+                notify: badge bumped for session \(session.id, privacy: .public), but no banner — \
+                "Show notification banners" is off in Settings > Notifications
+                """)
+            return
+        }
+        logger.notice("notify: posting banner for session \(session.id, privacy: .public)")
 
         let content = UNMutableNotificationContent()
         content.title = effectiveTitle
@@ -105,7 +115,14 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         ) else { return false }
         session.unseenCount += 1
         bounceDock()
-        guard bannersEnabled else { return true }
+        guard bannersEnabled else {
+            logger.notice("""
+                send: badge bumped for session \(session.id, privacy: .public), but no banner — \
+                "Show notification banners" is off in Settings > Notifications
+                """)
+            return true
+        }
+        logger.notice("send: posting banner for session \(session.id, privacy: .public)")
         let content = UNMutableNotificationContent()
         content.title = effectiveTitle
         content.body = body

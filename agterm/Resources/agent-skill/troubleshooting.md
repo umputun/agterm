@@ -113,6 +113,18 @@ Confirm what is pinned from `tree --json`: the node's `restoreCommand` (main pan
 (split pane) reports the persisted value, which survives after the override fires, so a read at any point
 shows the truth.
 
+### "notify says ok but no notification appears"
+
+Check **Settings ▸ Notifications ▸ Show notification banners** first. With it off, `notify` succeeds and
+the unseen badge still rises, but nothing is handed to macOS — the command answers `ok` with
+`result.text` = `badge updated, but "Show notification banners" is off, so no banner was posted`
+(a delivered notification carries no `result.text`). macOS must also have granted permission (System
+Settings ▸ Notifications ▸ agterm), and Do Not Disturb / a Focus mode suppresses banners system-wide.
+
+To separate "never posted" from "posted but not shown": `tree --json` shows a rising `unseen` on the
+target session whenever the command reached the notification path, and the log above records both the
+posted and the suppressed case under the `NotificationManager` category.
+
 ### "The agent-status glyph does not update"
 
 Install the hooks from Help ▸ Install Agent Status Hooks…. For shell-integrated agents, start a fresh shell

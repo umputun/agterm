@@ -27,6 +27,23 @@ paths:
   `send(toSession:title:body:)` is the control channel's entry point (the `notify` command / `agtermctl notify`):
   same badge + banner + reveal-identity machinery, but NO focus-suppression (the caller asked for it)
   and attributed to the `.main` pane.
+- **Every silent drop is LOGGED, and a banners-off `notify` says so in its response (#286).**
+  Both gates used to return without a trace: the OSC path's focus suppression and, in BOTH paths, the
+  `bannersEnabled` guard.
+  A user reading the documented `log show --predicate 'subsystem == "com.umputun.agterm"'` recipe therefore
+  got a COMPLETELY EMPTY log from a perfectly healthy notify — the success path logged nothing either —
+  and reasonably concluded notifications were broken (reproduced: banners-on delivery and banners-off
+  suppression produced byte-identical empty logs).
+  So `notify`/`send` now `logger.notice` on posting AND on each suppression, naming the setting.
+  Keep it at `.notice`, not `.debug`/`.info`: a notification is a rare user-driven event, and only the
+  default level is PERSISTED, so a `log show --last 30m` after the fact still finds it.
+  The control arm additionally returns the shared `ControlNotify.bannersOffNote` in `result.text` when
+  banners are off — `ok` alone is indistinguishable from a broken path, since the OS is never touched.
+  This is the `session.restore`-with-`restoreRunningCommand`-off note precedent (see [[control-api]]);
+  the CLI prints `result.text` in place of `ok` with no CLI change.
+  The e2e is `NotifyBannersUITests` (both polarities); it seeds `notificationsEnabled` into the isolated
+  state dir before launch via `ControlAPITestCase.seededSettings`, since there is no `settings.*` control
+  command to flip it at runtime.
 - **Suppression**
   is the pure, agtermCore-tested `TerminalNotification.shouldDeliver(firingIsFocused:appActive:)`:
   drop entirely only when the firing surface is the key window's first responder AND `NSApp.isActive`
@@ -236,7 +253,7 @@ paths:
   So a `right`- or `scratch`-tagged block both survives foreground typing in another pane AND pulls you to
   the waiting pane, not just the session.
 - **Titlebar attention bell (opt-in, window-wide aggregate of the glyph).**
-  When `attentionButtonEnabled` is on (Settings ▸ General, default OFF — see the Settings section),
+  When `attentionButtonEnabled` is on (Settings ▸ Notifications, default OFF — see the Settings section),
   `customTitlebar` (`ContentView`) shows a bell icon in the trailing action cluster (after the
   recent-sessions clock, before the divider and the scratch/split/quick-terminal buttons) that recovers
   the per-session attention signal when the sidebar is hidden.

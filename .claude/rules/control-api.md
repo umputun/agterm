@@ -418,6 +418,15 @@ paths:
   does NOT focus-suppress (the caller asked for it) but still bumps the badge + carries the `<windowID>:<sessionID>:main`
   click-to-reveal identity.
   It is the ONLY app-level way to post a banner; the terminal OSC path remains the other source.
+  The banner is gated by `NotificationManager.bannersEnabled` (Settings ▸ Notifications ▸ Show notification
+  banners) while the badge is NOT, so a banners-off call succeeds having touched nothing OS-side.
+  A bare `ok` there is indistinguishable from a broken notification path (#286), so the arm returns the
+  shared host-free `ControlNotify.bannersOffNote` in `result.text` — the `session.restore`-note precedent,
+  and the CLI prints `result.text` in place of `ok` with no CLI change.
+  A DELIVERED notify carries no `result.text`, so a caller can treat its presence as "no banner appeared".
+  No new read-back is owed: the badge already reads back as `unseen` on the `tree` node.
+  Covered by the `NotifyBannersUITests` e2e (both polarities), which seeds `notificationsEnabled` via
+  `ControlAPITestCase.seededSettings` before launch — there is no `settings.*` control command.
   `session.new` creates a session.
   The destination workspace is addressed one of two MUTUALLY-EXCLUSIVE ways:
   `args.workspace` (id / unique prefix / `active`, the default) OR `args.workspaceName` (the sidebar

@@ -37,6 +37,7 @@ class ControlAPITestCase: XCTestCase {
         // (that test, testDoubleClickHeaderHonorsNoneSetting, now lives in ControlWindowUITests.)
         app.launchEnvironment["AGTERM_UITEST_DOUBLECLICK_ACTION"] =
             name.contains("testDoubleClickHeaderHonorsNoneSetting") ? "None" : "Maximize"
+        try seedSettingsIfNeeded()
         app.launchForUITest()
         // the seeded session row proves the window (and thus the control server's scene .task) is up.
         XCTAssertTrue(app.staticTexts["session-row"].waitForExistence(timeout: 30), "seeded session should exist")
@@ -47,6 +48,20 @@ class ControlAPITestCase: XCTestCase {
         if let stateDir { try? FileManager.default.removeItem(at: stateDir) }
         if let socketPath { try? FileManager.default.removeItem(atPath: socketPath) }
         if let markerDir { try? FileManager.default.removeItem(at: markerDir) }
+    }
+
+    /// Settings to write into the isolated state dir's `settings.json` before launch. Nil (the default)
+    /// launches with stock defaults. Override to start the app with a non-default setting — the control
+    /// channel has no `settings.*` command, so pre-seeding the file is the only way to exercise one
+    /// without driving the Settings window.
+    var seededSettings: [String: Any]? { nil }
+
+    /// Write `seededSettings` into the state dir before launch, so `SettingsModel.init` picks it up.
+    private func seedSettingsIfNeeded() throws {
+        guard let seededSettings else { return }
+        try FileManager.default.createDirectory(at: stateDir, withIntermediateDirectories: true)
+        let data = try JSONSerialization.data(withJSONObject: seededSettings)
+        try data.write(to: stateDir.appendingPathComponent("settings.json"))
     }
 
     /// Polls until the sidebar shows exactly `expected` `session-row` elements.

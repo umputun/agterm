@@ -593,6 +593,11 @@ extension ControlServer: ControlActions {
     /// Post a desktop notification attributed to a session (default: the active session of the
     /// frontmost window, via `resolveSession`). `title` defaults to the session name; `body` is
     /// required. Errors when no open window owns the resolved session.
+    ///
+    /// A successful post while banners are off returns `ok` with a note in `result.text` — the badge
+    /// still tracks, but no banner appears, and a bare `ok` for a call that posts nothing to the OS
+    /// is indistinguishable from a broken notification path (issue #286). Mirrors the same note
+    /// `session.restore` returns when `restoreRunningCommand` is off.
     func sendNotification(_ target: String?, window: String?, title: String?, body: String) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
@@ -601,7 +606,11 @@ extension ControlServer: ControlActions {
             guard NotificationManager.shared.send(toSession: session, title: title ?? "", body: body) else {
                 return ControlResponse(ok: false, error: "session's window is not open")
             }
-            return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+            var result = ControlResult(id: id.uuidString)
+            if !NotificationManager.shared.bannersEnabled {
+                result.text = ControlNotify.bannersOffNote
+            }
+            return ControlResponse(ok: true, result: result)
         }
     }
 

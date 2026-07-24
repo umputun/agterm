@@ -720,6 +720,14 @@ public enum OverlayResultError {
     public static let noResult = "no overlay result"
 }
 
+/// Advisory text `notify` returns in `result.text` when the banner toggle is off. The command still
+/// succeeds — the unseen badge tracks either way — but nothing is handed to macOS, so a bare `ok`
+/// would look identical to a broken notification path (issue #286). Shared so the server's wording and
+/// any caller matching on it cannot drift.
+public enum ControlNotify {
+    public static let bannersOffNote = "badge updated, but \"Show notification banners\" is off, so no banner was posted"
+}
+
 /// The single response written back per connection. `ok` gates `result` (on success) vs `error`.
 public struct ControlResponse: Codable, Sendable, Equatable {
     public let ok: Bool
