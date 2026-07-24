@@ -1,12 +1,15 @@
 import agtermCore
 import AppKit
+import os
 import SwiftUI
+
+private let logger = Logger(subsystem: "com.umputun.agterm", category: "SettingsView")
 
 /// The Settings window (Cmd+,): six tabs — General (mouse, sessions, ghostty config),
 /// Appearance (font/theme + window translucency + pane dimming), Interface (per-element title-bar and
 /// sidebar chrome visibility), Notifications (banner / badge / attention toggles), Agent Status
-/// (the sidebar glyph colors + blocked sound + auto-follow), and Key Mapping (the config directory +
-/// keymap diagnostics + Reload).
+/// (the sidebar glyph colors and shapes + blocked sound + auto-follow), and Key Mapping (the config
+/// directory + keymap diagnostics + Reload).
 struct SettingsView: View {
     let model: SettingsModel
 
@@ -539,21 +542,25 @@ private struct NotificationsSettingsView: View {
     }
 }
 
-/// Agent Status tab: a Colors section (the three sidebar glyph colors — active / blocked /
-/// completed), a Sound section (the blocked sound), an Auto-follow section (the idle-timeout picker +
-/// stay-on-active toggle), and a trailing Reset that clears the colors and sound back to their defaults.
+/// Agent Status tab: a Colors and Shapes section (one row per state — active / blocked / completed —
+/// carrying that sidebar glyph's color well and silhouette picker side by side), a Sound section (the
+/// blocked sound), an Auto-follow section (the idle-timeout picker + stay-on-active toggle), and a
+/// trailing Reset that clears the colors, shapes and sound back to their defaults.
 private struct AgentStatusSettingsView: View {
+    /// Gap between a glyph row's color well and its shape picker.
+    private static let controlSpacing: CGFloat = 8
+    /// Fixed width of every shape picker, so the three rows' controls line up in one column whatever
+    /// silhouette each row currently shows.
+    private static let shapePickerWidth: CGFloat = 140
+
     let model: SettingsModel
 
     var body: some View {
         Form {
-            Section("Colors") {
-                ColorPicker("Active", selection: activeStatusColor, supportsOpacity: false)
-                    .accessibilityIdentifier("settings-status-active")
-                ColorPicker("Blocked", selection: blockedStatusColor, supportsOpacity: false)
-                    .accessibilityIdentifier("settings-status-blocked")
-                ColorPicker("Completed", selection: completedStatusColor, supportsOpacity: false)
-                    .accessibilityIdentifier("settings-status-completed")
+            Section("Colors and Shapes") {
+                glyphRow(.active)
+                glyphRow(.blocked)
+                glyphRow(.completed)
             }
 
             Section("Sound") {
@@ -591,21 +598,108 @@ private struct AgentStatusSettingsView: View {
         .padding()
     }
 
-    // each ColorPicker binds to the resolved color (the user's hex or the system default); a pick
-    // stores the sRGB hex, and "Reset to defaults" clears the hex back to nil (the system color).
-    private var activeStatusColor: Binding<Color> {
-        Binding(get: { Color(nsColor: NSColor(agtermHex: model.settings.activeStatusColorHex) ?? GhosttyApp.defaultActiveStatusColor) },
-                set: { model.setActiveStatusColorHex(NSColor($0).agtermHexString) })
+    /// One state's glyph row: the state name labels the row, and its color well and shape picker sit
+    /// together on the trailing side. Both controls hide their own labels so the state name is the row's
+    /// only visible label, and the shape picker takes a fixed width so the three rows line up. Both
+    /// bindings and both accessibility identifiers are derived from the state argument, so a row can
+    /// never label one status while driving another's setting.
+    private func glyphRow(_ status: AgentStatus) -> some View {
+        let color = statusColor(for: status)
+        let shape = statusShape(for: status)
+        return LabeledContent(status.rawValue.capitalized) {
+            HStack(spacing: Self.controlSpacing) {
+                ColorPicker("Color", selection: color, supportsOpacity: false)
+                    .labelsHidden()
+                    .accessibilityIdentifier("settings-status-\(status.rawValue)")
+                Picker("Shape", selection: shape) { shapeOptions(tint: NSColor(color.wrappedValue)) }
+                    .labelsHidden()
+                    .frame(width: Self.shapePickerWidth)
+                    .accessibilityIdentifier("settings-status-shape-\(status.rawValue)")
+                    .accessibilityValue(shape.wrappedValue.displayName)
+            }
+        }
     }
 
-    private var blockedStatusColor: Binding<Color> {
-        Binding(get: { Color(nsColor: NSColor(agtermHex: model.settings.blockedStatusColorHex) ?? .systemOrange) },
-                set: { model.setBlockedStatusColorHex(NSColor($0).agtermHexString) })
+    // the ColorPicker binds to the resolved color (the user's hex or the system default); a pick stores
+    // the sRGB hex, and "Reset to defaults" clears the hex back to nil (the system color).
+    private func statusColor(for status: AgentStatus) -> Binding<Color> {
+        Binding(get: { Color(nsColor: NSColor(agtermHex: storedColorHex(for: status)) ?? Self.defaultColor(for: status)) },
+                set: { setColorHex(NSColor($0).agtermHexString, for: status) })
     }
 
-    private var completedStatusColor: Binding<Color> {
-        Binding(get: { Color(nsColor: NSColor(agtermHex: model.settings.completedStatusColorHex) ?? .systemGreen) },
-                set: { model.setCompletedStatusColorHex(NSColor($0).agtermHexString) })
+    private func storedColorHex(for status: AgentStatus) -> String? {
+        switch status {
+        case .active: return model.settings.activeStatusColorHex
+        case .blocked: return model.settings.blockedStatusColorHex
+        case .completed: return model.settings.completedStatusColorHex
+        case .idle: return nil
+        }
+    }
+
+    private static func defaultColor(for status: AgentStatus) -> NSColor {
+        switch status {
+        case .active: return GhosttyApp.defaultActiveStatusColor
+        case .blocked: return .systemOrange
+        case .completed: return .systemGreen
+        case .idle: return .clear
+        }
+    }
+
+    private func setColorHex(_ hex: String?, for status: AgentStatus) {
+        switch status {
+        case .active: model.setActiveStatusColorHex(hex)
+        case .blocked: model.setBlockedStatusColorHex(hex)
+        case .completed: model.setCompletedStatusColorHex(hex)
+        case .idle: break
+        }
+    }
+
+    /// The option list one shape picker shows: one entry per `StatusShape`, built from `allCases` so the
+    /// picker can never drift from the enum. Each entry is the symbol ALONE — the silhouette is what is
+    /// being picked, and a name beside it only crowds the row — with the shape's name kept as its
+    /// accessibility label so VoiceOver still announces the choice. `tint` is that status's current glyph
+    /// color, so every option previews the real sidebar glyph; it comes from the row's color binding, so
+    /// picking a new color redraws the options in it.
+    @ViewBuilder
+    private func shapeOptions(tint: NSColor) -> some View {
+        ForEach(StatusShape.allCases, id: \.self) { shape in
+            Image(nsImage: Self.shapeImage(shape, tint: tint))
+                .accessibilityLabel(shape.displayName)
+                .tag(shape)
+        }
+    }
+
+    /// One picker option's glyph, drawn the way the sidebar draws it: the shape's symbol at the sidebar
+    /// glyph's own point size, tinted with that status's current color. It is a NON-template `NSImage`
+    /// because a menu recolors a template symbol to its own text color, which would wash out the tint the
+    /// option is previewing.
+    private static func shapeImage(_ shape: StatusShape, tint: NSColor) -> NSImage {
+        let config = NSImage.SymbolConfiguration(pointSize: StatusIconView.glyphPointSize, weight: .regular)
+            .applying(NSImage.SymbolConfiguration(paletteColors: [tint]))
+        guard let image = NSImage(systemSymbolName: shape.symbolName, accessibilityDescription: shape.displayName)?
+            .withSymbolConfiguration(config) else {
+            // a blank option row would silently offer an un-pickable-looking shape, so say which symbol failed
+            logger.error("no SF Symbol for status shape \(shape.rawValue, privacy: .public)")
+            return NSImage()
+        }
+        image.isTemplate = false
+        return image
+    }
+
+    // the shape picker reads the resolved setting and writes the typed shape; the default plain circle
+    // maps back to nil so settings.json stays minimal (nil and `circle` render identically).
+    private func statusShape(for status: AgentStatus) -> Binding<StatusShape> {
+        Binding(get: { model.settings.effectiveStatusShape(for: status) ?? .circle },
+                set: { setShape($0 == .circle ? nil : $0, for: status) })
+    }
+
+    private func setShape(_ shape: StatusShape?, for status: AgentStatus) {
+        switch status {
+        case .active: model.setActiveStatusShape(shape)
+        case .blocked: model.setBlockedStatusShape(shape)
+        case .completed: model.setCompletedStatusShape(shape)
+        case .idle: break
+        }
     }
 
     // the system sound played when a session enters `blocked`; "None" maps to nil. Selecting a sound
