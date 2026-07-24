@@ -23,6 +23,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// a folder path passed by `open -a agterm /path`. Nil before the scene `.task` runs.
     var actions: AppActions?
 
+    /// Strongly retains the target objects for the current Dock menu. AppKit's `NSMenuItem.target` is not
+    /// an owning reference, and Dock selections arrive with a nil sender, so each dynamic session command
+    /// needs a retained target that already knows which action to perform. Replaced whenever the Dock asks
+    /// for a fresh menu.
+    var dockMenuActionTargets: [DockMenuActionTarget] = []
+
     /// Directories requested via `open -a agterm /path` (the OS "open terminal here" integration) that
     /// haven't become sessions yet — queued until the frontmost window's store resolves, so a `session
     /// new`-style graft lands in the last-active window.

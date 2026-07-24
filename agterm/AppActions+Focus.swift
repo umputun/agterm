@@ -54,13 +54,13 @@ extension AppActions {
     /// then chases the wrong pane; re-asserting the split surface directly wins the race (its `onFocusChange`
     /// re-sets `splitFocused = true`). The gate is `splitSurface != nil` (NOT `hasSplit`), so a promoted
     /// split survivor (which `closePrimaryPane` moves into `surface` with `splitSurface == nil`, re-tagging a
-    /// `.right` block to `.left`) falls through to `focusActiveSession` as the session's sole main pane, and
-    /// a STALE `right` tag on a genuinely single-pane session (a manual `session.status --pane right`, or
-    /// after the split collapsed) does the same, instead of setting `splitFocused = true` with no split
-    /// surface (the `splitFocused` invariant is "true only while the split pane exists"). `.scratch` shows the
+    /// `.right` block to `.left`) explicitly targets the session's sole main pane, and a STALE `right` tag on
+    /// a genuinely single-pane session (a manual `session.status --pane right`, or after the split collapsed)
+    /// does the same, instead of setting `splitFocused = true` with no split surface (the `splitFocused`
+    /// invariant is "true only while the split pane exists"). `.scratch` shows the
     /// scratch only when hidden (a show-if-hidden guard, never a bare toggle that could HIDE a shown one) so
-    /// `topmostSurface` resolves to the scratch; `.left`/nil focus the session's current active surface via
-    /// `focusActiveSession` (the main pane unless a split is focused — no forced flip). The retry loops
+    /// `topmostSurface` resolves to the scratch; `.left`/nil explicitly clear `splitFocused` and target the
+    /// primary surface, even when the right pane held focus before the session was selected. The retry loops
     /// cover a split/scratch surface that materializes a beat after the reveal.
     /// The INVERSE of the `.scratch` show-if-hidden guard: for a NON-scratch target (`left`/`right`/nil)
     /// with the scratch currently SHOWN, hide the covering scratch (keep-alive `toggleScratch`) FIRST so the
@@ -87,7 +87,8 @@ extension AppActions {
             if !session.scratchActive { store?.toggleScratch(session.id) }
             focusActiveSession()
         case .left, .right, .none:
-            focusActiveSession()
+            session.splitFocused = false
+            focusSplitPane(session, wantSplit: false)
         }
     }
 

@@ -42,6 +42,27 @@ jobs:
       - name: swift test (with coverage)
         working-directory: agtermCore
         run: swift test --enable-code-coverage
+      - name: Cache libghostty (GhosttyKit + resources)
+        uses: actions/cache@v6
+        with:
+          path: |
+            GhosttyKit.xcframework
+            agterm/Resources/ghostty
+            agterm/Resources/terminfo
+          key: ghosttykit-${{ hashFiles('scripts/setup.sh') }}
+      - name: Install xcodegen
+        run: brew install xcodegen
+      - name: Prepare hosted app tests
+        run: |
+          scripts/setup.sh
+          xcodegen generate
+      - name: Application-hosted unit tests
+        run: |
+          xcodebuild test \
+            -project agterm.xcodeproj \
+            -scheme agtermTests \
+            -destination 'platform=macOS' \
+            -derivedDataPath "$RUNNER_TEMP/agterm-hosted-tests"
       - name: export lcov
         working-directory: agtermCore
         # rewrite the absolute SF: paths llvm-cov emits to repo-relative so the

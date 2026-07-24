@@ -28,6 +28,13 @@ struct agtermApp: App {
     private static let terminalProgramVersion =
         Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown"
 
+    /// Application-hosted XCTest loads the real app executable before test `setUp`. Its scheme supplies
+    /// isolated state/socket paths plus this sentinel before `init()` runs; the scene uses a shell-free
+    /// placeholder so hosted model/AppKit tests never mount terminal surfaces or start the control server.
+    static var isHostedUnitTest: Bool {
+        ProcessInfo.processInfo.environment["AGTERM_HOSTED_TESTS"] == "1"
+    }
+
     init() {
         let library = agtermApp.restoredLibrary()
         _library = State(initialValue: library)
@@ -65,108 +72,118 @@ struct agtermApp: App {
         // source of truth for the open-set: each appearing window claims the next open id from the
         // library's claim queue (Task 0 dedup-by-id); a window beyond the open set dismisses itself.
         WindowGroup(id: Self.windowGroupID) {
-            ContentView(
-                library: library,
-                makeSurface: { Self.makeSurface(for: $0, store: $1, env: surfaceEnv(for: $0, pane: .left), library: library) },
-                makeSplitSurface: { Self.makeSplitSurface(for: $0, store: $1, env: surfaceEnv(for: $0, pane: .right), library: library) },
-                makeOverlaySurface: { Self.makeOverlaySurface(for: $0, store: $1, env: surfaceEnv(for: $0)) },
-                makeScratchSurface: { session, store in
-                    // suppress the scratch's creation autoFocus when a full overlay OR this window's quick
-                    // terminal is already up — each renders above the scratch and owns focus.
-                    let qtVisible = library.windowID(forSession: session.id)
-                        .flatMap { QuickTerminalRegistry.shared.controller(for: $0) }?.isVisible ?? false
-                    return Self.makeScratchSurface(for: session, store: store,
-                                                   env: surfaceEnv(for: session, pane: .scratch),
-                                                   suppressAutoFocus: session.overlayActive || qtVisible,
-                                                   library: library)
-                },
-                quickTerminalEnv: { quickTerminalEnv(for: $0) },
-                actions: actions,
-                palette: palette,
-                sessionSwitcher: sessionSwitcher
-            )
-                .frame(minWidth: 640, minHeight: 400)
-                .task {
-                    appDelegate.library = library
-                    // give the action hub a window opener (the scene's `openWindow` is only reachable
-                    // here) so the cross-window reveal can reopen a banner-clicked closed window, and a
-                    // control-socket window.new/window.select can open one: raise it if it's already
-                    // on-screen, else claim its id + spawn a new window. Installed BEFORE the control
-                    // server starts so an early socket command never finds it nil (returns ok with no
-                    // window opened).
-                    actions.openWindow = { id in
-                        if WindowRegistry.shared.raise(id) { return }
-                        library.enqueueClaim(id)
-                        openWindow(id: Self.windowGroupID)
+            if Self.isHostedUnitTest {
+                Color.clear
+            } else {
+                ContentView(
+                    library: library,
+                    makeSurface: {
+                        Self.makeSurface(for: $0, store: $1,
+                                         env: surfaceEnv(for: $0, pane: .left), library: library)
+                    },
+                    makeSplitSurface: {
+                        Self.makeSplitSurface(for: $0, store: $1,
+                                              env: surfaceEnv(for: $0, pane: .right), library: library)
+                    },
+                    makeOverlaySurface: { Self.makeOverlaySurface(for: $0, store: $1, env: surfaceEnv(for: $0)) },
+                    makeScratchSurface: { session, store in
+                        // suppress the scratch's creation autoFocus when a full overlay OR this window's quick
+                        // terminal is already up — each renders above the scratch and owns focus.
+                        let qtVisible = library.windowID(forSession: session.id)
+                            .flatMap { QuickTerminalRegistry.shared.controller(for: $0) }?.isVisible ?? false
+                        return Self.makeScratchSurface(for: session, store: store,
+                                                       env: surfaceEnv(for: session, pane: .scratch),
+                                                       suppressAutoFocus: session.overlayActive || qtVisible,
+                                                       library: library)
+                    },
+                    quickTerminalEnv: { quickTerminalEnv(for: $0) },
+                    actions: actions,
+                    palette: palette,
+                    sessionSwitcher: sessionSwitcher
+                )
+                    .frame(minWidth: 640, minHeight: 400)
+                    .task {
+                        appDelegate.library = library
+                        // give the action hub a window opener (the scene's `openWindow` is only reachable
+                        // here) so the cross-window reveal can reopen a banner-clicked closed window, and a
+                        // control-socket window.new/window.select can open one: raise it if it's already
+                        // on-screen, else claim its id + spawn a new window. Installed BEFORE the control
+                        // server starts so an early socket command never finds it nil (returns ok with no
+                        // window opened).
+                        actions.openWindow = { id in
+                            if WindowRegistry.shared.raise(id) { return }
+                            library.enqueueClaim(id)
+                            openWindow(id: Self.windowGroupID)
+                        }
+                        // start the control channel (idempotent) and hand the delegate a
+                        // reference so it can stop + unlink the socket on terminate.
+                        appDelegate.controlServer = controlServer
+                        controlServer.start()
+                        // the quick terminal is per-window now: each WindowContentView owns its own
+                        // controller and binds its own cwdProvider to that window's active session.
+                        // install the Ctrl-Tab session-switcher key monitors (idempotent).
+                        sessionSwitcher.start()
+                        // install the Ctrl-1/Ctrl-2 direct pane-focus key monitor (idempotent).
+                        paneShortcuts.start()
+                        // install the undo-close shortcut (idempotent); it passes through text fields so
+                        // native edit undo still wins there.
+                        undoCloseShortcut.start()
+                        // install the custom-command key monitor (idempotent); rebuilds its matcher from
+                        // the keymap on `.agtermKeymapChanged`. Hand the delegate a reference so it can
+                        // remove the monitor on terminate.
+                        appDelegate.customCommandRunner = customCommandRunner
+                        appDelegate.settingsModel = settingsModel
+                        // hand the delegate the action hub and drain any folders an `open -a agterm /path`
+                        // queued before the window store resolved.
+                        appDelegate.actions = actions
+                        appDelegate.drainPendingOpenDirectories()
+                        customCommandRunner.start()
+                        // wire the keymap + runner into the action hub so the command palette can list the
+                        // custom commands and run them (both are built after `actions`, so they're set here
+                        // rather than in the init, mirroring the NotificationManager wiring below).
+                        actions.settingsModel = settingsModel
+                        // seed the auto-follow setting into every open window's store now that the model is
+                        // wired — deterministic regardless of the per-window resolveStore/onAppear ordering
+                        // (the resolveStore seed handles windows opened later). Idempotent.
+                        settingsModel.applyAutoFollowToAllWindows()
+                        actions.customCommandRunner = customCommandRunner
+                        // the action hub opens the .themes palette for the "Select Theme…" launcher + menu.
+                        actions.palette = palette
+                        // register the notification delegate + request authorization (idempotent), and
+                        // hand it the action hub + library so a banner click can navigate to the firing
+                        // pane and the capture side can stamp the firing window id into the identity.
+                        NotificationManager.shared.actions = actions
+                        NotificationManager.shared.library = library
+                        NotificationManager.shared.start()
+                        // drive the Dock icon's count badge (via UNUserNotifications) from the app-wide unseen
+                        // total (the same Session.unseenCount the sidebar pills track, summed across windows).
+                        DockBadgeController.shared.library = library
+                        DockBadgeController.shared.start()
+                        // surface keymap parse errors / conflicts loaded at SettingsModel init (too early to
+                        // post then — before notification registration above). Only on the launch window:
+                        // `hasReopened` is still false here for the first window's `.task` (reopenWindows()
+                        // below flips it), so subsequent windows don't repost the same banner.
+                        if !library.hasReopened, !settingsModel.keymapDiagnostics.isEmpty {
+                            NotificationManager.shared.notifyKeymapDiagnostics(count: settingsModel.keymapDiagnostics.count)
+                        }
+                        // same for ghostty config diagnostics: GhosttyApp.loadConfig records them at boot
+                        // (applicationDidFinishLaunching, before notification registration), so surface them
+                        // here on the launch window only, the same `hasReopened` gate as the keymap banner.
+                        if !library.hasReopened, GhosttyApp.shared.lastConfigDiagnosticsCount > 0 {
+                            NotificationManager.shared.notifyConfigDiagnostics(count: GhosttyApp.shared.lastConfigDiagnosticsCount)
+                        }
+                        // reopen every window that was open at quit. SwiftUI auto-opened one window
+                        // (this one) at launch, which claimed the launch id; open one more per remaining
+                        // open id. runs once (the .task fires per window) via the library latch.
+                        reopenWindows()
+                        appDelegate.scheduleRestoredWindowReconciliation(reason: "scene-task")
+                        // start following the macOS appearance last: `[.initial]` seeds the launch side once
+                        // the eager-deck surfaces exist (idempotent, so per-window `.task` re-entry is safe).
+                        appearanceObserver.start()
+                        // Consumers read current accessibility values at first render; this handles live flips.
+                        accessibilityObserver.start()
                     }
-                    // start the control channel (idempotent) and hand the delegate a
-                    // reference so it can stop + unlink the socket on terminate.
-                    appDelegate.controlServer = controlServer
-                    controlServer.start()
-                    // the quick terminal is per-window now: each WindowContentView owns its own
-                    // controller and binds its own cwdProvider to that window's active session.
-                    // install the Ctrl-Tab session-switcher key monitors (idempotent).
-                    sessionSwitcher.start()
-                    // install the Ctrl-1/Ctrl-2 direct pane-focus key monitor (idempotent).
-                    paneShortcuts.start()
-                    // install the undo-close shortcut (idempotent); it passes through text fields so
-                    // native edit undo still wins there.
-                    undoCloseShortcut.start()
-                    // install the custom-command key monitor (idempotent); rebuilds its matcher from
-                    // the keymap on `.agtermKeymapChanged`. Hand the delegate a reference so it can
-                    // remove the monitor on terminate.
-                    appDelegate.customCommandRunner = customCommandRunner
-                    appDelegate.settingsModel = settingsModel
-                    // hand the delegate the action hub and drain any folders an `open -a agterm /path`
-                    // queued before the window store resolved.
-                    appDelegate.actions = actions
-                    appDelegate.drainPendingOpenDirectories()
-                    customCommandRunner.start()
-                    // wire the keymap + runner into the action hub so the command palette can list the
-                    // custom commands and run them (both are built after `actions`, so they're set here
-                    // rather than in the init, mirroring the NotificationManager wiring below).
-                    actions.settingsModel = settingsModel
-                    // seed the auto-follow setting into every open window's store now that the model is
-                    // wired — deterministic regardless of the per-window resolveStore/onAppear ordering
-                    // (the resolveStore seed handles windows opened later). Idempotent.
-                    settingsModel.applyAutoFollowToAllWindows()
-                    actions.customCommandRunner = customCommandRunner
-                    // the action hub opens the .themes palette for the "Select Theme…" launcher + menu.
-                    actions.palette = palette
-                    // register the notification delegate + request authorization (idempotent), and
-                    // hand it the action hub + library so a banner click can navigate to the firing
-                    // pane and the capture side can stamp the firing window id into the identity.
-                    NotificationManager.shared.actions = actions
-                    NotificationManager.shared.library = library
-                    NotificationManager.shared.start()
-                    // drive the Dock icon's count badge (via UNUserNotifications) from the app-wide unseen
-                    // total (the same Session.unseenCount the sidebar pills track, summed across windows).
-                    DockBadgeController.shared.library = library
-                    DockBadgeController.shared.start()
-                    // surface keymap parse errors / conflicts loaded at SettingsModel init (too early to
-                    // post then — before notification registration above). Only on the launch window:
-                    // `hasReopened` is still false here for the first window's `.task` (reopenWindows()
-                    // below flips it), so subsequent windows don't repost the same banner.
-                    if !library.hasReopened, !settingsModel.keymapDiagnostics.isEmpty {
-                        NotificationManager.shared.notifyKeymapDiagnostics(count: settingsModel.keymapDiagnostics.count)
-                    }
-                    // same for ghostty config diagnostics: GhosttyApp.loadConfig records them at boot
-                    // (applicationDidFinishLaunching, before notification registration), so surface them
-                    // here on the launch window only, the same `hasReopened` gate as the keymap banner.
-                    if !library.hasReopened, GhosttyApp.shared.lastConfigDiagnosticsCount > 0 {
-                        NotificationManager.shared.notifyConfigDiagnostics(count: GhosttyApp.shared.lastConfigDiagnosticsCount)
-                    }
-                    // reopen every window that was open at quit. SwiftUI auto-opened one window
-                    // (this one) at launch, which claimed the launch id; open one more per remaining
-                    // open id. runs once (the .task fires per window) via the library latch.
-                    reopenWindows()
-                    appDelegate.scheduleRestoredWindowReconciliation(reason: "scene-task")
-                    // start following the macOS appearance last: `[.initial]` seeds the launch side once
-                    // the eager-deck surfaces exist (idempotent, so per-window `.task` re-entry is safe).
-                    appearanceObserver.start()
-                    // Consumers read current accessibility values at first render; this handles live flips.
-                    accessibilityObserver.start()
-                }
+            }
         }
         // chromeless: no system title bar (the traffic lights float over our custom titlebar row in
         // ContentView), so there's no empty title-bar strip above our header.

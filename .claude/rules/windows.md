@@ -5,11 +5,13 @@ paths:
   - "agtermCore/Sources/agtermCore/QuitPrompt.swift"
   - "agterm/WindowRegistry.swift"
   - "agterm/AppDelegate.swift"
+  - "agterm/AppDelegate+DockMenu.swift"
   - "agterm/Views/WindowAccessor.swift"
   - "agterm/Views/WindowControlArea.swift"
   - "agterm/Views/QuickTerminal.swift"
   - "agtermUITests/MultiWindowUITests.swift"
   - "agtermUITests/QuickTerminalUITests.swift"
+  - "agtermTests/DockMenuTests.swift"
 ---
 
 ## Windows (multi-window)
@@ -21,6 +23,19 @@ and the set open at quit reopens on next launch.
 Strict 1:1 — a bundle shows in exactly one on-screen window, never two windows for one bundle,
 never two bundles in one window.
 **No** shared/cross-window live state and **no** cross-window session drag (out of scope by the 1:1 model).
+
+- **Dock-menu window scope.**
+  `AppDelegate.applicationDockMenu` snapshots the last-active `AppStore` when AppKit opens the Dock
+  menu. Dynamic session targets are retained by the delegate because `NSMenuItem.target` is non-owning,
+  and every top-level and session closure keeps the captured store/window scope even if window B becomes
+  frontmost before a window A item is chosen. Invocation rechecks A's per-window modal/controller state,
+  raises A, and synchronously writes
+  `library.frontmostWindowID` + posts `.agtermWindowFrontmostChanged` before shared actions resolve their
+  store. New Session, Quick Terminal, Dashboard, selection, and pane-aware reveal therefore all target A.
+  Do not defer that publication to `WindowAccessor`'s key-window notification: all action work must target
+  A during the same Dock invocation. Recheck the captured window, not invocation-time frontmost B:
+  modal state is per-window, and a stale item must become inert if A enters dashboard/terminal zoom while
+  the menu is open.
 
 - **Model (`agtermCore`, host-free).**
   `WindowLibrary.swift` holds `WindowInfo {id: UUID, name: String}` (named `WindowInfo`,
@@ -296,4 +311,3 @@ never two bundles in one window.
   socket ALREADY exposes (`session.new --cwd <path>`, frontmost-defaulted), so it needs no new `Command`
   case / `agtermctl` subcommand / `commands.html` entry — call it out as the exemption it is, like
   `reveal`.
-
