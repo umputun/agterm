@@ -78,6 +78,11 @@ final class GhosttyApp {
     /// `SettingsModel` writes it. The re-render rides the `.agtermAppearanceChanged` notification, like
     /// `toolbarMode`. Empty by default (everything shown).
     private(set) var hiddenInterfaceElements: Set<InterfaceElement> = []
+    /// Whether only the frontmost window shows its sidebar, collapsing every other open window's
+    /// (`AppSettings.autoHideSidebarInactiveWindows`). NOT ghostty-resolved: `WindowAccessor.reportFrontmost`
+    /// reads it on every frontmost change to gate the `WindowLibrary` driver, `SettingsModel` writes it.
+    /// Off by default.
+    private(set) var autoHideSidebarInactiveWindows: Bool = false
     /// Program basenames NOT to re-run on restore — the parsed user-editable `restore-denylist.conf`
     /// (seeded with the terminal multiplexers). The surface factories read it via
     /// `CommandRestore.shouldRestore`; `SettingsModel` parses the file and writes it. Read at launch only.
@@ -193,6 +198,12 @@ final class GhosttyApp {
     /// and on every change; the chrome re-render rides the `.agtermAppearanceChanged` notification.
     func setHiddenInterfaceElements(_ elements: Set<InterfaceElement>) {
         hiddenInterfaceElements = elements
+    }
+
+    /// Set whether only the frontmost window shows its sidebar. Called by `SettingsModel` at launch and on
+    /// every change; read by `WindowAccessor.reportFrontmost` to gate the auto-hide driver.
+    func setAutoHideSidebarInactiveWindows(_ enabled: Bool) {
+        autoHideSidebarInactiveWindows = enabled
     }
 
     /// Set the parsed restore denylist (program basenames not to re-run). Called by `SettingsModel` at

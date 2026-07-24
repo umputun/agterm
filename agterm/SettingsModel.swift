@@ -82,6 +82,7 @@ final class SettingsModel {
         applyRestoreRunningCommand()
         applyAttentionButtonEnabled()
         applyInterfaceElements()
+        applyAutoHideSidebarInactiveWindows()
         // create the commented starter keymap on first launch, then load + parse it.
         ensureStarterKeymap()
         loadKeymap()
@@ -240,6 +241,16 @@ final class SettingsModel {
     func setRestoreRunningCommand(_ value: Bool?) { settings.restoreRunningCommand = value; persistAndApply() }
     // chrome flag, not a ghostty key: persistAndApply() no-ops the config but rides .agtermAppearanceChanged.
     func setAttentionButtonEnabled(_ value: Bool?) { settings.attentionButtonEnabled = value; persistAndApply() }
+
+    /// Persist whether only the frontmost window shows its sidebar. A behavior flag, not a ghostty key, so
+    /// `persistAndApply()` no-ops the config; it pushes the `GhosttyApp` mirror the frontmost-change driver
+    /// reads. Turning it ON collapses every inactive window's sidebar immediately, rather than waiting for
+    /// the next window-focus change.
+    func setAutoHideSidebarInactiveWindows(_ value: Bool?) {
+        settings.autoHideSidebarInactiveWindows = value
+        persistAndApply()
+        if value == true { library.applyInactiveWindowSidebarHiding() }
+    }
 
     /// Show or hide a single title-bar / sidebar-footer chrome element, then persist. Toggling `visible`
     /// off adds the element to `hiddenInterfaceElements`, on removes it; an empty result maps back to nil so
@@ -663,6 +674,7 @@ final class SettingsModel {
         applyRestoreRunningCommand()
         applyAttentionButtonEnabled()
         applyInterfaceElements()
+        applyAutoHideSidebarInactiveWindows()
         // refresh the app chrome (title bar + sidebar + quick terminal) with the new terminal color,
         // window translucency, and toolbar style immediately, rather than only when the window next
         // re-keys. The title-bar re-sync and the cwd-subtitle drop both ride this notification.
@@ -705,6 +717,10 @@ final class SettingsModel {
 
     private func applyInterfaceElements() {
         GhosttyApp.shared.setHiddenInterfaceElements(settings.resolvedHiddenInterfaceElements)
+    }
+
+    private func applyAutoHideSidebarInactiveWindows() {
+        GhosttyApp.shared.setAutoHideSidebarInactiveWindows(settings.autoHideSidebarInactiveWindows ?? false)
     }
 
     /// Push the current auto-follow configuration into a single window's store. Called when a window's

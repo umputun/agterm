@@ -162,6 +162,19 @@ struct AppSettingsTests {
         #expect(AppSettings(restoreRunningCommand: true).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
+    @Test func autoHideSidebarInactiveWindowsRoundTripsAndIsNotAConfigLine() throws {
+        #expect(AppSettings().autoHideSidebarInactiveWindows == nil)
+        let decoded = try JSONDecoder().decode(
+            AppSettings.self, from: JSONEncoder().encode(AppSettings(autoHideSidebarInactiveWindows: true)))
+        #expect(decoded.autoHideSidebarInactiveWindows == true)
+        // absent in a legacy file decodes to nil (off).
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
+        #expect(legacy.autoHideSidebarInactiveWindows == nil)
+        // a behavior flag, never a ghostty config key — only the always-on defaults (scroll + right-click) are emitted.
+        #expect(AppSettings(autoHideSidebarInactiveWindows: true).ghosttyConfigLines()
+            == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
+
     @Test func confirmCloseSessionRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(confirmCloseSession: true)))
         #expect(decoded.confirmCloseSession == true)

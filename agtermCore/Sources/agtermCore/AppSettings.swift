@@ -309,6 +309,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// failing the whole decode — the AppSettings forward-compat rule. A GUI-only chrome value applied at
     /// the AppKit/SwiftUI level, NOT a ghostty key — it never appears in `ghosttyConfigLines()`.
     public var hiddenInterfaceElements: [String]?
+    /// Whether, with more than one window open, only the frontmost window shows its sidebar and every other
+    /// window collapses its own. nil means the default (off). While on, sidebar visibility is driven by
+    /// window focus, so a manual per-window hide is transient (the frontmost window re-shows its sidebar on
+    /// refocus). An app-level behavior flag, NOT a ghostty key — it never appears in `ghosttyConfigLines()`.
+    public var autoHideSidebarInactiveWindows: Bool?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 darkTheme: String? = nil, followSystemAppearance: Bool? = nil,
@@ -325,7 +330,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 confirmCloseSession: Bool? = nil, closeGraceUndoEnabled: Bool? = nil,
                 autoFollowAttention: String? = nil,
                 autoFollowStayOnActive: Bool? = nil, sidebarFontSize: Double? = nil,
-                hiddenInterfaceElements: [String]? = nil) {
+                hiddenInterfaceElements: [String]? = nil,
+                autoHideSidebarInactiveWindows: Bool? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -359,6 +365,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.autoFollowStayOnActive = autoFollowStayOnActive
         self.sidebarFontSize = sidebarFontSize
         self.hiddenInterfaceElements = hiddenInterfaceElements
+        self.autoHideSidebarInactiveWindows = autoHideSidebarInactiveWindows
     }
 
     /// The resolved set of hidden chrome elements: the known raw names from `hiddenInterfaceElements`,

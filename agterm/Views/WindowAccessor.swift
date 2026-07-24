@@ -219,6 +219,12 @@ struct WindowAccessor: NSViewRepresentable {
             guard library.frontmostWindowID != id else { return }
             library.frontmostWindowID = id
             library.saveIndex()
+            // auto-hide-inactive-sidebars: show this now-frontmost window's sidebar and collapse every
+            // other window's. Gated on the setting mirror; only fires on a real frontmost change (the guard
+            // above), never on a resign, so switching to another app leaves every sidebar untouched.
+            if GhosttyApp.shared.autoHideSidebarInactiveWindows {
+                library.applyInactiveWindowSidebarHiding()
+            }
             // the active-window change is async; let the control server refresh its cached window list
             // so a `window.list` poll sees the new `active` flag without waiting for the next command.
             NotificationCenter.default.post(name: .agtermWindowFrontmostChanged, object: nil)

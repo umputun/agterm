@@ -298,6 +298,42 @@ final class WindowLibraryTests {
         #expect(library.activeWindowID == info.id)
     }
 
+    @Test func applyInactiveWindowSidebarHidingShowsOnlyFrontmost() {
+        let library = WindowLibrary(directory: directory)
+        let first = library.windows[0].id
+        let second = library.newWindow(name: "work").id
+        let third = library.newWindow(name: "personal").id // now frontmost
+
+        library.applyInactiveWindowSidebarHiding()
+        #expect(library.store(for: first)?.sidebarVisible == false)
+        #expect(library.store(for: second)?.sidebarVisible == false)
+        #expect(library.store(for: third)?.sidebarVisible == true)
+
+        // re-focus the first window and re-apply — only the new frontmost keeps its sidebar.
+        library.frontmostWindowID = first
+        library.applyInactiveWindowSidebarHiding()
+        #expect(library.store(for: first)?.sidebarVisible == true)
+        #expect(library.store(for: second)?.sidebarVisible == false)
+        #expect(library.store(for: third)?.sidebarVisible == false)
+    }
+
+    @Test func applyInactiveWindowSidebarHidingSingleWindowKeepsSidebar() {
+        let library = WindowLibrary(directory: directory)
+        let only = library.windows[0].id
+        library.applyInactiveWindowSidebarHiding()
+        #expect(library.store(for: only)?.sidebarVisible == true)
+    }
+
+    @Test func applyInactiveWindowSidebarHidingReshowsManuallyHiddenFrontmost() {
+        let library = WindowLibrary(directory: directory)
+        _ = library.newWindow(name: "work") // second window, now frontmost
+        let front = library.activeWindowID
+        library.store(for: front)?.setSidebarVisible(false) // user hid the active window's sidebar
+        library.applyInactiveWindowSidebarHiding()
+        // absolute rule: the frontmost window always shows its sidebar, overriding the manual hide.
+        #expect(library.store(for: front)?.sidebarVisible == true)
+    }
+
     @Test func controlWindowNodesProjectListMetadata() {
         let library = WindowLibrary(directory: directory)
         let first = library.windows[0]

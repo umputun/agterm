@@ -822,7 +822,14 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// `rightMouseDown`/`otherMouseDown`, which forward to libghostty, and with the default
     /// `right-click-action = paste` that would paste the clipboard into a window you only meant to raise —
     /// so right/middle first clicks just raise the window.
-    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { event?.type == .leftMouseDown }
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
+        // with auto-hide-inactive-sidebars on, activating an inactive window expands its (currently hidden)
+        // sidebar and resizes THIS surface; if the activating click also pressed the terminal button, that
+        // mid-gesture resize would drag the still-held press into a phantom selection. Let the click only
+        // raise the window in that mode — a follow-up click selects normally once the window is key.
+        if GhosttyApp.shared.autoHideSidebarInactiveWindows { return false }
+        return event?.type == .leftMouseDown
+    }
 
     override func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()

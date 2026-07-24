@@ -46,7 +46,9 @@ paths:
   [nil/false = off] the "don't leave a running session" opt-in; NOT ghostty keys, save-only + fanned out into
   every open window's `AppStore` via `SettingsModel.applyAutoFollow` → `AppStore.setAutoFollow`)
   + `hiddenInterfaceElements` (raw names of title-bar / sidebar-footer chrome elements the user hid,
-  nil/empty = all shown; the `InterfaceElement` set; NOT a ghostty key — see its own bullet).
+  nil/empty = all shown; the `InterfaceElement` set; NOT a ghostty key — see its own bullet)
+  + `autoHideSidebarInactiveWindows` (only the frontmost window shows its sidebar, every other collapses;
+  nil = off; NOT a ghostty key — see its own bullet).
   `theme`/`darkTheme`/`followSystemAppearance` are the macOS light/dark appearance-sync state: `theme` is the single/light-slot theme, `darkTheme` the dark slot, `followSystemAppearance` (nil = off) the toggle; when following, `ghosttyConfigLines()` emits ghostty's raw dual `theme = light:NAME,dark:NAME` conditional and libghostty resolves the side at runtime — `ghosttyConfigLines()` takes NO `isDark` arg (see the Theme picker rule; `ThemeResolution` is gone, the dual value is reduced to the active side for the sidebar selection colors by `ThemeName.resolved(from:isDark:)`).
   The three `*StatusColorHex` (`#RRGGBB`, nil = active `#DBD9E6` muted lavender-grey + system amber/green)
   color the sidebar agent-status glyph: `SettingsModel` passes the hex to `GhosttyApp.setAgentStatusColors`
@@ -167,7 +169,8 @@ paths:
   **Interface** (per-element chrome visibility, grouped into a **Title Bar** section and a **Sidebar**
   section — one default-on Toggle per `InterfaceElement`, laid out TWO per row (`twoColumnSection`) so the
   tab keeps fitting 540×590 without scrolling as the element set grows; see the `hiddenInterfaceElements`
-  bullet).
+  bullet — plus a **Multiple Windows** section with the single `autoHideSidebarInactiveWindows` toggle,
+  which is a plain default-OFF behavior Toggle, NOT an `InterfaceElement`).
   **Notifications** (a **Notifications** section with the banner / badge / attention-indicator toggles plus the Dock-bounce mode and notification-sound pickers).
   **Agent Status** (a **Colors** section with the three glyph color pickers, a **Sound** section with
   the blocked-sound picker, an **Auto-follow** section with the idle-timeout Picker
@@ -472,6 +475,33 @@ paths:
   round-trip/tolerant-decode tests already iterate `allCases`.
   Do this only AFTER the user agrees the element should be user-toggleable — some chrome is intentionally
   always-on — per the propose-then-ask working-norm in the root `CLAUDE.md` (never automatic).
+- **`autoHideSidebarInactiveWindows` (only the frontmost window shows its sidebar, opt-in, Interface tab).**
+  `AppSettings.autoHideSidebarInactiveWindows: Bool?` (nil = OFF, the default-off precedent like
+  `restoreRunningCommand`/`attentionButtonEnabled`) makes the frontmost open window show its sidebar and
+  every OTHER open window collapse its own.
+  NOT a ghostty key (`writeGhosttyConfig` no-ops, no surface reload).
+  It is the non-observable chrome-mirror pattern (like `attentionButtonEnabled`): `SettingsModel.setAutoHideSidebarInactiveWindows`
+  saves + `applyAutoHideSidebarInactiveWindows` pushes `settings.autoHideSidebarInactiveWindows ?? false`
+  into the `GhosttyApp.autoHideSidebarInactiveWindows` flag.
+  The DRIVER is host-free: `WindowLibrary.applyInactiveWindowSidebarHiding()` sets the active window's
+  `sidebarVisible = true` and every other open store's to `false` (`setSidebarVisible` no-ops an already-correct
+  window, so only the windows that actually change write/persist/notify).
+  `WindowAccessor.reportFrontmost` reads the mirror and invokes the driver on every REAL frontmost change
+  (the `frontmostWindowID != id` guard) — so it fires only when an agterm window BECOMES frontmost, NEVER on
+  a resign, which is what leaves every sidebar untouched when you switch to another app.
+  `setAutoHideSidebarInactiveWindows` also invokes the driver ONCE when the toggle flips ON, so it takes
+  effect immediately instead of waiting for the next window switch.
+  ABSOLUTE rule, no per-window intent memory: sidebar visibility is entirely focus-driven while on, so a
+  manual ⌃⌘S hide on the frontmost window is transient — it re-shows on the next refocus (the user-chosen
+  semantics; turning the feature OFF leaves background windows collapsed until manually reopened).
+  Because the driver writes the persisted per-window `sidebarVisible`, a GUI-only auto-hide is exactly the
+  `.agtermSidebarVisibilityChanged` case `ControlServer` already observes to refresh the `window.list` cache.
+  GUI-only and keep-in-sync EXEMPT (only `theme.set`/`config.reload` touch settings over the socket; the
+  sidebar capability itself already has full control coverage via the `sidebar` command + the `sidebarVisible`
+  read-back on `tree`/`window.list`).
+  Default-off + round-trip covered host-free in `AppSettingsTests`; the driver in `WindowLibraryTests`
+  (`applyInactiveWindowSidebarHiding*`); the mirror wiring is app-target (build/manually verified, no app
+  unit-test host).
 - **A Settings toggle's DESCRIPTION stays single-line short-form** — a terse hint, not a manual.
   No detailed multi-line explanation of what the toggle does and no cross-refs to other toggles;
   keep the minimal style (see also the flag-description convention).

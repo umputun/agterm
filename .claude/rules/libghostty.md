@@ -422,6 +422,13 @@ paths:
   `rightMouseDown`/`otherMouseDown`, which forward to libghostty, and with the default
   `right-click-action = paste` (`AppSettings.rightClickPaste`, nil = paste) that would paste the clipboard
   into a window you only meant to raise.
+  **EXCEPT under `autoHideSidebarInactiveWindows`: `acceptsFirstMouse` returns FALSE there.**
+  With that setting on, activating an inactive window expands its (hidden) sidebar and RESIZES the surface;
+  if the activating click also pressed the terminal button, the still-held press + the mid-gesture resize
+  land the release on a different cell → a phantom drag-selection.
+  Suppressing first-mouse in that mode makes the activating click ONLY raise the window (the sidebar still
+  expands via `didBecomeKey` → `reportFrontmost`); a follow-up click selects normally once the window is key.
+  The lost first-click pane-select is an accepted trade for that mode (verified by eye).
   Separately, `mouse_scroll` reports at libghostty's LAST-KNOWN cell, and a no-mouse-move reactivation
   (cmd-tab/keyboard, or scrolling to reactivate with the pointer already inside) fires no `mouseDown`/`mouseEntered`,
   so the position is stale or `-1,-1` (from `mouseExited`).
