@@ -549,9 +549,11 @@ private struct NotificationsSettingsView: View {
 private struct AgentStatusSettingsView: View {
     /// Gap between a glyph row's color well and its shape picker.
     private static let controlSpacing: CGFloat = 8
-    /// Fixed width of every shape picker, so the three rows' controls line up in one column whatever
-    /// silhouette each row currently shows.
-    private static let shapePickerWidth: CGFloat = 140
+    /// Column width every shape picker reserves. A menu button sizes to the glyph it currently shows and
+    /// the six silhouettes differ by a few points, so without a fixed column the color wells would jog
+    /// between rows. Snug enough that the reserved column reads as spacing rather than a hole, with room
+    /// above the widest silhouette's button.
+    private static let shapePickerWidth: CGFloat = 80
 
     let model: SettingsModel
 
@@ -600,9 +602,11 @@ private struct AgentStatusSettingsView: View {
 
     /// One state's glyph row: the state name labels the row, and its color well and shape picker sit
     /// together on the trailing side. Both controls hide their own labels so the state name is the row's
-    /// only visible label, and the shape picker takes a fixed width so the three rows line up. Both
-    /// bindings and both accessibility identifiers are derived from the state argument, so a row can
-    /// never label one status while driving another's setting.
+    /// only visible label. The shape picker takes a fixed-width column so the three rows line up, and
+    /// draws its button at that column's TRAILING edge so the row ends flush with the tab's right margin
+    /// like every other section's control (the column's default center alignment left it floating
+    /// inboard). Both bindings and both accessibility identifiers are derived from the state argument, so
+    /// a row can never label one status while driving another's setting.
     private func glyphRow(_ status: AgentStatus) -> some View {
         let color = statusColor(for: status)
         let shape = statusShape(for: status)
@@ -613,7 +617,7 @@ private struct AgentStatusSettingsView: View {
                     .accessibilityIdentifier("settings-status-\(status.rawValue)")
                 Picker("Shape", selection: shape) { shapeOptions(tint: NSColor(color.wrappedValue)) }
                     .labelsHidden()
-                    .frame(width: Self.shapePickerWidth)
+                    .frame(width: Self.shapePickerWidth, alignment: .trailing)
                     .accessibilityIdentifier("settings-status-shape-\(status.rawValue)")
                     .accessibilityValue(shape.wrappedValue.displayName)
             }

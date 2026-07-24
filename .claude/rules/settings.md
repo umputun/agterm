@@ -190,8 +190,19 @@ paths:
   **Agent Status** (a **Colors and Shapes** section holding ONE ROW PER STATUS — a `LabeledContent`
   labelled Active / Blocked / Completed whose trailing side carries that glyph's `ColorPicker`
   (`settings-status-active`/`-blocked`/`-completed`) and its silhouette `Picker`
-  (`settings-status-shape-active`/`-blocked`/`-completed`) side by side, both `.labelsHidden()` with the
-  shape picker at a fixed width so the rows align; the shape picker offers exactly `StatusShape.allCases`
+  (`settings-status-shape-active`/`-blocked`/`-completed`) side by side, both `.labelsHidden()`;
+  the shape picker takes a fixed-width column (`shapePickerWidth` 80) with `alignment: .trailing`,
+  which is what makes the row FLUSH RIGHT — the reserved column keeps the three color wells in one
+  column (a menu button sizes to the glyph it currently shows, so the six silhouettes span 64.5–68pt
+  and an unreserved column would jog the wells between rows), while the trailing alignment pins the
+  button to that column's right edge so the row ends where every sibling section's control ends.
+  The column's default CENTER alignment is what left the cluster floating ~38pt inboard of the Sound
+  and Auto-follow pickers (a ragged right edge), so keep any width change paired with the trailing
+  alignment, and keep the column wider than the widest silhouette's button or the wells start jogging.
+  `SettingsUITests.testAgentStatusShapePickerRowLayoutAndOptions` asserts exactly that — every shape
+  picker's `maxX` equals the Sound picker's and the wells share a leading edge, measured twice (the
+  default shapes and the Blocked row switched to the widest silhouette).
+  The shape picker offers exactly `StatusShape.allCases`
   — no "Default" entry, because nil and `circle` render the SAME plain circle, so `circle` maps back to
   nil (the sound/toolbar-mode nil-mapping convention) and `settings.json` stays minimal.
   Each option is the SYMBOL ALONE, drawn at the sidebar glyph's own `StatusIconView.glyphPointSize` (a

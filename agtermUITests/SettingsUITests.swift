@@ -111,17 +111,22 @@ final class SettingsUITests: XCTestCase {
     func testAgentStatusShapePickerRowLayoutAndOptions() throws {
         let picker = settingsControl(tab: "Agent Status", control: "settings-status-shape-blocked")
 
-        // the color well and the shape picker share one row per status: the well's vertical center falls
-        // inside the picker's own span. A same-row check, deliberately not a sub-pixel coordinate — the
-        // exact offsets move with any Form-style, font or OS-metric change.
-        let colorWell = app.descendants(matching: .any).matching(identifier: "settings-status-blocked").firstMatch
-        XCTAssertTrue(colorWell.waitForHittable(timeout: 5), "the blocked color well should be on the same tab")
-        XCTAssertTrue(picker.frame.minY <= colorWell.frame.midY && colorWell.frame.midY <= picker.frame.maxY,
-                      "the color well and the shape picker should sit on the same row")
-        // the shape pickers stack in one column, so the Active row's picker overlaps this one horizontally.
-        let activeShape = settingsControl(tab: "Agent Status", control: "settings-status-shape-active")
-        XCTAssertTrue(activeShape.frame.minX < picker.frame.maxX && picker.frame.minX < activeShape.frame.maxX,
-                      "the shape pickers should line up in one column")
+        // the Sound section's picker is the flush-right reference: every sibling section's trailing
+        // control ends at the tab's right margin, so a glyph row that floats inboard is a ragged edge.
+        let soundPicker = settingsControl(tab: "Agent Status", control: "settings-status-blocked-sound")
+        assertGlyphRowsLineUp(against: soundPicker, context: "default shapes")
+
+        // the same geometry with the rows showing DIFFERENT silhouettes: a menu button sizes to the glyph
+        // it shows and the six shapes differ by a few points, so the widest one is what a reserved column
+        // that is too narrow (or aligned anywhere but trailing) knocks out of line.
+        picker.click()
+        let capsuleOption = app.menuItems["Capsule"]
+        XCTAssertTrue(capsuleOption.waitForExistence(timeout: 5), "the shape picker should offer 'Capsule'")
+        capsuleOption.click()
+        XCTAssertTrue(poll { self.settingsValue("blockedStatusShape") == "capsule" },
+                      "selecting 'Capsule' should reach the Blocked row before its geometry is measured")
+        assertGlyphRowsLineUp(against: soundPicker, context: "Blocked row on the widest silhouette")
+
         // everything below still fits the fixed-size window, so the tab needs no scrolling.
         XCTAssertTrue(app.buttons["settings-status-reset"].firstMatch.waitForHittable(timeout: 5),
                       "the Reset button should stay reachable without scrolling")
@@ -136,7 +141,7 @@ final class SettingsUITests: XCTestCase {
         }
         XCTAssertEqual(picker.menuItems.count, 6, "the six shapes should be the whole option list")
         XCTAssertFalse(app.menuItems["Default"].exists, "the shape picker should no longer offer a 'Default' entry")
-        app.typeKey(.escape, modifierFlags: []) // leave the popup closed, nothing here picks a shape
+        app.typeKey(.escape, modifierFlags: []) // leave the popup closed, the option list picks nothing
     }
 
     func testAgentStatusShapePickerPersists() throws {
@@ -294,6 +299,34 @@ final class SettingsUITests: XCTestCase {
         }
         XCTFail("Settings '\(tab)' control '\(control)' never became hittable", file: file, line: line)
         return target
+    }
+
+    /// Asserts the three Agent Status glyph rows are laid out as one block: each row's color well and
+    /// shape picker share a row, every shape picker ends flush with `reference` (a sibling section's
+    /// trailing control, so the tab has no ragged right edge and the pickers form one column), and the
+    /// color wells share a leading edge. Every check is control-vs-control, never an absolute coordinate —
+    /// the offsets themselves move with any Form-style, font or OS-metric change, these relationships
+    /// must not. `context` names the state being measured so a failure says which one broke.
+    private func assertGlyphRowsLineUp(against reference: XCUIElement, context: String,
+                                       file: StaticString = #filePath, line: UInt = #line) {
+        var wellLeadingEdges: [CGFloat] = []
+        for status in ["active", "blocked", "completed"] {
+            let well = app.descendants(matching: .any).matching(identifier: "settings-status-\(status)").firstMatch
+            let shape = app.descendants(matching: .any).matching(identifier: "settings-status-shape-\(status)").firstMatch
+            XCTAssertTrue(well.waitForHittable(timeout: 5), "the \(status) color well should be on this tab (\(context))",
+                          file: file, line: line)
+            XCTAssertTrue(shape.frame.minY <= well.frame.midY && well.frame.midY <= shape.frame.maxY,
+                          "the \(status) color well and shape picker should sit on the same row (\(context))",
+                          file: file, line: line)
+            XCTAssertEqual(shape.frame.maxX, reference.frame.maxX, accuracy: 1,
+                           "the \(status) shape picker should end flush with the reference control (\(context))",
+                           file: file, line: line)
+            wellLeadingEdges.append(well.frame.minX)
+        }
+        for edge in wellLeadingEdges.dropFirst() {
+            XCTAssertEqual(edge, wellLeadingEdges[0], accuracy: 1,
+                           "the color wells should stack in one column (\(context))", file: file, line: line)
+        }
     }
 
     private func poll(_ condition: () -> Bool, timeout: TimeInterval = 5) -> Bool {
