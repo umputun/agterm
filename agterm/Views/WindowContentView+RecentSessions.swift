@@ -82,6 +82,7 @@ extension WindowContentView {
                 subtitle: "\(store.workspace(forSession: id)?.name ?? "") · \(session.subtitleDetail)",
                 status: nil,
                 statusColorHex: nil,
+                statusShape: nil,
                 foreground: chromeText,
                 hoverColor: recentSelectionColor,
                 accessibilityID: "recent-session-row"
@@ -157,6 +158,7 @@ extension WindowContentView {
                     subtitle: "\(store.workspace(forSession: session.id)?.name ?? "") · \(session.subtitleDetail)",
                     status: session.agentIndicator.status,
                     statusColorHex: session.agentIndicator.color,
+                    statusShape: session.agentIndicator.shape,
                     foreground: chromeText,
                     hoverColor: recentSelectionColor,
                     accessibilityID: "attention-session-row"
@@ -181,7 +183,8 @@ extension WindowContentView {
 
 /// One clickable session row for the title-bar popovers (recent-sessions and attention) — the shared two-line
 /// `SessionSwitcherRow` tinted with the terminal theme (`foreground`), with an optional leading status glyph
-/// (`status`, set only by the attention popover), a pointer-hover highlight (`hoverColor`) and a full-row hit
+/// (`status` plus its per-call `statusColorHex`/`statusShape` overrides, set only by the attention popover so
+/// the row matches the sidebar glyph), a pointer-hover highlight (`hoverColor`) and a full-row hit
 /// area (`.contentShape`), so the WHOLE row selects on click, not just the text (the command-palette-row
 /// feel). Kept a `Button` so it reads as an actionable control to VoiceOver; `accessibilityID` distinguishes
 /// the two popovers' rows for the tests.
@@ -190,6 +193,7 @@ private struct SessionPopoverRow: View {
     let subtitle: String
     let status: AgentStatus?
     let statusColorHex: String?
+    let statusShape: StatusShape?
     let foreground: Color
     let hoverColor: Color
     let accessibilityID: String
@@ -199,7 +203,7 @@ private struct SessionPopoverRow: View {
     var body: some View {
         Button(action: onSelect) {
             SessionSwitcherRow(title: title, subtitle: subtitle, foreground: foreground,
-                               status: status, statusColorHex: statusColorHex)
+                               status: status, statusColorHex: statusColorHex, statusShape: statusShape)
                 .background(hovering ? hoverColor : Color.clear)
                 .clipShape(RoundedRectangle(cornerRadius: 6))
                 .contentShape(Rectangle())

@@ -176,13 +176,15 @@ struct SessionSwitcherRow: View {
     /// color themes the title with it and the subtitle at 0.6 opacity (the recent-sessions popover's look).
     var foreground: Color?
     /// Optional leading agent-status glyph — the attention popover sets it; the Ctrl-Tab overlay and the
-    /// recent-sessions popover leave it nil. `statusColorHex` is the per-call `session.status --color` tint.
+    /// recent-sessions popover leave it nil. `statusColorHex` is the per-call `session.status --color` tint,
+    /// `statusShape` its per-call `--shape` silhouette.
     var status: AgentStatus?
     var statusColorHex: String?
+    var statusShape: StatusShape?
 
     var body: some View {
         HStack {
-            if let status { StatusGlyph(status: status, colorHex: statusColorHex) }
+            if let status { StatusGlyph(status: status, colorHex: statusColorHex, shape: statusShape) }
             VStack(alignment: .leading, spacing: 1) {
                 Text(title).foregroundStyle(foreground ?? Color.primary)
                 Text(subtitle)

@@ -21,6 +21,9 @@ struct PaletteItem: Identifiable {
     /// Per-call `#rrggbb` glyph-tint override for the leading status glyph (the session's
     /// `AgentIndicator.color`), so the attention row matches the sidebar; nil = the default status color.
     let statusColor: String?
+    /// Per-call silhouette override for the leading status glyph (the session's `AgentIndicator.shape`),
+    /// so the attention row matches the sidebar; nil = the Settings shape for that status.
+    let statusShape: StatusShape?
     /// Fired when this item BECOMES the selection (keyboard navigation), distinct from `run` (Enter/
     /// click). Only the `.themes` palette sets it — it drives the live theme preview; nil everywhere
     /// else, so the other palettes have no selection side effect.
@@ -29,7 +32,7 @@ struct PaletteItem: Identifiable {
 
     init(id: String? = nil, title: String, subtitle: String? = nil, shortcut: String? = nil,
          badge: String? = nil, status: AgentStatus? = nil, statusColor: String? = nil,
-         onSelect: (() -> Void)? = nil, run: @escaping () -> Void) {
+         statusShape: StatusShape? = nil, onSelect: (() -> Void)? = nil, run: @escaping () -> Void) {
         self.id = id ?? title
         self.title = title
         self.subtitle = subtitle
@@ -37,6 +40,7 @@ struct PaletteItem: Identifiable {
         self.badge = badge
         self.status = status
         self.statusColor = statusColor
+        self.statusShape = statusShape
         self.onSelect = onSelect
         self.run = run
     }
@@ -224,7 +228,7 @@ struct CommandPalette: View {
     private func row(_ item: PaletteItem, index: Int) -> some View {
         HStack {
             if let status = item.status {
-                StatusGlyph(status: status, colorHex: item.statusColor)
+                StatusGlyph(status: status, colorHex: item.statusColor, shape: item.statusShape)
             }
             VStack(alignment: .leading, spacing: 1) {
                 Text(item.title)

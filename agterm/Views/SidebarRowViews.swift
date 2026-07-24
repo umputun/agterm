@@ -142,14 +142,19 @@ final class BadgeView: NSView {
     }
 }
 
-/// A small SF-Symbol agent-status glyph drawn just left of the count badge: `active` is a blue
-/// ellipsis, `blocked` an amber exclamation, `completed` a green check (all `.circle.fill` for a
-/// consistent silhouette). Hidden on `.idle`. Exposed to accessibility as an `agent-status` static
-/// text whose value is the state name (so XCUITest matches `app.staticTexts["agent-status"]`). Blink
-/// is a layer `opacity` `CABasicAnimation` (autoreverse/repeat), added only while visible AND blinking.
+/// A small SF-Symbol agent-status glyph drawn just left of the count badge: by default a `circle.fill`
+/// tinted lavender-grey for `active`, amber for `blocked`, green for `completed`. A Settings shape or a
+/// per-call `session.status --shape` swaps in another silhouette, so the shape carries the state
+/// alongside the tint. Hidden on `.idle`. Exposed to accessibility as an
+/// `agent-status` static text whose value is the state name (so XCUITest matches
+/// `app.staticTexts["agent-status"]`; neither the tint nor the silhouette is accessibility-observable).
+/// Blink is a layer `opacity` `CABasicAnimation` (autoreverse/repeat), added only while visible AND blinking.
 final class StatusIconView: NSImageView {
     private static let blinkKey = "agent-status-blink"
     private static let glyphWidth: CGFloat = 16
+    /// Symbol point size of the drawn glyph. The Settings shape picker previews its options at the same
+    /// size, so an option looks like the glyph it will install.
+    static let glyphPointSize: CGFloat = 13
 
     /// The view's width, collapsed to 0 on `.idle` so a status-less row reclaims the slot (and its
     /// label truncates full-width); `glyphWidth` when a glyph shows. Activated in init, toggled in `apply`.
@@ -181,7 +186,7 @@ final class StatusIconView: NSImageView {
             return
         }
         isHidden = false
-        image = Self.icon(for: indicator.status, override: indicator.color)
+        image = Self.icon(for: indicator.status, override: indicator.color, shape: indicator.shape)
         widthConstraint.constant = Self.glyphWidth
         setAccessibilityValue(indicator.status.rawValue)
         let shouldBlink = indicator.blink && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
@@ -203,13 +208,14 @@ final class StatusIconView: NSImageView {
         layer?.removeAnimation(forKey: Self.blinkKey)
     }
 
-    private static func icon(for status: AgentStatus, override colorHex: String?) -> NSImage? {
+    private static func icon(for status: AgentStatus, override colorHex: String?, shape: StatusShape?) -> NSImage? {
         guard status != .idle else { return nil } // unreachable: `apply` returns early on `.idle` before drawing
-        // symbol + color come from the shared mapping (AgentStatus.symbolName + GhosttyApp.statusColor)
-        // so this glyph and the SwiftUI StatusGlyph stay identical; a per-call `--color` overrides the tint.
-        let config = NSImage.SymbolConfiguration(pointSize: 13, weight: .regular)
+        // symbol + color come from the shared resolvers (GhosttyApp.statusSymbolName + .statusColor) so this
+        // glyph and the SwiftUI StatusGlyph stay identical, per-call `--shape`/`--color` overrides included.
+        let config = NSImage.SymbolConfiguration(pointSize: Self.glyphPointSize, weight: .regular)
             .applying(NSImage.SymbolConfiguration(paletteColors: [GhosttyApp.shared.statusColor(for: status, override: colorHex)]))
-        return NSImage(systemSymbolName: status.symbolName, accessibilityDescription: status.rawValue)?
+        let symbol = GhosttyApp.shared.statusSymbolName(for: status, override: shape)
+        return NSImage(systemSymbolName: symbol, accessibilityDescription: status.rawValue)?
             .withSymbolConfiguration(config)
     }
 }

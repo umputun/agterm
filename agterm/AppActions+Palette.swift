@@ -162,20 +162,22 @@ extension AppActions {
     func paletteAttention() -> [PaletteItem] {
         guard let store else { return [] }
         return store.attentionSessions.map {
-            paletteItem(for: $0, in: store, status: $0.agentIndicator.status, statusColor: $0.agentIndicator.color)
+            paletteItem(for: $0, in: store, status: $0.agentIndicator.status,
+                        statusColor: $0.agentIndicator.color, statusShape: $0.agentIndicator.shape)
         }
     }
 
     /// Maps one session to a palette row — title=`displayName`, subtitle="`workspace` · `subtitleDetail`",
     /// `run` selects it. Shared by `paletteSessions()` (status nil) and `paletteAttention()` (status set so
-    /// `CommandPalette.row` renders the leading `StatusGlyph`, tinted by the session's per-call `statusColor`).
-    private func paletteItem(for session: Session, in store: AppStore,
-                             status: AgentStatus? = nil, statusColor: String? = nil) -> PaletteItem {
+    /// `CommandPalette.row` renders the leading `StatusGlyph`, tinted by the session's per-call `statusColor`
+    /// and shaped by its per-call `statusShape`).
+    private func paletteItem(for session: Session, in store: AppStore, status: AgentStatus? = nil,
+                             statusColor: String? = nil, statusShape: StatusShape? = nil) -> PaletteItem {
         let id = session.id
         let workspaceName = store.workspace(forSession: id)?.name ?? ""
         let subtitle = "\(workspaceName) · \(session.subtitleDetail)"
         return PaletteItem(id: id.uuidString, title: session.displayName, subtitle: subtitle,
-                           status: status, statusColor: statusColor) { [weak self] in
+                           status: status, statusColor: statusColor, statusShape: statusShape) { [weak self] in
             guard self?.uiActionsEnabled == true else { return }
             // picking a session from the ⌃P / attention palette is a user-initiated selection: note activity
             // so it buys the full idle grace before auto-follow can pull the selection back.
