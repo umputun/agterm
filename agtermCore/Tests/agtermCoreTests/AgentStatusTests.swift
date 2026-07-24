@@ -154,11 +154,89 @@ struct AgentStatusTests {
     }
 
     @Test func symbolNameMapsNonIdleStatesAndIdleIsEmpty() {
-        #expect(AgentStatus.active.symbolName == "ellipsis.circle.fill")
-        #expect(AgentStatus.blocked.symbolName == "exclamationmark.circle.fill")
-        #expect(AgentStatus.completed.symbolName == "checkmark.circle.fill")
+        // every unconfigured state draws the same plain circle; the tint is what tells them apart
+        #expect(AgentStatus.active.symbolName(override: nil, configured: nil) == "circle.fill")
+        #expect(AgentStatus.blocked.symbolName(override: nil, configured: nil) == "circle.fill")
+        #expect(AgentStatus.completed.symbolName(override: nil, configured: nil) == "circle.fill")
         // idle never renders a glyph
-        #expect(AgentStatus.idle.symbolName == "")
+        #expect(AgentStatus.idle.symbolName(override: nil, configured: nil) == "")
+    }
+
+    @Test func statusShapeSymbolNamesAreFilledVariants() {
+        #expect(StatusShape.circle.symbolName == "circle.fill")
+        #expect(StatusShape.square.symbolName == "square.fill")
+        #expect(StatusShape.triangle.symbolName == "triangle.fill")
+        #expect(StatusShape.diamond.symbolName == "diamond.fill")
+        #expect(StatusShape.capsule.symbolName == "capsule.fill")
+        #expect(StatusShape.star.symbolName == "star.fill")
+    }
+
+    @Test func statusShapeDisplayNamesAreCapitalizedRawValues() {
+        // the Settings picker's option label and its accessibility value, so the e2e's menu-item titles
+        // ("Triangle") and its post-relaunch picker value are pinned here rather than in the view.
+        #expect(StatusShape.circle.displayName == "Circle")
+        #expect(StatusShape.square.displayName == "Square")
+        #expect(StatusShape.triangle.displayName == "Triangle")
+        #expect(StatusShape.diamond.displayName == "Diamond")
+        #expect(StatusShape.capsule.displayName == "Capsule")
+        #expect(StatusShape.star.displayName == "Star")
+    }
+
+    @Test func statusShapeValidNamesCoverEveryCaseInBothJoinedForms() {
+        // the dispatcher's rejection uses the pipe form, the CLI's help and rejection the comma form
+        #expect(StatusShape.validNamesList == "circle|square|triangle|diamond|capsule|star")
+        #expect(StatusShape.validNamesPhrase == "circle, square, triangle, diamond, capsule, star")
+        for shape in StatusShape.allCases {
+            #expect(StatusShape.validNamesList.contains(shape.rawValue))
+            #expect(StatusShape.validNamesPhrase.contains(shape.rawValue))
+        }
+    }
+
+    @Test func statusShapeAllCasesAndRawValues() {
+        #expect(StatusShape.allCases == [.circle, .square, .triangle, .diamond, .capsule, .star])
+        #expect(StatusShape(rawValue: "triangle") == .triangle)
+        #expect(StatusShape(rawValue: "hexagon") == nil)
+        #expect(StatusShape(rawValue: "Circle") == nil) // case-sensitive
+        #expect(StatusShape(rawValue: "") == nil)
+    }
+
+    @Test func symbolNameOverrideWinsOverConfigured() {
+        #expect(AgentStatus.blocked.symbolName(override: .triangle, configured: .square) == "triangle.fill")
+        #expect(AgentStatus.active.symbolName(override: .star, configured: nil) == "star.fill")
+        // an explicit circle override is a real choice, not "unset", so it still beats the configured shape
+        #expect(AgentStatus.completed.symbolName(override: .circle, configured: .star) == "circle.fill")
+    }
+
+    @Test func symbolNameConfiguredWinsOverDefault() {
+        #expect(AgentStatus.active.symbolName(override: nil, configured: .capsule) == "capsule.fill")
+        #expect(AgentStatus.blocked.symbolName(override: nil, configured: .diamond) == "diamond.fill")
+        #expect(AgentStatus.completed.symbolName(override: nil, configured: .square) == "square.fill")
+    }
+
+    @Test func symbolNameBothNilIsThePlainCircleDefault() {
+        // the built-in default is StatusShape.circle for every non-idle state, so an unset shape and an
+        // explicit circle render identically
+        #expect(AgentStatus.active.symbolName(override: nil, configured: nil) == StatusShape.circle.symbolName)
+        #expect(AgentStatus.blocked.symbolName(override: nil, configured: nil) == StatusShape.circle.symbolName)
+        #expect(AgentStatus.completed.symbolName(override: nil, configured: nil) == StatusShape.circle.symbolName)
+        #expect(AgentStatus.blocked.symbolName(override: nil, configured: nil)
+            == AgentStatus.blocked.symbolName(override: nil, configured: .circle))
+    }
+
+    @Test func symbolNameIdleIsEmptyInEveryCombination() {
+        // idle renders no glyph, so a shape is accepted and ignored
+        #expect(AgentStatus.idle.symbolName(override: nil, configured: nil) == "")
+        #expect(AgentStatus.idle.symbolName(override: .star, configured: nil) == "")
+        #expect(AgentStatus.idle.symbolName(override: nil, configured: .square) == "")
+        #expect(AgentStatus.idle.symbolName(override: .star, configured: .square) == "")
+    }
+
+    @Test func indicatorShapeParticipatesInEquality() {
+        // a shape-only difference is distinguished, so a shape change reloads the sidebar row (RowContent).
+        #expect(AgentIndicator(status: .blocked, shape: .triangle) != AgentIndicator(status: .blocked))
+        #expect(AgentIndicator(status: .blocked, shape: .triangle) != AgentIndicator(status: .blocked, shape: .square))
+        #expect(AgentIndicator(status: .blocked, shape: .triangle) == AgentIndicator(status: .blocked, shape: .triangle))
+        #expect(AgentIndicator(status: .blocked).shape == nil) // unset by default
     }
 
     @Test func tooltipTextNamesVisibleStatusesAndOmitsIdle() {

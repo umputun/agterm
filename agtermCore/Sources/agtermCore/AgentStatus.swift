@@ -48,16 +48,15 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
         return nil
     }
 
-    /// SF Symbol name for the status glyph, shared by the AppKit sidebar and the SwiftUI attention list.
-    /// `idle` returns the empty string — idle never renders a glyph, so it is filtered out before any
-    /// glyph is built and this value is never used.
-    public var symbolName: String {
-        switch self {
-        case .active: return "ellipsis.circle.fill"
-        case .blocked: return "exclamationmark.circle.fill"
-        case .completed: return "checkmark.circle.fill"
-        case .idle: return ""
-        }
+    /// symbolName resolves the SF Symbol for the status glyph, shared by the AppKit sidebar and the
+    /// SwiftUI attention list. Precedence is two-level: the per-call `override` (the ephemeral
+    /// `AgentIndicator.shape` from `session.status --shape`) wins, else the `configured` Settings shape
+    /// for this status, else `StatusShape.circle` — the built-in default for every non-idle state. `idle`
+    /// returns the empty string in every combination — idle never renders a glyph, so it is filtered out
+    /// before any glyph is built and this value is never used.
+    public func symbolName(override: StatusShape?, configured: StatusShape?) -> String {
+        guard self != .idle else { return "" }
+        return (override ?? configured ?? .circle).symbolName
     }
 
     /// Tooltip for a visible status glyph. Idle renders no glyph and therefore has no tooltip.
@@ -74,9 +73,36 @@ public enum StatusPane: String, Codable, Sendable, CaseIterable {
     case left, right, scratch
 }
 
+/// StatusShape is the silhouette a status glyph draws, so the shape carries the state alongside the tint.
+/// Every shape is a plain silhouette with no interior mark, and one is selectable per status in Settings
+/// or per call via `session.status --shape`; `circle` is what an unset status draws. The raw value is the
+/// SF Symbol base name and serializes to JSON as `"circle"|"square"|…`.
+public enum StatusShape: String, Codable, Sendable, CaseIterable {
+    case circle, square, triangle, diamond, capsule, star
+
+    /// SF Symbol name for the shape — the `.fill` variant, so every glyph is a solid silhouette rather
+    /// than an outline.
+    public var symbolName: String { "\(rawValue).fill" }
+
+    /// The human-facing name for the shape ("Triangle"): the Settings picker uses it as an option's
+    /// accessibility label and as the picker's own accessibility value.
+    public var displayName: String { rawValue.capitalized }
+
+    /// The accepted names pipe-joined (`circle|square|…`) — the compact form the control server's
+    /// rejection message uses. Derived from `allCases`, like `WatermarkConfig.validFits`, so no message
+    /// can go stale when the set changes.
+    public static var validNamesList: String { validNames.joined(separator: "|") }
+
+    /// The accepted names comma-joined (`circle, square, …`) — the prose form the `agtermctl --shape`
+    /// help text and its local rejection message use.
+    public static var validNamesPhrase: String { validNames.joined(separator: ", ") }
+
+    private static var validNames: [String] { allCases.map(\.rawValue) }
+}
+
 /// AgentIndicator is the per-session agent status value: the state plus an optional blink flag (pulse
 /// the glyph for attention), an optional autoReset flag (clear back to idle once the session is
-/// visited), an optional per-call color override for the glyph tint, and the pane that set the status.
+/// visited), optional per-call color and shape overrides for the glyph, and the pane that set the status.
 /// It is ephemeral (never persisted) and set only via the control API.
 public struct AgentIndicator: Equatable, Sendable {
     /// status is the current agent state; `.idle` renders no glyph.
@@ -90,16 +116,21 @@ public struct AgentIndicator: Equatable, Sendable {
     /// glyph only — a caller-set, per-call value that rides the ephemeral indicator, so the next
     /// `session.status` call without a color naturally discards it. nil renders the default status color.
     public var color: String?
+    /// shape, when set, overrides the Settings-configured silhouette for this glyph only — a caller-set,
+    /// per-call value that rides the ephemeral indicator, so the next `session.status` without a shape
+    /// naturally discards it. nil falls back to the Settings shape, else the default plain circle.
+    public var shape: StatusShape?
     /// statusPane records which pane set this status; nil means unspecified and is treated as `.left`
     /// (main) by the clear logic.
     public var statusPane: StatusPane?
 
     public init(status: AgentStatus = .idle, blink: Bool = false, autoReset: Bool = false,
-                color: String? = nil, statusPane: StatusPane? = nil) {
+                color: String? = nil, shape: StatusShape? = nil, statusPane: StatusPane? = nil) {
         self.status = status
         self.blink = blink
         self.autoReset = autoReset
         self.color = color
+        self.shape = shape
         self.statusPane = statusPane
     }
 

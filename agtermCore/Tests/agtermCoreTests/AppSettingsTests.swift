@@ -145,6 +145,64 @@ struct AppSettingsTests {
         #expect(decoded.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
+    @Test func statusShapeFieldsRoundTripAndAreNotGhosttyKeys() throws {
+        let original = AppSettings(activeStatusShape: "square", blockedStatusShape: "triangle",
+                                   completedStatusShape: "star")
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
+        #expect(decoded == original)
+        #expect(decoded.effectiveStatusShape(for: .active) == .square)
+        #expect(decoded.effectiveStatusShape(for: .blocked) == .triangle)
+        #expect(decoded.effectiveStatusShape(for: .completed) == .star)
+        // the glyph shapes are applied at the AppKit level, never as ghostty config keys — so the only
+        // lines are the always-on defaults (scroll + right-click).
+        #expect(decoded.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
+
+    @Test func everyStatusShapeRoundTripsThroughTheRawStorage() throws {
+        for shape in StatusShape.allCases {
+            let stored = AppSettings(blockedStatusShape: shape.rawValue)
+            let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(stored))
+            #expect(decoded.blockedStatusShape == shape.rawValue)
+            #expect(decoded.effectiveStatusShape(for: .blocked) == shape)
+        }
+    }
+
+    @Test func statusShapesDefaultNilAndOmitFromJSON() throws {
+        // unset means the default plain circle, and nothing serializes, keeping settings.json minimal.
+        let settings = AppSettings()
+        #expect(settings.activeStatusShape == nil)
+        #expect(settings.effectiveStatusShape(for: .active) == nil)
+        #expect(settings.effectiveStatusShape(for: .blocked) == nil)
+        #expect(settings.effectiveStatusShape(for: .completed) == nil)
+        let json = String(decoding: try JSONEncoder().encode(settings), as: UTF8.self)
+        #expect(!json.contains("StatusShape"))
+        // a settings.json written before the fields existed decodes them to nil.
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
+        #expect(legacy.activeStatusShape == nil)
+        #expect(legacy.blockedStatusShape == nil)
+        #expect(legacy.completedStatusShape == nil)
+        #expect(legacy.effectiveStatusShape(for: .blocked) == nil)
+    }
+
+    @Test func unknownStatusShapeResolvesToNilAndPreservesOtherSettings() throws {
+        // a future-written or hand-edited shape must decode tolerantly (the forward-compat rule): the raw
+        // string is kept, resolves to nil (the built-in glyph), and the rest of the file survives.
+        let decoded = try JSONDecoder().decode(
+            AppSettings.self, from: Data(#"{ "blockedStatusShape": "trapezoid", "fontSize": 16 }"#.utf8))
+        #expect(decoded.fontSize == 16)
+        #expect(decoded.blockedStatusShape == "trapezoid")
+        #expect(decoded.effectiveStatusShape(for: .blocked) == nil)
+        // an empty string is likewise unknown, not a shape.
+        #expect(AppSettings(activeStatusShape: "").effectiveStatusShape(for: .active) == nil)
+    }
+
+    @Test func effectiveStatusShapeIsNilForIdle() {
+        // idle renders no glyph, so it resolves to no shape even with every field set.
+        let settings = AppSettings(activeStatusShape: "circle", blockedStatusShape: "square",
+                                   completedStatusShape: "star")
+        #expect(settings.effectiveStatusShape(for: .idle) == nil)
+    }
+
     @Test func notificationsEnabledRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(notificationsEnabled: false)))
         #expect(decoded.notificationsEnabled == false)

@@ -202,12 +202,22 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// compact bar. Read only by `effectiveToolbarMode` when `toolbarMode` is unset; nilled on the next
     /// mode write. Applied at the AppKit window level, NOT a ghostty key.
     public var compactToolbar: Bool?
-    /// Hex colors (`#RRGGBB`) for the agent-status glyph's three states; nil for each means the system
-    /// default (active = blue, blocked = amber, completed = green). Applied at the AppKit level when the
-    /// glyph is drawn, NOT ghostty keys, so they never appear in `ghosttyConfigLines()`.
+    /// Hex colors (`#RRGGBB`) for the agent-status glyph's three states; nil for each means the built-in
+    /// default (active = a muted lavender-grey `#DBD9E6`, blocked = system amber, completed = system
+    /// green). Applied at the AppKit level when the glyph is drawn, NOT ghostty keys, so they never appear
+    /// in `ghosttyConfigLines()`.
     public var activeStatusColorHex: String?
     public var blockedStatusColorHex: String?
     public var completedStatusColorHex: String?
+    /// Silhouettes for the agent-status glyph's three states, stored as `StatusShape` RAW STRINGS so an
+    /// unknown future value decodes tolerantly to nil via `effectiveStatusShape(for:)` (the AppSettings
+    /// forward-compat rule). nil for each means the default plain circle, and the Settings picker stores
+    /// nil when Circle is picked, so `settings.json` stays minimal. A per-call `session.status --shape`
+    /// overrides these. Applied at the AppKit level when the glyph is drawn, NOT ghostty keys, so they
+    /// never appear in `ghosttyConfigLines()`.
+    public var activeStatusShape: String?
+    public var blockedStatusShape: String?
+    public var completedStatusShape: String?
     /// Directory holding the user-editable keymap config (`keymap.conf`), or nil for the default
     /// (`~/.config/agterm`). Resolved by `ConfigPaths.configDirectory(setting:stateDir:home:)`; an
     /// app-level path, never a ghostty key.
@@ -320,7 +330,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 backgroundOpacity: Double? = nil, backgroundBlur: Int? = nil, notificationsEnabled: Bool? = nil,
                 toolbarMode: String? = nil, compactToolbar: Bool? = nil, notificationBadgeEnabled: Bool? = nil,
                 activeStatusColorHex: String? = nil, blockedStatusColorHex: String? = nil,
-                completedStatusColorHex: String? = nil, configDirectory: String? = nil,
+                completedStatusColorHex: String? = nil, activeStatusShape: String? = nil,
+                blockedStatusShape: String? = nil, completedStatusShape: String? = nil,
+                configDirectory: String? = nil,
                 mouseScrollMultiplier: Double? = nil, inactivePaneMuteStrength: Int? = nil,
                 sidebarBackgroundShift: Int? = nil, restoreRunningCommand: Bool? = nil,
                 inheritGlobalGhosttyConfig: Bool? = nil, attentionButtonEnabled: Bool? = nil,
@@ -346,6 +358,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.activeStatusColorHex = activeStatusColorHex
         self.blockedStatusColorHex = blockedStatusColorHex
         self.completedStatusColorHex = completedStatusColorHex
+        self.activeStatusShape = activeStatusShape
+        self.blockedStatusShape = blockedStatusShape
+        self.completedStatusShape = completedStatusShape
         self.configDirectory = configDirectory
         self.mouseScrollMultiplier = mouseScrollMultiplier
         self.inactivePaneMuteStrength = inactivePaneMuteStrength
@@ -394,6 +409,22 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// the read. The single read point the app target uses, so callers never touch the raw string.
     public var effectiveDockBounce: DockBounce {
         dockBounce.flatMap(DockBounce.init(rawValue:)) ?? .off
+    }
+
+    /// The resolved glyph silhouette for one agent status: the configured raw name when it is a KNOWN
+    /// `StatusShape`, else nil, which means the default plain circle. An unknown/nil raw value falls
+    /// through to nil the same way, so a hand-edited or future-written value never fails the read. `idle`
+    /// renders no glyph and so has no shape. The single read point the app target uses, so callers never
+    /// touch the raw strings.
+    public func effectiveStatusShape(for status: AgentStatus) -> StatusShape? {
+        let raw: String?
+        switch status {
+        case .active: raw = activeStatusShape
+        case .blocked: raw = blockedStatusShape
+        case .completed: raw = completedStatusShape
+        case .idle: return nil
+        }
+        return raw.flatMap(StatusShape.init(rawValue:))
     }
 
     /// The working directory a new session should open in, resolving the `newSessionDirectory` mode
