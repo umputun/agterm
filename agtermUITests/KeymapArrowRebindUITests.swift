@@ -54,9 +54,32 @@ final class KeymapArrowRebindUITests: ControlAPITestCase {
                       "the mapped arrow chord ⌘⇧← should fire next_session and select B (issue #278)")
     }
 
+    // `UndoCloseShortcut` is the OTHER app-side NSEvent→Chord site, and the only KEYBOARD path to
+    // undo_close — File ▸ Reopen Closed Item ships no key equivalent, so native text undo keeps working
+    // in the rename/palette/Settings fields. Its arrow support arrived with the shared
+    // `namedKey(forKeyCode:)`, so an arrow chord bound there must actually fire.
+    // Two constraints shape this test: a SINGLE-target control close takes the hard path and never arms
+    // the grace window, so it closes TWO sessions in one command; and the grace is 3 s
+    // (`AppStore.pendingCloseGraceInterval`), so nothing may poll or wait between the close and the chord.
+    func testMapToAnArrowChordFiresUndoClose() throws {
+        try relaunch(withKeymap: "map cmd+shift+up undo_close\n")
+
+        let first = try sendCommand(#"{"cmd":"session.new"}"#)
+        let idA = try XCTUnwrap((first["result"] as? [String: Any])?["id"] as? String, "session A id")
+        let second = try sendCommand(#"{"cmd":"session.new"}"#)
+        let idB = try XCTUnwrap((second["result"] as? [String: Any])?["id"] as? String, "session B id")
+        XCTAssertTrue(pollSessionRowCount(3, timeout: 10), "should have three sessions before the close")
+
+        _ = try sendCommand(#"{"cmd":"session.close","args":{"targets":["\#(idA)","\#(idB)"]}}"#)
+        app.typeKey(.upArrow, modifierFlags: [.command, .shift])
+
+        XCTAssertTrue(pollSessionRowCount(3, timeout: 10),
+                      "the mapped arrow chord ⌘⇧↑ should fire undo_close and restore the closed group")
+    }
+
     // the same rebind but applied via a LIVE `keymap.reload` (the exact path issue #219 used —
-    // `agtermctl keymap reload` while running), not seeded at launch. The menu items start with the
-    // hardcoded arrow key-equivalents, and reload must RE-REGISTER the mapped chord onto them.
+    // `agtermctl keymap reload` while running), not seeded at launch. The menu items start with their
+    // shipped arrow defaults, and reload must RE-REGISTER the mapped chord onto them.
     func testMapArrowNavActionFiresAfterLiveReload() throws {
         let sessionA = try activeSessionID()
         let created = try sendCommand(#"{"cmd":"session.new"}"#)

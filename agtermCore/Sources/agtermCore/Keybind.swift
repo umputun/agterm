@@ -21,16 +21,23 @@ public struct Modifier: OptionSet, Hashable, Sendable {
 /// abort and is intentionally NOT bindable.
 ///
 /// The four arrows are here because the six arrow-bound built-ins ship their defaults on them, so the
-/// grammar must be able to spell what `BuiltinAction.defaultChord` returns. Adding a name here is only
-/// safe once every `NSEvent`→`Chord` site can produce it — `CustomCommandRunner` and
-/// `UndoCloseShortcut` both resolve named keys through `namedKey(forKeyCode:)`.
+/// grammar must be able to spell what `BuiltinAction.defaultChord` returns.
+///
+/// Adding a name here means updating four sites, two inbound and two outbound:
+/// - `CustomCommandRunner` and `UndoCloseShortcut` resolve `NSEvent` → name via `namedKey(forKeyCode:)`,
+///   so a name with no keycode parses in the file yet never fires;
+/// - `Chord.glyphString` renders the name in palette hints and tooltips — it degrades to the raw name,
+///   so a miss here is cosmetic;
+/// - `agtermApp.toShortcut` maps the name to a SwiftUI `KeyEquivalent`, and its `default` arm is
+///   `KeyEquivalent(Character(chord.key))`, which TRAPS on a multi-character string. That one is a
+///   crash on the first menu render, not a degradation, so it is the site to update first.
 public let bindableNamedKeys: Set<String> = Set(["tab", "space", "return", "delete"]).union(bindableArrowKeys)
 
 /// The four arrow keys, a subset of `bindableNamedKeys`. Named separately because they carry one extra
 /// rule: a built-in `map` may not bind a modifier-less arrow (`parseMapLine`), since an always-on menu
 /// key-equivalent on a bare arrow swallows the key in the terminal, the palettes, the dashboard grid,
 /// and every text field at once.
-public let bindableArrowKeys: Set<String> = ["left", "right", "up", "down"]
+let bindableArrowKeys: Set<String> = ["left", "right", "up", "down"]
 
 /// The named key for a macOS virtual key code, or `nil` for a key that carries a normal character
 /// (which the caller derives from the event itself). The single source of truth for the keyCode→name
@@ -124,8 +131,8 @@ public typealias Keybind = [Chord]
 /// The grammar is chords separated by `>`, each chord a `+`-joined list of modifier words and a
 /// final base key, case-insensitive. Examples: `cmd+shift+e`, `ctrl+a>b`, `ctrl + a > b`. The base
 /// key is a single printable character or one of `bindableNamedKeys` (`tab`/`space`/`return`/
-/// `delete`) — the keys the app-side runner can actually produce; any other multi-char word (e.g.
-/// `esc`, `f1`) is rejected. Returns `nil` for an empty input, an empty chord (e.g. a trailing `>`
+/// `delete`/`left`/`right`/`up`/`down`) — the keys the app-side runner can actually produce; any other
+/// multi-char word (e.g. `esc`, `f1`) is rejected. Returns `nil` for an empty input, an empty chord (e.g. a trailing `>`
 /// or `+`), a chord with no base key, more than one base key in a chord, an unrecognized modifier
 /// word, or an unproducible named key.
 public func parseKeybind(_ s: String) -> Keybind? {

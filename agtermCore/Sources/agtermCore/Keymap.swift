@@ -373,7 +373,7 @@ private func parseMapLine(_ rest: String, line: Int, overrides: inout [ParsedOve
     // `parseCommandLine` requires a modifier for the same reason.
     guard !(bindableArrowKeys.contains(chord.key) && chord.mods.isEmpty) else {
         diagnostics.append(KeymapDiagnostic(line: line,
-                                            message: "chord '\(chordText)' needs a modifier; map skipped"))
+                                            message: "bare arrow chord '\(chordText)' needs a modifier; map skipped"))
         return
     }
     guard let action = BuiltinAction(rawValue: actionName) else {

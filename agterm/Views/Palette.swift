@@ -11,8 +11,7 @@ struct PaletteItem: Identifiable {
     /// The action's keyboard shortcut hint shown right-aligned, nil for items with no shortcut.
     /// Rebindable built-ins read the live keymap (`AppActions.shortcutGlyph`) so it tracks rebinds and
     /// render as macOS menu glyphs (e.g. `⌘⇧E`); custom commands show their raw kitty shortcut string
-    /// (e.g. `cmd+shift+e`). The six arrow-bound actions, not expressible as a `Chord`, keep their
-    /// hardcoded glyph fallback.
+    /// (e.g. `cmd+shift+e`).
     let shortcut: String?
     /// A small trailing badge label (e.g. `custom` for user-defined keymap commands), nil for none.
     let badge: String?

@@ -53,15 +53,15 @@ struct KeymapTests {
         #expect(keymap.glyphHint(for: .toggleSidebar) == "⌘K")
     }
 
-    @Test func glyphHintFallsBackToArrowGlyphForArrowActions() {
-        // arrow-bound actions have no expressible default chord, so the hint comes from the fallback.
+    @Test func glyphHintRendersArrowDefaultsAsGlyphs() {
+        // the arrow-bound actions resolve through defaultChord like any other keyed action.
         let keymap = Keymap(builtinOverrides: [:], commands: [])
         #expect(keymap.glyphHint(for: .previousSession) == "⌥⌘↑")
         #expect(keymap.glyphHint(for: .focusLeftPane) == "⌥⌘←")
     }
 
-    @Test func glyphHintOverrideWinsOverArrowFallback() {
-        // a user-mapped parseable chord beats the hardcoded arrow glyph.
+    @Test func glyphHintOverrideWinsOverArrowDefault() {
+        // a user-mapped chord beats the shipped arrow default.
         let keymap = Keymap(builtinOverrides: [.previousSession: Chord(mods: [.command], key: "p")], commands: [])
         #expect(keymap.glyphHint(for: .previousSession) == "⌘P")
     }
@@ -280,8 +280,19 @@ struct KeymapTests {
         // cross-section validation sees the arrow defaults too, so a custom command can't shadow one.
         let (keymap, diagnostics) = parseKeymap(#"command "Nav" cmd+opt+down echo hi"#)
         #expect(keymap.commands.count == 1)
+        // the keybind is dropped but the palette entry survives.
+        #expect(keymap.commands[0].name == "Nav")
         #expect(keymap.commands[0].shortcut.isEmpty)
         #expect(diagnostics.count == 1)
+        #expect(diagnostics[0].message.contains("built-in"))
+    }
+
+    @Test func parseBareNonArrowMapIsStillAccepted() {
+        // the modifier requirement is arrow-ONLY — a bare non-arrow map predates the rule and stays
+        // legal. Pins the guard's scope so widening it to every chord can't slip through unnoticed.
+        let (keymap, diagnostics) = parseKeymap("map a new_session")
+        #expect(diagnostics.isEmpty)
+        #expect(keymap.equivalent(for: .newSession) == Chord(mods: [], key: "a"))
     }
 
     @Test func parseDuplicateBuiltinChordDiagnostic() {

@@ -132,6 +132,9 @@ paths:
   surface).** Task 9 collapsed the old `BuiltinAction` ↔ menu keep-in-sync convention:
   EVERY built-in menu item reads `equivalent(for:)` (override else `defaultChord`) with NO hardcoded
   `.keyboardShortcut` literal, so adding/changing a default chord happens in `defaultChord` alone.
+  ONE keyed built-in carries no menu shortcut at all: `undo_close` (File ▸ Reopen Closed Item) is
+  delivered by the `UndoCloseShortcut` NSEvent monitor instead, so native text undo keeps working in the
+  rename/palette/Settings fields — it resolves the SAME `equivalent(for:)`, just not as a key-equivalent.
   There is NO exception any more: the six formerly arrow-bound actions (`focus_left_pane` ⌘⌥←,
   `focus_right_pane` ⌘⌥→, `previous_session` ⌥⌘↑, `next_session` ⌥⌘↓, `previous_attention_session` ⌃⌥↑,
   `next_attention_session` ⌃⌥↓) return their real chords from `defaultChord` now that `parseKeybind`
@@ -158,7 +161,7 @@ paths:
 - **Arrows are bindable; a BARE arrow is not (`map` only).**
   `bindableNamedKeys` carries `left`/`right`/`up`/`down` alongside `tab`/`space`/`return`/`delete`, and
   `bindableArrowKeys` names the four separately for the one rule that treats them specially.
-  `parseMapLine` REJECTS a modifier-less arrow (`map left previous_session` → `chord '<x>' needs a modifier; map skipped`)
+  `parseMapLine` REJECTS a modifier-less arrow (`map left previous_session` → `bare arrow chord '<x>' needs a modifier; map skipped`)
   because a built-in becomes an always-on menu key-equivalent with NO text-field pass-through — unlike
   the custom-command monitor, which returns false for an `NSText` responder — so a bare arrow would
   swallow the key in the terminal, both palettes, the dashboard grid's key-catcher, and every text field
