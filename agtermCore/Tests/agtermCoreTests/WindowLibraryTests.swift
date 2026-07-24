@@ -320,6 +320,7 @@ final class WindowLibraryTests {
     @Test func applyInactiveWindowSidebarHidingSingleWindowKeepsSidebar() {
         let library = WindowLibrary(directory: directory)
         let only = library.windows[0].id
+        library.store(for: only)?.setSidebarVisible(false) // hide first so the assert proves the force-show
         library.applyInactiveWindowSidebarHiding()
         #expect(library.store(for: only)?.sidebarVisible == true)
     }

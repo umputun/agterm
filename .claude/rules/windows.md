@@ -38,7 +38,9 @@ never two bundles in one window.
   `newWindow(name:)` seeds a fresh window (one "workspace 1" + one `$HOME` session — the seeding that
   used to live in the dropped `agtermApp.restoredStore()`); `closeWindow`/`renameWindow`/`removeWindow`
   (`canRemoveWindow` = count > 1, keep-at-least-one) mutate + persist; `openIDs()` is the persisted open-set
-  for launch reopen.
+  for launch reopen; `applyInactiveWindowSidebarHiding()` is the host-free auto-hide-inactive-sidebars
+  driver (shows the active window's sidebar, collapses the rest) — see the `autoHideSidebarInactiveWindows`
+  bullet in `settings.md`.
 - **Persistence layout**
   under `<stateDir>` (`AGTERM_STATE_DIR`-aware, else `~/Library/Application Support/agterm`):
   `windows.json` is the index, `windows/<uuid>.json` is each window's `Snapshot` (the same shape `workspaces.json`

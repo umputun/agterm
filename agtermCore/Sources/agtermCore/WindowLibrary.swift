@@ -173,8 +173,8 @@ public final class WindowLibrary {
     }
 
     /// Auto-hide-inactive-sidebars driver: the frontmost open window shows its sidebar and every OTHER
-    /// open window collapses its own. A single-window library is a no-op (the lone window is the active
-    /// one). Host-free so it is unit-testable; the app-side caller gates it on the
+    /// open window collapses its own. With a single open window it force-shows that (active) window's
+    /// sidebar and collapses nothing. Host-free so it is unit-testable; the app-side caller gates it on the
     /// `autoHideSidebarInactiveWindows` setting and invokes it on every frontmost change (and once when the
     /// toggle flips on). `setSidebarVisible` no-ops a window already in its target state, so the
     /// write/persist/notify happens only for the windows that actually change.

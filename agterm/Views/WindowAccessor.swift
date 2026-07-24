@@ -212,22 +212,31 @@ struct WindowAccessor: NSViewRepresentable {
             titlebarObservers.forEach(NotificationCenter.default.removeObserver)
         }
 
-        /// Record this window as the frontmost in the library and persist the index. A no-op when this
-        /// window is already frontmost, so the paired `didBecomeKey`/`didBecomeMain` (and a re-key of
-        /// the same window) collapse to a single write instead of a per-focus-change write-storm.
+        /// Record this window as the frontmost in the library and persist the index. The persist + the
+        /// frontmost-changed post are gated to an ACTUAL frontmost change, so the paired
+        /// `didBecomeKey`/`didBecomeMain` (and a re-key of the same window) collapse to a single write
+        /// instead of a per-focus-change write-storm.
         @MainActor private func reportFrontmost(_ id: WindowInfo.ID) {
-            guard library.frontmostWindowID != id else { return }
-            library.frontmostWindowID = id
-            library.saveIndex()
-            // auto-hide-inactive-sidebars: show this now-frontmost window's sidebar and collapse every
-            // other window's. Gated on the setting mirror; only fires on a real frontmost change (the guard
-            // above), never on a resign, so switching to another app leaves every sidebar untouched.
+            let changed = library.frontmostWindowID != id
+            if changed {
+                library.frontmostWindowID = id
+                library.saveIndex()
+            }
+            // auto-hide-inactive-sidebars: reconcile on EVERY activation report, even when the logical
+            // frontmost id is unchanged. `newWindow()` pre-sets `frontmostWindowID` before the window keys
+            // and launch restores it, so a changed-only gate would skip those paths and leave the prior
+            // window's sidebar showing (or the restored frontmost collapsed). Runs AFTER `frontmostWindowID`
+            // is set so `activeWindowID` resolves to this window; idempotent (`setSidebarVisible` no-ops
+            // when unchanged), so an unchanged re-key is cheap. Only fires on becomeKey/becomeMain, never
+            // on resign, so switching to another app leaves every sidebar untouched.
             if GhosttyApp.shared.autoHideSidebarInactiveWindows {
                 library.applyInactiveWindowSidebarHiding()
             }
             // the active-window change is async; let the control server refresh its cached window list
             // so a `window.list` poll sees the new `active` flag without waiting for the next command.
-            NotificationCenter.default.post(name: .agtermWindowFrontmostChanged, object: nil)
+            if changed {
+                NotificationCenter.default.post(name: .agtermWindowFrontmostChanged, object: nil)
+            }
         }
 
         private func bringForward(_ window: NSWindow) {
