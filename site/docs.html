@@ -449,7 +449,7 @@
                 <span
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
-                ><strong style="color: #e6e1d7">Install Agent Status Hooks…</strong> lets a coding agent (Claude Code, Codex, Pi, or
+                ><strong style="color: #e6e1d7">Install Agent Status Hooks…</strong> lets a coding agent (Claude Code, Codex, Pi, OpenCode, or
                 others) report its state onto its session's row, so you can tell which of several running agents is active,
                 blocked, or finished.
               </li>
@@ -1960,8 +1960,8 @@
               hooks package: a generic bash/zsh/fish shell integration (flags
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> while a command
               matching <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">AGTERM_AGENT_RE</span> runs;
-              the default set is gemini, cursor-agent, aider, opencode, crush, goose), and four Claude Code hooks (prompt → active,
-              tool run → active, Stop → completed, permission prompt → blocked).
+              the default set is gemini, cursor-agent, aider, crush, goose), four Claude Code hooks (prompt → active,
+              tool run → active, Stop → completed, permission prompt → blocked), and an OpenCode lifecycle plugin.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               Six Codex lifecycle events run a dedicated adapter.
@@ -1978,6 +1978,29 @@
               queued continuations finish. Pi has no built-in permission or structured-question event, so it does not infer blocked
               from assistant prose. Restart Pi or run <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">/reload</span>
               after installing it. Re-running upgrades agterm-managed integrations and is otherwise idempotent.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              When OpenCode has already created
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/opencode</span>,
+              the installer also adds a lifecycle plugin at
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">~/.config/opencode/plugins/agterm-status.js</span>
+              (plus companion
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agterm-status-logic.mjs</span>):
+              the <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">.js</span> exports only the plugin function;
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.status</span>
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">busy</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >retry</span
+              >
+              → active,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">idle</span> → completed,
+              permission/question prompts and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.error</span> → blocked.
+              Deprecated
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.idle</span>
+              is ignored so it does not double-fire with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session.status</span>.
+              Restart OpenCode after installing it.
             </p>
           </section>
 

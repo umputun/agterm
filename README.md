@@ -14,7 +14,7 @@ What it does:
 - **Control API and CLI.** A bundled tool, `agtermctl`, drives almost everything over a local socket: create sessions, type into them, run a program in an overlay and read its exit status, move and resize windows, or post a notification tied to a specific session. A script or an agent can set up and drive its own layout, and send you a notification from the session it was working in.
 - **Splits, scratch, and overlays.** Split a session into two shells, open a scratch terminal over it, or run a program in a full or floating overlay without disturbing the shell underneath.
 - **Agent skill.** An installable skill (Help ▸ Install Agent Skill…) teaches Claude Code or Codex the control model and the `agtermctl` commands, so an agent running inside agterm can build its own layout, run overlays, manage windows, and show images inline without you explaining the API.
-- **Agent status.** A coding agent reports its state (active, blocked, or completed) onto its session's row, so you can see which of many running agents needs you. Status hooks for Claude Code, Codex, Pi, and other agents install from Help ▸ Install Agent Status Hooks….
+- **Agent status.** A coding agent reports its state (active, blocked, or completed) onto its session's row, so you can see which of many running agents needs you. Status hooks for Claude Code, Codex, Pi, OpenCode, and other agents install from Help ▸ Install Agent Status Hooks….
 
 For the real terminal work, rendering, VT parsing, and shell I/O, `agterm` embeds [Ghostty](https://ghostty.org)'s engine (libghostty); everything above is `agterm`'s own.
 
@@ -92,7 +92,7 @@ Download the latest `.dmg` from the [releases page](https://github.com/umputun/a
 The app's **Help** menu has three one-time installers. None are needed to use agterm as a terminal; each connects it to a wider workflow, and you can run any of them later.
 
 - **Install Command Line Tool…** puts the bundled `agtermctl` on your `PATH` (a symlink in `/usr/local/bin`) so you can script the app from a shell. The Homebrew cask already installs it, so cask users can skip this one. See [Scripting agterm](#scripting-agterm).
-- **Install Agent Status Hooks…** lets a coding agent (Claude Code, Codex, Pi, or others) report its state onto its session's sidebar row, so you can tell at a glance which of several running agents is active, blocked, or finished. See [Agent status](#agent-status).
+- **Install Agent Status Hooks…** lets a coding agent (Claude Code, Codex, Pi, OpenCode, or others) report its state onto its session's sidebar row, so you can tell at a glance which of several running agents is active, blocked, or finished. See [Agent status](#agent-status).
 - **Install Agent Skill…** teaches Claude Code or Codex how to drive agterm through `agtermctl`, so an agent running inside a session can build its own layout, run overlays, and manage windows without you explaining the API. It drives the app through the command-line tool, so install that one too.
 
 ## Build from source
@@ -462,7 +462,9 @@ For Codex, the installer merges a matching set of lifecycle hooks into `~/.codex
 
 For Pi, the installer copies a bundled TypeScript lifecycle extension to `~/.pi/agent/extensions/agterm-status.ts` when Pi has already created `~/.pi/agent`. It sets `active --blink` when Pi starts work and `completed --auto-reset` only when it settles — after automatic retries, compaction retries, and queued continuations. Pi deliberately has no built-in permission prompt or structured question event, so the extension does not infer `blocked` from its prose. It preserves a same-named extension without agterm's ownership marker; restart Pi or run `/reload` after installing or upgrading it.
 
-A generic bash/zsh/fish `shell/integration.sh` (or `.fish`) covers any agent launched as a shell command: it flags `active` while a command matching `AGTERM_AGENT_RE` runs and `idle` at the next prompt. The default regex matches `gemini`, `cursor-agent`, `aider`, `opencode`, `crush`, and `goose`; Claude Code, Codex, and Pi are excluded by default because their own hooks/extensions drive finer per-turn state that the coarse process-level `active`/`idle` would only fight. Override `AGTERM_AGENT_RE` before sourcing to change the set. All hooks are no-ops outside an agterm session.
+For OpenCode, the installer copies a bundled JavaScript lifecycle plugin (`agterm-status.js` plus companion helpers `agterm-status-logic.mjs`) to `~/.config/opencode/plugins/` when OpenCode has already created `~/.config/opencode`. The `.js` exports only the plugin function (OpenCode's legacy loader treats every export as a plugin); helpers stay in the `.mjs`, which is not auto-discovered. OpenCode `session.status` `busy`/`retry` set `active --blink`; `idle` sets `completed --auto-reset`; permission/question prompts and `session.error` set `blocked`. Deprecated `session.idle` is ignored so it does not double-fire with `session.status(type=idle)`. It preserves a same-named plugin without agterm's ownership marker; restart OpenCode after installing or upgrading it.
+
+A generic bash/zsh/fish `shell/integration.sh` (or `.fish`) covers any agent launched as a shell command: it flags `active` while a command matching `AGTERM_AGENT_RE` runs and `idle` at the next prompt. The default regex matches `gemini`, `cursor-agent`, `aider`, `crush`, and `goose`; Claude Code, Codex, Pi, and OpenCode are excluded by default because their own hooks/extensions/plugins drive finer per-turn state that the coarse process-level `active`/`idle` would only fight. Override `AGTERM_AGENT_RE` before sourcing to change the set. All hooks are no-ops outside an agterm session.
 
 ## Troubleshooting
 

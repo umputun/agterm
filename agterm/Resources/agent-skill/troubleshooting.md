@@ -118,6 +118,8 @@ shows the truth.
 Install the hooks from Help ▸ Install Agent Status Hooks…. For shell-integrated agents, start a fresh shell
 so the installer-added `source` line takes effect. For Pi, restart it or run `/reload` so it loads
 `~/.pi/agent/extensions/agterm-status.ts`; the extension installs only after Pi has created `~/.pi/agent`.
+For OpenCode, restart it so it loads `~/.config/opencode/plugins/agterm-status.js` (and its companion `agterm-status-logic.mjs`); the plugin installs
+only after OpenCode has created `~/.config/opencode`.
 The installed wrapper resolves the bundled `agtermctl` itself; a bare development build instead needs
 `agtermctl` on `PATH`.
 

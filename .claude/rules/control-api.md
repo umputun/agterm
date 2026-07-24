@@ -100,8 +100,8 @@ paths:
   A second Help entry, **Help ▸ Install Agent Status Hooks…** (`AgentHooksInstaller.run()`),
   wires coding agents to `session.status`.
   The hooks package bundles at `agterm/Resources/agent-status/` (`agterm-agent-status.sh` generic wrapper,
-  `agterm-codex-status.sh` Codex adapter, `shell/integration.sh`, `shell/integration.fish`, and
-  `pi/agterm-status.ts`, a `project.yml` Contents/Resources folder mirroring `Resources/ghostty`).
+  `agterm-codex-status.sh` Codex adapter, `shell/integration.sh`, `shell/integration.fish`,
+  `pi/agterm-status.ts`, `opencode/agterm-status.js`, and `opencode/agterm-status-logic.mjs`, a `project.yml` Contents/Resources folder mirroring `Resources/ghostty`).
   The installer copies them to `~/.config/agterm/agent-status/`, bakes the bundled `agtermctl`'s absolute
   path (`Bundle.main.url(forAuxiliaryExecutable:)`) into both wrappers so the hooks fire even without the
   CLI on PATH, appends a marker-guarded `source` line to `~/.zshrc` + `~/.bashrc`,
@@ -147,9 +147,21 @@ paths:
   `blocked` from agent prose.
   The source carries `AgentHooksInstall.piExtensionMarker`; an unmarked same-named extension is user-owned
   and left untouched, and Pi must restart or run `/reload` after installation.
-  Idempotent + re-runnable (re-run refreshes the baked path and the managed Pi extension).
-  Like the CLI installer, the host-free JSON/TOML-merge / shell-rc-marker / backup-path / Pi-path-and-marker
-  logic is `agtermCore.AgentHooksInstall` (unit-tested); `AgentHooksInstaller` (app-side) owns the AppKit
+  When `~/.config/opencode` exists, the installer copies the bundled `opencode/agterm-status.js` lifecycle
+  plugin (and its companion `opencode/agterm-status-logic.mjs` helpers module) to
+  `~/.config/opencode/plugins/`.
+  The `.js` file exports ONLY `AgtermStatusPlugin` (OpenCode's legacy loader treats every export as a
+  plugin and rejects non-functions); helpers stay in the `.mjs`, which OpenCode does not auto-discover
+  (`*.{js,ts}` only).
+  OpenCode `session.status` `busy`/`retry` send `active --blink`; `idle` sends `completed --auto-reset`;
+  `permission.asked`/`question.asked`/`session.error` send `blocked`.
+  Deprecated `session.idle` is ignored so it does not double-fire with `session.status(type=idle)`.
+  The source carries `AgentHooksInstall.opencodePluginMarker` (named `*Plugin*` because OpenCode's host
+  term is plugin — intentional divergence from Pi's `piExtension*`); an unmarked same-named plugin is
+  user-owned and left untouched, and OpenCode must restart after installation.
+  Idempotent + re-runnable (re-run refreshes the baked path and the managed Pi extension / OpenCode plugin).
+  Like the CLI installer, the host-free JSON/TOML-merge / shell-rc-marker / backup-path / Pi-and-OpenCode
+  path-and-marker logic is `agtermCore.AgentHooksInstall` (unit-tested); `AgentHooksInstaller` (app-side) owns the AppKit
   FS glue, manually verified.
   Install is GUI-only and keep-in-sync EXEMPT — driving it over the socket is meaningless because the
   integration being installed is itself what uses `agtermctl`.

@@ -25,6 +25,29 @@ public enum AgentHooksInstall {
     /// same-named extension, preserving a user-authored integration.
     public static let piExtensionMarker = "// agterm-pi-status-extension"
 
+    /// The bundled OpenCode plugin's path relative to the agent-status package.
+    public static let opencodePluginRelativePath = "opencode/agterm-status.js"
+
+    /// Companion pure-helpers module imported by the plugin (not an OpenCode entry — OpenCode only
+    /// auto-loads `*.{js,ts}`). Must be installed beside the plugin so the relative import resolves.
+    public static let opencodePluginLogicRelativePath = "opencode/agterm-status-logic.mjs"
+
+    /// The OpenCode plugin's destination filename under `~/.config/opencode/plugins/`.
+    public static let opencodePluginName = "agterm-status.js"
+
+    /// Companion helpers filename installed next to the plugin.
+    public static let opencodePluginLogicName = "agterm-status-logic.mjs"
+
+    /// Ownership sentinel in the bundled OpenCode plugin. A reinstall refuses to overwrite an unmarked
+    /// same-named plugin, preserving a user-authored integration. Named `*Plugin*` (not `*Extension*`)
+    /// because OpenCode's host term is plugin — intentional divergence from Pi's `piExtension*`.
+    public static let opencodePluginMarker = "// agterm-opencode-status-plugin"
+
+    /// Default `AGTERM_AGENT_RE` for shell integration. OpenCode is intentionally absent — its
+    /// lifecycle plugin drives finer per-turn state. Claude/Codex/Pi stay out for the same reason.
+    /// Keep `shell/integration.sh` and `shell/integration.fish` in sync with this string.
+    public static let defaultShellAgentRegex = "^(gemini|cursor-agent|aider|crush|goose)([[:space:]]|$)"
+
     /// The shell integration script sourced from the user's rc files, relative to the script directory.
     public static let integrationRelativePath = "shell/integration.sh"
 
@@ -78,6 +101,29 @@ public enum AgentHooksInstall {
         guard fileExists else { return true }
         guard let existingContents else { return false }
         return existingContents.contains(piExtensionMarker)
+    }
+
+    /// The destination directory for OpenCode's auto-discovered global plugins.
+    public static func opencodePluginDirectory(home: String) -> String {
+        home + "/.config/opencode/plugins"
+    }
+
+    /// The destination path for agterm's OpenCode status plugin.
+    public static func opencodePluginPath(home: String) -> String {
+        opencodePluginDirectory(home: home) + "/" + opencodePluginName
+    }
+
+    /// The destination path for the OpenCode plugin's companion helpers module.
+    public static func opencodePluginLogicPath(home: String) -> String {
+        opencodePluginDirectory(home: home) + "/" + opencodePluginLogicName
+    }
+
+    /// Whether the OpenCode plugin destination is safe to replace. Same ownership policy as Pi:
+    /// absent is safe; an existing file must carry the agterm marker; unreadable counts as user-owned.
+    public static func mayOverwriteOpenCodePlugin(fileExists: Bool, existingContents: String?) -> Bool {
+        guard fileExists else { return true }
+        guard let existingContents else { return false }
+        return existingContents.contains(opencodePluginMarker)
     }
 
     /// Thrown by `mergeClaudeSettings` when the existing `settings.json` is non-empty but not a valid

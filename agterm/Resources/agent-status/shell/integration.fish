@@ -6,8 +6,8 @@
 # Which commands count as agents is a regex, override before sourcing to taste:
 #   set -g AGTERM_AGENT_RE '^(gemini|cursor-agent|my-agent)([[:space:]]|$)'
 #
-# Claude Code, Codex, and Pi are intentionally NOT in the default list — their
-# own hooks/extensions drive finer per-turn state, which the coarse
+# Claude Code, Codex, Pi, and OpenCode are intentionally NOT in the default list —
+# their own hooks/extensions/plugins drive finer per-turn state, which the coarse
 # process-level active/idle here would only fight. Add any of them here if you
 # rely on the shell integration alone for it.
 #
@@ -25,7 +25,7 @@ if not set -q AGTERM_AGENT_BIN
 end
 
 if not set -q AGTERM_AGENT_RE
-    set -g AGTERM_AGENT_RE '^(gemini|cursor-agent|aider|opencode|crush|goose)([[:space:]]|$)'
+    set -g AGTERM_AGENT_RE '^(gemini|cursor-agent|aider|crush|goose)([[:space:]]|$)'
 end
 
 function _ags_preexec --on-event fish_preexec

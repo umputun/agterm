@@ -317,6 +317,63 @@ struct AgentHooksInstallTests {
         #expect(!AgentHooksInstall.mayOverwritePiExtension(fileExists: true, existingContents: nil))
     }
 
+    @Test func opencodePluginPathsUseOpenCodePluginsDirectory() {
+        #expect(AgentHooksInstall.opencodePluginDirectory(home: "/Users/me")
+                == "/Users/me/.config/opencode/plugins")
+        #expect(AgentHooksInstall.opencodePluginPath(home: "/Users/me")
+                == "/Users/me/.config/opencode/plugins/agterm-status.js")
+        #expect(AgentHooksInstall.opencodePluginLogicPath(home: "/Users/me")
+                == "/Users/me/.config/opencode/plugins/agterm-status-logic.mjs")
+        #expect(AgentHooksInstall.opencodePluginRelativePath == "opencode/agterm-status.js")
+        #expect(AgentHooksInstall.opencodePluginLogicRelativePath == "opencode/agterm-status-logic.mjs")
+        #expect(AgentHooksInstall.opencodePluginMarker == "// agterm-opencode-status-plugin")
+    }
+
+    @Test func opencodePluginOwnershipProtectsUserPlugin() {
+        #expect(AgentHooksInstall.mayOverwriteOpenCodePlugin(fileExists: false, existingContents: nil))
+        #expect(AgentHooksInstall.mayOverwriteOpenCodePlugin(
+            fileExists: true,
+            existingContents: "// agterm-opencode-status-plugin\nexport const AgtermStatusPlugin = async () => ({})\n"
+        ))
+        #expect(!AgentHooksInstall.mayOverwriteOpenCodePlugin(
+            fileExists: true,
+            existingContents: "export const Other = async () => ({})\n"
+        ))
+        #expect(!AgentHooksInstall.mayOverwriteOpenCodePlugin(fileExists: true, existingContents: nil))
+    }
+
+    @Test func defaultShellAgentRegexOmitsLifecycleAgents() {
+        let re = AgentHooksInstall.defaultShellAgentRegex
+        #expect(re == "^(gemini|cursor-agent|aider|crush|goose)([[:space:]]|$)")
+        for name in ["opencode", "claude", "codex", "pi"] {
+            #expect(!re.contains(name), "default regex must not include \(name)")
+        }
+    }
+
+    @Test func shippedShellIntegrationsMatchDefaultAgentRegex() throws {
+        let root = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let expected = AgentHooksInstall.defaultShellAgentRegex
+        for relative in ["agterm/Resources/agent-status/shell/integration.sh",
+                         "agterm/Resources/agent-status/shell/integration.fish"] {
+            let text = try String(contentsOf: root.appendingPathComponent(relative), encoding: .utf8)
+            #expect(text.contains(expected), "\(relative) must embed defaultShellAgentRegex")
+            // the default assignment line must not list lifecycle-managed agents
+            let defaultLines = text.split(separator: "\n").filter {
+                $0.contains("AGTERM_AGENT_RE") && ($0.contains(":=") || $0.contains("set -g AGTERM_AGENT_RE"))
+            }
+            #expect(!defaultLines.isEmpty)
+            for line in defaultLines {
+                for name in ["opencode", "claude", "codex", "pi"] {
+                    #expect(!line.contains(name), "\(relative) default must not include \(name)")
+                }
+            }
+        }
+    }
+
     @Test func backupPathAppendsBak() {
         #expect(AgentHooksInstall.backupPath(for: "/home/me/.claude/settings.json") == "/home/me/.claude/settings.json.bak")
     }

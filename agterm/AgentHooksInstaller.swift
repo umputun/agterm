@@ -5,10 +5,11 @@ import agtermCore
 /// app bundle into `~/.config/agterm/agent-status/`, bakes the bundled `agtermctl`'s absolute path
 /// into the wrapper, appends a marker-guarded `source` line to `~/.zshrc`, `~/.bashrc`, and `~/.config/fish/config.fish`, merges
 /// the four Claude Code hooks into `~/.claude/settings.json`, merges the six Codex lifecycle hooks into
-/// `~/.codex/config.toml`, and installs Pi's lifecycle extension into `~/.pi/agent/extensions/` when Pi
-/// is configured. Claude/Codex configs write a `.bak` first; the Codex step parses TOML and falls back to
+/// `~/.codex/config.toml`, installs Pi's lifecycle extension into `~/.pi/agent/extensions/` when Pi
+/// is configured, and installs OpenCode's lifecycle plugin into `~/.config/opencode/plugins/` when
+/// OpenCode is configured. Claude/Codex configs write a `.bak` first; the Codex step parses TOML and falls back to
 /// surfacing a manual block when the file already has hooks or does not parse. The host-free string/JSON/
-/// TOML transforms and Pi ownership policy live in `agtermCore.AgentHooksInstall`; this type owns the
+/// TOML transforms and Pi/OpenCode ownership policy live in `agtermCore.AgentHooksInstall`; this type owns the
 /// AppKit filesystem glue.
 /// Idempotent and re-runnable: re-running refreshes the baked `agtermctl` path (healing a
 /// moved/reinstalled bundle) and is a clean no-op for already-present rc/settings/config entries.
@@ -60,14 +61,37 @@ enum AgentHooksInstaller {
         }
     }
 
+    // OpenCode plugin-install outcome (same shape as Pi; host term is plugin, not extension).
+    private enum OpenCodeResult {
+        case installed, alreadyConfigured, userOwned, unreadable, writeFailed, noOpenCode
+
+        var isWarning: Bool {
+            switch self {
+            case .userOwned, .unreadable, .writeFailed: return true
+            case .installed, .alreadyConfigured, .noOpenCode: return false
+            }
+        }
+    }
+
+    // Aggregates per-integration outcomes so `install()` stays under the large_tuple lint (max 3 members).
+    private struct InstallOutcome {
+        let settingsSkipped: Bool
+        let codex: CodexResult
+        let pi: PiResult
+        let opencode: OpenCodeResult
+
+        var isWarning: Bool {
+            settingsSkipped || codex.isWarning || pi.isWarning || opencode.isWarning
+        }
+    }
+
     /// Run the install and show a result alert.
     static func run() {
         do {
             let outcome = try install()
-            let warned = outcome.settingsSkipped || outcome.codex.isWarning || outcome.pi.isWarning
-            present(style: warned ? .warning : .informational,
-                    title: warned ? "Agent Status Hooks Installed — with a warning" : "Agent Status Hooks Installed",
-                    text: successText(settingsSkipped: outcome.settingsSkipped, codex: outcome.codex, pi: outcome.pi))
+            present(style: outcome.isWarning ? .warning : .informational,
+                    title: outcome.isWarning ? "Agent Status Hooks Installed — with a warning" : "Agent Status Hooks Installed",
+                    text: successText(outcome))
         } catch let error as InstallError {
             present(style: .warning, title: "Install Failed", text: error.message)
         } catch {
@@ -76,16 +100,17 @@ enum AgentHooksInstaller {
     }
 
     // settingsSkipped is true when the Claude settings merge was SKIPPED because ~/.claude/settings.json
-    // isn't valid JSON or couldn't be read (it is left untouched); codex and pi report their respective
-    // integration outcomes. Every step still runs regardless.
-    private static func install() throws -> (settingsSkipped: Bool, codex: CodexResult, pi: PiResult) {
+    // isn't valid JSON or couldn't be read (it is left untouched); codex/pi/opencode report their
+    // respective integration outcomes. Every step still runs regardless.
+    private static func install() throws -> InstallOutcome {
         try copyBundledFolder()
         try bakeAgtermctlPath()
         let settingsSkipped = try mergeClaudeSettings()
         try appendShellRC()
         let codex = try mergeCodexConfig()
         let pi = try installPiExtension()
-        return (settingsSkipped, codex, pi)
+        let opencode = try installOpenCodePlugin()
+        return InstallOutcome(settingsSkipped: settingsSkipped, codex: codex, pi: pi, opencode: opencode)
     }
 
     // copy the bundled agent-status folder into ~/.config/agterm/agent-status, overwriting any prior
@@ -276,6 +301,55 @@ enum AgentHooksInstaller {
         return .installed
     }
 
+    // Install OpenCode's auto-discovered global plugin only when ~/.config/opencode exists. Same
+    // ownership / degrade-to-warning policy as Pi; no backup (managed plugin carries no user state).
+    // Also copies `agterm-status-logic.mjs` beside the plugin (relative import); OpenCode does not
+    // auto-load `.mjs`, so it is never treated as a second plugin entry.
+    private static func installOpenCodePlugin() throws -> OpenCodeResult {
+        let fm = FileManager.default
+        let home = fm.homeDirectoryForCurrentUser
+        let opencodeDirectory = home.appendingPathComponent(".config/opencode")
+        guard fm.fileExists(atPath: opencodeDirectory.path) else { return .noOpenCode }
+
+        let source = destinationFolder.appendingPathComponent(AgentHooksInstall.opencodePluginRelativePath)
+        let logicSource = destinationFolder.appendingPathComponent(AgentHooksInstall.opencodePluginLogicRelativePath)
+        guard fm.fileExists(atPath: source.path), fm.fileExists(atPath: logicSource.path) else {
+            throw InstallError(message: "The OpenCode status plugin is not bundled in this build.")
+        }
+        let sourceContents = try String(contentsOf: source, encoding: .utf8)
+        let logicContents = try String(contentsOf: logicSource, encoding: .utf8)
+        guard sourceContents.contains(AgentHooksInstall.opencodePluginMarker) else {
+            throw InstallError(message: "The bundled OpenCode status plugin is missing its ownership marker.")
+        }
+
+        let destination = URL(fileURLWithPath: AgentHooksInstall.opencodePluginPath(home: home.path))
+        let logicDestination = URL(fileURLWithPath: AgentHooksInstall.opencodePluginLogicPath(home: home.path))
+        let existing: String?
+        do {
+            existing = try readExistingConfig(at: destination)
+        } catch {
+            return .unreadable
+        }
+        guard AgentHooksInstall.mayOverwriteOpenCodePlugin(fileExists: existing != nil, existingContents: existing) else {
+            return .userOwned
+        }
+        let existingLogic = try? String(contentsOf: logicDestination, encoding: .utf8)
+        guard existing != sourceContents || existingLogic != logicContents else { return .alreadyConfigured }
+
+        do {
+            try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
+            let target = symlinkTarget(of: destination) ?? destination
+            let mode = AgentHooksInstall.posixMode(ofFile: target.path)
+            try writePreservingSymlink(sourceContents, to: destination, posixMode: mode)
+            let logicTarget = symlinkTarget(of: logicDestination) ?? logicDestination
+            let logicMode = AgentHooksInstall.posixMode(ofFile: logicTarget.path)
+            try writePreservingSymlink(logicContents, to: logicDestination, posixMode: logicMode)
+        } catch {
+            return .writeFailed
+        }
+        return .installed
+    }
+
     // merge the Codex lifecycle hooks into ~/.codex/config.toml, writing a .bak first when the merge
     // changes anything. Gated on ~/.codex existing (like the fish rc gate) so a non-Codex user's home
     // isn't seeded with a config.toml. The host-free `AgentHooksInstall.mergeCodexConfig` PARSES the file
@@ -312,17 +386,18 @@ enum AgentHooksInstaller {
     }
 
     // the success-alert text. Explains what was left out when the Claude settings merge was skipped, or
-    // when the Codex/Pi integrations could not safely update a user-owned or unreadable file.
-    private static func successText(settingsSkipped: Bool, codex: CodexResult, pi: PiResult) -> String {
-        let claudeLine = settingsSkipped
+    // when the Codex/Pi/OpenCode integrations could not safely update a user-owned or unreadable file.
+    private static func successText(_ outcome: InstallOutcome) -> String {
+        let claudeLine = outcome.settingsSkipped
             ? "Your ~/.claude/settings.json isn't valid JSON (or couldn't be read), so the Claude Code hooks were NOT added "
               + "(the file was left untouched). Fix it and run this again, or add the hooks manually."
             : "Claude Code hooks merged into ~/.claude/settings.json."
         return """
         Scripts installed to \(destinationFolder.path).
         \(claudeLine)
-        \(codexText(codex))
-        \(piText(pi))
+        \(codexText(outcome.codex))
+        \(piText(outcome.pi))
+        \(opencodeText(outcome.opencode))
         The source line was added to ~/.zshrc, ~/.bashrc (and ~/.config/fish/config.fish if fish is installed).
 
         Open a new terminal for the shell integration to take effect.
@@ -366,6 +441,24 @@ enum AgentHooksInstaller {
             return "Pi's lifecycle extension couldn't be written to ~/.pi/agent/extensions/ (check that directory's permissions), so it was skipped."
         case .noPi:
             return "No ~/.pi/agent found, so Pi's lifecycle extension was skipped. Start Pi once, then run this again."
+        }
+    }
+
+    // Describe OpenCode's plugin-install outcome. Plugins load on the next OpenCode start.
+    private static func opencodeText(_ opencode: OpenCodeResult) -> String {
+        switch opencode {
+        case .installed:
+            return "OpenCode lifecycle plugin installed to ~/.config/opencode/plugins/agterm-status.js. Restart OpenCode."
+        case .alreadyConfigured:
+            return "OpenCode lifecycle plugin is already current at ~/.config/opencode/plugins/agterm-status.js."
+        case .userOwned:
+            return "~/.config/opencode/plugins/agterm-status.js is user-owned, so agterm left it untouched."
+        case .unreadable:
+            return "~/.config/opencode/plugins/agterm-status.js exists but could not be read, so agterm left it untouched."
+        case .writeFailed:
+            return "OpenCode's lifecycle plugin couldn't be written to ~/.config/opencode/plugins/ (check that directory's permissions), so it was skipped."
+        case .noOpenCode:
+            return "No ~/.config/opencode found, so OpenCode's lifecycle plugin was skipped. Start OpenCode once, then run this again."
         }
     }
 

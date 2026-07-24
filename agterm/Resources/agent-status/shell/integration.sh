@@ -6,8 +6,8 @@
 # Which commands count as agents is a regex, override before sourcing to taste:
 #   export AGTERM_AGENT_RE='^(gemini|cursor-agent|my-agent)([[:space:]]|$)'
 #
-# Claude Code, Codex, and Pi are intentionally NOT in the default list — their
-# own hooks/extensions drive finer per-turn state, which the coarse
+# Claude Code, Codex, Pi, and OpenCode are intentionally NOT in the default list —
+# their own hooks/extensions/plugins drive finer per-turn state, which the coarse
 # process-level active/idle here would only fight. Add any of them here if you
 # rely on the shell integration alone for it.
 #
@@ -26,7 +26,7 @@ else
   _ags_dir="$(cd "$(dirname "$_ags_self")/.." >/dev/null 2>&1 && pwd)"
 fi
 : "${AGTERM_AGENT_BIN:=$_ags_dir/agterm-agent-status.sh}"
-: "${AGTERM_AGENT_RE:=^(gemini|cursor-agent|aider|opencode|crush|goose)([[:space:]]|$)}"
+: "${AGTERM_AGENT_RE:=^(gemini|cursor-agent|aider|crush|goose)([[:space:]]|$)}"
 
 if [ -n "${ZSH_VERSION:-}" ]; then
   autoload -Uz add-zsh-hook

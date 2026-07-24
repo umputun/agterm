@@ -24,3 +24,5 @@ windows/
 !.claude/
 .claude/*
 !.claude/rules/
+Readme_herdr.md
+TODO.md
