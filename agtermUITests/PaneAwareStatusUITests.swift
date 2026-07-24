@@ -178,6 +178,21 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
         app.staticTexts["session-row"].firstMatch.click()
         usleep(800_000)
 
+        // the `right` case needs a LIVE split. `setAgentIndicator` coerces a `.right` tag to `.left` on a
+        // session with no split (the promoted-survivor normalization, pinned host-free by
+        // AppStorePaneTests.setAgentIndicatorCoercesRightToLeftWithoutLiveSplit), which would hand the block
+        // to the very pane this test types into and let the Escape clear it — a `right` tag is only a
+        // BACKGROUND pane once the right pane really exists. Opening the split focuses the NEW right pane,
+        // so hand focus back to the main pane before typing.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sessionA)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "session.split on should succeed")
+        XCTAssertTrue(try pollSplit(sessionA, timeout: 10), "the split should be live before tagging the right pane")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(sessionA)","args":{"pane":"left"}}"#)["ok"] as? Bool,
+                       true, "session.focus left should succeed")
+        XCTAssertTrue(try pollSplitFocused(sessionA, expected: false, timeout: 10),
+                      "focus should be back on the main pane before typing")
+        usleep(800_000)
+
         // a right- or scratch-tagged block survives Escape typed into the main pane.
         for tag in ["right", "scratch"] {
             try blockPane("blocked", pane: tag, target: sessionA)
