@@ -105,6 +105,93 @@ final class SettingsUITests: XCTestCase {
                       "selecting None (the default) should remove the notificationSoundName key from settings.json")
     }
 
+    // the row geometry and the option list, split off the persistence flow below: these are the most
+    // fragile assertions (they move with any Form-style, font or OS-metric change) and running them in
+    // the same test would mask every persistence leg behind a layout failure.
+    func testAgentStatusShapePickerRowLayoutAndOptions() throws {
+        let picker = settingsControl(tab: "Agent Status", control: "settings-status-shape-blocked")
+
+        // the color well and the shape picker share one row per status: the well's vertical center falls
+        // inside the picker's own span. A same-row check, deliberately not a sub-pixel coordinate — the
+        // exact offsets move with any Form-style, font or OS-metric change.
+        let colorWell = app.descendants(matching: .any).matching(identifier: "settings-status-blocked").firstMatch
+        XCTAssertTrue(colorWell.waitForHittable(timeout: 5), "the blocked color well should be on the same tab")
+        XCTAssertTrue(picker.frame.minY <= colorWell.frame.midY && colorWell.frame.midY <= picker.frame.maxY,
+                      "the color well and the shape picker should sit on the same row")
+        // the shape pickers stack in one column, so the Active row's picker overlaps this one horizontally.
+        let activeShape = settingsControl(tab: "Agent Status", control: "settings-status-shape-active")
+        XCTAssertTrue(activeShape.frame.minX < picker.frame.maxX && picker.frame.minX < activeShape.frame.maxX,
+                      "the shape pickers should line up in one column")
+        // everything below still fits the fixed-size window, so the tab needs no scrolling.
+        XCTAssertTrue(app.buttons["settings-status-reset"].firstMatch.waitForHittable(timeout: 5),
+                      "the Reset button should stay reachable without scrolling")
+
+        // the options are symbols only, but each keeps its shape name for VoiceOver (and for this test);
+        // the six shapes are the whole list, since an unset shape now renders the plain circle.
+        picker.click()
+        let triangle = app.menuItems["Triangle"]
+        XCTAssertTrue(triangle.waitForExistence(timeout: 5), "the shape picker should offer 'Triangle'")
+        for shape in ["Circle", "Square", "Diamond", "Capsule", "Star"] {
+            XCTAssertTrue(app.menuItems[shape].exists, "the shape picker should offer '\(shape)'")
+        }
+        XCTAssertEqual(picker.menuItems.count, 6, "the six shapes should be the whole option list")
+        XCTAssertFalse(app.menuItems["Default"].exists, "the shape picker should no longer offer a 'Default' entry")
+        app.typeKey(.escape, modifierFlags: []) // leave the popup closed, nothing here picks a shape
+    }
+
+    func testAgentStatusShapePickerPersists() throws {
+        let picker = settingsControl(tab: "Agent Status", control: "settings-status-shape-blocked")
+        let activeShape = settingsControl(tab: "Agent Status", control: "settings-status-shape-active")
+
+        // Triangle → blockedStatusShape="triangle".
+        picker.click()
+        let triangle = app.menuItems["Triangle"]
+        XCTAssertTrue(triangle.waitForExistence(timeout: 5), "the shape picker should offer 'Triangle'")
+        triangle.click()
+        XCTAssertTrue(poll { self.settingsValue("blockedStatusShape") == "triangle" },
+                      "selecting 'Triangle' should persist blockedStatusShape=triangle to settings.json")
+
+        // a SECOND status through the same flow: each row must write its OWN key, so a copy-pasted
+        // binding that drove the wrong status shows up here rather than passing on the blocked row alone.
+        activeShape.click()
+        let star = app.menuItems["Star"]
+        XCTAssertTrue(star.waitForExistence(timeout: 5), "the active shape picker should offer 'Star'")
+        star.click()
+        XCTAssertTrue(poll { self.settingsValue("activeStatusShape") == "star" },
+                      "selecting 'Star' on the Active row should persist activeStatusShape=star to settings.json")
+        XCTAssertEqual(settingsValue("blockedStatusShape"), "triangle", "the Active row must not rewrite the Blocked shape")
+
+        // both choices survive a relaunch: the pickers read them back from the same isolated state dir.
+        app.terminate()
+        app.launchForUITest()
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForHittable(timeout: 20), "seeded session should be hittable")
+        let restored = settingsControl(tab: "Agent Status", control: "settings-status-shape-blocked")
+        XCTAssertTrue(poll { (restored.value as? String) == "Triangle" },
+                      "after a relaunch the shape picker should show the stored Triangle, got \(String(describing: restored.value))")
+        let restoredActive = app.descendants(matching: .any).matching(identifier: "settings-status-shape-active").firstMatch
+        XCTAssertTrue(poll { (restoredActive.value as? String) == "Star" },
+                      "after a relaunch the Active picker should show the stored Star, got \(String(describing: restoredActive.value))")
+
+        // Circle is the built-in default and maps back to nil, so picking it REMOVES that row's key only.
+        restored.click()
+        let fallback = app.menuItems["Circle"]
+        XCTAssertTrue(fallback.waitForExistence(timeout: 5), "the shape picker should offer 'Circle'")
+        fallback.click()
+        XCTAssertTrue(poll { self.settingsObject()?["blockedStatusShape"] == nil },
+                      "selecting Circle (the default) should remove the blockedStatusShape key from settings.json")
+        XCTAssertEqual(settingsValue("activeStatusShape"), "star", "clearing the Blocked shape must leave the Active one alone")
+
+        // Reset to defaults clears the remaining shape too — the leg that would otherwise ship green
+        // with the three shape-clearing lines missing from resetAgentStatus().
+        let reset = app.buttons["settings-status-reset"].firstMatch
+        XCTAssertTrue(reset.waitForHittable(timeout: 5), "the Reset button should be clickable")
+        reset.click()
+        XCTAssertTrue(poll { self.settingsObject()?["activeStatusShape"] == nil },
+                      "Reset to defaults should clear activeStatusShape out of settings.json")
+        XCTAssertTrue(poll { (restoredActive.value as? String) == "Circle" },
+                      "after the reset the Active picker should fall back to Circle, got \(String(describing: restoredActive.value))")
+    }
+
     func testToolbarModePickerPersists() throws {
         // the Toolbar dropdown offers Normal/Compact/Hidden. compact is the default and maps back to nil;
         // Normal/Hidden write a stable key.

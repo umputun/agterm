@@ -94,7 +94,7 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
         XCTAssertTrue(try pollActiveNode(equals: sessionA, timeout: 12), "attention-nav should land on the blocked session")
         XCTAssertTrue(try pollOnScreen(target: sessionA, contains: "\(rightTag)-42"),
                       "the reveal should swap the hidden split to show the right pane maximized")
-        XCTAssertEqual(try sessionNode(id: sessionA)?["split"] as? Bool, false,
+        XCTAssertEqual(try sessionNode(id: sessionA)["split"] as? Bool, false,
                        "the split stays hidden after the reveal — the right pane is shown maximized, not side-by-side")
     }
 
@@ -187,7 +187,7 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
             usleep(600_000)
             XCTAssertTrue(app.staticTexts["agent-status"].exists,
                           "typing in the main pane must NOT clear a \(tag)-tagged block")
-            XCTAssertEqual(try sessionNode(id: sessionA)?["status"] as? String, "blocked",
+            XCTAssertEqual(try sessionNode(id: sessionA)["status"] as? String, "blocked",
                            "the \(tag)-tagged block should still read blocked after main-pane typing")
             XCTAssertEqual(try sendCommand(#"{"cmd":"session.status","target":"\#(sessionA)","args":{"status":"idle"}}"#)["ok"] as? Bool,
                            true, "clearing to idle should succeed")
@@ -329,7 +329,7 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
         var stayedShown = true
         for _ in 0..<8 {
             usleep(250_000)
-            if try sessionNode(id: sessionA)?["scratch"] as? Bool != true { stayedShown = false; break }
+            if try sessionNode(id: sessionA)["scratch"] as? Bool != true { stayedShown = false; break }
         }
         XCTAssertTrue(stayedShown, "the shown scratch must stay shown after selecting the idle session (reveal is a no-op)")
         XCTAssertTrue(try pollOnScreen(target: sessionA, contains: "\(scratchTag)-42"),
@@ -495,19 +495,9 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
         return try onScreenText(target)?.contains(needle) ?? false
     }
 
-    /// The session node (case-insensitive id) from a fresh `tree`, across all workspaces, or nil.
-    private func sessionNode(id: String) throws -> [String: Any]? {
-        let tree = try sendCommand(#"{"cmd":"tree"}"#)
-        guard let result = tree["result"] as? [String: Any],
-              let t = result["tree"] as? [String: Any],
-              let workspaces = t["workspaces"] as? [[String: Any]] else { return nil }
-        let sessions = workspaces.flatMap { ($0["sessions"] as? [[String: Any]]) ?? [] }
-        return sessions.first { ($0["id"] as? String)?.lowercased() == id.lowercased() }
-    }
-
     /// The `statusPane` read-back of `target` from the tree (nil when idle/unspecified).
     private func statusPane(of target: String) throws -> String? {
-        try sessionNode(id: target)?["statusPane"] as? String
+        try sessionNode(id: target)["statusPane"] as? String
     }
 
     /// The id (lowercased) of the tree's `active` (= selected) session, or nil.
@@ -535,9 +525,9 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
     private func pollScratch(id target: String, equals expected: Bool, timeout: TimeInterval) throws -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if try sessionNode(id: target)?["scratch"] as? Bool == expected { return true }
+            if try sessionNodeIfPresent(id: target)?["scratch"] as? Bool == expected { return true }
             usleep(250_000)
         }
-        return try sessionNode(id: target)?["scratch"] as? Bool == expected
+        return try sessionNodeIfPresent(id: target)?["scratch"] as? Bool == expected
     }
 }

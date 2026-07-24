@@ -271,21 +271,10 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
     }
 
     func testSessionStatusSoundValidatesName() throws {
-        let tree = try sendCommand(#"{"cmd":"tree"}"#)
-        let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
-        let root = try XCTUnwrap(treeResult["tree"] as? [String: Any], "result should carry a tree")
-        let workspaces = try XCTUnwrap(root["workspaces"] as? [[String: Any]], "tree should list workspaces")
-        let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
-        let seeded = try XCTUnwrap(sessions.first?["id"] as? String, "should have a seeded session id")
+        let seeded = try activeSessionID()
 
-        // reads the seeded session's current status from a fresh tree (nil when idle/absent).
-        func currentStatus() throws -> String? {
-            let t = try sendCommand(#"{"cmd":"tree"}"#)
-            let r = try XCTUnwrap(t["result"] as? [String: Any])
-            let ws = try XCTUnwrap((r["tree"] as? [String: Any])?["workspaces"] as? [[String: Any]])
-            let all = ws.flatMap { $0["sessions"] as? [[String: Any]] ?? [] }
-            return all.first { ($0["id"] as? String) == seeded }?["status"] as? String
-        }
+        // reads the seeded session's current status from a fresh tree (nil when idle).
+        func currentStatus() throws -> String? { try sessionNode(id: seeded)["status"] as? String }
 
         // the default-beep keyword resolves and the command succeeds.
         let ok = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"active","sound":"default"}}"#)
@@ -309,20 +298,9 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
     // manual), so this drives the command path end-to-end: a valid #rrggbb applies the status, and a
     // malformed color is rejected before the mutation and leaves the status unchanged.
     func testSessionStatusColorValidatesHex() throws {
-        let tree = try sendCommand(#"{"cmd":"tree"}"#)
-        let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
-        let root = try XCTUnwrap(treeResult["tree"] as? [String: Any], "result should carry a tree")
-        let workspaces = try XCTUnwrap(root["workspaces"] as? [[String: Any]], "tree should list workspaces")
-        let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
-        let seeded = try XCTUnwrap(sessions.first?["id"] as? String, "should have a seeded session id")
+        let seeded = try activeSessionID()
 
-        func currentStatus() throws -> String? {
-            let t = try sendCommand(#"{"cmd":"tree"}"#)
-            let r = try XCTUnwrap(t["result"] as? [String: Any])
-            let ws = try XCTUnwrap((r["tree"] as? [String: Any])?["workspaces"] as? [[String: Any]])
-            let all = ws.flatMap { $0["sessions"] as? [[String: Any]] ?? [] }
-            return all.first { ($0["id"] as? String) == seeded }?["status"] as? String
-        }
+        func currentStatus() throws -> String? { try sessionNode(id: seeded)["status"] as? String }
 
         // a valid #rrggbb applies the status and shows the glyph. NOTE: the `"#ff0000"` value contains the
         // `"#` sequence, which would close a `#"..."#` raw string early, so this line uses the `##"..."##`
@@ -340,6 +318,46 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
 
         // the rejected call must NOT have changed the status — validation happens before the mutation.
         XCTAssertEqual(try currentStatus(), "blocked", "an invalid color must leave the status unchanged")
+    }
+
+    // session.status --shape picks a per-call glyph silhouette. ASSERTION LIMIT, the same one --color has:
+    // the drawn shape is NOT accessibility-observable — `StatusIconView` exposes only the state NAME as its
+    // accessibility value — so no test can assert the rendered symbol (that is verified by eye on a dev
+    // instance). This drives the command path instead: a valid shape applies the status and reads back on
+    // the tree, an unknown shape is rejected before the mutation, and the next status without --shape
+    // discards the override.
+    func testSessionStatusShapeValidatesAndReadsBack() throws {
+        let seeded = try activeSessionID()
+
+        // a valid shape applies the status and shows the glyph.
+        let ok = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"blocked","shape":"triangle"}}"#)
+        XCTAssertEqual(ok["ok"] as? Bool, true, "session.status --shape triangle should succeed: \(ok)")
+        XCTAssertTrue(app.staticTexts["agent-status"].waitForExistence(timeout: 12),
+                      "the status glyph should appear on the session's row")
+        XCTAssertEqual(app.staticTexts["agent-status"].value as? String, "blocked",
+                       "the glyph keeps reporting the state name — the silhouette is not accessibility-observable")
+
+        // the tree read-back carries the per-call shape alongside the status.
+        var node = try sessionNode(id: seeded)
+        XCTAssertEqual(node["status"] as? String, "blocked", "the status should be applied")
+        XCTAssertEqual(node["statusShape"] as? String, "triangle", "the tree should report the per-call shape")
+
+        // an unknown shape is rejected with the allCases-derived message, before any mutation.
+        let bad = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"active","shape":"hexagon"}}"#)
+        XCTAssertEqual(bad["ok"] as? Bool, false, "an unknown shape should fail: \(bad)")
+        XCTAssertEqual(bad["error"] as? String, "invalid shape: hexagon (circle|square|triangle|diamond|capsule|star)",
+                       "should report the accepted shapes: \(bad)")
+        node = try sessionNode(id: seeded)
+        XCTAssertEqual(node["status"] as? String, "blocked", "an invalid shape must leave the status unchanged")
+        XCTAssertEqual(node["statusShape"] as? String, "triangle", "an invalid shape must leave the shape unchanged")
+
+        // the next status without --shape discards the override — the glyph falls back to the Settings
+        // shape (here the built-in circle) and the read-back drops the field.
+        let cleared = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"active"}}"#)
+        XCTAssertEqual(cleared["ok"] as? Bool, true, "session.status without --shape should succeed: \(cleared)")
+        node = try sessionNode(id: seeded)
+        XCTAssertEqual(node["status"] as? String, "active", "the new status should be applied")
+        XCTAssertNil(node["statusShape"], "a status set without --shape should clear the shape read-back")
     }
 
     // the agent-status icon shows on every non-idle session, the selected one INCLUDED — there is no

@@ -80,10 +80,10 @@ final class DashboardUITests: ControlAPITestCase {
         // splitFocused false → true, a real (non-vacuous) effect to assert.
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool,
                        true, "session.split on should succeed")
-        XCTAssertTrue(pollSplit(id, timeout: 10), "the session should report a split")
+        XCTAssertTrue(try pollSplit(id, timeout: 10), "the session should report a split")
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(id)","args":{"pane":"left"}}"#)["ok"] as? Bool,
                        true, "session.focus left should succeed")
-        XCTAssertTrue(pollSplitFocused(id, expected: false, timeout: 10), "focus the left pane before opening")
+        XCTAssertTrue(try pollSplitFocused(id, expected: false, timeout: 10), "focus the left pane before opening")
 
         try openDashboard(members: [id])
         XCTAssertTrue(pollCellCount(2, timeout: 15), "a split session opens as two pane cells")
@@ -100,7 +100,7 @@ final class DashboardUITests: ControlAPITestCase {
         app.typeKey(.return, modifierFlags: [])
         XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "Enter closes the dashboard")
         XCTAssertTrue(pollSelectedSession(id, timeout: 10), "Enter selects the session")
-        XCTAssertTrue(pollSplitFocused(id, expected: true, timeout: 10),
+        XCTAssertTrue(try pollSplitFocused(id, expected: true, timeout: 10),
                       "Enter on the split cell focuses the RIGHT pane (splitFocused flips to true)")
     }
 
@@ -126,8 +126,8 @@ final class DashboardUITests: ControlAPITestCase {
         let splitButton = app.buttons["split-toggle"]
         XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
         splitButton.click()
-        XCTAssertTrue(pollSplit(id, timeout: 10), "the session should report a split")
-        XCTAssertTrue(pollSplitFocused(id, expected: true, timeout: 10), "opening the split focuses the right pane")
+        XCTAssertTrue(try pollSplit(id, timeout: 10), "the session should report a split")
+        XCTAssertTrue(try pollSplitFocused(id, expected: true, timeout: 10), "opening the split focuses the right pane")
 
         // open the dashboard over the split session via the SOCKET, WITHOUT the masking cell click.
         let response = try sendCommand(#"{"cmd":"dashboard","args":{"targets":["\#(id)"]}}"#)
@@ -640,38 +640,6 @@ final class DashboardUITests: ControlAPITestCase {
             usleep(200_000)
         }
         return dashHighlighted()?.lowercased() == ref.lowercased()
-    }
-
-    /// The `tree` session node for `id`, or nil if not readable yet.
-    private func sessionNode(_ id: String) -> [String: Any]? {
-        guard let workspaces = (try? treeTop())?["workspaces"] as? [[String: Any]] else { return nil }
-        for workspace in workspaces {
-            for session in (workspace["sessions"] as? [[String: Any]] ?? [])
-            where (session["id"] as? String)?.lowercased() == id.lowercased() {
-                return session
-            }
-        }
-        return nil
-    }
-
-    /// Polls the session node's `split` (isSplit) flag until true.
-    private func pollSplit(_ id: String, timeout: TimeInterval) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if sessionNode(id)?["split"] as? Bool == true { return true }
-            usleep(200_000)
-        }
-        return sessionNode(id)?["split"] as? Bool == true
-    }
-
-    /// Polls the session node's `splitFocused` read-back until it equals `expected`.
-    private func pollSplitFocused(_ id: String, expected: Bool, timeout: TimeInterval) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if sessionNode(id)?["splitFocused"] as? Bool == expected { return true }
-            usleep(200_000)
-        }
-        return sessionNode(id)?["splitFocused"] as? Bool == expected
     }
 
     private func pollDashFontSize(timeout: TimeInterval) -> Double? {

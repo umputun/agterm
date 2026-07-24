@@ -84,6 +84,57 @@ class ControlAPITestCase: XCTestCase {
         return try XCTUnwrap((ws["sessions"] as? [[String: Any]])?.first?["id"] as? String, "seeded session id")
     }
 
+    /// One session's node from a FRESH `tree`, searched across every workspace — the read-back oracle for
+    /// the state a command just set. Re-sends `tree` on every call, so a test can poll a mutation, and
+    /// fails when the session is absent rather than returning a nil field that would read as "unset".
+    /// Use `sessionNodeIfPresent(id:)` where absence is a legitimate intermediate state.
+    func sessionNode(id: String) throws -> [String: Any] {
+        let sessions = try XCTUnwrap(sessionNodes(), "tree should carry a workspace/session list")
+        return try XCTUnwrap(sessions.first { matchesID($0, id) }, "session \(id) should be in the tree")
+    }
+
+    /// The tolerant twin of `sessionNode(id:)`: nil for an absent session AND for a response that carries
+    /// no readable tree, instead of failing. A polling loop needs this — a helper that throws on a
+    /// transient miss ends the test instead of taking the next tick.
+    func sessionNodeIfPresent(id: String) throws -> [String: Any]? {
+        try sessionNodes()?.first { matchesID($0, id) }
+    }
+
+    /// Every session node from a FRESH `tree`, flattened across all workspaces; nil when the response
+    /// carries no readable tree.
+    private func sessionNodes() throws -> [[String: Any]]? {
+        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+        guard let result = tree["result"] as? [String: Any],
+              let workspaces = (result["tree"] as? [String: Any])?["workspaces"] as? [[String: Any]]
+        else { return nil }
+        return workspaces.flatMap { $0["sessions"] as? [[String: Any]] ?? [] }
+    }
+
+    /// Case-insensitive session id match — a `tree` id and a caller-supplied one can differ in case.
+    private func matchesID(_ session: [String: Any], _ id: String) -> Bool {
+        (session["id"] as? String)?.lowercased() == id.lowercased()
+    }
+
+    /// Polls the session node's `split` (isSplit) read-back until true.
+    func pollSplit(_ id: String, timeout: TimeInterval) throws -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if try sessionNodeIfPresent(id: id)?["split"] as? Bool == true { return true }
+            usleep(200_000)
+        }
+        return try sessionNodeIfPresent(id: id)?["split"] as? Bool == true
+    }
+
+    /// Polls the session node's `splitFocused` read-back until it equals `expected`.
+    func pollSplitFocused(_ id: String, expected: Bool, timeout: TimeInterval) throws -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if try sessionNodeIfPresent(id: id)?["splitFocused"] as? Bool == expected { return true }
+            usleep(200_000)
+        }
+        return try sessionNodeIfPresent(id: id)?["splitFocused"] as? Bool == expected
+    }
+
     /// Terminate the running app, write `snapshot` as the (single) window's per-window snapshot file,
     /// and relaunch with the same isolated state dir + socket so a test can control the restored
     /// session set. `windows.json` (written by the first launch) already points at this file, so the
