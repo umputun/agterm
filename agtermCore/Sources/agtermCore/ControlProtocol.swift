@@ -129,6 +129,11 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// override for `session.status` (rides the ephemeral indicator, so it lasts only until the next
     /// `session.status` without a color); nil = the Settings-configured status color.
     public var color: String?
+    /// The per-call glyph-SILHOUETTE override for `session.status` (a `StatusShape` raw value —
+    /// `circle|square|triangle|diamond|capsule|star`, parsed and validated in the dispatcher). Rides the
+    /// ephemeral indicator like `color`, so it lasts only until the next `session.status` without a shape;
+    /// nil = the Settings-configured shape for that status, else the default plain circle.
+    public var shape: String?
     /// The `background-image-opacity` for `session.background` (image + text), 0...1; nil = ghostty's 1.0.
     public var opacity: Double?
     /// The `background-image-fit` for `session.background` (`contain|cover|stretch|none`); nil = `contain`.
@@ -260,7 +265,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 width: Int? = nil, height: Int? = nil, x: Int? = nil, y: Int? = nil, display: Int? = nil,
                 status: String? = nil, blink: Bool? = nil, autoReset: Bool? = nil, sound: String? = nil,
                 ratio: Double? = nil, ratioDelta: Double? = nil,
-                path: String? = nil, color: String? = nil, opacity: Double? = nil, fit: String? = nil,
+                path: String? = nil, color: String? = nil, shape: String? = nil,
+                opacity: Double? = nil, fit: String? = nil,
                 position: String? = nil, repeats: Bool? = nil, all: Bool? = nil, lines: Int? = nil,
                 light: String? = nil, dark: String? = nil,
                 close: Bool? = nil, fontSize: Double? = nil, autoSize: Bool? = nil, mru: Bool? = nil) {
@@ -304,6 +310,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.ratioDelta = ratioDelta
         self.path = path
         self.color = color
+        self.shape = shape
         self.opacity = opacity
         self.fit = fit
         self.position = position
@@ -415,6 +422,11 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// The per-call `#rrggbb` glyph-tint override for the session's agent status, or nil when idle or using
     /// the Settings-configured status color (omitted from the JSON). The read side of `session.status --color`.
     public let statusColor: String?
+    /// The per-call glyph-silhouette override for the session's agent status (a `StatusShape` raw value),
+    /// or nil when idle or using the Settings-configured shape / the default plain circle (omitted from
+    /// the JSON). The read side of `session.status --shape` — the PER-CALL override only, exactly like
+    /// `statusColor`, so record-then-restore treats both alike.
+    public let statusShape: String?
     /// The session's background watermark spec, or nil when none is set (omitted from the JSON). The read
     /// side of `session.background` — set/clear/query symmetry, so a script can inspect the current watermark.
     public let background: BackgroundWatermark?
@@ -447,6 +459,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
                 foreground: [String]? = nil, splitForeground: [String]? = nil,
                 restoreCommand: String? = nil, splitRestoreCommand: String? = nil, status: String? = nil,
                 statusPane: String? = nil, statusBlink: Bool? = nil, statusColor: String? = nil,
+                statusShape: String? = nil,
                 background: BackgroundWatermark? = nil, unseen: Int? = nil,
                 fontSize: Double? = nil, splitFontSize: Double? = nil, scratchFontSize: Double? = nil,
                 surfaces: [ControlSurfaceNode]? = nil) {
@@ -471,6 +484,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.statusPane = statusPane
         self.statusBlink = statusBlink
         self.statusColor = statusColor
+        self.statusShape = statusShape
         self.background = background
         self.unseen = unseen
         self.fontSize = fontSize

@@ -97,7 +97,7 @@ final class AppStoreEventTests {
 
         store.setAgentIndicator(AgentIndicator(status: .active, statusPane: .right), forSession: session.id)
         store.setAgentIndicator(AgentIndicator(status: .blocked, blink: true, color: "#aabbcc",
-                                               statusPane: .scratch), forSession: session.id)
+                                               shape: .triangle, statusPane: .scratch), forSession: session.id)
         store.setAgentIndicator(AgentIndicator(status: .completed), forSession: session.id)
         store.setAgentIndicator(AgentIndicator(), forSession: session.id)
 
@@ -106,10 +106,35 @@ final class AppStoreEventTests {
         )))
         #expect(batch.items.map { $0.payload.status } == ["active", "blocked", "completed", "idle"])
         #expect(batch.items[0].payload.pane == "left")
+        #expect(batch.items[0].payload.shape == nil)
         #expect(batch.items[1].payload.pane == "scratch")
         #expect(batch.items[1].payload.blink == true)
         #expect(batch.items[1].payload.color == "#aabbcc")
+        #expect(batch.items[1].payload.shape == "triangle")
         #expect(batch.items.allSatisfy { $0.payload.name == session.displayName })
+    }
+
+    @Test func shapeOnlyStatusChangeEmitsAnEventCarryingTheShape() throws {
+        let library = WindowLibrary(directory: directory, controlEventRing: ControlEventRing(runID: run))
+        let store = try #require(library.activeStore)
+        let session = try #require(store.activeSession)
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: session.id)
+        let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
+
+        // only the shape differs, so the `previous != indicator` guard passes and an event fires — a
+        // consumer must be able to explain it, which is what the payload field is for
+        store.setAgentIndicator(AgentIndicator(status: .blocked, shape: .star), forSession: session.id)
+        // the negative leg of the same guard: re-asserting the IDENTICAL shaped indicator is not a change,
+        // so a repeated hook call must stay silent — this is what breaks if `shape` ever stops
+        // participating in `AgentIndicator` equality
+        store.setAgentIndicator(AgentIndicator(status: .blocked, shape: .star), forSession: session.id)
+
+        let batch = try eventBatch(library.readEvents(ControlEventReadOptions(
+            cursor: ControlEventCursor(run: anchor.run, after: anchor.next), kinds: [.status], limit: 100
+        )))
+        #expect(batch.items.count == 1)
+        #expect(batch.items.first?.payload.status == "blocked")
+        #expect(batch.items.first?.payload.shape == "star")
     }
 
     @Test func sameNormalizedStatusAndUnknownSessionDoNotEmit() throws {

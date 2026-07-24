@@ -324,6 +324,13 @@ public struct ControlDispatcher {
             if let color = request.args?.color, !WatermarkConfig.isValidColorHex(color) {
                 return ControlResponse(ok: false, error: "invalid color (expected #rrggbb)")
             }
+            var shape: StatusShape?
+            if let raw = request.args?.shape {
+                guard let parsed = StatusShape(rawValue: raw) else {
+                    return ControlResponse(ok: false, error: "invalid shape: \(raw) (\(StatusShape.validNamesList))")
+                }
+                shape = parsed
+            }
             let pane: StatusPane?
             switch parsePane(request.args?.pane) {
             case .pane(let parsed): pane = parsed
@@ -332,6 +339,7 @@ public struct ControlDispatcher {
             let update = ControlSessionStatusUpdate(status: status, blink: request.args?.blink,
                                                     autoReset: request.args?.autoReset,
                                                     sound: request.args?.sound, color: request.args?.color,
+                                                    shape: shape,
                                                     pane: pane, paneID: request.args?.paneID)
             return actions.setSessionStatus(request.target, window: request.args?.window, update: update)
         case .sessionRestore:

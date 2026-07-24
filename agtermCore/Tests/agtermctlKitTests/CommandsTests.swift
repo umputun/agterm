@@ -525,6 +525,41 @@ struct CommandsTests {
         #expect(validationMessage(["session", "status", "blocked", "--color", "nope"]) == "color must be a #rrggbb hex value")
     }
 
+    @Test func sessionStatusWithShape() throws {
+        let req = try request(["session", "status", "blocked", "--shape", "triangle"])
+        #expect(req.cmd == .sessionStatus)
+        #expect(req.args?.status == "blocked")
+        #expect(req.args?.shape == "triangle")
+        #expect(req == ControlRequest(cmd: .sessionStatus, target: "active",
+                                      args: ControlArgs(status: "blocked", shape: "triangle")))
+    }
+
+    @Test(arguments: StatusShape.allCases)
+    func sessionStatusAcceptsEveryShape(_ shape: StatusShape) throws {
+        #expect(try request(["session", "status", "active", "--shape", shape.rawValue]).args?.shape == shape.rawValue)
+    }
+
+    @Test func sessionStatusWithoutShape() throws {
+        let req = try request(["session", "status", "active"])
+        #expect(req.args?.shape == nil)
+    }
+
+    @Test func sessionStatusRejectsUnknownShape() {
+        // an unknown shape is rejected by validate() before any request is built, so it never reaches the
+        // socket; pin the exact allCases-derived message so an unrelated parse failure can't pass for it.
+        #expect(validationMessage(["session", "status", "blocked", "--shape", "hexagon"])
+            == "shape must be one of: circle, square, triangle, diamond, capsule, star")
+    }
+
+    @Test func sessionStatusShapeHelpListsEveryShape() {
+        // the --shape help is built from allCases like the validation message, so `--help` can't go stale
+        // when the set changes; assert every raw value survives into the rendered help.
+        let help = Session.Status.helpMessage(columns: 200)
+        for shape in StatusShape.allCases {
+            #expect(help.contains(shape.rawValue), "--shape help should list \(shape.rawValue), got: \(help)")
+        }
+    }
+
     @Test func sessionStatusWithPane() throws {
         let expected = ControlRequest(cmd: .sessionStatus, target: "s1",
                                       args: ControlArgs(pane: "right", status: "blocked"))

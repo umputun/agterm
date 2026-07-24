@@ -716,6 +716,82 @@ struct ControlDispatcherTests {
         ])
     }
 
+    @Test(arguments: StatusShape.allCases)
+    func sessionStatusCarriesEveryValidShape(_ shape: StatusShape) async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionStatus,
+            target: "session",
+            args: ControlArgs(status: "blocked", shape: shape.rawValue)
+        ))
+
+        #expect(response == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .sessionStatus(target: "session", window: nil,
+                           ControlSessionStatusUpdate(status: .blocked, blink: nil, autoReset: nil,
+                                                      sound: nil, shape: shape))
+        ])
+    }
+
+    @Test func sessionStatusForwardsShapeOnlyWhenTheArgIsPresent() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        // the dispatcher carries the arg through verbatim: present → the parsed shape, absent → nil. The
+        // user-facing "next call without --shape discards it" contract is the STORE replacing the whole
+        // ephemeral indicator (AppStoreTests.controlTreeDropsStatusShapeOnTheNextSetWithoutOne).
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionStatus, target: "session",
+                                                     args: ControlArgs(status: "blocked", shape: "triangle")))
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionStatus, target: "session",
+                                                     args: ControlArgs(status: "blocked")))
+
+        #expect(actions.calls == [
+            .sessionStatus(target: "session", window: nil,
+                           ControlSessionStatusUpdate(status: .blocked, blink: nil, autoReset: nil,
+                                                      sound: nil, shape: .triangle)),
+            .sessionStatus(target: "session", window: nil,
+                           ControlSessionStatusUpdate(status: .blocked, blink: nil, autoReset: nil,
+                                                      sound: nil, shape: nil))
+        ])
+    }
+
+    @Test func sessionStatusRejectsInvalidShapeWithoutMutating() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionStatus,
+            target: "session",
+            args: ControlArgs(status: "blocked", shape: "hexagon")
+        ))
+
+        // the accepted set in the message is derived from allCases, so it tracks the enum.
+        let accepted = StatusShape.allCases.map(\.rawValue).joined(separator: "|")
+        #expect(response == ControlResponse(ok: false, error: "invalid shape: hexagon (\(accepted))"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionStatusAcceptsShapeOnIdle() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        // idle renders no glyph, so a shape is accepted and simply carries nothing to draw — same as --color.
+        let response = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionStatus,
+            target: "session",
+            args: ControlArgs(status: "idle", shape: "star")
+        ))
+
+        #expect(response == ControlResponse(ok: true))
+        #expect(actions.calls == [
+            .sessionStatus(target: "session", window: nil,
+                           ControlSessionStatusUpdate(status: .idle, blink: nil, autoReset: nil,
+                                                      sound: nil, shape: .star))
+        ])
+    }
+
     @Test func sessionStatusColorErrorWinsOverInvalidPane() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -728,6 +804,27 @@ struct ControlDispatcherTests {
         ))
 
         #expect(response == ControlResponse(ok: false, error: "invalid color (expected #rrggbb)"))
+        #expect(actions.calls.isEmpty)
+    }
+
+    @Test func sessionStatusValidatesColorThenShapeThenPane() async {
+        let actions = MockControlActions()
+        let dispatcher = ControlDispatcher(actions: actions)
+        let accepted = StatusShape.allCases.map(\.rawValue).joined(separator: "|")
+
+        // the shape check was inserted BETWEEN the existing color and pane checks; pin both boundaries so
+        // reordering the three guards can't change which error a caller sees without failing here.
+        let colorOverShape = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionStatus, target: "session",
+            args: ControlArgs(status: "blocked", color: "nope", shape: "hexagon")
+        ))
+        let shapeOverPane = await dispatcher.dispatch(ControlRequest(
+            cmd: .sessionStatus, target: "session",
+            args: ControlArgs(pane: "middle", status: "blocked", shape: "hexagon")
+        ))
+
+        #expect(colorOverShape == ControlResponse(ok: false, error: "invalid color (expected #rrggbb)"))
+        #expect(shapeOverPane == ControlResponse(ok: false, error: "invalid shape: hexagon (\(accepted))"))
         #expect(actions.calls.isEmpty)
     }
 

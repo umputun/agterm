@@ -232,6 +232,21 @@ struct ControlProtocolTests {
         #expect(decoded.args?.color == nil)
     }
 
+    @Test func sessionStatusRoundTripsWithShape() throws {
+        let request = ControlRequest(cmd: .sessionStatus, target: "9f3c",
+                                     args: ControlArgs(status: "blocked", shape: "triangle"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.shape == "triangle")
+    }
+
+    @Test func sessionStatusOmitsShapeWhenNil() throws {
+        let request = ControlRequest(cmd: .sessionStatus, target: "9f3c", args: ControlArgs(status: "active"))
+        let json = String(decoding: try JSONEncoder().encode(request), as: UTF8.self)
+        #expect(!json.contains("shape"), "a nil shape must be omitted from the JSON; got \(json)")
+        #expect(try roundTrip(request).args?.shape == nil)
+    }
+
     @Test func sessionStatusRoundTripsWithPaneID() throws {
         let request = ControlRequest(cmd: .sessionStatus, target: "9f3c",
                                      args: ControlArgs(paneID: "surface-token-abc", status: "blocked"))
@@ -526,6 +541,26 @@ struct ControlProtocolTests {
         let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
         #expect(decoded.statusBlink == nil)
         #expect(decoded.statusColor == nil)
+    }
+
+    @Test func treeSessionNodeRoundTripsWithStatusShape() throws {
+        // the read side of session.status --shape: the per-call silhouette rides the tree node.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         status: "blocked", statusShape: "triangle")
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.statusShape == "triangle")
+    }
+
+    @Test func treeSessionNodeOmitsStatusShapeWhenNil() throws {
+        // a glyph using the Settings shape or the built-in circle — the key must be omitted, not null.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false, status: "blocked")
+        let json = String(decoding: try JSONEncoder().encode(session), as: UTF8.self)
+        #expect(!json.contains("statusShape"), "a nil statusShape must be omitted; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.statusShape == nil)
     }
 
     @Test func treeSessionNodeRoundTripsWithBackground() throws {

@@ -70,6 +70,7 @@ enum EventFormatter {
             if let pane = event.payload.pane { parts.append("pane=\(pane)") }
             if event.payload.blink == true { parts.append("blink") }
             if let color = event.payload.color { parts.append("color=\(color)") }
+            if let shape = event.payload.shape { parts.append("shape=\(shape)") }
             return parts.joined(separator: " ")
         case .notify:
             return "\(time) \(event.kind.rawValue) \(name) \(event.payload.title ?? name): \(event.payload.body ?? "")"

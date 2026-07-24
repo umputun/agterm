@@ -49,7 +49,8 @@ extension AppStore {
                 status: indicator.status.rawValue,
                 pane: indicator.statusPane?.rawValue,
                 blink: indicator.blink,
-                color: indicator.color
+                color: indicator.color,
+                shape: indicator.shape?.rawValue
             )
         )
     }

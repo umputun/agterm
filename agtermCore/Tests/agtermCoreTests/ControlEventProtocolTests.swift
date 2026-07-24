@@ -33,7 +33,7 @@ struct ControlEventProtocolTests {
         let events = [
             ControlEvent(seq: 1, ts: 1.25, kind: .status, window: "win", workspace: "work", session: "sess",
                          payload: ControlEventPayload(name: "api", status: "blocked", pane: "right",
-                                                      blink: true, color: "#aabbcc")),
+                                                      blink: true, color: "#aabbcc", shape: "triangle")),
             ControlEvent(seq: 2, ts: 2.5, kind: .notify, window: "win", workspace: "work", session: "sess",
                          payload: ControlEventPayload(name: "api", title: "Done", body: "tests passed")),
             ControlEvent(seq: 3, ts: 3.5, kind: .sessionCreated, window: "win", workspace: "work",
@@ -43,7 +43,8 @@ struct ControlEventProtocolTests {
             ControlEvent(seq: 5, ts: 5.5, kind: .treeChanged, window: "win"),
         ]
         let expected = [
-            ##"{"kind":"status","payload":{"blink":true,"color":"#aabbcc","name":"api","pane":"right","status":"blocked"},"seq":1,"session":"sess","ts":1.25,"window":"win","workspace":"work"}"##,
+            ##"{"kind":"status","payload":{"blink":true,"color":"#aabbcc","name":"api","pane":"right","##
+                + ##""shape":"triangle","status":"blocked"},"seq":1,"session":"sess","ts":1.25,"window":"win","workspace":"work"}"##,
             ##"{"kind":"notify","payload":{"body":"tests passed","name":"api","title":"Done"},"seq":2,"session":"sess","ts":2.5,"window":"win","workspace":"work"}"##,
             ##"{"kind":"session.created","payload":{"name":"new"},"seq":3,"session":"created","ts":3.5,"window":"win","workspace":"work"}"##,
             ##"{"kind":"session.closed","payload":{"name":"old"},"seq":4,"session":"closed","ts":4.5,"window":"win","workspace":"work"}"##,
@@ -51,6 +52,20 @@ struct ControlEventProtocolTests {
         ]
 
         #expect(try events.map(canonicalJSON) == expected)
+    }
+
+    @Test func statusPayloadRoundTripsShapeAndOmitsItWhenNil() throws {
+        let shaped = ControlEvent(seq: 1, ts: 1.5, kind: .status, window: "win", session: "sess",
+                                  payload: ControlEventPayload(status: "blocked", shape: "triangle"))
+        let plain = ControlEvent(seq: 2, ts: 2.5, kind: .status, window: "win", session: "sess",
+                                 payload: ControlEventPayload(status: "blocked"))
+
+        let shapedData = try JSONEncoder().encode(shaped)
+        #expect(try JSONDecoder().decode(ControlEvent.self, from: shapedData) == shaped)
+        #expect(try JSONDecoder().decode(ControlEvent.self, from: shapedData).payload.shape == "triangle")
+
+        let plainJSON = String(decoding: try JSONEncoder().encode(plain), as: UTF8.self)
+        #expect(!plainJSON.contains("shape"), "a nil shape must be omitted from the payload; got \(plainJSON)")
     }
 
     @Test func optionalEventAndPayloadFieldsAreOmitted() throws {

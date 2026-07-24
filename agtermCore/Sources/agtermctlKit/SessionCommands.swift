@@ -355,6 +355,12 @@ struct Session: ParsableCommand {
         var sound: String?
         @Option(name: .long, help: "Override the glyph tint for this call only (#rrggbb); reverts on the next status set without it.")
         var color: String?
+        @Option(name: .long, help: """
+            Override the glyph silhouette for this call only: \
+            \(StatusShape.validNamesPhrase); \
+            reverts on the next status set without it.
+            """)
+        var shape: String?
         @Option(name: .long, help: "Which pane set this status: left (main), right (split), or scratch. Records the blocked pane so nav lands on it. Defaults to the left pane.") var pane: String?
         @Option(name: .customLong("pane-id"), help: """
             A surface's stable token (the shell's $AGTERM_PANE_ID) — the agent-status hook forwards it so a \
@@ -369,6 +375,9 @@ struct Session: ParsableCommand {
             if let color, !WatermarkConfig.isValidColorHex(color) {
                 throw ValidationError("color must be a #rrggbb hex value")
             }
+            if let shape, StatusShape(rawValue: shape) == nil {
+                throw ValidationError("shape must be one of: \(StatusShape.validNamesPhrase)")
+            }
             try validatePaneArgument(pane)
         }
 
@@ -377,7 +386,7 @@ struct Session: ParsableCommand {
                            args: options.withWindow(ControlArgs(pane: pane, paneID: paneID, status: state,
                                                                  blink: blink ? true : nil,
                                                                  autoReset: autoReset ? true : nil, sound: sound,
-                                                                 color: color)))
+                                                                 color: color, shape: shape)))
         }
     }
 

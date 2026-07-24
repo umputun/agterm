@@ -224,6 +224,7 @@ public final class AppStore {
                                           statusPane: statusPane,
                                           statusBlink: idle ? nil : (session.agentIndicator.blink ? true : nil),
                                           statusColor: idle ? nil : session.agentIndicator.color,
+                                          statusShape: idle ? nil : session.agentIndicator.shape?.rawValue,
                                           background: session.backgroundWatermark,
                                           unseen: session.unseenCount > 0 ? session.unseenCount : nil,
                                           fontSize: fontSize(session),
