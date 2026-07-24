@@ -51,6 +51,18 @@ struct ConfigPathsTests {
         #expect(starter.contains("(not expressible)"))
         #expect(starter.contains("#   rename_session"))
         #expect(starter.contains("(no default)"))
+        // the six arrow-bound actions print their real chords — they used to claim "(no default)".
+        #expect(starter.contains("cmd+opt+left"))
+        #expect(starter.contains("cmd+opt+right"))
+        #expect(starter.contains("cmd+opt+up"))
+        #expect(starter.contains("cmd+opt+down"))
+        #expect(starter.contains("ctrl+opt+up"))
+        #expect(starter.contains("ctrl+opt+down"))
+        for action in [BuiltinAction.focusLeftPane, .focusRightPane, .previousSession, .nextSession,
+                       .previousAttentionSession, .nextAttentionSession] {
+            let line = starter.split(separator: "\n").first { $0.contains("#   \(action.rawValue) ") }
+            #expect(line?.contains("(no default)") == false, "\(action.rawValue) should print a real chord")
+        }
         for token in CommandContext.tokenNames {
             #expect(starter.contains("#   {\(token)}"))
         }

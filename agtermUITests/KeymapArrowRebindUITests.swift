@@ -1,11 +1,10 @@
 import XCTest
 
-/// Reproduction for issue #219: `map <chord> <action>` reportedly does nothing when the target action
-/// ships without a default chord. The four actions the report tested — `previous_session`,
-/// `next_session`, `previous_attention_session`, `next_attention_session` — are all in the six-member
-/// arrow-bound group (`defaultChord == nil`, a hardcoded arrow key-equivalent as the menu fallback via
-/// `agtermApp.arrowShortcut(for:)`). Uses the control socket to read the selected session by id, which is
-/// why it subclasses `ControlAPITestCase` (the `KeymapUITests` base can't reach the socket).
+/// Rebinding the six arrow-bound built-ins (`previous_session`, `next_session`, `focus_left_pane`,
+/// `focus_right_pane`, and the two attention-nav actions) — the group issue #219 reported as dead. They
+/// are ordinary `defaultChord`-driven actions now, rebindable to any chord including another arrow
+/// (issue #278). Uses the control socket to read the selected session by id, which is why it subclasses
+/// `ControlAPITestCase` (the `KeymapUITests` base can't reach the socket).
 @MainActor
 final class KeymapArrowRebindUITests: ControlAPITestCase {
     // map `next_session` (one of the four reported arrow-bound actions) to a parseable chord and prove the
@@ -34,6 +33,25 @@ final class KeymapArrowRebindUITests: ControlAPITestCase {
         _ = try sendCommand(#"{"cmd":"session.go","args":{"to":"next"}}"#)
         XCTAssertTrue(pollSelectedSession(sessionB, timeout: 10),
                       "session.go next over the socket should select B (proves navigation is alive)")
+    }
+
+    // the #278 case: rebind a built-in to an ARROW chord and prove the arrow key actually fires it. This
+    // covers the menu half of arrow support (Chord "left" -> KeyEquivalent.leftArrow in `toShortcut`);
+    // the runner half is covered by `KeymapUITests.testCustomCommandArrowChordFires`.
+    func testMapToAnArrowChordFires() throws {
+        try relaunch(withKeymap: "map cmd+shift+left next_session\n")
+        let sessionA = try activeSessionID()
+
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        let sessionB = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "new session id")
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "should have two sessions")
+
+        _ = try sendCommand(#"{"cmd":"session.select","target":"\#(sessionA)"}"#)
+        XCTAssertTrue(pollSelectedSession(sessionA, timeout: 10), "A should be selected before the chord")
+
+        app.typeKey(.leftArrow, modifierFlags: [.command, .shift])
+        XCTAssertTrue(pollSelectedSession(sessionB, timeout: 10),
+                      "the mapped arrow chord ⌘⇧← should fire next_session and select B (issue #278)")
     }
 
     // the same rebind but applied via a LIVE `keymap.reload` (the exact path issue #219 used —

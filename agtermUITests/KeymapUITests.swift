@@ -189,6 +189,21 @@ final class KeymapUITests: XCTestCase {
                       "a custom command bound to shift+/ should fire when Shift+/ (the ? key) is pressed")
     }
 
+    // a custom command bound to an ARROW chord fires. This is the path the host-free tests structurally
+    // cannot reach: the parser accepting `cmd+shift+left` means nothing unless the runner's NSEvent→Chord
+    // mapping produces key "left" for keyCode 123. Without the keyCode entry the event falls through to
+    // the character branch, which yields the private-use arrow character — a valid Chord no keymap line
+    // can spell, so the binding registers and silently never fires (the shifted-symbol failure mode).
+    func testCustomCommandArrowChordFires() throws {
+        let marker = markerDir.appendingPathComponent("arrow")
+        seedKeymap("command \"Touch Arrow\" cmd+shift+left touch '\(marker.path)'\n")
+        app.launchForUITest()
+        focusTerminal()
+
+        XCTAssertTrue(chordFiresMarker(marker) { app.typeKey(.leftArrow, modifierFlags: [.command, .shift]) },
+                      "a custom command bound to cmd+shift+left should fire when ⌘⇧← is pressed (issue #278)")
+    }
+
     // a custom command bound to a LEADER sequence fires: bind `ctrl+a>g` to `touch <file>`, focus the
     // terminal, press ctrl+a then g (two key events), assert the file appears. ctrl+a normally moves to
     // the line start in the shell, but the runner arms on it and consumes the sequence.

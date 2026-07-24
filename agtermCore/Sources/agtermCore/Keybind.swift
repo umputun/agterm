@@ -19,7 +19,36 @@ public struct Modifier: OptionSet, Hashable, Sendable {
 /// keys the app-side runner can produce from an `NSEvent`, so `parseKeybind` rejects any other name
 /// (a key the UI would accept but the runner could never fire). `esc` is reserved as the leader
 /// abort and is intentionally NOT bindable.
-public let bindableNamedKeys: Set<String> = ["tab", "space", "return", "delete"]
+///
+/// The four arrows are here because the six arrow-bound built-ins ship their defaults on them, so the
+/// grammar must be able to spell what `BuiltinAction.defaultChord` returns. Adding a name here is only
+/// safe once every `NSEvent`→`Chord` site can produce it — `CustomCommandRunner` and
+/// `UndoCloseShortcut` both resolve named keys through `namedKey(forKeyCode:)`.
+public let bindableNamedKeys: Set<String> = Set(["tab", "space", "return", "delete"]).union(bindableArrowKeys)
+
+/// The four arrow keys, a subset of `bindableNamedKeys`. Named separately because they carry one extra
+/// rule: a built-in `map` may not bind a modifier-less arrow (`parseMapLine`), since an always-on menu
+/// key-equivalent on a bare arrow swallows the key in the terminal, the palettes, the dashboard grid,
+/// and every text field at once.
+public let bindableArrowKeys: Set<String> = ["left", "right", "up", "down"]
+
+/// The named key for a macOS virtual key code, or `nil` for a key that carries a normal character
+/// (which the caller derives from the event itself). The single source of truth for the keyCode→name
+/// half of the `NSEvent`→`Chord` mapping, shared by every app-side monitor so a name added to
+/// `bindableNamedKeys` can't parse in the file yet fail to fire at runtime.
+public func namedKey(forKeyCode keyCode: UInt16) -> String? {
+    switch keyCode {
+    case 36: return "return"
+    case 48: return "tab"
+    case 49: return "space"
+    case 51: return "delete"
+    case 123: return "left"
+    case 124: return "right"
+    case 125: return "down"
+    case 126: return "up"
+    default: return nil
+    }
+}
 
 /// Whether a chord is owned by the app's always-on `NSEvent` monitors (NOT a menu key-equivalent), so a
 /// keybind that starts with it would dead-race the monitor and must be rejected. This MIRRORS the
@@ -75,6 +104,10 @@ public struct Chord: Equatable, Hashable, Sendable {
         case "space": s += "␣"
         case "return": s += "↩"
         case "delete": s += "⌫"
+        case "left": s += "←"
+        case "right": s += "→"
+        case "up": s += "↑"
+        case "down": s += "↓"
         default: s += key.count == 1 ? key.uppercased() : key
         }
         return s

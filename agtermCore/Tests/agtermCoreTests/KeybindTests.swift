@@ -52,6 +52,50 @@ struct KeybindTests {
         #expect(parseKeybind("ctrl+space") == [Chord(mods: .control, key: "space")])
     }
 
+    @Test func parseArrowKeys() {
+        // the exact lines from the report that motivated arrow support (#278).
+        #expect(parseKeybind("cmd+shift+left") == [Chord(mods: [.command, .shift], key: "left")])
+        #expect(parseKeybind("cmd+shift+right") == [Chord(mods: [.command, .shift], key: "right")])
+        #expect(parseKeybind("cmd+opt+up") == [Chord(mods: [.command, .option], key: "up")])
+        #expect(parseKeybind("ctrl+opt+down") == [Chord(mods: [.control, .option], key: "down")])
+    }
+
+    @Test func parseArrowKeysIsCaseInsensitiveAndWorksBareAndInLeaders() {
+        #expect(parseKeybind("CMD+SHIFT+LEFT") == [Chord(mods: [.command, .shift], key: "left")])
+        // a bare arrow parses; the modifier requirement is a `map`/`command` rule, not a grammar one.
+        #expect(parseKeybind("up") == [Chord(mods: [], key: "up")])
+        #expect(parseKeybind("ctrl+a>left") == [Chord(mods: .control, key: "a"), Chord(mods: [], key: "left")])
+    }
+
+    @Test func parseStillRejectsNamedKeysTheRunnerCannotProduce() {
+        // guards against over-widening the named-key set: only the documented names are bindable, and
+        // `esc` stays reserved as the leader abort.
+        #expect(parseKeybind("cmd+esc") == nil)
+        #expect(parseKeybind("cmd+f1") == nil)
+        #expect(parseKeybind("cmd+home") == nil)
+        #expect(parseKeybind("cmd+end") == nil)
+        #expect(parseKeybind("cmd+pageup") == nil)
+        #expect(parseKeybind("cmd+arrowleft") == nil)
+    }
+
+    @Test func namedKeyForKeyCodeCoversExactlyTheBindableNamedKeys() {
+        // the keyCode→name map is what the app-side monitors use; a name the grammar accepts but the map
+        // can't produce would parse in the file and never fire (the shifted-symbol failure mode).
+        let produced = Set((0...127).compactMap { namedKey(forKeyCode: UInt16($0)) })
+        #expect(produced == bindableNamedKeys)
+        #expect(namedKey(forKeyCode: 123) == "left")
+        #expect(namedKey(forKeyCode: 124) == "right")
+        #expect(namedKey(forKeyCode: 125) == "down")
+        #expect(namedKey(forKeyCode: 126) == "up")
+        // a key that carries a normal character resolves from the event, not here.
+        #expect(namedKey(forKeyCode: 0) == nil)
+    }
+
+    @Test func bindableArrowKeysIsASubsetOfBindableNamedKeys() {
+        #expect(bindableArrowKeys.isSubset(of: bindableNamedKeys))
+        #expect(bindableArrowKeys == ["left", "right", "up", "down"])
+    }
+
     @Test func parseRejectsEmptyString() {
         #expect(parseKeybind("") == nil)
     }
@@ -190,5 +234,17 @@ struct KeybindTests {
         #expect(Chord(mods: [.command], key: "+").glyphString == "⌘+")
         #expect(Chord(mods: [.control], key: "tab").glyphString == "⌃⇥")
         #expect(Chord(mods: [.command], key: "return").glyphString == "⌘↩")
+        #expect(Chord(mods: [.command, .option], key: "left").glyphString == "⌥⌘←")
+        #expect(Chord(mods: [.command, .option], key: "right").glyphString == "⌥⌘→")
+        #expect(Chord(mods: [.command, .option], key: "up").glyphString == "⌥⌘↑")
+        #expect(Chord(mods: [.control, .option], key: "down").glyphString == "⌃⌥↓")
+    }
+
+    @Test func arrowChordsRoundTripThroughDisplayString() {
+        for key in bindableArrowKeys {
+            let chord = Chord(mods: [.command, .shift], key: key)
+            #expect(chord.displayString == "cmd+shift+\(key)")
+            #expect(parseKeybind(chord.displayString) == [chord])
+        }
     }
 }

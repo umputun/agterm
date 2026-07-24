@@ -38,16 +38,8 @@ final class UndoCloseShortcut {
         if flags.contains(.option) { mods.insert(.option) }
         if flags.contains(.shift) { mods.insert(.shift) }
 
-        let key: String?
-        switch event.keyCode {
-        case 36: key = "return"
-        case 48: key = "tab"
-        case 49: key = "space"
-        case 51: key = "delete"
-        default:
-            key = event.charactersIgnoringModifiers?.lowercased()
-        }
-        guard let key, key.count == 1 || ["return", "tab", "space", "delete"].contains(key) else { return nil }
+        let key = namedKey(forKeyCode: event.keyCode) ?? event.charactersIgnoringModifiers?.lowercased()
+        guard let key, key.count == 1 || bindableNamedKeys.contains(key) else { return nil }
         return Chord(mods: mods, key: key)
     }
 }

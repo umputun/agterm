@@ -27,15 +27,11 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
 
     /// The shipped default chord for this action, or `nil` when it has no default key today.
     ///
-    /// `nil` covers two groups: the keyless actions (`rename_*`/`delete_*`/`duplicate_session`/`clear_status`/
-    /// `first_session`/`last_session`/`select_theme`/`toggle_flagged_view`/`focus_workspace`),
-    /// which gain a key only when the user `map`s one; AND the six
-    /// arrow-bound actions (`focus_left_pane` ⌘⌥←, `focus_right_pane` ⌘⌥→, `previous_session` ⌥⌘↑,
-    /// `next_session` ⌥⌘↓, `previous_attention_session` ⌃⌥↑, `next_attention_session` ⌃⌥↓). Arrows are
-    /// NOT expressible as a parsed `Chord` (`parseKeybind` only accepts single-char keys or
-    /// `tab`/`space`/`return`/`delete`), so they cannot round-trip through the keymap grammar and are not
-    /// returned here. The menu keeps its hardcoded arrow shortcut as the
-    /// fallback when `equivalent(for:)` is nil; the user can still re-`map` these to a parseable chord.
+    /// `nil` covers only the keyless actions (`rename_*`/`delete_*`/`duplicate_session`/`clear_status`/
+    /// `first_session`/`last_session`/`select_theme`/`toggle_flagged_view`/`focus_workspace`), which gain
+    /// a key only when the user `map`s one. Every action that ships with a key returns it here, including
+    /// the six arrow-bound ones — the arrows are part of the chord grammar, so their defaults round-trip
+    /// through `keymap.conf` like any other and the menu needs no hardcoded fallback.
     public var defaultChord: Chord? {
         switch self {
         case .newWindow: return Chord(mods: [.command, .option], key: "n")
@@ -61,30 +57,15 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
         case .customCommandPalette: return Chord(mods: [.control, .shift], key: "o")
         case .showAttention: return Chord(mods: [.control, .shift], key: "i")
         case .dashboard: return Chord(mods: [.command, .shift], key: "d")
+        case .focusLeftPane: return Chord(mods: [.command, .option], key: "left")
+        case .focusRightPane: return Chord(mods: [.command, .option], key: "right")
+        case .previousSession: return Chord(mods: [.command, .option], key: "up")
+        case .nextSession: return Chord(mods: [.command, .option], key: "down")
+        case .previousAttentionSession: return Chord(mods: [.control, .option], key: "up")
+        case .nextAttentionSession: return Chord(mods: [.control, .option], key: "down")
         case .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .duplicateSession,
              .clearStatus, .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace:
             return nil
-        case .focusLeftPane, .focusRightPane, .previousSession, .nextSession,
-             .previousAttentionSession, .nextAttentionSession:
-            // arrow-bound: not expressible as a parsed Chord; the menu keeps its hardcoded arrow key.
-            return nil
-        }
-    }
-
-    /// The hardcoded macOS menu glyph for the six arrow-bound actions, whose default shortcut can't
-    /// round-trip through `Chord`/`keymap.conf` (so `defaultChord` is nil). `nil` for every other
-    /// action — a keyless action stays keyless until the user maps a chord. This is the display
-    /// counterpart of the menu's hardcoded arrow `.keyboardShortcut`, used by `Keymap.glyphHint(for:)`
-    /// to render an action's current shortcut in the action palette and the toolbar tooltips.
-    public var arrowGlyphFallback: String? {
-        switch self {
-        case .focusLeftPane: return "⌥⌘←"
-        case .focusRightPane: return "⌥⌘→"
-        case .previousSession: return "⌥⌘↑"
-        case .nextSession: return "⌥⌘↓"
-        case .previousAttentionSession: return "⌃⌥↑"
-        case .nextAttentionSession: return "⌃⌥↓"
-        default: return nil
         }
     }
 }

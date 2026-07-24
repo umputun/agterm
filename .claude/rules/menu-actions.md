@@ -63,8 +63,8 @@ paths:
   or quick terminal), else the active session's surface.
   A menu-driven font change still rides the CELL_SIZE → persist path, like the keybind.
 - **In-terminal search (⌘F).**
-  `BuiltinAction.toggleSearch` (`defaultChord` = ⌘F, expressible/rebindable — NOT one of the arrow-bound
-  exceptions) drives `AppActions.toggleSearch()` → `focusedSurface().startSearch()` (the `start_search`
+  `BuiltinAction.toggleSearch` (`defaultChord` = ⌘F, rebindable like every other built-in)
+  drives `AppActions.toggleSearch()` → `focusedSurface().startSearch()` (the `start_search`
   binding action).
   It is a real View ▸ Find… menu item (reading `equivalent(for: .toggleSearch)`,
   no hardcoded shortcut) plus a ⌃⇧P palette "Find…" entry. libghostty replies with a `START_SEARCH` action;
@@ -273,13 +273,13 @@ paths:
   the target so an off-screen row is revealed.
   Distinct from the ⌃Tab MRU switcher (recency order) and the ⌃P fuzzy palette (search) — this is predictable
   spatial stepping in the sidebar's visual order.
-  **Attention navigation** (⌃⌥↑/⌃⌥↓ — the SAME arrow-fallback as the session nav,
-  since arrows aren't keymap-expressible) is the variant that steps through ONLY the sessions needing
+  **Attention navigation** (⌃⌥↑/⌃⌥↓, a plain `defaultChord` like the session nav — arrows are part of the
+  keymap grammar, so both are rebindable) is the variant that steps through ONLY the sessions needing
   attention (`AgentStatus.needsAttention` = `blocked`/`completed`), WRAPPING around and skipping idle/active.
   It reuses `AppStore.navigateSession` (the `.nextAttention`/`.previousAttention` cases — host-free,
   unit-tested) and is driven by Navigate ▸ Previous/Next Attention Session,
-  the action palette, and `session.go next-attention|prev-attention`; the two new `BuiltinAction`s (`previous_attention_session`/`next_attention_session`)
-  join the arrow-bound set (nil `defaultChord`, hardcoded ⌃⌥↑/↓ via `arrowShortcut`).
+  the action palette, and `session.go next-attention|prev-attention`; the two `BuiltinAction`s (`previous_attention_session`/`next_attention_session`)
+  carry ⌃⌥↑/↓ as their `defaultChord`.
   EVERY user-initiated GUI selection now REVEALS the blocked PANE, not just the session: the shared
   `AppActions.revealActiveBlockedPane()` (formerly private, now called on all selection paths) reads the
   landed session's `agentIndicator.statusPane` and focuses that pane — for `right`, the split surface via
@@ -317,7 +317,7 @@ paths:
   opens the session switcher, ⌃⇧P the action palette (the session/action shortcut split is deliberate).
 - **Built-in shortcut hints are one resolver, shared by the palette AND the toolbar/sidebar tooltips.**
   `AppActions.shortcutGlyph(for:)` (formerly `paletteHint`) → the host-free `Keymap.glyphHint(for:)`
-  (`equivalent(for:)?.glyphString ?? BuiltinAction.arrowGlyphFallback`, nil = no shortcut) renders an
+  (`equivalent(for:)?.glyphString`, nil = no shortcut) renders an
   action's CURRENT chord as macOS glyphs (`⌃⌘S`), tracking a `keymap.conf` rebind live.
   `paletteActions()` reads it for the right-aligned palette hint; `WindowContentView.helpHint(_:_:)`
   appends `" (<glyph>)"` to the `.help(…)` tooltip of the 8 `BuiltinAction`-backed toolbar/sidebar buttons
@@ -337,8 +337,8 @@ paths:
   Empty-query order is the `attentionSessions` order (the palette re-sorts by fuzzy score only once the
   user types); `.attention` needs no theme-preview wiring (`syncThemeSession` guards on `.themes`).
   Opened three keyboard/menu ways: `BuiltinAction.showAttention` (rawValue `show_attention`,
-  `defaultChord` ⌃⇧I — a distinct chord swallowed before the terminal like ⌃⇧P/⌃⇧O,
-  expressible/pure-`defaultChord`, NOT an arrow exception) → `AppActions.toggleAttentionPalette()` →
+  `defaultChord` ⌃⇧I — a distinct chord swallowed before the terminal like ⌃⇧P/⌃⇧O)
+  → `AppActions.toggleAttentionPalette()` →
   `palette.toggle(.attention)`, the **Navigate ▸ "Go to Attention…"** menu item (reading `equivalent(for: .showAttention)`),
   and a **"Show Attention"** entry in `paletteActions()` (the ⌃⇧P launcher).
   The title-bar bell is NOT a fourth palette opener: clicking it opens a MOUSE-form popover of the attention

@@ -1509,6 +1509,12 @@
               >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">return</span>/<span
                 style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
                 >delete</span
+              >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">left</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >right</span
+              >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">up</span>/<span
+                style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >down</span
               >). A Shift-typed symbol is written
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+&lt;base&gt;</span>
               (e.g. <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">shift+/</span> for
@@ -1641,8 +1647,10 @@
                 <span
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
-                >The arrow keys can't be written as a chord, so the arrow-bound actions keep their defaults unless
-                mapped to a parseable chord. The literal
+                >A <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">map</span> line can't bind a
+                bare, modifier-less arrow — a built-in rides an always-on menu key equivalent, so a bare arrow would
+                swallow the key in the terminal, the palettes, the dashboard grid, and every text field; any modifier
+                makes it bindable. The literal
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">+</span> and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">&gt;</span> can't be a bare
                 key token (they are the separators), but those keys are bindable as

@@ -78,7 +78,7 @@ final class CustomCommandRunner {
     }
 
     /// The Esc virtual keycode the matcher treats specially (the leader abort); Return is a bindable
-    /// base key handled via `namedKeys`, not here.
+    /// base key handled via `namedKey(forKeyCode:)`, not here.
     private static let escapeKeyCode: UInt16 = 53
 
     /// Feed one key event to the matcher. Returns whether the event was consumed (so the caller drops
@@ -161,7 +161,7 @@ final class CustomCommandRunner {
         if flags.contains(.option) { mods.insert(.option) }
         if flags.contains(.shift) { mods.insert(.shift) }
 
-        if let named = Self.namedKeys[event.keyCode] {
+        if let named = namedKey(forKeyCode: event.keyCode) {
             return Chord(mods: mods, key: named)
         }
         // Derive the UNSHIFTED base key so every key normalizes the same way. `charactersIgnoringModifiers`
@@ -176,9 +176,6 @@ final class CustomCommandRunner {
         guard !key.isEmpty, key != " " else { return nil }
         return Chord(mods: mods, key: key)
     }
-
-    /// The special keys `parseKeybind` names, by macOS virtual keycode.
-    private static let namedKeys: [UInt16: String] = [48: "tab", 49: "space", 36: "return", 51: "delete"]
 
     private func startLeaderTimer() {
         cancelLeaderTimer()

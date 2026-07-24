@@ -16,19 +16,18 @@ public struct Keymap: Equatable, Sendable {
     }
 
     /// The active chord for a built-in action: the user override when one is present, else the
-    /// action's shipped `defaultChord` (which is `nil` for the keyless and arrow-bound actions).
+    /// action's shipped `defaultChord` (which is `nil` only for the keyless actions).
     public func equivalent(for action: BuiltinAction) -> Chord? {
         builtinOverrides[action] ?? action.defaultChord
     }
 
     /// The action's current shortcut as a macOS menu glyph string (e.g. `⌘N`, `⌃⌘S`), or `nil` when
     /// the action has no shortcut at all. Resolves the effective chord (`equivalent(for:)` — user
-    /// override else shipped default) and renders it via `Chord.glyphString`; for the arrow-bound
-    /// actions, which have no expressible default, it falls back to the hardcoded `arrowGlyphFallback`.
-    /// `nil` means "not configured" — the caller shows no shortcut. Drives both the action-palette
-    /// hints and the toolbar tooltips so the two surfaces can't drift.
+    /// override else shipped default) and renders it via `Chord.glyphString`. `nil` means "not
+    /// configured" — the caller shows no shortcut. Drives both the action-palette hints and the toolbar
+    /// tooltips so the two surfaces can't drift.
     public func glyphHint(for action: BuiltinAction) -> String? {
-        equivalent(for: action)?.glyphString ?? action.arrowGlyphFallback
+        equivalent(for: action)?.glyphString
     }
 }
 
@@ -171,8 +170,9 @@ private struct ParsedOverride {
 /// default, which may collide afresh with another action; the loop re-checks until no collision remains.
 /// Loser rule per collision: an override colliding with another action's UNMOVED default loses (keep the
 /// default owner); two colliding OVERRIDES → the later-in-file one loses. Each dropped override is
-/// diagnosed. The 12 shipped defaults are distinct, so every collision involves at least one override
-/// and each iteration removes ≥1 override → the loop terminates. Re-mapping the SAME action is last-wins
+/// diagnosed. The shipped defaults are all distinct (pinned by `BuiltinActionTests`), so every collision
+/// involves at least one override and each iteration removes ≥1 override → the loop terminates.
+/// Re-mapping the SAME action is last-wins
 /// (it can't collide with itself).
 private func resolveBuiltinOverrides(_ overrides: [ParsedOverride],
                                      diagnostics: inout [KeymapDiagnostic]) -> [BuiltinAction: Chord] {
@@ -254,9 +254,9 @@ private func firstBuiltinCollision(candidates: [BuiltinAction: Chord],
 /// command may freely reuse a default chord the user moved a built-in off of.
 private func validateCommands(_ commands: [CustomCommand], against keymap: Keymap,
                               diagnostics: inout [KeymapDiagnostic]) -> [CustomCommand] {
-    // active built-in chords: the override when present, else the shipped default. The keyless and
-    // arrow-bound actions contribute a chord only when the user mapped one (defaultChord == nil), so
-    // an unmapped arrow default never collides with a (parseable) custom chord.
+    // active built-in chords: the override when present, else the shipped default. The keyless actions
+    // contribute a chord only when the user mapped one (defaultChord == nil); every shipped default,
+    // arrows included, is in the set, so a custom command can't shadow one.
     let builtinChords = Set(BuiltinAction.allCases.compactMap { keymap.equivalent(for: $0) })
 
     var result = commands
@@ -365,6 +365,15 @@ private func parseMapLine(_ rest: String, line: Int, overrides: inout [ParsedOve
     // without dead-racing the monitor, so reject it for built-ins exactly as for custom commands.
     guard !isReservedMonitorChord(chord) else {
         diagnostics.append(KeymapDiagnostic(line: line, message: "chord '\(chordText)' is a reserved shortcut; map skipped"))
+        return
+    }
+    // a modifier-less arrow would install an always-on menu key-equivalent that swallows the key
+    // everywhere at once — the terminal, the palettes, the dashboard grid, and every text field — and
+    // the menu path (unlike the custom-command monitor) has no text-field pass-through to soften it.
+    // `parseCommandLine` requires a modifier for the same reason.
+    guard !(bindableArrowKeys.contains(chord.key) && chord.mods.isEmpty) else {
+        diagnostics.append(KeymapDiagnostic(line: line,
+                                            message: "chord '\(chordText)' needs a modifier; map skipped"))
         return
     }
     guard let action = BuiltinAction(rawValue: actionName) else {

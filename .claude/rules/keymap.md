@@ -130,19 +130,19 @@ paths:
   own dispatch — documented, not validated.
 - **`BuiltinAction.defaultChord` is the single source of truth for the built-in shortcuts (keep-in-sync
   surface).** Task 9 collapsed the old `BuiltinAction` ↔ menu keep-in-sync convention:
-  30 of the 36 built-in menu items now read `equivalent(for:)` (override else `defaultChord`) with NO
-  hardcoded `.keyboardShortcut` literal, so adding/changing a default chord happens in `defaultChord`
-  alone (`toggle_search` ⌘F, `toggle_sidebar` ⌃⌘S, `toggle_fullscreen` ⌃⌘F, `custom_command_palette` ⌃⇧O,
-  and `show_attention` ⌃⇧I are among these — expressible, so pure-`defaultChord`-driven,
-  not arrow exceptions).
-  The EXCEPTION is the six arrow-bound actions (`focus_left_pane` ⌘⌥←, `focus_right_pane` ⌘⌥→,
-  `previous_session` ⌥⌘↑, `next_session` ⌥⌘↓, `previous_attention_session` ⌃⌥↑,
-  `next_attention_session` ⌃⌥↓): `parseKeybind` accepts only single-char keys or `tab`/`space`/`return`/`delete`
-  — arrows are not expressible as a parsed `Chord`, so `defaultChord` returns nil for them and the menu
-  keeps its hardcoded arrow `.keyboardShortcut` as the FALLBACK when `equivalent(for:)` is nil (a user
-  can still `map` these to a parseable chord, which then wins).
-  So the six arrow actions are NOT pure-`defaultChord`-driven by design;
-  the other 29 are.
+  EVERY built-in menu item reads `equivalent(for:)` (override else `defaultChord`) with NO hardcoded
+  `.keyboardShortcut` literal, so adding/changing a default chord happens in `defaultChord` alone.
+  There is NO exception any more: the six formerly arrow-bound actions (`focus_left_pane` ⌘⌥←,
+  `focus_right_pane` ⌘⌥→, `previous_session` ⌥⌘↑, `next_session` ⌥⌘↓, `previous_attention_session` ⌃⌥↑,
+  `next_attention_session` ⌃⌥↓) return their real chords from `defaultChord` now that `parseKeybind`
+  accepts the four arrows, so EVERY keyed built-in is pure-`defaultChord`-driven and the menu holds no
+  hardcoded `.keyboardShortcut` at all.
+  The old props are gone — `agtermApp.arrowShortcut(for:)`, `BuiltinAction.arrowGlyphFallback`, and
+  `glyphHint`'s `?? arrowGlyphFallback` were deleted, and the starter file's six `(no default)` lines
+  became real chords.
+  This also CLOSED a hole: `firstBuiltinCollision` and `validateCommands` resolve through `defaultChord`,
+  so while the six were nil their live ⌥⌘↑/↓/←/→ were invisible to the conflict checker — a `map cmd+opt+up new_session`
+  would have double-bound the chord silently.
 - **Shifted symbols bind as `shift+<base>` — the runner normalizes to the UNSHIFTED base key.**
   `charactersIgnoringModifiers` KEEPS shift (shift+/ → "?", shift+= → "+"), and the old
   `.lowercased()` only undid that for letters (shift+u → "u"), so punctuation landed on the shifted glyph
@@ -155,10 +155,30 @@ paths:
   This is verified END-TO-END by `KeymapUITests.testCustomCommandShiftedSymbolFires` (a real synthesized
   Shift+/ keypress fires a `shift+/`-bound command) — the host-free tests structurally can't reach
   `chord(from:)`, which is exactly why the earlier parser-only version shipped a runtime that never fired.
+- **Arrows are bindable; a BARE arrow is not (`map` only).**
+  `bindableNamedKeys` carries `left`/`right`/`up`/`down` alongside `tab`/`space`/`return`/`delete`, and
+  `bindableArrowKeys` names the four separately for the one rule that treats them specially.
+  `parseMapLine` REJECTS a modifier-less arrow (`map left previous_session` → `chord '<x>' needs a modifier; map skipped`)
+  because a built-in becomes an always-on menu key-equivalent with NO text-field pass-through — unlike
+  the custom-command monitor, which returns false for an `NSText` responder — so a bare arrow would
+  swallow the key in the terminal, both palettes, the dashboard grid's key-catcher, and every text field
+  at once.
+  `parseCommandLine` already required a modifier on every custom chord, so the two verbs now agree for
+  arrows; a bare NON-arrow key stays legal for `map` (pre-existing, `map a new_session`).
+  The grammar itself accepts a bare arrow — the modifier rule is a `map` rule, not a parse rule, so a
+  leader tail like `ctrl+a>left` still works.
+- **The keyCode→name half of `NSEvent`→`Chord` is ONE host-free function.**
+  `namedKey(forKeyCode:)` (`Keybind.swift`) is the single source of truth, used by BOTH app-side monitors
+  — `CustomCommandRunner.chord(from:)` and `UndoCloseShortcut.chord(from:)`, which each carried their own
+  copy of the table before.
+  This matters because a name the GRAMMAR accepts but the keyCode map can't produce parses fine and then
+  never fires: an arrow would fall through to the character branch, whose `characters(byApplyingModifiers: [])`
+  yields the private-use `NSUpArrowFunctionKey` glyph — a VALID `Chord` no keymap line can spell.
+  That is exactly the shifted-symbol failure mode that shipped once (see the shift-symbol note above),
+  which is why `KeybindTests` pins `namedKey(forKeyCode:)`'s range to equal `bindableNamedKeys` exactly,
+  and why the runner path has its own e2e (`KeymapUITests.testCustomCommandArrowChordFires`).
 - **v1 scope cut (confirmed).**
   Built-in rebinds are single-chord only (leaders only for custom commands).
-  The arrows aren't expressible as a parsed `Chord` (the six arrow actions keep their defaults unless
-  mapped to a parseable chord).
   The literal `+`/`>` still can't be a bare key TOKEN (they are the chord-joiner / leader separator), but
   those keys ARE bindable as `shift+=`/`shift+.` (see the shift-symbol note above).
   `increase_font_size`'s default ⌘+ still renders `(not expressible)` in the STARTER file: its stored

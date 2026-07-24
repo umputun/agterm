@@ -11,11 +11,10 @@ extension AppActions {
     /// The macOS glyph string for a rebindable built-in's CURRENT shortcut (`⌘N`, `⌃⌘S`) — tracking
     /// rebinds, reading like the menu equivalent — or `nil` when the action has no shortcut. The SINGLE
     /// resolver behind both the action-palette hints and the toolbar/sidebar tooltips, so the two
-    /// surfaces can't drift. `glyphHint` resolves the live keymap (override else shipped default, with
-    /// the arrow-bound actions falling back to their hardcoded arrow glyph since arrows can't round-trip
-    /// through `parseKeybind`); before `settingsModel` is wired, fall back to the arrow glyph alone.
+    /// surfaces can't drift. `glyphHint` resolves the live keymap (override else shipped default);
+    /// before `settingsModel` is wired, the shipped default alone.
     func shortcutGlyph(for action: BuiltinAction) -> String? {
-        guard let keymap = settingsModel?.keymap else { return action.arrowGlyphFallback }
+        guard let keymap = settingsModel?.keymap else { return action.defaultChord?.glyphString }
         return keymap.glyphHint(for: action)
     }
 

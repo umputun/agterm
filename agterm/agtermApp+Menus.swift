@@ -4,35 +4,17 @@ import SwiftUI
 
 extension agtermApp {
     /// The active SwiftUI shortcut for a built-in action, driven by the keymap: the user override when
-    /// one is `map`ped, else the action's shipped default. `nil` when neither exists (a keyless action,
-    /// or one of the four arrow-bound actions whose default can't round-trip through the keymap grammar)
-    /// — the menu drops the shortcut for those (the arrow actions supply their own hardcoded fallback).
+    /// one is `map`ped, else the action's shipped default. `nil` only for a keyless action, which stays
+    /// keyless until the user maps a chord.
     /// Because `keymap` is `@Observable`, reading it here re-renders the menu shortcut on a reload.
     private func shortcut(for action: BuiltinAction) -> KeyboardShortcut? {
         settingsModel.keymap.equivalent(for: action).map(Self.toShortcut)
     }
 
-    /// The shortcut for one of the six arrow-bound actions: the user override when `map`ped, else the
-    /// hardcoded arrow default. Those defaults can't round-trip through the keymap grammar (`parseKeybind`
-    /// has no arrow keys), so `defaultChord` is nil and the fallback lives here in one place — keyed by
-    /// action so every arrow call site reads uniformly and the fallback set has a single home.
-    private func arrowShortcut(for action: BuiltinAction) -> KeyboardShortcut {
-        if let override = shortcut(for: action) { return override }
-        switch action {
-        case .focusLeftPane: return KeyboardShortcut(.leftArrow, modifiers: [.command, .option])
-        case .focusRightPane: return KeyboardShortcut(.rightArrow, modifiers: [.command, .option])
-        case .previousSession: return KeyboardShortcut(.upArrow, modifiers: [.command, .option])
-        case .nextSession: return KeyboardShortcut(.downArrow, modifiers: [.command, .option])
-        case .previousAttentionSession: return KeyboardShortcut(.upArrow, modifiers: [.control, .option])
-        case .nextAttentionSession: return KeyboardShortcut(.downArrow, modifiers: [.control, .option])
-        default: return KeyboardShortcut(.upArrow, modifiers: [.command, .option])
-        }
-    }
-
     /// Map a host-free `Chord` to a SwiftUI `KeyboardShortcut`. The base key is a single printable
     /// character (`Character`) or one of the named keys the grammar allows (`tab`/`space`/`return`/
-    /// `delete`); the modifiers map one-for-one. This is the menu-side mirror of the runner's
-    /// `NSEvent`→`Chord` mapping.
+    /// `delete` and the four arrows); the modifiers map one-for-one. This is the menu-side mirror of the
+    /// runner's `NSEvent`→`Chord` mapping.
     private static func toShortcut(_ chord: Chord) -> KeyboardShortcut {
         let key: KeyEquivalent
         switch chord.key {
@@ -40,6 +22,10 @@ extension agtermApp {
         case "space": key = .space
         case "return": key = .return
         case "delete": key = .delete
+        case "left": key = .leftArrow
+        case "right": key = .rightArrow
+        case "up": key = .upArrow
+        case "down": key = .downArrow
         default: key = KeyEquivalent(Character(chord.key))
         }
         var modifiers: EventModifiers = []
@@ -326,18 +312,17 @@ extension agtermApp {
                 // First/Last get no key (menu + palette + control only). Real menu items so AppKit menu
                 // dispatch swallows the shortcut before libghostty — never leaked to the shell.
                 Button { actions.selectPreviousSession() } label: { Label("Previous Session", systemImage: "chevron.up") }
-                    .keyboardShortcut(arrowShortcut(for: .previousSession))
+                    .keyboardShortcut(shortcut(for: .previousSession))
                     .disabled(library.activeStore?.activeSession == nil || modalActive)
                 Button { actions.selectNextSession() } label: { Label("Next Session", systemImage: "chevron.down") }
-                    .keyboardShortcut(arrowShortcut(for: .nextSession))
+                    .keyboardShortcut(shortcut(for: .nextSession))
                     .disabled(library.activeStore?.activeSession == nil || modalActive)
-                // step only through sessions needing attention (blocked/completed glyphs), wrapping. ⌃⌥↑/↓
-                // are arrow-bound like the session nav above, so they ride arrowShortcut's hardcoded fallback.
+                // step only through sessions needing attention (blocked/completed glyphs), wrapping.
                 Button { actions.selectPreviousAttentionSession() } label: { Label("Previous Attention Session", systemImage: "chevron.up.circle") }
-                    .keyboardShortcut(arrowShortcut(for: .previousAttentionSession))
+                    .keyboardShortcut(shortcut(for: .previousAttentionSession))
                     .disabled(library.activeStore?.activeSession == nil || modalActive)
                 Button { actions.selectNextAttentionSession() } label: { Label("Next Attention Session", systemImage: "chevron.down.circle") }
-                    .keyboardShortcut(arrowShortcut(for: .nextAttentionSession))
+                    .keyboardShortcut(shortcut(for: .nextAttentionSession))
                     .disabled(library.activeStore?.activeSession == nil || modalActive)
                 Button { actions.selectFirstSession() } label: { Label("First Session", systemImage: "arrow.up.to.line") }
                     .keyboardShortcut(shortcut(for: .firstSession))
@@ -346,19 +331,15 @@ extension agtermApp {
                     .keyboardShortcut(shortcut(for: .lastSession))
                     .disabled(library.activeStore?.activeSession == nil || modalActive)
                 Divider()
-                // arrow-bound actions: their default ⌘⌥←/→ can't round-trip through the keymap grammar
-                // (parseKeybind has no arrow keys), so defaultChord is nil and the hardcoded arrow is the
-                // FALLBACK — a user override (a parseable chord) wins. arrowShortcut(for:) owns the four
-                // fallbacks in one place.
                 Button { actions.focusPane(.main) } label: {
                     Label("Focus Left Pane", systemImage: "rectangle.lefthalf.filled")
                 }
-                .keyboardShortcut(arrowShortcut(for: .focusLeftPane))
+                .keyboardShortcut(shortcut(for: .focusLeftPane))
                 .disabled(library.activeStore?.activeSession?.hasSplit != true || modalActive)
                 Button { actions.focusPane(.split) } label: {
                     Label("Focus Right Pane", systemImage: "rectangle.righthalf.filled")
                 }
-                .keyboardShortcut(arrowShortcut(for: .focusRightPane))
+                .keyboardShortcut(shortcut(for: .focusRightPane))
                 .disabled(library.activeStore?.activeSession?.hasSplit != true || modalActive)
             }
             CommandGroup(replacing: .help) {

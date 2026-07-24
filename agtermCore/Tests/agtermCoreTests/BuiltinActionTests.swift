@@ -38,22 +38,38 @@ struct BuiltinActionTests {
         #expect(BuiltinAction(rawValue: "New_Window") == nil)
     }
 
-    @Test func arrowGlyphFallbackCoversTheSixArrowActions() {
-        // the six arrow-bound actions can't round-trip through Chord, so their menu glyph is hardcoded.
-        #expect(BuiltinAction.focusLeftPane.arrowGlyphFallback == "⌥⌘←")
-        #expect(BuiltinAction.focusRightPane.arrowGlyphFallback == "⌥⌘→")
-        #expect(BuiltinAction.previousSession.arrowGlyphFallback == "⌥⌘↑")
-        #expect(BuiltinAction.nextSession.arrowGlyphFallback == "⌥⌘↓")
-        #expect(BuiltinAction.previousAttentionSession.arrowGlyphFallback == "⌃⌥↑")
-        #expect(BuiltinAction.nextAttentionSession.arrowGlyphFallback == "⌃⌥↓")
+    @Test func arrowBoundActionsShipRealDefaultsThatRoundTrip() {
+        // the six arrow-bound actions are ordinary defaultChord-driven actions: the menu holds no
+        // hardcoded fallback, so their shipped chords must be spellable in keymap.conf.
+        let expected: [BuiltinAction: (syntax: String, glyph: String)] = [
+            .focusLeftPane: ("cmd+opt+left", "⌥⌘←"), .focusRightPane: ("cmd+opt+right", "⌥⌘→"),
+            .previousSession: ("cmd+opt+up", "⌥⌘↑"), .nextSession: ("cmd+opt+down", "⌥⌘↓"),
+            .previousAttentionSession: ("ctrl+opt+up", "⌃⌥↑"), .nextAttentionSession: ("ctrl+opt+down", "⌃⌥↓"),
+        ]
+        for (action, want) in expected {
+            let chord = action.defaultChord
+            #expect(chord?.displayString == want.syntax, "default chord mismatch for \(action.rawValue)")
+            #expect(chord.map { parseKeybind(want.syntax) == [$0] } == true)
+            #expect(chord?.glyphString == want.glyph)
+        }
     }
 
-    @Test func nonArrowActionsHaveNoArrowGlyphFallback() {
-        // an action with an expressible default resolves through the keymap, not the fallback.
-        #expect(BuiltinAction.toggleSidebar.arrowGlyphFallback == nil)
-        #expect(BuiltinAction.newSession.arrowGlyphFallback == nil)
-        // a keyless, non-arrow action has nothing.
-        #expect(BuiltinAction.firstSession.arrowGlyphFallback == nil)
+    @Test func everyShippedDefaultRoundTripsExceptTheDocumentedPlusKey() {
+        // a default that can't round-trip renders as "(not expressible)" in the starter file and can't be
+        // re-typed by the user. increase_font_size's ⌘+ is the ONE documented exception (`+` is the chord
+        // joiner); anything else appearing here is a bug in the new default, not a new exception.
+        let notExpressible = BuiltinAction.allCases.filter { action in
+            guard let chord = action.defaultChord else { return false }
+            return parseKeybind(chord.displayString) != [chord]
+        }
+        #expect(notExpressible == [.increaseFontSize])
+    }
+
+    @Test func shippedDefaultsAreAllDistinct() {
+        // resolveBuiltinOverrides' termination argument depends on this: every collision must involve at
+        // least one user override, so no two shipped defaults may claim the same chord.
+        let defaults = BuiltinAction.allCases.compactMap(\.defaultChord)
+        #expect(Set(defaults).count == defaults.count)
     }
 
     @Test func defaultChordMatchesShippedTable() {
@@ -85,12 +101,12 @@ struct BuiltinActionTests {
             .toggleFlaggedView: nil, // keyless — gains a key only when the user maps one
             .toggleFlag: Chord(mods: [.command, .shift], key: "f"),
             .focusWorkspace: nil,   // keyless — gains a key only when the user maps one
-            .focusLeftPane: nil,    // ⌘⌥← — arrow, not expressible as a parsed Chord
-            .focusRightPane: nil,   // ⌘⌥→ — arrow
-            .previousSession: nil,  // ⌥⌘↑ — arrow
-            .nextSession: nil,      // ⌥⌘↓ — arrow
-            .previousAttentionSession: nil, // ⌃⌥↑ — arrow
-            .nextAttentionSession: nil,     // ⌃⌥↓ — arrow
+            .focusLeftPane: Chord(mods: [.command, .option], key: "left"),
+            .focusRightPane: Chord(mods: [.command, .option], key: "right"),
+            .previousSession: Chord(mods: [.command, .option], key: "up"),
+            .nextSession: Chord(mods: [.command, .option], key: "down"),
+            .previousAttentionSession: Chord(mods: [.control, .option], key: "up"),
+            .nextAttentionSession: Chord(mods: [.control, .option], key: "down"),
             .firstSession: nil,
             .lastSession: nil,
             .quickTerminal: Chord(mods: [.control], key: "`"),
@@ -150,12 +166,11 @@ struct BuiltinActionTests {
         let keyless: Set<BuiltinAction> = [
             .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .duplicateSession,
             .clearStatus, .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace,
-            // arrow-bound actions are also nil here (arrows can't round-trip through parseKeybind).
-            .focusLeftPane, .focusRightPane, .previousSession, .nextSession,
-            .previousAttentionSession, .nextAttentionSession,
         ]
         for action in keyless {
             #expect(action.defaultChord == nil, "expected nil default for \(action.rawValue)")
         }
+        // nothing else is keyless — every remaining action ships a chord.
+        #expect(BuiltinAction.allCases.filter { $0.defaultChord == nil } == BuiltinAction.allCases.filter { keyless.contains($0) })
     }
 }
