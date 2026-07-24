@@ -32,8 +32,10 @@ events for its current process run. Independent readers do not consume one anoth
 The five event kinds and payloads are:
 
 - `status`: `name`, normalized `status` (`idle`|`active`|`blocked`|`completed`), a `blink` boolean,
-  and optional `pane` and `color`. Reasserting the same normalized status emits nothing; clearing emits
-  `idle`.
+  and optional `pane`, `color` and `shape` (the last two being the per-call `--color`/`--shape`
+  overrides). An event fires whenever the whole indicator changes, not just the state name — so a
+  change to `blink`, `pane`, `color` or `shape` alone is a real event you can watch, while re-asserting
+  an identical indicator emits nothing. Clearing emits `idle`.
 - `notify`: `name`, effective `title`, and `body`. It is emitted after target and foreground-focus
   suppression checks, including when desktop banners are disabled.
 - `session.created` / `session.closed`: session `name`, emitted when the session enters or leaves a
@@ -108,8 +110,12 @@ flagged working-set), `status` (the agent-status — `active`|`completed`|`block
 idle), `statusPane` (which pane set that status — `left` (main) | `right` (split) | `scratch` — the
 `--pane` value from `session status`, omitted when unset or idle; gated on the same non-idle condition
 as `status`, so it is never reported without a `status`), `statusBlink` (`true` when the status glyph is
-set to blink — the `--blink` value; omitted when idle or not blinking) and `statusColor` (the `#rrggbb`
-glyph-tint override — the `--color` value; omitted when idle or using the default color),
+set to blink — the `--blink` value; omitted when idle or not blinking), `statusColor` (the `#rrggbb`
+glyph-tint override — the `--color` value; omitted when idle or using the configured color) and
+`statusShape` (the glyph silhouette override — the `--shape` value, one of
+`circle`|`square`|`triangle`|`diamond`|`capsule`|`star`; omitted when idle or using the configured shape.
+Like `statusColor` it reports the PER-CALL override only, so a shape picked in Settings reads back as
+absent),
 `foreground`/`splitForeground` (the live argv of each pane's foreground
 process — what it is running — omitted when the pane sits at its shell prompt, and also for a
 setuid/setgid foreground process like `top` or `sudo`, whose argv macOS refuses to expose),
@@ -330,7 +336,7 @@ All ten are read-only projections of GUI state.
   `0.05..0.95` and persisted, and the applied (clamped) fraction is printed (and returned as `result.ratio`
   under `--json`). Errors when the session has no split. Resizing a hidden split updates the stored
   fraction; it takes effect when the split is next shown.
-- `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb] [--pane left|right|scratch] [--pane-id TOKEN] [--target] [--window W]` —
+- `session status <idle|active|completed|blocked> [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb] [--shape circle|square|triangle|diamond|capsule|star] [--pane left|right|scratch] [--pane-id TOKEN] [--target] [--window W]` —
   set the sidebar agent-status glyph. `--blink` requests an attention pulse; macOS Reduce Motion
   suppresses the repeating sidebar and dashboard animation while keeping the status visible, and the
   pulse resumes when Reduce Motion is disabled. `--auto-reset` clears it back to idle once the session
@@ -343,6 +349,15 @@ All ten are read-only projections of GUI state.
   `--color` (`#rrggbb`) overrides the glyph tint for THIS call only — it rides the status, so the next
   `session status` without `--color` reverts to the Settings-configured color (a malformed hex errors).
   Use it to distinguish states beyond the fixed palette (e.g. a caller-specific blocked color).
+  `--shape` (`circle`, `square`, `triangle`, `diamond`, `capsule`, `star`) overrides the glyph SILHOUETTE
+  the same way — it rides the status, so the next `session status` without `--shape` reverts to the
+  Settings-configured shape, else the built-in plain circle (an unknown name errors, listing the six).
+  Shape is a second channel alongside the tint, so a session stays distinguishable at a glance and for a
+  color-blind user; use it to mark one session for the length of a run.
+  The value is read back on `tree` as the session node's `statusShape` (the per-call override only, like
+  `statusColor`), and rides the `status` control event's `shape` payload field so an `events` consumer can
+  explain a shape-only change.
+  A `--shape` on `idle` is accepted and ignored, since an idle session draws no glyph.
   `--pane` (`left`|`right`|`scratch`, `left`=main, `right`=split; defaults to `left` when omitted) records
   which pane set the status. It has two effects: (1) keystroke-clear becomes pane-scoped — a status set
   from a background pane survives typing in a DIFFERENT pane (so a `right`- or `scratch`-tagged block is
@@ -790,6 +805,9 @@ restore; a `session restore --pane right` on a session with no split also return
 `window not open`
 (resize/move/`--window`), `unknown theme: <name>` (theme set), `unknown sound: <name>` (session status --sound),
 `invalid color (expected #rrggbb)` (session status --color),
+`invalid shape: <value> (circle|square|triangle|diamond|capsule|star)` (session status --shape over the
+raw socket; the `agtermctl` CLI rejects the same value locally with
+`shape must be one of: circle, square, triangle, diamond, capsule, star`),
 `--pane must be left, right, or scratch` (the `--pane` value check — the `agtermctl` CLI rejects a bad pane
 with this for session status/type/text, and over the raw socket `session.status` returns this same string;
 `session.type`/`session.text` over the raw socket instead return `invalid pane: <value>`). Unknown commands fail to decode and return a structured error, never a crash.

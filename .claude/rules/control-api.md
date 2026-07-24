@@ -23,8 +23,9 @@ paths:
   via the companion `agtermctl` CLI.
   It is a thin dispatcher onto the existing `AppActions`/`AppStore` seam — the third caller of that seam,
   alongside the toolbar/bottom bar and the menu bar — so no business logic is duplicated.
-  Scope is personal scripting: fire-and-forget commands, no terminal-output/scrollback streaming and
-  no event subscription (out of scope by design).
+  Scope is personal scripting: fire-and-forget commands, plus a polled event feed
+  (`events.read`, behind `agtermctl events`) for watching status and lifecycle changes.
+  There is no terminal-output/scrollback streaming (out of scope by design).
 - **Three layers, matching the core/app split:**
   1. **Protocol + pure logic in `agtermCore`**
      (Foundation-only, `Codable`, `Sendable`): `ControlProtocol.swift` holds the `Command` enum,
@@ -66,7 +67,8 @@ paths:
   The read field is populated in `AppStore.controlTree` and, like the other optionals, omitted from the
   JSON when nil.
   Existing pairs to mirror: `session.background`/`background`, `notify`+`session.seen`/`unseen`,
-  `session.status`/`status`+`statusPane` (+`statusBlink`/`statusColor` for `--blink`/`--color`),
+  `session.status`/`status`+`statusPane` (+`statusBlink`/`statusColor`/`statusShape` for
+  `--blink`/`--color`/`--shape`),
   `session.flag`/`flagged`, `session.focus`/`splitFocused`, `session.resize`/`splitRatio`,
   `session.restore`/`restoreCommand`+`splitRestoreCommand`,
   `session.overlay.resize`/`overlaySizePercent`, `sidebar`/`sidebarVisible` (top-level),
@@ -163,7 +165,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 64-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 65-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -241,8 +243,9 @@ paths:
   rules, then remaining targets resolve inside that same store so one command never mutates multiple windows.
   The top-level `target` also carries the first explicit batch target so a new CLI talking to a still-running
   pre-batch server degrades to a named session instead of accidentally acting on `active`.
-- **Command catalog (64 commands):**
+- **Command catalog (65 commands):**
   - `tree`
+  - `events.read` (the bounded per-app-run control event ring behind `agtermctl events`)
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`/`workspace.collapse`/`workspace.expand`
   - `session.new`/`session.duplicate`/`session.close`/`session.select`/`session.rename`/`session.reveal`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.paste`/`session.selectall`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.restore`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.resize`/`session.overlay.result`
   - `surface.zoom`
@@ -269,7 +272,7 @@ paths:
   Setting echoes the resulting effective side in `result.text`; the BARE form (no name) reads the side
   the last config feed applied (`SettingsModel.lastAppliedIsDark`), which the test polls to prove the
   flip actually drove the reload.
-  `AppearanceFlipUITests` is its only consumer; the public command count stays 64.
+  `AppearanceFlipUITests` is its only consumer; the public command count stays 65.
 
   `workspace.delete` honors keep-at-least-one and returns an error instead of the GUI confirm alert (nothing
   blocks on a modal).
@@ -1005,6 +1008,65 @@ paths:
   + `AgentStatusTests` (indicator color + Equatable) + CLI mapping in `CommandsTests` + the e2e
   `testSessionStatusColorValidatesHex` in `ControlSidebarStatusUITests` (asserts the command path — the
   glyph TINT itself is not accessibility-observable).
+  `args.shape` is the SILHOUETTE twin of `--color`, a NEW arg (nothing else carries a shape) whose value
+  is a `StatusShape` raw name — `circle`|`square`|`triangle`|`diamond`|`capsule`|`star`.
+  The dispatcher parses it to the typed enum, so an unknown value is rejected BEFORE any mutation with
+  `invalid shape: <raw> (circle|square|triangle|diamond|capsule|star)`, the accepted list DERIVED from
+  `allCases` via `StatusShape.validNamesList` so the message can never go stale (the `agtermctl` CLI
+  pre-rejects the same value locally, phrasing it from the comma-joined `StatusShape.validNamesPhrase`,
+  which also builds its `--shape` help text — the `WatermarkConfig.validFits` precedent).
+  It rides the ephemeral `AgentIndicator.shape` exactly like `color`, so the next `session.status`
+  without a shape discards it and falls back to the Settings shape for that status, else the built-in
+  plain `circle`; a `--shape` on `idle` is accepted and ignored, since `AgentStatus.symbolName`'s leading
+  idle guard returns the empty string before the shape is consulted.
+  Both render sites resolve it through the SHARED host-free `AgentStatus.symbolName(override:configured:)`
+  (reached app-side via `GhosttyApp.statusSymbolName(for:override:)`, the tint helper's twin), so the
+  AppKit `StatusIconView` and the SwiftUI `StatusGlyph` can't drift.
+  It mirrors every leg `--color` already has — the indicator, the dispatcher validation, the `tree`
+  read-back, the Settings fallback, the `.status` CONTROL EVENT payload, and the CLI's own presentation of
+  that event (`ControlEventPayload.color` and `EventFormatter.human`'s `color=` arm both predate this
+  feature).
+  The event payload and its formatter arm are the easy ones to miss.
+  `ControlEventPayload.shape` carries the per-call value because `AppStore.setAgentIndicator`'s
+  `guard previous != indicator` admits a shape-only change, so an `events.read` consumer would otherwise
+  receive an event it could not explain.
+  `EventFormatter.human` (`agtermctlKit/EventCommands.swift`) then prints `shape=<name>` beside
+  `color=<hex>` on the `status` line, so `agtermctl events` without `--json` shows the same field the
+  payload carries — a wire field with no formatter arm is invisible to every human reader of the stream.
+  The Settings shapes get NO control command of their own — keep-in-sync EXEMPT like the status
+  colors/sound (see the Settings rule), since `--shape` is the control surface.
+  That exemption is only from the COMMAND obligation: the pickers are still a surface this feature owns,
+  which is why they are point (5) of the audit below.
+  READ-BACK: `ControlSessionNode.statusShape`, gated on the same non-idle condition as `status` and
+  reporting the PER-CALL OVERRIDE ONLY — nil when the glyph draws the Settings shape or the default —
+  exactly matching `statusColor`, so a record-then-restore script treats the two alike.
+  It adds an ARGUMENT, not a command, so the catalog count is unchanged.
+  Five-point keep-in-sync audit for `session.status --shape`: (1) the `StatusShape` enum +
+  `AgentIndicator.shape` + `ControlArgs.shape` + `ControlSessionStatusUpdate.shape` +
+  `ControlSessionNode.statusShape` + `ControlEventPayload.shape` + the three `AppSettings.*StatusShape`
+  raw fields with `effectiveStatusShape(for:)` in `agtermCore`, plus the dispatcher parse/validation,
+  (2) the `.sessionStatus` arm folding `update.shape` into the indicator + the `statusShape` population in
+  `AppStore.controlTree` + the `shape:` payload in `AppStore+Status.swift` + the `GhosttyApp` shape mirror
+  and the two render sites, (3) the `session status --shape` option (`validate()`-guarded) plus the
+  `EventFormatter.human` `shape=` arm in `agtermctlKit`, (4) the tests below — every name spelled in
+  FULL so each one greps, since an abbreviated `…Name` survives a rename silently:
+  round-trip in `ControlProtocolTests` (`sessionStatusRoundTripsWithShape` /
+  `sessionStatusOmitsShapeWhenNil` / `treeSessionNodeRoundTripsWithStatusShape` /
+  `treeSessionNodeOmitsStatusShapeWhenNil`) + dispatcher parse/validation in `ControlDispatcherTests`
+  (`sessionStatusCarriesEveryValidShape` / `sessionStatusForwardsShapeOnlyWhenTheArgIsPresent` /
+  `sessionStatusRejectsInvalidShapeWithoutMutating` / `sessionStatusAcceptsShapeOnIdle` /
+  `sessionStatusValidatesColorThenShapeThenPane`, which pins the color-then-shape-then-pane REJECTION
+  ORDER so a shape error can never mask a bad color) +
+  `AgentStatusTests` (the resolver precedence + `symbolName` + indicator Equatable) + `AppSettingsTests`
+  (tolerant decode) + `AppStoreTests` (`controlTreeReportsStatusShapeOnlyForAPerCallOverride` /
+  `controlTreeDropsStatusShapeOnTheNextSetWithoutOne`, the read-back's ephemerality) +
+  `AppStoreEventTests` (`shapeOnlyStatusChangeEmitsAnEventCarryingTheShape`) + CLI mapping in
+  `CommandsTests` (incl. `sessionStatusShapeHelpListsEveryShape`, which pins the `--shape` help text to
+  `StatusShape.allCases`) + the formatter arm in `EventCommandsTests`
+  (`formattersCoverEveryKindAndNDJSONIsOneBareEvent`) + the e2e
+  `testSessionStatusShapeValidatesAndReadsBack` in `ControlSidebarStatusUITests`,
+  (5) the Settings ▸ Agent Status shape pickers — GUI-only, no control command of their own (see the
+  Settings rule).
   `args.pane` (`left`|`right`|`scratch`, REUSING the shared `--pane` addressing vocabulary — parsed to the
   host-free `StatusPane` and validated by the dispatcher, an `--pane must be left, right, or scratch` error
   that leaves the status UNCHANGED) records WHICH pane set the status onto the ephemeral `AgentIndicator.statusPane`
@@ -1023,10 +1085,11 @@ paths:
   (see the Menu/actions rule).
   It reads back on each `tree` node as `ControlSessionNode.statusPane` (omitted when nil, gated on the SAME
   non-idle condition as `status` so an idle node reports neither).
-  The `--blink` flag and `--color` override read back the same way — `ControlSessionNode.statusBlink`
-  (`true` when blinking, omitted otherwise) and `statusColor` (the `#rrggbb`, omitted when using the default
-  color), both populated in the tree builder gated on the SAME non-idle condition — so a script can record
-  the FULL status (state + pane + blink + color) and restore it.
+  The `--blink` flag and the `--color`/`--shape` overrides read back the same way —
+  `ControlSessionNode.statusBlink` (`true` when blinking, omitted otherwise), `statusColor` (the
+  `#rrggbb`, omitted when using the configured color) and `statusShape` (the `StatusShape` raw name,
+  omitted when using the configured shape), all populated in the tree builder gated on the SAME non-idle
+  condition — so a script can record the FULL status (state + pane + blink + color + shape) and restore it.
   Four-point keep-in-sync audit for `session.status --pane`: (1) the `StatusPane` enum + `AgentIndicator.statusPane`
   + `AgentIndicator.clearedBy(pane:isInterrupt:)` + `ControlSessionStatusUpdate.pane` + `ControlSessionNode.statusPane`
   + `SurfaceEnvironment.session(pane:)` (injects `AGTERM_PANE`) in `agtermCore`, plus the dispatcher `StatusPane`
@@ -1504,12 +1567,12 @@ paths:
   (image/text/color set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
-  examples.md recipes) and the command count there is bumped to 64 to match.
+  examples.md recipes) and the command count there is bumped to 65 to match.
   **Website mirror (HARD keep-in-sync):** the site's per-command reference `site/commands.html` documents
   EVERY `agtermctl` control command — one inline-styled card per command carrying its invocation, its
   arguments, and the `tree` read-back field, grouped into its command family's section.
   A new `Command` case REQUIRES a new `site/commands.html` entry (a changed command an updated one, a
   removed command a deleted one), in lockstep with the agent skill above and `README.md`/`site/docs.html`;
-  the page's "64 commands" copy must track the catalog count.
+  the page's "65 commands" copy must track the catalog count.
   It drifted once because the site keep-in-sync convention named only `docs.html`/`index.html`, so
   `dashboard` and `surface.zoom` shipped undocumented here.

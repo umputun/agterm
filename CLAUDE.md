@@ -354,7 +354,8 @@ always in context:
   read-modify-write, and idempotency checks all need the read leg.
   Every state-mutating command pairs with a read field:
   `session.background`/`background`, `notify`+`session.seen`/`unseen`,
-  `session.status`/`status`+`statusPane` (+`statusBlink`/`statusColor` for `--blink`/`--color`),
+  `session.status`/`status`+`statusPane` (+`statusBlink`/`statusColor`/`statusShape` for
+  `--blink`/`--color`/`--shape`),
   `session.flag`/`flagged`, `session.focus`/`splitFocused`, `session.resize`/`splitRatio`,
   `session.overlay.resize`/`overlaySizePercent`, `sidebar`/`sidebarVisible`, `sidebar.mode`/`sidebarMode`,
   `workspace.focus`/`focused`, `quick`/`quickVisible`,
@@ -363,6 +364,14 @@ always in context:
   field in the SAME change.
   `session.overlay.resize` shipped write-only and the `overlaySizePercent` read-back was missed until a
   tmux-zoom script needed record-then-restore, so it went in as a separate follow-up.
+- **An argument whose value rides a control EVENT owes the CLI's human line too, not just the payload
+  field.**
+  When you audit the legs of a per-call argument, count `EventFormatter.human`
+  (`agtermctlKit/EventCommands.swift`) as one of them: a value added to `ControlEventPayload` with no
+  matching arm there is silently dropped from `agtermctl events` in its default, non-`--json` mode, so
+  the human reader of the stream cannot explain a change the payload does describe.
+  `session.status --shape` was tracked as five legs and turned out to have six — the formatter was found
+  only during the final acceptance sweep, after every other leg was already in.
 - **The bundled agent skill is the fourth keep-in-sync surface.**
   Whenever you change the Control API (commands/args/returns), the keymap format,
   or the window/workspace/session/pane model, update `agterm/Resources/agent-skill/` (SKILL.md + reference.md

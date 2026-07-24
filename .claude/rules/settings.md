@@ -18,6 +18,7 @@ paths:
   Fields: `fontFamily`/`fontSize`/`theme`/`darkTheme`/`followSystemAppearance` + `backgroundOpacity` (0...1) / `backgroundBlur` (CGS radius)
   + `notificationsEnabled` / `toolbarMode` / `notificationBadgeEnabled` / `attentionButtonEnabled` / `dockBounce` / `notificationSoundName`
   + the agent-status glyph colors `activeStatusColorHex`/`blockedStatusColorHex`/`completedStatusColorHex`
+  + the agent-status glyph shapes `activeStatusShape`/`blockedStatusShape`/`completedStatusShape`
   (nil defaults: `notificationsEnabled`/`notificationBadgeEnabled` = on,
   `toolbarMode` = the three-state titlebar chrome `ToolbarMode { normal, compact, hidden }`,
   stored raw as `String?` (like `newSessionDirectory`/`autoFollowAttention`) for tolerant forward-compat
@@ -56,9 +57,22 @@ paths:
   `StatusIconView` reads it when drawing, and a change rides `.agtermAppearanceChanged` → the Coordinator's
   `reapplyStatusGlyphs()` sweep (the colors are global, not per-row, so `reconcile`'s diff can't see
   them).
-  Settings → Agent Status drives them with a Reset-to-defaults button (clears all three
-  to nil), plus a **Blocked sound** picker bound to `AppSettings.blockedStatusSoundName` (nil/"None"
-  = no sound, the default; else a system sound name).
+  The three `*StatusShape` are the same idea for the glyph's SILHOUETTE, stored as `StatusShape` RAW
+  STRINGS (not the enum) so a hand-edited or future value decodes tolerantly: the single read point is
+  `AppSettings.effectiveStatusShape(for:)`, which does `raw.flatMap(StatusShape.init(rawValue:))` and
+  returns nil for `.idle` — the `effectiveDockBounce` precedent, so callers never touch the raw fields.
+  nil = the built-in default plain `circle`, so nil and an explicit `circle` render identically.
+  The mirror path matches the colors exactly:
+  `SettingsModel.setActiveStatusShape`/`setBlockedStatusShape`/`setCompletedStatusShape` persist and
+  apply, `applyAgentStatusShapes()` (called from the same two sites as `applyAgentStatusColors()`)
+  pushes them into `GhosttyApp.setAgentStatusShapes`, and a change rides the SAME `.agtermAppearanceChanged`
+  → `reapplyStatusGlyphs()` sweep, so no new notification was needed.
+  Both render sites resolve through the one host-free `AgentStatus.symbolName(override:configured:)`
+  (see the Notifications rule), with the per-call `session.status --shape` override winning over the
+  Settings shape.
+  Settings → Agent Status drives them with a Reset-to-defaults button (clears all three colors and all
+  three shapes to nil), plus a **Blocked sound** picker bound to `AppSettings.blockedStatusSoundName`
+  (nil/"None" = no sound, the default; else a system sound name).
   `SettingsModel.setBlockedStatusSoundName` only SAVES (not a ghostty key,
   nothing renders it continuously); `ControlServer.setSessionStatus` reads `settingsModel.settings.blockedStatusSoundName`
   on demand and plays it via `StatusSoundPlayer.shared` ONLY when a session TRANSITIONS into `blocked`
@@ -68,8 +82,9 @@ paths:
   wins; an empty per-call value counts as unset; the default is blocked-only and the transition gate
   lives in the server).
   The picker previews the sound on selection (plays it via `StatusSoundPlayer.shared`).
-  GUI-only and keep-in-sync EXEMPT, same as the status colors (only `theme.set`/`config.reload` touch
-  settings over the socket); the per-status sound already has full control coverage via `session.status --sound`.
+  GUI-only and keep-in-sync EXEMPT, same as the status colors and shapes (only `theme.set`/`config.reload`
+  touch settings over the socket); the per-status sound already has full control coverage via
+  `session.status --sound`, and the per-status shape via `session.status --shape`.
   `notificationBadgeEnabled` (nil = on) gates the sidebar's red unseen-count pill (session rows + workspace
   roll-up), render-only — `unseenCount` keeps tracking so re-enabling instantly shows current counts;
   distinct from `notificationsEnabled` (which gates the OS banner) and does NOT gate the always-on agent-status
@@ -172,10 +187,39 @@ paths:
   bullet — plus a **Multiple Windows** section with the single `autoHideSidebarInactiveWindows` toggle,
   which is a plain default-OFF behavior Toggle, NOT an `InterfaceElement`).
   **Notifications** (a **Notifications** section with the banner / badge / attention-indicator toggles plus the Dock-bounce mode and notification-sound pickers).
-  **Agent Status** (a **Colors** section with the three glyph color pickers, a **Sound** section with
+  **Agent Status** (a **Colors and Shapes** section holding ONE ROW PER STATUS — a `LabeledContent`
+  labelled Active / Blocked / Completed whose trailing side carries that glyph's `ColorPicker`
+  (`settings-status-active`/`-blocked`/`-completed`) and its silhouette `Picker`
+  (`settings-status-shape-active`/`-blocked`/`-completed`) side by side, both `.labelsHidden()` with the
+  shape picker at a fixed width so the rows align; the shape picker offers exactly `StatusShape.allCases`
+  — no "Default" entry, because nil and `circle` render the SAME plain circle, so `circle` maps back to
+  nil (the sound/toolbar-mode nil-mapping convention) and `settings.json` stays minimal.
+  Each option is the SYMBOL ALONE, drawn at the sidebar glyph's own `StatusIconView.glyphPointSize` (a
+  shared constant, so a preview looks like the glyph it installs) as a NON-template `NSImage` tinted
+  with that row's CURRENT color
+  (`NSImage.SymbolConfiguration(paletteColors:)` + `isTemplate = false`, read from the row's color
+  binding so a new color redraws the options): a menu recolors a template symbol to its own text color,
+  and SwiftUI's `.foregroundStyle` on an `Image(systemName:)` does NOT survive into the popup — verified,
+  it rendered grey.
+  The option images are built fresh on every redraw and deliberately NOT cached.
+  A color-well drag fires `setActiveStatusColorHex` → `persistAndApply` on every system colour-panel
+  tick, so a (shape, tint)-keyed cache would mint six `NSImage`s per tick for a tint the user is already
+  dragging past and retain them for the life of the process — unbounded growth buying eighteen small
+  SF Symbol lookups on a path that already writes `settings.json` and diffs the ghostty config per tick.
+  Both the color and the shape binding are DERIVED from the row's `AgentStatus` argument inside
+  `glyphRow(_:)` (a `switch` per getter/setter) rather than passed in positionally, so a row can never
+  label one status while driving another's setting.
+  The option's shape name (`Triangle`, the host-free `StatusShape.displayName`) survives only as its
+  `.accessibilityLabel`, which is ALSO what gives the `NSMenuItem` its AX title,
+  so `app.menuItems["Triangle"]` still finds it; the `Picker` carries
+  a matching `.accessibilityValue`, and the collapsed, text-free button reads back as the shape name
+  (`value: Circle`), which is what the e2e's post-relaunch assertion reads.
+  There is deliberately no separate Shapes section — color and shape belong to the same glyph, so they
+  share a row.
+  Then a **Sound** section with
   the blocked-sound picker, an **Auto-follow** section with the idle-timeout Picker
   (Disabled/5s/10s/30s/60s/5m) + the "Don't auto-follow away from a running session" Toggle, and a trailing
-  **Reset** that clears the colors and sound back to defaults — not the auto-follow settings).
+  **Reset** that clears the colors, shapes and sound back to defaults — not the auto-follow settings).
   **Key Mapping** (the config directory holding `keymap.conf` + a read-only diagnostics list + a Reload
   button — see the Keymap section).
   Captions under controls are dropped for self-explanatory controls, which is nearly all of them.

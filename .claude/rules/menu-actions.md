@@ -332,8 +332,12 @@ paths:
   per-window: all non-idle, sorted blocked→active→completed then `statusChangedAt` newest-first,
   nil last) to `PaletteItem`s mirroring `paletteSessions()` (title=`displayName`,
   subtitle="workspace · detail"), with the new `PaletteItem.status: AgentStatus?` set so `CommandPalette.row`
-  renders a leading `StatusGlyph` (the shared `AgentStatus.symbolName` + `GhosttyApp.statusColor(for:)`
-  mapping the sidebar's `StatusIconView` also uses); `run` = `store.selectSession(id)`.
+  renders a leading `StatusGlyph`.
+  `PaletteItem` also carries the two per-call overrides the glyph needs — `statusColor: String?` and
+  `statusShape: StatusShape?` — which `StatusGlyph` resolves through the same shared
+  `GhosttyApp.statusSymbolName(for:override:)` + `.statusColor(for:override:)` pair the sidebar's
+  `StatusIconView` uses, so the palette and the sidebar cannot draw the same session differently;
+  `run` = `store.selectSession(id)`.
   Empty-query order is the `attentionSessions` order (the palette re-sorts by fuzzy score only once the
   user types); `.attention` needs no theme-preview wiring (`syncThemeSession` guards on `.themes`).
   Opened three keyboard/menu ways: `BuiltinAction.showAttention` (rawValue `show_attention`,

@@ -504,6 +504,7 @@ agtermctl session status completed --auto-reset --target "$AGTERM_SESSION_ID"  #
 agtermctl session status blocked --sound default --target "$AGTERM_SESSION_ID" # needs input, with a beep
 agtermctl session status completed --sound Glass --target "$AGTERM_SESSION_ID" # done, with a named sound
 agtermctl session status blocked --color '#ff0000' --target "$AGTERM_SESSION_ID" # per-call red tint (reverts on next status)
+agtermctl session status blocked --shape triangle --target "$AGTERM_SESSION_ID"  # per-call silhouette (reverts on next status)
 agtermctl session status blocked --pane right --target "$AGTERM_SESSION_ID"     # a split-pane agent tags its pane (see below)
 agtermctl session status idle --target "$AGTERM_SESSION_ID"             # clear
 ```

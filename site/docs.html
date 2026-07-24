@@ -1047,8 +1047,8 @@
                 <span
                   style="position: absolute; left: 0; top: 1px; color: #6d82f3; font-family: &quot;JetBrains Mono&quot;, monospace"
                   >›</span
-                ><strong style="color: #e6e1d7">Agent Status</strong> — the status-glyph colors, the blocked-session sound, and an
-                idle timeout to auto-follow blocked sessions.
+                ><strong style="color: #e6e1d7">Agent Status</strong> — the status-glyph colors and shapes, the blocked-session
+                sound, and an idle timeout to auto-follow blocked sessions.
               </div>
               <div style="font-size: 15px; line-height: 1.6; color: #cbc6bc; padding-left: 22px; position: relative">
                 <span
@@ -1106,15 +1106,15 @@
               "
             >
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0">
-                Looking for the full list? All 64 commands, with every argument, return value, and error, live on the
+                Looking for the full list? All 65 commands, with every argument, return value, and error, live on the
                 <a href="/commands" style="color: #6d82f3; font-weight: 500">Command reference →</a>
               </p>
             </div>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               agterm can be driven from a script over a local unix-domain socket through the companion CLI,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #e6e1d7">agtermctl</span>. This is for
-              fire-and-forget scripting that manages workspaces and sessions, injects text, and invokes control actions — there is
-              no output streaming and no event subscription.
+              fire-and-forget scripting that manages workspaces and sessions, injects text, invokes control actions, and polls a
+              control-event feed for status and lifecycle changes. There is no terminal-output streaming.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               To open a terminal at a directory without the CLI,
@@ -1796,11 +1796,11 @@
                 "
               >
                 <span
-                  style="width: 9px; height: 9px; border-radius: 100px; background: #5ea1f2; box-shadow: 0 0 10px #5ea1f2"
+                  style="width: 9px; height: 9px; border-radius: 100px; background: #dbd9e6; box-shadow: 0 0 10px #dbd9e6"
                 ></span>
                 <div>
                   <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 600">active</div>
-                  <div style="font-size: 12px; color: #949ba4">blue ellipsis</div>
+                  <div style="font-size: 12px; color: #949ba4">lavender-grey glyph</div>
                 </div>
               </div>
               <div
@@ -1819,7 +1819,7 @@
                 ></span>
                 <div>
                   <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 600">blocked</div>
-                  <div style="font-size: 12px; color: #949ba4">amber exclamation</div>
+                  <div style="font-size: 12px; color: #949ba4">amber glyph</div>
                 </div>
               </div>
               <div
@@ -1840,7 +1840,7 @@
                   <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13px; font-weight: 600">
                     completed
                   </div>
-                  <div style="font-size: 12px; color: #949ba4">green check</div>
+                  <div style="font-size: 12px; color: #949ba4">green glyph</div>
                 </div>
               </div>
               <div
@@ -1861,6 +1861,13 @@
                 </div>
               </div>
             </div>
+            <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0 0 22px">
+              Every state draws a filled circle by default, so the tint is what tells them apart. The shape is configurable per
+              state under <strong style="color: #e6e1d7">Settings ▸ Agent Status ▸ Colors and Shapes</strong>, where each state
+              carries its own color well and shape picker on one row. The six shapes are circle (the default), square, triangle,
+              diamond, capsule, and star, each drawn in that state's current color. Choosing a distinct shape per state adds a
+              second signal alongside the tint, so the states stay apart at a peripheral glance and without depending on hue.
+            </p>
             <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0 0 14px">
               An agent sets it over the control channel:
             </p>
@@ -1882,6 +1889,7 @@
               --sound default --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session status
               completed --auto-reset --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session
               status blocked --color <span style="color: #5ea1f2">'#ff0000'</span> --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session
+              status blocked --shape triangle --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session
               status blocked --pane right --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span><br />agtermctl session
               status idle --target <span style="color: #5ea1f2">"$AGTERM_SESSION_ID"</span>
               <span style="color: #6b727a">&nbsp;# clear it</span>
@@ -1903,6 +1911,18 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--color</span>
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">#rrggbb</span>) overrides the glyph
               tint for that one call — it rides the status, so the next status set without it reverts to the configured color.
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--shape</span>
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">circle</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">square</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">triangle</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">diamond</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">capsule</span>, or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">star</span>) overrides the silhouette
+              the same way, reverting to the configured shape on the next status set without it. Both read back on
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">tree</span> as the session's
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusColor</span> and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">statusShape</span>, each reporting
+              the per-call override only.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span>

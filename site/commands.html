@@ -6,7 +6,7 @@
     <title>Command reference — agterm | agtermctl control API</title>
     <meta
       name="description"
-      content="Complete agtermctl reference: all 64 control commands for agterm — sessions, workspaces, windows, overlays, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
+      content="Complete agtermctl reference: all 65 control commands for agterm — sessions, workspaces, windows, overlays, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
     />
     <meta
       name="keywords"
@@ -18,7 +18,7 @@
     <meta property="og:title" content="Command reference — agterm" />
     <meta
       property="og:description"
-      content="All 64 agtermctl control commands with arguments, return values, and errors."
+      content="All 65 agtermctl control commands with arguments, return values, and errors."
     />
     <meta property="og:url" content="https://agterm.com/commands" />
     <meta property="og:image" content="https://agterm.com/assets/agterm-og.png" />
@@ -30,7 +30,7 @@
     <meta name="twitter:title" content="Command reference — agterm" />
     <meta
       name="twitter:description"
-      content="All 64 agtermctl control commands with arguments, return values, and errors."
+      content="All 65 agtermctl control commands with arguments, return values, and errors."
     />
     <meta name="twitter:image" content="https://agterm.com/assets/agterm-og.png" />
     <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
@@ -186,6 +186,7 @@
             <div style="height: 16px"></div>
             <span style="color: #4a5158; font-size: 11px; letter-spacing: 0.12em; padding: 4px 12px">COMMANDS</span>
             <a href="#tree" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">tree</a>
+            <a href="#events" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">events</a>
             <a href="#workspace" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">workspace</a>
             <a href="#session" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">session</a>
             <a href="#overlay" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">session overlay</a>
@@ -234,7 +235,7 @@
             Command reference
           </h1>
           <p style="font-size: 19px; line-height: 1.6; color: #bfbab0; margin: 0 0 8px">
-            All 64 commands of the agterm control API, with arguments and return values. Every one is reachable from the
+            All 65 commands of the agterm control API, with arguments and return values. Every one is reachable from the
             <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> CLI and from the local
             control socket.
           </p>
@@ -260,8 +261,9 @@
             </h2>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               agterm listens on a local unix-domain socket. Each connection carries one newline-delimited JSON request and receives
-              one response, then closes. The scope is personal scripting — fire-and-forget commands. There is no scrollback
-              streaming and no event subscription.
+              one response, then closes. The scope is personal scripting: fire-and-forget commands, plus a polled event feed
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">events.read</span>) for watching status
+              and lifecycle changes. There is no scrollback or terminal-output streaming.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               <strong style="color: #e6e1d7">Socket resolution.</strong> With
@@ -430,6 +432,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusPane</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusBlink</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusColor</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusShape</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">foreground</span> /
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitForeground</span> (each pane's live foreground
                 argv, omitted at the shell prompt or for a setuid program like top/sudo),
@@ -464,6 +467,80 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarMode</span>, and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quickVisible</span>. All five are read-only
                 projections of GUI state.
+              </p>
+            </div>
+          </section>
+
+          <!-- EVENTS -->
+          <section id="events" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              events
+            </h2>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl events [--json] [--kind KIND ...] [--run UUID --after SEQ] [--limit N]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">events.read</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Read the app's control-event ring. The CLI polls it in a loop and prints one event per line, so a script can watch
+                agent status, notifications, and session lifecycle instead of re-reading
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>. With no cursor the first read subscribes
+                from the current tail: it returns an empty batch anchored at
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">run</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">next</span>
+                and replays no history. The ring keeps the latest 4,096 events of one app process and is non-destructive, so
+                independent readers never consume one another's events.
+              </p>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                <strong style="color: #e6e1d7">Kinds.</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">status</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">notify</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session.created</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">session.closed</span>, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree.changed</span> (a 100 ms coalesced signal that a
+                window's names, membership, or ordering moved — read
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">tree --json</span> for the new
+                snapshot). <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--kind</span> may be repeated or
+                comma-separated; an unknown kind errors. Every event carries
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">seq</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">ts</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">kind</span>, the applicable
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">window</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspace</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">session</span>
+                ids, and a kind-specific
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">payload</span> — a
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">status</span> payload carries the session name, the
+                normalized status, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">blink</span>, and the optional
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pane</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">color</span>, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">shape</span> fields.
+              </p>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                <strong style="color: #e6e1d7">Cursors.</strong> The raw response returns the batch under
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.events</span> as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">{run, next, items}</span>. Resume
+                with both values —
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--run RUN --after NEXT</span>, which
+                must appear together. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--limit</span> defaults to 100 and
+                accepts 1 through 1,000, and a filtered read still advances the global cursor past nonmatching events. The streaming
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--json</span> output is bare event objects, not the batch
+                envelope, so a restart-safe client keeps the cursor from raw
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">events.read</span> responses.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                A changed app run, an expired cursor, or a cursor ahead of the current sequence is a hard error carrying the ring's
+                current anchor — treat it as a data-loss boundary rather than silently rebaselining.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl events</span> exits non-zero on those, on a
+                server error, and on a missing app or socket. There is no terminal-output or scrollback stream.
               </p>
             </div>
           </section>
@@ -986,7 +1063,7 @@
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session status &lt;idle|active|completed|blocked&gt; [--blink] [--auto-reset] [--sound NAME] [--color #rrggbb]
-                [--pane left|right|scratch] [--pane-id TOKEN] [--target T] [--window W]
+                [--shape SHAPE] [--pane left|right|scratch] [--pane-id TOKEN] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.status</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1010,6 +1087,14 @@
                 configured Blocked sound, if any.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--color #rrggbb</span> overrides the glyph tint for
                 this call only; the next status set without it reverts.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--shape</span>
+                (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">circle</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">square</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">triangle</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">diamond</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">capsule</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">star</span>) overrides the glyph silhouette the same
+                way, falling back to the Settings shape for that state; an unknown name errors and leaves the status unchanged.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> (default
@@ -1018,8 +1103,10 @@
                 makes any user-initiated GUI selection reveal and focus the tagged pane. An agent running in a split or scratch
                 should set its own pane. Read back as the session node's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusPane</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusBlink</span>, and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusColor</span>.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusBlink</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusColor</span>, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">statusShape</span> (the last two reporting the
+                per-call override only).
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane-id</span> is the surface's stable spawn token
                 (the shell's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">$AGTERM_PANE_ID</span>), forwarded
                 automatically by the agent-status hook; when it resolves it overrides
@@ -2331,6 +2418,19 @@
                     white-space: nowrap;
                   "
                   >invalid color (expected #rrggbb)</span
+                >
+                <span
+                  style="
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                    font-size: 12.5px;
+                    color: #cbc6bc;
+                    background: #191d20;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 6px;
+                    padding: 4px 9px;
+                    white-space: nowrap;
+                  "
+                  >invalid shape: &lt;value&gt; (circle|square|triangle|diamond|capsule|star)</span
                 >
                 <span
                   style="

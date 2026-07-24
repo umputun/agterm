@@ -157,15 +157,39 @@ paths:
 - **Agent-status glyph.**
   Mirrors the `notify-badge` cell pattern (see the Control API `session.status`).
   `StatusIconView` (an `NSImageView` sibling of `BadgeView` in `WorkspaceSidebar`) draws the row's tinted
-  SF Symbol just LEFT of the count badge — `active`=`ellipsis.circle.fill`,
-  `blocked`=`exclamationmark.circle.fill`, `completed`=`checkmark.circle.fill`,
-  `.idle`=hidden, each tinted via the shared `GhosttyApp.statusColor(for:override:)`: the ephemeral
+  SF Symbol just LEFT of the count badge — a PLAIN filled silhouette carrying no interior mark,
+  `.idle`=hidden.
+  The three states share the built-in default `circle.fill` and are separated by TINT until a shape is
+  picked; the old marked circles (`ellipsis`/`exclamationmark`/`checkmark` knocked out of a circle) are
+  GONE, because a mark inside a 13pt symbol is legible only in the popup, which is exactly the complaint
+  the shapes answer (discussion #277).
+  The silhouette resolves through the shared host-free `AgentStatus.symbolName(override:configured:)`
+  (via `GhosttyApp.statusSymbolName(for:override:)`, the tint helper's twin): the ephemeral
+  `AgentIndicator.shape` per-call OVERRIDE (`session.status --shape`) wins, else the Settings shape for
+  that status (`GhosttyApp.{active,blocked,completed}StatusShape`, mirrored from
+  `AppSettings.effectiveStatusShape(for:)`), else `StatusShape.circle`.
+  Neither `symbolName` parameter is defaulted on purpose: a render site that forgot to pass the Settings
+  shape would silently draw the wrong glyph, so the omission has to be a compile error.
+  `StatusShape` is a fixed set of six — `circle`, `square`, `triangle`, `diamond`, `capsule`, `star` —
+  whose raw value IS the SF Symbol base name (`symbolName` = `"<raw>.fill"`); the set is capped there
+  because at the sidebar's 13pt render size in a 16pt slot `hexagon`/`octagon`/`pentagon`/`seal` are
+  indistinguishable from `circle`, `app` duplicates `square` and `rhombus` duplicates `diamond`, so a
+  wider picker would only let a user believe they had distinguished a status when they had not.
+  Adding a case is still not a one-line change: the `ControlArgs.shape` doc, the website command
+  reference and the agent skill each enumerate the set by hand (the dispatcher's rejection message and
+  the CLI's `--shape` help/rejection derive theirs from `StatusShape.validNamesList`/`validNamesPhrase`,
+  the `WatermarkConfig.validFits` precedent, so those three can't go stale).
+  `StatusShape.displayName` (the capitalized raw value) is the host-free picker label the Settings
+  options and the picker's accessibility value read, so the six names have ONE definition.
+  Each glyph is tinted via the shared `GhosttyApp.statusColor(for:override:)`: the ephemeral
   `AgentIndicator.color` per-call OVERRIDE (`session.status --color`, a valid `#rrggbb` wins) else its
   configurable Settings color (`GhosttyApp.{active,blocked,completed}StatusColor`,
   default `#DBD9E6` muted lavender-grey / system amber / system green; see the Settings + Control API sections)
-  — the SwiftUI attention-list `StatusGlyph` resolves through the SAME override helper so the two can't drift —
+  — the SwiftUI attention-list `StatusGlyph` resolves through the SAME two override helpers, tint and
+  silhouette alike, so the two render sites can't drift —
   with accessibility role `.staticText`, id `agent-status`, value = the state name (so XCUITest matches `app.staticTexts["agent-status"]`;
-  the glyph TINT, per-call or not, is NOT accessibility-observable),
+  neither the glyph TINT nor its SHAPE, per-call or not, is accessibility-observable, which is why the
+  e2e asserts the command path and the `tree` read-back rather than the drawn pixels),
   and a `CABasicAnimation` `opacity` pulse added only while visible AND `blink` (the install's `UserPromptSubmit→active --blink`
   hook pulses the in-progress glyph). `StatusIconView.apply` also requires
   `!NSWorkspace.shared.accessibilityDisplayShouldReduceMotion`, so Reduce Motion keeps the glyph/color
