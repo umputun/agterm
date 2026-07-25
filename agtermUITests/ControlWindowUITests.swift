@@ -210,6 +210,38 @@ final class ControlWindowUITests: ControlAPITestCase {
                       "the restored window should be interactive again")
     }
 
+    // Parking the FRONTMOST window must hand frontmost to a window that is still visible. `activeWindowID`
+    // only falls back when the frontmost window's store is gone, and a minimized window keeps its store, so
+    // without the handoff every untargeted command keeps routing into a window sitting in the Dock — the
+    // exact state a park-all-but-one script produces. AppKit only keys another window while the app is
+    // active, so this cannot be left to it.
+    func testMinimizingFrontmostHandsOffActive() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session")
+        let launchID = try XCTUnwrap(try windowList().first?["id"] as? String, "the seeded window should have an id")
+
+        let created = try sendCommand(#"{"cmd":"window.new","args":{"name":"second"}}"#)
+        let newID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "window.new returns an id")
+        XCTAssertTrue(pollWindowList(timeout: 10) { list in
+            list.first { ($0["id"] as? String)?.lowercased() == newID.lowercased() }?["active"] as? Bool == true
+        }, "the new window should be frontmost before we park it")
+        // wait out WindowAccessor's UI-test bring-forward schedule (~0.95s from attach), which would
+        // deminiaturize the brand-new window out from under the assertion.
+        usleep(1_200_000)
+
+        addTeardownBlock { _ = try? self.sendCommand(#"{"cmd":"window.minimize","target":"\#(newID)","args":{"mode":"off"}}"#) }
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.minimize","target":"\#(newID)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true)
+
+        let handedOff = pollWindowList(timeout: 10) { list in
+            let parked = list.first { ($0["id"] as? String)?.lowercased() == newID.lowercased() }
+            let remaining = list.first { ($0["id"] as? String)?.lowercased() == launchID.lowercased() }
+            return parked?["minimized"] as? Bool == true && remaining?["active"] as? Bool == true
+        }
+        let finalList = (try? windowList()) ?? []
+        XCTAssertTrue(handedOff,
+                      "minimizing the frontmost window should make the still-visible one active: \(finalList)")
+    }
+
     // AppKit's own Window ▸ Minimize (⌘M) mutates the state with no control command in play, so the
     // read-back only stays honest because `ControlServer` observes NSWindow.didMiniaturize. This drives the
     // menu item — the GUI half — and asserts the flag flips, which is the regression guard for those

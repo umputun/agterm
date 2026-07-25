@@ -160,9 +160,27 @@ extension ControlServer {
                                        error: "cannot minimize a full-screen window — window.fullscreen it first")
             case .applied(let desired):
                 await pollUntil { WindowRegistry.shared.isMinimized(id) == desired }
+                if desired { handOffFrontmost(from: id) }
                 return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
             }
         }
+    }
+
+    /// After parking the FRONTMOST window, point `frontmostWindowID` at a window the user can still see.
+    ///
+    /// `activeWindowID` only falls back when the frontmost window's STORE is gone (i.e. closed), and a
+    /// minimized window keeps its store — so without this every untargeted command (`tree`, `session.new`,
+    /// `quick`, the palette, the menu bar) keeps routing into a window sitting in the Dock. AppKit keys
+    /// another window on a minimize only while the APP is active, so a script parking windows in the
+    /// background never gets that handoff; when AppKit DID hand off, `reportFrontmost` already moved the
+    /// id and the guard below skips. With every open window minimized there is nothing to hand to, so the
+    /// pointer stays put rather than being cleared.
+    private func handOffFrontmost(from id: WindowInfo.ID) {
+        guard library.frontmostWindowID == id else { return }
+        guard let next = library.openIDs().first(where: { $0 != id && !WindowRegistry.shared.isMinimized($0) })
+        else { return }
+        library.frontmostWindowID = next
+        library.saveIndex()
     }
 
     /// Resolve a window id and rename it (the name lives in the index). Requires a name. Returns the id.

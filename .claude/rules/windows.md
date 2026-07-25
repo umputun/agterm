@@ -248,9 +248,22 @@ never two bundles in one window.
   SHARED by `geometry`, `move`, and `resize` on purpose: a read resolved by overlap and a write resolved
   against `NSScreen.main` would disagree on the display index, so a minimized window's frame would stop
   round-tripping back through `window.move`.
+  Parking the FRONTMOST window HANDS `frontmostWindowID` off to a still-visible open window
+  (`handOffFrontmost`).
+  `activeWindowID` only falls back when the frontmost window's STORE is gone, and a minimized window keeps
+  its store, so without the handoff `tree`, `session.new`, `quick`, the palette, and the menu bar all keep
+  routing into a window sitting in the Dock — exactly the state a park-all-but-one script produces.
+  AppKit keys another window on a minimize only while the APP is active, so a background script never gets
+  that handoff for free; when AppKit DID hand off, `reportFrontmost` already moved the id and the guard
+  skips.
+  With every open window minimized there is no candidate, so the pointer stays put rather than being
+  cleared.
   `minimized` is LIVE-ONLY (never persisted — see the control-api rule), so a parking script re-applies
-  after a relaunch, and a Dock-icon click restores minimized windows through AppKit's default reopen
-  handling (agterm implements no `applicationShouldHandleReopen`).
+  after a relaunch.
+  Both GUI directions keep the read-back honest, verified: a ⌘M/menu minimize
+  (`testMenuMinimizeReadsBackOverControl`) and a Dock-icon click restore (AppKit's default reopen handling
+  — agterm implements no `applicationShouldHandleReopen`) each flip the flag with no control command in
+  play.
   Four-point keep-in-sync audit: (1) `case windowMinimize = "window.minimize"` + `minimized` on
   `ControlWindowNode` in `ControlProtocol.swift` (reuses `ControlArgs.mode`),
   (2) the `.windowMinimize` dispatcher arm (mode parse + error string) → `ControlActions.windowMinimize`
