@@ -16,8 +16,8 @@ extension ControlServer {
     /// after SwiftUI resolves the store and runs a second render pass. Fire-and-forget like the other
     /// polls — a window that never renders times out and the command still replies ok.
     ///
-    /// `minimized` parks the new window in the Dock instead of presenting it, so a script can build a set
-    /// of project windows without each one flashing on screen and taking focus.
+    /// `minimized` creates the window and THEN parks it in the Dock, so a script can build a set of
+    /// project windows and be left on one it can still see.
     func windowNew(name: String?, minimized: Bool) async -> ControlResponse {
         let info = library.newWindow(name: trimmed(name))
         actions.openWindow?(info.id)
@@ -32,11 +32,21 @@ extension ControlServer {
     /// synchronously and again on the next main-queue turn, and that second present deminiaturizes — so
     /// minimizing the instant registration lands would simply be undone. One poll tick yields the main
     /// actor long enough for the queued present to drain first.
-    private func park(_ id: WindowInfo.ID) async {
+    ///
+    /// The attach poll above is bounded and fire-and-forget, so a window that never rendered reaches here
+    /// unregistered and `minimize` answers `.notOpen`. LOG that rather than swallowing it: the window is
+    /// then still on screen holding focus while the caller was told it was parked. Frontmost is handed off
+    /// only when the park actually applied — an unparked window is visible, so nothing is owed.
+    @discardableResult
+    private func park(_ id: WindowInfo.ID) async -> Bool {
         try? await Task.sleep(nanoseconds: 50_000_000)
-        guard case .applied = WindowRegistry.shared.minimize(id, mode: .on) else { return }
+        guard case .applied = WindowRegistry.shared.minimize(id, mode: .on) else {
+            log("window.new --minimized: \(id) never attached in time, left presented")
+            return false
+        }
         await pollUntil { WindowRegistry.shared.isMinimized(id) }
         handOffFrontmost(from: id)
+        return true
     }
 
     /// Project the window library into the `window.list` response: every window with its open flag and
@@ -198,6 +208,12 @@ extension ControlServer {
         else { return }
         library.frontmostWindowID = next
         library.saveIndex()
+        // becoming frontmost also reconciles the auto-hidden sidebars, which `WindowAccessor.reportFrontmost`
+        // does on the GUI path. It is not reached here — AppKit only re-keys another window while the app is
+        // active — so without this the window that just became visible keeps its sidebar collapsed until the
+        // user next activates agterm. Idempotent, and resolves through `activeWindowID`, which returns the id
+        // just assigned above.
+        if GhosttyApp.shared.autoHideSidebarInactiveWindows { library.applyInactiveWindowSidebarHiding() }
     }
 
     /// Resolve a window id and rename it (the name lives in the index). Requires a name. Returns the id.

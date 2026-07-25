@@ -318,9 +318,9 @@ w=$(agtermctl window new work)                   # create and open a window, cap
 agtermctl window new proj-b --minimized          # create one already parked in the Dock
 agtermctl window select "$w"                     # raise it (opening it first if it was closed)
 agtermctl window rename "$w" personal            # rename it
+agtermctl window minimize "$w" on                # park it in the Dock (off restores, toggle flips)
 agtermctl window close "$w"                      # close its on-screen window (the bundle is kept)
 agtermctl window delete "$w"                     # delete it (the last window can't be deleted)
-agtermctl window minimize "$w" on                # park it in the Dock (off restores, toggle flips)
 ```
 
 A global `--window <id>` option on the session, workspace, `tree`, and `font` commands targets a *specific* window's tree instead of the frontmost one (the window must be open). Without it, those commands act on the frontmost window:

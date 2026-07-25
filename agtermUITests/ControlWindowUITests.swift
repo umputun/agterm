@@ -168,8 +168,9 @@ final class ControlWindowUITests: ControlAPITestCase {
     // so any XCUIElement query against it hangs on event synthesis rather than failing. The restore rides
     // `addTeardownBlock` (registered BEFORE the minimize) because `continueAfterFailure = false` unwinds
     // through an ObjC exception that skips a Swift `defer`, which would leave the runner's screen with a
-    // Dock-parked window. It drives the LAUNCH window on purpose — a freshly created one is still inside
-    // `WindowAccessor`'s ~0.95s UI-test bring-forward schedule, which would deminiaturize it mid-test.
+    // Dock-parked window. A parked window stays parked because `bringForwardForUITests` latches on its
+    // first tick — the delay-0 block finds the window already on screen and disarms the rest of the
+    // schedule — so nothing deminiaturizes it out from under the assertions.
     func testWindowMinimizeAndRestore() throws {
         XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session")
         let id = try XCTUnwrap(try windowList().first?["id"] as? String, "the seeded window should have an id")
@@ -252,10 +253,9 @@ final class ControlWindowUITests: ControlAPITestCase {
         XCTAssertTrue(pollWindowList(timeout: 10) { list in
             list.first { ($0["id"] as? String)?.lowercased() == newID.lowercased() }?["active"] as? Bool == true
         }, "the new window should be frontmost before we park it")
-        // wait out WindowAccessor's UI-test bring-forward schedule (~0.95s from attach), which would
-        // deminiaturize the brand-new window out from under the assertion.
-        usleep(1_200_000)
-
+        // no wait is needed before parking: `bringForwardForUITests` latches on its delay-0 tick, which is
+        // enqueued inside the same `viewDidMoveToWindow` body that registers the window — so it has run
+        // long before `window.new` replies, and the later ticks are inert.
         addTeardownBlock { _ = try? self.sendCommand(#"{"cmd":"window.minimize","target":"\#(newID)","args":{"mode":"off"}}"#) }
         XCTAssertEqual(try sendCommand(#"{"cmd":"window.minimize","target":"\#(newID)","args":{"mode":"on"}}"#)["ok"] as? Bool,
                        true)

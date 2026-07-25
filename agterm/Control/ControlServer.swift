@@ -593,7 +593,9 @@ final class ControlServer {
         return result.isEmpty ? nil : result
     }
 
-    private func log(_ message: @autoclosure () -> String) {
+    /// Internal, not private: the command arms live in `ControlServer+*.swift` extensions, which cannot
+    /// reach a private member declared here.
+    func log(_ message: @autoclosure () -> String) {
         NSLog("agterm: %@", message())
     }
 }

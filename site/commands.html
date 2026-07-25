@@ -1363,9 +1363,9 @@
                 Create and open a window. It replies only once the on-screen window exists, so an immediate
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">window resize</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">move</span>
                 on the returned id works.
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--minimized</span> creates it already parked in the Dock
-                instead of presenting it, leaving frontmost on a window you can still see — for building a set of project windows
-                without each one flashing up and taking focus.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--minimized</span> parks it in the Dock right after
+                creating it, leaving frontmost on a window you can still see — for building a set of project windows and ending up
+                on one you are looking at. The window is presented briefly before it is parked.
                 <strong style="color: #bfbab0">Returns</strong>
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
               </p>

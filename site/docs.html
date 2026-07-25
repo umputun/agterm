@@ -1376,14 +1376,17 @@
               "
             >
               agtermctl window list <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;# id  name  [open]  [active]</span
-              ><br /><span style="color: #6d82f3">w</span>=$(agtermctl window new work)<br />agtermctl window select
+              ><br /><span style="color: #6d82f3">w</span>=$(agtermctl window new work)<br />agtermctl window new proj-b
+              --minimized <span style="color: #6b727a">&nbsp;# create one, parked in the Dock</span
+              ><br />agtermctl window select
               <span style="color: #f2b45c">"$w"</span> <span style="color: #6b727a">&nbsp;# raise it (opening if closed)</span
-              ><br />agtermctl window rename <span style="color: #f2b45c">"$w"</span> personal<br />agtermctl window close
+              ><br />agtermctl window rename <span style="color: #f2b45c">"$w"</span> personal
+              <br />agtermctl window minimize <span style="color: #f2b45c">"$w"</span> on
+              <span style="color: #6b727a">&nbsp;# park it in the Dock (off restores)</span
+              ><br />agtermctl window close
               <span style="color: #f2b45c">"$w"</span> <span style="color: #6b727a">&nbsp;&nbsp;# close its window (bundle kept)</span
               ><br />agtermctl window delete <span style="color: #f2b45c">"$w"</span>
-              <span style="color: #6b727a">&nbsp;# delete (last window can't be deleted)</span
-              ><br />agtermctl window minimize <span style="color: #f2b45c">"$w"</span> on
-              <span style="color: #6b727a">&nbsp;# park it in the Dock (off restores)</span><br /><br /><span
+              <span style="color: #6b727a">&nbsp;# delete (last window can't be deleted)</span><br /><br /><span
                 style="color: #6b727a"
                 ># --window targets a specific window's tree on session/workspace/tree/font</span
               ><br />agtermctl tree --window <span style="color: #f2b45c">"$w"</span><br />agtermctl session new --window

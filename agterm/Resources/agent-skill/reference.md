@@ -491,9 +491,9 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
 
 - `window new [name] [--minimized]` — create and open a window; returns its id. It replies only once
   the on-screen window exists, so an immediate `window resize`/`move` on the returned id works.
-  `--minimized` creates it already parked in the Dock instead of presenting it, and leaves frontmost
-  on a window you can still see — for building a set of project windows without each one flashing up
-  and taking focus.
+  `--minimized` parks it in the Dock right after creating it, and leaves frontmost on a window you can
+  still see — for building a set of project windows and ending up on one you are looking at. The window
+  is presented briefly before it is parked, so expect it to appear and take focus on its way to the Dock.
 - `window list` — `result.windows`, each with `id`, `name`, `open`, `active`, `autoFollowMs` (the
   window's Auto-follow timeout in milliseconds, omitted when the setting is Disabled), and
   `sidebarVisible` (whether that window's sidebar is shown, read from the open window's store — omitted
@@ -534,7 +534,8 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
   address is always a hex UUID prefix or `active`, so `window minimize on` is understood as the active
   window. The window must be open, and a window in NATIVE FULL SCREEN is rejected
   (`cannot minimize a full-screen window — window.fullscreen it first`) because AppKit no-ops miniaturize
-  there. Restoring puts the window back on screen without raising it — use `window select` for that. This
+  there. Restoring puts the window back on screen without making it key — use `window select` to restore
+  and raise in one step. This
   is the control half of ⌘M, the yellow traffic-light button, and the Minimize title-bar double-click
   action. Read back as `minimized` on `window list`. The state is LIVE-ONLY: it is never persisted, so
   every window reopens un-minimized after a restart, and a Dock-icon click restores minimized windows.

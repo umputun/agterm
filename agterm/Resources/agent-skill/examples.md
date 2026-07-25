@@ -617,7 +617,7 @@ process effect.
 agtermctl session go --to next            # step selection to the next session
 agtermctl session go --to next-attention  # jump to the next blocked/completed session
 w=$(agtermctl window new "scratch" --json | jq -r '.result.id')
-# or build one already parked, so it never flashes on screen or takes focus:
+# or park one in the Dock right after creating it (it appears briefly on its way there):
 # p=$(agtermctl window new "proj-b" --minimized --json | jq -r '.result.id')
 agtermctl window resize "$w" --width 1200 --height 800
 agtermctl window move "$w" --x 100 --y 100 --display 0
@@ -639,7 +639,8 @@ Switching then looks like switching a tab rather than managing five windows.
 # align every window to the active one's frame, so raising one covers the others exactly
 set -- $(agtermctl window list --json | jq -r '.result.windows[] | select(.active) | .geometry
   | "\(.x) \(.y) \(.width) \(.height) \(.display)"')
-agtermctl window list --json | jq -r '.result.windows[].id' | while read -r id; do
+# select(.open): a closed window has no NSWindow, so resize/move would error on it
+agtermctl window list --json | jq -r '.result.windows[] | select(.open) | .id' | while read -r id; do
   agtermctl window resize "$id" --width "$3" --height "$4"
   agtermctl window move "$id" --x "$1" --y "$2" --display "$5"
 done
@@ -650,16 +651,23 @@ for p in "Project A" "Project B" "Project C"; do
 done
 
 # show exactly one project: raise it, park the rest
+# show exactly one project: raise it, park the rest. `select` opens a closed window, so it needs no
+# filter; `park` does — minimize errors on a window that has no NSWindow.
 show() {
   agtermctl window list --json | jq -r --arg n "$1" '.result.windows[]
+    | select(.name == $n or .open)
     | "\(if .name == $n then "select" else "park" end) \(.id)"' |
   while read -r act id; do
-    [ "$act" = select ] && agtermctl window select "$id" || agtermctl window minimize "$id" on
+    if [ "$act" = select ]; then
+      agtermctl window select "$id"
+    else
+      agtermctl window minimize "$id" on
+    fi
   done
 }
 ```
 
-A minimized window still reports its `geometry`, so re-running the align step covers parked windows too.
+A minimized window still reports its `geometry`, so a script can record the frame it will come back to.
 The minimized state is live-only — re-run `show` after restarting agterm.
 
 ## Reload the keymap after editing it
