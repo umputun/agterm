@@ -37,16 +37,14 @@ extension ControlServer {
     /// unregistered and `minimize` answers `.notOpen`. LOG that rather than swallowing it: the window is
     /// then still on screen holding focus while the caller was told it was parked. Frontmost is handed off
     /// only when the park actually applied — an unparked window is visible, so nothing is owed.
-    @discardableResult
-    private func park(_ id: WindowInfo.ID) async -> Bool {
+    private func park(_ id: WindowInfo.ID) async {
         try? await Task.sleep(nanoseconds: 50_000_000)
         guard case .applied = WindowRegistry.shared.minimize(id, mode: .on) else {
             log("window.new --minimized: \(id) never attached in time, left presented")
-            return false
+            return
         }
         await pollUntil { WindowRegistry.shared.isMinimized(id) }
         handOffFrontmost(from: id)
-        return true
     }
 
     /// Project the window library into the `window.list` response: every window with its open flag and
@@ -69,12 +67,19 @@ extension ControlServer {
     /// store loaded — which is what `tree --window` needs, so it stays — but it flips a render pass before
     /// the NSWindow exists, so a frame command issued right after would still hit `window not open`. An
     /// already-open, already-attached window satisfies both on the first iteration.
+    ///
+    /// Selecting also takes frontmost EXPLICITLY. `raise` makes the window key, but `frontmostWindowID` is
+    /// only updated by `WindowAccessor.reportFrontmost` on `didBecomeKey`, which AppKit does not deliver
+    /// while the app is inactive — so a background `window select` used to reply ok while every untargeted
+    /// command kept routing into the previously-active window. Same asymmetry `handOffFrontmost` fixes on
+    /// the minimize path, and the same reconcile is owed.
     func windowSelect(_ target: String?) async -> ControlResponse {
         switch resolver.resolveWindowID(target) {
         case .failure(let response): return response
         case .success(let id):
             actions.openWindow?(id)
             await pollUntil { self.library.isOpen(id) && WindowRegistry.shared.isRegistered(id) }
+            takeFrontmost(id)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
@@ -206,13 +211,21 @@ extension ControlServer {
         guard library.frontmostWindowID == id else { return }
         guard let next = library.openIDs().first(where: { $0 != id && !WindowRegistry.shared.isMinimized($0) })
         else { return }
-        library.frontmostWindowID = next
+        takeFrontmost(next)
+    }
+
+    /// Make `id` the logical frontmost window, the way `WindowAccessor.reportFrontmost` does on the GUI
+    /// path: record it, persist the index, and reconcile the auto-hidden sidebars.
+    ///
+    /// The control channel needs its own path because `reportFrontmost` fires on `didBecomeKey`, which
+    /// AppKit does not deliver while the app is inactive — exactly when a script is driving. Without the
+    /// reconcile the window that just became visible keeps its sidebar collapsed until the user next
+    /// activates agterm. Idempotent, and the reconcile resolves through `activeWindowID`, which returns
+    /// the id assigned just above.
+    private func takeFrontmost(_ id: WindowInfo.ID) {
+        guard library.frontmostWindowID != id else { return }
+        library.frontmostWindowID = id
         library.saveIndex()
-        // becoming frontmost also reconciles the auto-hidden sidebars, which `WindowAccessor.reportFrontmost`
-        // does on the GUI path. It is not reached here — AppKit only re-keys another window while the app is
-        // active — so without this the window that just became visible keeps its sidebar collapsed until the
-        // user next activates agterm. Idempotent, and resolves through `activeWindowID`, which returns the id
-        // just assigned above.
         if GhosttyApp.shared.autoHideSidebarInactiveWindows { library.applyInactiveWindowSidebarHiding() }
     }
 

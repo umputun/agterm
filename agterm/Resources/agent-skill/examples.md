@@ -667,8 +667,9 @@ show() {
 }
 ```
 
-A minimized window still reports its `geometry`, so a script can record the frame it will come back to.
-The minimized state is live-only — re-run `show` after restarting agterm.
+A minimized window still reports its `geometry`, and `window move`/`window resize` apply to it — a parked
+window comes back at whatever frame was written while it sat in the Dock, so re-running the align step
+covers parked windows too. The minimized state is live-only — re-run `show` after restarting agterm.
 
 ## Reload the keymap after editing it
 

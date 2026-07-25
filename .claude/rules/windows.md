@@ -295,6 +295,24 @@ never two bundles in one window.
   deliberate minimize — the same oscillation hazard its own comment warns about.
   It now latches as soon as the window is on screen.
   Verified load-bearing: reverting that latch fails `testWindowNewMinimizedStaysParked`.
+- **A control command that changes which window is frontmost must SAY SO — `takeFrontmost`, not AppKit.**
+  `library.frontmostWindowID` is normally written by `WindowAccessor.reportFrontmost` on `didBecomeKey`,
+  and AppKit does not deliver that while the app is INACTIVE — which is exactly the state a driving script
+  is in.
+  So `window.select` used to `raise` the window, reply `ok`, and leave frontmost on the PREVIOUS window;
+  every untargeted command that followed (`session.new`, `tree`, the palette, the quick terminal) then
+  routed into the window the caller had just navigated away from.
+  Both `windowSelect` and `handOffFrontmost` now go through `takeFrontmost(_:)`, which records the id,
+  persists the index, and runs the auto-hidden-sidebar reconcile — the same three things `reportFrontmost`
+  does, minus the notification the dispatch path already covers.
+  **This path has NO XCUITest coverage, deliberately.** Reproducing it requires agterm to be inactive, and
+  every way to arrange that from XCUITest disturbs the user's session — activating another app jumps to
+  whatever Space that app's window is on.
+  A test written without deactivating the app passes with OR without the fix (verified: it did), so it
+  would guard nothing.
+  Verify by hand on an ISOLATED instance instead: open two windows, leave agterm in the background, run
+  `window select <the non-active one>`, then check `window list` reports it `active` and that an untargeted
+  `session new` lands in it.
 - **`window.new` replies only once its NSWindow has ATTACHED — the open-vs-attached distinction.**
   A window is "open" the moment its `AppStore` loads (`WindowLibrary.isOpen` = `stores[id] != nil`), which
   `newWindow()` does SYNCHRONOUSLY. The NSWindow lands much later: registration happens in
