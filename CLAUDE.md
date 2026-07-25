@@ -210,6 +210,22 @@ The app must build, `swift test` and `make test-app` must stay green, and `make 
   The XCUITests no longer collide either: the `.debug` bundle id means XCUITest's launch-time terminate
   hits only the `.debug` instance, not the deployed `com.umputun.agterm`,
   and they still use an isolated `AGTERM_STATE_DIR`/socket.
+- **NEVER run a MUTATING `agtermctl` command against the DEFAULT socket — that socket is the user's LIVE
+  daily driver.**
+  The kill/relaunch ban below is only part of the rule: a bare `agtermctl window move|resize|minimize|new`,
+  `session new|close|type`, `workspace …` reaches the DEPLOYED app, because `agtermctl` on PATH is the
+  deployed copy and its socket auto-resolves to `~/Library/Application Support/agterm/agterm.sock`.
+  This has already cost real damage: a review subagent "checked" the bundled `agent-skill/examples.md`
+  window-stacking recipe by RUNNING it and restacked all four of the user's live windows onto one frame.
+  Read-only probes (`tree`, `window list`) are tolerable; anything that WRITES must target an isolated
+  instance with an explicit `--socket <tmp>/agterm.sock`.
+  **Never "test" a bundled recipe or doc example by executing it** — read it statically, or run it against
+  an isolated instance.
+- **Every DISPATCHED SUBAGENT must carry that constraint VERBATIM in its prompt.**
+  A subagent inherits the same PATH and socket default, so it reaches the daily driver exactly as easily as
+  you do, and it never reads this file unless told to.
+  Any agent prompt that could plausibly lead to running the app or its CLI must state: never execute
+  `agterm`/`agtermctl` against the default socket, never launch or quit the app, static reading only.
 - **NEVER kill or relaunch the deployed `~/Applications/agterm.app` — it is the user's REAL,
   in-use daily terminal with LIVE sessions.** BANNED: `pkill agterm` / `pkill -x agterm`,
   `osascript -e 'tell application "agterm" to quit'`, and ANY quit-then-relaunch of the deployed app
