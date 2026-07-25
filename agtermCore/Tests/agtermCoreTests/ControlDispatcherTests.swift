@@ -1814,18 +1814,24 @@ struct ControlDispatcherTests {
             cmd: .windowNew,
             args: ControlArgs(name: "Build")
         ))
+        let parked = await dispatcher.dispatch(ControlRequest(
+            cmd: .windowNew,
+            args: ControlArgs(name: "Parked", minimized: true)
+        ))
         let listed = await dispatcher.dispatch(ControlRequest(cmd: .windowList))
         let selected = await dispatcher.dispatch(ControlRequest(cmd: .windowSelect, target: "win-b"))
         let closed = await dispatcher.dispatch(ControlRequest(cmd: .windowClose, target: "win-b"))
         let deleted = await dispatcher.dispatch(ControlRequest(cmd: .windowDelete, target: "win-b"))
 
         #expect(created == ControlResponse(ok: true, result: ControlResult(id: "win-b")))
+        #expect(parked == ControlResponse(ok: true, result: ControlResult(id: "win-b")))
         #expect(listed == ControlResponse(ok: true, result: ControlResult(windows: windows)))
         #expect(selected == ControlResponse(ok: true, result: ControlResult(id: "win-b")))
         #expect(closed == ControlResponse(ok: true, result: ControlResult(id: "win-b")))
         #expect(deleted == ControlResponse(ok: false, error: "cannot delete last window"))
         #expect(actions.calls == [
-            .windowNew("Build"),
+            .windowNew("Build", minimized: false),
+            .windowNew("Parked", minimized: true),
             .windowList,
             .windowSelect(target: "win-b"),
             .windowClose(target: "win-b"),

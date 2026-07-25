@@ -1356,11 +1356,16 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl window new [name]
+                agtermctl window new [name] [--minimized]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">window.new</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Create and open a window.
+                Create and open a window. It replies only once the on-screen window exists, so an immediate
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">window resize</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">move</span>
+                on the returned id works.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--minimized</span> creates it already parked in the Dock
+                instead of presenting it, leaving frontmost on a window you can still see — for building a set of project windows
+                without each one flashing up and taking focus.
                 <strong style="color: #bfbab0">Returns</strong>
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
               </p>

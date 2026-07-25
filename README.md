@@ -315,6 +315,7 @@ agtermctl session type --target "$id" --select $'echo hello\n'
 ```sh
 agtermctl window list                            # id  name  [open]  [active]
 w=$(agtermctl window new work)                   # create and open a window, capture its id
+agtermctl window new proj-b --minimized          # create one already parked in the Dock
 agtermctl window select "$w"                     # raise it (opening it first if it was closed)
 agtermctl window rename "$w" personal            # rename it
 agtermctl window close "$w"                      # close its on-screen window (the bundle is kept)

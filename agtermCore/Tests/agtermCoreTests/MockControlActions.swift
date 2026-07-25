@@ -62,7 +62,7 @@ final class MockControlActions: ControlActions {
         case overlayResult(target: String?, window: String?)
         case sessionBackground(target: String?, window: String?, ControlSessionBackgroundOptions)
         case sessionText(target: String?, window: String?, ControlSessionTextOptions)
-        case windowNew(String?)
+        case windowNew(String?, minimized: Bool)
         case windowList
         case windowSelect(target: String?)
         case windowClose(target: String?)
@@ -395,8 +395,8 @@ final class MockControlActions: ControlActions {
         return nextSessionTextResponse
     }
 
-    func windowNew(name: String?) async -> ControlResponse {
-        calls.append(.windowNew(name))
+    func windowNew(name: String?, minimized: Bool) async -> ControlResponse {
+        calls.append(.windowNew(name, minimized: minimized))
         return nextWindowNewResponse
     }
 

@@ -293,7 +293,7 @@ omitted when expanded).
   overlay is a real terminal (pty), which is also how you **display an image inline** — via the bundled
   `scripts/show-image.sh` (see below).
 
-**window** — `new [name]` · `list` · `select <id>` · `close <id>` · `rename <id> <name>` ·
+**window** — `new [name] [--minimized]` · `list` · `select <id>` · `close <id>` · `rename <id> <name>` ·
 `delete <id>` · `resize <id> --width W --height H` · `move <id> --x X --y Y [--display N]` ·
 `zoom <id>` (maximize-to-screen toggle, the double-click-header gesture; a plain green-button click does full screen) ·
 `fullscreen <id>` (toggle native macOS full screen, the green-button / ⌃⌘F action) ·

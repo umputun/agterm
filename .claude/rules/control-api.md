@@ -78,7 +78,7 @@ paths:
   panes' fonts are otherwise unobservable, being live-only; supplied to `controlTree` by app-side closures
   reading `GhosttySurfaceView.currentFontSize()`, since the host-free tree can't read a surface),
   `window.move`+`window.resize`/`geometry`, `window.fullscreen`+`window.zoom`/`fullscreen`+`zoomed`,
-  `window.minimize`/`minimized` (the last four on `window.list`).
+  `window.minimize`+`window.new --minimized`/`minimized` (the last four on `window.list`).
   This is a SEPARATE obligation from the four-point audit (Command + arg + CLI + tests) and easy to forget:
   `session.overlay.resize` shipped write-only and `overlaySizePercent` was added only later, when a
   tmux-zoom script needed to restore an overlay's exact size.

@@ -281,6 +281,20 @@ never two bundles in one window.
   that case by targeting `active` — covered by `windowMinimizeBareModeTargetsActive`.
   Do NOT "fix" it by copying `surface zoom`'s mode-first-plus-`--target` shape; that is a different family
   convention.
+- **`window.new --minimized` creates a window already parked.**
+  It rides the existing command as an ARG (`ControlArgs.minimized`), so there is no new `Command` case and
+  the catalog count is unchanged — the `session.new --no-select` precedent, and like it the read-back is
+  the EXISTING field (`window.list`'s `minimized`), so no new node field is owed.
+  Ordering inside the arm is load-bearing: `WindowAccessor` presents a new window BOTH synchronously in
+  `viewDidMoveToWindow` and again on the next main-queue turn, and that second present deminiaturizes — so
+  `park` waits one poll tick after registration before minimizing, else the park is silently undone.
+  It then hands frontmost off (the same `handOffFrontmost`), because `newWindow()` pre-sets
+  `frontmostWindowID` and a window in the Dock must not be where untargeted commands land.
+  It ALSO required fixing `bringForwardForUITests` (`WindowAccessor`): its guard returned WITHOUT latching
+  for an already-presented window, leaving all six ticks of the 0.95 s schedule armed to fight a later
+  deliberate minimize — the same oscillation hazard its own comment warns about.
+  It now latches as soon as the window is on screen.
+  Verified load-bearing: reverting that latch fails `testWindowNewMinimizedStaysParked`.
 - **`window.new` replies only once its NSWindow has ATTACHED — the open-vs-attached distinction.**
   A window is "open" the moment its `AppStore` loads (`WindowLibrary.isOpen` = `stores[id] != nil`), which
   `newWindow()` does SYNCHRONOUSLY. The NSWindow lands much later: registration happens in

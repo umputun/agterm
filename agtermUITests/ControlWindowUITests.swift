@@ -210,6 +210,34 @@ final class ControlWindowUITests: ControlAPITestCase {
                       "the restored window should be interactive again")
     }
 
+    // window.new --minimized creates the window already parked, so a script can build a set of project
+    // windows without each one flashing on screen and taking focus. The window must come up minimized and
+    // must NOT be left as the frontmost one — a window in the Dock would otherwise swallow every untargeted
+    // command. This also guards the ordering inside the command: WindowAccessor presents a new window on
+    // the next main-queue turn as well as synchronously, so parking it too early is silently undone.
+    func testWindowNewMinimizedStaysParked() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session")
+        let launchID = try XCTUnwrap(try windowList().first?["id"] as? String, "the seeded window should have an id")
+
+        let created = try sendCommand(#"{"cmd":"window.new","args":{"name":"parked","minimized":true}}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true, "window.new --minimized should succeed: \(created)")
+        let newID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "window.new returns an id")
+        addTeardownBlock { _ = try? self.sendCommand(#"{"cmd":"window.minimize","target":"\#(newID)","args":{"mode":"off"}}"#) }
+
+        let list = try windowList()
+        let made = try XCTUnwrap(list.first { ($0["id"] as? String)?.lowercased() == newID.lowercased() },
+                                 "the new window should be listed: \(list)")
+        XCTAssertEqual(made["minimized"] as? Bool, true, "window.new --minimized should report minimized: \(made)")
+        XCTAssertEqual(made["active"] as? Bool, false, "a parked window must not be left frontmost: \(made)")
+        XCTAssertEqual(list.first { ($0["id"] as? String)?.lowercased() == launchID.lowercased() }?["active"] as? Bool,
+                       true, "the visible window should keep frontmost: \(list)")
+
+        // and it STAYS parked past WindowAccessor's deferred present and its UI-test schedule.
+        usleep(1_500_000)
+        XCTAssertEqual(try windowList().first { ($0["id"] as? String)?.lowercased() == newID.lowercased() }?["minimized"] as? Bool,
+                       true, "the parked window must not be dragged back out of the Dock")
+    }
+
     // Parking the FRONTMOST window must hand frontmost to a window that is still visible. `activeWindowID`
     // only falls back when the frontmost window's store is gone, and a minimized window keeps its store, so
     // without the handoff every untargeted command keeps routing into a window sitting in the Dock — the

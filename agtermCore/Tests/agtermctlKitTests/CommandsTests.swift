@@ -1100,6 +1100,14 @@ struct CommandsTests {
         #expect(try request(["window", "new"]) == ControlRequest(cmd: .windowNew, args: ControlArgs(name: nil)))
     }
 
+    @Test func windowNewMinimized() throws {
+        #expect(try request(["window", "new", "Work", "--minimized"])
+            == ControlRequest(cmd: .windowNew, args: ControlArgs(name: "Work", minimized: true)))
+        // omitted rather than false, so an un-flagged create stays byte-identical on the wire
+        #expect(try request(["window", "new", "Work"])
+            == ControlRequest(cmd: .windowNew, args: ControlArgs(name: "Work", minimized: nil)))
+    }
+
     @Test func windowList() throws {
         #expect(try request(["window", "list"]) == ControlRequest(cmd: .windowList))
     }

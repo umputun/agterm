@@ -105,6 +105,12 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// `session.new --no-select` without it opening. Omitted/`false` = expanded. The read-back is the
     /// `tree` workspace node's `collapsed` field.
     public var collapsed: Bool?
+    /// For `window.new`: create the window already MINIMIZED to the Dock (the CLI's `--minimized`) instead
+    /// of presenting it, so a script can build a set of project windows without each one flashing on screen
+    /// and stealing focus. Omitted/`false` presents it as usual. The read-back is the `window.list` node's
+    /// `minimized` field; the new window also hands frontmost back to a still-visible window, so untargeted
+    /// commands do not route into the Dock.
+    public var minimized: Bool?
     /// For `session.new`: create the session in the background without selecting or focusing it, leaving
     /// the current selection untouched (the CLI's `--no-select`). Omitted/`false` keeps the default
     /// select-and-focus behavior. The read-back is the existing `tree` `active` flag — the new node is not
@@ -256,7 +262,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
 
     public init(name: String? = nil, cwd: String? = nil, targets: [String]? = nil,
                 workspace: String? = nil, workspaceName: String? = nil,
-                createWorkspace: Bool? = nil, collapsed: Bool? = nil, noSelect: Bool? = nil,
+                createWorkspace: Bool? = nil, collapsed: Bool? = nil, minimized: Bool? = nil,
+                noSelect: Bool? = nil,
                 text: String? = nil, select: Bool? = nil, mode: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
                 follow: Bool? = nil, window: String? = nil,
@@ -279,6 +286,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.workspaceName = workspaceName
         self.createWorkspace = createWorkspace
         self.collapsed = collapsed
+        self.minimized = minimized
         self.noSelect = noSelect
         self.text = text
         self.select = select

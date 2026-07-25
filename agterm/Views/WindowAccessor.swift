@@ -307,7 +307,14 @@ struct WindowAccessor: NSViewRepresentable {
             // present a window that isn't on screen yet (FB11763863: created minimized/background), then
             // latch off. Re-fronting on later ticks (or a momentary !isVisible during a re-render) would
             // fight a deliberate window.select and oscillate the key window, flapping the "active" flag.
-            guard !didPresentForUITests, window.isMiniaturized || !window.isVisible else { return }
+            guard !didPresentForUITests else { return }
+            // already on screen: it presented on its own, so latch NOW instead of leaving the remaining
+            // ticks armed. Staying armed is the same hazard the comment above warns about, one step later:
+            // a window parked by window.minimize within the schedule would be dragged back out of the Dock.
+            guard window.isMiniaturized || !window.isVisible else {
+                didPresentForUITests = true
+                return
+            }
             NSApp.unhide(nil)
             NSApp.activate()
             if window.isMiniaturized { window.deminiaturize(nil) }

@@ -617,6 +617,8 @@ process effect.
 agtermctl session go --to next            # step selection to the next session
 agtermctl session go --to next-attention  # jump to the next blocked/completed session
 w=$(agtermctl window new "scratch" --json | jq -r '.result.id')
+# or build one already parked, so it never flashes on screen or takes focus:
+# p=$(agtermctl window new "proj-b" --minimized --json | jq -r '.result.id')
 agtermctl window resize "$w" --width 1200 --height 800
 agtermctl window move "$w" --x 100 --y 100 --display 0
 agtermctl window zoom "$w"                 # maximize-to-screen toggle (call again to restore)
@@ -640,6 +642,11 @@ set -- $(agtermctl window list --json | jq -r '.result.windows[] | select(.activ
 agtermctl window list --json | jq -r '.result.windows[].id' | while read -r id; do
   agtermctl window resize "$id" --width "$3" --height "$4"
   agtermctl window move "$id" --x "$1" --y "$2" --display "$5"
+done
+
+# building the set from scratch: create every project window already parked, then show one
+for p in "Project A" "Project B" "Project C"; do
+  agtermctl window new "$p" --minimized >/dev/null
 done
 
 # show exactly one project: raise it, park the rest

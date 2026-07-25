@@ -67,7 +67,7 @@ public protocol ControlActions {
     func setSessionBackground(_ target: String?, window: String?,
                               options: ControlSessionBackgroundOptions) -> ControlResponse
     func readSessionText(_ target: String?, window: String?, options: ControlSessionTextOptions) -> ControlResponse
-    func windowNew(name: String?) async -> ControlResponse
+    func windowNew(name: String?, minimized: Bool) async -> ControlResponse
     func windowList() -> ControlResponse
     func windowSelect(_ target: String?) async -> ControlResponse
     func windowClose(_ target: String?) async -> ControlResponse
@@ -689,7 +689,7 @@ public struct ControlDispatcher {
     private func dispatchWindowCommand(_ request: ControlRequest) async -> ControlResponse {
         switch request.cmd {
         case .windowNew:
-            return await actions.windowNew(name: request.args?.name)
+            return await actions.windowNew(name: request.args?.name, minimized: request.args?.minimized ?? false)
         case .windowList:
             return actions.windowList()
         case .windowSelect:

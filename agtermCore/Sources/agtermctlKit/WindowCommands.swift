@@ -13,11 +13,12 @@ struct Window: ParsableCommand {
     struct New: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Create and open a window.")
         @Argument(help: "Window name (defaults to the auto-generated name).") var name: String?
+        @Flag(name: .long, help: "Create it minimized to the Dock instead of presenting it.") var minimized = false
         @OptionGroup var options: BasicOptions
         var echoesResultID: Bool { true }
 
         func makeRequest() throws -> ControlRequest {
-            ControlRequest(cmd: .windowNew, args: ControlArgs(name: name))
+            ControlRequest(cmd: .windowNew, args: ControlArgs(name: name, minimized: minimized ? true : nil))
         }
     }
 

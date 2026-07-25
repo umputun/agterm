@@ -15,11 +15,28 @@ extension ControlServer {
     /// synchronously, so `isOpen` is already true and would prove nothing, while the NSWindow only attaches
     /// after SwiftUI resolves the store and runs a second render pass. Fire-and-forget like the other
     /// polls — a window that never renders times out and the command still replies ok.
-    func windowNew(name: String?) async -> ControlResponse {
+    ///
+    /// `minimized` parks the new window in the Dock instead of presenting it, so a script can build a set
+    /// of project windows without each one flashing on screen and taking focus.
+    func windowNew(name: String?, minimized: Bool) async -> ControlResponse {
         let info = library.newWindow(name: trimmed(name))
         actions.openWindow?(info.id)
         await pollUntil { WindowRegistry.shared.isRegistered(info.id) }
+        if minimized { await park(info.id) }
         return ControlResponse(ok: true, result: ControlResult(id: info.id.uuidString))
+    }
+
+    /// Park a freshly created window: minimize it, wait out the animation, and hand frontmost back.
+    ///
+    /// The wait before minimizing is load-bearing. `WindowAccessor` presents the window on attach BOTH
+    /// synchronously and again on the next main-queue turn, and that second present deminiaturizes — so
+    /// minimizing the instant registration lands would simply be undone. One poll tick yields the main
+    /// actor long enough for the queued present to drain first.
+    private func park(_ id: WindowInfo.ID) async {
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        guard case .applied = WindowRegistry.shared.minimize(id, mode: .on) else { return }
+        await pollUntil { WindowRegistry.shared.isMinimized(id) }
+        handOffFrontmost(from: id)
     }
 
     /// Project the window library into the `window.list` response: every window with its open flag and

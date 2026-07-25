@@ -1208,6 +1208,7 @@ struct ControlProtocolTests {
     @Test func windowCommandsRoundTrip() throws {
         let cases: [ControlRequest] = [
             ControlRequest(cmd: .windowNew, args: ControlArgs(name: "work")),
+            ControlRequest(cmd: .windowNew, args: ControlArgs(name: "parked", minimized: true)),
             ControlRequest(cmd: .windowList),
             ControlRequest(cmd: .windowSelect, target: "9f3c"),
             ControlRequest(cmd: .windowClose, target: "9f3c"),

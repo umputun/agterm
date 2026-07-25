@@ -489,7 +489,11 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
 
 ## window
 
-- `window new [name]` — create and open a window; returns its id.
+- `window new [name] [--minimized]` — create and open a window; returns its id. It replies only once
+  the on-screen window exists, so an immediate `window resize`/`move` on the returned id works.
+  `--minimized` creates it already parked in the Dock instead of presenting it, and leaves frontmost
+  on a window you can still see — for building a set of project windows without each one flashing up
+  and taking focus.
 - `window list` — `result.windows`, each with `id`, `name`, `open`, `active`, `autoFollowMs` (the
   window's Auto-follow timeout in milliseconds, omitted when the setting is Disabled), and
   `sidebarVisible` (whether that window's sidebar is shown, read from the open window's store — omitted
