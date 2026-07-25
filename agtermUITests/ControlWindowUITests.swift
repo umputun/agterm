@@ -163,6 +163,100 @@ final class ControlWindowUITests: ControlAPITestCase {
                        "window should restore toward \(normal) after exiting full screen, got \(window.frame.size)")
     }
 
+    // window.minimize puts the window in the Dock and brings it back, with `minimized` reading back on
+    // window.list. Everything is asserted through the control channel: a miniaturized window is off-screen,
+    // so any XCUIElement query against it hangs on event synthesis rather than failing. The restore rides
+    // `addTeardownBlock` (registered BEFORE the minimize) because `continueAfterFailure = false` unwinds
+    // through an ObjC exception that skips a Swift `defer`, which would leave the runner's screen with a
+    // Dock-parked window. It drives the LAUNCH window on purpose — a freshly created one is still inside
+    // `WindowAccessor`'s ~0.95s UI-test bring-forward schedule, which would deminiaturize it mid-test.
+    func testWindowMinimizeAndRestore() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session")
+        let id = try XCTUnwrap(try windowList().first?["id"] as? String, "the seeded window should have an id")
+        let before = try XCTUnwrap(try windowList().first?["geometry"] as? [String: Any],
+                                   "an open window should report its geometry")
+
+        addTeardownBlock { _ = try? self.sendCommand(#"{"cmd":"window.minimize","args":{"mode":"off"}}"#) }
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.minimize","args":{"mode":"on"}}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(pollWindowList(timeout: 10) { $0.first?["minimized"] as? Bool == true },
+                      "window.list should report minimized:true after window.minimize on")
+
+        // the payoff for a re-align script: a minimized window keeps reporting the frame it comes back to.
+        // NSWindow.screen is nil while miniaturized, so this fails without the overlap-based screen fallback.
+        let whileMinimized = try XCTUnwrap(try windowList().first?["geometry"] as? [String: Any],
+                                           "a minimized window must still report its geometry")
+        for key in ["x", "y", "width", "height", "display"] {
+            XCTAssertEqual(whileMinimized[key] as? Int, before[key] as? Int,
+                           "\(key) should survive minimizing: before=\(before) now=\(whileMinimized)")
+        }
+
+        // `on` again is a no-op, not a flip — the mode resolves against current state.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.minimize","args":{"mode":"on"}}"#)["ok"] as? Bool, true)
+        XCTAssertEqual(try windowList().first?["minimized"] as? Bool, true, "a repeated `on` must stay minimized")
+
+        // window.select restores it too — `WindowRegistry.raise` deminiaturizes before making key, which is
+        // also what pulls a minimized window forward on a notification-banner reveal.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.select","target":"\#(id)"}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(pollWindowList(timeout: 10) { $0.first?["minimized"] as? Bool == false },
+                      "window.select should un-minimize the window it raises")
+
+        // and the explicit restore is idempotent from there.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.minimize","target":"\#(id)","args":{"mode":"off"}}"#)["ok"] as? Bool,
+                       true)
+        XCTAssertEqual(try windowList().first?["minimized"] as? Bool, false)
+        // only now is the window back on screen, so element queries are safe again.
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10),
+                      "the restored window should be interactive again")
+    }
+
+    // AppKit's own Window ▸ Minimize (⌘M) mutates the state with no control command in play, so the
+    // read-back only stays honest because `ControlServer` observes NSWindow.didMiniaturize. This drives the
+    // menu item — the GUI half — and asserts the flag flips, which is the regression guard for those
+    // observers. The menu click happens while the window is still on screen, so no element query touches a
+    // miniaturized window; the teardown block restores it whatever happens.
+    func testMenuMinimizeReadsBackOverControl() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session")
+        XCTAssertEqual(try windowList().first?["minimized"] as? Bool, false, "should start un-minimized")
+
+        addTeardownBlock { _ = try? self.sendCommand(#"{"cmd":"window.minimize","args":{"mode":"off"}}"#) }
+
+        app.menuBars.menuBarItems["Window"].click()
+        app.menuBars.menuItems["Minimize"].click()
+        XCTAssertTrue(pollWindowList(timeout: 10) { $0.first?["minimized"] as? Bool == true },
+                      "a ⌘M minimize must reach window.list's minimized flag")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"window.minimize","args":{"mode":"off"}}"#)["ok"] as? Bool, true)
+        XCTAssertTrue(pollWindowList(timeout: 10) { $0.first?["minimized"] as? Bool == false },
+                      "window.minimize off should restore it")
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10),
+                      "the restored window should be interactive again")
+    }
+
+    // window.new must not reply until its NSWindow has attached: the store loads synchronously (so the
+    // library reports open:true at once) while the NSWindow lands two SwiftUI render passes later. Before
+    // the attach poll, an immediate window.resize on the returned id failed with "window not open", and the
+    // node cached right after window.new carried no geometry — with nothing on that path refreshing it
+    // afterwards, so window.list reported a geometry-less window indefinitely.
+    func testWindowNewIsUsableImmediately() throws {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session")
+        let created = try sendCommand(#"{"cmd":"window.new","args":{"name":"immediate"}}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true, "window.new should succeed: \(created)")
+        let result = try XCTUnwrap(created["result"] as? [String: Any], "window.new should carry a result")
+        let newID = try XCTUnwrap(result["id"] as? String, "window.new should return the new id")
+
+        // no polling and no intervening command: window.list is fast-path-served from the cache, so a node
+        // built before the attach would still be missing geometry here.
+        let list = try windowList()
+        let made = try XCTUnwrap(list.first { ($0["id"] as? String)?.lowercased() == newID.lowercased() },
+                                 "the new window should be listed: \(list)")
+        XCTAssertNotNil(made["geometry"] as? [String: Any],
+                        "window.new should report the new window's geometry without another command: \(made)")
+
+        let resized = try sendCommand(#"{"cmd":"window.resize","target":"\#(newID)","args":{"width":900,"height":650}}"#)
+        XCTAssertEqual(resized["ok"] as? Bool, true, "resize right after window.new should succeed: \(resized)")
+    }
+
     // A point 14pt below the top edge, horizontally centred: clears the top resize strip, lands inside the
     // titlebar band (compact 30 / normal 48), and sits in the empty header (a Spacer) — clear of the traffic
     // lights on the left and the toolbar buttons on the right, so the click falls through the decorative

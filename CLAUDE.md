@@ -361,7 +361,8 @@ always in context:
   `session.flag`/`flagged`, `session.focus`/`splitFocused`, `session.resize`/`splitRatio`,
   `session.overlay.resize`/`overlaySizePercent`, `sidebar`/`sidebarVisible`, `sidebar.mode`/`sidebarMode`,
   `workspace.focus`/`focused`, `quick`/`quickVisible`,
-  `window.move`+`window.resize`/`geometry`, `window.fullscreen`+`window.zoom`/`fullscreen`+`zoomed`.
+  `window.move`+`window.resize`/`geometry`, `window.fullscreen`+`window.zoom`/`fullscreen`+`zoomed`,
+  `window.minimize`/`minimized`.
   When adding a state-mutating command, ask "how does a script read back what I just set?" and add that
   field in the SAME change.
   `session.overlay.resize` shipped write-only and the `overlaySizePercent` read-back was missed until a

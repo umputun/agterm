@@ -239,13 +239,18 @@ extension AppActions {
     /// Selects a session in its owning store and focuses the firing pane.
     private func revealSession(_ sessionID: UUID, pane: PaneRole, in store: AppStore) {
         guard let session = store.session(withID: sessionID) else { return }
+        let windowID = library.windowID(forSession: session.id)
         // a banner click is an explicit "take me there": if the owning window is zoomed, exit zoom
         // first so the reveal is visible — otherwise the selection change happens behind the opaque
         // zoom layer and the click looks dead (every other UI entry point is gated or exits zoom).
-        if let windowID = library.windowID(forSession: session.id),
-           let zoom = TerminalZoomRegistry.shared.controller(for: windowID), zoom.target != nil {
+        if let windowID, let zoom = TerminalZoomRegistry.shared.controller(for: windowID), zoom.target != nil {
             zoom.clear()
         }
+        // and raise the owning window, which `makeFirstResponder` alone does not do. `NSApp.activate` in
+        // the notification handler brings the APP forward, not a window minimized to the Dock or sitting
+        // behind another one — so without this the selection would change invisibly. The closed-window
+        // branch already raises via `openWindow`; this makes the open-window branch symmetric.
+        if let windowID { WindowRegistry.shared.raise(windowID) }
         // clicking a notification banner is a user-initiated selection: note activity on the SAME (owning)
         // store it selects into — reveal can cross windows — so it buys the full idle grace before
         // auto-follow can pull the selection away.

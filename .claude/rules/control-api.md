@@ -77,8 +77,8 @@ paths:
   `font.*`/`fontSize`+`splitFontSize`+`scratchFontSize` (the per-pane LIVE font size — the split/scratch
   panes' fonts are otherwise unobservable, being live-only; supplied to `controlTree` by app-side closures
   reading `GhosttySurfaceView.currentFontSize()`, since the host-free tree can't read a surface),
-  `window.move`+`window.resize`/`geometry`, `window.fullscreen`+`window.zoom`/`fullscreen`+`zoomed`
-  (the last three on `window.list`).
+  `window.move`+`window.resize`/`geometry`, `window.fullscreen`+`window.zoom`/`fullscreen`+`zoomed`,
+  `window.minimize`/`minimized` (the last four on `window.list`).
   This is a SEPARATE obligation from the four-point audit (Command + arg + CLI + tests) and easy to forget:
   `session.overlay.resize` shipped write-only and `overlaySizePercent` was added only later, when a
   tmux-zoom script needed to restore an overlay's exact size.
@@ -165,7 +165,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 65-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 66-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -243,7 +243,7 @@ paths:
   rules, then remaining targets resolve inside that same store so one command never mutates multiple windows.
   The top-level `target` also carries the first explicit batch target so a new CLI talking to a still-running
   pre-batch server degrades to a named session instead of accidentally acting on `active`.
-- **Command catalog (65 commands):**
+- **Command catalog (66 commands):**
   - `tree`
   - `events.read` (the bounded per-app-run control event ring behind `agtermctl events`)
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`/`workspace.collapse`/`workspace.expand`
@@ -254,7 +254,7 @@ paths:
   - `sidebar`/`sidebar.mode`/`sidebar.expand`/`sidebar.collapse`
   - `notify`
   - `font.inc`/`font.dec`/`font.reset`
-  - `window.new`/`window.list`/`window.select`/`window.close`/`window.rename`/`window.delete`/`window.resize`/`window.move`/`window.zoom`/`window.fullscreen` (see the Windows section)
+  - `window.new`/`window.list`/`window.select`/`window.close`/`window.rename`/`window.delete`/`window.resize`/`window.move`/`window.zoom`/`window.fullscreen`/`window.minimize` (see the Windows section)
   - `keymap.reload` (see the Keymap section)
   - `config.reload` (see the Settings section)
   - `theme.set`/`theme.list` (see the Theme picker section)
@@ -272,7 +272,7 @@ paths:
   Setting echoes the resulting effective side in `result.text`; the BARE form (no name) reads the side
   the last config feed applied (`SettingsModel.lastAppliedIsDark`), which the test polls to prove the
   flip actually drove the reload.
-  `AppearanceFlipUITests` is its only consumer; the public command count stays 65.
+  `AppearanceFlipUITests` is its only consumer; the public command count stays 66.
 
   `workspace.delete` honors keep-at-least-one and returns an error instead of the GUI confirm alert (nothing
   blocks on a modal).
@@ -1391,13 +1391,17 @@ paths:
   just rebuilds the same cheap agterm nodes.
   The host-free plumbing (the closure + node field) is unit-tested (`controlWindowNodesIncludeGeometryFromClosure`,
   the round-trips); the coordinate conversion + the NSWindow-notification cache refresh are app-side, build-verified.
-  Each `ControlWindowNode` ALSO carries `fullscreen`/`zoomed` — the read side of the write-only
-  `window.fullscreen`/`window.zoom` toggles (so a script can toggle idempotently), filled by a PARALLEL
+  Each `ControlWindowNode` ALSO carries `fullscreen`/`zoomed`/`minimized` — the read side of the write-only
+  `window.fullscreen`/`window.zoom`/`window.minimize` (so a script can act idempotently), filled by a PARALLEL
   app-side `flags:` closure on `controlWindowNodes` (kept separate from `geometry:` so each stays a clean
   addition) that `buildWindowList` reads from `WindowRegistry.windowFlags(for:)`
-  (`styleMask.contains(.fullScreen)` / `NSWindow.isZoomed`); both nil/omitted for a closed window, on the
-  cache like `geometry`. The closure plumbing is unit-tested (`controlWindowNodesIncludeFullscreenZoomFromClosure`
+  (`styleMask.contains(.fullScreen)` / `NSWindow.isZoomed` / `NSWindow.isMiniaturized`); all nil/omitted for a
+  closed window, on the cache like `geometry`. The closure plumbing is unit-tested (`controlWindowNodesIncludeFullscreenZoomFromClosure`
   + the round-trips); the NSWindow reads are app-side, build-verified.
+  `minimized` is LIVE-ONLY, never persisted: nothing in `WindowEntry`/`Snapshot`/the UserDefaults frame
+  records it, per-window AppKit restoration is opted out (`WindowAccessor` sets `isRestorable = false`), and
+  `bringForward` deminiaturizes on attach — so every window reopens un-minimized and a script that parks
+  windows must re-apply after a relaunch.
   `restore.clear` clears every open session's saved CAPTURED foreground command (`Session.foregroundCommand`/`splitForegroundCommand`)
   and persists via `library.saveAllOpen()`, so the next restart restores plain shells for those panes instead
   of re-running the captured commands (also closing the force-quit re-fire: the restored command is consumed
@@ -1568,12 +1572,12 @@ paths:
   (image/text/color set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
-  examples.md recipes) and the command count there is bumped to 65 to match.
+  examples.md recipes) and the command count there is bumped to 66 to match.
   **Website mirror (HARD keep-in-sync):** the site's per-command reference `site/commands.html` documents
   EVERY `agtermctl` control command — one inline-styled card per command carrying its invocation, its
   arguments, and the `tree` read-back field, grouped into its command family's section.
   A new `Command` case REQUIRES a new `site/commands.html` entry (a changed command an updated one, a
   removed command a deleted one), in lockstep with the agent skill above and `README.md`/`site/docs.html`;
-  the page's "65 commands" copy must track the catalog count.
+  the page's "66 commands" copy must track the catalog count.
   It drifted once because the site keep-in-sync convention named only `docs.html`/`index.html`, so
   `dashboard` and `surface.zoom` shipped undocumented here.

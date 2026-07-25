@@ -191,19 +191,20 @@ public final class WindowLibrary {
     /// handles live in `WindowRegistry`, not this host-free model), defaulting to nil so unit tests and any
     /// non-AppKit caller get a geometry-free list.
     public func controlWindowNodes(geometry: (WindowInfo.ID) -> ControlWindowFrame? = { _ in nil },
-                                   flags: (WindowInfo.ID) -> (fullscreen: Bool, zoomed: Bool)? = { _ in nil })
+                                   flags: (WindowInfo.ID) -> (fullscreen: Bool, zoomed: Bool, minimized: Bool)? = { _ in nil })
         -> [ControlWindowNode] {
         let active = activeWindowID
         return windows.map {
             // reach each open store for its auto-follow timeout + sidebar visibility (per-window state); a
-            // closed window has no store and reports nil for both. The frame + fullscreen/zoom flags come
-            // from the app-side closures (nil for a closed window with no NSWindow).
+            // closed window has no store and reports nil for both. The frame + fullscreen/zoom/minimized
+            // flags come from the app-side closures (nil for a closed window with no NSWindow).
             let live = flags($0.id)
             return ControlWindowNode(id: $0.id.uuidString, name: $0.name, open: isOpen($0.id), active: $0.id == active,
                                      autoFollowMs: stores[$0.id]?.autoFollowMs,
                                      sidebarVisible: stores[$0.id]?.sidebarVisible,
                                      geometry: geometry($0.id),
-                                     fullscreen: live?.fullscreen, zoomed: live?.zoomed)
+                                     fullscreen: live?.fullscreen, zoomed: live?.zoomed,
+                                     minimized: live?.minimized)
         }
     }
 

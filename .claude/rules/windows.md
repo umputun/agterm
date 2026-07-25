@@ -226,7 +226,74 @@ never two bundles in one window.
   `windowCommandsRoundTrip` (`ControlProtocolTests`) +
   `windowCommandsRouteParsedInputsAndKeepActionResponses` (`ControlDispatcherTests`) + the CLI mapping in
   `CommandsTests` + the e2e `testWindowFullscreen` in `ControlWindowUITests`.
-- **`window.*` control additions (eight commands, plus `window.zoom`/`window.fullscreen`).**
+- **`window.minimize` (Dock-minimize toggle — control + ⌘M / yellow button / title-bar double-click GUI).**
+  `WindowRegistry.minimize(_:mode:)` drives the standard `NSWindow.miniaturize`/`deminiaturize`.
+  It is MODE-BEARING (`on`|`off`|`toggle`, default toggle via `ControlToggleMode.parse`), unlike the bare
+  `window.zoom`/`window.fullscreen` toggles, because the workflow it exists for — park every window except
+  the one you're on — needs a deterministic minimize without reading state first.
+  It is NOT control-native: ⌘M (AppKit's own Window menu, which agterm never replaces), the yellow
+  traffic-light button, and the Minimize title-bar double-click action all drive the same AppKit path.
+  That is exactly why the read-back needs the `NSWindow.didMiniaturize`/`didDeminiaturize` observers in
+  `ControlServer` — three GUI drivers mutate it with no control command.
+  It requires the window OPEN (closed → the `window not open` error) and REJECTS a window in native full
+  screen (`cannot minimize a full-screen window — window.fullscreen it first`): AppKit no-ops `miniaturize`
+  there, so applying it would report success having done nothing.
+  The arm is `async` and settle-POLLS `WindowRegistry.isMinimized(id) == desired` before replying, because
+  miniaturize/deminiaturize are ANIMATED — without the poll the `defer`-ed `refreshWindowCache()` captures
+  the pre-animation value and the next `window.list` reports the state the caller just changed away from.
+  Its READ side is `ControlWindowNode.minimized` on `window.list`, and a minimized window still reports its
+  `geometry` — the frame it comes back to — which needs `WindowRegistry.resolvedScreen(for:)`, since
+  `NSWindow.screen` is nil while miniaturized.
+  That resolver (`window.screen` → `WindowGeometry.bestDisplayIndex` largest-overlap → `NSScreen.main`) is
+  SHARED by `geometry`, `move`, and `resize` on purpose: a read resolved by overlap and a write resolved
+  against `NSScreen.main` would disagree on the display index, so a minimized window's frame would stop
+  round-tripping back through `window.move`.
+  `minimized` is LIVE-ONLY (never persisted — see the control-api rule), so a parking script re-applies
+  after a relaunch, and a Dock-icon click restores minimized windows through AppKit's default reopen
+  handling (agterm implements no `applicationShouldHandleReopen`).
+  Four-point keep-in-sync audit: (1) `case windowMinimize = "window.minimize"` + `minimized` on
+  `ControlWindowNode` in `ControlProtocol.swift` (reuses `ControlArgs.mode`),
+  (2) the `.windowMinimize` dispatcher arm (mode parse + error string) → `ControlActions.windowMinimize`
+  (app-side `ControlServer+WindowCommands`) → `WindowRegistry.minimize`, plus the two miniaturize
+  notifications in the `ControlServer` observer array,
+  (3) the `window minimize <id> [on|off|toggle]` subcommand in `agtermctlKit`,
+  (4) `.windowMinimize` in `windowCommandsRoundTrip` + `windowNodeRoundTripsWithMinimized`/`…OmitsMinimizedWhenNil`
+  (`ControlProtocolTests`) + `windowCommandsRouteParsedInputsAndKeepActionResponses` /
+  `…RejectInvalidInputsBeforeCallingActions` (`ControlDispatcherTests`) +
+  `controlWindowNodesIncludeFullscreenZoomFromClosure` (`WindowLibraryTests`) + the CLI mapping in
+  `CommandsTests` + the e2e `testWindowMinimizeAndRestore` in `ControlWindowUITests`.
+  **CLI positional note:** every `window` subcommand takes the id as its first positional, so `minimize`'s
+  mode is a SECOND optional positional and a bare `window minimize on` would bind the mode word to the id.
+  A window address is a hex UUID prefix or `active` and can never be a mode word, so `makeRequest` recovers
+  that case by targeting `active` — covered by `windowMinimizeBareModeTargetsActive`.
+  Do NOT "fix" it by copying `surface zoom`'s mode-first-plus-`--target` shape; that is a different family
+  convention.
+- **`window.new` replies only once its NSWindow has ATTACHED — the open-vs-attached distinction.**
+  A window is "open" the moment its `AppStore` loads (`WindowLibrary.isOpen` = `stores[id] != nil`), which
+  `newWindow()` does SYNCHRONOUSLY. The NSWindow lands much later: registration happens in
+  `TitleProbeView.viewDidMoveToWindow`, which needs `ContentView` to resolve its store (`Color.clear` until
+  then), `.onAppear` → `resolveStore`, and a SECOND render pass before the accessor attaches.
+  So `window.new` used to return with `open: true` and no NSWindow, and an immediate
+  `window.resize <new id>` — the shipped `examples.md` recipe — failed with `window not open`.
+  `windowNew` is therefore `async` and polls `WindowRegistry.isRegistered(id)`; `windowSelect` polls
+  `library.isOpen(id) && isRegistered(id)` (the CONJUNCTION — `isOpen` alone is what `tree --window` needs
+  and stays, but it flips a render pass before the NSWindow exists).
+  Never gate a readiness poll on `isOpen` alone for anything that touches the NSWindow.
+- **The `window.list` cache must refresh on ATTACH, not just on frontmost change.**
+  `window.list` is fast-path-served from `cachedWindowNodes` and never rebuilds its own cache, so the node
+  captured right after `window.new` (no geometry, no flags) stuck FOREVER for a polling script: `newWindow()`
+  pre-sets `frontmostWindowID`, so the new window's first `didBecomeKey` computes `changed == false` and
+  skips `.agtermWindowFrontmostChanged`, and a brand-new id has no saved frame, so `restoreSavedFrame`
+  early-returns and no `didMove`/`didResize` fires either.
+  `WindowRegistry.register`/`unregister` therefore post `.agtermWindowAttachmentChanged`
+  (`GhosttyApp.swift`, app-side — the poster is app-side), which `ControlServer` observes to
+  `refreshWindowCache`.
+  It also covers the paths the `window.new` poll cannot: GUI New Window (⌘⌥N), launch reopen-all, and a
+  red-button close (whose `willClose` unregisters with no command in play).
+  Use `queue: .main`, NOT the `queue: nil` the sidebar observer uses: `unregister` runs near the TOP of the
+  `willClose` block and `library.closeWindow` at the BOTTOM, so a synchronous refresh would capture
+  `open: true` + `geometry: nil` and never refresh again.
+- **`window.*` control additions (eight commands, plus `window.zoom`/`window.fullscreen`/`window.minimize`).**
   `window.new` (returns the new id + opens its window), `window.list` (returns `windows` with each window's
   `open`/`active` flag, plus `autoFollowMs` and `sidebarVisible` read from the open window's store, and
   `geometry` — the live NSWindow frame `{x, y, width, height, display}` in `window.move`/`window.resize`'s

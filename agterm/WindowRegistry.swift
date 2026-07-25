@@ -16,6 +16,7 @@ final class WindowRegistry {
 
     func register(_ id: WindowInfo.ID, window: NSWindow) {
         windows[id] = window
+        NotificationCenter.default.post(name: .agtermWindowAttachmentChanged, object: nil)
     }
 
     /// Whether an on-screen window is registered for `id` (i.e. its NSWindow has attached).
@@ -28,6 +29,7 @@ final class WindowRegistry {
 
     func unregister(_ id: WindowInfo.ID) {
         windows[id] = nil
+        NotificationCenter.default.post(name: .agtermWindowAttachmentChanged, object: nil)
     }
 
     func contains(_ window: NSWindow) -> Bool {
@@ -61,7 +63,7 @@ final class WindowRegistry {
     @discardableResult
     func resize(_ id: WindowInfo.ID, width: Int, height: Int) -> Bool {
         guard let window = windows[id] else { return false }
-        let maxSize = (window.screen ?? NSScreen.main)?.visibleFrame.size
+        let maxSize = resolvedScreen(for: window)?.visibleFrame.size
             ?? CGSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         let size = WindowGeometry.clampSize(WindowGeometry.Size(CGSize(width: CGFloat(width), height: CGFloat(height))),
                                             min: WindowGeometry.Size(window.minSize),
@@ -87,7 +89,7 @@ final class WindowRegistry {
             guard display >= 0, display < screens.count else { return false }
             screen = screens[display]
         } else {
-            screen = window.screen ?? NSScreen.main
+            screen = resolvedScreen(for: window)
         }
         guard let screen else { return false }
         // (x, y) is the top-left relative to the screen's top-left (y down) → AppKit screen point (y up).
@@ -124,15 +126,61 @@ final class WindowRegistry {
         return true
     }
 
+    /// Whether the window for `id` is minimized to the Dock. False when none is registered. The settle-poll
+    /// predicate for `window.minimize`, which must wait out the animation before reporting.
+    func isMinimized(_ id: WindowInfo.ID) -> Bool { windows[id]?.isMiniaturized ?? false }
+
+    /// The outcome of a `minimize` request, so the caller can tell "not open" from "not minimizable".
+    enum MinimizeOutcome {
+        case applied(desired: Bool)
+        case notOpen
+        case fullScreen
+    }
+
+    /// Minimizes the on-screen window for `id` to the Dock, or restores it, driving the standard
+    /// `NSWindow.miniaturize`/`deminiaturize` — the same action as ⌘M, the yellow traffic-light button, and
+    /// the Minimize title-bar double-click action. The mode resolves against the window's CURRENT state, so
+    /// `on`/`off` are idempotent and only `toggle` flips. Restoring puts the window back on screen without
+    /// making it key; `window.select` (`raise`) is the raise-it-too path.
+    ///
+    /// A window in native full screen is rejected rather than silently ignored: AppKit no-ops
+    /// `miniaturize` there, so applying it would report success having done nothing.
+    func minimize(_ id: WindowInfo.ID, mode: ControlToggleMode) -> MinimizeOutcome {
+        guard let window = windows[id] else { return .notOpen }
+        let desired = mode.desiredValue(current: window.isMiniaturized)
+        guard window.isMiniaturized != desired else { return .applied(desired: desired) }
+        guard !window.styleMask.contains(.fullScreen) else { return .fullScreen }
+        if desired { window.miniaturize(nil) } else { window.deminiaturize(nil) }
+        return .applied(desired: desired)
+    }
+
+    /// The screen a window's frame belongs to. `NSWindow.screen` is nil whenever the window is off-screen —
+    /// notably while MINIMIZED to the Dock, and while the app is hidden — so fall back to the display its
+    /// frame overlaps most (`WindowGeometry.bestDisplayIndex`, the same resolution the frame-restore path
+    /// uses), then the main screen for a frame overlapping nothing (a disconnected display).
+    ///
+    /// Shared by `geometry`, `move`, and `resize` on purpose: a read resolved by overlap and a write
+    /// resolved against `NSScreen.main` would disagree on the display index, so a minimized window's
+    /// reported frame would stop round-tripping back through `window.move`.
+    private func resolvedScreen(for window: NSWindow) -> NSScreen? {
+        if let screen = window.screen { return screen }
+        let screens = NSScreen.screens
+        let frames = screens.map { WindowGeometry.Rect($0.frame) }
+        if let index = WindowGeometry.bestDisplayIndex(for: WindowGeometry.Rect(window.frame), among: frames) {
+            return screens[index]
+        }
+        return NSScreen.main ?? screens.first
+    }
+
     /// The window's current frame in the SAME coordinate system `move`/`resize` accept, so `window.list`'s
     /// read-back round-trips back through `window.move`/`window.resize`: `x`/`y` are the top-left relative to
     /// the window's display top-left (y down), `width`/`height` the frame size, `display` the screen index.
     /// This is the inverse of `move`'s forward math (`x = minX - screen.minX`, `y = screen.maxY - maxY`) to
     /// integer-point precision: the values round to `Int` since `window.move`/`window.resize` take `Int`, so a
     /// user-dragged fractional frame restores to the nearest point (which is all those commands accept).
-    /// Nil when no window is registered for `id` (closed) or it has no screen. The `window.list` frame source.
+    /// Nil when no window is registered for `id` (closed). The `window.list` frame source.
     func geometry(for id: WindowInfo.ID) -> ControlWindowFrame? {
-        guard let window = windows[id], let screen = window.screen else { return nil }
+        guard let window = windows[id], let screen = resolvedScreen(for: window) else { return nil }
         let frame = window.frame
         let x = Int((frame.minX - screen.frame.minX).rounded())
         let y = Int((screen.frame.maxY - frame.maxY).rounded())
@@ -142,12 +190,14 @@ final class WindowRegistry {
                                   display: display)
     }
 
-    /// Whether the window for `id` is in native full screen and/or zoomed (maximized-to-screen, NOT full
-    /// screen), or nil when no window is registered (closed). The read side of `window.fullscreen`/`window.zoom`
-    /// on `window.list`, so a script can make those toggles idempotent.
-    func windowFlags(for id: WindowInfo.ID) -> (fullscreen: Bool, zoomed: Bool)? {
+    /// Whether the window for `id` is in native full screen, zoomed (maximized-to-screen, NOT full screen),
+    /// and/or minimized to the Dock, or nil when no window is registered (closed). The read side of
+    /// `window.fullscreen`/`window.zoom`/`window.minimize` on `window.list`, so a script can make those
+    /// toggles idempotent.
+    func windowFlags(for id: WindowInfo.ID) -> (fullscreen: Bool, zoomed: Bool, minimized: Bool)? {
         guard let window = windows[id] else { return nil }
-        return (fullscreen: window.styleMask.contains(.fullScreen), zoomed: window.isZoomed)
+        return (fullscreen: window.styleMask.contains(.fullScreen), zoomed: window.isZoomed,
+                minimized: window.isMiniaturized)
     }
 }
 

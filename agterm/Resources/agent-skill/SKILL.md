@@ -17,7 +17,7 @@ when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.scratch, session.focus, session.resize, surface.zoom, dashboard, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
   session.flag, session.seen, session.reveal, session.duplicate, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
-  window.select, window.resize, window.move, window.zoom, window.fullscreen, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
+  window.select, window.resize, window.move, window.zoom, window.fullscreen, window.minimize, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
   theme.set, theme.list, events, events.read, event subscription, select theme, edit keymap, show an image, display an image inline, show-image,
   AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: troubleshoot agterm,
   keymap editor won't open, custom action / custom command not working, agterm logs, file an agterm
@@ -100,9 +100,10 @@ sidebar is currently shown — the read side of the write-only `sidebar` command
 terminal is shown — the read side of the write-only `quick` command). List windows with
 `agtermctl window list --json`; each window also reports `autoFollowMs`, `sidebarVisible`, `geometry`
 (the live frame `{x, y, width, height, display}` in the units `window move`/`window resize` take — the
-read side, so record it then restore the exact frame), and `fullscreen`/`zoomed` (the read side of
-`window fullscreen`/`window zoom`, so a script can make those toggles idempotent) — all omitted for a
-closed window, but not the live `idleMs`, which is `tree`-only.
+read side, so record it then restore the exact frame), and `fullscreen`/`zoomed`/`minimized` (the read side
+of `window fullscreen`/`window zoom`/`window minimize`, so a script can act idempotently) — all omitted for
+a closed window, but not the live `idleMs`, which is `tree`-only. A MINIMIZED window still reports its
+`geometry` (the frame it comes back to), so a re-align script can include it.
 
 ## Addressing
 
@@ -141,7 +142,7 @@ prompt concatenates with yours, and the program starts on the merged line. (`--n
 focus, but the newline and shared-buffer hazards of `type`-as-launcher remain — `--command` is still the
 rule.) After `--command`, confirm in `tree --json` that the new node's `foreground` shows your program running, not a bare shell prompt.
 
-## Command summary (65 commands)
+## Command summary (66 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -295,7 +296,10 @@ omitted when expanded).
 **window** — `new [name]` · `list` · `select <id>` · `close <id>` · `rename <id> <name>` ·
 `delete <id>` · `resize <id> --width W --height H` · `move <id> --x X --y Y [--display N]` ·
 `zoom <id>` (maximize-to-screen toggle, the double-click-header gesture; a plain green-button click does full screen) ·
-`fullscreen <id>` (toggle native macOS full screen, the green-button / ⌃⌘F action).
+`fullscreen <id>` (toggle native macOS full screen, the green-button / ⌃⌘F action) ·
+`minimize <id> [on|off|toggle]` (minimize to the Dock or restore, the ⌘M / yellow-button action; default
+`toggle`, the id may be omitted so `window minimize on` targets the active window; errors on a full-screen
+window; read back as `minimized` on `window list`).
 
 **surface** — `zoom [show|hide|toggle] [--target surface:<session-id>:left|right|scratch|overlay|quick] [--window W]`
 — zoom a terminal surface to fill the window (sidebar hidden; a slim title-bar strip with an exit

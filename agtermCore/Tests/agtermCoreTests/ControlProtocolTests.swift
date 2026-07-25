@@ -851,6 +851,28 @@ struct ControlProtocolTests {
         #expect(decoded.zoomed == nil)
     }
 
+    @Test func windowNodeRoundTripsWithMinimized() throws {
+        // the read side of window.minimize, so a script can skip a redundant minimize and restore the set of
+        // windows it put away. A minimized window still reports the frame it comes back to.
+        let frame = ControlWindowFrame(x: 100, y: 50, width: 900, height: 600, display: 0)
+        let node = ControlWindowNode(id: "w1", name: "work", open: true, active: false,
+                                     geometry: frame, minimized: true)
+        let response = ControlResponse(ok: true, result: ControlResult(windows: [node]))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.windows?.first?.minimized == true)
+        #expect(decoded.result?.windows?.first?.geometry == frame)
+    }
+
+    @Test func windowNodeOmitsMinimizedWhenNil() throws {
+        // a closed window with no live NSWindow — the key must be omitted, not emitted as null.
+        let node = ControlWindowNode(id: "w1", name: "work", open: false, active: false)
+        let json = String(data: try JSONEncoder().encode(node), encoding: .utf8) ?? ""
+        #expect(!json.contains("minimized"), "a nil minimized must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlWindowNode.self, from: Data(json.utf8))
+        #expect(decoded.minimized == nil)
+    }
+
     @Test func workspaceNodeRoundTripsWithFocused() throws {
         // the read side of workspace.focus: the sidebar-focused workspace is flagged so a script can record
         // which one is focused and restore it (distinct from `active`, the selected workspace).
@@ -1193,6 +1215,8 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .windowDelete, target: "9f3c"),
             ControlRequest(cmd: .windowZoom, target: "9f3c"),
             ControlRequest(cmd: .windowFullscreen, target: "9f3c"),
+            ControlRequest(cmd: .windowMinimize, target: "9f3c", args: ControlArgs(mode: "on")),
+            ControlRequest(cmd: .windowMinimize, target: "active"),
         ]
         for request in cases {
             #expect(try roundTrip(request) == request)

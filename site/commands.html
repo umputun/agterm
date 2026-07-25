@@ -18,7 +18,7 @@
     <meta property="og:title" content="Command reference — agterm" />
     <meta
       property="og:description"
-      content="All 65 agtermctl control commands with arguments, return values, and errors."
+      content="All 66 agtermctl control commands with arguments, return values, and errors."
     />
     <meta property="og:url" content="https://agterm.com/commands" />
     <meta property="og:image" content="https://agterm.com/assets/agterm-og.png" />
@@ -30,7 +30,7 @@
     <meta name="twitter:title" content="Command reference — agterm" />
     <meta
       name="twitter:description"
-      content="All 65 agtermctl control commands with arguments, return values, and errors."
+      content="All 66 agtermctl control commands with arguments, return values, and errors."
     />
     <meta name="twitter:image" content="https://agterm.com/assets/agterm-og.png" />
     <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
@@ -235,7 +235,7 @@
             Command reference
           </h1>
           <p style="font-size: 19px; line-height: 1.6; color: #bfbab0; margin: 0 0 8px">
-            All 65 commands of the agterm control API, with arguments and return values. Every one is reachable from the
+            All 66 commands of the agterm control API, with arguments and return values. Every one is reachable from the
             <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> CLI and from the local
             control socket.
           </p>
@@ -1384,12 +1384,14 @@
                 (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">{x, y, width, height, display}</span>, the read side
                 of <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">window move</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">resize</span>,
                 in the same units they take), plus
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">fullscreen</span> and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zoomed</span>. The last three are omitted for a closed
-                window.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">fullscreen</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zoomed</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">minimized</span>. The last four are omitted for a closed
+                window. A minimized window still reports its
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">geometry</span> — the frame it comes back to.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">geometry</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">fullscreen</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">zoomed</span>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">geometry</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">fullscreen</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">zoomed</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">minimized</span>
                 stay current across hand-drags and GUI toggles. Unlike
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>, this does not carry
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">idleMs</span> — a live metric would freeze in the
@@ -1482,6 +1484,27 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zoom</span>. Read back via
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">window list</span>'s
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">fullscreen</span>.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl window minimize &lt;id&gt; [on|off|toggle]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">window.minimize</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Minimize a window to the Dock, or restore it. The mode resolves against the window's current state, so
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">on</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">off</span>
+                are idempotent and only <span style="font-family: &quot;JetBrains Mono&quot;, monospace">toggle</span> (the default) flips. Both
+                positionals are optional, so <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">window minimize on</span>
+                targets the active window. The window must be open, and one in native full screen is rejected. The control half of ⌘M,
+                the yellow traffic-light button, and the Minimize title-bar double-click action. Read back via
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">window list</span>'s
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">minimized</span>.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Give every window the same frame and park all but one, and switching windows looks like switching a tab. The minimized
+                state is live-only — it is never persisted, so windows reopen un-minimized after a restart.
               </p>
             </div>
           </section>

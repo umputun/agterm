@@ -14,11 +14,15 @@ struct SkillInstallTests {
         let reference = try String(contentsOf: skillDirectory.appendingPathComponent("reference.md"), encoding: .utf8)
         let examples = try String(contentsOf: skillDirectory.appendingPathComponent("examples.md"), encoding: .utf8)
 
-        #expect(skill.contains("Command summary (65 commands)"))
+        #expect(skill.contains("Command summary (66 commands)"))
         #expect(skill.contains("**events**"))
         #expect(reference.contains("## events"))
         #expect(reference.contains("event cursor expired"))
         #expect(examples.contains("agtermctl events --json"))
+        // the window-minimize mirror: summary line, per-command detail, and a recipe
+        #expect(skill.contains("minimize <id> [on|off|toggle]"))
+        #expect(reference.contains("`window minimize <id> [on|off|toggle]`"))
+        #expect(examples.contains("agtermctl window minimize"))
     }
 
     @Test func skillDirectoryComposesUnderAgentBase() {

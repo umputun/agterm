@@ -8,9 +8,17 @@ import agtermCore
 extension ControlServer {
     /// Create a new window (library) and open its on-screen window via the action hub's window opener
     /// (the same `enqueueClaim` + `openWindow(id:)` path the menu uses). Returns the new window id.
-    func windowNew(name: String?) -> ControlResponse {
+    ///
+    /// Bounded-polls for the NSWindow to ATTACH before replying, so `window.new` followed immediately by
+    /// `window.resize`/`move`/`zoom` works — those need a registered window and would otherwise fail. The
+    /// poll must gate on `WindowRegistry.isRegistered`, NOT `library.isOpen`: `newWindow()` loads the store
+    /// synchronously, so `isOpen` is already true and would prove nothing, while the NSWindow only attaches
+    /// after SwiftUI resolves the store and runs a second render pass. Fire-and-forget like the other
+    /// polls — a window that never renders times out and the command still replies ok.
+    func windowNew(name: String?) async -> ControlResponse {
         let info = library.newWindow(name: trimmed(name))
         actions.openWindow?(info.id)
+        await pollUntil { WindowRegistry.shared.isRegistered(info.id) }
         return ControlResponse(ok: true, result: ControlResult(id: info.id.uuidString))
     }
 
@@ -26,16 +34,20 @@ extension ControlServer {
     }
 
     /// Resolve a window id and surface it: raise an already-open window, or open a closed one (the
-    /// action hub's opener claims its id + spawns the window). A closed window's store loads only when
-    /// its SwiftUI window appears, so this bounded-polls for it to open before replying — a script can
-    /// then immediately target it (`tree --window <id>`) without racing the window appearing. Returns
-    /// the window id.
+    /// action hub's opener claims its id + spawns the window). This bounded-polls for the NSWindow to
+    /// ATTACH before replying — a script can then immediately target it (`tree --window <id>`, or a
+    /// frame command) without racing the window appearing. Returns the window id.
+    ///
+    /// The poll waits for BOTH the store and the NSWindow. `library.isOpen` alone only reports that the
+    /// store loaded — which is what `tree --window` needs, so it stays — but it flips a render pass before
+    /// the NSWindow exists, so a frame command issued right after would still hit `window not open`. An
+    /// already-open, already-attached window satisfies both on the first iteration.
     func windowSelect(_ target: String?) async -> ControlResponse {
         switch resolver.resolveWindowID(target) {
         case .failure(let response): return response
         case .success(let id):
             actions.openWindow?(id)
-            await pollUntil { self.library.isOpen(id) }
+            await pollUntil { self.library.isOpen(id) && WindowRegistry.shared.isRegistered(id) }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
@@ -125,6 +137,31 @@ extension ControlServer {
                 return ControlResponse(ok: false, error: "window not open — window.select it first")
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+        }
+    }
+
+    /// Resolve a window id and minimize it to the Dock, or restore it, per the mode. The window must be
+    /// open; a closed window errors, as does one in native full screen (AppKit no-ops `miniaturize` there,
+    /// so reporting ok would be a lie). The control half of ⌘M / the yellow traffic-light button / the
+    /// Minimize title-bar double-click action.
+    ///
+    /// Miniaturize and deminiaturize are ANIMATED, so `isMiniaturized` lags the call — without the settle
+    /// poll the `defer`-ed window-cache refresh would capture the OLD value and the very next
+    /// `window.list` would report the state the caller just changed away from.
+    func windowMinimize(_ target: String?, mode: ControlToggleMode) async -> ControlResponse {
+        switch resolver.resolveWindowID(target) {
+        case .failure(let response): return response
+        case .success(let id):
+            switch WindowRegistry.shared.minimize(id, mode: mode) {
+            case .notOpen:
+                return ControlResponse(ok: false, error: "window not open — window.select it first")
+            case .fullScreen:
+                return ControlResponse(ok: false,
+                                       error: "cannot minimize a full-screen window — window.fullscreen it first")
+            case .applied(let desired):
+                await pollUntil { WindowRegistry.shared.isMinimized(id) == desired }
+                return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
+            }
         }
     }
 

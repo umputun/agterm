@@ -147,7 +147,7 @@ agterm arranges terminals into a small hierarchy. These are the only terms you n
 
 **Workspace.** A workspace is a named group of sessions for one project or context, for example "work" or "personal". Sessions belong to a workspace and can move between workspaces while still running, keeping their shell and scrollback. There is always at least one workspace.
 
-**Window.** A window is a whole set of workspaces and sessions in its own on-screen macOS window, with its own sidebar. Each window has its own sessions, so "work" and "personal" can run as two separate windows at once, each with its own tree. You keep a library of windows and open one per on-screen window; the windows open at quit reopen on the next launch with their frames. Right-click agterm's Dock icon for New Session, Quick Terminal, Dashboard, recent sessions, and sessions needing attention. The Dock menu is scoped to the last-active window: its lists and actions stay tied to that window even if another window comes forward while the menu is open.
+**Window.** A window is a whole set of workspaces and sessions in its own on-screen macOS window, with its own sidebar. Each window has its own sessions, so "work" and "personal" can run as two separate windows at once, each with its own tree. You keep a library of windows and open one per on-screen window; the windows open at quit reopen on the next launch with their frames. Windows are also fully scriptable: `agtermctl window` can create, raise, move, resize, and minimize them, so a few lines of shell can give every window the same frame and park all but the one you are on, turning several windows into what feels like one that switches contents. Right-click agterm's Dock icon for New Session, Quick Terminal, Dashboard, recent sessions, and sessions needing attention. The Dock menu is scoped to the last-active window: its lists and actions stay tied to that window even if another window comes forward while the menu is open.
 
 **Flagging and focus.** Two ways to cut down a busy sidebar. Flag a few sessions from different workspaces to get a flat working-set view of just those; a flag is durable and survives a move. Focus a single workspace to hide the others, with a one-click way back. The two are independent.
 
@@ -183,7 +183,7 @@ The theme picker (View ▸ Select Theme…, or the action palette) previews each
 
 To open a terminal at a directory without the CLI, `open -a agterm <path>` — or right-click a folder in Finder and choose **Open With ▸ agterm**. agterm adds a session in that directory to the last-active window. This works when agterm is already running (its usual state); if it isn't, launch agterm first, then run the command. The socket equivalent, and the way to place the session precisely, is `agtermctl session new --cwd <path>`.
 
-The sections below cover the common cases. All 65 commands, with every argument, return value, and error, are documented in the **[Command reference](https://agterm.com/commands)**.
+The sections below cover the common cases. All 66 commands, with every argument, return value, and error, are documented in the **[Command reference](https://agterm.com/commands)**.
 
 The app bundles `agtermctl` inside `agterm.app`. The easiest way to put it on your PATH is **Help ▸ Install Command Line Tool…**, which symlinks the bundled binary into `/usr/local/bin` (the first entry in macOS's default PATH). When that directory is user-writable it installs silently; otherwise it asks once for an administrator password.
 
@@ -319,6 +319,7 @@ agtermctl window select "$w"                     # raise it (opening it first if
 agtermctl window rename "$w" personal            # rename it
 agtermctl window close "$w"                      # close its on-screen window (the bundle is kept)
 agtermctl window delete "$w"                     # delete it (the last window can't be deleted)
+agtermctl window minimize "$w" on                # park it in the Dock (off restores, toggle flips)
 ```
 
 A global `--window <id>` option on the session, workspace, `tree`, and `font` commands targets a *specific* window's tree instead of the frontmost one (the window must be open). Without it, those commands act on the frontmost window:

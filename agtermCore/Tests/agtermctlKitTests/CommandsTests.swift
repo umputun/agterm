@@ -1157,6 +1157,30 @@ struct CommandsTests {
         #expect(try request(["window", "fullscreen"]) == ControlRequest(cmd: .windowFullscreen, target: "active"))
     }
 
+    @Test func windowMinimize() throws {
+        #expect(try request(["window", "minimize", "9f3c", "on"])
+            == ControlRequest(cmd: .windowMinimize, target: "9f3c", args: ControlArgs(mode: "on")))
+        #expect(try request(["window", "minimize", "9f3c", "off"])
+            == ControlRequest(cmd: .windowMinimize, target: "9f3c", args: ControlArgs(mode: "off")))
+    }
+
+    @Test func windowMinimizeDefaultsActiveAndToggle() throws {
+        #expect(try request(["window", "minimize"])
+            == ControlRequest(cmd: .windowMinimize, target: "active", args: ControlArgs(mode: "toggle")))
+    }
+
+    @Test func windowMinimizeBareModeTargetsActive() throws {
+        // both positionals are optional, so a bare mode word would otherwise bind to the id. A window
+        // address is a hex UUID prefix or `active`, never a mode word, so the recovery can't misfire.
+        #expect(try request(["window", "minimize", "on"])
+            == ControlRequest(cmd: .windowMinimize, target: "active", args: ControlArgs(mode: "on")))
+        #expect(try request(["window", "minimize", "toggle"])
+            == ControlRequest(cmd: .windowMinimize, target: "active", args: ControlArgs(mode: "toggle")))
+        // an id that merely looks like a mode word is still an id (hex `0ff`, not the word `off`)
+        #expect(try request(["window", "minimize", "0ff"])
+            == ControlRequest(cmd: .windowMinimize, target: "0ff", args: ControlArgs(mode: "toggle")))
+    }
+
     @Test func windowDeleteDefaultsActive() throws {
         #expect(try request(["window", "delete"]) == ControlRequest(cmd: .windowDelete, target: "active"))
     }

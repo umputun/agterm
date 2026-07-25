@@ -951,7 +951,10 @@
               A window is a top-level bundle of workspaces and sessions in its own on-screen macOS window, with its own sidebar and
               its own sessions — so "work" and "personal" can run as two separate windows at once, each with its own tree. Keep a
               library of windows, open one per screen, and create, rename, or delete them from the File menu (New Window ⌥⌘N) or the
-              action palette. The set of windows open at quit reopens on the next launch, frames restored.
+              action palette. The set of windows open at quit reopens on the next launch, frames restored. Windows are also fully
+              scriptable — <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl window</span> can
+              create, raise, move, resize, and minimize them, so a few lines of shell can give every window the same frame and park
+              all but the one you are on, turning several windows into what feels like one that switches contents.
             </p>
           </section>
 
@@ -1108,7 +1111,7 @@
               "
             >
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0">
-                Looking for the full list? All 65 commands, with every argument, return value, and error, live on the
+                Looking for the full list? All 66 commands, with every argument, return value, and error, live on the
                 <a href="/commands" style="color: #6d82f3; font-weight: 500">Command reference →</a>
               </p>
             </div>
@@ -1378,7 +1381,9 @@
               ><br />agtermctl window rename <span style="color: #f2b45c">"$w"</span> personal<br />agtermctl window close
               <span style="color: #f2b45c">"$w"</span> <span style="color: #6b727a">&nbsp;&nbsp;# close its window (bundle kept)</span
               ><br />agtermctl window delete <span style="color: #f2b45c">"$w"</span>
-              <span style="color: #6b727a">&nbsp;# delete (last window can't be deleted)</span><br /><br /><span
+              <span style="color: #6b727a">&nbsp;# delete (last window can't be deleted)</span
+              ><br />agtermctl window minimize <span style="color: #f2b45c">"$w"</span> on
+              <span style="color: #6b727a">&nbsp;# park it in the Dock (off restores)</span><br /><br /><span
                 style="color: #6b727a"
                 ># --window targets a specific window's tree on session/workspace/tree/font</span
               ><br />agtermctl tree --window <span style="color: #f2b45c">"$w"</span><br />agtermctl session new --window

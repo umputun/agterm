@@ -64,6 +64,7 @@ public enum Command: String, Codable, Sendable {
     case windowMove = "window.move"
     case windowZoom = "window.zoom"
     case windowFullscreen = "window.fullscreen"
+    case windowMinimize = "window.minimize"
     case keymapReload = "keymap.reload"
     case configReload = "config.reload"
     case themeSet = "theme.set"
@@ -116,7 +117,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// Mode for `session.split` / `quick` / `surface.zoom` (`on|off|toggle`,
     /// `show|hide|toggle` for quick/surface zoom),
     /// `session.flag` (`on|off|toggle|clear`), `sidebar.mode` (`tree|flagged|toggle`),
-    /// `workspace.focus` (`on|off|toggle`), `session.background` (`image|text|color|clear`), and
+    /// `workspace.focus` (`on|off|toggle`), `window.minimize` (`on|off|toggle`),
+    /// `session.background` (`image|text|color|clear`), and
     /// `session.restore` (`set|none|clear` — pin `command`, pin nothing, or drop the pin).
     public var mode: String?
     /// The image file path for `session.background` mode `image` (PNG or JPEG).
@@ -652,10 +654,16 @@ public struct ControlWindowNode: Codable, Sendable, Equatable {
     /// Whether the window is zoomed (maximized-to-screen, NOT full screen), or nil for a CLOSED window
     /// (omitted from the JSON). The read side of the write-only `window.zoom` toggle. Read live app-side.
     public let zoomed: Bool?
+    /// Whether the window is minimized to the Dock, or nil for a CLOSED window (omitted from the JSON).
+    /// The read side of `window.minimize`, so a script can skip a redundant minimize or restore the set
+    /// of windows it put away. Read live app-side; like `geometry` it rides the cache, refreshed on the
+    /// NSWindow miniaturize/deminiaturize notifications so ⌘M or a Dock click is reflected too. A
+    /// minimized window still reports its `geometry` (the frame it will come back to).
+    public let minimized: Bool?
 
     public init(id: String, name: String, open: Bool, active: Bool, autoFollowMs: Int? = nil,
                 sidebarVisible: Bool? = nil, geometry: ControlWindowFrame? = nil,
-                fullscreen: Bool? = nil, zoomed: Bool? = nil) {
+                fullscreen: Bool? = nil, zoomed: Bool? = nil, minimized: Bool? = nil) {
         self.id = id
         self.name = name
         self.open = open
@@ -665,6 +673,7 @@ public struct ControlWindowNode: Codable, Sendable, Equatable {
         self.geometry = geometry
         self.fullscreen = fullscreen
         self.zoomed = zoomed
+        self.minimized = minimized
     }
 }
 

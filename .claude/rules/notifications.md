@@ -57,6 +57,14 @@ paths:
   `didReceive` parses it, `NSApp.activate`s, and calls `AppActions.reveal(sessionID:pane:)`:
   `selectSession` (which clears the badge + derives the workspace) then `focusSplitPane` for the pane,
   stale-safe (unknown session → just activate; a `.split` no longer split → primary).
+  `revealSession` ALSO raises the owning window (`WindowRegistry.raise`, which deminiaturizes first).
+  `NSApp.activate` brings the APP forward, and `makeFirstResponder` moves focus WITHIN a window, but
+  neither orders a window front — so without the raise a banner for a session in a MINIMIZED or merely
+  backgrounded window changed the selection invisibly and the click looked dead.
+  The closed-window branch already raised via `openWindow`; the open-window branch now matches.
+  This path has no automated coverage — its only caller is the `UNUserNotificationCenter` delegate, which
+  XCUITest cannot drive — so verify it by hand; the raise MECHANISM is pinned by
+  `testWindowMinimizeAndRestore`, which asserts `window.select` un-minimizes.
   `reveal` is internal click-routing (not on toolbar/menu/palette) composing the already-controllable
   `session.select`, so it has NO control command (keep-in-sync exempt, by user decision).
 - **Badge.**

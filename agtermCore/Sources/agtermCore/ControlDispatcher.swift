@@ -67,7 +67,7 @@ public protocol ControlActions {
     func setSessionBackground(_ target: String?, window: String?,
                               options: ControlSessionBackgroundOptions) -> ControlResponse
     func readSessionText(_ target: String?, window: String?, options: ControlSessionTextOptions) -> ControlResponse
-    func windowNew(name: String?) -> ControlResponse
+    func windowNew(name: String?) async -> ControlResponse
     func windowList() -> ControlResponse
     func windowSelect(_ target: String?) async -> ControlResponse
     func windowClose(_ target: String?) async -> ControlResponse
@@ -77,6 +77,7 @@ public protocol ControlActions {
     func windowMove(_ target: String?, x: Int, y: Int, display: Int?) -> ControlResponse
     func windowZoom(_ target: String?) -> ControlResponse
     func windowFullscreen(_ target: String?) -> ControlResponse
+    func windowMinimize(_ target: String?, mode: ControlToggleMode) async -> ControlResponse
     func clearRestoreCommands() -> ControlResponse
 }
 
@@ -165,7 +166,7 @@ public struct ControlDispatcher {
         case .quickType, .quickText:
             return await dispatchQuickCommand(request)
         case .windowNew, .windowList, .windowSelect, .windowClose, .windowRename,
-                .windowDelete, .windowResize, .windowMove, .windowZoom, .windowFullscreen:
+                .windowDelete, .windowResize, .windowMove, .windowZoom, .windowFullscreen, .windowMinimize:
             return await dispatchWindowCommand(request)
         case .dashboard:
             return dispatchDashboard(request)
@@ -688,7 +689,7 @@ public struct ControlDispatcher {
     private func dispatchWindowCommand(_ request: ControlRequest) async -> ControlResponse {
         switch request.cmd {
         case .windowNew:
-            return actions.windowNew(name: request.args?.name)
+            return await actions.windowNew(name: request.args?.name)
         case .windowList:
             return actions.windowList()
         case .windowSelect:
@@ -717,6 +718,11 @@ public struct ControlDispatcher {
             return actions.windowZoom(request.target)
         case .windowFullscreen:
             return actions.windowFullscreen(request.target)
+        case .windowMinimize:
+            guard let mode = ControlToggleMode.parse(request.args?.mode) else {
+                return ControlResponse(ok: false, error: "invalid window minimize mode: \(request.args?.mode ?? "toggle")")
+            }
+            return await actions.windowMinimize(request.target, mode: mode)
         default:
             preconditionFailure("unexpected window command: \(request.cmd.rawValue)")
         }

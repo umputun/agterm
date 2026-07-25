@@ -698,6 +698,14 @@ extension Notification.Name {
     /// would otherwise stay stale until the next dispatched command.
     static let agtermWindowFrontmostChanged = Notification.Name("agterm.windowFrontmostChanged")
 
+    /// Posted by `WindowRegistry` when a window's NSWindow attaches or detaches, so the control server can
+    /// refresh its cached `window.list`. A window is "open" (its store loaded) well before its NSWindow
+    /// exists, so `window.new` builds its cached node with no `geometry`/`fullscreen`/`zoomed`/`minimized`;
+    /// nothing else refreshes it afterwards on that path — `newWindow()` pre-sets `frontmostWindowID`, so
+    /// the first `didBecomeKey` is a no-change and skips `.agtermWindowFrontmostChanged`, and a brand-new
+    /// window has no saved frame to restore, so no `didMove`/`didResize` fires either.
+    static let agtermWindowAttachmentChanged = Notification.Name("agterm.windowAttachmentChanged")
+
     /// Posted after `keymap.conf` is (re)loaded and reparsed, so the custom-command runner rebuilds its
     /// matcher and the action palette re-reads the custom commands. The data-driven menu shortcuts
     /// re-render on their own because they read the `@Observable` keymap directly.

@@ -7,7 +7,7 @@ struct Window: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Window commands.",
         subcommands: [New.self, List.self, Select.self, Close.self, Rename.self, Delete.self, Resize.self, Move.self,
-                      Zoom.self, Fullscreen.self]
+                      Zoom.self, Fullscreen.self, Minimize.self]
     )
 
     struct New: RequestCommand {
@@ -102,5 +102,24 @@ struct Window: ParsableCommand {
         @OptionGroup var options: BasicOptions
 
         func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .windowFullscreen, target: id) }
+    }
+
+    struct Minimize: RequestCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Minimize a window to the Dock, or restore it."
+        )
+        @Argument(help: "Window id, unique prefix, or 'active'.") var id: String = "active"
+        @Argument(help: "on, off, or toggle (default: toggle).") var mode: String?
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest {
+            // both positionals are optional, so a bare `window minimize on` binds the mode word to `id`.
+            // A window address is a UUID prefix (hex only) or `active`, so it can never be a mode word —
+            // recovering the intent here is unambiguous and keeps the id optional for the common case.
+            if mode == nil, ControlToggleMode.parse(id) != nil {
+                return ControlRequest(cmd: .windowMinimize, target: "active", args: ControlArgs(mode: id))
+            }
+            return ControlRequest(cmd: .windowMinimize, target: id, args: ControlArgs(mode: mode ?? "toggle"))
+        }
     }
 }
