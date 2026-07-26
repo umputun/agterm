@@ -190,16 +190,6 @@ struct AppStoreOrganizationTests {
         #expect(store.flaggedSessions.map(\.id) == [b.id, a.id])
     }
 
-    @Test func setFocusedWorkspaceSetsAndClears() {
-        let store = makeStore()
-        let work = store.addWorkspace(name: "work")
-        #expect(store.focusedWorkspaceID == nil)
-        store.setFocusedWorkspace(work.id)
-        #expect(store.focusedWorkspaceID == work.id)
-        store.setFocusedWorkspace(nil)
-        #expect(store.focusedWorkspaceID == nil)
-    }
-
     @Test func ensureWorkspaceClearFocusFalsePreservesFocusOnCreate() {
         let store = makeStore()
         let ws1 = store.addWorkspace(name: "one")
@@ -306,29 +296,6 @@ struct AppStoreOrganizationTests {
         #expect(store.workspaces[0].isExpanded)
         store.setWorkspaceExpanded(a.id, expanded: true) // already expanded
         #expect(store.workspaces[0].isExpanded)
-    }
-
-    @Test func visibleWorkspacesReturnsAllWhenUnfocused() {
-        let store = makeStore()
-        let work = store.addWorkspace(name: "work")
-        let personal = store.addWorkspace(name: "personal")
-        #expect(store.visibleWorkspaces.map(\.id) == [work.id, personal.id])
-    }
-
-    @Test func visibleWorkspacesReturnsOneWhenFocused() {
-        let store = makeStore()
-        _ = store.addWorkspace(name: "work")
-        let personal = store.addWorkspace(name: "personal")
-        store.setFocusedWorkspace(personal.id)
-        #expect(store.visibleWorkspaces.map(\.id) == [personal.id])
-    }
-
-    @Test func visibleWorkspacesFallsBackToAllForStaleFocusID() {
-        let store = makeStore()
-        let work = store.addWorkspace(name: "work")
-        let personal = store.addWorkspace(name: "personal")
-        store.focusedWorkspaceID = UUID() // stale id, no matching workspace
-        #expect(store.visibleWorkspaces.map(\.id) == [work.id, personal.id])
     }
 
     @Test func selectSessionOutsideFocusClearsFocus() {

@@ -1452,21 +1452,6 @@ struct AppStoreTests {
         #expect(store.controlTree().sidebarVisible == true)
     }
 
-    @Test func controlTreeReportsFocusedWorkspace() {
-        let store = makeStore()
-        let ws2 = store.addWorkspace(name: "second")
-        // no focus: no workspace node reports focused.
-        #expect(store.controlTree().workspaces.allSatisfy { $0.focused == nil })
-        // focus the second workspace: ONLY its node reports focused == true (distinct from active).
-        store.setFocusedWorkspace(ws2.id)
-        let nodes = store.controlTree().workspaces
-        #expect(nodes.first { $0.id == ws2.id.uuidString }?.focused == true)
-        #expect(nodes.filter { $0.focused == true }.count == 1)
-        // clearing focus: no node reports focused again.
-        store.setFocusedWorkspace(nil)
-        #expect(store.controlTree().workspaces.allSatisfy { $0.focused == nil })
-    }
-
     @Test func controlTreeReportsCollapsedWorkspace() {
         let store = makeStore()
         let ws2 = store.addWorkspace(name: "second")
@@ -1803,22 +1788,6 @@ extension AppStoreTests {
         store.setSidebarMode(.tree)
         #expect(store.sidebarSelectionIDs == [b.id],
                 "rows hidden by the mode switch must not re-enter the selection when visible again")
-    }
-
-    @Test func workspaceFocusPrunesRowsOutsideFocusedWorkspace() {
-        let store = makeStore()
-        let ws1 = store.addWorkspace(name: "one")
-        let ws2 = store.addWorkspace(name: "two")
-        let a = try! #require(store.addSession(toWorkspace: ws1.id, cwd: "/a"))
-        let b = try! #require(store.addSession(toWorkspace: ws2.id, cwd: "/b"))
-        store.setSidebarSelection([a.id, b.id])
-
-        store.setFocusedWorkspace(ws2.id)
-
-        #expect(store.sidebarSelectionIDs == [b.id])
-        store.setFocusedWorkspace(nil)
-        #expect(store.sidebarSelectionIDs == [b.id],
-                "rows hidden by the focus filter must not re-enter the selection when unfocused")
     }
 
     @Test func singleFlagChangePrunesRowHiddenInFlaggedMode() {

@@ -307,25 +307,36 @@ move was clean.
 
 **Files:**
 - Create: `agtermCore/Sources/agtermCore/AppStore+Focus.swift`
-- Create: `agterm/AppActions+Focus.swift`
+- Create: `agterm/AppActions+WorkspaceFocus.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/AppStoreFocusTests.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/ControlDispatcherWorkspaceTests.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore.swift`
 - Modify: `agterm/AppActions.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTests.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/AppStoreOrganizationTests.swift`
 
-- [ ] move `visibleWorkspaces`, `navigableSessions`, `focusedWorkspace`, `setFocusedWorkspace`, and
+- [x] move `visibleWorkspaces`, `navigableSessions`, `focusedWorkspace`, `setFocusedWorkspace`, and
       `autoUnfocusIfOutsideFocus` from `AppStore.swift` into a new `AppStore+Focus.swift` extension, verbatim
       (the two stored properties must stay on the class)
-- [ ] move `focusWorkspace`, `focusActiveWorkspace`, and `clearFocus` from `AppActions.swift` into a new
-      `AppActions+Focus.swift` extension, verbatim
-- [ ] move the existing focus/visibility test functions out of `AppStoreTests.swift` into a new
-      `AppStoreFocusTests.swift` (`setFocusedWorkspaceSetsAndClears`, the three `visibleWorkspaces*` cases)
-- [ ] create an empty-but-compiling `ControlDispatcherWorkspaceTests.swift` scaffold for Task 8's tests
+- [x] move `focusWorkspace`, `focusActiveWorkspace`, and `clearFocus` from `AppActions.swift` into a new
+      `AppActions+WorkspaceFocus.swift` extension, verbatim. ⚠️ the plan's original `AppActions+Focus.swift`
+      name is already TAKEN by the SESSION/PANE focus extension, so the workspace-focus file carries the
+      disambiguated name; every later task referencing it was updated to match
+- [x] move the existing focus/visibility test functions into a new `AppStoreFocusTests.swift`:
+      `setFocusedWorkspaceSetsAndClears` + the three `visibleWorkspaces*` cases (which live in
+      `AppStoreOrganizationTests.swift`, not `AppStoreTests.swift` as the plan assumed), plus
+      `controlTreeReportsFocusedWorkspace` and `workspaceFocusPrunesRowsOutsideFocusedWorkspace` out of
+      `AppStoreTests.swift` — the two that make room there and give Task 9's read-back tests a home
+- [x] create an empty-but-compiling `ControlDispatcherWorkspaceTests.swift` scaffold for Task 8's tests
       (`ControlDispatcherDashboardTests.swift` is the precedent for the split)
-- [ ] run `swift test` with NO test edits beyond the move — all must pass, proving the move changed nothing
-- [ ] run `make build` and `make lint`; confirm `AppStore.swift` ≤ 960 lines, `AppStoreTests.swift` ≤ 1900,
-      `AppActions.swift` ≤ 920 — must pass before Task 2
+- [x] run `swift test` with NO test edits beyond the move — all must pass, proving the move changed nothing
+- [x] run `make build` and `make lint`; confirm `AppStore.swift` ≤ 960 lines, `AppStoreTests.swift` ≤ 1900,
+      `AppActions.swift` ≤ 920 — must pass before Task 2. ⚠️ measured after the move: `AppStore.swift` 950 ✓,
+      `AppStoreTests.swift` 1938 and `AppActions.swift` 935 — both MISS their targets because the plan
+      over-estimated how much focus code those two files held (25 lines in `AppActions.swift`, 31 in
+      `AppStoreTests.swift`). Both still gain the headroom the split exists for, and neither is grown by a
+      later task: Tasks 12/13/14 add to `AppActions+WorkspaceFocus.swift`, and Task 9's read-back tests move
+      to `AppStoreFocusTests.swift` (its Files list updated)
 
 ### Task 2: Add the focus set and enabled flag to AppStore
 
@@ -404,7 +415,7 @@ today's observable behavior. The real UX work happens in Tasks 11-14, which rewr
 again; that small churn is the price of a continuously-building tree.
 
 **Files:**
-- Modify: `agterm/AppActions+Focus.swift`
+- Modify: `agterm/AppActions+WorkspaceFocus.swift`
 - Modify: `agterm/AppActions+Palette.swift` (line 29)
 - Modify: `agterm/agtermApp+Menus.swift` (lines 242 AND 250 — two distinct sites)
 - Modify: `agterm/Views/WorkspaceSidebar.swift` (lines 122, 551)
@@ -528,7 +539,8 @@ showing, so an empty-space drop must NOT land in the marked workspace.
 - Modify: `agterm/Control/ControlServer+WorkspaceCommands.swift` (the `workspace.*` adapter home, per
   `.claude/rules/control-api.md` — NOT `+AppCommands.swift`)
 - Modify: `agtermCore/Sources/agtermCore/AppStore.swift` (`controlTree`)
-- Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTests.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/AppStoreFocusTests.swift` (the focus read-back tests moved
+  here in Task 1)
 
 - [ ] rewrite `focusWorkspace` to switch on the typed `WorkspaceFocusMode`: `on` → `setFocusedWorkspace(id)`,
       `off` → `setFocusMembership(id, member: false)`, `add` → `setFocusMembership(id, member: true)`,
@@ -589,7 +601,7 @@ Menu behavior is covered by Task 15's e2e.
 
 **Files:**
 - Modify: `agterm/Views/WorkspaceSidebar+ContextMenu.swift`
-- Modify: `agterm/AppActions+Focus.swift`
+- Modify: `agterm/AppActions+WorkspaceFocus.swift`
 
 - [ ] add `AppActions.setFocusMembership(_ id: UUID, member: Bool)` delegating to the store mutator
 - [ ] change the existing Focus item's label logic: "Unfocus" only when the set is exactly `{this}` AND the
@@ -604,7 +616,7 @@ Menu behavior is covered by Task 15's e2e.
 
 **Files:**
 - Modify: `agterm/Views/WindowContentView.swift`
-- Modify: `agterm/AppActions+Focus.swift`
+- Modify: `agterm/AppActions+WorkspaceFocus.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppSettings.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppSettingsTests.swift`
 
@@ -627,7 +639,7 @@ Menu behavior is covered by Task 15's e2e.
 
 **Files:**
 - Modify: `agterm/agtermApp+Menus.swift`
-- Modify: `agterm/AppActions+Focus.swift`
+- Modify: `agterm/AppActions+WorkspaceFocus.swift`
 - Modify: `agterm/AppActions+Palette.swift`
 - Modify: `agtermCore/Sources/agtermCore/PaletteCatalog.swift`
 - Modify: `agtermCore/Sources/agtermCore/BuiltinAction.swift`
