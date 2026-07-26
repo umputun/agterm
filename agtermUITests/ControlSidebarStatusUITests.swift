@@ -169,14 +169,24 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
     }
 
     // workspace.focus add MARKS a workspace alongside the existing members instead of replacing them — the
-    // multi-workspace working set the single-id filter could not express. Three workspaces: `on` the first
-    // (only its row's session renders), `add` the second (both render, the third does not), `off` the second
-    // (back to one). The read-back is each tree node's `focused` flag, which now means SET MEMBERSHIP and is
-    // reported independently of whether the filter applies.
+    // multi-workspace working set the single-id filter could not express. Three workspaces: `add` the third
+    // from an empty set (marks only, the filter stays off), `on` the first (only its row's session renders),
+    // `add` the second (both render, the third does not), `off` the second (back to one). The read-back is
+    // each tree node's `focused` flag, which now means SET MEMBERSHIP and is reported independently of
+    // whether the filter applies.
     func testWorkspaceFocusAddBuildsAMultiWorkspaceSet() throws {
         let ids = try seedFocusWorkspaces([(workspace: "second", session: "hidden"),
                                            (workspace: "third", session: "buried")])
         let (first, second, third) = (ids[0], ids[1], ids[2])
+
+        // `add` NEVER turns the filter on — it only marks, which is what lets a script build a set with a
+        // run of adds and apply it with one `workspace.filter on` (and what keeps the GUI's row-by-row
+        // marking from hiding the rows still to be marked).
+        XCTAssertEqual(try sendCommand(#"{"cmd":"workspace.focus","target":"\#(third)","args":{"mode":"add"}}"#)["ok"] as? Bool,
+                       true, "workspace.focus add should succeed on an empty set")
+        XCTAssertEqual(treeWorkspaceFilter(), false, "add must leave the filter off")
+        XCTAssertEqual(try workspaceFocusedFlag(third), true, "the added workspace should read back focused")
+        XCTAssertTrue(pollSessionRowCount(3, timeout: 10), "with the filter off every session row still renders")
 
         // `on` replaces the set with the first workspace: only its session renders.
         let focus = try sendCommand(#"{"cmd":"workspace.focus","target":"\#(first)","args":{"mode":"on"}}"#)

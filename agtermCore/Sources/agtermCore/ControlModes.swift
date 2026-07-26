@@ -78,12 +78,14 @@ public enum ControlSidebarViewMode: Equatable, Sendable {
     }
 }
 
-/// The four modes `workspace.focus` accepts, each identical to the single-workspace behavior at set
-/// size 1: `on` replaces the marked set with the target and enables the filter, `off` removes the target
-/// (disabling once the set empties), `toggle` replace-toggles (clears when the set is exactly the target
-/// and enabled, else replaces with the target and enables), and `add` inserts the target and enables.
-/// There is deliberately no membership-TOGGLE mode — the row menu's membership item computes its own
-/// direction from what it just read and maps to `add` or `off`. Raw values are the wire tokens.
+/// The four modes `workspace.focus` accepts: `on` replaces the marked set with the target and enables
+/// the filter, `off` removes the target (disabling once the set empties), `toggle` replace-toggles
+/// (clears when the set is exactly the target and enabled, else replaces with the target and enables),
+/// and `add` inserts the target WITHOUT touching the filter flag — marking alone, so a set can be built
+/// member by member with the whole tree still on screen (an add that enabled the filter would hide the
+/// rows the next add needs). There is deliberately no membership-TOGGLE mode — the row menu's membership
+/// item computes its own direction from what it just read and maps to `add` or `off`. Raw values are the
+/// wire tokens.
 public enum WorkspaceFocusMode: String, CaseIterable, Sendable {
     case on, off, toggle, add
 

@@ -35,17 +35,35 @@ struct AppStoreFocusTests {
         let work = store.addWorkspace(name: "work")
         let personal = store.addWorkspace(name: "personal")
         store.setFocusMembership(work.id, member: true)
-        #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled) // marking also turns the filter on
+        #expect(store.focusedWorkspaceIDs == [work.id] && !store.focusEnabled) // marking never turns the filter on
         store.setFocusMembership(personal.id, member: true)
-        #expect(store.focusedWorkspaceIDs == [work.id, personal.id] && store.focusEnabled)
+        #expect(store.focusedWorkspaceIDs == [work.id, personal.id] && !store.focusEnabled)
+        store.setFocusEnabled(true)
         store.setFocusMembership(work.id, member: false)
         #expect(store.focusedWorkspaceIDs == [personal.id] && store.focusEnabled) // the survivor keeps the filter on
+    }
+
+    @Test func addingToTheSetNeverTurnsTheFilterOn() {
+        // the contract that makes a multi-workspace set buildable: an add MARKS and nothing else. If it
+        // enabled the filter, marking the first workspace would collapse the tree to it and the rows of
+        // every workspace still to be marked would be gone — each extra member costing a toggle off and
+        // back. Both polarities are pinned: adding while OFF leaves it off, adding while ON leaves it on.
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        store.setFocusMembership(work.id, member: true)
+        #expect(store.focusedWorkspaceIDs == [work.id] && !store.focusEnabled)
+        #expect(store.visibleWorkspaces.map(\.id) == [work.id, personal.id]) // the whole tree is still on screen
+        store.setFocusEnabled(true)
+        store.setFocusMembership(personal.id, member: true)
+        #expect(store.focusedWorkspaceIDs == [work.id, personal.id] && store.focusEnabled) // still on, not flipped
     }
 
     @Test func removingTheLastMemberDisablesTheFilter() {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
         store.setFocusMembership(work.id, member: true)
+        store.setFocusEnabled(true)
         store.setFocusMembership(work.id, member: false)
         #expect(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled) // `enabled + empty` is unrepresentable
     }
@@ -56,6 +74,7 @@ struct AppStoreFocusTests {
         let personal = store.addWorkspace(name: "personal")
         store.setFocusMembership(work.id, member: true)
         store.setFocusMembership(personal.id, member: true)
+        store.setFocusEnabled(true)
         store.setFocusEnabled(false)
         store.setFocusMembership(work.id, member: false)
         #expect(store.focusedWorkspaceIDs == [personal.id] && !store.focusEnabled) // removing never turns it back on
@@ -67,6 +86,7 @@ struct AppStoreFocusTests {
         let personal = store.addWorkspace(name: "personal")
         store.setFocusMembership(work.id, member: true)
         store.setFocusMembership(personal.id, member: true)
+        store.setFocusEnabled(true)
         store.setFocusEnabled(false)
         #expect(store.focusedWorkspaceIDs == [work.id, personal.id] && !store.focusEnabled) // the set survives
         store.setFocusEnabled(true)
@@ -111,8 +131,9 @@ struct AppStoreFocusTests {
         let work = store.addWorkspace(name: "work")
         let personal = store.addWorkspace(name: "personal")
         #expect(store.visibleWorkspaces.map(\.id) == [work.id, personal.id])
-        // marking then switching the filter off reveals the whole tree again, set intact.
+        // marking then applying then switching the filter off reveals the whole tree again, set intact.
         store.setFocusMembership(work.id, member: true)
+        store.setFocusEnabled(true)
         store.setFocusEnabled(false)
         #expect(store.visibleWorkspaces.map(\.id) == [work.id, personal.id])
     }
@@ -132,6 +153,7 @@ struct AppStoreFocusTests {
         let three = store.addWorkspace(name: "three")
         store.setFocusMembership(three.id, member: true) // marked out of tree order
         store.setFocusMembership(one.id, member: true)
+        store.setFocusEnabled(true)
         #expect(store.visibleWorkspaces.map(\.id) == [one.id, three.id]) // rendered in tree order, not mark order
     }
 
@@ -160,6 +182,7 @@ struct AppStoreFocusTests {
         _ = store.addWorkspace(name: "other")
         store.setFocusMembership(work.id, member: true)
         store.setFocusMembership(doomed.id, member: true)
+        store.setFocusEnabled(true)
         store.removeWorkspace(doomed.id)
         #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled) // the survivor keeps filtering
         #expect(store.visibleWorkspaces.map(\.id) == [work.id])
@@ -170,6 +193,7 @@ struct AppStoreFocusTests {
         _ = store.addWorkspace(name: "other")
         let doomed = store.addWorkspace(name: "doomed")
         store.setFocusMembership(doomed.id, member: true)
+        store.setFocusEnabled(true)
         store.removeWorkspace(doomed.id)
         #expect(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled) // nothing left to filter to
     }
@@ -181,6 +205,7 @@ struct AppStoreFocusTests {
         let doomed = store.addWorkspace(name: "doomed")
         store.setFocusMembership(work.id, member: true)
         store.setFocusMembership(personal.id, member: true)
+        store.setFocusEnabled(true)
         store.removeWorkspace(doomed.id)
         #expect(store.focusedWorkspaceIDs == [work.id, personal.id] && store.focusEnabled)
     }
@@ -192,6 +217,7 @@ struct AppStoreFocusTests {
         _ = store.addWorkspace(name: "spare") // soft-remove keeps at least one workspace
         store.setFocusMembership(work.id, member: true)
         store.setFocusMembership(doomed.id, member: true)
+        store.setFocusEnabled(true)
         #expect(store.softRemoveWorkspace(doomed.id))
         #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled)
         #expect(store.softRemoveWorkspace(work.id))
@@ -206,6 +232,7 @@ struct AppStoreFocusTests {
         _ = store.addSession(toWorkspace: work.id, cwd: "/a")
         store.setFocusMembership(work.id, member: true)
         store.setFocusMembership(personal.id, member: true)
+        store.setFocusEnabled(true)
         let stray = try! #require(store.addSession(toWorkspace: outside.id, cwd: "/b", select: false))
         store.selectSession(stray.id)
         #expect(store.focusedWorkspaceIDs == [work.id, personal.id] && !store.focusEnabled) // set intact
@@ -221,6 +248,7 @@ struct AppStoreFocusTests {
         let inSet = try! #require(store.addSession(toWorkspace: personal.id, cwd: "/b", select: false))
         store.setFocusMembership(work.id, member: true)
         store.setFocusMembership(personal.id, member: true)
+        store.setFocusEnabled(true)
         store.selectSession(inSet.id)
         #expect(store.focusedWorkspaceIDs == [work.id, personal.id] && store.focusEnabled)
     }
@@ -244,6 +272,7 @@ struct AppStoreFocusTests {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
         store.setFocusMembership(work.id, member: true)
+        store.setFocusEnabled(true)
         _ = store.addWorkspace(name: "background", revealNewWorkspace: false)
         #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled) // the background create stays hidden
         #expect(store.visibleWorkspaces.map(\.id) == [work.id])
@@ -325,6 +354,7 @@ struct AppStoreFocusTests {
         let personal = store.addWorkspace(name: "personal")
         store.setFocusMembership(work.id, member: true)
         store.setFocusMembership(personal.id, member: true)
+        store.setFocusEnabled(true) // enabled, so the nil answer comes from the COUNT, not from the flag
         #expect(store.dropFallbackWorkspaceID == nil) // no unambiguous target among several rendered rows
     }
 
@@ -391,6 +421,8 @@ struct AppStoreFocusTests {
         let work = store.addWorkspace(name: "work")
         #expect(store.controlTree().workspaceFilter == false) // nothing marked, filter off
         store.setFocusMembership(work.id, member: true)
+        #expect(store.controlTree().workspaceFilter == false) // marking alone does not apply the filter
+        store.setFocusEnabled(true)
         #expect(store.controlTree().workspaceFilter == true)
         store.setFocusEnabled(false)
         #expect(store.controlTree().workspaceFilter == false)
@@ -424,6 +456,11 @@ struct AppStoreFocusTests {
         let actions = MockControlActions()
         actions.filterStore = store
         let dispatcher = ControlDispatcher(actions: actions)
+
+        // marking left the filter off, so `on` is what applies the set — the two-call build-then-apply
+        // shape a script uses after a run of `workspace.focus add`.
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .workspaceFilter, args: ControlArgs(mode: "on")))
+        #expect(store.controlTree().workspaceFilter == true)
 
         _ = await dispatcher.dispatch(ControlRequest(cmd: .workspaceFilter, args: ControlArgs(mode: "off")))
         #expect(store.controlTree().workspaceFilter == false)

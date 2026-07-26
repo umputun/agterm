@@ -65,15 +65,16 @@ struct Workspace: ParsableCommand {
     }
 
     /// `agtermctl workspace focus [on|off|toggle|add] [--target W]` — marks or unmarks ONE workspace in
-    /// the sidebar's focus set. The accepted list, the help text, and the local rejection message all
-    /// derive from `WorkspaceFocusMode.allCases`, so the CLI cannot drift from the dispatcher's parse.
+    /// the sidebar's focus set. `add` only marks; applying the set is `workspace filter on`. The accepted
+    /// list, the help text, and the local rejection message all derive from `WorkspaceFocusMode.allCases`,
+    /// so the CLI cannot drift from the dispatcher's parse.
     struct Focus: RequestCommand {
         static let configuration = CommandConfiguration(
             abstract: "Mark a workspace in the sidebar focus set (\(WorkspaceFocusMode.validNamesList))."
         )
         @Argument(help: """
             Mode: on (mark it alone), off (unmark it), toggle (replace-toggle, the default), or add \
-            (mark it alongside the others).
+            (mark it alongside the others, leaving the filter flag alone).
             """)
         var mode: String = WorkspaceFocusMode.toggle.rawValue
         @OptionGroup var target: TargetOptions

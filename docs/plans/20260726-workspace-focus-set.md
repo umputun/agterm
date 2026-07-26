@@ -187,6 +187,18 @@ the set with `{id}` and enable; nil clears and disables". The row menu's Focus, 
 `focusActiveWorkspace` / `clearFocus`, the control arm, and `removeWorkspace`'s cleanup all keep the same
 observable behavior at set size 1.
 
+**Adding to the set MARKS ONLY — it never switches the filter on** (`setFocusMembership(_:member:)`'s
+`wantEnabled` is just the current `focusEnabled` once the set is non-empty). Marking-that-enables makes the
+set unbuildable from the sidebar: the first mark collapses the tree onto that one workspace, so the rows of
+every workspace still to be marked are gone and each extra member costs a toggle off and back — three
+toggles to build a three-workspace set, exactly the friction multi-select exists to remove. So a set is built
+member by member with the whole tree on screen and applied ONCE (the bottom-bar toggle, or
+`workspace.filter on`). Removing still disables the filter as the set empties — `enabled + empty` stays
+unrepresentable — and `Focus` (the REPLACING `setFocusedWorkspace`) still enables immediately, so the
+single-workspace zoom is unchanged. ⚠️ *This is a post-Task-15 correction: Tasks 2/8/9/12 were implemented
+with "adding also enables" and the e2e written in Task 15 exposed the friction. Tasks 16, 17 and 18 must
+document THIS behavior.*
+
 **Key design decisions and rationale**
 
 | Decision | Rationale |
@@ -195,6 +207,7 @@ observable behavior at set size 1.
 | Keep `setFocusedWorkspace(_:)` as a single-id convenience | Collapses the diff: every current call site is behavior-identical, so the risk concentrates in new code rather than spreading across the app. |
 | `Focus` = replace with this; a SECOND menu item toggles membership | Preserves today's muscle memory and the meaning of `workspace.focus on` for existing scripts. Making `Focus` itself a membership toggle would silently change what `on` does. |
 | No membership-*toggle* control mode | The menu item computes its own direction (its label flips to "Remove from Focus"), so `setFocusMembership(_:member:)` has exactly two call sites mapping to `add` and `off`. A fifth mode would be dead weight. |
+| Adding to the set never turns the filter ON | An add that enabled would hide the rows still to be marked, so every extra member costs a toggle off and back. Mark-only keeps the build cost at N marks + one apply. `Focus` (replace) still enables, so the single-workspace zoom is untouched. |
 | Cross-set select DISABLES the filter, keeping the set | Same visual result as today's auto-unfocus (the tree reveals), but a hand-curated set is not destroyed by a notification click. Re-enabling is one click. |
 | Creating a workspace ADDS it to the set | Preserves today's "a new workspace is immediately visible" contract WITHOUT blowing the filtered view open. Mutating the set is acceptable here because the user initiated the creation — unlike the passive reveal case above. |
 | Delete the `focus-pill` entirely | With a set, the pill would have to render "N workspaces", duplicating what the tree already shows. One grid button covers both the single and multi case, and it is the only affordance that also works when the filter is OFF. |
@@ -274,7 +287,7 @@ Mode semantics (each identical to today at set size 1):
 | `on` | set := `{X}`, enable |
 | `off` | remove X from the set; disable when it empties |
 | `toggle` | replace-toggle — clear when the set is exactly `{X}` and enabled, else set := `{X}` and enable |
-| `add` | insert X, enable |
+| `add` | insert X into the set; the filter flag is left exactly as it was (an add never turns it on) |
 
 The mode parse moves INTO `ControlDispatcher` (typed `WorkspaceFocusMode`, invalid value rejected before any
 mutation with a message derived from `allCases` so it cannot go stale), per the dispatcher-first rule. The
@@ -285,10 +298,10 @@ mutation with a message derived from `allCases` so it cannot go stale), per the 
 ```
 row context menu "Add to Focus"
   -> AppActions.setFocusMembership(id, member: true)
-  -> AppStore.setFocusMembership -> mutate set + enable + save()
+  -> AppStore.setFocusMembership -> mutate set (filter flag untouched) + save()
   -> observation fires (updateNSView reads focusedWorkspaceIDs AND focusEnabled)
   -> RowContent diff -> per-row reloadItem  (icon -> square.grid.2x2.fill)
-  -> TreeShape diff   -> rebuildAndReload   (tree narrows)
+  -> TreeShape diff   -> rebuildAndReload   (no narrowing until the filter is switched on)
 ```
 
 ## What Goes Where
@@ -799,10 +812,12 @@ Menu behavior is covered by Task 15's e2e.
       so the rewritten case asserts BOTH `workspace-row` visibility AND the toggle's `value`+`isEnabled`,
       and was renamed `testFocusWorkspaceHidesOthersAndUnfocusRestores`
 - [x] add a test that marks a second workspace via the context menu's Add to Focus and asserts BOTH
-      workspaces' rows are visible while a third is not. ⚠️ marking the SECOND row has to route through the
-      bottom-bar toggle: once the first is marked the filter is on, so the second workspace's row is not
-      rendered and there is nothing to right-click. The shared `markFirstTwoOfThreeWorkspaces` fixture does
-      that suspend-mark-reenable round-trip, which is how a working set is genuinely built row by row
+      workspaces' rows are visible while a third is not. ⚠️ this bullet originally recorded that marking the
+      SECOND row had to route through the bottom-bar toggle (the first mark turned the filter on, so the
+      second workspace's row was not rendered and there was nothing to right-click). That friction is what
+      prompted the mark-only decision below: the shared `markFirstTwoOfThreeWorkspaces` fixture now marks
+      both rows directly and clicks the toggle ONCE, and it asserts the filter stays off — and all three rows
+      stay on screen — across both marks
 - [x] add a test that the bottom-bar toggle disables the filter (all rows return) and re-enables it (the
       same two rows return), proving the set survived
 - [x] add a test that `focus-filter-toggle` reports `isEnabled == false` with nothing marked and true once a
@@ -829,6 +844,19 @@ Menu behavior is covered by Task 15's e2e.
       -derivedDataPath build/DerivedData -only-testing:agtermUITests/<Class>[/<method>]`. Both were RUN:
       all 4 `FocusWorkspaceUITests` (68.8 s) and the 4 affected `ControlSidebarStatusUITests` methods (17.6 s)
       passed
+
+### ➕ Post-Task-15 decision: "Add to Focus" marks without enabling
+
+Not one of the numbered tasks — a user decision taken after Task 15, whose e2e work exposed that a
+marking add which also enabled the filter made a multi-workspace set cost one toggle-off per extra member.
+`setFocusMembership`'s `wantEnabled` term became `wantIDs.isEmpty ? false : focusEnabled`, so adding
+preserves whatever the filter state was and only removing can disable (as the set empties). `Focus` /
+`workspace.focus on|toggle` are UNCHANGED and still enable immediately. Implemented across
+`AppStore+Focus.swift`, the `add`-mode doc comments (`ControlModes.swift`,
+`ControlServer+WorkspaceCommands.swift`, `agtermctlKit/WorkspaceCommands.swift`,
+`AppActions+WorkspaceFocus.swift`), the migrated unit tests (`AppStoreFocusTests`, `SnapshotRoundTripTests`)
+with a new `addingToTheSetNeverTurnsTheFilterOn` case, and both e2e suites. **Tasks 16, 17 and 18 must
+document THIS semantic** — `add` = "insert X into the marked set", never "insert X, enable".
 
 ### Task 16: Update the product documentation surfaces
 
@@ -866,6 +894,8 @@ Menu behavior is covered by Task 15's e2e.
 ### Task 17: Verify acceptance criteria
 
 - [ ] a workspace can be marked and unmarked from its row menu, and the row icon fills/unfills accordingly
+- [ ] marking a workspace does NOT turn the filter on: the whole tree stays on screen, so three workspaces
+      can be marked in a row and applied with one click of the bottom-bar toggle
 - [ ] with three workspaces marked and the filter on, exactly those three render in the tree
 - [ ] the bottom-bar toggle disables and re-enables the filter WITHOUT losing the marked set
 - [ ] the toggle is disabled when nothing is marked, and `workspace.filter on` with an empty set leaves the
@@ -897,12 +927,13 @@ Menu behavior is covered by Task 15's e2e.
 - Modify: `CLAUDE.md` (only if a new cross-cutting convention emerged)
 
 - [ ] rewrite the sidebar rule's "Focus filter" bullet for the set + flag model, covering the two lifecycle
-      rules (cross-set select disables and keeps; workspace creation adds), the unrepresentable
-      `enabled + empty` invariant, the filled-icon indication, the removal of the pill, and the dual-field
-      `updateNSView` observation dependency
-- [ ] update the control-api rule's `workspace.focus` paragraph for the fourth mode and the
-      dispatcher-hoisted typed parse, add the `workspace.filter` entry with its four-point keep-in-sync
-      audit, and bump the catalog count 66 → 67 everywhere it appears in that file
+      rules (cross-set select disables and keeps; workspace creation adds), the mark-only add (Focus
+      REPLACES and enables; Add to Focus only marks, so a set is built then applied once), the
+      unrepresentable `enabled + empty` invariant, the filled-icon indication, the removal of the pill, and
+      the dual-field `updateNSView` observation dependency
+- [ ] update the control-api rule's `workspace.focus` paragraph for the fourth mode (`add` inserts WITHOUT
+      enabling the filter) and the dispatcher-hoisted typed parse, add the `workspace.filter` entry with its
+      four-point keep-in-sync audit, and bump the catalog count 66 → 67 everywhere it appears in that file
 - [ ] update the control-api rule's `session.new --no-select` paragraph (lines ~477-484), which documents
       `clearFocus: Bool = true` gating `focusedWorkspaceID = nil` — both the parameter name and the
       mechanism changed in Task 3

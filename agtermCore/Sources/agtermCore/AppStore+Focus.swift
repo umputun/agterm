@@ -34,13 +34,16 @@ extension AppStore {
         save()
     }
 
-    /// Adds or removes one workspace from the marked set, leaving the other members alone. Adding also
-    /// enables the filter (marking is only meaningful when it applies); removing disables it once the set
-    /// empties, keeping `enabled + empty` unrepresentable. Clean no-op (no write) when nothing changes.
+    /// Adds or removes one workspace from the marked set, leaving the other members alone. Marking ONLY
+    /// marks: adding never switches the filter on, so a working set is built row by row with the whole
+    /// tree on screen — an add that enabled the filter would hide the very rows the next add needs, making
+    /// every extra member cost a toggle off and back. Removing still disables the filter once the set
+    /// empties, keeping `enabled + empty` unrepresentable. `setFocusedWorkspace(_:)` (the replacing
+    /// "Focus") is the one that enables immediately. Clean no-op (no write) when nothing changes.
     public func setFocusMembership(_ id: UUID, member: Bool) {
         var wantIDs = focusedWorkspaceIDs
         if member { wantIDs.insert(id) } else { wantIDs.remove(id) }
-        let wantEnabled = wantIDs.isEmpty ? false : (member || focusEnabled)
+        let wantEnabled = wantIDs.isEmpty ? false : focusEnabled
         guard focusedWorkspaceIDs != wantIDs || focusEnabled != wantEnabled else { return }
         focusedWorkspaceIDs = wantIDs
         focusEnabled = wantEnabled

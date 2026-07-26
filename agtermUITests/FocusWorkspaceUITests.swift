@@ -135,6 +135,11 @@ final class FocusWorkspaceUITests: XCTestCase {
     /// set, so an enabled-but-inert button would misrepresent what a click does). Removing the last member
     /// puts it back. `isEnabled` and `value` are both accessibility-observable, so this belongs in an e2e
     /// rather than in the manual checks.
+    ///
+    /// It is also the direct read of the mark-only contract on the two accessibility-observable fields:
+    /// "Add to Focus" moves `isEnabled` false → true while `value` stays `off`, so the two must be
+    /// asserted together — a marking add that also flipped `value` to `on` would pass an `isEnabled`-only
+    /// check.
     func testFilterToggleIsDisabledUntilAWorkspaceIsMarked() throws {
         XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
         let toggle = filterToggle()
@@ -144,8 +149,8 @@ final class FocusWorkspaceUITests: XCTestCase {
                       "with nothing marked the toggle should be disabled and read off")
 
         invokeWorkspaceMenuItem("Add to Focus", onWorkspace: "workspace 1")
-        XCTAssertTrue(pollFilterToggle(value: "on", enabled: true, timeout: 8),
-                      "marking a workspace should enable the toggle and turn the filter on")
+        XCTAssertTrue(pollFilterToggle(value: "off", enabled: true, timeout: 8),
+                      "marking a workspace should enable the toggle WITHOUT turning the filter on")
 
         // the item now reads "Remove from Focus"; taking the last member out empties the set, so the
         // toggle must go back to disabled rather than sit enabled over an empty filter.
@@ -156,13 +161,14 @@ final class FocusWorkspaceUITests: XCTestCase {
 
     // MARK: - Fixture
 
-    /// Seeds three workspaces (the seeded "workspace 1" plus two empty ones) and marks the first two into
-    /// the focus set via their rows' "Add to Focus" item, leaving the filter ON with a two-member set.
+    /// Seeds three workspaces (the seeded "workspace 1" plus two empty ones), marks the first two into the
+    /// focus set via their rows' "Add to Focus" item, then applies the set with one click of the bottom-bar
+    /// toggle — leaving the filter ON with a two-member set.
     ///
-    /// Marking the SECOND one has to go through the bottom-bar toggle: once workspace 1 is marked the
-    /// filter is on, so workspace 2's row is not rendered and there is nothing to right-click. Suspending
-    /// the filter is the affordance that makes the other rows reachable again, and adding a member
-    /// re-enables it — that round-trip is part of how a working set is built row by row.
+    /// "Add to Focus" MARKS ONLY, so both rows stay on screen and the second workspace can be right-clicked
+    /// straight away. That is what the mark-only contract buys: an N-workspace set costs N marks plus one
+    /// click, instead of a suspend/mark/re-enable round-trip per extra member (each mark would otherwise
+    /// collapse the tree onto the marked set and hide the rows still to be marked).
     private func markFirstTwoOfThreeWorkspaces() {
         XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
         addWorkspace()
@@ -171,17 +177,19 @@ final class FocusWorkspaceUITests: XCTestCase {
         XCTAssertTrue(workspaceRow(named: "workspace 3").waitForExistence(timeout: 8), "third workspace should appear")
 
         invokeWorkspaceMenuItem("Add to Focus", onWorkspace: "workspace 1")
-        XCTAssertTrue(workspaceRow(named: "workspace 2").waitForNonExistence(timeout: 8),
-                      "marking workspace 1 should filter the tree down to it")
-        XCTAssertTrue(pollFilterToggle(value: "on", enabled: true, timeout: 8),
-                      "the first mark should turn the filter on")
+        XCTAssertTrue(pollFilterToggle(value: "off", enabled: true, timeout: 8),
+                      "marking should ENABLE the toggle while leaving the filter off")
+        XCTAssertTrue(pollWorkspaceRowCount(3, timeout: 8),
+                      "marking must not narrow the tree — the rows still to be marked stay reachable")
+
+        invokeWorkspaceMenuItem("Add to Focus", onWorkspace: "workspace 2")
+        XCTAssertTrue(pollFilterToggle(value: "off", enabled: true, timeout: 8),
+                      "a second mark still leaves the filter off")
+        XCTAssertTrue(pollWorkspaceRowCount(3, timeout: 8), "the whole tree is still on screen after both marks")
 
         filterToggle().click()
-        XCTAssertTrue(workspaceRow(named: "workspace 2").waitForHittable(timeout: 8),
-                      "suspending the filter should make the unmarked rows reachable again")
-        invokeWorkspaceMenuItem("Add to Focus", onWorkspace: "workspace 2")
         XCTAssertTrue(pollFilterToggle(value: "on", enabled: true, timeout: 8),
-                      "adding a member should re-enable the filter")
+                      "one click of the toggle applies the marked set")
     }
 
     // MARK: - Actions

@@ -218,6 +218,7 @@ struct SnapshotRoundTripTests {
         let three = store.addWorkspace(name: "three")
         store.setFocusMembership(three.id, member: true) // marked out of tree order
         store.setFocusMembership(one.id, member: true)
+        store.setFocusEnabled(true) // marking only marks; applying the set is its own step
         let snap = store.snapshot()
         #expect(snap.focusedWorkspaceIDs == [one.id, three.id]) // written in tree order, not Set order
         #expect(snap.focusEnabled == true)
@@ -235,6 +236,7 @@ struct SnapshotRoundTripTests {
         let work = store.addWorkspace(name: "work")
         _ = store.addWorkspace(name: "personal")
         store.setFocusMembership(work.id, member: true)
+        store.setFocusEnabled(true)
         store.setFocusEnabled(false)
         let snap = store.snapshot()
         #expect(snap.focusedWorkspaceIDs == [work.id] && snap.focusEnabled == nil) // off omits the key

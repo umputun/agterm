@@ -18,8 +18,9 @@ extension AppActions {
 
     /// Add or remove one workspace from the marked set, leaving the other members alone — the sidebar
     /// workspace row's "Add to Focus"/"Remove from Focus" context-menu item, which computes its own
-    /// direction and so needs no toggle mode. Adding also enables the filter; removing disables it once
-    /// the set empties. Clean no-op on an unknown id.
+    /// direction and so needs no toggle mode. Adding MARKS ONLY, never switching the filter on, so the
+    /// rows of the workspaces still to be marked stay on screen; removing disables the filter once the set
+    /// empties. Clean no-op on an unknown id.
     func setFocusMembership(_ id: UUID, member: Bool) {
         guard uiActionsEnabled else { return }
         guard let store, store.workspaces.contains(where: { $0.id == id }) else { return }

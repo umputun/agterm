@@ -63,8 +63,10 @@ extension ControlServer {
     /// with the target and enables the filter, `off` drops the target from the set (disabling once it
     /// empties; a no-op when it was never marked), `toggle` replace-toggles (clears when the target is the
     /// only marked workspace and the filter is on, else replaces the set with it), and `add` inserts the
-    /// target alongside the existing members. Delta-computed via the store mutators so a no-op mode skips
-    /// the write (idempotent). The control half of the workspace row's Focus/Unfocus menu.
+    /// target alongside the existing members WITHOUT turning the filter on — marking only, so a script
+    /// builds a set with repeated `add` calls and applies it with one `workspace.filter on`. Delta-computed
+    /// via the store mutators so a no-op mode skips the write (idempotent). The control half of the
+    /// workspace row's Focus/Unfocus + Add to/Remove from Focus menu.
     func focusWorkspace(_ target: String?, window: String?, mode: WorkspaceFocusMode) -> ControlResponse {
         resolver.resolveWorkspace(target, window: window) { store, id in
             // the mutators are delta-guarded, so a no-op mode skips the write (idempotent)
