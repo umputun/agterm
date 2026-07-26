@@ -157,7 +157,8 @@ extension WorkspaceSidebar.Coordinator {
               let workspaceID = SidebarDrop.resolveDirectoryWorkspace(
                   sidebarMode: store.sidebarMode,
                   rowWorkspaceID: rowWorkspaceID(for: item),
-                  focusedWorkspaceID: store.focusedWorkspaceID,
+                  focusedWorkspaceID: store.focusEnabled && store.focusedWorkspaceIDs.count == 1
+                      ? store.focusedWorkspaceIDs.first : nil,
                   currentWorkspaceID: store.currentWorkspaceID)
         else { return nil }
         return DirectoryDrop(urls: resolved.urls, workspaceID: workspaceID,

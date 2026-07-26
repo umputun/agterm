@@ -26,7 +26,7 @@ extension AppActions {
             sidebarShowsWorkspaceTree: activeStore?.sidebarMode == .tree,
             sidebarShowsFlaggedOnly: activeStore?.sidebarMode == .flagged,
             activeSessionFlagged: activeStore?.activeSession?.flagged == true,
-            hasFocusedWorkspace: activeStore?.focusedWorkspaceID != nil,
+            hasFocusedWorkspace: activeStore?.focusedWorkspaceIDs.isEmpty == false,
             activeSessionHasSplit: activeStore?.activeSession?.hasSplit == true,
             hasPendingClose: activeStore?.pendingCloseSummary != nil,
             hasRecentClosed: !library.recentClosedItems.isEmpty

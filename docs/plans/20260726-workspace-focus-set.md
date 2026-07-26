@@ -439,23 +439,26 @@ again; that small churn is the price of a continuously-building tree.
 - Modify: `agterm/Views/WindowContentView.swift` (line 781)
 - Modify: `agterm/Control/ControlServer+WorkspaceCommands.swift`
 
-- [ ] rewrite `AppActions.focusWorkspace`'s body (was
+- [x] rewrite `AppActions.focusWorkspace`'s body (was
       `store.setFocusedWorkspace(store.focusedWorkspaceID == id ? nil : id)`) as the replace-toggle against
       the set, and `AppActions.clearFocus`'s guard (was `store.focusedWorkspaceID != nil`) as a
       non-empty-set-or-enabled check
-- [ ] update `AppActions+Palette.swift:29`'s `hasFocusedWorkspace` to `!focusedWorkspaceIDs.isEmpty`
-- [ ] update BOTH `agtermApp+Menus.swift` sites: line 242's `focusedWorkspace?.id` comparison and line 250's
+- [x] update `AppActions+Palette.swift:29`'s `hasFocusedWorkspace` to `!focusedWorkspaceIDs.isEmpty`
+- [x] update BOTH `agtermApp+Menus.swift` sites: line 242's `focusedWorkspace?.id` comparison and line 250's
       `focusedWorkspaceID == nil` disabled-check
-- [ ] update `WorkspaceSidebar.swift:122` (the `updateNSView` observation read) and `:551` (the
-      `rebuildAndReload` force-expand) to the set; `WorkspaceSidebar+ContextMenu.swift:141`'s focused check
-- [ ] update `WorkspaceSidebar+DragDrop.swift:160` to pass the single-member-when-enabled value (Task 6
+- [x] update `WorkspaceSidebar.swift:122` (the `updateNSView` observation read — now reads BOTH fields, which
+      Task 11 only has to verify) and `:551` (the `rebuildAndReload` force-expand) to the set;
+      `WorkspaceSidebar+ContextMenu.swift:141`'s focused check
+- [x] update `WorkspaceSidebar+DragDrop.swift:160` to pass the single-member-when-enabled value (Task 6
       replaces this with the tested `dropFallbackWorkspaceID` accessor)
-- [ ] make `WindowContentView.swift:781`'s pill render only when the set holds exactly one member and the
+- [x] make `WindowContentView.swift:781`'s pill render only when the set holds exactly one member and the
       filter is enabled — its exact current behavior; it is DELETED in Task 13
-- [ ] update `ControlServer+WorkspaceCommands.swift`'s `focusWorkspace` string switch to the set (typed mode
-      and the `add` case land in Tasks 8/9)
-- [ ] run `swift test`, `make build`, `make lint`, `make test-app` — all four must pass before Task 5; from
-      here on every task gates on the full set
+- [x] update `ControlServer+WorkspaceCommands.swift`'s `focusWorkspace` string switch to the set (typed mode
+      and the `add` case land in Tasks 8/9). `off` already maps to `setFocusMembership(id, member: false)`,
+      the mapping Task 9 specifies
+- [x] run `swift test`, `make build`, `make lint`, `make test-app` — all four must pass before Task 5; from
+      here on every task gates on the full set. ⚠️ the static call-site list was COMPLETE: the build went
+      green on the FIRST `make build` with exactly the eight listed files changed and no others
 
 ### Task 5: Persist the set and flag, with legacy migration
 

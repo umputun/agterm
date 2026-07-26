@@ -117,9 +117,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
         // sidebarMode flips the whole data source between the tree and the flat flagged list; reading it
         // here registers the observer so a mode change re-invokes updateNSView and reconcile rebuilds.
         _ = store.sidebarMode
-        // focusedWorkspaceID restricts the tree to one root (via visibleWorkspaces); reading it registers
-        // the observer so a focus flip re-invokes updateNSView and reconcile takes the rebuild branch.
-        _ = store.focusedWorkspaceID
+        // the marked set restricts the tree to its members (via visibleWorkspaces) while the filter is on;
+        // BOTH fields are read so either a membership change or a filter flip re-invokes updateNSView and
+        // reconcile takes the rebuild branch.
+        _ = store.focusedWorkspaceIDs
+        _ = store.focusEnabled
         context.coordinator.reconcile()
         context.coordinator.syncSelection()
     }
@@ -548,7 +550,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
             // workspace must keep its persisted collapse (the zoom-in shows it, but doesn't un-collapse it).
             outline.reloadData()
             suppressExpansionPersist = true
-            for node in roots where expandedWorkspaceIDs.contains(node.id) || node.id == store.focusedWorkspaceID {
+            let forceExpanded = store.focusEnabled ? store.focusedWorkspaceIDs : []
+            for node in roots where expandedWorkspaceIDs.contains(node.id) || forceExpanded.contains(node.id) {
                 outline.expandItem(node)
             }
             suppressExpansionPersist = false

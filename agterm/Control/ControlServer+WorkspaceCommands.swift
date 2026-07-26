@@ -58,22 +58,25 @@ extension ControlServer {
         }
     }
 
-    /// Focus (or unfocus) a workspace — collapse the sidebar tree to that workspace's subtree, or restore
-    /// the full tree. `mode` is `on|off|toggle`: `on` focuses the target, `off` unfocuses it only when it
-    /// is the currently focused one (a no-op otherwise), `toggle` flips. Delta-computed via
-    /// `AppStore.setFocusedWorkspace` so a no-op mode skips the write (idempotent). An unknown mode is an
-    /// error. The control half of the workspace row's Focus/Unfocus menu + the pill ✕.
+    /// Focus (or unfocus) a workspace — collapse the sidebar tree to the marked set, or restore the full
+    /// tree. `mode` is `on|off|toggle`: `on` replaces the set with the target and enables the filter,
+    /// `off` drops the target from the set (disabling once it empties; a no-op when it was never marked),
+    /// `toggle` replace-toggles (clears when the target is the only marked workspace and the filter is on,
+    /// else replaces the set with it). Delta-computed via the store mutators so a no-op mode skips the
+    /// write (idempotent). An unknown mode is an error. The control half of the workspace row's
+    /// Focus/Unfocus menu + the pill ✕.
     func focusWorkspace(_ target: String?, window: String?, mode: String?) -> ControlResponse {
         let mode = mode ?? "toggle"
         return resolver.resolveWorkspace(target, window: window) { store, id in
-            let want: UUID?
+            // the mutators are delta-guarded, so a no-op mode skips the write (idempotent)
             switch mode {
-            case "on": want = id
-            case "off": want = store.focusedWorkspaceID == id ? nil : store.focusedWorkspaceID
-            case "toggle": want = store.focusedWorkspaceID == id ? nil : id
+            case "on": store.setFocusedWorkspace(id)
+            case "off": store.setFocusMembership(id, member: false)
+            case "toggle":
+                let onlyThisFocused = store.focusEnabled && store.focusedWorkspaceIDs == [id]
+                store.setFocusedWorkspace(onlyThisFocused ? nil : id)
             default: return ControlResponse(ok: false, error: "invalid focus mode: \(mode)")
             }
-            store.setFocusedWorkspace(want) // no-op + no save when unchanged (idempotent)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

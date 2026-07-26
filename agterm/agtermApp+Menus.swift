@@ -239,7 +239,9 @@ extension agtermApp {
                 // keyless by default (rebindable via focus_workspace). The control half is workspace.focus.
                 // the label tracks the toggle (Focus/Unfocus) like the workspace row's context-menu item.
                 let focusStore = library.activeStore
-                let currentFocused = focusStore?.focusedWorkspace?.id == focusStore?.currentWorkspaceID
+                let currentWorkspaceID = focusStore?.currentWorkspaceID
+                let currentFocused = focusStore?.focusEnabled == true
+                    && currentWorkspaceID.map { focusStore?.focusedWorkspaceIDs == [$0] } == true
                 Button { actions.focusActiveWorkspace() } label: {
                     Label(currentFocused ? "Unfocus Workspace" : "Focus Workspace", systemImage: "scope")
                 }
@@ -247,7 +249,7 @@ extension agtermApp {
                 .disabled(library.activeStore?.currentWorkspaceID == nil || modalActive)
                 // plain (non-BuiltinAction) clear, like Clear Flagged; the bottom-bar pill ✕ is primary.
                 Button { actions.clearFocus() } label: { Label("Clear Focus", systemImage: "scope") }
-                    .disabled(library.activeStore?.focusedWorkspaceID == nil || modalActive)
+                    .disabled(library.activeStore?.focusedWorkspaceIDs.isEmpty != false || modalActive)
                 Button { actions.toggleSplit() } label: {
                     Label(library.activeStore?.activeSession?.isSplit == true ? "Hide Split" : "Split Right", systemImage: "rectangle.split.2x1")
                 }

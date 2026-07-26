@@ -776,9 +776,11 @@ struct WindowContentView: View {
 
             Spacer()
 
-            // an escape hatch shown only while a workspace is focused: names the focused workspace and
-            // unfocuses on its ✕ (the primary affordance; the menu/palette "Clear Focus" mirror it).
-            if let focused = store.focusedWorkspace {
+            // an escape hatch shown only while the filter is on and exactly one workspace is marked: names
+            // that workspace and unfocuses on its ✕ (the primary affordance; the menu/palette "Clear Focus"
+            // mirror it).
+            if store.focusEnabled, store.focusedWorkspaceIDs.count == 1,
+               let focused = store.workspaces.first(where: { store.focusedWorkspaceIDs.contains($0.id) }) {
                 Button {
                     actions.clearFocus()
                 } label: {

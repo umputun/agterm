@@ -137,8 +137,8 @@ extension WorkspaceSidebar.Coordinator {
             openSession.representedObject = node
             menu.addItem(openSession)
             // "Focus"/"Unfocus" collapses the tree to this workspace's subtree (or restores all when it
-            // is already the focused one); the label reflects the current state.
-            let focused = store.focusedWorkspaceID == node.id
+            // is already the only marked one); the label reflects the current state.
+            let focused = store.focusEnabled && store.focusedWorkspaceIDs == [node.id]
             let focus = NSMenuItem(title: focused ? "Unfocus" : "Focus", action: #selector(menuFocusWorkspace(_:)), keyEquivalent: "")
             focus.target = self
             focus.representedObject = node
