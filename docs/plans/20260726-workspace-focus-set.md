@@ -545,7 +545,10 @@ showing, so an empty-space drop must NOT land in the marked workspace.
 - [x] ➕ keep the two exhaustive `Command` switches compiling: `ControlDispatcher.dispatch` gets a
       `.workspaceFilter` arm returning `nil` (the documented not-yet-migrated fallthrough — grouping it with
       the workspace commands instead would hit `dispatchWorkspaceCommand`'s `preconditionFailure`), and
-      `ControlServer.dispatch`'s unhandled list gains the case. Task 8 replaces both with the real routing
+      `ControlServer.dispatch`'s unhandled list gains the case. Task 8 replaces the DISPATCHER arm with the
+      real routing; ⚠️ the `ControlServer` list entry is PERMANENT, not interim — that switch is exhaustive
+      over `Command` and every dispatcher-owned command (`.tree`, `.sidebar`, `.workspaceFocus`, …) stays in
+      it as the unreachable "dispatcher did not handle" safety net
 - [x] write the `WorkspaceFocusMode` raw-value and `allCases` tests in `ControlModesTests.swift` (the
       existing home for mode enums), NOT in `ControlProtocolTests.swift`
 - [x] write round-trip tests for `workspace.filter` requests in `ControlProtocolTests.swift`
@@ -556,21 +559,33 @@ showing, so an empty-space drop must NOT land in the marked workspace.
 
 **Files:**
 - Modify: `agtermCore/Sources/agtermCore/ControlDispatcher.swift`
+- Modify: `agterm/Control/ControlServer+WorkspaceCommands.swift` (⚠️ missing from the original list — a
+  changed/added `ControlActions` requirement breaks `ControlServer`'s conformance, so the app-side arms
+  must move in the SAME task or `make build` cannot pass)
 - Modify: `agtermCore/Tests/agtermCoreTests/MockControlActions.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherTests.swift` (⚠️ missing from the original
+  list — it held the old raw-string routing assertion, migrated into the workspace suite here)
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherWorkspaceTests.swift` (created in Task 1)
 
-- [ ] change `ControlActions.focusWorkspace` from `mode: String?` to `mode: WorkspaceFocusMode` and parse the
+- [x] change `ControlActions.focusWorkspace` from `mode: String?` to `mode: WorkspaceFocusMode` and parse the
       raw string in the dispatcher's `.workspaceFocus` arm, defaulting to `toggle` when absent
-- [ ] reject an unknown mode in the dispatcher BEFORE any mutation, with a message derived from
+- [x] reject an unknown mode in the dispatcher BEFORE any mutation, with a message derived from
       `WorkspaceFocusMode.allCases` (e.g. `invalid focus mode: <raw> (on|off|toggle|add)`)
-- [ ] add `ControlActions.setWorkspaceFilter(window:mode:)` and the `.workspaceFilter` dispatch arm, reusing
-      the shared show/hide/toggle mode parsing the `sidebar` command already uses, with an unknown mode an error
-- [ ] update `MockControlActions` for both signature changes
-- [ ] write dispatcher tests IN `ControlDispatcherWorkspaceTests.swift`: each of the four focus modes reaches
+- [x] add `ControlActions.setWorkspaceFilter(window:mode:)` and the `.workspaceFilter` dispatch arm, reusing
+      the shared `ControlToggleMode` parser the `sidebar` command already uses, with an unknown mode an error.
+      ⚠️ the wire tokens are `on|off|toggle`, NOT the `sidebar` command's `show|hide|toggle` spelling — this
+      checkbox said "show/hide/toggle" but Tasks 10 and 17 both spell the CLI `workspace filter on|off|toggle`,
+      so the shared PARSER is reused with its default tokens
+- [x] update `MockControlActions` for both signature changes
+- [x] write dispatcher tests IN `ControlDispatcherWorkspaceTests.swift`: each of the four focus modes reaches
       the action with the right typed value; an unknown mode is rejected without calling the action
-- [ ] write dispatcher tests: `workspace.filter` routing for on/off/toggle, unknown-mode rejection, and that
+- [x] write dispatcher tests: `workspace.filter` routing for on/off/toggle, unknown-mode rejection, and that
       it carries `--window` through
-- [ ] run the full gate — must pass before Task 9
+- [x] run the full gate — must pass before Task 9. ⚠️ the `ControlServer` arms landed here out of necessity
+      (the conformance break above): `focusWorkspace` switches on the typed mode with `add` →
+      `setFocusMembership(id, member: true)`, and `setWorkspaceFilter` resolves via `resolvePlacementStore`
+      and calls `setFocusEnabled` — Task 9's first two checkboxes are therefore already satisfied and only
+      need VERIFYING there; its `controlTree` read-back work is untouched
 
 ### Task 9: Wire the ControlServer arms and the tree read-back
 

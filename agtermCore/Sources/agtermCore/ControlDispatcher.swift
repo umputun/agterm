@@ -22,7 +22,10 @@ public protocol ControlActions {
     func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse
     func moveSessions(_ targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse
     func moveWorkspace(_ target: String?, window: String?, direction: ReorderDirection) -> ControlResponse
-    func focusWorkspace(_ target: String?, window: String?, mode: String?) -> ControlResponse
+    func focusWorkspace(_ target: String?, window: String?, mode: WorkspaceFocusMode) -> ControlResponse
+    /// Turn a window's workspace focus filter on/off WITHOUT touching the marked set. Window-scoped, so
+    /// it takes no workspace target — the host resolves the store from `window` (frontmost when nil).
+    func setWorkspaceFilter(window: String?, mode: ControlToggleMode) -> ControlResponse
     func setWorkspaceExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse
     func setSessionFlag(_ target: String?, window: String?, mode: String?) -> ControlResponse
     func markSessionSeen(_ target: String?, window: String?) -> ControlResponse
@@ -157,7 +160,7 @@ public struct ControlDispatcher {
                 .sessionText:
             return await dispatchSessionSurfaceCommand(request)
         case .workspaceNew, .workspaceSelect, .workspaceRename, .workspaceDelete,
-                .workspaceMove, .workspaceFocus, .workspaceCollapse, .workspaceExpand:
+                .workspaceMove, .workspaceFocus, .workspaceFilter, .workspaceCollapse, .workspaceExpand:
             return dispatchWorkspaceCommand(request)
         case .quick, .fontInc, .fontDec, .fontReset, .keymapReload,
                 .configReload, .notify, .themeSet, .themeList, .sidebar, .sidebarMode, .sidebarExpand,
@@ -170,9 +173,6 @@ public struct ControlDispatcher {
             return await dispatchWindowCommand(request)
         case .dashboard:
             return dispatchDashboard(request)
-        case .workspaceFilter:
-            // Not dispatcher-owned yet: returns nil so it falls through to the host's own switch.
-            return nil
         case .debugAppearance:
             // UI-test-only seam handled app-side in `ControlServer` (needs AppKit + `ContentView.isUITestLaunch`).
             return nil
@@ -444,7 +444,22 @@ public struct ControlDispatcher {
             }
             return actions.moveWorkspace(request.target, window: request.args?.window, direction: direction)
         case .workspaceFocus:
-            return actions.focusWorkspace(request.target, window: request.args?.window, mode: request.args?.mode)
+            // parsed + rejected BEFORE the host runs, so an unknown mode can never half-apply; the
+            // accepted list is derived from `allCases`, so it cannot go stale when a mode is added.
+            let raw = request.args?.mode ?? WorkspaceFocusMode.toggle.rawValue
+            guard let mode = WorkspaceFocusMode(rawValue: raw) else {
+                return ControlResponse(ok: false,
+                                       error: "invalid focus mode: \(raw) (\(WorkspaceFocusMode.validNamesList))")
+            }
+            return actions.focusWorkspace(request.target, window: request.args?.window, mode: mode)
+        case .workspaceFilter:
+            // window-scoped: no workspace target, only the flag. Same on/off/toggle vocabulary and shared
+            // parser as `sidebar`, defaulting to `toggle`.
+            guard let mode = ControlToggleMode.parse(request.args?.mode) else {
+                return ControlResponse(ok: false,
+                                       error: "invalid workspace filter mode: \(request.args?.mode ?? "toggle")")
+            }
+            return actions.setWorkspaceFilter(window: request.args?.window, mode: mode)
         case .workspaceCollapse:
             return actions.setWorkspaceExpansion(request.target, window: request.args?.window, expanded: false)
         case .workspaceExpand:

@@ -552,20 +552,6 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.workspaceMove(target: "workspace", window: "win", .bottom)])
     }
 
-    @Test func workspaceFocusRoutesModeForHostSideValidation() async {
-        let actions = MockControlActions()
-        let dispatcher = ControlDispatcher(actions: actions)
-
-        let focused = await dispatcher.dispatch(ControlRequest(
-            cmd: .workspaceFocus,
-            target: "workspace",
-            args: ControlArgs(mode: "on", window: "win")
-        ))
-
-        #expect(focused == ControlResponse(ok: true))
-        #expect(actions.calls == [.workspaceFocus(target: "workspace", window: "win", "on")])
-    }
-
     @Test func workspaceCollapseAndExpandRouteExpandedFlag() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

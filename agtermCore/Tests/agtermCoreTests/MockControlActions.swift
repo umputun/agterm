@@ -26,7 +26,8 @@ final class MockControlActions: ControlActions {
         case sessionMove(target: String?, window: String?, ControlSessionMove)
         case sessionMoveBatch(targets: [String], window: String?, ControlSessionMove)
         case workspaceMove(target: String?, window: String?, ReorderDirection)
-        case workspaceFocus(target: String?, window: String?, String?)
+        case workspaceFocus(target: String?, window: String?, WorkspaceFocusMode)
+        case workspaceFilter(window: String?, ControlToggleMode)
         case workspaceExpansion(target: String?, window: String?, expanded: Bool)
         case sessionFlag(target: String?, window: String?, String?)
         case markSessionSeen(target: String?, window: String?)
@@ -81,6 +82,7 @@ final class MockControlActions: ControlActions {
     var nextEventsReadResponse = ControlResponse(ok: false, error: "events.read not stubbed")
     var nextSessionNewResponse = ControlResponse(ok: true)
     var nextSessionDuplicateResponse = ControlResponse(ok: true)
+    var nextWorkspaceFilterResponse = ControlResponse(ok: true)
     var nextSidebarVisibilityResponse = ControlResponse(ok: true)
     var nextSidebarViewModeResponse = ControlResponse(ok: true)
     var nextExpandResponse = ControlResponse(ok: true)
@@ -206,9 +208,14 @@ final class MockControlActions: ControlActions {
         return ControlResponse(ok: true)
     }
 
-    func focusWorkspace(_ target: String?, window: String?, mode: String?) -> ControlResponse {
+    func focusWorkspace(_ target: String?, window: String?, mode: WorkspaceFocusMode) -> ControlResponse {
         calls.append(.workspaceFocus(target: target, window: window, mode))
         return ControlResponse(ok: true)
+    }
+
+    func setWorkspaceFilter(window: String?, mode: ControlToggleMode) -> ControlResponse {
+        calls.append(.workspaceFilter(window: window, mode))
+        return nextWorkspaceFilterResponse
     }
 
     func setWorkspaceExpansion(_ target: String?, window: String?, expanded: Bool) -> ControlResponse {
