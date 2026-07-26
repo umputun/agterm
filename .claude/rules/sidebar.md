@@ -82,13 +82,15 @@ paths:
   Covered by `SidebarUITests.testClickWorkspaceRowTogglesExpansion`.
 - **A session ROW click reveals a blocked session's pane-tagged pane.**
   `Coordinator.outlineViewSelectionDidChange` selects the clicked session (`selectSession`) then — async,
-  after the selection + the sidebar's own focus-restore settle — calls `AppActions.revealActiveBlockedPane()`,
+  after the selection + the sidebar's own focus-restore settle — calls `AppActions.revealActiveBlockedPane(captured:)`
+  with the pre-reset indicator `selectSession` returned,
   so clicking a session whose agent blocked in its split (right) or scratch pane lands you on THAT pane,
   not the plain focused pane.
   It is a no-op (plain `focusActiveSession`) for an IDLE or ACTIVE session, so ordinary clicks and
   informational working-state tags are unaffected — the reveal never dismisses a merely-shown scratch
   (a blocked/completed nil-tagged status is treated as `left`/main).
-  This matches attention-nav, plain session nav, the command palettes, and idle auto-follow,
+  This matches attention-nav, plain session nav, the command palettes, a Dock-menu session row, the title-bar
+  bell popover, and idle auto-follow,
   which all route through the same helper (see the Menu/actions + Notifications rules).
   Covered by `PaneAwareStatusUITests.testSidebarClickRevealsBlockedSplitPane`.
 - Accessibility identifiers `session-row`, `workspace-row`, `edit-field`,

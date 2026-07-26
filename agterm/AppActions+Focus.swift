@@ -43,7 +43,8 @@ extension AppActions {
     /// Reveal and focus the active session's blocked pane, reading its agent-status pane tag so navigation
     /// lands on the pane actually waiting for input rather than the session's plain focused pane. Called on
     /// every user-initiated selection — the auto-follow jump, attention navigation (⌃⌥↑/↓), plain session
-    /// nav (⌥⌘↑/↓/first/last), the ⌃P / attention command palette, and a sidebar row click — so however you
+    /// nav (⌥⌘↑/↓/first/last), the ⌃P / attention command palette, a sidebar row click, a title-bar bell
+    /// popover row, and a Dock-menu session row — so however you
     /// reach a blocked session you land on its waiting pane; it is a no-op (plain `focusActiveSession`) for an
     /// idle or active session, so ordinary selections and a working agent's informational pane tag do not
     /// change the user's pane selection. `.right` — only WHEN the split surface exists
@@ -153,6 +154,13 @@ extension AppActions {
         // reason: while it's up its key-catcher owns first responder, and a NON-member deck surface behind it
         // is not view-only, so grabbing first responder here would leak keystrokes into a hidden terminal.
         if dashboardActive(for: session) { return }
+        // the inline rename field and an open palette own the keyboard, exactly as in `focusActiveSession`,
+        // which re-checks both on every one of its retries. this loop needs them for the same reason: the
+        // `.left`/nil reveal routes here (a plain `session status blocked` with no `--pane` lands in that
+        // branch), so a sidebar row click followed within the ~360ms retry window by ⌘R or a palette open
+        // would otherwise pull first responder off the field and type the name into the terminal.
+        if renamePending { return }
+        if palette?.mode != nil { return }
         // the quick terminal is a window-level cover above the session; while it's up it owns focus, so
         // don't move first responder to a pane behind it (its own hide restores the session). The caller
         // has already set `splitFocused`, so the right pane shows once the quick terminal is dismissed.

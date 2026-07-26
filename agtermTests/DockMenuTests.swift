@@ -62,7 +62,12 @@ final class DockMenuTests: XCTestCase {
         try await super.tearDown()
     }
 
-    func testHostProcessStartsWithIsolatedStateSocketAndShellFreeScene() throws {
+    // Covers the two legs that keep a hosted run off the user's real environment: the state dir and the
+    // control-socket path Xcode expands into the launch environment. It deliberately does NOT claim to
+    // cover the shell-free scene — nothing here observes the `isHostedUnitTest` branch being CONSUMED, and
+    // the only obvious probe (`AppDelegate.controlServer == nil`) rides the scene's async `.task`, so it
+    // would pass even with the branch deleted. Renaming rather than adding a assertion that cannot fail.
+    func testHostProcessStartsWithIsolatedStateAndSocket() throws {
         let environment = ProcessInfo.processInfo.environment
         let statePath = try XCTUnwrap(environment["AGTERM_STATE_DIR"])
         let socketPath = try XCTUnwrap(environment["AGTERM_CONTROL_SOCKET"])
@@ -124,6 +129,13 @@ final class DockMenuTests: XCTestCase {
         XCTAssertFalse(try item("Quick Terminal", in: menu).isEnabled)
         XCTAssertTrue(try item("Dashboard", in: menu).isEnabled,
                       "an open dashboard remains enabled so the Dock action can close it")
+
+        // and the enabled item must actually CLOSE it. This is the `dashboardWasOpen == true` half of the
+        // staleness guard (`dashboard.isOpen == dashboardWasOpen`), which nothing else invokes: every other
+        // dashboard case builds the menu while it is closed. Tightening that guard to `!dashboard.isOpen`
+        // would make the item inert here with the rest of the suite still green.
+        try invokeWithNilSender(try item("Dashboard", in: menu))
+        XCTAssertFalse(dashboard.isOpen, "a Dashboard item built while the dashboard was open should close it")
     }
 
     func testRecentSessionsUseMRUOrderExcludeCurrentAndShareSwitcherCap() throws {

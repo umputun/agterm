@@ -103,6 +103,48 @@ final class PaneAwareStatusUITests: ControlAPITestCase {
                       "previous-attention should reveal the selected session's tagged right pane")
     }
 
+    // The INVERSE of the test above, and the reason plain nav and attention nav must not share a fallback:
+    // a PLAIN ⌥⌘↓ that resolves to the session already selected must leave the user's pane alone. In a
+    // one-element filtered set (flagged mode, a single flag) `next` wraps back onto the current session, so
+    // `navigateSession` re-selects it and — since `selectSession` does not short-circuit a same-target select
+    // — still hands back an indicator. Revealing on that would clear `splitFocused` and drop the user onto
+    // the primary pane on a keystroke that moved nothing.
+    func testPlainNavNoOpKeepsTheFocusedSplitPane() throws {
+        let sessionA = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sessionA)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "split on should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the session should report split:true")
+
+        let leftTag = "PNOL-\(UUID().uuidString.prefix(8))"
+        let rightTag = "PNOR-\(UUID().uuidString.prefix(8))"
+        try seedPaneMarker(target: sessionA, pane: "left", tag: leftTag)
+        try seedPaneMarker(target: sessionA, pane: "right", tag: rightTag)
+
+        // the user is working in the split (right) pane while the agent blocks in the MAIN pane. An UNTAGGED
+        // block is treated as `left`, which is what a plain `agtermctl session status blocked` sends, and a
+        // left-scoped block is not cleared by typing in the right pane, so the state persists into the nav.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(sessionA)","args":{"pane":"right"}}"#)["ok"] as? Bool,
+                       true, "focusing the right pane should succeed")
+        XCTAssertTrue(try pollOnScreen(target: sessionA, contains: "\(rightTag)-42"),
+                      "the split pane should be the on-screen surface before nav")
+        try blockPane("blocked", pane: nil, target: sessionA)
+
+        // narrow the navigable set to this one session so ⌥⌘↓ wraps onto it instead of moving elsewhere.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.flag","target":"\#(sessionA)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "flagging the session should succeed")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"sidebar.mode","args":{"mode":"flagged"}}"#)["ok"] as? Bool,
+                       true, "switching to flagged mode should succeed")
+
+        app.typeKey(.downArrow, modifierFlags: [.command, .option])
+
+        XCTAssertTrue(try pollActiveNode(equals: sessionA, timeout: 12),
+                      "the wrapping step should keep the same session selected")
+        XCTAssertFalse(try pollOnScreen(target: sessionA, contains: "\(leftTag)-42", timeout: 3),
+                       "a plain nav that moved nothing must not pull the on-screen surface onto the primary pane")
+        XCTAssertTrue(try pollOnScreen(target: sessionA, contains: "\(rightTag)-42"),
+                      "the split pane the user was working in should still be the on-screen surface")
+    }
+
     // a `right`-tagged block on a HIDDEN split: nav reveals it by swapping which pane shows MAXIMIZED (the
     // split stays hidden — split:false — but the right pane is now the on-screen one), not by re-showing the
     // two panes side-by-side.
