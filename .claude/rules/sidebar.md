@@ -103,7 +103,7 @@ paths:
   the current visible session order so batch actions are deterministic in tree and flagged modes.
   AppKit Shift-click and Command-click update the outline selection; `outlineViewSelectionDidChange`
   mirrors it through `AppStore.setSidebarSelection(_:)`. `allowsEmptySelection` stays TRUE because a
-  focused workspace can intentionally hide the active session and `syncSelection` must be able to
+  focus filter can intentionally hide the active session and `syncSelection` must be able to
   `deselectAll(nil)` in that state.
   Right-click follows standard Mac list behavior: inside the current multi-selection it keeps the whole
   selection for the context menu, outside it narrows to the clicked row. Context menu target resolution
@@ -166,27 +166,87 @@ paths:
   The filled variant is tree-mode only — the flat flagged view shows the unfilled base icon,
   so a split session still gets the split-rectangle to stay distinguishable;
   only the FILLED flag variant is suppressed there (every row is flagged).
-- **Focus filter (`AppStore.focusedWorkspaceID`).**
-  A per-workspace toggle collapses the `.tree` to a single root: `visibleWorkspaces` is the focused workspace
-  when `focusedWorkspaceID` is set AND still present, else ALL workspaces — the source of truth the tree
-  filters on (the data source maps `store.visibleWorkspaces` in `.tree`).
+- **Focus filter — a marked SET plus an on/off flag (`AppStore.focusedWorkspaceIDs` + `focusEnabled`).**
+  Two stored fields on the class replace the old single `focusedWorkspaceID: UUID?`:
+  `focusedWorkspaceIDs: Set<UUID>` is the marked set, `focusEnabled: Bool` is whether the filter applies —
+  so the set survives being switched off and peeking at the whole tree costs one flip.
+  Everything else lives in `AppStore+Focus.swift`.
+  `visibleWorkspaces` is `guard focusEnabled else { return workspaces }` then the members in TREE order —
+  the source of truth the tree filters on (the data source maps `store.visibleWorkspaces` in `.tree`).
+  Its empty-result fallback to the full tree is defensive belt-and-braces, not a reachable path (see the
+  invariant below).
   Focus is ORTHOGONAL to flagged: the flat flagged view ignores focus (it always shows the full cross-workspace
   set).
-  `setFocusedWorkspace(_:)` (delta-guarded so callers stay idempotent, nil unfocuses,
-  saves) is driven by the workspace-row context-menu Focus/Unfocus → `AppActions.focusWorkspace(_:)`,
-  the bottom-bar `focus-pill` ("<name> ✕" — the focused workspace name with no "Focused:" prefix,
-  shown only while focused, ✕ unfocuses), `AppActions.focusActiveWorkspace()` (targets `currentWorkspaceID`,
-  analogous to `deleteActiveWorkspace`) wired to `BuiltinAction.focusWorkspace` + a View-menu/palette
-  "Focus Workspace", and `AppActions.clearFocus()` (a plain menu/palette "Clear Focus",
-  NOT a `BuiltinAction`).
-  `removeWorkspace` clears focus when the removed workspace was the focused one.
+  Three delta-guarded mutators (no write, no `save()`, when nothing changes, so every caller stays idempotent):
+  - `setFocusedWorkspace(_ id: UUID?)` REPLACES the set with `{id}` and enables; nil clears and disables.
+    This is the unchanged single-workspace zoom — the row menu's Focus/Unfocus, `AppActions.focusWorkspace(_:)`,
+    `focusActiveWorkspace()` (targets `currentWorkspaceID`, wired to `BuiltinAction.focusWorkspace` +
+    a View-menu/palette "Focus Workspace"), `AppActions.clearFocus()` (a plain menu/palette "Clear Focus",
+    NOT a `BuiltinAction`), and `workspace.focus on`.
+  - `setFocusMembership(_ id: UUID, member: Bool)` marks or unmarks ONE workspace, leaving the other members
+    alone — the row menu's "Add to Focus"/"Remove from Focus" and the View-menu "Add Workspace to Focus".
+  - `setFocusEnabled(_ on: Bool)` flips the flag WITHOUT touching the set — the bottom-bar toggle,
+    the View-menu "Toggle Workspace Filter", `BuiltinAction.toggleWorkspaceFilter`, and `workspace.filter`.
+- **Marking MARKS ONLY — an add never switches the filter on.**
+  `setFocusMembership`'s `wantEnabled` is `wantIDs.isEmpty ? false : focusEnabled`, i.e. the flag is carried
+  through untouched while the set is non-empty.
+  This is load-bearing, not a detail: an add that enabled would collapse the tree onto the first marked
+  workspace, so the rows of every workspace still to be marked are gone and each extra member costs a toggle
+  off and back — three toggles to build a three-workspace set, exactly the friction the set exists to remove.
+  So a set is built member by member with the whole tree on screen and applied ONCE.
+  Removal still disables as the set empties, and `setFocusedWorkspace` (the REPLACING Focus) still enables
+  immediately, so the single-workspace zoom is unchanged.
+  Pinned by `AppStoreFocusTests.addingToTheSetNeverTurnsTheFilterOn` (both polarities).
+- **`enabled + empty` is UNREPRESENTABLE, and three guards keep it that way.**
+  The documented control read-back contract is "a workspace is visible iff `focused && workspaceFilter`";
+  an enabled-but-empty filter would make it lie (`workspaceFilter` true while no workspace reports `focused`,
+  yet the whole tree on screen).
+  The guards: (1) `setFocusEnabled(true)` is a no-op on an empty set, matching the bottom-bar toggle, which
+  is disabled in exactly that state, so the GUI and the control path agree;
+  (2) `setFocusMembership` disables as the set empties;
+  (3) `restoreFocus(from:)` PRUNES member ids absent from the restored tree and disables when the pruned set
+  comes back empty, so an all-stale set collapses instead of restoring as an invisible filter.
+  Covered by `setFocusEnabledRefusesAnEmptySet`, `restorePrunesAnAllStaleSetToEmptyAndDisabled`, and
+  `workspaceFilterOnAnEmptySetLeavesTheFilterOffThroughTheControlPath` (driven through
+  `ControlDispatcher.dispatch` so the mode parse and the refusal are both exercised, not the mutator alone).
+- **Two focus lifecycle rules.**
+  A cross-set select DISABLES the filter but KEEPS the set (`disableFocusIfSelectionOutsideSet`, see the
+  contract bullet below) — the tree reveals exactly as the old auto-unfocus did, but a hand-curated working
+  set is not destroyed by a passive notification click, and re-enabling is one click.
+  Creating a workspace while the filter is ON ADDS it to the set (`addWorkspace`/`ensureWorkspace`'s
+  `revealNewWorkspace: Bool = true` gates the insert), preserving the "a new workspace is immediately visible"
+  contract WITHOUT blowing the filtered view open; mutating the set is acceptable here because the user
+  initiated the creation, unlike the passive reveal above.
+  `removeWorkspace` and the `AppStore+PendingClose` soft-remove path prune the id and disable when the set
+  empties.
+- **Membership is drawn on the row, and the bottom-bar toggle replaced the pill.**
+  A marked workspace row draws the cached `focusedWorkspaceIcon` (`square.grid.2x2.fill`) instead of the
+  outline `workspaceIcon` — the same filled-SF-Symbol idiom as the flagged session rows, so it is a
+  same-size swap and inherently layout-shift-free.
+  The choice is on MEMBERSHIP alone, independent of `focusEnabled`, so a marked row reads filled while the
+  filter is off — which is what makes a set visible while it is being built.
+  Membership rides `RowContent.focusMember` (Equatable, a SEPARATE field from the session-only `flagged`),
+  so marking/unmarking re-renders just that row via `reloadItem`.
+  The single-workspace `focus-pill` is DELETED: with a set it would have to render "N workspaces",
+  duplicating what the tree already shows.
+  The bottom-bar `focus-filter-toggle` replaces it and is both the indicator and the control — a 2-state grid
+  glyph (filled while the filter applies), `.disabled` + `.opacity(0.35)` on an empty set (the explicit
+  `chromeText` foregroundStyle defeats SwiftUI's default disabled dimming, so it is muted by hand — the
+  flagged toggle's rule), and `accessibilityValue` `"on"`/`"off"`, which is the only accessibility-observable
+  read of the filter state now that the pill is gone.
+  It is the only affordance that also works while the filter is OFF.
+  Host-free-gated by `InterfaceElement.focusFilter` ("Workspace filter"), so Settings ▸ Interface can hide it.
 - **Scoped session navigation (the VISIBLE/FILTERED set).**
   Session navigation operates over `AppStore.navigableSessions`, NOT the whole tree:
   `sidebarMode == .flagged ? flaggedSessions : visibleWorkspaces.flatMap(\.sessions)` — i.e. the flagged
-  set in `.flagged` mode, the focused workspace's sessions when a workspace is focused (tree mode),
+  set in `.flagged` mode, the MARKED workspaces' sessions while the focus filter is on (tree mode),
   else ALL sessions.
-  Computed LIVE (`visibleWorkspaces` already collapses to the focused workspace or the full tree,
-  including the stale-focus-id fallback), so clearing the flag/focus naturally restores the full set.
+  Generalizing `visibleWorkspaces` to the set is what made the multi-workspace case free here: nav walks
+  every marked workspace in tree order and skips the unmarked ones, with no count term anywhere
+  (`AppStoreNavigationTests.navigateScopesToEveryMemberOfAMultiWorkspaceSet` and its attention-nav twin
+  pin a NON-contiguous 2-of-3 set).
+  Computed LIVE (`visibleWorkspaces` already collapses to the marked set or the full tree), so clearing the
+  flag or switching the filter off naturally restores the full set.
   `navigateSession(_:)` flattens `navigableSessions` for EVERY direction — next/prev/first/last AND attention-nav
   (next-attention/prev-attention scope to the filtered set too) — keeping the same "no/invalid selection
   → first of the filtered list", "next/prev WRAP within the filtered set (like attention-nav)" semantics
@@ -195,23 +255,27 @@ paths:
   the ⌥⌘↑/↓ + ⌃⌥↑/↓ menu/palette nav, the Ctrl-Tab MRU switcher (`SessionSwitcher.begin()` scopes its
   candidate set to `store.navigableSessions.map(\.id)`; the MRU ORDER still comes from `sessionRecency`),
   AND the ⌃P fuzzy session palette (`AppActions.paletteSessions()` lists `store.navigableSessions`,
-  so the searchable set matches the visible sidebar — in a focused workspace ⌃P shows only that workspace's
-  sessions, in flagged mode only the flagged ones).
+  so the searchable set matches the visible sidebar — with the filter on ⌃P shows only the marked
+  workspaces' sessions, in flagged mode only the flagged ones).
   This SUPERSEDES the earlier "global nav reveals its target" behavior.
-- **Focus×selection auto-unfocus contract (load-bearing, now the cross-set safety net).** Because nav
+- **Focus×selection contract (load-bearing, the cross-set safety net).** Because nav
   is scoped, its targets are ALWAYS in-set, so nav never crosses the focus boundary.
-  `selectSession` still AUTO-CLEARS focus when the newly selected session is NOT in the focused workspace
-  (`workspace(forSession:)?.id != focusedWorkspaceID` → `focusedWorkspaceID = nil`) — but this now only
-  fires for an EXPLICIT cross-set select: `session.select <id>` of a hidden session,
+  `selectSession` calls `disableFocusIfSelectionOutsideSet` (renamed from `autoUnfocusIfOutsideFocus`),
+  which switches the filter OFF — KEEPING the marked set — when the newly selected session's workspace is
+  not a member (`focusedWorkspaceIDs.contains(owner)` fails → `focusEnabled = false`).
+  Keeping the set is the deliberate change from the old clear-everything behavior: the visual result is the
+  same (the tree reveals) but a hand-curated working set is not destroyed by a passive reveal, and one flip
+  of the bottom-bar toggle brings it back.
+  It fires only for an EXPLICIT cross-set select: `session.select <id>` of a hidden session,
   a notification reveal, or a move/close that reselects elsewhere.
   This keeps the active session inside the visible set for those cases, which also keeps `currentWorkspaceID`
   (new-session placement) consistent with NO special-case.
-  No-op when unfocused or nothing selected.
-  The contract is ONE-DIRECTIONAL by design: an explicit cross-set select auto-unfocuses (reveal),
-  but focusing a workspace that does NOT contain the active session deliberately does NOT reselect or
+  No-op when the filter is off, when nothing is selected, or when the selection sits in a member workspace.
+  The contract is ONE-DIRECTIONAL by design: an explicit cross-set select disables the filter (reveal),
+  but marking a workspace that does NOT contain the active session deliberately does NOT reselect or
   switch the active terminal — focus is a pure view filter, never a terminal switch,
   so the active session's terminal keeps rendering while the sidebar shows no selection until the next
-  select (the focus pill signals the state, and it self-heals on the next `selectSession`/`addSession`).
+  select (the bottom-bar toggle signals the state, and it self-heals on the next `selectSession`/`addSession`).
   This stranded-selection state is intentional, not a bug.
 - **Mode/focus-aware reconcile signal.**
   The reconcile `TreeShape` is computed from the MODE-selected/filtered roots:
@@ -219,8 +283,12 @@ paths:
   in `.flagged` it is a SINGLE flat group keyed on a stable pseudo-id (`flaggedShapeID`,
   so within flagged mode only a change to the flagged list — not a fresh per-call id — rebuilds).
   A `lastMode` flip swaps the whole data source and forces a `rebuildAndReload` regardless of the shape
-  diff; `sidebarMode`, `focusedWorkspaceID`, and each session's `flagged` are folded into the `updateNSView`
+  diff; `sidebarMode`, BOTH focus fields, and each session's `flagged` are folded into the `updateNSView`
   dependency read so a mode/focus/flag change is seen.
+  The focus dependency is DUAL and both halves are load-bearing: `updateNSView` reads
+  `store.focusedWorkspaceIDs` (a mark/unmark must redraw the row icon) AND `store.focusEnabled` (a filter
+  flip must re-shape the tree).
+  With only one read the other change is invisible to `@Observable` and the sidebar does not redraw.
   **Task 9 expansion-restore fix:** `NSOutlineView` discards the expansion state of items DROPPED from
   the data source during a flagged-mode reload, so expanded workspace ids are tracked independently in
   `expandedWorkspaceIDs` via the `outlineViewItemDidExpand`/`outlineViewItemDidCollapse` delegate callbacks
@@ -246,12 +314,19 @@ paths:
   (see the Control API catalog).
 - **Persistence (per-window, no version bump).**
   `Session.flagged` persists via `SessionSnapshot.flagged: Bool?` (decode → `false`),
-  `sidebarMode` via `Snapshot.sidebarMode: SidebarMode?` (→ `.tree`), `focusedWorkspaceID` via `Snapshot.focusedWorkspaceID: UUID?`
-  (naturally Optional → nil), and each workspace's expand/collapse state via `WorkspaceSnapshot.collapsed: Bool?`
-  (decode → `false` → expanded).
-  All four Optional fields, so legacy JSON with none of the keys decodes to the unflagged / `.tree`
-  / unfocused / expanded defaults without throwing (the load-fresh-on-decode-failure contract) — no `Snapshot`
+  `sidebarMode` via `Snapshot.sidebarMode: SidebarMode?` (→ `.tree`), the focus filter via
+  `Snapshot.focusedWorkspaceIDs: [UUID]?` (→ `[]`) + `Snapshot.focusEnabled: Bool?` (→ `false`), and each
+  workspace's expand/collapse state via `WorkspaceSnapshot.collapsed: Bool?` (decode → `false` → expanded).
+  All Optional fields, so legacy JSON with none of the keys decodes to the unflagged / `.tree`
+  / unfiltered / expanded defaults without throwing (the load-fresh-on-decode-failure contract) — no `Snapshot`
   version bump.
+  `Snapshot.focusedWorkspaceID: UUID?` survives as a DECODE-ONLY legacy key, dropped from the memberwise init
+  and never populated, so the synthesized `encodeIfPresent` omits it automatically: a snapshot written by an
+  older release migrates inside the existing custom `init(from:)` to `[legacy]` with `focusEnabled = true`
+  ONLY when the new `focusedWorkspaceIDs` key is absent, so the set always wins.
+  The set is written in TREE order rather than `Set` order, so the on-disk list does not follow the hash seed.
+  `AppStore.restore(from:)` then calls `restoreFocus(from:)` once the tree is rebuilt, which intersects the
+  restored ids with the present workspaces — the third `enabled + empty` guard above.
   `collapsed` is stored as the INVERSE of `Workspace.isExpanded` and only WRITTEN when collapsed (`true`);
   an expanded workspace omits it, so an all-expanded tree serializes byte-identically to a legacy snapshot,
   and "lack of the field = expanded" holds.
@@ -263,8 +338,9 @@ paths:
   (a PER-workspace mutator, so toggling one row never rewrites another's saved state), and `expandAll`/`collapseOthers`
   persist the whole tree once via `setWorkspacesExpanded(_:)`.
   A `suppressExpansionPersist` flag is set around every PROGRAMMATIC `expandItem`/`collapseItem` — the launch/`rebuildAndReload`
-  re-apply, the `syncSelection` reveal, and the focused-workspace force-expand — so those update the VISUAL
-  `expandedWorkspaceIDs` (needed for the flagged-mode round-trip) WITHOUT touching the persisted `isExpanded`.
+  re-apply, the `syncSelection` reveal, and the marked-set force-expand
+  (`focusEnabled ? focusedWorkspaceIDs : []`) — so those update the VISUAL `expandedWorkspaceIDs`
+  (needed for the flagged-mode round-trip) WITHOUT touching the persisted `isExpanded`.
   This is what makes a deliberate collapse durable: revealing a session inside a collapsed workspace (nav,
   notification click, or the launch-time active-session reveal) or focusing it shows the row but does NOT
   un-collapse it on disk — the collapse survives until the user expands the row themselves.

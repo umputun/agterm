@@ -59,8 +59,10 @@ paths:
 - **Menu split: View vs Navigate.**
   The menu bar has TWO custom menus (besides File/Help).
   **View** (`CommandGroup(after: .toolbar)`) holds appearance + what-is-shown:
-  font/theme, sidebar show-hide + expand/collapse, the flagged-view + Flag/Clear-Flagged + Focus Workspace
-  items, the surface toggles (Split/Scratch/Find/Quick Terminal), and Toggle Full Screen
+  font/theme, sidebar show-hide + expand/collapse, the flagged-view + Flag/Clear-Flagged items, the four
+  workspace-focus items (Focus Workspace and Toggle Workspace Filter, both `BuiltinAction`-backed and so
+  rebindable; Add Workspace to Focus and Clear Focus, plain keyless items),
+  the surface toggles (Split/Scratch/Find/Quick Terminal), and Toggle Full Screen
   (`toggle_fullscreen`, ⌃⌘F → `AppActions.toggleFullscreen()`, native `NSWindow.toggleFullScreen` on the
   key window; the `window.fullscreen` control command is a fourth driver of native full screen, via
   `WindowRegistry.fullscreen` with id resolution (not through `toggleFullscreen()`) — see control-api / windows).
@@ -245,14 +247,18 @@ paths:
 - **The FOCUS filter deliberately does NOT scope the close-reselection MRU — do not "fix" this by reaching for
   `navigableSessions`.**
   It is the obvious-looking choice (one set, already the definition of "what the user is navigating within") and
-  it is WRONG here, because focus is a property of the TREE, not of the selection: `setFocusedWorkspace` never
-  moves the active session, so focus can sit on a workspace the closing session doesn't even belong to.
+  it is WRONG here, because focus is a property of the TREE, not of the selection: neither `setFocusedWorkspace`
+  nor `setFocusMembership` ever moves the active session, so the marked set can hold workspaces the closing
+  session doesn't even belong to.
+  Generalizing focus from one id to a SET does not soften this — it widens it, since the set can now be several
+  workspaces, none of them the closing session's.
   Scoping by `navigableSessions` (which folds focus in) breaks two reachable states: closing a session while
-  ANOTHER workspace is focused jumps the user INTO that focused workspace, and closing the focused workspace's LAST
-  session widens into an EMPTY set (`navigableSessions` has collapsed to the workspace just emptied) and falls
-  through to the positional first-workspace jump.
-  Landing outside the focused workspace needs no scoping defense anyway: every caller already runs
-  `autoUnfocusIfOutsideFocus` on the pick, which drops the filter to reveal the target.
+  ANOTHER workspace is marked jumps the user INTO the marked set, and closing the LAST session of the only
+  marked workspace widens into an EMPTY set (`navigableSessions` has collapsed to the workspace just emptied)
+  and falls through to the positional first-workspace jump.
+  Landing outside the marked set needs no scoping defense anyway: every caller already runs
+  `disableFocusIfSelectionOutsideSet` on the pick, which switches the filter off (KEEPING the set) to reveal
+  the target.
   Both cases are pinned by `closeActiveSessionWhileAnotherWorkspaceIsFocusedStaysInTheClosingWorkspace` and
   `closeTheFocusedWorkspacesLastSessionPicksTheRecentSurvivorElsewhere`.
   Only an empty MRU after that (a fresh restore before anything was activated, or the only recent entry was the one

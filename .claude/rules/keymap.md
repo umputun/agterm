@@ -35,7 +35,8 @@ paths:
   Pure types: `Modifier`/`Chord`/`Keybind`/`parseKeybind`/`keybindConflicts`/`reservedMonitorChords`
   (`Keybind.swift`), `KeybindMatcher` (leader state machine), `CustomCommand`/`CommandContext` (the `{AGT_X}`
   token table — single source of truth for both `{AGT_X}` expansion and the `$AGT_X` env),
-  `BuiltinAction` (the 36 rebindable actions + `defaultChord`), `Keymap`/`parseKeymap` (`Keymap.swift`),
+  `BuiltinAction` (the 42 rebindable actions + `defaultChord`, the count pinned by
+  `BuiltinActionTests.swift`), `Keymap`/`parseKeymap` (`Keymap.swift`),
   `ConfigPaths` (the path resolver).
   All unit-tested under `agtermCoreTests`.
 - **MENU-driven built-in override vs MONITOR-driven custom commands — two different mechanisms.** Built-ins

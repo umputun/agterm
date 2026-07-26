@@ -230,6 +230,65 @@ struct AppStoreNavigationTests {
         #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled) // never auto-unfocuses — every target was in-set
     }
 
+    /// Builds a three-workspace tree (work: a, b; personal: c, d; archive: e, f) so the flattened order is
+    /// [a, b, c, d, e, f] — enough to mark a NON-CONTIGUOUS pair and prove nav walks both and skips the gap.
+    static func makeThreeWorkspaceNavTree() -> (store: AppStore, workspaces: [UUID], sessions: [UUID]) {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        let archive = store.addWorkspace(name: "archive")
+        let sessions = [
+            store.addSession(toWorkspace: work.id, cwd: "/a")!.id, store.addSession(toWorkspace: work.id, cwd: "/b")!.id,
+            store.addSession(toWorkspace: personal.id, cwd: "/c")!.id, store.addSession(toWorkspace: personal.id, cwd: "/d")!.id,
+            store.addSession(toWorkspace: archive.id, cwd: "/e")!.id, store.addSession(toWorkspace: archive.id, cwd: "/f")!.id,
+        ]
+        return (store, [work.id, personal.id, archive.id], sessions)
+    }
+
+    @Test func navigateScopesToEveryMemberOfAMultiWorkspaceSet() {
+        let (store, workspaces, ids) = Self.makeThreeWorkspaceNavTree() // work={a,b}, personal={c,d}, archive={e,f}
+        store.setFocusMembership(workspaces[0], member: true) // work
+        store.setFocusMembership(workspaces[2], member: true) // archive — the UNMARKED personal sits between them
+        store.setFocusEnabled(true)
+        #expect(store.navigableSessions.map(\.id) == [ids[0], ids[1], ids[4], ids[5]]) // personal's c and d are out
+        store.selectSession(ids[0])
+        store.navigateSession(.next)
+        #expect(store.selectedSessionID == ids[1]) // a -> b, within the first marked workspace
+        store.navigateSession(.next)
+        #expect(store.selectedSessionID == ids[4]) // b -> e: crosses INTO the second marked workspace, skipping c and d
+        store.navigateSession(.next)
+        #expect(store.selectedSessionID == ids[5]) // e -> f, within the second marked workspace
+        store.navigateSession(.next)
+        #expect(store.selectedSessionID == ids[0]) // f is the in-set last: wraps to a, never reaching the unmarked workspace
+        store.navigateSession(.previous)
+        #expect(store.selectedSessionID == ids[5]) // and backward over the same gap
+        store.navigateSession(.previous)
+        #expect(store.selectedSessionID == ids[4]) // f -> e, still skipping d
+        store.navigateSession(.last)
+        #expect(store.selectedSessionID == ids[5]) // .last is the marked set's last, not the tree's
+        store.navigateSession(.first)
+        #expect(store.selectedSessionID == ids[0]) // .first is the marked set's first
+        // every target was in-set, so the filter never trips disableFocusIfSelectionOutsideSet
+        #expect(store.focusedWorkspaceIDs == [workspaces[0], workspaces[2]] && store.focusEnabled)
+    }
+
+    @Test func navigateAttentionScopesToEveryMemberOfAMultiWorkspaceSet() {
+        let (store, workspaces, ids) = Self.makeThreeWorkspaceNavTree()
+        store.session(withID: ids[1])?.agentIndicator = AgentIndicator(status: .blocked)   // b, in the marked work
+        store.session(withID: ids[3])?.agentIndicator = AgentIndicator(status: .blocked)   // d, in the UNMARKED personal
+        store.session(withID: ids[5])?.agentIndicator = AgentIndicator(status: .completed) // f, in the marked archive
+        store.setFocusMembership(workspaces[0], member: true)
+        store.setFocusMembership(workspaces[2], member: true)
+        store.setFocusEnabled(true)
+        store.selectSession(ids[0]) // a, idle
+        store.navigateSession(.nextAttention)
+        #expect(store.selectedSessionID == ids[1]) // blocked b, the first in-set attention session
+        store.navigateSession(.nextAttention)
+        #expect(store.selectedSessionID == ids[5]) // jumps the unmarked workspace's blocked d, lands on completed f
+        store.navigateSession(.nextAttention)
+        #expect(store.selectedSessionID == ids[1]) // wraps within the marked set, still never reaching d
+    }
+
     @Test func navigateScopesToFlaggedSet() {
         let (store, ids) = Self.makeNavTree() // a, b, c, d
         store.setFlag(true, forSession: ids[0]) // a

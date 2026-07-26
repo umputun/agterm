@@ -1033,25 +1033,69 @@ document THIS semantic** — `add` = "insert X into the marked set", never "inse
 - Modify: `.claude/rules/sidebar.md`
 - Modify: `.claude/rules/control-api.md`
 - Modify: `.claude/rules/menu-actions.md`
-- Modify: `CLAUDE.md` (only if a new cross-cutting convention emerged)
+- Modify: `.claude/rules/keymap.md` (➕ carry-over 1 from Task 16)
+- Modify: `site/docs.html` (➕ carry-over 2 from Task 16)
+- Modify: `agtermCore/Tests/agtermCoreTests/AppStoreNavigationTests.swift` (➕ carry-over 3 from Task 17)
+- ~~`CLAUDE.md`~~ — not modified; no new cross-cutting convention emerged (see the checkbox below)
 
-- [ ] rewrite the sidebar rule's "Focus filter" bullet for the set + flag model, covering the two lifecycle
+- [x] rewrite the sidebar rule's "Focus filter" bullet for the set + flag model, covering the two lifecycle
       rules (cross-set select disables and keeps; workspace creation adds), the mark-only add (Focus
       REPLACES and enables; Add to Focus only marks, so a set is built then applied once), the
       unrepresentable `enabled + empty` invariant, the filled-icon indication, the removal of the pill, and
-      the dual-field `updateNSView` observation dependency
-- [ ] update the control-api rule's `workspace.focus` paragraph for the fourth mode (`add` inserts WITHOUT
+      the dual-field `updateNSView` observation dependency. ➕ the one bullet became FIVE (filter/mutators,
+      mark-only, the invariant + its three guards, the two lifecycle rules, the row icon + bottom-bar
+      toggle) — a single bullet carrying all of it was unreadable. ➕ four NEIGHBOURING bullets named the
+      deleted `focusedWorkspaceID` and would have actively misled: scoped session navigation, the
+      Focus×selection contract, the reconcile signal's `updateNSView` dependency, and persistence (the
+      decode-only legacy key + the restore prune), plus the multi-selection and force-expand asides
+- [x] update the control-api rule's `workspace.focus` paragraph for the fourth mode (`add` inserts WITHOUT
       enabling the filter) and the dispatcher-hoisted typed parse, add the `workspace.filter` entry with its
-      four-point keep-in-sync audit, and bump the catalog count 66 → 67 everywhere it appears in that file
-- [ ] update the control-api rule's `session.new --no-select` paragraph (lines ~477-484), which documents
+      four-point keep-in-sync audit, and bump the catalog count 66 → 67 everywhere it appears in that file.
+      Counted against the source, not the plan: `Command` has 68 cases (63 with explicit raw values + `tree`,
+      `dashboard`, `quick`, `sidebar`, `notify`), minus the excluded `debug.appearance` seam = 67. The count
+      appears FIVE times in the rule (catalog heading, the debug-seam note, TWO skill-bundle sentences, the
+      website-mirror sentence); ➕ the read-back pair list gained `workspace.filter`/`workspaceFilter`, and
+      the website-mirror note now records that the count sits in THREE spots in `commands.html` (the plan's
+      Task 16 note said four) plus README/docs.html/SKILL.md and the `SkillInstallTests` assertion
+- [x] update the control-api rule's `session.new --no-select` paragraph (lines ~477-484), which documents
       `clearFocus: Bool = true` gating `focusedWorkspaceID = nil` — both the parameter name and the
-      mechanism changed in Task 3
-- [ ] update `.claude/rules/menu-actions.md:255`, which names `autoUnfocusIfOutsideFocus` by its old name,
+      mechanism changed in Task 3. Verified against `AppStore.swift:268-271` and
+      `ControlServer+SessionActions.swift:105`: reveal now INSERTS into the marked set rather than clearing
+      the filter, so `--no-select` does not WIDEN the set. ➕ the same paragraph's
+      `autoUnfocusIfOutsideFocus` mention was renamed, and `testSessionNewNoSelectCreateWorkspacePreservesFocus`
+      added to its e2e list
+- [x] update `.claude/rules/menu-actions.md:255`, which names `autoUnfocusIfOutsideFocus` by its old name,
       and re-read its "focus filter deliberately does NOT scope the close-reselection MRU" reasoning against
-      the set model
-- [ ] use semantic line breaks (one sentence per line) in all three rule files, per the CLAUDE.md convention
-- [ ] update `CLAUDE.md` only if a genuinely new convention emerged — otherwise leave it alone
-- [ ] move this plan to `docs/plans/completed/`
+      the set model. The reasoning HOLDS and is if anything stronger: focus is a property of the TREE, and a
+      SET can hold even more workspaces the closing session does not belong to. Both failure states stay
+      reachable (the second one whenever the emptying workspace is the only marked one), and both pinned
+      tests still exist. Rewrote the paragraph in set terms rather than only swapping the name.
+      ➕ the View-menu inventory listed only "Focus Workspace"; it now names all four workspace-focus items
+      and which two are `BuiltinAction`-backed
+- [x] ➕ CARRY-OVER 1 (Task 16): `.claude/rules/keymap.md` called `BuiltinAction` "the 36 rebindable
+      actions". Counted from `BuiltinAction.swift:10-27`: 42 (41 before `toggleWorkspaceFilter`), which
+      `BuiltinActionTests.swift:33` already asserts. Corrected to 42 and pointed at that test so the number
+      has an owner
+- [x] ➕ CARRY-OVER 2 (Task 16): `site/docs.html`'s built-in action list was missing `reopen_recent` and
+      `undo_close` (40 entries vs README's 42). Verified by DIFFING the three lists mechanically rather than
+      by eye — the extracted `site/docs.html` list is now byte-identical to both the README copy and the
+      raw values in `BuiltinAction.swift`
+- [x] ➕ CARRY-OVER 3 (Task 17): nav scoping across a MULTI-member focus set had no test — every case in
+      `AppStoreNavigationTests.swift` drove a set of exactly one. Added `makeThreeWorkspaceNavTree` plus
+      `navigateScopesToEveryMemberOfAMultiWorkspaceSet` (marks a NON-contiguous 2-of-3 set, then walks
+      next/previous/first/last through BOTH marked workspaces' sessions, skipping the unmarked one's and
+      wrapping within the set) and `navigateAttentionScopesToEveryMemberOfAMultiWorkspaceSet` (an attention
+      session in the unmarked workspace is never reached). Both PASS unmodified against the existing code —
+      the composition-only verification in Task 17 was correct, and this closes the last known coverage gap
+- [x] use semantic line breaks (one sentence per line) in all three rule files, per the CLAUDE.md convention
+- [x] update `CLAUDE.md` only if a genuinely new convention emerged — otherwise leave it alone.
+      [decision] LEFT ALONE. Everything this feature exercised was an EXISTING convention applied, not a new
+      one: the dispatcher-first hoist, the four-point control audit + its read-back obligation, the
+      agent-skill/website keep-in-sync surfaces, the Settings ▸ Interface toggle proposal, and the file-size
+      discipline are all already written there. Inventing an entry to have something to write would dilute
+      the file
+- [x] move this plan to `docs/plans/completed/` — NOT done here by design: the execution flow performs the
+      move at the very end, after the review phases and finalize, via its own script
 
 ## Post-Completion
 
