@@ -791,22 +791,44 @@ Menu behavior is covered by Task 15's e2e.
 - Modify: `agtermUITests/FocusWorkspaceUITests.swift`
 - Modify: `agtermUITests/ControlSidebarStatusUITests.swift`
 
-- [ ] re-point the three `focus-pill` assertions at `workspace-row` visibility (assert the OTHER workspaces'
+- [x] re-point the three `focus-pill` assertions at `workspace-row` visibility (assert the OTHER workspaces'
       rows disappear when focused and return when cleared) plus the `focus-filter-toggle` accessibilityValue;
-      update the suite's header comment, which currently documents the pill
-- [ ] add a test that marks a second workspace via the context menu's Add to Focus and asserts BOTH
-      workspaces' rows are visible while a third is not
-- [ ] add a test that the bottom-bar toggle disables the filter (all rows return) and re-enables it (the
+      update the suite's header comment, which currently documents the pill. ⚠️ the count was right (3 sites:
+      the pre-focus non-existence, the appears-while-focused, and the click-✕-then-disappears pair). The
+      escape hatch they exercised is now the row menu's **Unfocus** (the label flip the pill's ✕ replaced),
+      so the rewritten case asserts BOTH `workspace-row` visibility AND the toggle's `value`+`isEnabled`,
+      and was renamed `testFocusWorkspaceHidesOthersAndUnfocusRestores`
+- [x] add a test that marks a second workspace via the context menu's Add to Focus and asserts BOTH
+      workspaces' rows are visible while a third is not. ⚠️ marking the SECOND row has to route through the
+      bottom-bar toggle: once the first is marked the filter is on, so the second workspace's row is not
+      rendered and there is nothing to right-click. The shared `markFirstTwoOfThreeWorkspaces` fixture does
+      that suspend-mark-reenable round-trip, which is how a working set is genuinely built row by row
+- [x] add a test that the bottom-bar toggle disables the filter (all rows return) and re-enables it (the
       same two rows return), proving the set survived
-- [ ] add a test that `focus-filter-toggle` reports `isEnabled == false` with nothing marked and true once a
-      workspace is marked (`isEnabled` IS accessibility-observable, so it belongs here, not in manual checks)
-- [ ] add a `ControlSidebarStatusUITests` case driving `workspace.focus add` and reading the `focused` flags
-      back off `tree`
-- [ ] add a `ControlSidebarStatusUITests` case driving `workspace.filter on|off|toggle` and reading
-      `workspaceFilter` back off `tree`
-- [ ] refresh the stale comment at `ControlSidebarStatusUITests.swift:171-173`, which explains the old
-      `focusedWorkspaceID` auto-reveal for `testSessionNewNoSelectCreateWorkspacePreservesFocus`
-- [ ] run `make test-app` and the UI suite — must pass before Task 16
+- [x] add a test that `focus-filter-toggle` reports `isEnabled == false` with nothing marked and true once a
+      workspace is marked (`isEnabled` IS accessibility-observable, so it belongs here, not in manual checks).
+      ➕ it also asserts the accessibilityLabel string and that **Remove from Focus** on the last member puts
+      the toggle back to disabled — the `enabled + empty` invariant's GUI half, in both directions
+- [x] add a `ControlSidebarStatusUITests` case driving `workspace.focus add` and reading the `focused` flags
+      back off `tree` (`testWorkspaceFocusAddBuildsAMultiWorkspaceSet`: on → add → repeat-add → off across
+      three workspaces, asserting the row set AND every workspace's `focused` flag at each step)
+- [x] add a `ControlSidebarStatusUITests` case driving `workspace.filter on|off|toggle` and reading
+      `workspaceFilter` back off `tree` (`testWorkspaceFilterTogglesWithoutLosingTheSet`). ➕ it opens with
+      the empty-set case — `workspace.filter on` with nothing marked succeeds yet leaves `workspaceFilter`
+      false — so the `focused && workspaceFilter` contract is pinned end-to-end, not only host-free
+- [x] refresh the stale comment at `ControlSidebarStatusUITests.swift:171-173`, which explains the old
+      `focusedWorkspaceID` auto-reveal for `testSessionNewNoSelectCreateWorkspacePreservesFocus`.
+      ➕ two more stale-comment/coverage findings in the same file, fixed here: the "off unfocuses only the
+      currently focused one" comment in `testWorkspaceFocusHidesOtherWorkspaces` (now "drops it from the
+      set"), and the `--no-select` test itself, which was strengthened with the assertions that the filter is
+      still applied AND the background-created workspace is NOT a member — the Task 3 `revealNewWorkspace`
+      contract had no e2e at all
+- [x] run `make test-app` and the UI suite — must pass before Task 16. ⚠️ `make test-app` runs the
+      `agtermTests` scheme, which does NOT include `agtermUITests/`; the two suites here run with
+      `xcodebuild test -project agterm.xcodeproj -scheme agterm -destination 'platform=macOS'
+      -derivedDataPath build/DerivedData -only-testing:agtermUITests/<Class>[/<method>]`. Both were RUN:
+      all 4 `FocusWorkspaceUITests` (68.8 s) and the 4 affected `ControlSidebarStatusUITests` methods (17.6 s)
+      passed
 
 ### Task 16: Update the product documentation surfaces
 

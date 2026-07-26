@@ -113,7 +113,7 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertTrue((bad["error"] as? String ?? "").contains("invalid sidebar mode"), "should report invalid mode: \(bad)")
     }
 
-    // workspace.focus collapses the sidebar tree to a single workspace's subtree — the other workspaces'
+    // workspace.focus on collapses the sidebar tree to a single workspace's subtree — the other workspaces'
     // session rows leave the AX tree; unfocusing restores them. Orthogonal to the flagged view.
     func testWorkspaceFocusHidesOtherWorkspaces() throws {
         XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
@@ -149,8 +149,8 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertTrue(sessionRowValueExists(containing: "stay"), "the focused workspace's session should remain")
         XCTAssertFalse(sessionRowValueExists(containing: "hidden"), "the other workspace's session should be hidden")
 
-        // workspace.focus off on a NON-focused workspace is a no-op — it unfocuses only the currently
-        // focused one, so the focus on the first workspace must survive (the other's rows stay hidden).
+        // workspace.focus off on a workspace that is NOT in the marked set is a no-op — it only drops that
+        // workspace from the set, so the mark on the first workspace must survive (the other's rows stay hidden).
         XCTAssertEqual(try sendCommand(#"{"cmd":"workspace.focus","target":"\#(secondWsID)","args":{"mode":"off"}}"#)["ok"] as? Bool,
                        true, "workspace.focus off on a non-focused workspace should succeed (no-op)")
         XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "the focus on the first workspace should be unchanged")
@@ -168,9 +168,163 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertTrue((bad["error"] as? String ?? "").contains("invalid focus mode"), "should report invalid mode: \(bad)")
     }
 
-    // --no-select --create-workspace preserves the workspace-focus filter. A plain --create-workspace clears
-    // focusedWorkspaceID (addWorkspace's auto-reveal); --no-select threads clearFocus:false so a background
-    // create leaves the focused workspace (and the current session selection) untouched.
+    // workspace.focus add MARKS a workspace alongside the existing members instead of replacing them — the
+    // multi-workspace working set the single-id filter could not express. Three workspaces: `on` the first
+    // (only its row's session renders), `add` the second (both render, the third does not), `off` the second
+    // (back to one). The read-back is each tree node's `focused` flag, which now means SET MEMBERSHIP and is
+    // reported independently of whether the filter applies.
+    func testWorkspaceFocusAddBuildsAMultiWorkspaceSet() throws {
+        let ids = try seedFocusWorkspaces([(workspace: "second", session: "hidden"),
+                                           (workspace: "third", session: "buried")])
+        let (first, second, third) = (ids[0], ids[1], ids[2])
+
+        // `on` replaces the set with the first workspace: only its session renders.
+        let focus = try sendCommand(#"{"cmd":"workspace.focus","target":"\#(first)","args":{"mode":"on"}}"#)
+        XCTAssertEqual(focus["ok"] as? Bool, true, "workspace.focus on should succeed: \(focus)")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "marking one workspace should hide the other two")
+        XCTAssertTrue(sessionRowValueExists(containing: "stay"), "the marked workspace's session should remain")
+        XCTAssertEqual(try workspaceFocusedFlag(first), true, "the marked workspace should read back focused")
+        XCTAssertNil(try workspaceFocusedFlag(second), "an unmarked workspace should omit focused")
+        XCTAssertNil(try workspaceFocusedFlag(third), "an unmarked workspace should omit focused")
+        XCTAssertEqual(treeWorkspaceFilter(), true, "the filter should be on")
+
+        // `add` marks the second WITHOUT dropping the first: both sessions render, the third stays hidden.
+        let added = try sendCommand(#"{"cmd":"workspace.focus","target":"\#(second)","args":{"mode":"add"}}"#)
+        XCTAssertEqual(added["ok"] as? Bool, true, "workspace.focus add should succeed: \(added)")
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "add should widen the filtered tree to both marked workspaces")
+        XCTAssertTrue(sessionRowValueExists(containing: "stay"), "the first marked workspace's session should still render")
+        XCTAssertTrue(sessionRowValueExists(containing: "hidden"), "the newly marked workspace's session should render")
+        XCTAssertFalse(sessionRowValueExists(containing: "buried"), "the unmarked workspace's session should stay hidden")
+        XCTAssertEqual(try workspaceFocusedFlag(first), true, "add must not drop the existing member")
+        XCTAssertEqual(try workspaceFocusedFlag(second), true, "the added workspace should read back focused")
+        XCTAssertNil(try workspaceFocusedFlag(third), "the unmarked workspace should still omit focused")
+
+        // idempotent: adding an existing member changes nothing.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"workspace.focus","target":"\#(second)","args":{"mode":"add"}}"#)["ok"] as? Bool,
+                       true, "re-adding an existing member should succeed")
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "a repeat add should leave the set unchanged")
+        XCTAssertEqual(try workspaceFocusedFlag(second), true, "a repeat add should keep the membership")
+
+        // `off` drops just that member; the other survives and the filter stays on.
+        let removed = try sendCommand(#"{"cmd":"workspace.focus","target":"\#(second)","args":{"mode":"off"}}"#)
+        XCTAssertEqual(removed["ok"] as? Bool, true, "workspace.focus off should succeed: \(removed)")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "off should narrow the tree back to the remaining member")
+        XCTAssertNil(try workspaceFocusedFlag(second), "the removed workspace should no longer read back focused")
+        XCTAssertEqual(try workspaceFocusedFlag(first), true, "the surviving member should keep its mark")
+        XCTAssertEqual(treeWorkspaceFilter(), true, "a non-empty set keeps the filter on")
+    }
+
+    // workspace.filter turns the marked-set filter on/off WITHOUT touching the set — the control half of the
+    // bottom-bar toggle, read back as the tree's top-level `workspaceFilter`. Two invariants: `on` with an
+    // EMPTY set is refused (so the documented "visible iff focused && workspaceFilter" can never lie), and
+    // once a workspace is marked the flag flips independently of membership — off restores the full tree
+    // while the member keeps reporting `focused`, and on filters back to exactly the same rows.
+    func testWorkspaceFilterTogglesWithoutLosingTheSet() throws {
+        let ids = try seedFocusWorkspaces([(workspace: "second", session: "hidden")])
+        let first = ids[0]
+
+        // nothing marked yet: `on` succeeds having changed nothing, and the read-back stays false.
+        let empty = try sendCommand(#"{"cmd":"workspace.filter","args":{"mode":"on"}}"#)
+        XCTAssertEqual(empty["ok"] as? Bool, true, "workspace.filter on should succeed with an empty set: \(empty)")
+        XCTAssertEqual(treeWorkspaceFilter(), false, "enabling an empty set must be refused — enabled + empty is unrepresentable")
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "an empty set filters nothing")
+
+        // mark the first workspace, then suspend the filter: the full tree returns and the mark survives.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"workspace.focus","target":"\#(first)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "workspace.focus on should succeed")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "marking one workspace should hide the other")
+        XCTAssertTrue(pollWorkspaceFilter(true, timeout: 10), "the filter should read on")
+
+        let off = try sendCommand(#"{"cmd":"workspace.filter","args":{"mode":"off"}}"#)
+        XCTAssertEqual(off["ok"] as? Bool, true, "workspace.filter off should succeed: \(off)")
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "suspending the filter should restore the full tree")
+        XCTAssertTrue(pollWorkspaceFilter(false, timeout: 10), "the filter should read off")
+        XCTAssertEqual(try workspaceFocusedFlag(first), true,
+                       "the mark must survive the filter being off — that is what makes re-enabling one call")
+
+        // re-enable: the SAME row set comes back with nothing re-marked.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"workspace.filter","args":{"mode":"on"}}"#)["ok"] as? Bool, true,
+                       "workspace.filter on should succeed")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "re-enabling should apply the preserved set")
+        XCTAssertTrue(pollWorkspaceFilter(true, timeout: 10), "the filter should read on again")
+
+        // toggle flips it in both directions.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"workspace.filter","args":{"mode":"toggle"}}"#)["ok"] as? Bool, true,
+                       "workspace.filter toggle should succeed")
+        XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "toggle should suspend the filter")
+        XCTAssertTrue(pollWorkspaceFilter(false, timeout: 10), "toggle should read off")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"workspace.filter","args":{"mode":"toggle"}}"#)["ok"] as? Bool, true,
+                       "workspace.filter toggle should succeed")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "toggle should re-apply the filter")
+        XCTAssertTrue(pollWorkspaceFilter(true, timeout: 10), "toggle should read on")
+
+        // an invalid mode errors rather than silently no-opping.
+        let bad = try sendCommand(#"{"cmd":"workspace.filter","args":{"mode":"bogus"}}"#)
+        XCTAssertEqual(bad["ok"] as? Bool, false, "an invalid filter mode should error: \(bad)")
+        XCTAssertTrue((bad["error"] as? String ?? "").contains("invalid workspace filter mode"),
+                      "should report the invalid mode: \(bad)")
+        XCTAssertTrue(pollWorkspaceFilter(true, timeout: 10), "a rejected mode must leave the filter unchanged")
+    }
+
+    /// Seeds the fixture the focus-set control tests share: renames the seeded session to `stay`, then adds
+    /// one workspace per entry of `extras`, each holding one renamed session. Returns the workspace ids in
+    /// tree order (the seeded one first). Every session is created BEFORE any focus command, and the seeded
+    /// one is re-selected at the end, so no `session.new` selection sits outside the set a test marks (which
+    /// would trip the cross-set auto-disable and silently turn the filter off mid-test).
+    private func seedFocusWorkspaces(_ extras: [(workspace: String, session: String)]) throws -> [String] {
+        XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
+        let ws = try XCTUnwrap(treeWorkspaces().first, "should have a seeded workspace")
+        let firstWsID = try XCTUnwrap(ws["id"] as? String, "should have a seeded workspace id")
+        let seededID = try XCTUnwrap((ws["sessions"] as? [[String: Any]])?.first?["id"] as? String, "seeded session id")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.rename","target":"\#(seededID)","args":{"name":"stay"}}"#)["ok"] as? Bool,
+                       true, "renaming the seeded session should succeed")
+
+        var ids = [firstWsID]
+        for extra in extras {
+            let created = try sendCommand(#"{"cmd":"workspace.new","args":{"name":"\#(extra.workspace)"}}"#)
+            let wsID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "workspace.new should return an id")
+            let session = try sendCommand(#"{"cmd":"session.new","args":{"workspace":"\#(wsID)"}}"#)
+            let sessionID = try XCTUnwrap((session["result"] as? [String: Any])?["id"] as? String,
+                                          "session.new should return an id")
+            let renamed = try sendCommand(#"{"cmd":"session.rename","target":"\#(sessionID)","args":{"name":"\#(extra.session)"}}"#)
+            XCTAssertEqual(renamed["ok"] as? Bool, true, "renaming the new session should succeed: \(renamed)")
+            ids.append(wsID)
+        }
+        XCTAssertTrue(pollSessionRowCount(extras.count + 1, timeout: 10), "every seeded session row should be present")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.select","target":"\#(seededID)"}"#)["ok"] as? Bool, true,
+                       "selecting the seeded session should succeed")
+        return ids
+    }
+
+    /// Whether the workspace with `id` reports `focused` in the current tree — SET MEMBERSHIP, omitted (nil)
+    /// for a non-member and reported independently of the filter flag. The single-read twin of the polling
+    /// `workspaceFocused`.
+    private func workspaceFocusedFlag(_ id: String) throws -> Bool? {
+        try treeWorkspaces().first { ($0["id"] as? String)?.lowercased() == id.lowercased() }?["focused"] as? Bool
+    }
+
+    /// The tree's top-level `workspaceFilter` — whether the marked set is currently applied. Always
+    /// populated on an app-produced tree (like `sidebarVisible`), so nil means the read itself failed.
+    private func treeWorkspaceFilter() -> Bool? {
+        guard let result = (try? sendCommand(#"{"cmd":"tree"}"#))?["result"] as? [String: Any],
+              let root = result["tree"] as? [String: Any] else { return nil }
+        return root["workspaceFilter"] as? Bool
+    }
+
+    /// Polls the tree's `workspaceFilter` until it equals `expected`.
+    private func pollWorkspaceFilter(_ expected: Bool, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if treeWorkspaceFilter() == expected { return true }
+            usleep(200_000)
+        }
+        return treeWorkspaceFilter() == expected
+    }
+
+    // --no-select --create-workspace must not widen the workspace focus SET. A plain --create-workspace adds
+    // the new workspace to the set while the filter is on (addWorkspace's reveal, so a just-created workspace
+    // is visible); --no-select threads revealNewWorkspace:false so a background create leaves the set — and
+    // the current session selection — untouched.
     func testSessionNewNoSelectCreateWorkspacePreservesFocus() throws {
         XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 10), "seeded session row")
 
@@ -184,11 +338,16 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
                        true, "workspace.focus on should succeed")
         XCTAssertTrue(workspaceFocused(firstWsID, timeout: 5), "the seeded workspace should be focused")
 
-        // background-create a session in a brand-new workspace: the focus filter must survive.
+        // background-create a session in a brand-new workspace: the marked set must survive untouched.
         let created = try sendCommand(#"{"cmd":"session.new","args":{"workspaceName":"bg","createWorkspace":true,"noSelect":true}}"#)
         XCTAssertEqual(created["ok"] as? Bool, true, "background create-workspace should succeed: \(created)")
         XCTAssertTrue(workspaceFocused(firstWsID, timeout: 5),
-                      "--no-select --create-workspace must preserve the focused workspace (not clear it via auto-reveal)")
+                      "--no-select --create-workspace must keep the marked workspace marked")
+        XCTAssertEqual(treeWorkspaceFilter(), true, "the filter must still be applied after a background create")
+        let background = try XCTUnwrap(treeWorkspaces().first { ($0["name"] as? String) == "bg" },
+                                       "the background-created workspace should be in the tree")
+        XCTAssertNil(background["focused"],
+                     "a background create must NOT widen the set — that reveal is the foreground path's job")
     }
 
     // sidebar.collapse collapses every workspace except the active session's — the others' session rows
