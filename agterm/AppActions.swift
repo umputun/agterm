@@ -710,20 +710,27 @@ final class AppActions {
     /// Start an inline rename of the active session. The sidebar owns the edit field, so this posts
     /// a notification it observes; `renamePending` keeps the palette-close focus restore off the
     /// field while the edit starts.
+    /// The post carries the frontmost STORE as its object, and `WorkspaceSidebar.Coordinator` registers
+    /// with `object: store`, so only that window's sidebar starts an edit — the same per-window scoping
+    /// `expandAllWorkspaces(in:)` uses. Posting with a nil object instead reached EVERY open window's
+    /// coordinator, and their `selectedSessionID` guard does not scope anything (every window has a
+    /// selection), so each one opened an editor nobody was typing into and each leaked one unbalanced
+    /// `suppressAutoFollow`.
     func renameActiveSession() {
         guard uiActionsEnabled else { return }
-        guard store?.activeSession != nil else { return }
+        guard let store, store.activeSession != nil else { return }
         renamePending = true
-        NotificationCenter.default.post(name: .agtermBeginRenameSession, object: nil)
+        NotificationCenter.default.post(name: .agtermBeginRenameSession, object: store)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.renamePending = false }
     }
 
     /// Start an inline rename of the active session's workspace (the same one new sessions land in).
+    /// Store-scoped like `renameActiveSession` above, for the same reason.
     func renameActiveWorkspace() {
         guard uiActionsEnabled else { return }
-        guard store?.currentWorkspaceID != nil else { return }
+        guard let store, store.currentWorkspaceID != nil else { return }
         renamePending = true
-        NotificationCenter.default.post(name: .agtermBeginRenameWorkspace, object: nil)
+        NotificationCenter.default.post(name: .agtermBeginRenameWorkspace, object: store)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { [weak self] in self?.renamePending = false }
     }
 

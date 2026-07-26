@@ -221,15 +221,18 @@ struct WorkspaceSidebar: NSViewRepresentable {
             renameController.onRenameEnded = { [weak self] in self?.focusActiveTerminal() }
             // the menu/palette can't reach the inline editor directly, so they post a
             // notification and this coordinator starts the edit on the selected row.
+            // Scoped by `object: store` like expand/collapse below: the selected-session guard in the
+            // handlers is NOT a per-window scope (every open window has a selected session), so an
+            // object: nil pairing started an inline edit in EVERY window — each leaving an editor the
+            // user never opened, plus an unbalanced `suppressAutoFollow` that wedged that window's idle
+            // auto-follow off for good.
             NotificationCenter.default.addObserver(self, selector: #selector(beginRenameSessionNotified),
-                                                   name: .agtermBeginRenameSession, object: nil)
+                                                   name: .agtermBeginRenameSession, object: store)
             NotificationCenter.default.addObserver(self, selector: #selector(beginRenameWorkspaceNotified),
-                                                   name: .agtermBeginRenameWorkspace, object: nil)
+                                                   name: .agtermBeginRenameWorkspace, object: store)
             // expand/collapse target ONLY the frontmost window's sidebar: AppActions posts these with the
             // frontmost store as the object, and registering with `object: store` lets NotificationCenter
             // deliver only to the Coordinator whose store matches — so other windows' sidebars stay put.
-            // (The rename observers above are object: nil and self-scope via the selected-session guard;
-            // expand/collapse have no such natural per-window guard, so they scope by the store object.)
             NotificationCenter.default.addObserver(self, selector: #selector(expandWorkspacesNotified),
                                                    name: .agtermExpandWorkspaces, object: store)
             NotificationCenter.default.addObserver(self, selector: #selector(collapseWorkspacesNotified),
