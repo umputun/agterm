@@ -712,20 +712,30 @@ Menu behavior is covered by Task 15's e2e.
 - Modify: `agtermCore/Sources/agtermCore/AppSettings.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppSettingsTests.swift`
 
-- [ ] delete the `focus-pill` Button (kept alive mechanically by Task 4) and its store binding
-- [ ] add `AppActions.toggleFocusFilter()` flipping `focusEnabled` on the active store
-- [ ] add a `focus-filter-toggle` Button beside `flagged-view-toggle`: 2-state
+- [x] delete the `focus-pill` Button (kept alive mechanically by Task 4) and its store binding
+- [x] add `AppActions.toggleFocusFilter()` flipping `focusEnabled` on the active store
+- [x] add a `focus-filter-toggle` Button beside `flagged-view-toggle`: 2-state
       `square.grid.2x2` / `square.grid.2x2.fill` glyph, `chromeText` tint, disabled and dimmed to 0.35 when
       `focusedWorkspaceIDs.isEmpty` (mirroring the flagged toggle's empty-state rule and its explicit opacity,
-      which is needed because the explicit `foregroundStyle` defeats SwiftUI's default disabled dimming)
-- [ ] give the button an `accessibilityValue` reflecting on/off so the filter state stays XCUITest-observable
-      now that the pill is gone
-- [ ] add `case focusFilter` to `InterfaceElement` with `section == .sidebar` and displayName
+      which is needed because the explicit `foregroundStyle` defeats SwiftUI's default disabled dimming).
+      ➕ it took the pill's SLOT (right after the trailing `Spacer()`, before `flagged-view-toggle`) rather
+      than trailing it, and its `.help(…)` is a PLAIN string, not `helpHint(_:_:)` — the
+      `BuiltinAction.toggleWorkspaceFilter` that a hint would resolve against does not exist until Task 14,
+      which should upgrade it there
+- [x] give the button an `accessibilityValue` reflecting on/off so the filter state stays XCUITest-observable
+      now that the pill is gone. The strings are exactly `"on"` / `"off"` — Task 15 must assert those
+- [x] add `case focusFilter` to `InterfaceElement` with `section == .sidebar` and displayName
       "Workspace filter", and gate the button behind `shows(.focusFilter)` — it auto-appears in
-      Settings ▸ Interface via `allCases`
-- [ ] write a test that `InterfaceElement.focusFilter` decodes and reports the sidebar section (extend the
-      existing tolerant-decode coverage)
-- [ ] run the full gate — must pass before Task 14
+      Settings ▸ Interface via `allCases`. Ordered between `flaggedView` and `workspaceAddSession` so the
+      footer controls stay grouped ahead of the row element
+- [x] write a test that `InterfaceElement.focusFilter` decodes and reports the sidebar section (extend the
+      existing tolerant-decode coverage). ➕ `interfaceElementSectionsPartitionAllCases` pins the sidebar
+      ORDER, so its expected array gained the case too
+- [x] ➕ `.claude/rules/settings.md`'s `hiddenInterfaceElements` bullet said the focus pill "is transient,
+      so [it is] not a per-element toggle" and listed the sidebar elements without `focusFilter` — both
+      falsified by this task, so the two sentences were corrected here rather than left wrong until Task 18
+      (which does not cover `settings.md`)
+- [x] run the full gate — must pass before Task 14
 
 ### Task 14: Add the menu, palette, and keymap surfaces
 

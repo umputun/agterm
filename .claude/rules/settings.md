@@ -494,13 +494,14 @@ paths:
   NOT a ghostty key (`ghosttyConfigLines()` never emits it).
   The toggleable elements are the host-free `InterfaceElement` enum (agtermCore): title bar —
   `sidebarToggle`/`sessionName`/`windowName`/`recentSessions`/`scratch`/`split`/`dashboard`/`quickTerminal`;
-  sidebar — `newWorkspace`/`newSession`/`flaggedView` (the footer add/flag controls) + `workspaceAddSession`
+  sidebar — `newWorkspace`/`newSession`/`flaggedView`/`focusFilter` (the footer add/flag/filter controls)
+  + `workspaceAddSession`
   (the hover-revealed "+" on each workspace ROW that adds a session there — a SEPARATE toggle from the
   footer `newSession` button, though both run the same new-session action).
   Each case carries its `section` (Title Bar / Sidebar) and `displayName` (the toggle label), so the
   Interface tab iterates `InterfaceElement.allCases` grouped by section.
   The attention bell is NOT in the set — it keeps its own `attentionButtonEnabled` opt-in (default OFF, not
-  ON), and the focus pill is transient, so neither is a per-element toggle.
+  ON), so it is not a per-element toggle.
   It is the non-observable chrome-mirror pattern (like `attentionButtonEnabled`/`toolbarMode`):
   `SettingsModel.setInterfaceElementVisible(_:visible:)` mutates the RAW string set (NOT
   `resolvedHiddenInterfaceElements`, whose known-only filter would erase an unknown future element name a

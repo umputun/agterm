@@ -776,29 +776,28 @@ struct WindowContentView: View {
 
             Spacer()
 
-            // an escape hatch shown only while the filter is on and exactly one workspace is marked: names
-            // that workspace and unfocuses on its ✕ (the primary affordance; the menu/palette "Clear Focus"
-            // mirror it).
-            if store.focusEnabled, store.focusedWorkspaceIDs.count == 1,
-               let focused = store.workspaces.first(where: { store.focusedWorkspaceIDs.contains($0.id) }) {
+            // apply or suspend the marked-workspace filter WITHOUT losing the set, so peeking at the whole
+            // tree costs one click each way. 2-state glyph (filled while the filter applies); it is both
+            // the indicator and the control now that the single-workspace pill is gone.
+            if shows(.focusFilter) {
                 Button {
-                    actions.clearFocus()
+                    actions.toggleFocusFilter()
                 } label: {
-                    HStack(spacing: 4) {
-                        Text(focused.name)
-                            .lineLimit(1)
-                        Image(systemName: "xmark")
-                    }
-                    .font(.caption)
-                    .padding(.horizontal, 7)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(chromeText.opacity(0.15)))
-                    .contentShape(Capsule())
+                    Image(systemName: store.focusEnabled ? "square.grid.2x2.fill" : "square.grid.2x2")
+                        .frame(width: 24, height: 22)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                .help("Clear focus")
-                .accessibilityLabel("Clear focus")
-                .accessibilityIdentifier("focus-pill")
+                // nothing marked means nothing to filter to, and the store refuses to enable an empty set
+                // anyway. The explicit chromeText foregroundStyle defeats SwiftUI's default disabled
+                // dimming, so mute it by hand — the flagged toggle's rule.
+                .disabled(store.focusedWorkspaceIDs.isEmpty)
+                .opacity(store.focusedWorkspaceIDs.isEmpty ? 0.35 : 1)
+                .help(store.focusEnabled ? "Show all workspaces" : "Show only focused workspaces")
+                .accessibilityLabel("Toggle Workspace Filter")
+                // the only accessibility-observable read of the filter state now that the pill is gone.
+                .accessibilityValue(store.focusEnabled ? "on" : "off")
+                .accessibilityIdentifier("focus-filter-toggle")
             }
 
             // flip the sidebar between the workspace tree and the flat flagged working-set list. 2-state

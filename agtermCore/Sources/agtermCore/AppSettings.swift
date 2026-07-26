@@ -41,16 +41,17 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
     case newWorkspace
     case newSession
     case flaggedView
+    case focusFilter
     case workspaceAddSession
 
     /// Which chrome surface the element belongs to — the Settings tab groups the toggles by this.
     public enum Section: Sendable { case titleBar, sidebar }
 
-    /// The surface this element lives on: the sidebar for the add/flag controls (the footer buttons plus
-    /// the workspace-row add-session "+"), the title bar for everything else.
+    /// The surface this element lives on: the sidebar for the add/flag/filter controls (the footer
+    /// buttons plus the workspace-row add-session "+"), the title bar for everything else.
     public var section: Section {
         switch self {
-        case .newWorkspace, .newSession, .flaggedView, .workspaceAddSession: return .sidebar
+        case .newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession: return .sidebar
         default: return .titleBar
         }
     }
@@ -69,6 +70,7 @@ public enum InterfaceElement: String, Codable, Sendable, CaseIterable {
         case .newWorkspace: return "New workspace"
         case .newSession: return "New session"
         case .flaggedView: return "Flagged view"
+        case .focusFilter: return "Workspace filter"
         case .workspaceAddSession: return "Workspace add-session"
         }
     }

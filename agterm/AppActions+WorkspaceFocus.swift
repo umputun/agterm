@@ -34,9 +34,18 @@ extension AppActions {
         focusWorkspace(id)
     }
 
+    /// Flip the focus filter on or off WITHOUT touching the marked set — the bottom-bar grid toggle, so
+    /// peeking at the whole tree and coming back costs one click each way. The store refuses to enable an
+    /// empty set, which is the same state the toggle renders disabled in, so the two agree by construction.
+    func toggleFocusFilter() {
+        guard uiActionsEnabled else { return }
+        guard let store else { return }
+        store.setFocusEnabled(!store.focusEnabled)
+    }
+
     /// Clear the marked workspace set entirely, restoring the full tree. A plain menu/palette "Clear Focus"
-    /// item (the bottom-bar pill's ✕ is the primary affordance); no-op when nothing is marked and the
-    /// filter is already off.
+    /// item; no-op when nothing is marked and the filter is already off. Distinct from `toggleFocusFilter`,
+    /// which keeps the set and only stops applying it.
     func clearFocus() {
         guard uiActionsEnabled else { return }
         guard let store, !store.focusedWorkspaceIDs.isEmpty || store.focusEnabled else { return }

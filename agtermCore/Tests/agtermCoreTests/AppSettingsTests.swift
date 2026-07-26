@@ -616,6 +616,16 @@ struct AppSettingsTests {
         #expect(!hidden.isInterfaceElementHidden(.newSession)) // hiding one does not hide the other
     }
 
+    @Test func focusFilterIsASidebarInterfaceElement() {
+        // the bottom-bar workspace-filter toggle is its own sidebar-section element, hidden independently
+        // of the flagged-view toggle beside it.
+        #expect(InterfaceElement.focusFilter.section == .sidebar)
+        #expect(InterfaceElement.focusFilter.displayName == "Workspace filter")
+        let hidden = AppSettings(hiddenInterfaceElements: ["focusFilter"])
+        #expect(hidden.isInterfaceElementHidden(.focusFilter))
+        #expect(!hidden.isInterfaceElementHidden(.flaggedView)) // hiding one does not hide the other
+    }
+
     @Test func unknownInterfaceElementDecodesTolerantly() throws {
         // a future-written element name must decode tolerantly (the forward-compat rule): the unknown name
         // is dropped from the resolved set, and it must NOT fail the whole decode and discard other fields.
@@ -633,7 +643,7 @@ struct AppSettingsTests {
         let titleBar = InterfaceElement.allCases.filter { $0.section == .titleBar }
         let sidebar = InterfaceElement.allCases.filter { $0.section == .sidebar }
         #expect(titleBar.count + sidebar.count == InterfaceElement.allCases.count)
-        #expect(sidebar == [.newWorkspace, .newSession, .flaggedView, .workspaceAddSession])
+        #expect(sidebar == [.newWorkspace, .newSession, .flaggedView, .focusFilter, .workspaceAddSession])
         #expect(!titleBar.isEmpty)
     }
 
