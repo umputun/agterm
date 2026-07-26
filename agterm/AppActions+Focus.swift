@@ -159,8 +159,16 @@ extension AppActions {
         // `.left`/nil reveal routes here (a plain `session status blocked` with no `--pane` lands in that
         // branch), so a sidebar row click followed within the ~360ms retry window by ⌘R or a palette open
         // would otherwise pull first responder off the field and type the name into the terminal.
-        if renamePending { return }
-        if palette?.mode != nil { return }
+        // SCOPED to the session's own window like the two gates above, and for the same cross-window reason:
+        // both flags are app-GLOBAL (one `renamePending`, one `PaletteController` shared by every window),
+        // so unscoped they would let a palette open in the frontmost window silently skip the responder move
+        // for a `session.focus` aimed at a background one — leaving that window's `splitFocused` and its real
+        // first responder disagreeing, with the control command still reporting ok. The rename/palette race
+        // this guards is always in the frontmost window, so scoping costs the protection nothing.
+        if library.windowID(forSession: session.id) == library.activeWindowID {
+            if renamePending { return }
+            if palette?.mode != nil { return }
+        }
         // the quick terminal is a window-level cover above the session; while it's up it owns focus, so
         // don't move first responder to a pane behind it (its own hide restores the session). The caller
         // has already set `splitFocused`, so the right pane shows once the quick terminal is dismissed.
