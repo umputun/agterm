@@ -73,8 +73,51 @@ struct CommandsTests {
         #expect(try request(["workspace", "focus", "on", "--target", "9f3c"]) == expected)
     }
 
+    @Test func workspaceFocusAddWithTarget() throws {
+        let expected = ControlRequest(cmd: .workspaceFocus, target: "9f3c", args: ControlArgs(mode: "add"))
+        #expect(try request(["workspace", "focus", "add", "--target", "9f3c"]) == expected)
+    }
+
     @Test func workspaceFocusRejectsBadMode() {
-        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["workspace", "focus", "sideways"]) }
+        // rejected by validate() before any request is built; pin the exact allCases-derived message so an
+        // unrelated parse failure can't pass for it.
+        #expect(validationMessage(["workspace", "focus", "sideways"]) == "mode must be one of: on, off, toggle, add")
+    }
+
+    @Test func workspaceFocusHelpListsEveryMode() {
+        // the abstract is built from allCases like the validation message, so `--help` can't go stale when
+        // a mode is added; assert every raw value survives into the rendered help.
+        let help = Workspace.Focus.helpMessage(columns: 200)
+        for mode in WorkspaceFocusMode.allCases {
+            #expect(help.contains(mode.rawValue), "workspace focus help should list \(mode.rawValue), got: \(help)")
+        }
+    }
+
+    @Test func workspaceFilterDefaultsToggle() throws {
+        #expect(try request(["workspace", "filter"]) == ControlRequest(cmd: .workspaceFilter, args: ControlArgs(mode: "toggle")))
+    }
+
+    @Test func workspaceFilterOn() throws {
+        #expect(try request(["workspace", "filter", "on"]) == ControlRequest(cmd: .workspaceFilter, args: ControlArgs(mode: "on")))
+    }
+
+    @Test func workspaceFilterOff() throws {
+        #expect(try request(["workspace", "filter", "off"]) == ControlRequest(cmd: .workspaceFilter, args: ControlArgs(mode: "off")))
+    }
+
+    @Test func workspaceFilterThreadsWindow() throws {
+        let expected = ControlRequest(cmd: .workspaceFilter, args: ControlArgs(mode: "on", window: "win"))
+        #expect(try request(["workspace", "filter", "on", "--window", "win"]) == expected)
+    }
+
+    @Test func workspaceFilterRejectsBadMode() {
+        #expect(validationMessage(["workspace", "filter", "sideways"]) == "mode must be on, off, or toggle")
+    }
+
+    @Test func workspaceFilterTakesNoTarget() {
+        // window-scoped: it flips the whole window's filter, so a --target would imply it acts on one
+        // workspace. Carrying only ClientOptions is what makes the flag unknown here.
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["workspace", "filter", "on", "--target", "9f3c"]) }
     }
 
     @Test func workspaceCollapseDefaultsActive() throws {

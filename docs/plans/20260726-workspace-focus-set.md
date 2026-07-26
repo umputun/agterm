@@ -626,17 +626,27 @@ showing, so an empty-space drop must NOT land in the marked workspace.
 - Modify: `agtermCore/Sources/agtermctlKit/WorkspaceCommands.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/CommandsTests.swift`
 
-- [ ] extend `Workspace.Focus`: accept `add` in `validate()` and in the `@Argument` help text, deriving both
-      from `WorkspaceFocusMode.allCases` so the CLI list cannot drift from the dispatcher's
-- [ ] update the `Focus` subcommand abstract — it no longer focuses "a single workspace"
-- [ ] add a `Workspace.Filter` subcommand (`on|off|toggle`, default `toggle`, `ClientOptions` for `--window`,
+- [x] extend `Workspace.Focus`: accept `add` in `validate()` and in the `@Argument` help text, deriving both
+      from `WorkspaceFocusMode.allCases` so the CLI list cannot drift from the dispatcher's. The `validate()`
+      guard is now `WorkspaceFocusMode(rawValue:) != nil` with a `validNamesPhrase` message, and the mode's
+      default is `WorkspaceFocusMode.toggle.rawValue` rather than a bare `"toggle"` literal
+- [x] update the `Focus` subcommand abstract — it no longer focuses "a single workspace"; it now reads
+      "Mark a workspace in the sidebar focus set (`\(WorkspaceFocusMode.validNamesList)`)", so the abstract
+      is `allCases`-derived too
+- [x] add a `Workspace.Filter` subcommand (`on|off|toggle`, default `toggle`, `ClientOptions` for `--window`,
       NO `TargetOptions`) emitting `.workspaceFilter`, and register it in the `Workspace` subcommand list
-- [ ] write tests for `workspace focus add` mapping and for rejection of an invalid mode
-- [ ] write tests for `workspace filter` mapping across all three modes, that it carries `--window`, and that
-      it rejects an invalid mode
-- [ ] write a test pinning the `--mode` help text to `WorkspaceFocusMode.allCases` (the
-      `sessionStatusShapeHelpListsEveryShape` precedent)
-- [ ] run the full gate — must pass before Task 11
+- [x] write tests for `workspace focus add` mapping and for rejection of an invalid mode (the existing
+      loose `throws: (any Error).self` rejection assertion was MIGRATED to pin the exact
+      `allCases`-derived message, matching `sessionStatusRejectsUnknownShape`)
+- [x] write tests for `workspace filter` mapping across all three modes, that it carries `--window`, and that
+      it rejects an invalid mode. ➕ plus `workspaceFilterTakesNoTarget`, pinning the deliberate absence of
+      `TargetOptions` — an unregistered/mis-shaped option group is otherwise invisible to a mapping test
+- [x] write a test pinning the help text to `WorkspaceFocusMode.allCases` (the
+      `sessionStatusShapeHelpListsEveryShape` precedent). ⚠️ the checkbox said "the `--mode` help text", but
+      `workspace focus` takes the mode as a POSITIONAL `@Argument`, not a `--mode` option, so
+      `workspaceFocusHelpListsEveryMode` asserts against the whole rendered
+      `Workspace.Focus.helpMessage(columns: 200)`
+- [x] run the full gate — must pass before Task 11
 
 ### Task 11: Draw the filled grid icon for marked workspaces
 
