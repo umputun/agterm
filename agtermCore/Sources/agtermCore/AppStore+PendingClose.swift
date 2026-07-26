@@ -81,7 +81,7 @@ extension AppStore {
         if wasActive {
             selectedSessionID = closeReselectionTarget(after: location)
             replaceSidebarSelection(with: selectedSessionID)
-            autoUnfocusIfOutsideFocus(selectedSessionID)
+            disableFocusIfSelectionOutsideSet(selectedSessionID)
             recordRecency()
         } else {
             pruneSidebarSelection()
@@ -142,7 +142,7 @@ extension AppStore {
                                                       sessionIndex: close.sessionIndex - removedBeforeActive))
             } ?? workspaces.first(where: { !$0.sessions.isEmpty })?.sessions.first?.id
             replaceSidebarSelection(with: selectedSessionID)
-            autoUnfocusIfOutsideFocus(selectedSessionID)
+            disableFocusIfSelectionOutsideSet(selectedSessionID)
             recordRecency()
         } else {
             pruneSidebarSelection()
@@ -179,7 +179,7 @@ extension AppStore {
             selectedSessionID = workspaces[fallbackIndex].sessions.first?.id
                 ?? workspaces.first(where: { !$0.sessions.isEmpty })?.sessions.first?.id
             replaceSidebarSelection(with: selectedSessionID)
-            autoUnfocusIfOutsideFocus(selectedSessionID)
+            disableFocusIfSelectionOutsideSet(selectedSessionID)
             recordRecency()
         } else {
             pruneSidebarSelection()
@@ -348,7 +348,7 @@ extension AppStore {
         if let target {
             selectedSessionID = target
             replaceSidebarSelection(with: selectedSessionID)
-            autoUnfocusIfOutsideFocus(selectedSessionID)
+            disableFocusIfSelectionOutsideSet(selectedSessionID)
             recordRecency()
         }
     }
@@ -380,7 +380,7 @@ extension AppStore {
         guard let target = close.selectedSessionID ?? close.workspace.sessions.first?.id else { return }
         selectedSessionID = target
         replaceSidebarSelection(with: selectedSessionID)
-        autoUnfocusIfOutsideFocus(selectedSessionID)
+        disableFocusIfSelectionOutsideSet(selectedSessionID)
         recordRecency()
     }
 

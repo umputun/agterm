@@ -153,6 +153,102 @@ struct AppStoreFocusTests {
         #expect(store.visibleWorkspaces.map(\.id) == [work.id, personal.id]) // defensive fallback, not a reachable state
     }
 
+    @Test func removingAMemberPrunesItAndKeepsTheRestFiltered() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let doomed = store.addWorkspace(name: "doomed")
+        _ = store.addWorkspace(name: "other")
+        store.setFocusMembership(work.id, member: true)
+        store.setFocusMembership(doomed.id, member: true)
+        store.removeWorkspace(doomed.id)
+        #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled) // the survivor keeps filtering
+        #expect(store.visibleWorkspaces.map(\.id) == [work.id])
+    }
+
+    @Test func removingTheLastMemberWorkspaceDisablesTheFilter() {
+        let store = makeStore()
+        _ = store.addWorkspace(name: "other")
+        let doomed = store.addWorkspace(name: "doomed")
+        store.setFocusMembership(doomed.id, member: true)
+        store.removeWorkspace(doomed.id)
+        #expect(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled) // nothing left to filter to
+    }
+
+    @Test func removingANonMemberWorkspaceLeavesTheFilterUntouched() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        let doomed = store.addWorkspace(name: "doomed")
+        store.setFocusMembership(work.id, member: true)
+        store.setFocusMembership(personal.id, member: true)
+        store.removeWorkspace(doomed.id)
+        #expect(store.focusedWorkspaceIDs == [work.id, personal.id] && store.focusEnabled)
+    }
+
+    @Test func softRemovingAMemberPrunesItAndDisablesWhenTheSetEmpties() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let doomed = store.addWorkspace(name: "doomed")
+        _ = store.addWorkspace(name: "spare") // soft-remove keeps at least one workspace
+        store.setFocusMembership(work.id, member: true)
+        store.setFocusMembership(doomed.id, member: true)
+        #expect(store.softRemoveWorkspace(doomed.id))
+        #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled)
+        #expect(store.softRemoveWorkspace(work.id))
+        #expect(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled)
+    }
+
+    @Test func selectingOutsideTheSetDisablesTheFilterButKeepsEveryMember() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        let outside = store.addWorkspace(name: "outside")
+        _ = store.addSession(toWorkspace: work.id, cwd: "/a")
+        store.setFocusMembership(work.id, member: true)
+        store.setFocusMembership(personal.id, member: true)
+        let stray = try! #require(store.addSession(toWorkspace: outside.id, cwd: "/b", select: false))
+        store.selectSession(stray.id)
+        #expect(store.focusedWorkspaceIDs == [work.id, personal.id] && !store.focusEnabled) // set intact
+        store.setFocusEnabled(true) // one flip restores the hand-curated working set
+        #expect(store.visibleWorkspaces.map(\.id) == [work.id, personal.id])
+    }
+
+    @Test func selectingInsideTheSetChangesNothing() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        _ = store.addSession(toWorkspace: work.id, cwd: "/a")
+        let inSet = try! #require(store.addSession(toWorkspace: personal.id, cwd: "/b", select: false))
+        store.setFocusMembership(work.id, member: true)
+        store.setFocusMembership(personal.id, member: true)
+        store.selectSession(inSet.id)
+        #expect(store.focusedWorkspaceIDs == [work.id, personal.id] && store.focusEnabled)
+    }
+
+    @Test func addWorkspaceJoinsTheSetOnlyWhileTheFilterIsOn() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        // filter OFF with a marked set: the new workspace is visible anyway, so neither field is touched.
+        store.setFocusMembership(work.id, member: true)
+        store.setFocusEnabled(false)
+        _ = store.addWorkspace(name: "quiet")
+        #expect(store.focusedWorkspaceIDs == [work.id] && !store.focusEnabled)
+        // filter ON: the new workspace joins the set so it is visible without dropping the filter.
+        store.setFocusEnabled(true)
+        let fresh = store.addWorkspace(name: "fresh")
+        #expect(store.focusedWorkspaceIDs == [work.id, fresh.id] && store.focusEnabled)
+        #expect(store.visibleWorkspaces.map(\.id) == [work.id, fresh.id]) // `quiet` stays filtered out
+    }
+
+    @Test func addWorkspaceWithoutRevealDoesNotWidenTheSet() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        store.setFocusMembership(work.id, member: true)
+        _ = store.addWorkspace(name: "background", revealNewWorkspace: false)
+        #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled) // the background create stays hidden
+        #expect(store.visibleWorkspaces.map(\.id) == [work.id])
+    }
+
     @Test func workspaceFocusPrunesRowsOutsideFocusedWorkspace() {
         let store = makeStore()
         let ws1 = store.addWorkspace(name: "one")

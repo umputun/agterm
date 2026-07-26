@@ -253,21 +253,21 @@ public final class AppStore {
                            dashboardFontMode: dashboardFontMode())
     }
 
-    /// Creates a workspace and appends it. When `clearFocus` (the default) it clears any active focus so
-    /// the new (empty) workspace is immediately visible — else `visibleWorkspaces` returns only the
-    /// focused one and the new workspace is silently hidden (the auto-reveal contract, like `addSession`).
-    /// Pass `clearFocus: false` to keep the current focus — a background `session.new --no-select` create.
+    /// Creates a workspace and appends it. When `revealNewWorkspace` (the default) and the focus filter is
+    /// ON, the new workspace JOINS the marked set so it is immediately visible — else `visibleWorkspaces`
+    /// would render only the existing members and silently hide it (the auto-reveal contract, like
+    /// `addSession`). Widening the set rather than clearing it keeps the rest of the working set filtered;
+    /// the user asked for this workspace, so mutating the set here is intentional.
+    /// Pass `revealNewWorkspace: false` to leave the filter untouched — a background
+    /// `session.new --no-select` create, which must not widen the view.
     /// Pass `collapsed: true` to create it already collapsed in the sidebar (backs `workspace.new --collapsed`):
     /// a runtime add defaults `isExpanded == true` and renders open, so a collapsed workspace can be built
     /// and filled with `addSession(select: false)` without opening.
     @discardableResult
-    public func addWorkspace(name: String, collapsed: Bool = false, clearFocus: Bool = true) -> Workspace {
+    public func addWorkspace(name: String, collapsed: Bool = false, revealNewWorkspace: Bool = true) -> Workspace {
         let workspace = Workspace(name: name, isExpanded: !collapsed)
         workspaces.append(workspace)
-        if clearFocus {
-            focusedWorkspaceIDs.removeAll()
-            focusEnabled = false
-        }
+        if revealNewWorkspace, focusEnabled { focusedWorkspaceIDs.insert(workspace.id) }
         scheduleTreeChanged()
         save()
         return workspace
@@ -281,12 +281,12 @@ public final class AppStore {
         return workspaces.first { $0.name == needle }
     }
 
-    /// The workspace named `name`, created if none exists (idempotent); `clearFocus` (default true) is
-    /// forwarded to `addWorkspace` on the create path. Nil only when blank. Backs `--workspace-name --create-workspace`.
+    /// The workspace named `name`, created if none exists (idempotent); `revealNewWorkspace` (default true)
+    /// is forwarded to `addWorkspace` on the create path. Nil only when blank. Backs `--workspace-name --create-workspace`.
     @discardableResult
-    public func ensureWorkspace(named name: String, clearFocus: Bool = true) -> Workspace? {
+    public func ensureWorkspace(named name: String, revealNewWorkspace: Bool = true) -> Workspace? {
         guard let needle = name.trimmedOrNil else { return nil }
-        return workspace(named: needle) ?? addWorkspace(name: needle, clearFocus: clearFocus)
+        return workspace(named: needle) ?? addWorkspace(name: needle, revealNewWorkspace: revealNewWorkspace)
     }
 
     /// Creates a session in the given workspace and, when `select` is true (the default), selects it;
@@ -310,7 +310,7 @@ public final class AppStore {
         // a background add (`session.new --no-select`) leaves selection/focus/recency untouched.
         if select {
             selectedSessionID = session.id
-            autoUnfocusIfOutsideFocus(session.id) // a control-driven add into another workspace must reveal it
+            disableFocusIfSelectionOutsideSet(session.id) // a control-driven add into another workspace must reveal it
             recordRecency()
         }
         emitSessionCreated(session, workspace: workspaceID)
@@ -338,7 +338,7 @@ public final class AppStore {
         } else {
             replaceSidebarSelection(with: sessionID)
         }
-        autoUnfocusIfOutsideFocus(sessionID)
+        disableFocusIfSelectionOutsideSet(sessionID)
         if let sessionID { clearUnseen(sessionID) }
         clearAutoResetIndicator(sessionID) // visit: you've seen it
         clearAutoResetIndicator(previous)  // leave: a one-time status must not linger on the row you left
@@ -390,7 +390,7 @@ public final class AppStore {
         if wasActive {
             selectedSessionID = closeReselectionTarget(after: location)
             replaceSidebarSelection(with: selectedSessionID)
-            autoUnfocusIfOutsideFocus(selectedSessionID) // the reselected session may live outside the focused workspace
+            disableFocusIfSelectionOutsideSet(selectedSessionID) // the reselected session may live outside the focused workspace
             recordRecency()
         } else {
             pruneSidebarSelection()
@@ -431,7 +431,7 @@ public final class AppStore {
             selectedSessionID = workspaces[fallbackIndex].sessions.first?.id
                 ?? workspaces.first(where: { !$0.sessions.isEmpty })?.sessions.first?.id
             replaceSidebarSelection(with: selectedSessionID)
-            autoUnfocusIfOutsideFocus(selectedSessionID) // the reselected session may live outside the focused workspace
+            disableFocusIfSelectionOutsideSet(selectedSessionID) // the reselected session may live outside the focused workspace
             recordRecency()
         } else {
             pruneSidebarSelection()
@@ -457,7 +457,7 @@ public final class AppStore {
         let session = workspaces[source.workspaceIndex].sessions.remove(at: source.sessionIndex)
         let destination = max(0, min(index ?? workspaces[targetIndex].sessions.count, workspaces[targetIndex].sessions.count))
         workspaces[targetIndex].sessions.insert(session, at: destination)
-        if sessionID == selectedSessionID { autoUnfocusIfOutsideFocus(sessionID) }
+        if sessionID == selectedSessionID { disableFocusIfSelectionOutsideSet(sessionID) }
         pruneSidebarSelection()
         if before != workspaces.map({ $0.sessions.map(\.id) }) { scheduleTreeChanged() }
         save()
@@ -492,7 +492,7 @@ public final class AppStore {
         let destination = max(0, min(index ?? workspaces[targetIndex].sessions.count,
                                      workspaces[targetIndex].sessions.count))
         workspaces[targetIndex].sessions.insert(contentsOf: moving, at: destination)
-        if let selectedSessionID, movingIDs.contains(selectedSessionID) { autoUnfocusIfOutsideFocus(selectedSessionID) }
+        if let selectedSessionID, movingIDs.contains(selectedSessionID) { disableFocusIfSelectionOutsideSet(selectedSessionID) }
         pruneSidebarSelection()
         if before != workspaces.map({ $0.sessions.map(\.id) }) { scheduleTreeChanged() }
         save()
@@ -548,7 +548,7 @@ public final class AppStore {
     /// ends of the filtered list. With no/invalid current selection, `next`/`previous` land on its first
     /// session. No-op when the filtered list is empty. Routes through `selectSession`, inheriting recency,
     /// badge clearing, persistence, and workspace derivation. Because the targets are always in-set, nav
-    /// never triggers `autoUnfocusIfOutsideFocus` — that stays the safety net for an explicit cross-set
+    /// never triggers `disableFocusIfSelectionOutsideSet` — that stays the safety net for an explicit cross-set
     /// select.
     @discardableResult
     public func navigateSession(_ direction: SessionNavigation) -> AgentIndicator? {

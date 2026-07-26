@@ -16,8 +16,8 @@ extension AppStore {
     /// `navigableSessions`, which folds focus in) would make ⌘W in that state jump into the FOCUSED workspace,
     /// and would make closing the focused workspace's last session widen into an EMPTY set and fall through to
     /// the positional first-workspace jump — the exact disorientation this helper exists to remove. Landing
-    /// outside the focused workspace is already handled: every caller runs `autoUnfocusIfOutsideFocus` on the
-    /// pick, which drops the filter to reveal the target.
+    /// outside the marked set is already handled: every caller runs `disableFocusIfSelectionOutsideSet` on the
+    /// pick, which switches the filter off (keeping the set) to reveal the target.
     ///
     /// The scope is built from the TREE, so a session already removed there cannot come back even when it
     /// survives in `sessionRecency` (the soft-close paths keep it there on purpose, for undo).

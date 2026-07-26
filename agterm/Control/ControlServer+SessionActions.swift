@@ -99,10 +99,10 @@ extension ControlServer: ControlActions {
                 guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                     return ControlResponse(ok: false, error: "workspace name must not be blank")
                 }
-                // a --no-select create must not clear the workspace-focus filter (addWorkspace's auto-reveal),
+                // a --no-select create must not widen the workspace-focus set (addWorkspace's auto-reveal),
                 // so the background create leaves the current view untouched like the rest of --no-select.
                 let workspace = options.createWorkspace == true
-                    ? store.ensureWorkspace(named: name, clearFocus: !options.noSelect)
+                    ? store.ensureWorkspace(named: name, revealNewWorkspace: !options.noSelect)
                     : store.workspace(named: name)
                 guard let workspace else {
                     return ControlResponse(ok: false, error: "no workspace named \"\(name)\" (pass --create-workspace to add it)")

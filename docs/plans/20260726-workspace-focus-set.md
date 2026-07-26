@@ -384,34 +384,44 @@ move was clean.
 - Modify: `agtermCore/Sources/agtermCore/AppStore+PendingClose.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore+RecentClosed.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore+CloseReselection.swift` (doc comment naming the helper)
+- Modify: `agterm/Control/ControlServer+SessionActions.swift` (⚠️ missing from the original list — it holds
+  the only app-target `clearFocus:` caller, renamed here so Task 4's sweep finds it consistent)
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreFocusTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreOrganizationTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreCloseReselectionTests.swift`
-- Modify: `agtermCore/Tests/agtermCoreTests/AppStoreNavigationTests.swift`
+- ~~`agtermCore/Tests/agtermCoreTests/AppStoreNavigationTests.swift`~~ — ⚠️ NOT modified: its two focus
+  assertions already match the new contract (see the migration checkbox below)
 
-- [ ] rename `autoUnfocusIfOutsideFocus` to `disableFocusIfSelectionOutsideSet` and update ALL call sites —
+- [x] rename `autoUnfocusIfOutsideFocus` to `disableFocusIfSelectionOutsideSet` and update ALL call sites —
       `AppStore.swift` (7), `AppStore+PendingClose.swift` (5), `AppStore+RecentClosed.swift` (2, at lines 24
-      and 45), plus the doc comment in `AppStore+CloseReselection.swift:19`
-- [ ] change its behavior to DISABLE the filter while KEEPING the set when the newly selected session's
+      and 45), plus the doc comment in `AppStore+CloseReselection.swift:19`. ➕ one more site the plan
+      missed: the comment in `AppStoreCloseReselectionTests.swift:111` names the helper too
+- [x] change its behavior to DISABLE the filter while KEEPING the set when the newly selected session's
       workspace is not a member; still a no-op when disabled or when nothing is selected
-- [ ] `removeWorkspace` and the `AppStore+PendingClose` soft-remove path: prune the id and disable when the
-      set empties
-- [ ] `addWorkspace` / `ensureWorkspace`: when the filter is ON, insert the new workspace into the set
+- [x] `removeWorkspace` and the `AppStore+PendingClose` soft-remove path: prune the id and disable when the
+      set empties. ⚠️ already landed in Task 2 as a logged `[decision]` (the mechanical compile fix); this
+      task VERIFIED both sites and added the missing test coverage rather than rewriting them
+- [x] `addWorkspace` / `ensureWorkspace`: when the filter is ON, insert the new workspace into the set
       instead of clearing focus, so it is visible and the filter survives
-- [ ] rename the `clearFocus: Bool = true` parameter to `revealNewWorkspace: Bool = true` — after this change
+- [x] rename the `clearFocus: Bool = true` parameter to `revealNewWorkspace: Bool = true` — after this change
       the old name states the opposite of what it does; update its callers in `AppStore.swift` and
       `agterm/Control/ControlServer+SessionActions.swift` (the `session.new --no-select` path, which must
       still NOT widen the set)
-- [ ] MIGRATE the existing auto-unfocus assertions in `AppStoreCloseReselectionTests.swift` (lines 104, 125,
-      146) and `AppStoreNavigationTests.swift` (lines 17, 230) from "focus cleared" to "set preserved,
-      `focusEnabled` false" — these currently assert the OLD contract
-- [ ] write tests: removing a member prunes the set, removing the LAST member disables, removing a
-      non-member leaves the filter untouched
-- [ ] write tests: selecting a session in a non-member workspace disables but preserves the set; selecting
+- [x] MIGRATE the existing auto-unfocus assertions from "focus cleared" to "set preserved, `focusEnabled`
+      false". ⚠️ the plan mislocated these: of the five lines it named, only
+      `AppStoreCloseReselectionTests.swift:125` and `:146` asserted the OLD contract —
+      `AppStoreCloseReselectionTests.swift:104` and `AppStoreNavigationTests.swift:17`/`:230` already assert
+      the SURVIVING filter (nav never crosses the boundary), so they needed no change. Seven more
+      old-contract assertions the checkbox did not name live in `AppStoreOrganizationTests.swift` (the
+      `addWorkspace` case at 200 plus the auto-unfocus cases at 309, 342, 357, 368, 400, 422) and were
+      migrated here, with six test functions renamed off "ClearsFocus" onto the new contract
+- [x] write tests: removing a member prunes the set, removing the LAST member disables, removing a
+      non-member leaves the filter untouched (plus a `softRemoveWorkspace` case, which had no coverage)
+- [x] write tests: selecting a session in a non-member workspace disables but preserves the set; selecting
       a session inside a member workspace changes nothing
-- [ ] write tests: `addWorkspace` with the filter on adds the new workspace to the set; with the filter off
+- [x] write tests: `addWorkspace` with the filter on adds the new workspace to the set; with the filter off
       it touches neither field; `revealNewWorkspace: false` does not widen the set
-- [ ] run `swift test` — must pass before Task 4. **`make build` is NOT gated here**
+- [x] run `swift test` — must pass before Task 4. **`make build` is NOT gated here**
 
 ### Task 4: Sweep the app target back to compiling
 

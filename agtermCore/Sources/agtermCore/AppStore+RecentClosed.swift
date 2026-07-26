@@ -21,7 +21,7 @@ extension AppStore {
             emitSessionCreated(session, workspace: workspaces[index].id)
             selectedSessionID = session.id
             replaceSidebarSelection(with: selectedSessionID)
-            autoUnfocusIfOutsideFocus(selectedSessionID)
+            disableFocusIfSelectionOutsideSet(selectedSessionID)
             recordRecency()
             save()
             return true
@@ -42,7 +42,7 @@ extension AppStore {
                 workspace.sessions.contains { $0.id == sessionID } ? sessionID : nil
             } ?? workspace.sessions.first?.id
             replaceSidebarSelection(with: selectedSessionID)
-            autoUnfocusIfOutsideFocus(selectedSessionID)
+            disableFocusIfSelectionOutsideSet(selectedSessionID)
             recordRecency()
             save()
             return true

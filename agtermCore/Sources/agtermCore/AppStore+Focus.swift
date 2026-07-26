@@ -5,18 +5,19 @@ import Foundation
 /// selection. Split out of the main `AppStore` declaration to keep each file focused; the stored
 /// filter state itself stays on the class, since an extension cannot hold stored properties.
 extension AppStore {
-    /// Clears the focus filter when the newly selected session lives outside the marked set, so an
-    /// explicit cross-set select (`session.select <id>` of a hidden session, a notification reveal, a
-    /// move/close that reselects elsewhere) reveals its target — the active session is then always
-    /// inside the visible set. Session navigation (`navigateSession`/`session.go`, Ctrl-Tab,
-    /// attention-nav) is scoped to the filtered set (`navigableSessions`), so its targets are always
-    /// in-set and never trip this — it stays the safety net only for the explicit cross-set cases.
-    /// No-op when the filter is off, when nothing is selected, or when the selection sits in a member
-    /// workspace. Persistence rides the caller's `selectSession` save.
-    func autoUnfocusIfOutsideFocus(_ sessionID: UUID?) {
+    /// Switches the focus filter OFF — KEEPING the marked set — when the newly selected session lives
+    /// outside that set, so an explicit cross-set select (`session.select <id>` of a hidden session, a
+    /// notification reveal, a move/close that reselects elsewhere) reveals its target: the active session
+    /// is then always inside the visible set. The set survives so a hand-curated working set is not
+    /// destroyed by a passive reveal — re-enabling it costs one flip of the bottom-bar toggle.
+    /// Session navigation (`navigateSession`/`session.go`, Ctrl-Tab, attention-nav) is scoped to the
+    /// filtered set (`navigableSessions`), so its targets are always in-set and never trip this — it
+    /// stays the safety net only for the explicit cross-set cases. No-op when the filter is off, when
+    /// nothing is selected, or when the selection sits in a member workspace. Persistence rides the
+    /// caller's `selectSession` save.
+    func disableFocusIfSelectionOutsideSet(_ sessionID: UUID?) {
         guard focusEnabled, let sessionID else { return }
         if let owner = workspace(forSession: sessionID)?.id, focusedWorkspaceIDs.contains(owner) { return }
-        focusedWorkspaceIDs.removeAll()
         focusEnabled = false
     }
 
