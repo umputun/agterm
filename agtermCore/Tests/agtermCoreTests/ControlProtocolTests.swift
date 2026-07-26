@@ -311,6 +311,10 @@ struct ControlProtocolTests {
             ControlRequest(cmd: .workspaceFocus, target: "active", args: ControlArgs(mode: "on")),
             ControlRequest(cmd: .workspaceFocus, target: "9f3c", args: ControlArgs(mode: "off")),
             ControlRequest(cmd: .workspaceFocus, target: "active", args: ControlArgs(mode: "toggle")),
+            ControlRequest(cmd: .workspaceFocus, target: "9f3c", args: ControlArgs(mode: "add")),
+            ControlRequest(cmd: .workspaceFilter, args: ControlArgs(mode: "on")),
+            ControlRequest(cmd: .workspaceFilter, args: ControlArgs(mode: "off")),
+            ControlRequest(cmd: .workspaceFilter, args: ControlArgs(mode: "toggle")),
         ]
         for request in cases {
             #expect(try roundTrip(request) == request)
@@ -383,6 +387,32 @@ struct ControlProtocolTests {
         #expect(decoded.cmd == .workspaceFocus)
         #expect(decoded.args?.mode == "on")
         #expect(decoded.target == "active")
+    }
+
+    @Test func workspaceFilterRoundTripsWithWindow() throws {
+        // workspace.filter is window-scoped and takes no --target: it flips the whole focus filter, so the
+        // only selector it carries is the global --window.
+        let request = ControlRequest(cmd: .workspaceFilter, args: ControlArgs(mode: "on", window: "9f3c"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.target == nil)
+        #expect(decoded.args?.mode == "on")
+        #expect(decoded.args?.window == "9f3c")
+    }
+
+    @Test func workspaceFilterRawStringMapsToCommandAndMode() throws {
+        let raw = #"{"cmd":"workspace.filter","args":{"mode":"toggle"}}"#
+        let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(raw.utf8))
+        #expect(decoded.cmd == .workspaceFilter)
+        #expect(decoded.args?.mode == "toggle")
+    }
+
+    @Test func workspaceFilterBareRequestOmitsMode() throws {
+        // a bare `agtermctl workspace filter` sends no mode; the dispatcher defaults it to toggle.
+        let request = ControlRequest(cmd: .workspaceFilter)
+        let json = String(data: try JSONEncoder().encode(request), encoding: .utf8) ?? ""
+        #expect(!json.contains("mode"), "a nil mode must be omitted from the JSON; got \(json)")
+        #expect(try roundTrip(request) == request)
     }
 
     @Test func sessionBackgroundRoundTrips() throws {
@@ -930,6 +960,41 @@ struct ControlProtocolTests {
         let decoded = try roundTrip(response)
         #expect(decoded == response)
         #expect(decoded.result?.tree?.sidebarMode == "flagged")
+    }
+
+    @Test func treeRoundTripsWithWorkspaceFilter() throws {
+        // the read side of workspace.filter: the flag half of the focus set rides the tree top level, while
+        // the member half rides each workspace node's `focused` — visible iff focused && workspaceFilter.
+        let marked = ControlWorkspaceNode(id: "w1", name: "work", active: true, focused: true, sessions: [])
+        let other = ControlWorkspaceNode(id: "w2", name: "play", active: false, sessions: [])
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [marked, other], workspaceFilter: true)))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaceFilter == true)
+        #expect(decoded.result?.tree?.workspaces.first?.focused == true)
+        #expect(decoded.result?.tree?.workspaces.last?.focused == nil)
+    }
+
+    @Test func treeRoundTripsWithWorkspaceFilterOff() throws {
+        // a marked set with the filter OFF must round-trip as false, not omitted — membership is reported
+        // independently of the flag, so `false` is a real state a script restores.
+        let marked = ControlWorkspaceNode(id: "w1", name: "work", active: true, focused: true, sessions: [])
+        let tree = ControlTree(workspaces: [marked], workspaceFilter: false)
+        let json = String(data: try JSONEncoder().encode(tree), encoding: .utf8) ?? ""
+        #expect(json.contains("\"workspaceFilter\":false"))
+        let decoded = try JSONDecoder().decode(ControlTree.self, from: Data(json.utf8))
+        #expect(decoded.workspaceFilter == false)
+        #expect(decoded.workspaces.first?.focused == true)
+    }
+
+    @Test func treeOmitsWorkspaceFilterWhenNil() throws {
+        // a host-produced tree that projects no window — the key must be omitted, not emitted as null.
+        let tree = ControlTree(workspaces: [])
+        let json = String(data: try JSONEncoder().encode(tree), encoding: .utf8) ?? ""
+        #expect(!json.contains("workspaceFilter"), "a nil workspaceFilter must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlTree.self, from: Data(json.utf8))
+        #expect(decoded.workspaceFilter == nil)
     }
 
     @Test func treeRoundTripsWithQuickVisible() throws {

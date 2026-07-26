@@ -524,23 +524,33 @@ showing, so an empty-space drop must NOT land in the marked workspace.
 **Files:**
 - Modify: `agtermCore/Sources/agtermCore/ControlModes.swift`
 - Modify: `agtermCore/Sources/agtermCore/ControlProtocol.swift`
+- Modify: `agtermCore/Sources/agtermCore/ControlDispatcher.swift` (⚠️ missing from the original list — its
+  top-level `dispatch(_:)` switch is EXHAUSTIVE over `Command`, so a new case breaks the build)
+- Modify: `agterm/Control/ControlServer.swift` (⚠️ same reason — its post-dispatcher fallthrough switch is
+  exhaustive too)
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlModesTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlProtocolTests.swift`
 
-- [ ] add `WorkspaceFocusMode: String, CaseIterable, Sendable` with cases `on`, `off`, `toggle`, `add`, plus
-      a `validNamesList`-style derived description for the error message (the `StatusShape` precedent)
-- [ ] add `case workspaceFilter = "workspace.filter"` to `Command` (reuses `ControlArgs.mode` and
+- [x] add `WorkspaceFocusMode: String, CaseIterable, Sendable` with cases `on`, `off`, `toggle`, `add`, plus
+      a `validNamesList`-style derived description for the error message (the `StatusShape` precedent).
+      ➕ `validNamesPhrase` went in beside it, matching `StatusShape`'s pair: the dispatcher's rejection
+      message (Task 8) wants the pipe form, the CLI's help text and local `validate()` (Task 10) the prose one
+- [x] add `case workspaceFilter = "workspace.filter"` to `Command` (reuses `ControlArgs.mode` and
       `ControlArgs.window`; no new args field)
-- [ ] add `workspaceFilter: Bool?` to `ControlTree` with a doc comment stating it is LIVE and `tree`-only
+- [x] add `workspaceFilter: Bool?` to `ControlTree` with a doc comment stating it is LIVE and `tree`-only
       (the GUI toggle bypasses the command path, so a cached `window.list` copy would go stale)
-- [ ] update `ControlWorkspaceNode.focused`'s doc comment: it now means "is a member of the focus set",
+- [x] update `ControlWorkspaceNode.focused`'s doc comment: it now means "is a member of the focus set",
       reported independently of the flag, and a workspace is visible iff `focused && tree.workspaceFilter` —
       noting that `enabled + empty` is unrepresentable, which is what makes the contract exact
-- [ ] write the `WorkspaceFocusMode` raw-value and `allCases` tests in `ControlModesTests.swift` (the
+- [x] ➕ keep the two exhaustive `Command` switches compiling: `ControlDispatcher.dispatch` gets a
+      `.workspaceFilter` arm returning `nil` (the documented not-yet-migrated fallthrough — grouping it with
+      the workspace commands instead would hit `dispatchWorkspaceCommand`'s `preconditionFailure`), and
+      `ControlServer.dispatch`'s unhandled list gains the case. Task 8 replaces both with the real routing
+- [x] write the `WorkspaceFocusMode` raw-value and `allCases` tests in `ControlModesTests.swift` (the
       existing home for mode enums), NOT in `ControlProtocolTests.swift`
-- [ ] write round-trip tests for `workspace.filter` requests in `ControlProtocolTests.swift`
-- [ ] write `treeRoundTripsWithWorkspaceFilter` and `treeOmitsWorkspaceFilterWhenNil`
-- [ ] run the full gate — must pass before Task 8
+- [x] write round-trip tests for `workspace.filter` requests in `ControlProtocolTests.swift`
+- [x] write `treeRoundTripsWithWorkspaceFilter` and `treeOmitsWorkspaceFilterWhenNil`
+- [x] run the full gate — must pass before Task 8
 
 ### Task 8: Hoist focus-mode validation into the dispatcher and route workspace.filter
 

@@ -78,6 +78,27 @@ public enum ControlSidebarViewMode: Equatable, Sendable {
     }
 }
 
+/// The four modes `workspace.focus` accepts, each identical to the single-workspace behavior at set
+/// size 1: `on` replaces the marked set with the target and enables the filter, `off` removes the target
+/// (disabling once the set empties), `toggle` replace-toggles (clears when the set is exactly the target
+/// and enabled, else replaces with the target and enables), and `add` inserts the target and enables.
+/// There is deliberately no membership-TOGGLE mode — the row menu's membership item computes its own
+/// direction from what it just read and maps to `add` or `off`. Raw values are the wire tokens.
+public enum WorkspaceFocusMode: String, CaseIterable, Sendable {
+    case on, off, toggle, add
+
+    /// The accepted names pipe-joined (`on|off|toggle|add`) — the compact form the dispatcher's rejection
+    /// message uses. Derived from `allCases`, like `StatusShape.validNamesList`, so no message can go
+    /// stale when the set changes.
+    public static var validNamesList: String { validNames.joined(separator: "|") }
+
+    /// The accepted names comma-joined (`on, off, toggle, add`) — the prose form the `agtermctl workspace
+    /// focus` help text and its local rejection message use.
+    public static var validNamesPhrase: String { validNames.joined(separator: ", ") }
+
+    private static var validNames: [String] { allCases.map(\.rawValue) }
+}
+
 /// The mutually exclusive move forms accepted by `session.move`.
 public enum ControlSessionMove: Equatable, Sendable {
     case reorder(ReorderDirection)

@@ -170,6 +170,9 @@ public struct ControlDispatcher {
             return await dispatchWindowCommand(request)
         case .dashboard:
             return dispatchDashboard(request)
+        case .workspaceFilter:
+            // Not dispatcher-owned yet: returns nil so it falls through to the host's own switch.
+            return nil
         case .debugAppearance:
             // UI-test-only seam handled app-side in `ControlServer` (needs AppKit + `ContentView.isUITestLaunch`).
             return nil

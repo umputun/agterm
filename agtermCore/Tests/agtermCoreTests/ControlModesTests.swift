@@ -60,6 +60,28 @@ struct ControlModesTests {
         #expect(!ControlPaneFocusMode.toggle.wantsSplit(currentSplitFocused: true))
     }
 
+    @Test func workspaceFocusModeParsesWireTokens() {
+        #expect(WorkspaceFocusMode(rawValue: "on") == .on)
+        #expect(WorkspaceFocusMode(rawValue: "off") == .off)
+        #expect(WorkspaceFocusMode(rawValue: "toggle") == .toggle)
+        #expect(WorkspaceFocusMode(rawValue: "add") == .add)
+        #expect(WorkspaceFocusMode(rawValue: "remove") == nil)
+        #expect(WorkspaceFocusMode(rawValue: "") == nil)
+    }
+
+    @Test func workspaceFocusModeListsEveryCase() {
+        // there is deliberately no membership-toggle mode: the row menu computes its own direction.
+        #expect(WorkspaceFocusMode.allCases == [.on, .off, .toggle, .add])
+    }
+
+    @Test func workspaceFocusModeDerivesValidNamesFromAllCases() {
+        // both spellings derive from allCases, so a new mode cannot leave an error/help string stale.
+        #expect(WorkspaceFocusMode.validNamesList == WorkspaceFocusMode.allCases.map(\.rawValue).joined(separator: "|"))
+        #expect(WorkspaceFocusMode.validNamesPhrase == WorkspaceFocusMode.allCases.map(\.rawValue).joined(separator: ", "))
+        #expect(WorkspaceFocusMode.validNamesList == "on|off|toggle|add")
+        #expect(WorkspaceFocusMode.validNamesPhrase == "on, off, toggle, add")
+    }
+
     @Test func sidebarViewModeParsesModes() {
         #expect(ControlSidebarViewMode.parse(nil) == .toggle)
         #expect(ControlSidebarViewMode.parse("tree") == .tree)

@@ -20,6 +20,7 @@ public enum Command: String, Codable, Sendable {
     case sessionMove = "session.move"
     case workspaceMove = "workspace.move"
     case workspaceFocus = "workspace.focus"
+    case workspaceFilter = "workspace.filter"
     case workspaceCollapse = "workspace.collapse"
     case workspaceExpand = "workspace.expand"
     case sessionType = "session.type"
@@ -123,7 +124,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// Mode for `session.split` / `quick` / `surface.zoom` (`on|off|toggle`,
     /// `show|hide|toggle` for quick/surface zoom),
     /// `session.flag` (`on|off|toggle|clear`), `sidebar.mode` (`tree|flagged|toggle`),
-    /// `workspace.focus` (`on|off|toggle`), `window.minimize` (`on|off|toggle`),
+    /// `workspace.focus` (`on|off|toggle|add`), `workspace.filter` (`on|off|toggle`),
+    /// `window.minimize` (`on|off|toggle`),
     /// `session.background` (`image|text|color|clear`), and
     /// `session.restore` (`set|none|clear` — pin `command`, pin nothing, or drop the pin).
     public var mode: String?
@@ -509,10 +511,15 @@ public struct ControlWorkspaceNode: Codable, Sendable, Equatable {
     public let id: String
     public let name: String
     public let active: Bool
-    /// Whether this workspace is the one the sidebar tree is FOCUSED (collapsed) to, or nil when it is not
-    /// the focused one / no workspace is focused (omitted from the JSON). Distinct from `active` (the
-    /// SELECTED workspace): focus collapses the sidebar to a single workspace. The read side of the
-    /// write-only `workspace.focus` — so a script can record which workspace is focused and restore it.
+    /// Whether this workspace is a MEMBER of the sidebar's focus set, or nil when it is not (omitted from
+    /// the JSON). Membership is reported INDEPENDENTLY of whether the filter is currently applied, so a
+    /// script can read a marked-but-not-filtering set back; the flag itself is the tree top-level
+    /// `workspaceFilter`. A workspace is VISIBLE in the sidebar iff `focused && tree.workspaceFilter` —
+    /// exact, not approximate, because `workspaceFilter == true` with an empty member set is
+    /// unrepresentable (enabling an empty set is refused, and restore prunes stale ids then disables when
+    /// the set comes back empty). Distinct from `active` (the SELECTED workspace). The read side of the
+    /// write-only `workspace.focus`/`workspace.filter` — so a script can record the working set and
+    /// restore it.
     public let focused: Bool?
     /// Whether this workspace is COLLAPSED in the sidebar tree (`true`), or nil when expanded — the
     /// default — so an all-expanded tree omits the field (matching the persisted `WorkspaceSnapshot.collapsed`).
@@ -558,6 +565,14 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// mode and restore it. `tree`-only (not on `window.list`), since a GUI-only flagged-view toggle would
     /// leave a cached copy stale — read the live tree copy instead.
     public let sidebarMode: String?
+    /// Whether the projected window's workspace focus FILTER is currently applied — the flag half of the
+    /// focus set, whose member half is each workspace node's `focused`. A workspace renders in the sidebar
+    /// iff `focused && workspaceFilter`. LIVE and `tree`-only (not on `window.list`), like `sidebarMode`:
+    /// the bottom-bar toggle and the row menu flip it without going through the command path, so a cached
+    /// copy would go stale — read the live tree copy instead. The read side of the write-only
+    /// `workspace.filter` command, so a script can record the filter state and restore it, or make the
+    /// toggle idempotent. nil in a host-produced tree that does not project a window.
+    public let workspaceFilter: Bool?
     /// Whether the projected window's quick terminal is currently visible. LIVE — resolved app-side per
     /// request from the window's `QuickTerminalController` — so a script can make the `quick` toggle
     /// idempotent (show only when hidden). The read side of the write-only `quick` command. `tree`-only
@@ -595,7 +610,8 @@ public struct ControlTree: Codable, Sendable, Equatable {
     public let dashboardFontMode: String?
 
     public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
-                sidebarVisible: Bool? = nil, sidebarMode: String? = nil, quickVisible: Bool? = nil,
+                sidebarVisible: Bool? = nil, sidebarMode: String? = nil, workspaceFilter: Bool? = nil,
+                quickVisible: Bool? = nil,
                 zoomedSurface: String? = nil, dashboardMembers: [String]? = nil,
                 dashboardHighlighted: String? = nil, dashboardFontSize: Double? = nil,
                 dashboardFontMode: String? = nil) {
@@ -604,6 +620,7 @@ public struct ControlTree: Codable, Sendable, Equatable {
         self.autoFollowMs = autoFollowMs
         self.sidebarVisible = sidebarVisible
         self.sidebarMode = sidebarMode
+        self.workspaceFilter = workspaceFilter
         self.quickVisible = quickVisible
         self.zoomedSurface = zoomedSurface
         self.dashboardMembers = dashboardMembers
