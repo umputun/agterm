@@ -918,30 +918,114 @@ document THIS semantic** — `add` = "insert X into the marked set", never "inse
 
 ### Task 17: Verify acceptance criteria
 
-- [ ] a workspace can be marked and unmarked from its row menu, and the row icon fills/unfills accordingly
-- [ ] marking a workspace does NOT turn the filter on: the whole tree stays on screen, so three workspaces
-      can be marked in a row and applied with one click of the bottom-bar toggle
-- [ ] with three workspaces marked and the filter on, exactly those three render in the tree
-- [ ] the bottom-bar toggle disables and re-enables the filter WITHOUT losing the marked set
-- [ ] the toggle is disabled when nothing is marked, and `workspace.filter on` with an empty set leaves the
-      filter off (so `focused && workspaceFilter` can never lie)
-- [ ] Focus on a single workspace still behaves exactly as before (including the Unfocus label flip)
-- [ ] selecting a session outside the marked set disables the filter and preserves the set
-- [ ] creating a workspace while filtered adds it to the set and keeps the filter on
-- [ ] deleting the last marked workspace disables the filter
-- [ ] a snapshot written by the CURRENT release (carrying `focusedWorkspaceID`) restores as a one-member
-      enabled set; a snapshot whose members are all gone restores to empty + disabled
-- [ ] a drop on empty sidebar space lands in the marked workspace only when exactly one is marked AND the
-      filter is on
-- [ ] session nav, attention nav, Ctrl-Tab, and the ⌃P palette all scope to the multi-workspace set
-- [ ] `agtermctl workspace focus add`, `workspace filter on|off|toggle`, and the `tree` read-backs all work
-      and are idempotent
-- [ ] run the full unit suite: `cd agtermCore && swift test`
-- [ ] run the app-hosted suite: `make test-app`
-- [ ] run the linter: `make lint` (zero findings, `--strict`)
-- [ ] build clean: `make build`
-- [ ] verify no source file crossed 1000 lines and no test file crossed 2000, and that no swiftlint limit was
-      raised
+- [x] a workspace can be marked and unmarked from its row menu, and the row icon fills/unfills accordingly.
+      MARK/UNMARK verified by `FocusWorkspaceUITests.testFilterToggleIsDisabledUntilAWorkspaceIsMarked`,
+      which invokes the row items BY TITLE ("Add to Focus" then "Remove from Focus"), so the label flip is
+      itself asserted; wiring read at `WorkspaceSidebar+ContextMenu.swift:149-156` + `menuToggleFocusMembership`
+      (:252-255, which re-reads the Coordinator's own store for direction). ⚠️ the ICON half is NOT
+      accessibility-observable and is verified BY CODE READING only —
+      `WorkspaceSidebar+RowRendering.swift:58` picks `focusedWorkspaceIcon` on `focusedWorkspaceIDs.contains(node.id)`,
+      independent of `focusEnabled`. Its RENDERED appearance stays on the Post-Completion manual list
+- [x] marking a workspace does NOT turn the filter on: the whole tree stays on screen, so three workspaces
+      can be marked in a row and applied with one click of the bottom-bar toggle. The post-Task-15 contract,
+      pinned host-free by `AppStoreFocusTests.addingToTheSetNeverTurnsTheFilterOn` (BOTH polarities) against
+      `AppStore+Focus.swift:46`'s `wantEnabled = wantIDs.isEmpty ? false : focusEnabled`; in the GUI by
+      `FocusWorkspaceUITests`'s `markFirstTwoOfThreeWorkspaces`, which asserts the toggle stays `off` AND
+      all three rows stay on screen across BOTH marks before one click applies; and over the socket by
+      `ControlSidebarStatusUITests.testWorkspaceFocusAddBuildsAMultiWorkspaceSet` (`add` on an empty set →
+      `workspaceFilter` still false)
+- [x] with three workspaces marked and the filter on, exactly those three render in the tree.
+      ⚠️ [deviation] verified at N=2-of-3, not N=3: `FocusWorkspaceUITests.testAddToFocusKeepsBothMarkedWorkspacesVisible`
+      (`pollWorkspaceRowCount(2)` + the third row absent) and host-free
+      `AppStoreFocusTests.visibleWorkspacesReturnsTheMarkedSubsetInTreeOrder` (two of three marked, rendered
+      in TREE order not mark order). The arity is not a boundary — `visibleWorkspaces` filters by set
+      membership with no count term — so two-marked-of-three already proves the multi-member case
+- [x] the bottom-bar toggle disables and re-enables the filter WITHOUT losing the marked set —
+      `FocusWorkspaceUITests.testFilterToggleSuspendsAndRestoresTheMarkedSet` (the same two rows return with
+      nothing re-marked), `AppStoreFocusTests.setFocusEnabledRoundTripsWithoutLosingTheSet`, and the control
+      half `ControlSidebarStatusUITests.testWorkspaceFilterTogglesWithoutLosingTheSet`
+- [x] the toggle is disabled when nothing is marked, and `workspace.filter on` with an empty set leaves the
+      filter off (so `focused && workspaceFilter` can never lie) —
+      `FocusWorkspaceUITests.testFilterToggleIsDisabledUntilAWorkspaceIsMarked` (both directions: marking
+      enables it, removing the last member disables it again), `AppStoreFocusTests.setFocusEnabledRefusesAnEmptySet`
+      + `workspaceFilterOnAnEmptySetLeavesTheFilterOffThroughTheControlPath` (driven through
+      `ControlDispatcher.dispatch`), and `testWorkspaceFilterTogglesWithoutLosingTheSet`, which opens with
+      the empty-set case
+- [x] Focus on a single workspace still behaves exactly as before (including the Unfocus label flip) —
+      `FocusWorkspaceUITests.testFocusWorkspaceHidesOthersAndUnfocusRestores` invokes the item by title
+      "Focus" then "Unfocus", so the flip is asserted; the predicate is
+      `WorkspaceSidebar+ContextMenu.swift:144` (`store.focusEnabled && store.focusedWorkspaceIDs == [node.id]`).
+      Host-free: `setFocusedWorkspaceSetsAndClears`, `setFocusedWorkspaceReplacesTheWholeSet`,
+      `visibleWorkspacesReturnsOneWhenFocused`; over the socket `testWorkspaceFocusHidesOtherWorkspaces`
+- [x] selecting a session outside the marked set disables the filter and preserves the set —
+      `AppStoreFocusTests.selectingOutsideTheSetDisablesTheFilterButKeepsEveryMember` and its
+      `selectingInsideTheSetChangesNothing` twin, against `AppStore+Focus.swift:18-22`
+- [x] creating a workspace while filtered adds it to the set and keeps the filter on —
+      `AppStoreFocusTests.addWorkspaceJoinsTheSetOnlyWhileTheFilterIsOn` (with the filter OFF it touches
+      neither field) + `addWorkspaceWithoutRevealDoesNotWidenTheSet`, and the e2e
+      `ControlSidebarStatusUITests.testSessionNewNoSelectCreateWorkspacePreservesFocus`
+- [x] deleting the last marked workspace disables the filter —
+      `AppStoreFocusTests.removingTheLastMemberWorkspaceDisablesTheFilter`, with
+      `removingAMemberPrunesItAndKeepsTheRestFiltered`, `removingANonMemberWorkspaceLeavesTheFilterUntouched`,
+      and `softRemovingAMemberPrunesItAndDisablesWhenTheSetEmpties` covering the neighbouring paths
+- [x] a snapshot written by the CURRENT release (carrying `focusedWorkspaceID`) restores as a one-member
+      enabled set; a snapshot whose members are all gone restores to empty + disabled. The BACK-COMPAT
+      guarantee, so it was checked against the decode path itself: `Snapshot.swift:80-88` decodes the legacy
+      key, and ONLY when `focusedWorkspaceIDs` is absent does it migrate to `[legacy]` + `focusEnabled = true`;
+      `AppStore+Focus.swift:74-78` then intersects with the restored tree and disables on an empty result.
+      PROVEN by `PersistenceTests.legacySnapshotWithSingleFocusedWorkspaceMigratesToAnEnabledSet` — a raw
+      legacy JSON file through `PersistenceStore.load` + `AppStore.restore`, asserting the one-member enabled
+      set AND `visibleWorkspaces == [ws]` — with `SnapshotRoundTripTests.legacySnapshotWithSingleFocusedWorkspaceDecodesAsAnEnabledSet`
+      pinning the raw decode, `snapshotWithBothFocusKeysPrefersTheSet` pinning that the SET wins a
+      downgrade/upgrade round trip, and `snapshotWithoutAnyFocusKeyDecodesToNilWithoutThrowing` +
+      `PersistenceTests.legacySnapshotWithoutFocusedWorkspaceDecodesUnfocused` pinning the no-key case.
+      The all-gone case is `AppStoreFocusTests.restorePrunesAnAllStaleSetToEmptyAndDisabled`; the partial
+      case `restoreKeepsTheSurvivorsOfAPartiallyStaleSet`. Verified entirely against test fixtures — the
+      real `~/Library/Application Support/agterm/` state was never read or touched
+- [x] a drop on empty sidebar space lands in the marked workspace only when exactly one is marked AND the
+      filter is on — the four `AppStoreFocusTests.dropFallback*` cases (empty → nil; one member enabled →
+      that member; one member DISABLED → nil; two members enabled → nil) against `AppStore+Focus.swift:110-113`,
+      consumed at `WorkspaceSidebar+DragDrop.swift:161` as `resolveDirectoryWorkspace`'s `focusedWorkspaceID:`
+- [x] session nav, attention nav, Ctrl-Tab, and the ⌃P palette all scope to the multi-workspace set.
+      ⚠️ verified BY CODE READING + composition, not by a direct multi-member test: all four consumers read
+      `AppStore.navigableSessions` (`AppStore.swift:556` for `navigateSession`, which backs both plain and
+      attention nav; `SessionSwitcher.swift:85` for Ctrl-Tab; `AppActions+Palette.swift:157` for ⌃P), and
+      that is `visibleWorkspaces.flatMap(\.sessions)` (`AppStore+Focus.swift:99`), whose multi-member
+      behavior IS pinned by `visibleWorkspacesReturnsTheMarkedSubsetInTreeOrder`. The nav suite itself
+      (`navigateScopesToFocusedWorkspace`, `navigateAttentionScopesToFocusedWorkspace`,
+      `navigableSessionsReflectsFlaggedFocusAndUnfocused`) only ever drives a set of ONE, so no test walks
+      nav across a 2-member set. Left as-is rather than fixed: the plan's Solution Overview lists this as
+      "FREE — do not fix", and a strengthening test is a maintainer call, not an acceptance fix
+- [x] `agtermctl workspace focus add`, `workspace filter on|off|toggle`, and the `tree` read-backs all work
+      and are idempotent — CLI mapping by `CommandsTests.workspaceFocusAddWithTarget` +
+      `workspaceFocusRejectsBadMode`/`workspaceFocusHelpListsEveryMode` and the six `workspaceFilter*` cases;
+      dispatcher routing/validation by the nine `ControlDispatcherWorkspaceTests` cases; the read-backs by
+      `AppStoreFocusTests.controlTreeReportsEveryMemberAsFocused` /
+      `controlTreeReportsMembershipIndependentlyOfTheFilterFlag` / `controlTreeReportsWorkspaceFilterInBothStates`.
+      IDEMPOTENCY: the store mutators are delta-guarded (`focusSettersAreNoOpWritesWhenUnchanged` +
+      `setFocusEnabledOnAnEmptySetIsANoOpWrite` assert no file is even written), and the e2e
+      `testWorkspaceFocusAddBuildsAMultiWorkspaceSet` drives an explicit repeat-`add` end to end
+- [x] run the full unit suite: `cd agtermCore && swift test` — **1860 tests in 75 suites, 0 failures**
+- [x] run the app-hosted suite: `make test-app` — **22 tests, 0 failures** (`** TEST SUCCEEDED **`)
+- [x] run the linter: `make lint` (zero findings, `--strict`) — `swiftlint lint --strict --quiet` exited 0
+      with NO output, i.e. zero violations
+- [x] build clean: `make build` — `** BUILD SUCCEEDED **`
+- [x] verify no source file crossed 1000 lines and no test file crossed 2000, and that no swiftlint limit was
+      raised. Measured across every tracked `.swift`: NO source file over 1000 (largest touched:
+      `AppStore.swift` 965, `AppActions.swift` 935, `WorkspaceSidebar.swift` 899) and NO test file over 2000
+      (largest: `ControlDispatcherTests.swift` 1946, `AppStoreTests.swift` 1938,
+      `ControlSidebarStatusUITests.swift` 1008). `git diff origin/master...HEAD --name-only | grep -i swiftlint`
+      is EMPTY — neither the root `.swiftlint.yml` nor the three nested test configs were touched on this branch
+- [x] ➕ the two e2e suites were re-run as part of this gate:
+      `xcodebuild test … -only-testing:agtermUITests/FocusWorkspaceUITests` → **4 tests, 0 failures (67.9 s)**,
+      and the four affected `ControlSidebarStatusUITests` methods
+      (`testWorkspaceFocusHidesOtherWorkspaces`, `testWorkspaceFocusAddBuildsAMultiWorkspaceSet`,
+      `testWorkspaceFilterTogglesWithoutLosingTheSet`, `testSessionNewNoSelectCreateWorkspacePreservesFocus`)
+      → **4 tests, 0 failures (17.8 s)**
+- ➕ [decision] the acceptance list needed NO old-behavior corrections: every criterion already describes
+      the post-Task-15 mark-only contract, and the criterion Task 15b said it added ("marking a workspace
+      does NOT turn the filter on") is present and now verified. The two annotations above are a coverage
+      arity note and a composition-only verification note, not behavior corrections
 
 ### Task 18: [Final] Update project documentation
 
