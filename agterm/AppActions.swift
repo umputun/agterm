@@ -784,9 +784,10 @@ final class AppActions {
     // MARK: - Quick terminal (frontmost window)
 
     /// Toggle the frontmost window's quick terminal (each window owns its own controller). Gated on the full
-    /// `uiActionsEnabled` (zoom AND dashboard), not zoom alone: the View ▸ Quick Terminal item already carries
-    /// `.disabled(modalActive)` and the dashboard force-hides a shown quick terminal, so this makes the one
-    /// remaining path — a rebound keymap chord — agree with the menu instead of opening over the grid.
+    /// `uiActionsEnabled` (zoom AND dashboard), not zoom alone — defence in depth rather than a gap being
+    /// closed, since all three callers already gate: the View ▸ Quick Terminal item's `.disabled(modalActive)`
+    /// (which covers a `keymap.conf` rebind too, because that rebind is the item's own key equivalent), the
+    /// palette's `runPaletteCommand` check, and the Dock item's invocation-time `uiActionsEnabled(for:)`.
     func toggleQuickTerminal() {
         guard uiActionsEnabled else { return }
         frontmostQuickTerminal?.toggle()

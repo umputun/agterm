@@ -163,8 +163,12 @@ extension AppActions {
         // both flags are app-GLOBAL (one `renamePending`, one `PaletteController` shared by every window),
         // so unscoped they would let a palette open in the frontmost window silently skip the responder move
         // for a `session.focus` aimed at a background one — leaving that window's `splitFocused` and its real
-        // first responder disagreeing, with the control command still reporting ok. The rename/palette race
-        // this guards is always in the frontmost window, so scoping costs the protection nothing.
+        // first responder disagreeing, with the control command still reporting ok. Scoping costs the
+        // protection nothing because only the KEY window receives keystrokes, so the race actually guarded
+        // here — a retry stealing the field the user is typing into — is frontmost-only by construction.
+        // (A BACKGROUND window can still hold an inline editor, since the rename notifications fan out to
+        // every window's sidebar coordinator; nobody is typing into that one, and the fan-out itself is a
+        // separate, older defect.)
         if library.windowID(forSession: session.id) == library.activeWindowID {
             if renamePending { return }
             if palette?.mode != nil { return }

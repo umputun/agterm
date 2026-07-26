@@ -26,10 +26,12 @@ paths:
   split + focus, and font.
   `toggleQuickTerminal` gates on the full `uiActionsEnabled` (terminal zoom AND the dashboard grid),
   not zoom alone.
-  The View ▸ Quick Terminal item already carried `.disabled(modalActive)`,
-  and `WindowContentView+Dashboard` force-hides a shown quick terminal when the grid opens.
-  So the wider gate changes only the one remaining path, a rebound keymap chord,
-  and makes it agree with the menu instead of opening over the grid.
+  This is defence in depth, not a gap being closed: all three callers of the method were already gated.
+  The View ▸ Quick Terminal item carries `.disabled(modalActive)`, which also covers a `keymap.conf` rebind of the built-in, because that rebind IS the item's key equivalent;
+  the palette caller is gated by `runPaletteCommand`'s own `uiActionsEnabled` check;
+  and the Dock item rechecks `uiActionsEnabled(for:)` at invocation.
+  The control `quick` command never reaches this method at all, driving `QuickTerminalRegistry` directly.
+  The title-bar quick-terminal button is not a caller either — it toggles the controller directly, and is unreachable while a modal is up because `WindowContentView+Dashboard` swaps the whole titlebar.
 - **Application Dock menu (`AppDelegate.applicationDockMenu`).**
   AppKit asks for a fresh menu when the Dock icon is right-clicked.
   The menu exposes New Session, Quick Terminal, Dashboard, the captured window's MRU sessions, and that window's attention ordering.
@@ -295,8 +297,12 @@ paths:
   no-ops on an empty tree, and routes through `selectSession` (recency + badge + persist + workspace-derivation).
   It is shared by the menu, the action palette, and the control channel (`session.go`) so the three can't
   drift.
-  Each GUI action (`AppActions.select{Next,Previous,First,Last}Session`) calls `focusActiveSession()`
-  after the move so first responder follows into the moved-to terminal (the sidebar never steals focus);
+  The four GUI actions (`AppActions.select{Next,Previous,First,Last}Session`) are one-liners over the private `AppActions.navigatePlain(_:)`.
+  A step that MOVES the selection routes through `revealActiveBlockedPane(captured:)`,
+  which reveals the tagged pane when the moved-to session needs attention and otherwise falls through to `focusActiveSession()`,
+  so first responder follows into the moved-to terminal either way (the sidebar never steals focus).
+  A step that resolves to the session ALREADY selected skips the reveal and calls `focusActiveSession()` directly.
+  Both paths are still subject to the shared modal focus guards (zoom, dashboard, rename, palette, quick terminal), which suppress the responder move in either branch.
   `WorkspaceSidebar.syncSelection()` expands the owning workspace if collapsed and `scrollRowToVisible`s
   the target so an off-screen row is revealed.
   Distinct from the ⌃Tab MRU switcher (recency order) and the ⌃P fuzzy palette (search) — this is predictable
