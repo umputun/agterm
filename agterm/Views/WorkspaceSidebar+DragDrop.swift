@@ -150,15 +150,15 @@ extension WorkspaceSidebar.Coordinator {
 
     /// Resolves a Finder drop to existing directory URLs and a destination workspace. Dropping on a
     /// workspace row adds there; dropping on a session row adds to that session's workspace; dropping into
-    /// empty sidebar space uses the focused workspace when set, otherwise the current workspace.
+    /// empty sidebar space uses the store's `dropFallbackWorkspaceID` (the sole marked workspace while the
+    /// focus filter is on), otherwise the current workspace.
     private func resolveDirectoryDrop(from info: NSDraggingInfo, item: Any?) -> DirectoryDrop? {
         let resolved = directoryURLs(from: info)
         guard !resolved.urls.isEmpty,
               let workspaceID = SidebarDrop.resolveDirectoryWorkspace(
                   sidebarMode: store.sidebarMode,
                   rowWorkspaceID: rowWorkspaceID(for: item),
-                  focusedWorkspaceID: store.focusEnabled && store.focusedWorkspaceIDs.count == 1
-                      ? store.focusedWorkspaceIDs.first : nil,
+                  focusedWorkspaceID: store.dropFallbackWorkspaceID,
                   currentWorkspaceID: store.currentWorkspaceID)
         else { return nil }
         return DirectoryDrop(urls: resolved.urls, workspaceID: workspaceID,

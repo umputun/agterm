@@ -95,4 +95,17 @@ extension AppStore {
     public var navigableSessions: [Session] {
         sidebarMode == .flagged ? flaggedSessions : visibleWorkspaces.flatMap(\.sessions)
     }
+
+    /// The workspace a drop into EMPTY sidebar space (a Finder folder dropped below the rows) should land
+    /// in, or nil to let the drop fall through to the current workspace. It is the marked workspace only
+    /// when the filter is ENABLED and the set holds exactly ONE member — the state where the tree renders
+    /// that single workspace, so the drop lands where the user is looking and adding a session cannot
+    /// silently leave the filtered view. The `focusEnabled` term is load-bearing: with a workspace marked
+    /// but the filter OFF the WHOLE tree is on screen, so the mark has no claim on an empty-space drop.
+    /// Two or more members give no unambiguous target, so those fall through as well. Host-free, unlike
+    /// the AppKit drop handler that consumes it, so the rule is unit-testable.
+    public var dropFallbackWorkspaceID: UUID? {
+        guard focusEnabled, focusedWorkspaceIDs.count == 1 else { return nil }
+        return focusedWorkspaceIDs.first
+    }
 }

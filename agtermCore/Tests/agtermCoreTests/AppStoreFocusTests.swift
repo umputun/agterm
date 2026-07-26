@@ -293,6 +293,41 @@ struct AppStoreFocusTests {
         #expect(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled)
     }
 
+    @Test func dropFallbackIsNilWithNothingMarked() {
+        let store = makeStore()
+        _ = store.addWorkspace(name: "work")
+        #expect(store.dropFallbackWorkspaceID == nil) // no filter, so an empty-space drop uses the current workspace
+    }
+
+    @Test func dropFallbackIsTheSoleMemberWhileTheFilterIsOn() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        _ = store.addWorkspace(name: "personal")
+        store.setFocusedWorkspace(work.id)
+        #expect(store.dropFallbackWorkspaceID == work.id) // the only workspace the tree is rendering
+    }
+
+    @Test func dropFallbackIsNilWhenTheFilterIsOff() {
+        // the load-bearing case: one workspace is MARKED but the filter is OFF, so the whole tree is on
+        // screen — an empty-space drop must not silently land in the marked workspace.
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        _ = store.addWorkspace(name: "personal")
+        store.setFocusMembership(work.id, member: true)
+        store.setFocusEnabled(false)
+        #expect(store.focusedWorkspaceIDs == [work.id]) // still marked, so set SIZE alone would answer wrong
+        #expect(store.dropFallbackWorkspaceID == nil)
+    }
+
+    @Test func dropFallbackIsNilWithTwoMembersMarked() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        store.setFocusMembership(work.id, member: true)
+        store.setFocusMembership(personal.id, member: true)
+        #expect(store.dropFallbackWorkspaceID == nil) // no unambiguous target among several rendered rows
+    }
+
     @Test func workspaceFocusPrunesRowsOutsideFocusedWorkspace() {
         let store = makeStore()
         let ws1 = store.addWorkspace(name: "one")

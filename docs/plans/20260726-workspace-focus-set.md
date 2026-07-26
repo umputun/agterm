@@ -208,7 +208,7 @@ observable behavior at set size 1.
   so ⌥⌘↑/↓ session nav, ⌃⌥↑/↓ attention nav, the Ctrl-Tab MRU switcher, and the ⌃P fuzzy session palette all
   scope to the multi-workspace set automatically. (It MOVES file in Task 1 but its body is untouched.)
 - The reconcile `TreeShape` already derives from `visibleWorkspaces`, so a filter flip re-shapes the tree.
-- `SidebarDrop.resolveTargetWorkspace` itself stays byte-identical — only what the CALLER passes for its
+- `SidebarDrop.resolveDirectoryWorkspace` itself stays byte-identical — only what the CALLER passes for its
   focus argument changes (Task 6).
 - The flagged flat list keeps ignoring focus entirely — the two remain orthogonal.
 
@@ -497,7 +497,7 @@ again; that small churn is the price of a continuously-building tree.
 
 ### Task 6: Add the tested drop-fallback accessor
 
-`SidebarDrop.resolveTargetWorkspace` itself stays byte-identical; only what the caller passes changes. The
+`SidebarDrop.resolveDirectoryWorkspace` itself stays byte-identical; only what the caller passes changes. The
 new logic must include the `focusEnabled` term — with one member marked and the filter OFF the full tree is
 showing, so an empty-space drop must NOT land in the marked workspace.
 
@@ -506,15 +506,18 @@ showing, so an empty-space drop must NOT land in the marked workspace.
 - Modify: `agterm/Views/WorkspaceSidebar+DragDrop.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreFocusTests.swift`
 
-- [ ] add `public var dropFallbackWorkspaceID: UUID?` returning
+- [x] add `public var dropFallbackWorkspaceID: UUID?` returning
       `focusEnabled && focusedWorkspaceIDs.count == 1 ? that member : nil` (host-free, so it is unit-testable
       unlike the app-side call site)
-- [ ] pass it as `resolveTargetWorkspace`'s `focusedWorkspaceID:` argument from
-      `WorkspaceSidebar+DragDrop.swift:160`, replacing Task 4's inline expression
-- [ ] leave `SidebarDrop.swift` and `SidebarDropTests.swift` untouched — the helper's contract is unchanged
-- [ ] write tests: empty set → nil; one member ENABLED → that member; one member DISABLED → nil; two members
+- [x] pass it as `resolveDirectoryWorkspace`'s `focusedWorkspaceID:` argument from
+      `WorkspaceSidebar+DragDrop.swift:160`, replacing Task 4's inline expression. ⚠️ the plan called the
+      helper `resolveTargetWorkspace`; its real name is `SidebarDrop.resolveDirectoryWorkspace` (fixed here
+      and in the Solution Overview bullet). Its `resolveDirectoryDrop` doc comment, which described the old
+      single-`focusedWorkspaceID` fallback, was refreshed to name the accessor
+- [x] leave `SidebarDrop.swift` and `SidebarDropTests.swift` untouched — the helper's contract is unchanged
+- [x] write tests: empty set → nil; one member ENABLED → that member; one member DISABLED → nil; two members
       enabled → nil (the fallback would otherwise be a workspace the sidebar is not rendering)
-- [ ] run the full gate — must pass before Task 7
+- [x] run the full gate — must pass before Task 7
 
 ### Task 7: Extend the control protocol (mode enum, new command, tree read-back)
 
