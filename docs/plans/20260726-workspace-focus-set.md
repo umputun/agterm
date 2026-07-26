@@ -595,20 +595,30 @@ showing, so an empty-space drop must NOT land in the marked workspace.
 - Modify: `agtermCore/Sources/agtermCore/AppStore.swift` (`controlTree`)
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreFocusTests.swift` (the focus read-back tests moved
   here in Task 1)
+- Modify: `agtermCore/Tests/agtermCoreTests/MockControlActions.swift` (⚠️ missing from the original list —
+  the empty-set test must drive the REAL command path, so the mock's `setWorkspaceFilter` gained an opt-in
+  `filterStore` that applies the parsed mode to a live `AppStore` the way the app-side arm does)
 
-- [ ] rewrite `focusWorkspace` to switch on the typed `WorkspaceFocusMode`: `on` → `setFocusedWorkspace(id)`,
+- [x] rewrite `focusWorkspace` to switch on the typed `WorkspaceFocusMode`: `on` → `setFocusedWorkspace(id)`,
       `off` → `setFocusMembership(id, member: false)`, `add` → `setFocusMembership(id, member: true)`,
-      `toggle` → replace-toggle; delete the inline string switch and its error return (now dispatcher-owned)
-- [ ] add the `setWorkspaceFilter` arm in the same file: resolve the target store via
+      `toggle` → replace-toggle; delete the inline string switch and its error return (now dispatcher-owned).
+      ⚠️ landed in TASK 8 (changing the `ControlActions` requirement broke conformance, so `make build`
+      could not pass without it) — VERIFIED here, all four arms present and correct
+- [x] add the `setWorkspaceFilter` arm in the same file: resolve the target store via
       `resolvePlacementStore(window)` (so it honors the global `--window` selector like
-      `sidebar.expand`/`sidebar.collapse`), compute the delta, and call `AppStore.setFocusEnabled`
-- [ ] populate `ControlWorkspaceNode.focused` from set membership (`focusedWorkspaceIDs.contains(id) ? true : nil`)
-      and the new top-level `workspaceFilter` from `focusEnabled` in `AppStore.controlTree`
-- [ ] write tests: `controlTree` reports `focused` on every member and omits it on non-members, independent
+      `sidebar.expand`/`sidebar.collapse`), compute the delta, and call `AppStore.setFocusEnabled`.
+      ⚠️ also landed in TASK 8 for the same conformance reason — VERIFIED here, incl. the no-open-window guard
+- [x] populate `ControlWorkspaceNode.focused` from set membership (`focusedWorkspaceIDs.contains(id) ? true : nil`)
+      and the new top-level `workspaceFilter` from `focusEnabled` in `AppStore.controlTree`.
+      ⚠️ the `focused` half landed in the TASK 4 sweep; the `workspaceFilter` half landed here, always
+      populated (never nil) on an app-produced tree, matching `sidebarVisible`
+- [x] write tests: `controlTree` reports `focused` on every member and omits it on non-members, independent
       of the flag; `workspaceFilter` reflects `focusEnabled` in both states
-- [ ] write a test that `workspace.filter on` against an EMPTY set leaves `workspaceFilter` false, so the
-      documented `focused && workspaceFilter` contract cannot be violated through the control path
-- [ ] run the full gate — must pass before Task 10
+- [x] write a test that `workspace.filter on` against an EMPTY set leaves `workspaceFilter` false, so the
+      documented `focused && workspaceFilter` contract cannot be violated through the control path.
+      Driven through `ControlDispatcher.dispatch(.workspaceFilter, mode: "on")` against a store-backed
+      action, so the mode parse and `setFocusEnabled`'s refusal are both exercised, not the mutator alone
+- [x] run the full gate — must pass before Task 10
 
 ### Task 10: Extend the agtermctl CLI
 

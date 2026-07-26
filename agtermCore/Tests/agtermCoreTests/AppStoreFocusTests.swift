@@ -358,4 +358,78 @@ struct AppStoreFocusTests {
         store.setFocusedWorkspace(nil)
         #expect(store.controlTree().workspaces.allSatisfy { $0.focused == nil })
     }
+
+    @Test func controlTreeReportsEveryMemberAsFocused() {
+        let store = makeStore()
+        let one = store.addWorkspace(name: "one")
+        _ = store.addWorkspace(name: "two")
+        let three = store.addWorkspace(name: "three")
+        store.setFocusMembership(one.id, member: true)
+        store.setFocusMembership(three.id, member: true)
+
+        let nodes = store.controlTree().workspaces
+        #expect(nodes.filter { $0.focused == true }.map(\.id).sorted() == [one.id, three.id].map(\.uuidString).sorted())
+        #expect(nodes.first { $0.id != one.id.uuidString && $0.id != three.id.uuidString }?.focused == nil)
+    }
+
+    @Test func controlTreeReportsMembershipIndependentlyOfTheFilterFlag() {
+        // membership and the flag are separate read-back fields: a marked-but-not-filtering set must still
+        // report `focused`, else a script could not record a working set while the filter is off.
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        _ = store.addWorkspace(name: "personal")
+        store.setFocusMembership(work.id, member: true)
+        store.setFocusEnabled(false)
+
+        let tree = store.controlTree()
+        #expect(tree.workspaceFilter == false)
+        #expect(tree.workspaces.first { $0.id == work.id.uuidString }?.focused == true)
+    }
+
+    @Test func controlTreeReportsWorkspaceFilterInBothStates() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        #expect(store.controlTree().workspaceFilter == false) // nothing marked, filter off
+        store.setFocusMembership(work.id, member: true)
+        #expect(store.controlTree().workspaceFilter == true)
+        store.setFocusEnabled(false)
+        #expect(store.controlTree().workspaceFilter == false)
+    }
+
+    @Test func workspaceFilterOnAnEmptySetLeavesTheFilterOffThroughTheControlPath() async {
+        // the read-back contract published to scripts is "visible iff `focused && workspaceFilter`". If the
+        // control path could enable an EMPTY set, `workspaceFilter` would report true while no workspace
+        // reported `focused`, so a script would conclude nothing is visible while the whole tree is on
+        // screen. Driven through the real command path (dispatcher parse -> the arm -> `setFocusEnabled`),
+        // not the store mutator alone, so the guard cannot be bypassed by the command.
+        let store = makeStore()
+        _ = store.addWorkspace(name: "work")
+        let actions = MockControlActions()
+        actions.filterStore = store
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        let response = await dispatcher.dispatch(ControlRequest(cmd: .workspaceFilter, args: ControlArgs(mode: "on")))
+
+        #expect(response?.ok == true) // the command succeeds having changed nothing
+        #expect(!store.focusEnabled)
+        let tree = store.controlTree()
+        #expect(tree.workspaceFilter == false)
+        #expect(tree.workspaces.allSatisfy { $0.focused == nil })
+    }
+
+    @Test func workspaceFilterTogglesTheFlagThroughTheControlPathOnceAWorkspaceIsMarked() async {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        store.setFocusMembership(work.id, member: true)
+        let actions = MockControlActions()
+        actions.filterStore = store
+        let dispatcher = ControlDispatcher(actions: actions)
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .workspaceFilter, args: ControlArgs(mode: "off")))
+        #expect(store.controlTree().workspaceFilter == false)
+        #expect(store.focusedWorkspaceIDs == [work.id]) // turning the filter off keeps the marked set
+
+        _ = await dispatcher.dispatch(ControlRequest(cmd: .workspaceFilter, args: ControlArgs(mode: "toggle")))
+        #expect(store.controlTree().workspaceFilter == true)
+    }
 }

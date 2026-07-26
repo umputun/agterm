@@ -83,6 +83,10 @@ final class MockControlActions: ControlActions {
     var nextSessionNewResponse = ControlResponse(ok: true)
     var nextSessionDuplicateResponse = ControlResponse(ok: true)
     var nextWorkspaceFilterResponse = ControlResponse(ok: true)
+    /// The store `setWorkspaceFilter` drives when set (nil = record-only, the default for every other
+    /// dispatcher test). Lets a test exercise the REAL `workspace.filter` command path against a live
+    /// `AppStore` rather than asserting only on what was routed.
+    var filterStore: AppStore?
     var nextSidebarVisibilityResponse = ControlResponse(ok: true)
     var nextSidebarViewModeResponse = ControlResponse(ok: true)
     var nextExpandResponse = ControlResponse(ok: true)
@@ -215,6 +219,9 @@ final class MockControlActions: ControlActions {
 
     func setWorkspaceFilter(window: String?, mode: ControlToggleMode) -> ControlResponse {
         calls.append(.workspaceFilter(window: window, mode))
+        // when a test supplies a store, apply the parsed mode to it exactly as the app-side arm does, so
+        // the whole `workspace.filter` path (dispatcher parse -> `setFocusEnabled`) runs host-free.
+        if let store = filterStore { store.setFocusEnabled(mode.desiredValue(current: store.focusEnabled)) }
         return nextWorkspaceFilterResponse
     }
 
