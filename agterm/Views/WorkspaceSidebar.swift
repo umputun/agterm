@@ -552,15 +552,19 @@ struct WorkspaceSidebar: NSViewRepresentable {
 
             // restore expansion from the tracked set rather than the live outline state: a flagged-mode
             // reload drops the workspace nodes, so the outline forgets they were expanded, but the tracked
-            // set remembers across the interlude. Every marked workspace is expanded unconditionally while
-            // the filter is on — focus is a "zoom in", so their sessions must show even if a workspace was
-            // collapsed. This re-apply is a VIEW restore, not a user action, so suppress the persist: a
+            // set remembers across the interlude. A filter applied to a SINGLE marked workspace also
+            // force-expands it — that case is a "zoom in" on one workspace, so its sessions must show even
+            // if the row was collapsed. The force stops at one member on purpose: with a working SET the
+            // tree is a list of workspaces, not a zoom, and re-expanding every member on each rebuild
+            // (any session add/close/move re-shapes the tree) would undo the user's collapse of a member
+            // over and over while `tree` still reported it `collapsed` — a visible read-back divergence.
+            // This re-apply is a VIEW restore, not a user action, so suppress the persist: a
             // marked-but-collapsed workspace must keep its persisted collapse (the zoom-in shows it, but
             // doesn't un-collapse it).
             outline.reloadData()
             suppressExpansionPersist = true
-            let forceExpanded = store.focusEnabled ? store.focusedWorkspaceIDs : []
-            for node in roots where expandedWorkspaceIDs.contains(node.id) || forceExpanded.contains(node.id) {
+            let forceExpanded = store.soleFocusedWorkspaceID
+            for node in roots where expandedWorkspaceIDs.contains(node.id) || forceExpanded == node.id {
                 outline.expandItem(node)
             }
             suppressExpansionPersist = false

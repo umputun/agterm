@@ -344,10 +344,14 @@ which switches the filter off as the set empties. Per-window and persisted; orth
 `sidebar mode`. While the filter is applied, `session go` navigation is scoped to the marked workspaces'
 sessions; suspending it restores stepping over all sessions.
 
+Every mode acts on `--target`, which defaults to `active` — the workspace of the SELECTED session, not
+whatever the previous line addressed. Focusing does not move the selection, so always name the workspace
+you mean.
+
 ```bash
 agtermctl workspace focus on --target "$AGTERM_WORKSPACE_ID"  # zoom to this workspace
 agtermctl workspace focus toggle --target a1b2                # replace-toggle onto another workspace
-agtermctl workspace focus off                                 # unmark it; the tree comes back
+agtermctl workspace focus off --target a1b2                   # unmark it; the tree comes back
 ```
 
 ## Build, read back, and restore a multi-workspace working set
@@ -356,17 +360,22 @@ agtermctl workspace focus off                                 # unmark it; the t
 member with the whole tree still on screen and applied ONCE with `workspace filter on`. `workspace
 filter off` suspends it WITHOUT losing the set, so peeking at everything and coming back costs one call
 each way. Membership reads back per workspace as `focused`, the flag as the tree-level
-`workspaceFilter`, and a workspace renders iff both are true — `filter on` with nothing marked is
-refused, so the pair can never disagree with what is on screen.
+`workspaceFilter`, and a workspace row renders iff
+`sidebarVisible && sidebarMode == "tree" && (!workspaceFilter || focused)` — no workspace row renders at
+all with the sidebar hidden or in `flagged` mode (that view is a flat flagged-session list); in `tree`
+mode with the filter off the whole tree is on screen regardless of membership, and only with the filter
+on does visibility narrow to the members. `filter on` with nothing marked is refused, so an applied
+filter always has a visible member and the pair can never disagree with what is on screen.
 
 ```bash
 agtermctl workspace focus add --target a1b2      # mark; the tree stays fully visible
 agtermctl workspace focus add --target c3d4      # mark a second one, still nothing hidden
 agtermctl workspace filter on                    # now show only the two marked workspaces
 
-# record the working set before changing it
-set=$(agtermctl tree --json | jq -r '.result.tree.workspaces[] | select(.focused) | .id')
-was=$(agtermctl tree --json | jq -r '.result.tree.workspaceFilter')
+# record the working set before changing it (one tree read for both fields)
+tree=$(agtermctl tree --json)
+marked=$(printf '%s' "$tree" | jq -r '.result.tree.workspaces[] | select(.focused) | .id')
+was=$(printf '%s' "$tree" | jq -r '.result.tree.workspaceFilter')
 
 agtermctl workspace filter off                   # peek at the whole tree; the set survives
 agtermctl workspace filter on                    # back to the same two workspaces
@@ -376,8 +385,8 @@ agtermctl workspace filter off
 for ws in $(agtermctl tree --json | jq -r '.result.tree.workspaces[] | select(.focused) | .id'); do
   agtermctl workspace focus off --target "$ws"
 done
-for ws in $set; do agtermctl workspace focus add --target "$ws"; done
-[ "$was" = "true" ] && agtermctl workspace filter on
+for ws in $marked; do agtermctl workspace focus add --target "$ws"; done
+if [ "$was" = "true" ]; then agtermctl workspace filter on; fi
 ```
 
 ## Expand or collapse the sidebar tree

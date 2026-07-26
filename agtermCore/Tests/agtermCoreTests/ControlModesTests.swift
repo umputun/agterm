@@ -61,25 +61,39 @@ struct ControlModesTests {
     }
 
     @Test func workspaceFocusModeParsesWireTokens() {
-        #expect(WorkspaceFocusMode(rawValue: "on") == .on)
-        #expect(WorkspaceFocusMode(rawValue: "off") == .off)
-        #expect(WorkspaceFocusMode(rawValue: "toggle") == .toggle)
-        #expect(WorkspaceFocusMode(rawValue: "add") == .add)
-        #expect(WorkspaceFocusMode(rawValue: "remove") == nil)
-        #expect(WorkspaceFocusMode(rawValue: "") == nil)
+        #expect(ControlWorkspaceFocusMode(rawValue: "on") == .on)
+        #expect(ControlWorkspaceFocusMode(rawValue: "off") == .off)
+        #expect(ControlWorkspaceFocusMode(rawValue: "toggle") == .toggle)
+        #expect(ControlWorkspaceFocusMode(rawValue: "add") == .add)
+        #expect(ControlWorkspaceFocusMode(rawValue: "remove") == nil)
+        #expect(ControlWorkspaceFocusMode(rawValue: "") == nil)
     }
 
     @Test func workspaceFocusModeListsEveryCase() {
         // there is deliberately no membership-toggle mode: the row menu computes its own direction.
-        #expect(WorkspaceFocusMode.allCases == [.on, .off, .toggle, .add])
+        #expect(ControlWorkspaceFocusMode.allCases == [.on, .off, .toggle, .add])
     }
 
     @Test func workspaceFocusModeDerivesValidNamesFromAllCases() {
         // both spellings derive from allCases, so a new mode cannot leave an error/help string stale.
-        #expect(WorkspaceFocusMode.validNamesList == WorkspaceFocusMode.allCases.map(\.rawValue).joined(separator: "|"))
-        #expect(WorkspaceFocusMode.validNamesPhrase == WorkspaceFocusMode.allCases.map(\.rawValue).joined(separator: ", "))
-        #expect(WorkspaceFocusMode.validNamesList == "on|off|toggle|add")
-        #expect(WorkspaceFocusMode.validNamesPhrase == "on, off, toggle, add")
+        #expect(ControlWorkspaceFocusMode.validNamesList == ControlWorkspaceFocusMode.allCases.map(\.rawValue).joined(separator: "|"))
+        #expect(ControlWorkspaceFocusMode.validNamesPhrase == ControlWorkspaceFocusMode.allCases.map(\.rawValue).joined(separator: ", "))
+        #expect(ControlWorkspaceFocusMode.validNamesList == "on|off|toggle|add")
+        #expect(ControlWorkspaceFocusMode.validNamesPhrase == "on, off, toggle, add")
+    }
+
+    @Test func workspaceFocusModeHelpNamesEveryModeAndItsFilterEffect() {
+        // the CLI's `--help` prose is assembled from these clauses, so a new case reaches the help text by
+        // construction. Each clause has to name what the mode does to the FILTER FLAG: `add` is the only
+        // one that leaves it alone, and stating that in isolation reads as if the others did too.
+        let phrase = ControlWorkspaceFocusMode.helpPhrase
+        for mode in ControlWorkspaceFocusMode.allCases {
+            #expect(phrase.contains(mode.helpSummary), "the help phrase should carry \(mode.rawValue)'s clause")
+            #expect(mode.helpSummary.hasPrefix(mode.rawValue), "each clause should lead with its wire token")
+            #expect(mode.helpSummary.contains("filter"), "each clause should state its effect on the filter")
+        }
+        #expect(ControlWorkspaceFocusMode.on.helpSummary.contains("apply"))
+        #expect(ControlWorkspaceFocusMode.add.helpSummary.contains("leaving the filter flag alone"))
     }
 
     @Test func sidebarViewModeParsesModes() {

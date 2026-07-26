@@ -90,8 +90,8 @@ struct PaletteCatalogTests {
     @Test func workspaceAndSplitCommandsFollowTheirPredicates() {
         #expect(!PaletteCommand.deleteWorkspace.isVisible(in: PaletteContext(canRemoveWorkspace: false)))
         #expect(PaletteCommand.deleteWorkspace.isVisible(in: PaletteContext(canRemoveWorkspace: true)))
-        #expect(!PaletteCommand.clearFocus.isVisible(in: PaletteContext(hasFocusedWorkspace: false)))
-        #expect(PaletteCommand.clearFocus.isVisible(in: PaletteContext(hasFocusedWorkspace: true)))
+        #expect(!PaletteCommand.clearFocus.isVisible(in: PaletteContext(hasMarkedWorkspaces: false)))
+        #expect(PaletteCommand.clearFocus.isVisible(in: PaletteContext(hasMarkedWorkspaces: true)))
         #expect(!PaletteCommand.focusLeftPane.isVisible(in: PaletteContext(activeSessionHasSplit: false)))
         #expect(PaletteCommand.focusRightPane.isVisible(in: PaletteContext(activeSessionHasSplit: true)))
         #expect(!PaletteCommand.undoClose.isVisible(in: PaletteContext(hasPendingClose: false)))
@@ -101,15 +101,28 @@ struct PaletteCatalogTests {
     }
 
     @Test func workspaceFocusEntriesFollowTheMarkedSet() {
-        // marking is always offered; applying/suspending the filter only once something is marked —
-        // the same empty-set rule the bottom-bar toggle renders as disabled.
-        #expect(PaletteCommand.addWorkspaceToFocus.isVisible(in: PaletteContext(hasFocusedWorkspace: false)))
-        #expect(PaletteCommand.addWorkspaceToFocus.isVisible(in: PaletteContext(hasFocusedWorkspace: true)))
-        #expect(!PaletteCommand.toggleWorkspaceFilter.isVisible(in: PaletteContext(hasFocusedWorkspace: false)))
-        #expect(PaletteCommand.toggleWorkspaceFilter.isVisible(in: PaletteContext(hasFocusedWorkspace: true)))
+        // marking is offered wherever it would DO something: in EITHER sidebar mode (membership is model
+        // state the tree applies as soon as it is shown, and the View-menu twin gates on the same single
+        // term) and while the current workspace is not already a member — this keyless entry targets
+        // `currentWorkspaceID`, so on a member it would be a silent no-op.
+        let tree = PaletteContext(sidebarShowsWorkspaceTree: true)
+        let flagged = PaletteContext(sidebarShowsFlaggedOnly: true)
+        #expect(PaletteCommand.addWorkspaceToFocus.isVisible(in: tree))
+        #expect(PaletteCommand.addWorkspaceToFocus.isVisible(in: flagged))
+        #expect(!PaletteCommand.addWorkspaceToFocus.isVisible(
+            in: PaletteContext(sidebarShowsWorkspaceTree: true, activeWorkspaceMarked: true)))
+        #expect(!PaletteCommand.addWorkspaceToFocus.isVisible(
+            in: PaletteContext(sidebarShowsFlaggedOnly: true, activeWorkspaceMarked: true)))
+        // marking OTHER workspaces does not hide it — only the CURRENT one being a member does.
+        #expect(PaletteCommand.addWorkspaceToFocus.isVisible(
+            in: PaletteContext(sidebarShowsWorkspaceTree: true, hasMarkedWorkspaces: true)))
+        // applying/suspending the filter appears only once something is marked — the same empty-set rule
+        // the bottom-bar toggle renders as disabled.
+        #expect(!PaletteCommand.toggleWorkspaceFilter.isVisible(in: PaletteContext(hasMarkedWorkspaces: false)))
+        #expect(PaletteCommand.toggleWorkspaceFilter.isVisible(in: PaletteContext(hasMarkedWorkspaces: true)))
         // both titles are static — the marked set is read off the sidebar, not the palette row.
-        #expect(PaletteCommand.addWorkspaceToFocus.title(in: PaletteContext(hasFocusedWorkspace: true)) == "Add Workspace to Focus")
-        #expect(PaletteCommand.toggleWorkspaceFilter.title(in: PaletteContext(hasFocusedWorkspace: true)) == "Toggle Workspace Filter")
+        #expect(PaletteCommand.addWorkspaceToFocus.title(in: tree) == "Add Workspace to Focus")
+        #expect(PaletteCommand.toggleWorkspaceFilter.title(in: PaletteContext(hasMarkedWorkspaces: true)) == "Toggle Workspace Filter")
     }
 
     @Test func builtinMappingsCoverRebindableCommands() {

@@ -21,8 +21,8 @@ struct ControlDispatcherWorkspaceTests {
         #expect(actions.calls == [.workspaceFocus(target: "work", window: "win", .on)])
     }
 
-    @Test(arguments: WorkspaceFocusMode.allCases)
-    func workspaceFocusParsesEveryMode(mode: WorkspaceFocusMode) async {
+    @Test(arguments: ControlWorkspaceFocusMode.allCases)
+    func workspaceFocusParsesEveryMode(mode: ControlWorkspaceFocusMode) async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
 
@@ -49,7 +49,7 @@ struct ControlDispatcherWorkspaceTests {
             cmd: .workspaceFocus, target: "work", args: ControlArgs(mode: "pin")))
 
         #expect(response == ControlResponse(ok: false,
-                                            error: "invalid focus mode: pin (\(WorkspaceFocusMode.validNamesList))"))
+                                            error: "invalid focus mode: pin (\(ControlWorkspaceFocusMode.validNamesList))"))
         #expect(actions.calls.isEmpty)
     }
 
@@ -61,7 +61,7 @@ struct ControlDispatcherWorkspaceTests {
             cmd: .workspaceFocus, target: "work", args: ControlArgs(mode: "pin")))
 
         let error = response?.error ?? ""
-        for mode in WorkspaceFocusMode.allCases {
+        for mode in ControlWorkspaceFocusMode.allCases {
             #expect(error.contains(mode.rawValue))
         }
     }

@@ -55,14 +55,22 @@ public final class AppStore {
     /// (restored on relaunch); orthogonal to `sidebarMode` (flagged mode ignores focus). Mutated by the
     /// workspace row menu, the View menu, the palette, and the `workspace.focus` control command via
     /// `setFocusedWorkspace(_:)` / `setFocusMembership(_:member:)`. A member is pruned when its
-    /// workspace is removed.
-    public var focusedWorkspaceIDs: Set<UUID> = []
+    /// workspace is removed. Read-only outside the module (`internal(set)`) so the invariant below can
+    /// only be broken from inside `agtermCore`, never by an app-target line writing the field directly.
+    public internal(set) var focusedWorkspaceIDs: Set<UUID> = []
 
     /// Whether the focus filter applies, so a hand-curated set survives being switched off. Per-window
-    /// UI state, persisted in `Snapshot` (restored on relaunch). Enabled with an EMPTY set is
-    /// unrepresentable: `setFocusEnabled(true)` is a no-op on an empty set and every mutator disables
-    /// when the set empties, so a workspace is visible exactly when it is a member and this is true.
-    public var focusEnabled = false
+    /// UI state, persisted in `Snapshot` (restored on relaunch), and `internal(set)` for the same reason
+    /// as the set above. Enabled with an EMPTY set is unrepresentable, which is what makes the FILTER-ON
+    /// half of the control row-visibility read-back (`ControlWorkspaceNode.focused`) exact: an applied
+    /// filter always has at least one visible member. (The filter-OFF half is `visibleWorkspaces`
+    /// returning the whole tree, which this invariant says nothing about.) Three guards hold it:
+    /// `setFocusEnabled(true)` is a no-op on an empty set (matching the bottom-bar toggle, disabled in
+    /// exactly that state), every mutator disables as the set empties (`setFocusMembership`,
+    /// `dropFocusMember`), and `restoreFocus(from:)` prunes ids absent from the restored tree, disabling
+    /// when the prune empties the set. Driven by the bottom-bar `focus-filter-toggle`, View ▸ Toggle
+    /// Workspace Filter, `BuiltinAction.toggleWorkspaceFilter`, and `workspace.filter`.
+    public internal(set) var focusEnabled = false
 
     /// This window's sidebar width in points. Per-window UI state, persisted in `Snapshot`. Driven by the
     /// sidebar divider drag (clamped to `sidebarWidthMin...sidebarWidthMax`); restored on relaunch.
@@ -268,7 +276,7 @@ public final class AppStore {
     public func addWorkspace(name: String, collapsed: Bool = false, revealNewWorkspace: Bool = true) -> Workspace {
         let workspace = Workspace(name: name, isExpanded: !collapsed)
         workspaces.append(workspace)
-        if revealNewWorkspace, focusEnabled { focusedWorkspaceIDs.insert(workspace.id) }
+        if revealNewWorkspace { revealNewFocusMember(workspace.id) }
         scheduleTreeChanged()
         save()
         return workspace
@@ -391,7 +399,7 @@ public final class AppStore {
         if wasActive {
             selectedSessionID = closeReselectionTarget(after: location)
             replaceSidebarSelection(with: selectedSessionID)
-            disableFocusIfSelectionOutsideSet(selectedSessionID) // the reselected session may live outside the focused workspace
+            disableFocusIfSelectionOutsideSet(selectedSessionID) // the reselected session may live outside the marked set
             recordRecency()
         } else {
             pruneSidebarSelection()
@@ -413,7 +421,10 @@ public final class AppStore {
         guard canRemoveWorkspace, let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return }
         let workspace = workspaces[index]
         let removingActive = selectedSessionID.map { id in workspace.sessions.contains { $0.id == id } } ?? false
-        recordRecentClosedWorkspace(workspace, selectedSessionID: removingActive ? selectedSessionID : nil)
+        // the membership goes into the record BEFORE `dropFocusMember` below prunes it, so Reopen Closed
+        // Item can mark the workspace again
+        recordRecentClosedWorkspace(workspace, selectedSessionID: removingActive ? selectedSessionID : nil,
+                                    focusMember: focusedWorkspaceIDs.contains(workspaceID))
         for session in workspace.sessions { emitSessionClosed(session, workspace: workspace.id) }
         if workspace.sessions.isEmpty { scheduleTreeChanged() }
         for session in workspace.sessions {
@@ -424,15 +435,14 @@ public final class AppStore {
             WatermarkStorage.removeRenderedText(sessionID: session.id) // drop any rendered .text PNG; the session is gone
             sessionRecency.remove(session.id)
         }
-        focusedWorkspaceIDs.remove(workspaceID) // a marked root is gone
-        if focusedWorkspaceIDs.isEmpty { focusEnabled = false }
+        dropFocusMember(workspaceID) // a marked root is gone; the filter goes with the last member
         workspaces.remove(at: index)
         if removingActive {
             let fallbackIndex = min(index, workspaces.count - 1)
             selectedSessionID = workspaces[fallbackIndex].sessions.first?.id
                 ?? workspaces.first(where: { !$0.sessions.isEmpty })?.sessions.first?.id
             replaceSidebarSelection(with: selectedSessionID)
-            disableFocusIfSelectionOutsideSet(selectedSessionID) // the reselected session may live outside the focused workspace
+            disableFocusIfSelectionOutsideSet(selectedSessionID) // the reselected session may live outside the marked set
             recordRecency()
         } else {
             pruneSidebarSelection()
@@ -447,9 +457,10 @@ public final class AppStore {
     /// `selectedSessionID` is unaffected — the id is stable, so a moved active
     /// session stays selected. No-ops if the session or target workspace is
     /// unknown; a same-workspace move to the current slot leaves order unchanged.
-    /// Moving the **active** session out of the focused workspace auto-unfocuses
-    /// (the auto-reveal contract — the active session must stay inside the visible
-    /// set); moving a non-active session leaves focus intact.
+    /// Moving the **active** session out of the marked set suspends the focus
+    /// filter while KEEPING the set (`disableFocusIfSelectionOutsideSet`, the
+    /// auto-reveal contract — the active session must stay inside the visible
+    /// set); moving a non-active session leaves the filter intact.
     public func moveSession(_ sessionID: UUID, toWorkspace targetID: UUID, at index: Int? = nil) {
         guard let source = location(ofSession: sessionID) else { return }
         guard let targetIndex = workspaces.firstIndex(where: { $0.id == targetID }) else { return }
@@ -542,11 +553,12 @@ public final class AppStore {
     }
 
     /// Steps the selection through the flattened VISIBLE/FILTERED session list (`navigableSessions`:
-    /// the flagged set in `.flagged` mode, the focused workspace's sessions when focused, else all),
-    /// in the sidebar's visual order. `next`/`previous` move one and WRAP at the ends WITHIN the filtered
-    /// set (`next` on the last lands on the first, `previous` on the first lands on the last, never
-    /// leaking across the filter — matching the cyclic attention-nav below); `first`/`last` jump to the
-    /// ends of the filtered list. With no/invalid current selection, `next`/`previous` land on its first
+    /// the flagged set in `.flagged` mode, the MARKED workspaces' sessions while the focus filter is
+    /// applied, else all), in the sidebar's visual order. `next`/`previous` move one and WRAP at the ends
+    /// WITHIN the filtered set (`next` on the last lands on the first, `previous` on the first lands on
+    /// the last, never leaking across the filter — matching the cyclic attention-nav below);
+    /// `first`/`last` jump to the ends of the filtered list.
+    /// With no/invalid current selection, `next`/`previous` land on its first
     /// session. No-op when the filtered list is empty. Routes through `selectSession`, inheriting recency,
     /// badge clearing, persistence, and workspace derivation. Because the targets are always in-set, nav
     /// never triggers `disableFocusIfSelectionOutsideSet` — that stays the safety net for an explicit cross-set

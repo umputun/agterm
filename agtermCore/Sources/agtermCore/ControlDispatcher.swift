@@ -22,7 +22,7 @@ public protocol ControlActions {
     func moveSession(_ target: String?, window: String?, move: ControlSessionMove) -> ControlResponse
     func moveSessions(_ targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse
     func moveWorkspace(_ target: String?, window: String?, direction: ReorderDirection) -> ControlResponse
-    func focusWorkspace(_ target: String?, window: String?, mode: WorkspaceFocusMode) -> ControlResponse
+    func focusWorkspace(_ target: String?, window: String?, mode: ControlWorkspaceFocusMode) -> ControlResponse
     /// Turn a window's workspace focus filter on/off WITHOUT touching the marked set. Window-scoped, so
     /// it takes no workspace target — the host resolves the store from `window` (frontmost when nil).
     func setWorkspaceFilter(window: String?, mode: ControlToggleMode) -> ControlResponse
@@ -446,10 +446,10 @@ public struct ControlDispatcher {
         case .workspaceFocus:
             // parsed + rejected BEFORE the host runs, so an unknown mode can never half-apply; the
             // accepted list is derived from `allCases`, so it cannot go stale when a mode is added.
-            let raw = request.args?.mode ?? WorkspaceFocusMode.toggle.rawValue
-            guard let mode = WorkspaceFocusMode(rawValue: raw) else {
+            let raw = request.args?.mode ?? ControlWorkspaceFocusMode.toggle.rawValue
+            guard let mode = ControlWorkspaceFocusMode(rawValue: raw) else {
                 return ControlResponse(ok: false,
-                                       error: "invalid focus mode: \(raw) (\(WorkspaceFocusMode.validNamesList))")
+                                       error: "invalid focus mode: \(raw) (\(ControlWorkspaceFocusMode.validNamesList))")
             }
             return actions.focusWorkspace(request.target, window: request.args?.window, mode: mode)
         case .workspaceFilter:

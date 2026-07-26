@@ -250,8 +250,10 @@ struct SnapshotRoundTripTests {
         let store = makeStore()
         _ = store.addWorkspace(name: "work")
         let snap = store.snapshot()
-        #expect(snap.focusedWorkspaceIDs == nil && snap.focusEnabled == nil && snap.focusedWorkspaceID == nil)
+        #expect(snap.focusedWorkspaceIDs == nil && snap.focusEnabled == nil)
         let json = try String(decoding: JSONEncoder().encode(snap), as: UTF8.self)
+        // covers the legacy `focusedWorkspaceID` too — it has no stored property at all now, so nothing
+        // starting with `focusedWorkspace` may appear.
         #expect(!json.contains("focusedWorkspace") && !json.contains("focusEnabled"))
     }
 
@@ -263,6 +265,23 @@ struct SnapshotRoundTripTests {
         let snap = try JSONDecoder().decode(Snapshot.self, from: Data(json.utf8))
         #expect(snap.focusedWorkspaceIDs == [ws])
         #expect(snap.focusEnabled == true)
+    }
+
+    @Test func reEncodingAMigratedSnapshotDropsTheLegacyFocusKey() throws {
+        // decode-only means decode-only: a legacy file that rides a load -> mutate -> save path (e.g.
+        // `WindowLibrary.clearClosedWindowFontSizes`) must be rewritten with the SET keys alone. While the
+        // legacy value was kept in a stored property it was re-encoded alongside them, so the file kept a
+        // key this build never means to write.
+        let ws = UUID()
+        let json = #"{"version":1,"workspaces":[],"focusedWorkspaceID":"\#(ws.uuidString)"}"#
+        let decoded = try JSONDecoder().decode(Snapshot.self, from: Data(json.utf8))
+
+        let reEncoded = try String(decoding: JSONEncoder().encode(decoded), as: UTF8.self)
+
+        #expect(!reEncoded.contains("\"focusedWorkspaceID\""))
+        #expect(reEncoded.contains("\"focusedWorkspaceIDs\"") && reEncoded.contains("\"focusEnabled\""))
+        let again = try JSONDecoder().decode(Snapshot.self, from: Data(reEncoded.utf8))
+        #expect(again.focusedWorkspaceIDs == [ws] && again.focusEnabled == true) // the filter survives the rewrite
     }
 
     @Test func snapshotWithBothFocusKeysPrefersTheSet() throws {

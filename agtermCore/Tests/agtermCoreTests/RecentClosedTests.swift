@@ -68,6 +68,38 @@ final class RecentClosedTests {
         #expect(RecentClosedStore(directory: directory).load().isEmpty)
     }
 
+    @Test func workspaceEntryWithoutFocusFieldsStillDecodes() throws {
+        // `focusMember` is PERSISTED, and `load()` maps any decode failure onto an EMPTY list — so a
+        // required key would wipe the user's whole recent list on the first launch after the upgrade.
+        let data = try JSONEncoder().encode(RecentClosedState(items: [workspaceItem(title: "work")]))
+        let json = String(decoding: data, as: UTF8.self)
+        #expect(!json.contains("focusMember")) // the legacy shape verbatim
+        try data.write(to: fileURL)
+
+        let loaded = RecentClosedStore(directory: directory).load()
+        #expect(loaded.count == 1)
+        #expect(loaded[0].workspace?.focusMember == nil) // absent reads as "not a member"
+    }
+
+    @Test func workspaceEntryWithALegacyFocusEnabledKeyStillDecodes() throws {
+        // the other direction of the same rule: a key that was DROPPED must not fail the decode either, or
+        // the first launch after the upgrade wipes the recent list of anyone who ran the build that wrote
+        // it. `focusEnabled` was one — the reopen leg marks only, so nothing reads a stored filter flag.
+        let encoded = try JSONEncoder().encode(RecentClosedState(items: [workspaceItem(title: "work")]))
+        var object = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
+        var items = try #require(object["items"] as? [[String: Any]])
+        var workspace = try #require(items[0]["workspace"] as? [String: Any])
+        workspace["focusMember"] = true
+        workspace["focusEnabled"] = true // the retired key, as an older build wrote it
+        items[0]["workspace"] = workspace
+        object["items"] = items
+        try JSONSerialization.data(withJSONObject: object).write(to: fileURL)
+
+        let loaded = RecentClosedStore(directory: directory).load()
+        #expect(loaded.count == 1) // not the empty list a decode failure would produce
+        #expect(loaded[0].workspace?.focusMember == true) // and the surviving field still reads back
+    }
+
     /// Reopen Closed Item rebuilds the session from its snapshot through `session(from:)`, which defaults
     /// to arming nothing: the persisted pin comes back (so `tree` reads it and the next launch fires it),
     /// but no payload is pending, so reopening cannot execute a sticky override mid-process.

@@ -11,10 +11,11 @@ extension AppStore {
     /// The `.flagged` sidebar filter DOES scope the pick (landing on a session the flagged view isn't even
     /// rendering would be worse — so it scopes the positional fallback too), and it survives the widening
     /// because `flaggedSessions` is cross-workspace by definition. The FOCUS filter deliberately does NOT scope it — unlike flagged mode, focus is a
-    /// property of the TREE, not of the selection: `setFocusedWorkspace` never moves the active session, so
-    /// focus can sit on a workspace the closing session doesn't even belong to. Scoping by it (i.e. using
-    /// `navigableSessions`, which folds focus in) would make ⌘W in that state jump into the FOCUSED workspace,
-    /// and would make closing the focused workspace's last session widen into an EMPTY set and fall through to
+    /// property of the TREE, not of the selection: neither `setFocusedWorkspace` nor `setFocusMembership` ever
+    /// moves the active session, so the marked set can hold workspaces the closing session doesn't even belong
+    /// to. Scoping by it (i.e. using
+    /// `navigableSessions`, which folds focus in) would make ⌘W in that state jump into the MARKED set,
+    /// and would make closing the only marked workspace's last session widen into an EMPTY set and fall through to
     /// the positional first-workspace jump — the exact disorientation this helper exists to remove. Landing
     /// outside the marked set is already handled: every caller runs `disableFocusIfSelectionOutsideSet` on the
     /// pick, which switches the filter off (keeping the set) to reveal the target.

@@ -738,8 +738,10 @@ struct WindowContentView: View {
         }
     }
 
-    /// Two distinct add controls, source-list style: add a workspace, and a menu
-    /// to add a session to the current workspace (default cwd) or a picked directory.
+    /// The sidebar footer, source-list style: two add controls on the left — add a workspace, and a menu
+    /// to add a session to the current workspace (default cwd) or a picked directory — and two view
+    /// toggles on the right, the workspace focus filter and the flagged working-set view. Each of the four
+    /// is individually hideable via Settings ▸ Interface (`shows(_:)`).
     private var bottomBar: some View {
         HStack(spacing: 2) {
             if shows(.newWorkspace) {
@@ -778,7 +780,7 @@ struct WindowContentView: View {
 
             // apply or suspend the marked-workspace filter WITHOUT losing the set, so peeking at the whole
             // tree costs one click each way. 2-state glyph (filled while the filter applies); it is both
-            // the indicator and the control now that the single-workspace pill is gone.
+            // the indicator and the control for the filter state.
             if shows(.focusFilter) {
                 Button {
                     actions.toggleFocusFilter()

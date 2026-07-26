@@ -38,6 +38,11 @@ extension AppStore {
             workspaces.append(workspace)
             for session in workspace.sessions { emitSessionCreated(session, workspace: workspace.id) }
             if workspace.sessions.isEmpty { scheduleTreeChanged() }
+            // re-mark BEFORE the reselect below, so a restored member is inside the set when
+            // `disableFocusIfSelectionOutsideSet` runs; the workspace is already in the tree, so the
+            // unguarded insert cannot leave a phantom member behind. Entries written before the field
+            // existed carry nil and restore unmarked.
+            if recent.focusMember == true { markFocusMember(workspace.id) }
             selectedSessionID = recent.selectedSessionID.flatMap { sessionID in
                 workspace.sessions.contains { $0.id == sessionID } ? sessionID : nil
             } ?? workspace.sessions.first?.id
@@ -79,6 +84,7 @@ extension AppStore {
             let missing = recent.snapshot.sessions.filter { !taken.contains($0.id) }.map { session(from: $0) }
             workspaces[index].sessions.append(contentsOf: missing)
             for session in missing { emitSessionCreated(session, workspace: workspaces[index].id) }
+            if recent.focusMember == true { markFocusMember(workspaces[index].id) } // before the reselect, as above
             let target = recent.selectedSessionID.flatMap { id in
                 workspaces[index].sessions.contains { $0.id == id } ? id : nil
             } ?? workspaces[index].sessions.first?.id
@@ -159,6 +165,7 @@ extension AppStore {
     @discardableResult
     func recordRecentClosedWorkspace(_ workspace: Workspace,
                                      selectedSessionID: UUID?,
+                                     focusMember: Bool,
                                      id: UUID = UUID()) -> UUID? {
         guard let recentClosedStore else { return nil }
         let sessionCount = workspace.sessions.count
@@ -167,7 +174,9 @@ extension AppStore {
             kind: .workspace,
             title: workspace.name,
             subtitle: "\(sessionCount) session\(sessionCount == 1 ? "" : "s")",
-            workspace: RecentClosedWorkspace(snapshot: workspaceSnapshot(workspace), selectedSessionID: selectedSessionID)
+            workspace: RecentClosedWorkspace(snapshot: workspaceSnapshot(workspace),
+                                             selectedSessionID: selectedSessionID,
+                                             focusMember: focusMember)
         ))
         recentClosedDidChange?()
         return id

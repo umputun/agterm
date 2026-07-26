@@ -1280,7 +1280,7 @@ paths:
   in `ControlSidebarStatusUITests`.
   `workspace.focus` (target = workspace) MARKS a workspace in the sidebar focus SET — the filter is a
   `Set<UUID>` of marked workspaces plus a separate on/off flag, not a single id (see the Sidebar section).
-  `args.mode` is `on`|`off`|`toggle`|`add`, parsed into the typed `WorkspaceFocusMode` by
+  `args.mode` is `on`|`off`|`toggle`|`add`, parsed into the typed `ControlWorkspaceFocusMode` by
   `ControlDispatcher` BEFORE the host runs, so an unknown mode is rejected without half-applying and the
   accepted list in the message derives from `allCases` and cannot go stale:
   - `on` — replace the set with the target and ENABLE the filter (the unchanged single-workspace zoom).
@@ -1307,17 +1307,35 @@ paths:
   Its READ side is `ControlWorkspaceNode.focused` on each `tree` workspace node
   (`focusedWorkspaceIDs.contains(workspace.id) ? true : nil` in the tree builder — DISTINCT from `active`,
   the selected workspace), which now means "is a MEMBER of the marked set" and is reported INDEPENDENTLY of
-  the filter flag: a workspace is VISIBLE iff `focused && tree.workspaceFilter`.
-  That contract is exact rather than approximate because `enabled + empty` is unrepresentable (three guards
-  in the store, see the Sidebar section), so a script can record the whole working set and restore it;
+  the filter flag: a workspace ROW is VISIBLE iff
+  `tree.sidebarVisible && tree.sidebarMode == "tree" && (!tree.workspaceFilter || focused)`.
+  All THREE terms are load-bearing, and every shorter form the docs have carried was wrong in a reachable
+  state.
+  `focused && workspaceFilter` reports nothing visible whenever the filter is OFF — where the whole tree
+  renders regardless of membership — and a script that "fixes" that with `workspace.focus on` REPLACES the
+  whole marked set and applies the filter, destroying the working set this feature exists to protect.
+  A bare `!workspaceFilter || focused` reports rows visible in `flagged` sidebar mode (a flat
+  flagged-session list with NO workspace rows at all) and behind a hidden sidebar.
+  State the predicate by ENUMERATING the states rather than patching the formula: sidebar hidden → nothing;
+  `flagged` → no workspace rows whatever the filter says; `tree` + filter off → every workspace;
+  `tree` + filter on → the members only.
+  The filter-ON term is exact rather than approximate because `enabled + empty` is unrepresentable (three
+  guards in the store, see the Sidebar section), so an applied filter always has at least one visible
+  member and a script can record the whole working set and restore it;
   omitted on the unmarked ones and absent when nothing is marked.
   Four-point keep-in-sync audit: (1) `case workspaceFocus = "workspace.focus"` in `ControlProtocol.swift`
-  (reuses `ControlArgs.mode`) + `WorkspaceFocusMode` in `ControlModes.swift`, (2) the `.workspaceFocus`
-  dispatch arm parsing the mode + `ControlActions.focusWorkspace(_:window:mode:)` (typed `WorkspaceFocusMode`,
-  NOT a raw `String?`) implemented in `ControlServer+WorkspaceCommands.swift`,
-  (3) the `workspace focus on|off|toggle|add` subcommand (`Focus`) in `agtermctlKit`, whose help text,
-  abstract, and local `validate()` message are ALL derived from `WorkspaceFocusMode.allCases`,
+  (reuses `ControlArgs.mode`) + `ControlWorkspaceFocusMode` in `ControlModes.swift`, (2) the `.workspaceFocus`
+  dispatch arm parsing the mode + `ControlActions.focusWorkspace(_:window:mode:)` (typed `ControlWorkspaceFocusMode`,
+  NOT a raw `String?`) implemented in `ControlServer+WorkspaceCommands.swift`, whose whole mode-to-mutator
+  mapping is the host-free `AppStore.applyFocusMode(_:to:)` so the arm is left with target resolution alone
+  (and so the GUI's replace-toggle and the wire's `toggle` cannot mean different things),
+  (3) the `workspace focus on|off|toggle|add` subcommand (`Focus`) in `agtermctlKit`, whose abstract,
+  per-mode `--help` prose (`helpPhrase`/`helpSummary`, which state each mode's effect on the FILTER FLAG,
+  not just its effect on the set) and local `validate()` message are ALL derived from
+  `ControlWorkspaceFocusMode.allCases`,
   (4) round-trip in `ControlProtocolTests`, mode routing + rejection in `ControlDispatcherWorkspaceTests`,
+  the four modes' behavior driven through the dispatcher against a live store in
+  `AppStoreFocusTests.workspaceFocusModesDriveTheStoreThroughTheControlPath`,
   CLI mapping/help in `CommandsTests`, and the e2e `testWorkspaceFocusHidesOtherWorkspaces` +
   `testWorkspaceFocusAddBuildsAMultiWorkspaceSet` in `ControlSidebarStatusUITests` plus the
   `FocusWorkspaceUITests` XCUITest.
@@ -1327,10 +1345,11 @@ paths:
   already uses (default `toggle`, unknown mode = error); note the wire tokens are `on|off|toggle`, NOT
   `sidebar`'s `show|hide|toggle` spelling.
   It resolves the target store via `resolvePlacementStore(window)` — so like `sidebar.expand`/`sidebar.collapse`
-  it can drive a BACKGROUND window, unlike the frontmost-only `sidebar`/`sidebar.mode` — and calls
-  `AppStore.setFocusEnabled`, which is delta-guarded and REFUSES to enable an empty set.
+  it can drive a BACKGROUND window, unlike the frontmost-only `sidebar`/`sidebar.mode` — and calls the
+  host-free `AppStore.applyWorkspaceFilter` (→ `setFocusEnabled`), which is delta-guarded and REFUSES to
+  enable an empty set.
   So `workspace.filter on` with nothing marked succeeds having changed nothing, which is what keeps the
-  `focused && workspaceFilter` contract from ever lying.
+  filter term of the row-visibility contract from ever lying.
   No open window is an error rather than a silent no-op.
   It is the control half of the bottom-bar `focus-filter-toggle`, the View-menu Toggle Workspace Filter,
   and `BuiltinAction.toggleWorkspaceFilter`.
@@ -1346,7 +1365,13 @@ paths:
   routing/default/rejection in `ControlDispatcherWorkspaceTests`, CLI mapping (incl.
   `workspaceFilterTakesNoTarget`) in `CommandsTests`, the empty-set refusal driven through the dispatcher in
   `AppStoreFocusTests.workspaceFilterOnAnEmptySetLeavesTheFilterOffThroughTheControlPath`, and the e2e
-  `testWorkspaceFilterTogglesWithoutLosingTheSet` in `ControlSidebarStatusUITests`.
+  `testWorkspaceFilterTogglesWithoutLosingTheSet` +
+  `testWorkspaceFilterDrivesABackgroundWindow` (the `--window` leg — a MINIMIZED second window keeps the
+  seeded one frontmost, so an arm that ignored the selector would land on the wrong store) in
+  `ControlSidebarStatusUITests`.
+  The dispatcher tests drive BOTH arms against a live `AppStore` through `MockControlActions.focusStore`,
+  which calls the same `applyWorkspaceFilter`/`applyFocusMode` helpers the app-side arms call — a test
+  double must never re-derive a mode's semantics, or the test proves only that the double works.
   `workspace.collapse`/`workspace.expand` (target = workspace) collapse/expand ONE workspace's subtree in
   the sidebar tree — the per-workspace analogue of the all-workspace `sidebar.expand`/`sidebar.collapse`
   (scope by prefix: `sidebar.*` acts on every workspace, `workspace.*` on the addressed one).
@@ -1376,6 +1401,12 @@ paths:
   → `Workspace(isExpanded: !collapsed)`): a runtime-added workspace with `isExpanded == false` renders
   collapsed (the reconcile's `formUnion(filter(\.isExpanded))` excludes it), so it can be built and filled
   with `session.new --no-select` without opening.
+  It ALSO threads `revealNewWorkspace: !collapsed`, so a `--collapsed` create stays OUT of the workspace
+  focus set: the flag means "build this quietly", and joining a marked set would put the workspace on
+  screen and mutate a working set the script did not ask to change (the same reasoning as
+  `session.new --no-select --create-workspace`).
+  A PLAIN `workspace.new` keeps the auto-reveal, matching the GUI's New Workspace button — a foreground
+  create must not land invisibly behind an applied filter.
   Four-point keep-in-sync audit: (1) `case workspaceCollapse = "workspace.collapse"` + `case workspaceExpand = "workspace.expand"`
   + `ControlArgs.collapsed` + `ControlWorkspaceNode.collapsed` in `ControlProtocol.swift`,
   (2) the `.workspaceCollapse`/`.workspaceExpand` dispatch arms → `ControlActions.setWorkspaceExpansion`
@@ -1641,8 +1672,15 @@ paths:
   A new `Command` case REQUIRES a new `site/commands.html` entry (a changed command an updated one, a
   removed command a deleted one), in lockstep with the agent skill above and `README.md`/`site/docs.html`;
   the page's "67 commands" copy must track the catalog count.
-  A bump is a grep, not a single edit: the count sits in THREE spots in `commands.html` alone (two `<meta>`
-  description tags plus the body copy), and again in `README.md`, `site/docs.html`, the bundled `SKILL.md`,
-  and the `SkillInstallTests` assertion above.
+  A bump is a grep, not a single edit: the count sits in FOUR spots in `commands.html` alone (the
+  `description` `<meta>`, the `og:description` and `twitter:description` `<meta>`s, plus the body copy),
+  and again in `README.md`, `site/docs.html`, the bundled `SKILL.md`, and the `SkillInstallTests`
+  assertion above.
+  Grep for the PATTERN, never for the old or new number: a site that is ALREADY stale at some third value
+  is invisible to a search for either, which is exactly how `commands.html`'s `description` `<meta>` sat at
+  65 through a 66 → 67 bump that corrected the other three.
+  Use something like `grep -rnE "\b[0-9]{2,3}\b[A-Za-z ,'-]{0,40}commands?\b"` scoped to `README.md`,
+  `site/`, `agterm/Resources/agent-skill/`, and `.claude/rules/`, and reconcile EVERY hit against the
+  `Command` case count.
   It drifted once because the site keep-in-sync convention named only `docs.html`/`index.html`, so
   `dashboard` and `surface.zoom` shipped undocumented here.

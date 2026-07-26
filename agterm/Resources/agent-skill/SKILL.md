@@ -187,7 +187,8 @@ one process run. Cursor run changes, expiry, and ahead-of-tail errors are fatal 
 rebaselined. There is no terminal-output event stream.
 
 **workspace** — `new [name] [--collapsed]` (`--collapsed` creates it closed in the sidebar so you can fill
-it with `session new --no-select` without it opening) · `rename <name>` · `delete` · `select` ·
+it with `session new --no-select` without it opening, and keeps it out of the focus set; a plain create
+joins the marked set while the filter is applied, so it is visible) · `rename <name>` · `delete` · `select` ·
 `move --to up|down|top|bottom` ·
 `focus [on|off|toggle|add]` (mark ONE workspace in the sidebar's focus set — `on` marks it alone and
 applies the filter, `off` unmarks it, `toggle` (default) replace-toggles, and `add` marks it alongside
@@ -195,8 +196,11 @@ the others WITHOUT switching the filter on; read membership back from the tree w
 `focused` flag) ·
 `filter [on|off|toggle]` (apply or suspend that filter for the whole window WITHOUT losing the marked
 set — no `--target`; read it back from the tree top-level `workspaceFilter`. Build a working set with
-repeated `focus add`, then apply it once with `filter on`; a workspace renders iff
-`focused && workspaceFilter`, and `filter on` with nothing marked is refused so the pair can never lie) ·
+repeated `focus add`, then apply it once with `filter on`; a workspace row renders iff
+`sidebarVisible && sidebarMode == "tree" && (!workspaceFilter || focused)` — no workspace row renders at
+all with the sidebar hidden or in `flagged` mode, the whole tree renders while the filter is off, and
+only while it is on does visibility narrow to the members — and `filter on` with nothing marked is
+refused so the pair can never lie) ·
 `collapse [--target W] [--window W]` · `expand [--target W] [--window W]` (collapse/expand ONE workspace
 in the sidebar tree — the per-workspace pair, distinct from the all-workspace `sidebar expand`/`collapse`;
 read the open/closed state back from the tree workspace node's `collapsed` flag, `true` when collapsed and

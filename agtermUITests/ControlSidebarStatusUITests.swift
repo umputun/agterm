@@ -226,7 +226,8 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
 
     // workspace.filter turns the marked-set filter on/off WITHOUT touching the set — the control half of the
     // bottom-bar toggle, read back as the tree's top-level `workspaceFilter`. Two invariants: `on` with an
-    // EMPTY set is refused (so the documented "visible iff focused && workspaceFilter" can never lie), and
+    // EMPTY set is refused (so the filter term of the documented row-visibility contract — a workspace row
+    // renders iff sidebarVisible && sidebarMode == tree && (!workspaceFilter || focused) — can never lie), and
     // once a workspace is marked the flag flips independently of membership — off restores the full tree
     // while the member keeps reporting `focused`, and on filters back to exactly the same rows.
     func testWorkspaceFilterTogglesWithoutLosingTheSet() throws {
@@ -276,6 +277,79 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         XCTAssertTrue(pollWorkspaceFilter(true, timeout: 10), "a rejected mode must leave the filter unchanged")
     }
 
+    // Creating a workspace while the filter is applied JOINS the marked set, so a foreground create is
+    // never hidden behind the filter (the GUI's New Workspace button does the same) — EXCEPT a
+    // `--collapsed` create, whose whole point is a quiet background build: it must not widen a working set
+    // a script carefully marked. Both polarities are asserted through the `focused` read-back, since the
+    // difference is invisible in the row count (a collapsed workspace's row shows either way).
+    func testWorkspaceNewJoinsTheMarkedSetUnlessCollapsed() throws {
+        let ids = try seedFocusWorkspaces([])
+        let first = ids[0]
+        XCTAssertEqual(try sendCommand(#"{"cmd":"workspace.focus","target":"\#(first)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "workspace.focus on should succeed")
+        XCTAssertTrue(pollWorkspaceFilter(true, timeout: 10), "the filter should be applied")
+
+        let quiet = try sendCommand(#"{"cmd":"workspace.new","args":{"name":"quiet","collapsed":true}}"#)
+        let quietID = try XCTUnwrap((quiet["result"] as? [String: Any])?["id"] as? String, "workspace.new returns an id")
+        XCTAssertNil(try workspaceFocusedFlag(quietID), "a --collapsed create must stay out of the marked set")
+        XCTAssertEqual(try workspaceFocusedFlag(first), true, "the existing member is untouched")
+
+        let loud = try sendCommand(#"{"cmd":"workspace.new","args":{"name":"loud"}}"#)
+        let loudID = try XCTUnwrap((loud["result"] as? [String: Any])?["id"] as? String, "workspace.new returns an id")
+        XCTAssertEqual(try workspaceFocusedFlag(loudID), true,
+                       "a plain create joins the set, so it is visible rather than filtered away")
+        XCTAssertTrue(pollWorkspaceFilter(true, timeout: 10), "neither create suspends the filter")
+    }
+
+    // workspace.filter and workspace.focus resolve their target through `--window`, so they can drive a
+    // BACKGROUND window — the leg no single-window test can tell apart from "acts on the frontmost". A
+    // second window is created MINIMIZED so the seeded one stays frontmost: every command below names the
+    // background window explicitly, and an arm that ignored `--window` would land on the frontmost one,
+    // whose own filter is asserted to stay off throughout.
+    func testWorkspaceFilterDrivesABackgroundWindow() throws {
+        let frontID = try XCTUnwrap(try windowIDs().first, "the seeded window should have an id")
+        let created = try sendCommand(#"{"cmd":"window.new","args":{"name":"parked","minimized":true}}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true, "window.new should succeed: \(created)")
+        let backID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "window.new returns an id")
+        XCTAssertTrue(pollWindowCount(2, timeout: 10), "the second window should register")
+
+        // mark a workspace in the BACKGROUND window and apply the filter there.
+        let backWs = try XCTUnwrap(treeWorkspaces(window: backID).first?["id"] as? String,
+                                   "the new window should have a seeded workspace")
+        let focused = try sendCommand(#"{"cmd":"workspace.focus","target":"\#(backWs)","args":{"mode":"on","window":"\#(backID)"}}"#)
+        XCTAssertEqual(focused["ok"] as? Bool, true, "workspace.focus should succeed on a background window: \(focused)")
+        XCTAssertTrue(pollWorkspaceFilter(true, window: backID, timeout: 10),
+                      "the background window's filter should be applied")
+        XCTAssertEqual(treeWorkspaceFilter(window: frontID), false,
+                       "the frontmost window's own filter must be untouched")
+
+        // suspend it — again by name, with the frontmost window still the default target.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"workspace.filter","args":{"mode":"off","window":"\#(backID)"}}"#)["ok"] as? Bool,
+                       true, "workspace.filter off should succeed on a background window")
+        XCTAssertTrue(pollWorkspaceFilter(false, window: backID, timeout: 10), "the background filter should read off")
+        XCTAssertEqual(try workspaceFocusedFlag(backWs, window: backID), true, "suspending keeps the marked set")
+
+        // and re-apply, so the toggle is exercised in both directions against the background window.
+        XCTAssertEqual(try sendCommand(#"{"cmd":"workspace.filter","args":{"mode":"toggle","window":"\#(backID)"}}"#)["ok"] as? Bool,
+                       true, "workspace.filter toggle should succeed on a background window")
+        XCTAssertTrue(pollWorkspaceFilter(true, window: backID, timeout: 10), "toggle should re-apply it")
+        XCTAssertEqual(treeWorkspaceFilter(window: frontID), false,
+                       "no command named the frontmost window, so its filter should still be off")
+    }
+
+    /// Every window id from `window.list`, in list order.
+    private func windowIDs() throws -> [String] {
+        let response = try sendCommand(#"{"cmd":"window.list"}"#)
+        let windows = try XCTUnwrap((response["result"] as? [String: Any])?["windows"] as? [[String: Any]],
+                                    "window.list should carry windows")
+        return windows.compactMap { $0["id"] as? String }
+    }
+
+    /// Polls `window.list` until it reports `expected` windows.
+    private func pollWindowCount(_ expected: Int, timeout: TimeInterval) -> Bool {
+        poll(until: (try? windowIDs().count) == expected, timeout: timeout)
+    }
+
     /// Seeds the fixture the focus-set control tests share: renames the seeded session to `stay`, then adds
     /// one workspace per entry of `extras`, each holding one renamed session. Returns the workspace ids in
     /// tree order (the seeded one first). Every session is created BEFORE any focus command, and the seeded
@@ -306,29 +380,25 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
         return ids
     }
 
-    /// Whether the workspace with `id` reports `focused` in the current tree — SET MEMBERSHIP, omitted (nil)
+    /// Whether the workspace with `id` reports `focused` in a window's tree — SET MEMBERSHIP, omitted (nil)
     /// for a non-member and reported independently of the filter flag. The single-read twin of the polling
     /// `workspaceFocused`.
-    private func workspaceFocusedFlag(_ id: String) throws -> Bool? {
-        try treeWorkspaces().first { ($0["id"] as? String)?.lowercased() == id.lowercased() }?["focused"] as? Bool
+    private func workspaceFocusedFlag(_ id: String, window: String? = nil) throws -> Bool? {
+        try treeWorkspaces(window: window)
+            .first { ($0["id"] as? String)?.lowercased() == id.lowercased() }?["focused"] as? Bool
     }
 
-    /// The tree's top-level `workspaceFilter` — whether the marked set is currently applied. Always
+    /// A window's top-level `workspaceFilter` — whether its marked set is currently applied. Always
     /// populated on an app-produced tree (like `sidebarVisible`), so nil means the read itself failed.
-    private func treeWorkspaceFilter() -> Bool? {
-        guard let result = (try? sendCommand(#"{"cmd":"tree"}"#))?["result"] as? [String: Any],
+    private func treeWorkspaceFilter(window: String? = nil) -> Bool? {
+        guard let result = (try? sendCommand(treeRequest(window: window)))?["result"] as? [String: Any],
               let root = result["tree"] as? [String: Any] else { return nil }
         return root["workspaceFilter"] as? Bool
     }
 
-    /// Polls the tree's `workspaceFilter` until it equals `expected`.
-    private func pollWorkspaceFilter(_ expected: Bool, timeout: TimeInterval) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if treeWorkspaceFilter() == expected { return true }
-            usleep(200_000)
-        }
-        return treeWorkspaceFilter() == expected
+    /// Polls a window's `workspaceFilter` until it equals `expected`.
+    private func pollWorkspaceFilter(_ expected: Bool, window: String? = nil, timeout: TimeInterval) -> Bool {
+        poll(until: treeWorkspaceFilter(window: window) == expected, timeout: timeout)
     }
 
     // --no-select --create-workspace must not widen the workspace focus SET. A plain --create-workspace adds
@@ -982,12 +1052,20 @@ final class ControlSidebarStatusUITests: ControlAPITestCase {
                      "expand must persist with the sidebar hidden — collapsed omitted")
     }
 
-    /// The tree's workspace nodes, for read-back assertions.
-    private func treeWorkspaces() throws -> [[String: Any]] {
-        let tree = try sendCommand(#"{"cmd":"tree"}"#)
+    /// The workspace nodes of a window's tree — the frontmost window's by default, or the window named by
+    /// `window` (the selector every focus/filter command also honors, so the read-back can follow a command
+    /// into a background window).
+    private func treeWorkspaces(window: String? = nil) throws -> [[String: Any]] {
+        let tree = try sendCommand(treeRequest(window: window))
         let result = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
         let t = try XCTUnwrap(result["tree"] as? [String: Any], "result should carry a tree")
         return try XCTUnwrap(t["workspaces"] as? [[String: Any]], "tree should carry workspaces")
+    }
+
+    /// A `tree` request line, optionally scoped to one window.
+    private func treeRequest(window: String?) -> String {
+        guard let window else { return #"{"cmd":"tree"}"# }
+        return #"{"cmd":"tree","args":{"window":"\#(window)"}}"#
     }
 
     /// Polls until the tree's top-level `sidebarVisible` reads false (draining the run loop so SwiftUI can

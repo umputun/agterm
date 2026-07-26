@@ -239,21 +239,24 @@ extension agtermApp {
                 // keyless by default (rebindable via focus_workspace). The control half is workspace.focus.
                 // the label tracks the toggle (Focus/Unfocus) like the workspace row's context-menu item.
                 let focusStore = library.activeStore
-                let currentWorkspaceID = focusStore?.currentWorkspaceID
-                let currentFocused = focusStore?.focusEnabled == true
-                    && currentWorkspaceID.map { focusStore?.focusedWorkspaceIDs == [$0] } == true
                 Button { actions.focusActiveWorkspace() } label: {
-                    Label(currentFocused ? "Unfocus Workspace" : "Focus Workspace", systemImage: "scope")
+                    Label(focusStore?.isCurrentWorkspaceSoleFocus == true ? "Unfocus Workspace" : "Focus Workspace",
+                          systemImage: "scope")
                 }
                 .keyboardShortcut(shortcut(for: .focusWorkspace))
-                .disabled(library.activeStore?.currentWorkspaceID == nil || modalActive)
+                .disabled(focusStore?.currentWorkspaceID == nil || modalActive)
                 // the ADDITIVE sibling of Focus Workspace: mark the current workspace without dropping the
                 // other members, so a working set can be built from the menu. Plain (non-BuiltinAction)
-                // keyless item like Clear Focus below. The control half is workspace.focus add.
+                // keyless item like Clear Focus below. The control half is workspace.focus add. Disabled
+                // once the current workspace is already marked — it would be a silent no-op (the row menu
+                // flips to "Remove from Focus" instead, which it can do because it has a clicked row).
+                // Membership is NOT gated on the sidebar mode here or in the palette (unlike Expand/Collapse
+                // Workspaces above), matching the focus siblings and the control modes.
                 Button { actions.addActiveWorkspaceToFocus() } label: {
                     Label("Add Workspace to Focus", systemImage: "square.grid.2x2")
                 }
-                .disabled(library.activeStore?.currentWorkspaceID == nil || modalActive)
+                .disabled(focusStore?.currentWorkspaceID == nil
+                    || focusStore?.isCurrentWorkspaceFocusMember == true || modalActive)
                 // apply or suspend the filter without losing the marked set — the menu twin of the
                 // bottom-bar grid toggle, disabled in the same empty-set state (the store refuses to
                 // enable an empty set, so the item would be a no-op). The control half is workspace.filter.
@@ -261,10 +264,10 @@ extension agtermApp {
                     Label("Toggle Workspace Filter", systemImage: "square.grid.2x2")
                 }
                 .keyboardShortcut(shortcut(for: .toggleWorkspaceFilter))
-                .disabled(library.activeStore?.focusedWorkspaceIDs.isEmpty != false || modalActive)
+                .disabled((focusStore?.focusedWorkspaceIDs.isEmpty ?? true) || modalActive)
                 // plain (non-BuiltinAction) clear, like Clear Flagged; the bottom-bar toggle is primary.
                 Button { actions.clearFocus() } label: { Label("Clear Focus", systemImage: "scope") }
-                    .disabled(library.activeStore?.focusedWorkspaceIDs.isEmpty != false || modalActive)
+                    .disabled((focusStore?.focusedWorkspaceIDs.isEmpty ?? true) || modalActive)
                 Button { actions.toggleSplit() } label: {
                     Label(library.activeStore?.activeSession?.isSplit == true ? "Hide Split" : "Split Right", systemImage: "rectangle.split.2x1")
                 }

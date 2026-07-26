@@ -205,9 +205,16 @@ struct AppStoreNavigationTests {
         let work = store.workspace(forSession: ids[0])!
         store.setFocusedWorkspace(work.id)
         #expect(store.navigableSessions.map(\.id) == [ids[0], ids[1]]) // focused -> only that workspace
-        store.setFocusedWorkspace(UUID()) // a stale focus id falls back to all
+        // marking an id that names no workspace is REFUSED by the mutator, so the focus survives intact.
+        store.setFocusedWorkspace(UUID())
+        #expect(store.navigableSessions.map(\.id) == [ids[0], ids[1]])
+        // the all-stale set is therefore only reachable by writing the fields directly (a hand-edited file
+        // that skipped the restore prune); `visibleWorkspaces` then falls back to the whole tree, and nav
+        // with it.
+        store.focusedWorkspaceIDs = [UUID()]
+        store.focusEnabled = true
         #expect(store.navigableSessions.map(\.id) == ids)
-        store.setFocusedWorkspace(nil)
+        store.clearFocus()
         store.setFlag(true, forSession: ids[1])
         store.setFlag(true, forSession: ids[2])
         store.setSidebarMode(.flagged)
@@ -227,7 +234,7 @@ struct AppStoreNavigationTests {
         #expect(store.selectedSessionID == ids[1]) // .last is the focused workspace's last, not the tree's
         store.navigateSession(.first)
         #expect(store.selectedSessionID == ids[0]) // .first is the focused workspace's first
-        #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled) // never auto-unfocuses — every target was in-set
+        #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled) // never suspends the filter — every target was in-set
     }
 
     /// Builds a three-workspace tree (work: a, b; personal: c, d; archive: e, f) so the flattened order is
@@ -323,7 +330,7 @@ struct AppStoreNavigationTests {
         store.selectSession(ids[1]) // b, the in-set last of {a,b}
         store.navigateSession(.next)
         #expect(store.selectedSessionID == ids[0]) // scoped: wraps within {a,b} back to a, never crosses to c
-        store.setFocusedWorkspace(nil) // clearing focus restores the full navigable set
+        store.clearFocus() // clearing focus restores the full navigable set
         store.selectSession(ids[1]) // b again, now in the full set [a,b,c,d]
         store.navigateSession(.next)
         #expect(store.selectedSessionID == ids[2]) // now crosses into the personal workspace

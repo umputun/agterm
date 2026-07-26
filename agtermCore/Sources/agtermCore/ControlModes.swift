@@ -86,7 +86,7 @@ public enum ControlSidebarViewMode: Equatable, Sendable {
 /// rows the next add needs). There is deliberately no membership-TOGGLE mode — the row menu's membership
 /// item computes its own direction from what it just read and maps to `add` or `off`. Raw values are the
 /// wire tokens.
-public enum WorkspaceFocusMode: String, CaseIterable, Sendable {
+public enum ControlWorkspaceFocusMode: String, CaseIterable, Equatable, Sendable {
     case on, off, toggle, add
 
     /// The accepted names pipe-joined (`on|off|toggle|add`) — the compact form the dispatcher's rejection
@@ -95,8 +95,24 @@ public enum WorkspaceFocusMode: String, CaseIterable, Sendable {
     public static var validNamesList: String { validNames.joined(separator: "|") }
 
     /// The accepted names comma-joined (`on, off, toggle, add`) — the prose form the `agtermctl workspace
-    /// focus` help text and its local rejection message use.
+    /// focus` local rejection message uses.
     public static var validNamesPhrase: String { validNames.joined(separator: ", ") }
+
+    /// What this mode does to the marked set AND to the filter flag, in one clause — the building block of
+    /// the `agtermctl workspace focus` argument help, so that help cannot go stale when a case is added
+    /// (the `StatusShape.validNamesPhrase`-builds-its-own-help precedent). Every clause names the filter
+    /// effect, since `add`'s "leaves the flag alone" reads as the exception unless the others say so too.
+    public var helpSummary: String {
+        switch self {
+        case .on: return "on (mark it alone and apply the filter)"
+        case .off: return "off (unmark it; the filter switches off as the set empties)"
+        case .toggle: return "toggle (replace-toggle and apply the filter, the default; clears when it is the only marked one AND the filter is applied)"
+        case .add: return "add (mark it alongside the others, leaving the filter flag alone)"
+        }
+    }
+
+    /// Every mode's `helpSummary`, comma-joined — the whole `--help` sentence, derived from `allCases`.
+    public static var helpPhrase: String { allCases.map(\.helpSummary).joined(separator: ", ") }
 
     private static var validNames: [String] { allCases.map(\.rawValue) }
 }

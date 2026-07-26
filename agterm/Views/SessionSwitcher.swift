@@ -79,7 +79,8 @@ final class SessionSwitcher {
     /// Snapshot the MRU order (live sessions only, capped at `maxCandidates`) and pre-select the previous
     /// session. No-op when there's nothing to switch to (fewer than two sessions). The candidate set is
     /// scoped to the VISIBLE/FILTERED sessions (`navigableSessions` — the flagged set in flagged mode, the
-    /// focused workspace's sessions when focused, else all), so clearing the flag/focus restores the full MRU.
+    /// sessions of the workspaces MARKED in the focus set while the filter applies, else all), so clearing
+    /// the flag or suspending the filter restores the full MRU.
     private func begin() {
         guard let store else { return }
         let valid = Set(store.navigableSessions.map(\.id))

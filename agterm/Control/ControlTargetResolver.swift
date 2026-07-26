@@ -39,6 +39,18 @@ final class ControlTargetResolver {
         }
     }
 
+    /// `resolvePlacementStore` for the window-scoped commands that must FAIL rather than silently no-op
+    /// when nothing is open. Without `window` the placement default is the frontmost store, which falls
+    /// back to a throwaway `emptyStore` once every window is closed — a command driven onto that store
+    /// would answer `ok` having changed nothing. A named window already errors when it isn't open, so this
+    /// only adds the nil-window case.
+    func resolveOpenPlacementStore(_ window: String?, _ body: (AppStore) -> ControlResponse) -> ControlResponse {
+        if trimmed(window) == nil, library.activeStore == nil {
+            return ControlResponse(ok: false, error: "no open window")
+        }
+        return resolvePlacementStore(window, body)
+    }
+
     /// Resolve `window` to an OPEN window's store. nil → the frontmost store. A set value resolves the
     /// window id (active=frontmost / exact / prefix / ambiguous / not-found); the window must be open,
     /// else the closed-window error.

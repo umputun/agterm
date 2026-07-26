@@ -140,8 +140,12 @@ from the top-level `zoomedSurface`. Workspace nodes carry
 `id`, `name`, `active`, `sessions`, `focused` (whether this workspace is a MEMBER of the sidebar's focus
 set — the read side of `workspace focus`, distinct from `active` the SELECTED workspace; omitted on
 non-members, and absent entirely when nothing is marked. Membership is reported INDEPENDENTLY of whether
-the filter is applied, so a marked-but-not-filtering set reads back too; a workspace RENDERS in the
-sidebar iff `focused && workspaceFilter`), and `collapsed` (whether this workspace is COLLAPSED in the sidebar tree — the read side of
+the filter is applied, so a marked-but-not-filtering set reads back too; a workspace ROW RENDERS in the
+sidebar iff `sidebarVisible && sidebarMode == "tree" && (!workspaceFilter || focused)`, every term on the
+same tree response — the sidebar hidden renders nothing, `flagged` mode renders a flat flagged-session
+list with NO workspace rows whatever the filter says, `tree` mode with the filter OFF renders the whole
+tree regardless of membership, and only `tree` mode with the filter ON narrows visibility to the
+members), and `collapsed` (whether this workspace is COLLAPSED in the sidebar tree — the read side of
 `workspace collapse`/`workspace expand` and `workspace new --collapsed`; `true` when collapsed, omitted
 when expanded, so an all-expanded tree carries no `collapsed` keys).
 
@@ -176,7 +180,11 @@ All eleven are read-only projections of GUI state.
 - `workspace new [name] [--collapsed] [--window W]` — create a workspace; returns its id. Name defaults
   to an auto-generated one. `--collapsed` creates it CLOSED in the sidebar tree so a script can build a
   workspace and fill it with `session new --no-select` without it ever opening (a fresh workspace is
-  expanded by default). Read the state back from the tree workspace node's `collapsed` flag.
+  expanded by default), and for the same reason a `--collapsed` create is kept OUT of the workspace focus
+  set — it never widens a marked working set. A PLAIN `workspace new` while the filter is applied JOINS
+  the marked set instead, so a foreground create is visible rather than hidden behind the filter (the
+  same auto-reveal the GUI's New Workspace button has). Read the state back from the tree workspace
+  node's `collapsed` flag, and the membership from its `focused` flag.
 - `workspace rename <name> [--target] [--window W]`.
 - `workspace delete [--target] [--window W]` — keep-at-least-one; deleting the last workspace errors.
 - `workspace select [--target] [--window W]`.
@@ -197,7 +205,9 @@ All eleven are read-only projections of GUI state.
   While the filter is applied, `session go` navigation is scoped to the marked workspaces' sessions (and
   to the flagged set in flagged mode); an explicit `session select` of a session outside the set switches
   the filter OFF while KEEPING the set, so re-applying it costs one `workspace filter on`. A workspace
-  created while the filter is applied joins the set, so it is visible without breaking the filter.
+  created while the filter is applied joins the set, so it is visible without breaking the filter — except
+  a `workspace new --collapsed` (or a `session new --no-select --create-workspace`), whose whole point is a
+  quiet background build.
   Read membership back from the tree workspace node's `focused` flag. An unknown mode errors.
 - `workspace filter [on|off|toggle] [--window W]` — apply or suspend the whole window's workspace focus
   filter WITHOUT touching the marked set, so peeking at the full tree and coming back costs one call each
@@ -205,8 +215,10 @@ All eleven are read-only projections of GUI state.
   membership), and `--window` picks the window like `sidebar expand`/`sidebar collapse`, defaulting to
   the frontmost. `toggle` is the default; idempotent (delta-computed); an unknown mode errors, and
   `no open window` when none is open. `on` with an EMPTY marked set is REFUSED — it returns ok having
-  changed nothing, which is what keeps the read-back contract exact: a workspace is visible iff
-  `focused && workspaceFilter`, and `workspaceFilter == true` with nothing marked cannot occur. Read it
+  changed nothing, which is what keeps the filter term of the row-visibility contract exact:
+  `workspaceFilter == true` with nothing marked cannot occur, so an applied filter always has at least one
+  visible member (the full predicate, including the sidebar-mode term, is on the `focused` field above).
+  Read it
   back from the tree top-level `workspaceFilter`. The GUI half is the sidebar's bottom-bar grid button
   (filled while applied, disabled with nothing marked), View ▸ Toggle Workspace Filter, the ⌃⇧P palette
   entry, and the `toggle_workspace_filter` keymap action.

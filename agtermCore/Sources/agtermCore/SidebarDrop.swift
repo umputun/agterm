@@ -11,12 +11,16 @@ public enum SidebarDrop {
     /// Prevents an accidental Finder multi-selection from spawning an unbounded number of shells.
     public static let maximumDirectoryImportCount = 20
 
-    /// Resolves the workspace for a Finder directory drop. Folder import is a tree-only affordance;
-    /// empty-space drops prefer the focused workspace so adding a session cannot silently leave focus mode.
+    /// Resolves the workspace for a Finder directory drop. Folder import is a tree-only affordance; a drop
+    /// ON a row lands in that row's workspace, and an EMPTY-SPACE drop takes `fallbackWorkspaceID` when the
+    /// caller can name an unambiguous one (`AppStore.soleFocusedWorkspaceID`: the sole marked workspace
+    /// while the focus filter applies — the only state where the tree renders exactly one workspace), else
+    /// the current workspace. With no marked set, the filter off, or two or more members there is no such
+    /// workspace, so the caller passes nil and the drop falls through to `currentWorkspaceID`.
     public static func resolveDirectoryWorkspace(sidebarMode: SidebarMode, rowWorkspaceID: UUID?,
-                                                 focusedWorkspaceID: UUID?, currentWorkspaceID: UUID?) -> UUID? {
+                                                 fallbackWorkspaceID: UUID?, currentWorkspaceID: UUID?) -> UUID? {
         guard sidebarMode == .tree else { return nil }
-        return rowWorkspaceID ?? focusedWorkspaceID ?? currentWorkspaceID
+        return rowWorkspaceID ?? fallbackWorkspaceID ?? currentWorkspaceID
     }
 
     /// The destination of a dragged session, or nil when the drop is a no-op (would leave order
@@ -141,6 +145,25 @@ public enum SidebarDrop {
     public struct WorkspaceResolution: Equatable, Sendable {
         public let dropChildIndex: Int
         public let destination: Int
+    }
+
+    /// Maps a drop slot read off the RENDERED workspace rows onto the FULL workspace array's index space,
+    /// which is what `resolveWorkspace`/`AppStore.moveWorkspace` work in. `visibleIndices` holds the
+    /// full-array indices of the workspace rows the sidebar actually renders, in order — under the focus
+    /// filter those are the marked set's, so they can be non-contiguous; `slot` is how many of those rows
+    /// have their midpoint above the cursor (0 = the cursor is above every rendered row).
+    ///
+    /// A drop lands IMMEDIATELY ADJACENT to the visible row it was aimed at, never at a raw array index the
+    /// filter has no row for: above the first rendered row it takes that row's own index (landing just
+    /// before it), otherwise the index just after the last rendered row above the cursor. Anything else
+    /// would jump the dragged workspace across the hidden workspaces in between — invisible at drop time
+    /// and only revealed once the filter is switched off. With every workspace rendered
+    /// (`visibleIndices == Array(0..<count)`) it returns `slot` unchanged, so the unfiltered tree behaves
+    /// exactly as before. Returns 0 for an empty `visibleIndices` (nothing to drop against).
+    public static func workspaceInsertIndex(visibleIndices: [Int], slot: Int) -> Int {
+        guard let firstVisible = visibleIndices.first else { return 0 }
+        guard slot > 0 else { return firstVisible }
+        return visibleIndices[min(slot, visibleIndices.count) - 1] + 1
     }
 
     /// Resolves a top-level workspace reorder (validity — a between-rows root drop — is the caller's

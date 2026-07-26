@@ -150,15 +150,15 @@ extension WorkspaceSidebar.Coordinator {
 
     /// Resolves a Finder drop to existing directory URLs and a destination workspace. Dropping on a
     /// workspace row adds there; dropping on a session row adds to that session's workspace; dropping into
-    /// empty sidebar space uses the store's `dropFallbackWorkspaceID` (the sole marked workspace while the
-    /// focus filter is on), otherwise the current workspace.
+    /// empty sidebar space uses the store's `soleFocusedWorkspaceID` (the workspace the tree is zoomed to),
+    /// otherwise the current workspace.
     private func resolveDirectoryDrop(from info: NSDraggingInfo, item: Any?) -> DirectoryDrop? {
         let resolved = directoryURLs(from: info)
         guard !resolved.urls.isEmpty,
               let workspaceID = SidebarDrop.resolveDirectoryWorkspace(
                   sidebarMode: store.sidebarMode,
                   rowWorkspaceID: rowWorkspaceID(for: item),
-                  focusedWorkspaceID: store.dropFallbackWorkspaceID,
+                  fallbackWorkspaceID: store.soleFocusedWorkspaceID,
                   currentWorkspaceID: store.currentWorkspaceID)
         else { return nil }
         return DirectoryDrop(urls: resolved.urls, workspaceID: workspaceID,
@@ -279,25 +279,34 @@ extension WorkspaceSidebar.Coordinator {
     /// only ever proposes drops INTO a workspace's children (`item != nil`) — never the clean root
     /// between-rows slot — making the reorder impossible from the proposed `item`/`childIndex` alone.
     /// Derive the insert slot from the cursor Y against the workspace ROWS' midpoints instead (sessions
-    /// ignored): the slot is the count of workspace rows whose midpoint sits above the cursor, so the
-    /// top half of a row drops before it and the bottom half after it. The index arithmetic (post-removal
-    /// off-by-one, no-op detection) defers to the host-free `SidebarDrop.resolveWorkspace`.
+    /// ignored): the slot is the count of RENDERED workspace rows whose midpoint sits above the cursor, so
+    /// the top half of a row drops before it and the bottom half after it. The focus filter can render a
+    /// non-contiguous subset of the workspaces, so that slot is a VISIBLE-row count, not a full-array
+    /// index; `SidebarDrop.workspaceInsertIndex` maps it back onto the full array (landing adjacent to the
+    /// aimed-at row rather than jumping across the hidden workspaces between them), and the index
+    /// arithmetic (post-removal off-by-one, no-op detection) defers to `SidebarDrop.resolveWorkspace`.
     private func resolveWorkspaceMove(from info: NSDraggingInfo, in outlineView: NSOutlineView)
         -> (workspaceID: UUID, dropChildIndex: Int, destination: Int)? {
         guard let workspaceID = draggedWorkspaceID(from: info),
               let sourceIndex = store.workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
         let point = outlineView.convert(info.draggingLocation, from: nil)
-        var insertIndex = 0
+        var visibleIndices: [Int] = []
+        var slot = 0
         for (i, workspace) in store.workspaces.enumerated() {
             guard let node = workspaceNode(forID: workspace.id) else { continue }
             let row = outlineView.row(forItem: node)
             guard row >= 0 else { continue }
+            visibleIndices.append(i)
             // the outline is flipped (y increases downward): a cursor below a row's midpoint lands after it.
-            if point.y > outlineView.rect(ofRow: row).midY { insertIndex = i + 1 }
+            if point.y > outlineView.rect(ofRow: row).midY { slot = visibleIndices.count }
         }
+        let insertIndex = SidebarDrop.workspaceInsertIndex(visibleIndices: visibleIndices, slot: slot)
         guard let move = SidebarDrop.resolveWorkspace(sourceIndex: sourceIndex, count: store.workspaces.count,
                                                       childIndex: insertIndex) else { return nil }
-        return (workspaceID, move.dropChildIndex, move.destination)
+        // the highlight rides the OUTLINE's root children — under the focus filter only the rendered
+        // workspaces — so it takes the VISIBLE-space slot, while the store move takes the full-array
+        // destination. The two index spaces coincide only on an unfiltered tree.
+        return (workspaceID, slot, move.destination)
     }
 
     /// Reads the dragged workspace id from the pasteboard.

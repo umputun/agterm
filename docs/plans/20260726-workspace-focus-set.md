@@ -172,7 +172,13 @@ would conclude nothing was visible while the whole tree was on screen). Two guar
   empty-and-disabled rather than to an enabled-but-invisible filter.
 
 With both in place the empty-result fallback in `visibleWorkspaces` becomes defensive belt-and-braces rather
-than a reachable path, and the simple contract "visible iff `focused && workspaceFilter`" holds exactly:
+than a reachable path, and the contract "visible iff `!workspaceFilter || focused`" holds exactly.
+
+⚠️ CORRECTION (review round 3): every task below, and the shipped docs they produced, wrote that contract as
+`focused && workspaceFilter`. That form is FALSE whenever the filter is off — `visibleWorkspaces` returns the
+whole tree there, while `focused && workspaceFilter` evaluates false for every node. The guards above make
+only the filter-ON half exact; the `!workspaceFilter` half is unconditional. Read every `focused &&
+workspaceFilter` in this plan as `!workspaceFilter || focused`.
 
 ```swift
 public var visibleWorkspaces: [Workspace] {
@@ -277,8 +283,9 @@ public let workspaceFilter: Bool?                // new ControlTree top-level re
 ```
 
 `ControlWorkspaceNode.focused` keeps its name and type but its MEANING generalizes to "is a member of the
-focus set", reported independently of the flag. A workspace is visible iff `focused && tree.workspaceFilter`
-— true exactly because `enabled + empty` is unrepresentable (see Solution Overview).
+focus set", reported independently of the flag. A workspace is visible iff `!tree.workspaceFilter || focused`
+— the filter-ON half exact because `enabled + empty` is unrepresentable (see the correction in Solution
+Overview).
 
 Mode semantics (each identical to today at set size 1):
 

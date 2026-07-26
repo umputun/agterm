@@ -2,6 +2,23 @@ import AppKit
 import Darwin
 import XCTest
 
+@MainActor
+extension XCTestCase {
+    /// The shared waiting idiom: re-evaluate `condition` on a drained run loop until it holds or `timeout`
+    /// expires. `@autoclosure` so a caller reads as a plain expression, and a drained run loop (rather than
+    /// `usleep`) so the runner keeps servicing the AX queries and socket round-trips the condition makes.
+    /// Lives on `XCTestCase` rather than on `ControlAPITestCase` so the suites that do NOT need the control
+    /// harness (`FocusWorkspaceUITests`) share the one loop too.
+    func poll(until condition: @autoclosure () -> Bool, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if condition() { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
+        }
+        return condition()
+    }
+}
+
 /// Shared XCUITest harness for the programmatic control-channel e2e suites: launches the real app
 /// with an isolated `AGTERM_STATE_DIR` (which also locates the unix socket at `<stateDir>/agterm.sock`),
 /// speaks the socket directly from the test process (one newline-delimited JSON request → one response

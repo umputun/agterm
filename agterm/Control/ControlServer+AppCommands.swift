@@ -54,10 +54,7 @@ extension ControlServer {
     /// frontmost). Idempotent (expanding when all are already expanded is a clean no-op); a named-but-closed
     /// window errors, and no open window at all errors rather than silently no-opping.
     func expandSidebar(window: String?) -> ControlResponse {
-        if trimmed(window) == nil, library.activeStore == nil {
-            return ControlResponse(ok: false, error: "no open window")
-        }
-        return resolver.resolvePlacementStore(window) { store in
+        resolver.resolveOpenPlacementStore(window) { store in
             actions.expandAllWorkspaces(in: store)
             return ControlResponse(ok: true)
         }
@@ -69,10 +66,7 @@ extension ControlServer {
     /// Graceful no-op in flagged mode; idempotent; a named-but-closed window errors, and no open window
     /// at all errors.
     func collapseSidebar(window: String?) -> ControlResponse {
-        if trimmed(window) == nil, library.activeStore == nil {
-            return ControlResponse(ok: false, error: "no open window")
-        }
-        return resolver.resolvePlacementStore(window) { store in
+        resolver.resolveOpenPlacementStore(window) { store in
             actions.collapseOtherWorkspaces(in: store)
             return ControlResponse(ok: true)
         }

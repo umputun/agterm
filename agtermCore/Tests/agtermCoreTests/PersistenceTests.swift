@@ -247,7 +247,7 @@ final class PersistenceTests {
         restored.restore(from: store.load())
         #expect(restored.focusedWorkspaceIDs == [work.id] && restored.focusEnabled)
 
-        app.setFocusedWorkspace(nil)
+        app.clearFocus()
         let restoredCleared = AppStore(persistence: store)
         restoredCleared.restore(from: store.load())
         #expect(restoredCleared.focusedWorkspaceIDs.isEmpty && !restoredCleared.focusEnabled)
@@ -261,7 +261,7 @@ final class PersistenceTests {
         try Data(json.utf8).write(to: fileURL)
         let loaded = store.load()
         #expect(loaded.workspaces.map(\.id) == [ws])
-        #expect(loaded.focusedWorkspaceIDs == nil && loaded.focusEnabled == nil && loaded.focusedWorkspaceID == nil)
+        #expect(loaded.focusedWorkspaceIDs == nil && loaded.focusEnabled == nil)
 
         let app = AppStore(persistence: store)
         app.restore(from: loaded)

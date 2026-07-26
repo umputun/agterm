@@ -514,12 +514,21 @@ public struct ControlWorkspaceNode: Codable, Sendable, Equatable {
     /// Whether this workspace is a MEMBER of the sidebar's focus set, or nil when it is not (omitted from
     /// the JSON). Membership is reported INDEPENDENTLY of whether the filter is currently applied, so a
     /// script can read a marked-but-not-filtering set back; the flag itself is the tree top-level
-    /// `workspaceFilter`. A workspace is VISIBLE in the sidebar iff `focused && tree.workspaceFilter` —
-    /// exact, not approximate, because `workspaceFilter == true` with an empty member set is
-    /// unrepresentable (enabling an empty set is refused, and restore prunes stale ids then disables when
-    /// the set comes back empty). Distinct from `active` (the SELECTED workspace). The read side of the
-    /// write-only `workspace.focus`/`workspace.filter` — so a script can record the working set and
-    /// restore it.
+    /// `workspaceFilter`. Distinct from `active` (the SELECTED workspace). The read side of the write-only
+    /// `workspace.focus`/`workspace.filter` — so a script can record the working set and restore it.
+    ///
+    /// A workspace ROW is VISIBLE in the sidebar iff
+    /// `tree.sidebarVisible && tree.sidebarMode == "tree" && (!tree.workspaceFilter || focused)` — every
+    /// term is on the same `tree` response, so a script evaluates it without a second call. The states,
+    /// enumerated: `sidebarVisible == false` renders no sidebar at all; `sidebarMode == "flagged"` renders
+    /// a FLAT flagged-session list with NO workspace rows, whatever the filter and the membership say;
+    /// `"tree"` with the filter OFF renders EVERY workspace regardless of membership; `"tree"` with the
+    /// filter ON renders only the members. Neither shorter form works: `focused && workspaceFilter`
+    /// reports nothing visible whenever the filter is off, and `!workspaceFilter || focused` alone reports
+    /// rows in flagged mode and behind a hidden sidebar, where no workspace row renders at all. The
+    /// filter-ON term is exact rather than approximate, because `workspaceFilter == true` with an empty
+    /// member set is unrepresentable (enabling an empty set is refused, and restore prunes stale ids then
+    /// disables when the set comes back empty), so an applied filter always has at least one visible member.
     public let focused: Bool?
     /// Whether this workspace is COLLAPSED in the sidebar tree (`true`), or nil when expanded — the
     /// default — so an all-expanded tree omits the field (matching the persisted `WorkspaceSnapshot.collapsed`).
@@ -566,8 +575,11 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// leave a cached copy stale — read the live tree copy instead.
     public let sidebarMode: String?
     /// Whether the projected window's workspace focus FILTER is currently applied — the flag half of the
-    /// focus set, whose member half is each workspace node's `focused`. A workspace renders in the sidebar
-    /// iff `focused && workspaceFilter`. LIVE and `tree`-only (not on `window.list`), like `sidebarMode`:
+    /// focus set, whose member half is each workspace node's `focused`. It is one term of the row-visibility
+    /// predicate, not the whole of it: a workspace row renders iff
+    /// `sidebarVisible && sidebarMode == "tree" && (!workspaceFilter || focused)` — see `focused` for the
+    /// enumerated states, including `flagged` mode, where no workspace row renders whatever this says.
+    /// LIVE and `tree`-only (not on `window.list`), like `sidebarMode`:
     /// the bottom-bar toggle and the row menu flip it without going through the command path, so a cached
     /// copy would go stale — read the live tree copy instead. The read side of the write-only
     /// `workspace.filter` command, so a script can record the filter state and restore it, or make the

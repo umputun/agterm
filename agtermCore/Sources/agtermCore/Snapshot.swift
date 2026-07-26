@@ -29,10 +29,6 @@ public struct Snapshot: Codable, Equatable, Sendable {
     /// Whether the focus filter applies to the marked set, or nil for the default (off). Persisted apart
     /// from the set so an off filter keeps its members. Optional for forward-compat like the fields above.
     public var focusEnabled: Bool?
-    /// LEGACY single-workspace focus, written by releases before the focus SET existed. Decode-only: it
-    /// migrates in `init(from:)` to a one-member enabled set and is never populated again, so the
-    /// synthesized `encodeIfPresent` drops it from every snapshot this build writes.
-    public var focusedWorkspaceID: UUID?
     /// Most-recently-selected session ids, front = current, so the Ctrl-Tab switcher's order survives
     /// a relaunch. Restore drops ids no longer in the tree. Optional so a snapshot already on disk
     /// before this field was added still decodes (as nil → selection only), like the fields above.
@@ -55,7 +51,15 @@ public struct Snapshot: Codable, Equatable, Sendable {
 
     enum CodingKeys: String, CodingKey {
         case version, selectedSessionID, workspaces, sidebarWidth, sidebarVisible, sidebarMode
-        case focusedWorkspaceIDs, focusEnabled, focusedWorkspaceID, sessionRecency
+        case focusedWorkspaceIDs, focusEnabled, sessionRecency
+    }
+
+    /// The LEGACY single-workspace focus key, written by releases before the focus SET existed. It lives
+    /// in its OWN key type, read only by `init(from:)`: it has no stored property (so re-encoding a
+    /// migrated snapshot drops it, instead of writing the legacy key back on every load-mutate-save path),
+    /// and an extra case in `CodingKeys` above would block the synthesized `encode(to:)` outright.
+    private enum LegacyCodingKeys: String, CodingKey {
+        case focusedWorkspaceID
     }
 
     /// Custom decode so `sessionRecency` is LOSSY: a present-but-invalid list (a malformed UUID
@@ -68,7 +72,9 @@ public struct Snapshot: Codable, Equatable, Sendable {
     /// It is also where the LEGACY `focusedWorkspaceID` migrates: a file written before the focus set
     /// existed carries only that single id, which becomes a one-member ENABLED set (the old field meant
     /// "focused on this workspace", so its presence implied the filter was on). A file carrying neither
-    /// key decodes to nil/nil, which restore reads as an empty, disabled filter.
+    /// key decodes to nil/nil, which restore reads as an empty, disabled filter. The legacy value is a
+    /// LOCAL here rather than a stored property, so re-encoding a migrated snapshot drops the key instead
+    /// of writing it back alongside the new ones.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         version = try c.decode(Int.self, forKey: .version)
@@ -77,10 +83,11 @@ public struct Snapshot: Codable, Equatable, Sendable {
         sidebarWidth = try c.decodeIfPresent(Double.self, forKey: .sidebarWidth)
         sidebarVisible = try c.decodeIfPresent(Bool.self, forKey: .sidebarVisible)
         sidebarMode = try c.decodeIfPresent(SidebarMode.self, forKey: .sidebarMode)
-        focusedWorkspaceID = try c.decodeIfPresent(UUID.self, forKey: .focusedWorkspaceID)
+        let legacyContainer = try decoder.container(keyedBy: LegacyCodingKeys.self)
+        let legacyFocus = try legacyContainer.decodeIfPresent(UUID.self, forKey: .focusedWorkspaceID)
         let ids = try c.decodeIfPresent([UUID].self, forKey: .focusedWorkspaceIDs)
-        if ids == nil, let legacy = focusedWorkspaceID {
-            focusedWorkspaceIDs = [legacy]
+        if ids == nil, let legacyID = legacyFocus {
+            focusedWorkspaceIDs = [legacyID]
             focusEnabled = true
         } else {
             focusedWorkspaceIDs = ids

@@ -84,12 +84,16 @@ struct CommandsTests {
         #expect(validationMessage(["workspace", "focus", "sideways"]) == "mode must be one of: on, off, toggle, add")
     }
 
-    @Test func workspaceFocusHelpListsEveryMode() {
-        // the abstract is built from allCases like the validation message, so `--help` can't go stale when
-        // a mode is added; assert every raw value survives into the rendered help.
-        let help = Workspace.Focus.helpMessage(columns: 200)
-        for mode in WorkspaceFocusMode.allCases {
+    @Test func workspaceFocusHelpListsEveryModeAndWhatItDoesToTheFilter() {
+        // the abstract AND the argument's per-mode prose are both built from allCases, so `--help` can't go
+        // stale when a mode is added. Asserting the raw values alone was NOT enough — the abstract carries
+        // those on its own, so a hand-written argument help could rot undetected; assert each mode's whole
+        // clause (which names its effect on the filter flag) survives into the rendered help.
+        let help = Workspace.Focus.helpMessage(columns: 400)
+        for mode in ControlWorkspaceFocusMode.allCases {
             #expect(help.contains(mode.rawValue), "workspace focus help should list \(mode.rawValue), got: \(help)")
+            #expect(help.contains(mode.helpSummary),
+                    "workspace focus help should explain \(mode.rawValue)'s filter effect, got: \(help)")
         }
     }
 

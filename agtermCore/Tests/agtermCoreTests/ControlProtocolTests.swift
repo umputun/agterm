@@ -964,7 +964,8 @@ struct ControlProtocolTests {
 
     @Test func treeRoundTripsWithWorkspaceFilter() throws {
         // the read side of workspace.filter: the flag half of the focus set rides the tree top level, while
-        // the member half rides each workspace node's `focused` — visible iff focused && workspaceFilter.
+        // the member half rides each workspace node's `focused` — the two together are the filter term of
+        // the row-visibility contract, which also requires sidebarVisible and tree mode.
         let marked = ControlWorkspaceNode(id: "w1", name: "work", active: true, focused: true, sessions: [])
         let other = ControlWorkspaceNode(id: "w2", name: "play", active: false, sessions: [])
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(

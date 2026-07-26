@@ -16,8 +16,8 @@ import XCTest
 /// - a workspace row exposes its name as a StaticText `value` under the `workspace-row` identifier (and
 ///   also as its `label`), so a workspace leaving the filtered tree is directly observable;
 /// - the bottom-bar filter toggle is a button with identifier `focus-filter-toggle`, whose `value` is
-///   `on`/`off` and whose `isEnabled` is false exactly while nothing is marked. It replaced the old
-///   single-workspace `focus-pill`, which no longer exists — with a SET there is no one name to show.
+///   `on`/`off` and whose `isEnabled` is false exactly while nothing is marked — the only
+///   accessibility-observable read of the filter state.
 @MainActor
 final class FocusWorkspaceUITests: XCTestCase {
     private var app: XCUIApplication!
@@ -251,7 +251,7 @@ final class FocusWorkspaceUITests: XCTestCase {
     }
 
     /// The bottom-bar filter toggle — both the control and the only accessibility-observable read of the
-    /// filter state now that the single-workspace pill is gone.
+    /// filter state.
     private func filterToggle() -> XCUIElement { app.buttons["focus-filter-toggle"] }
 
     /// The on-screen (hittable) menu item with `title`, filtering out the closed menu-bar twin.
@@ -272,22 +272,14 @@ final class FocusWorkspaceUITests: XCTestCase {
     /// anything is marked — and only their combination pins the state the pill used to show.
     private func pollFilterToggle(value: String, enabled: Bool, timeout: TimeInterval) -> Bool {
         let toggle = filterToggle()
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if toggle.exists, (toggle.value as? String) == value, toggle.isEnabled == enabled { return true }
-            RunLoop.current.run(until: Date().addingTimeInterval(0.1))
-        }
-        return toggle.exists && (toggle.value as? String) == value && toggle.isEnabled == enabled
+        return poll(until: toggle.exists && (toggle.value as? String) == value && toggle.isEnabled == enabled,
+                    timeout: timeout)
     }
 
     /// Polls until the visible `workspace-row` element count equals `expected`. NSOutlineView recycles
     /// cells, so the AX-tree count can lag a reload — hence the retry loop.
     private func pollWorkspaceRowCount(_ expected: Int, timeout: TimeInterval) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if app.staticTexts.matching(identifier: "workspace-row").count == expected { return true }
-            usleep(200_000)
-        }
-        return app.staticTexts.matching(identifier: "workspace-row").count == expected
+        poll(until: app.staticTexts.matching(identifier: "workspace-row").count == expected, timeout: timeout)
     }
+
 }

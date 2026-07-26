@@ -11,10 +11,14 @@ extension ControlServer {
     func createWorkspace(window: String?, name: String?, collapsed: Bool) -> ControlResponse {
         // placement target: the window's frontmost store (or `args.window`'s). name defaults to
         // the auto-generated workspace name when none is given. `collapsed` seeds the workspace closed
-        // so a script can fill it with `session.new --no-select` without it opening.
+        // so a script can fill it with `session.new --no-select` without it opening — and, for the same
+        // reason, keeps it OUT of the workspace focus set (`revealNewWorkspace: false`): a `--collapsed`
+        // create is by definition a quiet background build, so widening a script's carefully marked set
+        // would contradict the flag. A PLAIN `workspace.new` keeps the auto-reveal, matching the GUI's
+        // New Workspace button — a foreground create must not land invisibly behind an applied filter.
         resolver.resolvePlacementStore(window) { store in
             let name = trimmed(name) ?? store.defaultWorkspaceName
-            let workspace = store.addWorkspace(name: name, collapsed: collapsed)
+            let workspace = store.addWorkspace(name: name, collapsed: collapsed, revealNewWorkspace: !collapsed)
             return ControlResponse(ok: true, result: ControlResult(id: workspace.id.uuidString))
         }
     }
@@ -58,26 +62,19 @@ extension ControlServer {
         }
     }
 
-    /// Focus (or unfocus) a workspace — collapse the sidebar tree to the marked set, or restore the full
-    /// tree. `mode` arrives already parsed and validated by `ControlDispatcher`: `on` replaces the set
-    /// with the target and enables the filter, `off` drops the target from the set (disabling once it
-    /// empties; a no-op when it was never marked), `toggle` replace-toggles (clears when the target is the
-    /// only marked workspace and the filter is on, else replaces the set with it), and `add` inserts the
-    /// target alongside the existing members WITHOUT turning the filter on — marking only, so a script
-    /// builds a set with repeated `add` calls and applies it with one `workspace.filter on`. Delta-computed
-    /// via the store mutators so a no-op mode skips the write (idempotent). The control half of the
-    /// workspace row's Focus/Unfocus + Add to/Remove from Focus menu.
-    func focusWorkspace(_ target: String?, window: String?, mode: WorkspaceFocusMode) -> ControlResponse {
+    /// Mark or unmark a workspace in the sidebar focus SET. `mode` arrives already parsed and validated by
+    /// `ControlDispatcher`, and only two of the four modes touch the filter flag: `on` replaces the set
+    /// with the target and APPLIES the filter, `toggle` replace-toggles (clearing when the target is the
+    /// only marked workspace and the filter applies, else replacing the set with it and applying), `off`
+    /// drops the target from the set (the filter switches off once it empties; a no-op when it was never
+    /// marked), and `add` inserts the target alongside the existing members leaving the flag EXACTLY as it
+    /// was — marking only, so a script builds a set with repeated `add` calls and applies it with one
+    /// `workspace.filter on`. The whole mapping is host-free in `AppStore.applyFocusMode`, so this arm is
+    /// only target resolution; the mutators there are delta-guarded, so every mode is idempotent. The
+    /// control half of the workspace row's Focus/Unfocus + Add to/Remove from Focus menu.
+    func focusWorkspace(_ target: String?, window: String?, mode: ControlWorkspaceFocusMode) -> ControlResponse {
         resolver.resolveWorkspace(target, window: window) { store, id in
-            // the mutators are delta-guarded, so a no-op mode skips the write (idempotent)
-            switch mode {
-            case .on: store.setFocusedWorkspace(id)
-            case .off: store.setFocusMembership(id, member: false)
-            case .add: store.setFocusMembership(id, member: true)
-            case .toggle:
-                let onlyThisFocused = store.focusEnabled && store.focusedWorkspaceIDs == [id]
-                store.setFocusedWorkspace(onlyThisFocused ? nil : id)
-            }
+            store.applyFocusMode(mode, to: id)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
@@ -87,14 +84,11 @@ extension ControlServer {
     /// workspace target) — the `--window` selector picks the target like `sidebar.expand`/`sidebar.collapse`,
     /// defaulting to the frontmost. `AppStore.setFocusEnabled` is delta-guarded and REFUSES to enable an
     /// empty set, so `on` with nothing marked succeeds having changed nothing, keeping the documented
-    /// `focused && workspaceFilter` read-back contract exact. No open window is an error rather than a
-    /// silent no-op.
+    /// row-visibility read-back contract (`ControlWorkspaceNode.focused`) exact. No open window is an
+    /// error rather than a silent no-op.
     func setWorkspaceFilter(window: String?, mode: ControlToggleMode) -> ControlResponse {
-        if trimmed(window) == nil, library.activeStore == nil {
-            return ControlResponse(ok: false, error: "no open window")
-        }
-        return resolver.resolvePlacementStore(window) { store in
-            store.setFocusEnabled(mode.desiredValue(current: store.focusEnabled))
+        resolver.resolveOpenPlacementStore(window) { store in
+            store.applyWorkspaceFilter(mode)
             return ControlResponse(ok: true)
         }
     }

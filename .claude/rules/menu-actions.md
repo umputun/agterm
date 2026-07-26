@@ -69,6 +69,14 @@ paths:
   agterm ships its OWN Toggle Full Screen item so full screen is rebindable/palette/control-drivable;
   `AppDelegate` strips AppKit's auto-injected native "Enter Full Screen" item (re-injected on every menu
   open) so the two don't render as a duplicate — see the `window.fullscreen` note in windows.md.
+  **None of the four workspace-focus items is gated on the SIDEBAR MODE** — the menu item, its palette
+  twin, the `focus_workspace` keybind, and the `workspace.focus`/`workspace.filter` control modes are all
+  mode-agnostic, because membership is model state the tree applies the moment it is shown again (and a
+  keybind-driven sibling could not be gated by a palette predicate anyway).
+  Only Expand/Collapse Workspaces carry the `!treeMode` gate, and they carry it in BOTH the menu and the
+  palette, since they manipulate rows the flagged view never renders.
+  A palette entry gated differently from its menu twin is exactly the drift the keep-in-sync convention
+  exists to stop — Add Workspace to Focus carried a palette-only tree-mode term for one review round.
   **Navigate** (a separate top-level `CommandMenu("Navigate")`, placed right after the View group so
   AppKit renders it after View) holds moving the selection/focus: the two palettes (Go to Session / Command
   Palette), session stepping (Previous/Next, Previous/Next Attention, First/Last),

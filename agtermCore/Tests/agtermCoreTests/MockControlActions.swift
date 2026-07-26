@@ -26,7 +26,7 @@ final class MockControlActions: ControlActions {
         case sessionMove(target: String?, window: String?, ControlSessionMove)
         case sessionMoveBatch(targets: [String], window: String?, ControlSessionMove)
         case workspaceMove(target: String?, window: String?, ReorderDirection)
-        case workspaceFocus(target: String?, window: String?, WorkspaceFocusMode)
+        case workspaceFocus(target: String?, window: String?, ControlWorkspaceFocusMode)
         case workspaceFilter(window: String?, ControlToggleMode)
         case workspaceExpansion(target: String?, window: String?, expanded: Bool)
         case sessionFlag(target: String?, window: String?, String?)
@@ -83,10 +83,19 @@ final class MockControlActions: ControlActions {
     var nextSessionNewResponse = ControlResponse(ok: true)
     var nextSessionDuplicateResponse = ControlResponse(ok: true)
     var nextWorkspaceFilterResponse = ControlResponse(ok: true)
-    /// The store `setWorkspaceFilter` drives when set (nil = record-only, the default for every other
-    /// dispatcher test). Lets a test exercise the REAL `workspace.filter` command path against a live
-    /// `AppStore` rather than asserting only on what was routed.
-    var filterStore: AppStore?
+    /// The store the `workspace.filter` / `workspace.focus` arms drive when set (nil = record-only, the
+    /// default for every other dispatcher test). It lets a test run the REAL command path — the
+    /// dispatcher's parse plus the host-free `AppStore.applyWorkspaceFilter`/`applyFocusMode` the app-side
+    /// arms call — against a live `AppStore`, instead of asserting only on what was routed. The double
+    /// supplies ONLY the target resolution the real arm supplies, and only its id-spelling half: the
+    /// `active`/prefix sugar and the `window` selector need the app-side `ControlTargetResolver`, so a
+    /// test driving this store must address workspaces by full id and stay single-window. It must never
+    /// re-implement a mode's semantics, or the test would be exercising the double.
+    var focusStore: AppStore?
+
+    /// Target strings that reached a `focusStore`-backed arm but could not be resolved, so a "the store
+    /// did not change" assertion cannot pass vacuously on a typo'd or sugar-spelled target.
+    var unresolvedFocusTargets: [String] = []
     var nextSidebarVisibilityResponse = ControlResponse(ok: true)
     var nextSidebarViewModeResponse = ControlResponse(ok: true)
     var nextExpandResponse = ControlResponse(ok: true)
@@ -212,16 +221,25 @@ final class MockControlActions: ControlActions {
         return ControlResponse(ok: true)
     }
 
-    func focusWorkspace(_ target: String?, window: String?, mode: WorkspaceFocusMode) -> ControlResponse {
+    func focusWorkspace(_ target: String?, window: String?, mode: ControlWorkspaceFocusMode) -> ControlResponse {
         calls.append(.workspaceFocus(target: target, window: window, mode))
+        // with a store supplied, stand in for the app-side arm: resolve the target (here just the id
+        // spelling) and hand the parsed mode to the SAME `applyFocusMode` the real arm calls.
+        if let store = focusStore {
+            if let id = UUID(uuidString: target ?? "") {
+                store.applyFocusMode(mode, to: id)
+            } else {
+                unresolvedFocusTargets.append(target ?? "active")
+            }
+        }
         return ControlResponse(ok: true)
     }
 
     func setWorkspaceFilter(window: String?, mode: ControlToggleMode) -> ControlResponse {
         calls.append(.workspaceFilter(window: window, mode))
-        // when a test supplies a store, apply the parsed mode to it exactly as the app-side arm does, so
-        // the whole `workspace.filter` path (dispatcher parse -> `setFocusEnabled`) runs host-free.
-        if let store = filterStore { store.setFocusEnabled(mode.desiredValue(current: store.focusEnabled)) }
+        // as above: the real arm resolves the window then calls `applyWorkspaceFilter`, so the double
+        // calls the same host-free helper rather than re-deriving the flag.
+        if let store = focusStore { store.applyWorkspaceFilter(mode) }
         return nextWorkspaceFilterResponse
     }
 
