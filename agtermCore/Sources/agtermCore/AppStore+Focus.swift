@@ -60,6 +60,20 @@ extension AppStore {
         save()
     }
 
+    /// Restores the focus filter from a snapshot, PRUNING member ids absent from the restored tree and
+    /// disabling the filter when the pruned set comes back empty. The prune is what keeps
+    /// `enabled + empty` unrepresentable across a restore: an all-stale set (its workspaces deleted by
+    /// another window, or a hand-edited file) would otherwise restore as an enabled-but-invisible filter,
+    /// making the documented `focused && workspaceFilter` read-back contract lie — the tree would render
+    /// in full while no workspace reported `focused`. A partially stale set keeps its survivors and stays
+    /// enabled. Called from `restore(from:)` AFTER the tree is rebuilt, and deliberately writes the fields
+    /// directly rather than going through the mutators, which would `save()` what was just read.
+    func restoreFocus(from snapshot: Snapshot) {
+        let present = Set(workspaces.map(\.id))
+        focusedWorkspaceIDs = Set(snapshot.focusedWorkspaceIDs ?? []).intersection(present)
+        focusEnabled = (snapshot.focusEnabled ?? false) && !focusedWorkspaceIDs.isEmpty
+    }
+
     /// The workspaces the sidebar tree should render: the marked set when the filter is enabled, else
     /// all workspaces. The source of truth the tree filters on. The empty-result fallback is defensive
     /// belt-and-braces — the mutators above keep `enabled + empty` and an all-stale enabled set out of

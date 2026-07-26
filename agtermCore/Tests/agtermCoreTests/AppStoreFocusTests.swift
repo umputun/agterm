@@ -249,6 +249,50 @@ struct AppStoreFocusTests {
         #expect(store.visibleWorkspaces.map(\.id) == [work.id])
     }
 
+    @Test func restorePrunesAnAllStaleSetToEmptyAndDisabled() {
+        // every marked workspace is gone from the restored tree (deleted from another window, or a
+        // hand-edited file). Restoring the set verbatim would leave `enabled + empty`, which reports
+        // `workspaceFilter == true` while no workspace reports `focused` — a read-back contract that lies.
+        let store = makeStore()
+        let survivor = WorkspaceSnapshot(id: UUID(), name: "survivor", sessions: [])
+        store.restore(from: Snapshot(workspaces: [survivor], focusedWorkspaceIDs: [UUID(), UUID()],
+                                     focusEnabled: true))
+        #expect(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled)
+        #expect(store.visibleWorkspaces.map(\.id) == [survivor.id])
+    }
+
+    @Test func restoreKeepsTheSurvivorsOfAPartiallyStaleSet() {
+        let store = makeStore()
+        let kept = WorkspaceSnapshot(id: UUID(), name: "kept", sessions: [])
+        let other = WorkspaceSnapshot(id: UUID(), name: "other", sessions: [])
+        store.restore(from: Snapshot(workspaces: [kept, other], focusedWorkspaceIDs: [kept.id, UUID()],
+                                     focusEnabled: true))
+        #expect(store.focusedWorkspaceIDs == [kept.id] && store.focusEnabled) // the survivor keeps filtering
+        #expect(store.visibleWorkspaces.map(\.id) == [kept.id])
+    }
+
+    @Test func restoreKeepsADisabledSetWithoutEnablingIt() {
+        // the flag is persisted apart from the set, so restoring a marked-but-off filter must not turn it
+        // back on just because members survived the prune.
+        let store = makeStore()
+        let kept = WorkspaceSnapshot(id: UUID(), name: "kept", sessions: [])
+        let other = WorkspaceSnapshot(id: UUID(), name: "other", sessions: [])
+        store.restore(from: Snapshot(workspaces: [kept, other], focusedWorkspaceIDs: [kept.id]))
+        #expect(store.focusedWorkspaceIDs == [kept.id] && !store.focusEnabled)
+        #expect(store.visibleWorkspaces.map(\.id) == [kept.id, other.id]) // off means the whole tree renders
+    }
+
+    @Test func restoreClearsAFocusSetLeftOverFromAPreviousTree() {
+        // `restore` replaces the state wholesale (a window reopen reloads through it), so a set left from
+        // the store's previous contents must not survive into the new tree.
+        let store = makeStore()
+        let stale = store.addWorkspace(name: "stale")
+        store.setFocusMembership(stale.id, member: true)
+        let fresh = WorkspaceSnapshot(id: UUID(), name: "fresh", sessions: [])
+        store.restore(from: Snapshot(workspaces: [fresh]))
+        #expect(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled)
+    }
+
     @Test func workspaceFocusPrunesRowsOutsideFocusedWorkspace() {
         let store = makeStore()
         let ws1 = store.addWorkspace(name: "one")

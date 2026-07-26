@@ -470,22 +470,30 @@ again; that small churn is the price of a continuously-building tree.
 - Modify: `agtermCore/Tests/agtermCoreTests/PersistenceTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreFocusTests.swift`
 
-- [ ] add `focusedWorkspaceIDs: [UUID]?` and `focusEnabled: Bool?` to `Snapshot` (Optional, no
+- [x] add `focusedWorkspaceIDs: [UUID]?` and `focusEnabled: Bool?` to `Snapshot` (Optional, no
       `currentVersion` bump), keeping `focusedWorkspaceID` decodable but removing it from the memberwise init
-- [ ] implement the migration in the existing custom `init(from:)`: new key absent + legacy present →
-      `[legacy]` with `focusEnabled = true`; both absent → `[]` / `false`
-- [ ] confirm no `encode(to:)` work is needed — it is synthesized and `encodeIfPresent` omits the never-
-      populated legacy `UUID?` automatically
-- [ ] update `AppStore.snapshot()` to emit the two new fields and stop passing `focusedWorkspaceID:`
-- [ ] make `AppStore.restore(from:)` PRUNE member ids absent from the restored tree, then disable when the
+- [x] implement the migration in the existing custom `init(from:)`: new key absent + legacy present →
+      `[legacy]` with `focusEnabled = true`; both absent → `[]` / `false`. ⚠️ "both absent" decodes to
+      `nil`/`nil` (the Optional default, matching every other forward-compat field) and `restore` maps that
+      to `[]`/`false` — normalizing inside the decoder would have made the "was the key written?" question
+      unanswerable to the round-trip tests
+- [x] confirm no `encode(to:)` work is needed — it is synthesized and `encodeIfPresent` omits the never-
+      populated legacy `UUID?` automatically (verified by a test asserting the written JSON carries no
+      `"focusedWorkspaceID"` key)
+- [x] update `AppStore.snapshot()` to emit the two new fields and stop passing `focusedWorkspaceID:`.
+      ➕ the set is written in TREE order rather than `Set` order, so the on-disk list is deterministic
+      instead of following the hash seed
+- [x] make `AppStore.restore(from:)` PRUNE member ids absent from the restored tree, then disable when the
       pruned set is empty — this is what makes the all-stale case collapse instead of producing an
-      enabled-but-invisible filter
-- [ ] write round-trip tests for the new fields, including the empty-set / disabled default shape
-- [ ] write a legacy-decode test: JSON carrying only `focusedWorkspaceID` decodes to a one-member enabled set
-- [ ] write a legacy-decode test: JSON carrying NEITHER key decodes to empty + disabled without throwing
-- [ ] write a restore test: a snapshot whose members are ALL absent from the tree restores to empty +
+      enabled-but-invisible filter. Implemented as `AppStore.restoreFocus(from:)` in `AppStore+Focus.swift`,
+      called from `restore(from:)` once the tree is rebuilt
+- [x] write round-trip tests for the new fields, including the empty-set / disabled default shape
+- [x] write a legacy-decode test: JSON carrying only `focusedWorkspaceID` decodes to a one-member enabled set
+      (both as a raw `Snapshot` decode and end-to-end through `PersistenceStore.load`)
+- [x] write a legacy-decode test: JSON carrying NEITHER key decodes to empty + disabled without throwing
+- [x] write a restore test: a snapshot whose members are ALL absent from the tree restores to empty +
       disabled; one whose members are PARTIALLY absent keeps the survivors and stays enabled
-- [ ] run the full gate — must pass before Task 6
+- [x] run the full gate — must pass before Task 6
 
 ### Task 6: Add the tested drop-fallback accessor
 

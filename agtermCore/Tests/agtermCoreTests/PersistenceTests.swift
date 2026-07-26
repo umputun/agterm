@@ -239,9 +239,9 @@ final class PersistenceTests {
     @Test func focusedWorkspacePersistsAndRestores() {
         let app = AppStore(persistence: store)
         let work = app.addWorkspace(name: "work")
-        #expect(store.load().focusedWorkspaceID == nil) // default unfocused
+        #expect(store.load().focusedWorkspaceIDs == nil) // default: nothing marked
         app.setFocusedWorkspace(work.id)
-        #expect(store.load().focusedWorkspaceID == work.id)
+        #expect(store.load().focusedWorkspaceIDs == [work.id] && store.load().focusEnabled == true)
 
         let restored = AppStore(persistence: store)
         restored.restore(from: store.load())
@@ -254,18 +254,49 @@ final class PersistenceTests {
     }
 
     @Test func legacySnapshotWithoutFocusedWorkspaceDecodesUnfocused() throws {
-        // a workspaces.json written before `focusedWorkspaceID` existed has no key; it must decode (not
-        // throw and wipe the tree) and restore to unfocused.
+        // a workspaces.json written before any focus key existed has neither; it must decode (not throw
+        // and wipe the tree) and restore to an empty, disabled filter.
         let ws = UUID()
         let json = #"{ "version": 1, "workspaces": [ { "id": "\#(ws.uuidString)", "name": "work", "sessions": [] } ] }"#
         try Data(json.utf8).write(to: fileURL)
         let loaded = store.load()
         #expect(loaded.workspaces.map(\.id) == [ws])
-        #expect(loaded.focusedWorkspaceID == nil)
+        #expect(loaded.focusedWorkspaceIDs == nil && loaded.focusEnabled == nil && loaded.focusedWorkspaceID == nil)
 
         let app = AppStore(persistence: store)
         app.restore(from: loaded)
         #expect(app.focusedWorkspaceIDs.isEmpty && !app.focusEnabled)
+    }
+
+    @Test func legacySnapshotWithSingleFocusedWorkspaceMigratesToAnEnabledSet() throws {
+        // a workspaces.json written by the release BEFORE the focus set existed carries only the single
+        // `focusedWorkspaceID`; it must migrate to a one-member ENABLED set rather than losing the filter.
+        let ws = UUID()
+        let json = #"""
+        { "version": 1, "focusedWorkspaceID": "\#(ws.uuidString)",
+          "workspaces": [ { "id": "\#(ws.uuidString)", "name": "work", "sessions": [] } ] }
+        """#
+        try Data(json.utf8).write(to: fileURL)
+        let loaded = store.load()
+        #expect(loaded.focusedWorkspaceIDs == [ws] && loaded.focusEnabled == true)
+
+        let app = AppStore(persistence: store)
+        app.restore(from: loaded)
+        #expect(app.focusedWorkspaceIDs == [ws] && app.focusEnabled)
+        #expect(app.visibleWorkspaces.map(\.id) == [ws])
+    }
+
+    @Test func savedSnapshotStopsWritingTheLegacyFocusKey() throws {
+        // the legacy key is decode-only: once this build saves, the file must carry the set instead, so a
+        // multi-member filter cannot be silently narrowed to one member on the next load.
+        let app = AppStore(persistence: store)
+        let work = app.addWorkspace(name: "work")
+        let personal = app.addWorkspace(name: "personal")
+        app.setFocusMembership(work.id, member: true)
+        app.setFocusMembership(personal.id, member: true)
+        let written = try String(contentsOf: fileURL, encoding: .utf8)
+        #expect(!written.contains("\"focusedWorkspaceID\""))
+        #expect(store.load().focusedWorkspaceIDs == [work.id, personal.id])
     }
 
     @Test func sessionRecencyPersistsAndRestores() {

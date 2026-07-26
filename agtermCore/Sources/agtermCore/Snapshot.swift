@@ -22,9 +22,16 @@ public struct Snapshot: Codable, Equatable, Sendable {
     /// Optional so a snapshot already on disk before this field was added still decodes instead of
     /// failing the load and wiping the saved tree, like the fields above.
     public var sidebarMode: SidebarMode?
-    /// The workspace the sidebar tree is focused on, or nil for the full tree. Naturally Optional, so a
-    /// snapshot already on disk before this field was added decodes (as nil → unfocused) instead of
-    /// failing the load and wiping the saved tree.
+    /// The workspaces marked in the sidebar focus set, in tree order, or nil for none. Optional so a
+    /// snapshot already on disk before this field was added still decodes (as nil → nothing marked)
+    /// instead of failing the load and wiping the saved tree, like the fields above.
+    public var focusedWorkspaceIDs: [UUID]?
+    /// Whether the focus filter applies to the marked set, or nil for the default (off). Persisted apart
+    /// from the set so an off filter keeps its members. Optional for forward-compat like the fields above.
+    public var focusEnabled: Bool?
+    /// LEGACY single-workspace focus, written by releases before the focus SET existed. Decode-only: it
+    /// migrates in `init(from:)` to a one-member enabled set and is never populated again, so the
+    /// synthesized `encodeIfPresent` drops it from every snapshot this build writes.
     public var focusedWorkspaceID: UUID?
     /// Most-recently-selected session ids, front = current, so the Ctrl-Tab switcher's order survives
     /// a relaunch. Restore drops ids no longer in the tree. Optional so a snapshot already on disk
@@ -33,20 +40,22 @@ public struct Snapshot: Codable, Equatable, Sendable {
 
     public init(version: Int = Snapshot.currentVersion, selectedSessionID: UUID? = nil,
                 workspaces: [WorkspaceSnapshot] = [], sidebarWidth: Double? = nil, sidebarVisible: Bool? = nil,
-                sidebarMode: SidebarMode? = nil, focusedWorkspaceID: UUID? = nil, sessionRecency: [UUID]? = nil) {
+                sidebarMode: SidebarMode? = nil, focusedWorkspaceIDs: [UUID]? = nil, focusEnabled: Bool? = nil,
+                sessionRecency: [UUID]? = nil) {
         self.version = version
         self.selectedSessionID = selectedSessionID
         self.workspaces = workspaces
         self.sidebarWidth = sidebarWidth
         self.sidebarVisible = sidebarVisible
         self.sidebarMode = sidebarMode
-        self.focusedWorkspaceID = focusedWorkspaceID
+        self.focusedWorkspaceIDs = focusedWorkspaceIDs
+        self.focusEnabled = focusEnabled
         self.sessionRecency = sessionRecency
     }
 
     enum CodingKeys: String, CodingKey {
         case version, selectedSessionID, workspaces, sidebarWidth, sidebarVisible, sidebarMode
-        case focusedWorkspaceID, sessionRecency
+        case focusedWorkspaceIDs, focusEnabled, focusedWorkspaceID, sessionRecency
     }
 
     /// Custom decode so `sessionRecency` is LOSSY: a present-but-invalid list (a malformed UUID
@@ -55,6 +64,11 @@ public struct Snapshot: Codable, Equatable, Sendable {
     /// `Snapshot` and `PersistenceStore.load` would start fresh — wiping every workspace and
     /// session over a non-essential field. Mirrors `SessionSnapshot`'s `backgroundWatermark`
     /// handling below; every other field keeps its strict/`decodeIfPresent` behavior.
+    ///
+    /// It is also where the LEGACY `focusedWorkspaceID` migrates: a file written before the focus set
+    /// existed carries only that single id, which becomes a one-member ENABLED set (the old field meant
+    /// "focused on this workspace", so its presence implied the filter was on). A file carrying neither
+    /// key decodes to nil/nil, which restore reads as an empty, disabled filter.
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         version = try c.decode(Int.self, forKey: .version)
@@ -64,6 +78,14 @@ public struct Snapshot: Codable, Equatable, Sendable {
         sidebarVisible = try c.decodeIfPresent(Bool.self, forKey: .sidebarVisible)
         sidebarMode = try c.decodeIfPresent(SidebarMode.self, forKey: .sidebarMode)
         focusedWorkspaceID = try c.decodeIfPresent(UUID.self, forKey: .focusedWorkspaceID)
+        let ids = try c.decodeIfPresent([UUID].self, forKey: .focusedWorkspaceIDs)
+        if ids == nil, let legacy = focusedWorkspaceID {
+            focusedWorkspaceIDs = [legacy]
+            focusEnabled = true
+        } else {
+            focusedWorkspaceIDs = ids
+            focusEnabled = try c.decodeIfPresent(Bool.self, forKey: .focusEnabled)
+        }
         sessionRecency = (try? c.decodeIfPresent([UUID].self, forKey: .sessionRecency)) ?? nil
     }
 }

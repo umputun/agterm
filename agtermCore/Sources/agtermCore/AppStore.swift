@@ -754,9 +754,14 @@ public final class AppStore {
             return WorkspaceSnapshot(id: workspace.id, name: workspace.name, sessions: sessions,
                                      collapsed: workspace.isExpanded ? nil : true)
         }
+        // the marked set in TREE order, so the on-disk list is deterministic rather than following the
+        // Set's hash order; an unmarked store omits both focus keys, keeping its file identical to one
+        // written before the set existed. The legacy `focusedWorkspaceID` is never populated.
+        let focusIDs = workspaces.map(\.id).filter(focusedWorkspaceIDs.contains)
         return Snapshot(selectedSessionID: selectedSessionID, workspaces: workspaceSnapshots,
                         sidebarWidth: sidebarWidth, sidebarVisible: sidebarVisible, sidebarMode: sidebarMode,
-                        focusedWorkspaceID: focusEnabled ? focusedWorkspaceIDs.first : nil,
+                        focusedWorkspaceIDs: focusIDs.isEmpty ? nil : focusIDs,
+                        focusEnabled: focusEnabled ? true : nil,
                         sessionRecency: sessionRecency.items)
     }
 
@@ -795,10 +800,7 @@ public final class AppStore {
         sidebarWidth = min(AppStore.sidebarWidthMax, max(AppStore.sidebarWidthMin, snapshot.sidebarWidth ?? AppStore.sidebarWidthDefault))
         sidebarVisible = snapshot.sidebarVisible ?? true
         sidebarMode = snapshot.sidebarMode ?? .tree
-        // a stale focus id (its workspace not in the restored tree) is harmless — `visibleWorkspaces`
-        // falls back to the full tree — so restore it verbatim; nil stays unfocused.
-        focusedWorkspaceIDs = snapshot.focusedWorkspaceID.map { [$0] } ?? []
-        focusEnabled = !focusedWorkspaceIDs.isEmpty
+        restoreFocus(from: snapshot)
         if let id = snapshot.selectedSessionID, session(withID: id) == nil {
             selectedSessionID = nil
         } else {
