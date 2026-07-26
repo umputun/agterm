@@ -52,7 +52,10 @@ extension WorkspaceSidebar.Coordinator {
             // roll-up badge so an unseen notification stays visible when the workspace is collapsed
             // (gated by the Settings badge toggle, like the session badge below)
             applyBadge(toCell: cell, count: effectiveUnseen(workspace?.unseenCount ?? 0))
-            cell.imageView?.image = workspaceIcon
+            // a workspace in the focus set draws the FILLED grid glyph. keyed on MEMBERSHIP alone, not
+            // on `focusEnabled`: a marked workspace reads filled while the filter is off too, which is
+            // the point — the marked set stays legible while looking at the whole tree.
+            cell.imageView?.image = store.focusedWorkspaceIDs.contains(node.id) ? focusedWorkspaceIcon : workspaceIcon
             cell.imageView?.setAccessibilityIdentifier("workspace-icon")
         case .session:
             field.stringValue = rowLabel(forSession: node.id)

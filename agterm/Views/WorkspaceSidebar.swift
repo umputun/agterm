@@ -400,6 +400,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
             /// Whether the session is flagged (tree-mode filled-icon variant). A change re-badges
             /// just this row via `reloadItem`. Always false for workspace rows.
             let flagged: Bool
+            /// Whether the workspace is a member of the focus set (the filled grid icon). Tracks
+            /// MEMBERSHIP only, independent of `focusEnabled`, so marking a workspace re-renders just
+            /// that row via `reloadItem` even while the filter is off (with the filter on, the shape
+            /// changes too and the rebuild branch takes over). Always false for session rows.
+            let focusMember: Bool
         }
 
         /// The session's own agent-status indicator (or `.idle` for an unknown id / workspace row). Shown
@@ -437,8 +442,9 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// The structural shape for the current mode: the workspace tree (workspace id + ordered session
         /// ids) in `.tree`, or a single flat group of the flagged session ids in `.flagged`. A change here
         /// means an add/remove/move/reorder (or a flag/unflag in flagged mode) and forces a full rebuild.
-        /// The tree case derives from `visibleWorkspaces` (the focused workspace alone when focused, else
-        /// all), so a focus on/off — which changes the rendered root set — registers as a shape change.
+        /// The tree case derives from `visibleWorkspaces` (the marked set when the focus filter is on,
+        /// else all), so marking a workspace or flipping the filter — either of which changes the
+        /// rendered root set — registers as a shape change.
         private func currentShape() -> [TreeShape] {
             switch store.sidebarMode {
             case .tree:
@@ -484,7 +490,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         /// and `snapshotRowContent` so the change-detection snapshot and the diff can't drift.
         private func rowContent(forWorkspace workspace: Workspace) -> RowContent {
             RowContent(label: workspace.name, hasSplit: false, unseen: effectiveUnseen(workspace.unseenCount),
-                       indicator: AgentIndicator(), flagged: false)
+                       indicator: AgentIndicator(), flagged: false,
+                       focusMember: store.focusedWorkspaceIDs.contains(workspace.id))
         }
 
         /// The visible content of a session row. The single builder shared by `reloadChangedContentRows`
@@ -494,7 +501,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         private func rowContent(forSession session: Session, workspaceName: String) -> RowContent {
             RowContent(label: rowLabel(for: session, workspaceName: workspaceName), hasSplit: session.hasSplit,
                        unseen: effectiveUnseen(session.unseenCount),
-                       indicator: effectiveIndicator(forSession: session.id), flagged: session.flagged)
+                       indicator: effectiveIndicator(forSession: session.id), flagged: session.flagged,
+                       focusMember: false)
         }
 
         /// Rebuilds `roots` from the store, reusing cached node instances by id so
@@ -517,8 +525,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
                 return
             }
 
-            // render only the visible workspaces: the focused workspace's subtree alone when focus is set
-            // (and that workspace still exists), else the full tree.
+            // render only the visible workspaces: the marked set's subtrees when the focus filter is on,
+            // else the full tree.
             var seen = Set<UUID>()
             var newRoots: [SidebarNode] = []
             for workspace in store.visibleWorkspaces {
@@ -544,10 +552,11 @@ struct WorkspaceSidebar: NSViewRepresentable {
 
             // restore expansion from the tracked set rather than the live outline state: a flagged-mode
             // reload drops the workspace nodes, so the outline forgets they were expanded, but the tracked
-            // set remembers across the interlude. A freshly-focused workspace is expanded unconditionally —
-            // focus is a "zoom in", so its sessions must show even if the workspace was collapsed. This
-            // re-apply is a VIEW restore, not a user action, so suppress the persist: a focused-but-collapsed
-            // workspace must keep its persisted collapse (the zoom-in shows it, but doesn't un-collapse it).
+            // set remembers across the interlude. Every marked workspace is expanded unconditionally while
+            // the filter is on — focus is a "zoom in", so their sessions must show even if a workspace was
+            // collapsed. This re-apply is a VIEW restore, not a user action, so suppress the persist: a
+            // marked-but-collapsed workspace must keep its persisted collapse (the zoom-in shows it, but
+            // doesn't un-collapse it).
             outline.reloadData()
             suppressExpansionPersist = true
             let forceExpanded = store.focusEnabled ? store.focusedWorkspaceIDs : []
@@ -598,8 +607,8 @@ struct WorkspaceSidebar: NSViewRepresentable {
         }
 
         /// Expands every workspace row — the "Expand Workspaces" user action. Seeds the tracked expansion
-        /// from the live `store.workspaces`, NOT the current `roots` (a single subtree when a workspace is
-        /// focused), so unfocusing back to the full tree remembers every workspace as expanded. The
+        /// from the live `store.workspaces`, NOT the current `roots` (only the marked set's subtrees while
+        /// the focus filter is on), so turning the filter off remembers every workspace as expanded. The
         /// per-item callbacks are suppressed; the whole-tree state is persisted once via
         /// `setWorkspacesExpanded` since this is a deliberate all-workspace command.
         func expandAll() {
@@ -798,12 +807,14 @@ struct WorkspaceSidebar: NSViewRepresentable {
 
         /// Leading row icons: a 2x2 grid glyph for a workspace, an outlined terminal for a single
         /// session, and a split-rectangle for a split session, rendered as monochrome template symbols.
-        /// The two `flagged*` variants swap to the `.fill` SF Symbol (a solid interior — the same
-        /// "small filled area" idiom the scratch-active toolbar glyph uses): `terminal.fill` for a
-        /// single session, `rectangle.split.2x1.fill` for a split. A pure symbol swap, not a composited
-        /// corner badge, so it stays a single template `setColors` tints and reserves no extra space.
+        /// The three `.fill` variants mark membership in a set (a solid interior — the same "small
+        /// filled area" idiom the scratch-active toolbar glyph uses): `terminal.fill` /
+        /// `rectangle.split.2x1.fill` for a flagged session, `square.grid.2x2.fill` for a workspace in
+        /// the focus set. A pure symbol swap, not a composited corner badge, so each stays a single
+        /// template `setColors` tints and reserves no extra space.
         /// Cached because only a few distinct symbols exist and every row reuses them.
         lazy var workspaceIcon = Self.rowIcon("square.grid.2x2")
+        lazy var focusedWorkspaceIcon = Self.rowIcon("square.grid.2x2.fill")
         lazy var splitSessionIcon = Self.rowIcon("rectangle.split.2x1")
         lazy var sessionIcon = Self.rowIcon("terminal")
         lazy var flaggedSessionIcon = Self.rowIcon("terminal.fill")

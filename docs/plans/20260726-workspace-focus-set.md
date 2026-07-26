@@ -656,18 +656,27 @@ Not accessibility-observable, so its regression coverage is Task 15's e2e; this 
 - Modify: `agterm/Views/WorkspaceSidebar.swift`
 - Modify: `agterm/Views/WorkspaceSidebar+RowRendering.swift`
 
-- [ ] add a lazily-cached `focusedWorkspaceIcon = Self.rowIcon("square.grid.2x2.fill")` beside
+- [x] add a lazily-cached `focusedWorkspaceIcon = Self.rowIcon("square.grid.2x2.fill")` beside
       `flaggedSessionIcon`
-- [ ] select it in the workspace-row branch of the row builder when the workspace is a SET MEMBER,
+- [x] select it in the workspace-row branch of the row builder when the workspace is a SET MEMBER,
       independent of `focusEnabled`
-- [ ] fold membership into `RowContent` (Equatable) so marking/unmarking triggers a per-row `reloadItem`
-      rather than a full rebuild
-- [ ] confirm `updateNSView` reads BOTH `store.focusedWorkspaceIDs` and `store.focusEnabled` (Task 4 changed
+- [x] fold membership into `RowContent` (Equatable) so marking/unmarking triggers a per-row `reloadItem`
+      rather than a full rebuild. ➕ went in as a SEPARATE `focusMember: Bool` field rather than reusing
+      the session-only `flagged` one — same "filled variant" idiom but a different subject, and the
+      existing struct already carries per-kind fields (`hasSplit`, `indicator`) documented as always-false
+      for the other kind
+- [x] confirm `updateNSView` reads BOTH `store.focusedWorkspaceIDs` and `store.focusEnabled` (Task 4 changed
       the field; this task verifies BOTH are read) — LOAD-BEARING: with only one read, toggling the filter
-      does not redraw
-- [ ] verify `TreeShape` still derives from `visibleWorkspaces` and refresh any code comment naming the old
-      single-workspace field
-- [ ] run the full gate — must pass before Task 12
+      does not redraw. ⚠️ VERIFICATION ONLY: Task 4 already landed both reads (`WorkspaceSidebar.swift:123-124`)
+      with a comment stating why one alone is not enough; nothing was rewritten
+- [x] verify `TreeShape` still derives from `visibleWorkspaces` and refresh any code comment naming the old
+      single-workspace field. ⚠️ `currentShape()`'s `.tree` arm already maps `store.visibleWorkspaces` —
+      untouched. Four comments still described the single-workspace model and were refreshed: `currentShape()`'s
+      doc, `rebuildAndReload`'s render-scope and force-expand comments, and `expandAll`'s doc
+- [x] run the full gate — must pass before Task 12. ⚠️ NO new unit test: the icon is an `NSImage` on a
+      recycled cell, not accessibility-observable, so any assertion here would test the store field the
+      Task 2/3 suites already cover, not the rendering — Task 15's e2e is this task's regression coverage,
+      as the plan's Testing Strategy states
 
 ### Task 12: Regroup the workspace context menu and add the membership item
 
