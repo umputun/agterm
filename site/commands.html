@@ -18,7 +18,7 @@
     <meta property="og:title" content="Command reference — agterm" />
     <meta
       property="og:description"
-      content="All 66 agtermctl control commands with arguments, return values, and errors."
+      content="All 67 agtermctl control commands with arguments, return values, and errors."
     />
     <meta property="og:url" content="https://agterm.com/commands" />
     <meta property="og:image" content="https://agterm.com/assets/agterm-og.png" />
@@ -30,7 +30,7 @@
     <meta name="twitter:title" content="Command reference — agterm" />
     <meta
       name="twitter:description"
-      content="All 66 agtermctl control commands with arguments, return values, and errors."
+      content="All 67 agtermctl control commands with arguments, return values, and errors."
     />
     <meta name="twitter:image" content="https://agterm.com/assets/agterm-og.png" />
     <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
@@ -235,7 +235,7 @@
             Command reference
           </h1>
           <p style="font-size: 19px; line-height: 1.6; color: #bfbab0; margin: 0 0 8px">
-            All 66 commands of the agterm control API, with arguments and return values. Every one is reachable from the
+            All 67 commands of the agterm control API, with arguments and return values. Every one is reachable from the
             <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> CLI and from the local
             control socket.
           </p>
@@ -451,9 +451,12 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">name</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sessions</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">focused</span> (the read side of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">focused</span> (membership in the sidebar
+                focus set — the read side of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace focus</span>, distinct from
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>; reported independently of whether the
+                filter is applied, so a workspace renders iff
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">focused &amp;&amp; workspaceFilter</span>), and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">collapsed</span> (the read side of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace collapse</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">expand</span>;
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">true</span> when collapsed, omitted when expanded).
@@ -464,8 +467,11 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>-only),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">autoFollowMs</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarVisible</span>,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarMode</span>, and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quickVisible</span>. All five are read-only
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarMode</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceFilter</span> (whether the workspace focus
+                filter is applied — the flag half of the focus set, the read side of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace filter</span>), and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quickVisible</span>. All six are read-only
                 projections of GUI state.
               </p>
             </div>
@@ -621,25 +627,53 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl workspace focus [on|off|toggle] [--target T] [--window W]
+                agtermctl workspace focus [on|off|toggle|add] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.focus</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Collapse the sidebar tree to a single workspace's subtree, hiding the others, or restore the full tree.
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">on</span> focuses the target,
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">off</span> unfocuses it only when it is the currently
-                focused one, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">toggle</span> (the default) flips.
-                Per-window and persisted; orthogonal to
+                Mark or unmark one workspace in the sidebar's focus set. The sidebar renders the marked workspaces while the
+                filter is applied, all of them while it is not.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">on</span> sets the marked set to just this workspace and
+                applies the filter, <span style="font-family: &quot;JetBrains Mono&quot;, monospace">off</span> removes it (the filter
+                switches off once the set empties),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">toggle</span> (the default) replace-toggles, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">add</span> inserts it alongside the others while leaving
+                the filter flag exactly as it was. Per-window and persisted; orthogonal to
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">sidebar mode</span>. An unknown mode errors.
                 <strong style="color: #bfbab0">Returns</strong>
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.id</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                While a workspace is focused, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session go</span>
-                navigation is scoped to its sessions. An explicit
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session select</span> of a session outside it
-                auto-unfocuses. Read back via the workspace node's
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">add</span> never switches the filter on — that is what
+                makes a multi-workspace set buildable, since a mark that narrowed the tree would hide the rows still to be
+                marked. Mark several, then apply once with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace filter on</span>.
+                While the filter is applied, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session go</span>
+                navigation is scoped to the marked workspaces' sessions, and an explicit
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session select</span> of a session outside
+                the set suspends the filter while keeping the set. Read membership back via the workspace node's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">focused</span> field.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl workspace filter [on|off|toggle] [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">workspace.filter</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Apply or suspend the whole window's workspace focus filter without touching the marked set, so peeking at the
+                full tree and coming back costs one call each way. Window-scoped: it takes no
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span>, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> picks the window (default frontmost).
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">toggle</span> is the default; idempotent. An unknown mode
+                errors, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no open window</span> when none is open.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">on</span> with an empty marked set is refused — it
+                returns ok having changed nothing, which is what keeps the read-back exact: a workspace is visible iff
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">focused &amp;&amp; workspaceFilter</span>. Read back via the
+                tree's top-level <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceFilter</span> field.
               </p>
             </div>
 

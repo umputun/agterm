@@ -16,7 +16,7 @@ description: >
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
   session.split, session.scratch, session.focus, session.resize, surface.zoom, dashboard, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
-  session.flag, session.seen, session.reveal, session.duplicate, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, window.new, window.list,
+  session.flag, session.seen, session.reveal, session.duplicate, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, workspace.filter, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, window.minimize, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, config.reload,
   theme.set, theme.list, events, events.read, event subscription, select theme, edit keymap, show an image, display an image inline, show-image,
   AGTERM_SESSION_ID, AGTERM_SOCKET, and asks to drive or script agterm. Also: troubleshoot agterm,
@@ -142,7 +142,7 @@ prompt concatenates with yours, and the program starts on the merged line. (`--n
 focus, but the newline and shared-buffer hazards of `type`-as-launcher remain — `--command` is still the
 rule.) After `--command`, confirm in `tree --json` that the new node's `foreground` shows your program running, not a bare shell prompt.
 
-## Command summary (66 commands)
+## Command summary (67 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -189,8 +189,14 @@ rebaselined. There is no terminal-output event stream.
 **workspace** — `new [name] [--collapsed]` (`--collapsed` creates it closed in the sidebar so you can fill
 it with `session new --no-select` without it opening) · `rename <name>` · `delete` · `select` ·
 `move --to up|down|top|bottom` ·
-`focus [on|off|toggle]` (collapse the sidebar tree to a single workspace; read back which workspace is
-focused from the tree workspace node's `focused` flag) ·
+`focus [on|off|toggle|add]` (mark ONE workspace in the sidebar's focus set — `on` marks it alone and
+applies the filter, `off` unmarks it, `toggle` (default) replace-toggles, and `add` marks it alongside
+the others WITHOUT switching the filter on; read membership back from the tree workspace node's
+`focused` flag) ·
+`filter [on|off|toggle]` (apply or suspend that filter for the whole window WITHOUT losing the marked
+set — no `--target`; read it back from the tree top-level `workspaceFilter`. Build a working set with
+repeated `focus add`, then apply it once with `filter on`; a workspace renders iff
+`focused && workspaceFilter`, and `filter on` with nothing marked is refused so the pair can never lie) ·
 `collapse [--target W] [--window W]` · `expand [--target W] [--window W]` (collapse/expand ONE workspace
 in the sidebar tree — the per-workspace pair, distinct from the all-workspace `sidebar expand`/`collapse`;
 read the open/closed state back from the tree workspace node's `collapsed` flag, `true` when collapsed and

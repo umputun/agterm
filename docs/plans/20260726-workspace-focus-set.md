@@ -867,29 +867,54 @@ document THIS semantic** — `add` = "insert X into the marked set", never "inse
 - Modify: `site/commands.html`
 - Modify: `site/docs.html`
 - Modify: `README.md`
+- Modify: `agtermCore/Tests/agtermCoreTests/SkillInstallTests.swift` (⚠️ missing from the original list —
+  `bundledSkillDocumentsEventSubscriptionCommand` PINS the bundled skill's command count, so the 66 → 67
+  bump fails `swift test` until the assertion moves with it)
 
-- [ ] bump the command count 66 → 67 in ALL five places: `SKILL.md:145`, `README.md:186`,
+- [x] bump the command count 66 → 67 in ALL five places: `SKILL.md:145`, `README.md:186`,
       `site/docs.html:1114`, and `site/commands.html` lines 21 and 33 (two `<meta>` description tags) plus
-      line 238 (body copy) — four separate spots in `commands.html` alone
-- [ ] update `SKILL.md`'s command summary with `workspace.filter` and the `workspace.focus` mode list
-      gaining `add`
-- [ ] update `reference.md`: full per-command detail for `workspace.filter`, the four `workspace.focus`
+      line 238 (body copy) — four separate spots in `commands.html` alone. ⚠️ there is a SIXTH place the
+      plan did not name: `SkillInstallTests.swift:17` asserts `Command summary (66 commands)` against the
+      bundled `SKILL.md`, so the bump is a code gate too. Counted against the source to confirm 67 is
+      right: `Command` has 68 cases, minus the excluded `debug.appearance` test seam = 67
+- [x] update `SKILL.md`'s command summary with `workspace.filter` and the `workspace.focus` mode list
+      gaining `add`. ➕ `workspace.filter` also went into the frontmatter `when_to_use` trigger list beside
+      `workspace.focus`, which is how a model finds the skill by command name
+- [x] update `reference.md`: full per-command detail for `workspace.filter`, the four `workspace.focus`
       modes, the `tree` schema's new `workspaceFilter` field, and the changed meaning of
-      `ControlWorkspaceNode.focused`
-- [ ] update `reference.md:817`'s error-string catalog for the reshaped `invalid focus mode` message
-- [ ] update the EXISTING `examples.md:346-348` recipe, which describes `workspace focus on|toggle|off` as
+      `ControlWorkspaceNode.focused`. ➕ four more stale single-workspace descriptions in the same file
+      were corrected: the top-level field count ("ten" → "eleven" + the `tree`-only list), `session go`'s
+      scoping sentence, `sidebar mode`'s nav-scoping sentence, and `session new --no-select`'s
+      "does not clear a focused-workspace filter" note (it now does not WIDEN the set)
+- [x] update `reference.md:817`'s error-string catalog for the reshaped `invalid focus mode` message.
+      ⚠️ the entry was a bare `invalid focus mode`; it now carries the full `allCases`-derived socket
+      string AND the CLI's own local rejection wording, matching how `--shape` documents both, plus a new
+      `invalid workspace filter mode` entry and `workspace filter` added to the `no open window` list
+- [x] update the EXISTING `examples.md:346-348` recipe, which describes `workspace focus on|toggle|off` as
       single-workspace zoom, and add a new recipe building and restoring a multi-workspace working set
       (mark, read back `focused` + `workspaceFilter` off `tree`, restore)
-- [ ] add a `site/commands.html` card for `workspace.filter`, update the `workspace.focus` card's arguments
+- [x] add a `site/commands.html` card for `workspace.filter`, update the `workspace.focus` card's arguments
       and read-back, update the tree `focused` field description at line 455, and add `workspaceFilter` to
-      the top-level tree field list at lines 466-467
-- [ ] add `toggle_workspace_filter` to the keymap built-in action lists, which are duplicated at
-      `README.md:369` and `site/docs.html:1563` (`toggle_flagged_view` is the precedent)
-- [ ] update `README.md` and `site/docs.html` where the sidebar focus filter is described (no longer
-      single-workspace) and where the bottom-bar controls and Settings ▸ Interface toggles are listed
-- [ ] edit ONLY `agterm/Resources/agent-skill/` — never the installed copies under `~/.claude/skills/agterm/`
+      the top-level tree field list at lines 466-467 ("All five" → "All six")
+- [x] add `toggle_workspace_filter` to the keymap built-in action lists, which are duplicated at
+      `README.md:369` and `site/docs.html:1563` (`toggle_flagged_view` is the precedent). ➕ also added to
+      the skill's own partial list in `reference.md`, together with `focus_workspace`, which that list had
+      always omitted — listing the new action without its sibling would have read as an oversight
+- [x] update `README.md` and `site/docs.html` where the sidebar focus filter is described (no longer
+      single-workspace) and where the bottom-bar controls and Settings ▸ Interface toggles are listed.
+      The GUI changes are documented in both: Focus vs Add to Focus in the row menu, the filled grid icon
+      on a marked row, the bottom-bar toggle replacing the pill (with its empty-set disabled state), the
+      new Settings ▸ Interface "Workspace filter" entry (placed after flagged-view, matching
+      `InterfaceElement`'s declared order), and the two lifecycle rules
+- [x] edit ONLY `agterm/Resources/agent-skill/` — never the installed copies under `~/.claude/skills/agterm/`
       or `~/.codex/skills/agterm/`, which are regenerated install outputs
-- [ ] do NOT touch `CHANGELOG.md` — release-only
+- [x] do NOT touch `CHANGELOG.md` — release-only
+- ➕ discovered, NOT fixed here (out of this task's product-doc scope — for Task 18 / the maintainer to
+      decide): (1) `.claude/rules/keymap.md:38` calls `BuiltinAction` "the 36 rebindable actions"; the real
+      count is 42 after this feature (41 before it), so that line was already stale and `keymap.md` is not
+      in Task 18's file list. (2) `site/docs.html`'s built-in action list is missing `reopen_recent` and
+      `undo_close`, which `README.md`'s copy of the same list carries — pre-existing drift between the two
+      duplicated lists, unrelated to the focus set
 
 ### Task 17: Verify acceptance criteria
 

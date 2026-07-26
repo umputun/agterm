@@ -14,7 +14,7 @@ struct SkillInstallTests {
         let reference = try String(contentsOf: skillDirectory.appendingPathComponent("reference.md"), encoding: .utf8)
         let examples = try String(contentsOf: skillDirectory.appendingPathComponent("examples.md"), encoding: .utf8)
 
-        #expect(skill.contains("Command summary (66 commands)"))
+        #expect(skill.contains("Command summary (67 commands)"))
         #expect(skill.contains("**events**"))
         #expect(reference.contains("## events"))
         #expect(reference.contains("event cursor expired"))
@@ -23,6 +23,15 @@ struct SkillInstallTests {
         #expect(skill.contains("minimize <id> [on|off|toggle]"))
         #expect(reference.contains("`window minimize <id> [on|off|toggle]`"))
         #expect(examples.contains("agtermctl window minimize"))
+        // the workspace focus-set mirror: the fourth `add` mode, the new workspace.filter command, and
+        // the tree read-back pair a script builds a working set with
+        #expect(skill.contains("focus [on|off|toggle|add]"))
+        #expect(skill.contains("filter [on|off|toggle]"))
+        #expect(reference.contains("`workspace focus [on|off|toggle|add] [--target] [--window W]`"))
+        #expect(reference.contains("`workspace filter [on|off|toggle] [--window W]`"))
+        #expect(reference.contains("`workspaceFilter`"))
+        #expect(examples.contains("agtermctl workspace focus add"))
+        #expect(examples.contains("agtermctl workspace filter on"))
     }
 
     @Test func skillDirectoryComposesUnderAgentBase() {

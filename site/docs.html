@@ -590,7 +590,10 @@
                   >›</span
                 >Narrow a crowded sidebar two ways: <strong style="color: #e6e1d7">flag</strong> sessions across workspaces into a
                 flat working-set view (a flag is durable and survives a move), or <strong style="color: #e6e1d7">focus</strong> a
-                single workspace to collapse the tree to just its sessions. The two are independent.
+                set of workspaces to collapse the tree to just their sessions. Focus one workspace to zoom to it, or mark
+                several from their row menus and apply the filter once with the sidebar's grid button — marking never
+                narrows the tree on its own, and suspending the filter keeps the set for one click back. The two are
+                independent.
               </li>
             </ul>
             <figure
@@ -1035,8 +1038,8 @@
                   >›</span
                 ><strong style="color: #e6e1d7">Interface</strong> — turn individual chrome controls on or off (each shown by
                 default): in the title bar the sidebar toggle, the session name, the window name, and the recent-sessions,
-                scratch, split, dashboard, and quick-terminal buttons; in the sidebar the new-workspace, new-session, and
-                flagged-view footer buttons plus the per-workspace add-session + revealed on hover. A
+                scratch, split, dashboard, and quick-terminal buttons; in the sidebar the new-workspace, new-session,
+                flagged-view, and workspace-filter footer buttons plus the per-workspace add-session + revealed on hover. A
                 <strong style="color: #e6e1d7">Multiple Windows</strong> option (off by default) shows the sidebar only in
                 the frontmost window and collapses it on every other, so switching windows moves the sidebar with focus.
               </div>
@@ -1111,7 +1114,7 @@
               "
             >
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0">
-                Looking for the full list? All 66 commands, with every argument, return value, and error, live on the
+                Looking for the full list? All 67 commands, with every argument, return value, and error, live on the
                 <a href="/commands" style="color: #6d82f3; font-weight: 500">Command reference →</a>
               </p>
             </div>
@@ -1204,7 +1207,11 @@
               <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# create a workspace closed in the sidebar (fill with session new --no-select)</span
               ><br />agtermctl workspace collapse --target <span style="color: #f2b45c">9f3c</span>
               <span style="color: #6b727a">&nbsp;# collapse one workspace; workspace expand re-opens it</span><br />agtermctl workspace focus on
-              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# collapse tree to active ws (on|off|toggle)</span>
+              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;# mark this workspace alone and apply the filter (on|off|toggle|add)</span>
+              <br />agtermctl workspace focus add --target <span style="color: #f2b45c">a1b2</span>
+              <span style="color: #6b727a">&nbsp;&nbsp;# mark another one without narrowing the tree yet</span
+              ><br />agtermctl workspace filter on
+              <span style="color: #6b727a">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;# apply the marked set; filter off suspends it without losing the set</span>
               <br />agtermctl session reveal --target <span style="color: #f2b45c">9f3c</span>
               <span style="color: #6b727a">&nbsp;# reveal the focused pane's cwd in Finder</span>
             </div>
@@ -1560,7 +1567,7 @@
                 color: #cbc6bc;
               "
             >
-              new_window&nbsp;&nbsp;&nbsp;rename_window&nbsp;&nbsp;&nbsp;delete_window<br />new_workspace&nbsp;&nbsp;&nbsp;rename_workspace&nbsp;&nbsp;&nbsp;delete_workspace<br />new_session&nbsp;&nbsp;&nbsp;open_directory&nbsp;&nbsp;&nbsp;rename_session&nbsp;&nbsp;&nbsp;duplicate_session<br />close_session&nbsp;&nbsp;&nbsp;clear_status<br />increase_font_size&nbsp;&nbsp;&nbsp;decrease_font_size&nbsp;&nbsp;&nbsp;reset_font_size<br />toggle_split&nbsp;&nbsp;&nbsp;toggle_scratch&nbsp;&nbsp;&nbsp;toggle_search<br />toggle_sidebar&nbsp;&nbsp;&nbsp;toggle_flag&nbsp;&nbsp;&nbsp;toggle_flagged_view<br />focus_left_pane&nbsp;&nbsp;&nbsp;focus_right_pane&nbsp;&nbsp;&nbsp;focus_workspace<br />previous_session&nbsp;&nbsp;&nbsp;next_session&nbsp;&nbsp;&nbsp;first_session&nbsp;&nbsp;&nbsp;last_session<br />previous_attention_session&nbsp;&nbsp;&nbsp;next_attention_session<br />quick_terminal&nbsp;&nbsp;&nbsp;session_palette&nbsp;&nbsp;&nbsp;command_palette<br />custom_command_palette&nbsp;&nbsp;&nbsp;show_attention<br />select_theme&nbsp;&nbsp;&nbsp;toggle_fullscreen&nbsp;&nbsp;&nbsp;toggle_terminal_zoom<br />dashboard
+              new_window&nbsp;&nbsp;&nbsp;rename_window&nbsp;&nbsp;&nbsp;delete_window<br />new_workspace&nbsp;&nbsp;&nbsp;rename_workspace&nbsp;&nbsp;&nbsp;delete_workspace<br />new_session&nbsp;&nbsp;&nbsp;open_directory&nbsp;&nbsp;&nbsp;rename_session&nbsp;&nbsp;&nbsp;duplicate_session<br />close_session&nbsp;&nbsp;&nbsp;clear_status<br />increase_font_size&nbsp;&nbsp;&nbsp;decrease_font_size&nbsp;&nbsp;&nbsp;reset_font_size<br />toggle_split&nbsp;&nbsp;&nbsp;toggle_scratch&nbsp;&nbsp;&nbsp;toggle_search<br />toggle_sidebar&nbsp;&nbsp;&nbsp;toggle_flag&nbsp;&nbsp;&nbsp;toggle_flagged_view<br />focus_left_pane&nbsp;&nbsp;&nbsp;focus_right_pane&nbsp;&nbsp;&nbsp;focus_workspace&nbsp;&nbsp;&nbsp;toggle_workspace_filter<br />previous_session&nbsp;&nbsp;&nbsp;next_session&nbsp;&nbsp;&nbsp;first_session&nbsp;&nbsp;&nbsp;last_session<br />previous_attention_session&nbsp;&nbsp;&nbsp;next_attention_session<br />quick_terminal&nbsp;&nbsp;&nbsp;session_palette&nbsp;&nbsp;&nbsp;command_palette<br />custom_command_palette&nbsp;&nbsp;&nbsp;show_attention<br />select_theme&nbsp;&nbsp;&nbsp;toggle_fullscreen&nbsp;&nbsp;&nbsp;toggle_terminal_zoom<br />dashboard
             </div>
 
             <h3

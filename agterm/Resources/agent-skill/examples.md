@@ -339,13 +339,45 @@ agtermctl session seen --target "$SID"                   # clear it, selection/f
 ## Focus a single workspace
 
 Collapse the sidebar tree to one workspace's sessions (hiding the others), with the full tree one
-command away. Per-window and persisted; orthogonal to `sidebar mode`. While focused, `session go`
-navigation is scoped to that workspace's sessions; unfocusing restores stepping over all sessions.
+command away. `on` replaces the marked set with this workspace and applies the filter; `off` unmarks it,
+which switches the filter off as the set empties. Per-window and persisted; orthogonal to
+`sidebar mode`. While the filter is applied, `session go` navigation is scoped to the marked workspaces'
+sessions; suspending it restores stepping over all sessions.
 
 ```bash
 agtermctl workspace focus on --target "$AGTERM_WORKSPACE_ID"  # zoom to this workspace
-agtermctl workspace focus toggle --target a1b2                # flip focus on another workspace
-agtermctl workspace focus off                                 # restore the full tree
+agtermctl workspace focus toggle --target a1b2                # replace-toggle onto another workspace
+agtermctl workspace focus off                                 # unmark it; the tree comes back
+```
+
+## Build, read back, and restore a multi-workspace working set
+
+`workspace focus add` MARKS a workspace without switching the filter on, so a set is built member by
+member with the whole tree still on screen and applied ONCE with `workspace filter on`. `workspace
+filter off` suspends it WITHOUT losing the set, so peeking at everything and coming back costs one call
+each way. Membership reads back per workspace as `focused`, the flag as the tree-level
+`workspaceFilter`, and a workspace renders iff both are true — `filter on` with nothing marked is
+refused, so the pair can never disagree with what is on screen.
+
+```bash
+agtermctl workspace focus add --target a1b2      # mark; the tree stays fully visible
+agtermctl workspace focus add --target c3d4      # mark a second one, still nothing hidden
+agtermctl workspace filter on                    # now show only the two marked workspaces
+
+# record the working set before changing it
+set=$(agtermctl tree --json | jq -r '.result.tree.workspaces[] | select(.focused) | .id')
+was=$(agtermctl tree --json | jq -r '.result.tree.workspaceFilter')
+
+agtermctl workspace filter off                   # peek at the whole tree; the set survives
+agtermctl workspace filter on                    # back to the same two workspaces
+
+# restore an earlier set exactly: clear, re-mark, then re-apply only if it was applied
+agtermctl workspace filter off
+for ws in $(agtermctl tree --json | jq -r '.result.tree.workspaces[] | select(.focused) | .id'); do
+  agtermctl workspace focus off --target "$ws"
+done
+for ws in $set; do agtermctl workspace focus add --target "$ws"; done
+[ "$was" = "true" ] && agtermctl workspace filter on
 ```
 
 ## Expand or collapse the sidebar tree

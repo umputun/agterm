@@ -137,20 +137,24 @@ so a script can zoom them without changing split/scratch visibility first. Cavea
 derive from the session's own flags, not from zoom — and `visible` reads false for a pane behind a
 FLOATING overlay even though it is visually on screen; address by `id`/`kind`, and read the zoom state
 from the top-level `zoomedSurface`. Workspace nodes carry
-`id`, `name`, `active`, `sessions`, `focused` (whether the sidebar
-tree is collapsed to this workspace — the read side of `workspace focus`, distinct from `active` the
-SELECTED workspace; omitted unless this is the focused one, and absent entirely when nothing is focused),
-and `collapsed` (whether this workspace is COLLAPSED in the sidebar tree — the read side of
+`id`, `name`, `active`, `sessions`, `focused` (whether this workspace is a MEMBER of the sidebar's focus
+set — the read side of `workspace focus`, distinct from `active` the SELECTED workspace; omitted on
+non-members, and absent entirely when nothing is marked. Membership is reported INDEPENDENTLY of whether
+the filter is applied, so a marked-but-not-filtering set reads back too; a workspace RENDERS in the
+sidebar iff `focused && workspaceFilter`), and `collapsed` (whether this workspace is COLLAPSED in the sidebar tree — the read side of
 `workspace collapse`/`workspace expand` and `workspace new --collapsed`; `true` when collapsed, omitted
 when expanded, so an all-expanded tree carries no `collapsed` keys).
 
-The tree object itself carries ten top-level read-only fields: `idleMs` (milliseconds since the last
+The tree object itself carries eleven top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
 timeout in milliseconds, omitted when the setting is Disabled), `sidebarVisible` (whether the
 window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
 can restore it, e.g. a tmux-style zoom that hides the sidebar and must re-show it only when it was
 visible before), `sidebarMode` (`tree` or `flagged` — the sidebar view mode, the read side of
-`sidebar mode`), `quickVisible` (whether the window's quick terminal is currently shown — the read
+`sidebar mode`), `workspaceFilter` (whether the window's workspace focus filter is currently APPLIED —
+the flag half of the focus set, whose member half is each workspace node's `focused`; the read side of
+`workspace filter`, so a script can record the filter state, restore it, or make the toggle idempotent),
+`quickVisible` (whether the window's quick terminal is currently shown — the read
 side of the write-only `quick` command, so a script can make the toggle idempotent), `zoomedSurface`
 (the control id of the surface terminal zoom currently fills the window with —
 `surface:<session-id>:<kind>` or `quick`; omitted when nothing is zoomed — the read side of the
@@ -163,9 +167,9 @@ that exact pane), `dashboardFontSize` (the absolute font size in points applied 
 the mode is `untouched`), and `dashboardFontMode` (`auto` for `--auto-size`, `fixed` for `--font-size`, or
 `untouched`). `idleMs` is live
 and grows while the window is idle, so it is on `tree` only, never `window.list`; `sidebarVisible` is on
-both; `sidebarMode`, `quickVisible`, `zoomedSurface`, and the four `dashboard*` fields are `tree`-only
-(a GUI/keyboard change would leave a cached copy stale).
-All ten are read-only projections of GUI state.
+both; `sidebarMode`, `workspaceFilter`, `quickVisible`, `zoomedSurface`, and the four `dashboard*` fields
+are `tree`-only (a GUI/keyboard change would leave a cached copy stale).
+All eleven are read-only projections of GUI state.
 
 ## workspace
 
@@ -180,13 +184,32 @@ All ten are read-only projections of GUI state.
   or invalid `--to` errors. Note: `--target active` resolves to the current workspace, which with no
   selected session falls back to the last workspace; address a specific workspace by id to step the
   same one.
-- `workspace focus [on|off|toggle] [--target] [--window W]` — collapse the sidebar tree to a single
-  workspace's subtree (hiding the others), or restore the full tree; returns the workspace id. `on`
-  focuses the target, `off` unfocuses it only when it is the currently focused one, `toggle` (default)
-  flips. Per-window and persisted; orthogonal to `sidebar mode` (the flagged flat list ignores focus).
-  While a workspace is focused, `session go` navigation is scoped to that workspace's sessions (and to
-  the flagged set in flagged mode); an explicit `session select` of a session outside the focused
-  workspace still auto-unfocuses to reveal it. An unknown mode errors.
+- `workspace focus [on|off|toggle|add] [--target] [--window W]` — mark or unmark ONE workspace in the
+  sidebar's focus SET; returns the workspace id. The sidebar renders the marked workspaces when the
+  filter is applied, all of them when it is not. `on` sets the marked set to just this workspace and
+  APPLIES the filter (the single-workspace zoom); `off` removes it, and the filter switches off once the
+  set empties; `toggle` (the default) replace-toggles — it clears when the set is exactly this workspace
+  and the filter is applied, else sets the set to just this workspace and applies it; `add` inserts it
+  into the set leaving the filter flag EXACTLY as it was. `add` never switches the filter on: that is
+  what makes a multi-workspace set buildable, since a mark that narrowed the tree would hide the rows
+  still to be marked, so mark several and apply once with `workspace filter on`.
+  Per-window and persisted; orthogonal to `sidebar mode` (the flagged flat list ignores the filter).
+  While the filter is applied, `session go` navigation is scoped to the marked workspaces' sessions (and
+  to the flagged set in flagged mode); an explicit `session select` of a session outside the set switches
+  the filter OFF while KEEPING the set, so re-applying it costs one `workspace filter on`. A workspace
+  created while the filter is applied joins the set, so it is visible without breaking the filter.
+  Read membership back from the tree workspace node's `focused` flag. An unknown mode errors.
+- `workspace filter [on|off|toggle] [--window W]` — apply or suspend the whole window's workspace focus
+  filter WITHOUT touching the marked set, so peeking at the full tree and coming back costs one call each
+  way. Window-scoped: it takes NO `--target` (it flips the window's filter, not one workspace's
+  membership), and `--window` picks the window like `sidebar expand`/`sidebar collapse`, defaulting to
+  the frontmost. `toggle` is the default; idempotent (delta-computed); an unknown mode errors, and
+  `no open window` when none is open. `on` with an EMPTY marked set is REFUSED — it returns ok having
+  changed nothing, which is what keeps the read-back contract exact: a workspace is visible iff
+  `focused && workspaceFilter`, and `workspaceFilter == true` with nothing marked cannot occur. Read it
+  back from the tree top-level `workspaceFilter`. The GUI half is the sidebar's bottom-bar grid button
+  (filled while applied, disabled with nothing marked), View ▸ Toggle Workspace Filter, the ⌃⇧P palette
+  entry, and the `toggle_workspace_filter` keymap action.
 - `workspace collapse [--target] [--window W]` — collapse ONE workspace's subtree in the sidebar tree
   (hide its sessions); returns the workspace id. The per-workspace counterpart of `sidebar collapse`
   (which collapses ALL but the active workspace) — this targets exactly the addressed workspace and does
@@ -230,8 +253,8 @@ All ten are read-only projections of GUI state.
   it is added to the sidebar but NOT selected or focused, so the current selection and focus are left
   untouched (the new node is not `active` in `tree` — that flag is the read-back); omit it for the default
   select-and-focus behavior. Every other addressing/placement option composes with it, and a background
-  `--create-workspace` create does not clear a focused-workspace filter either (it leaves the sidebar view
-  put instead of revealing the new workspace).
+  `--create-workspace` create does not widen the workspace focus set either (the new workspace stays
+  unmarked, so the filtered sidebar view is left put instead of revealing it).
 - `session duplicate [--target] [--window W]` — create a fresh session in the SAME workspace as the
   target, inserted directly AFTER it, rooted at the target's focused-pane working directory (the live
   OSC 7 cwd the sidebar row shows and `session reveal` opens); selects + focuses the new session and
@@ -257,8 +280,8 @@ All ten are read-only projections of GUI state.
   directory in Finder. Errors when that directory no longer exists.
 - `session go --to next|prev|first|last|next-attention|prev-attention [--window W]` — move the
   selection relative to the CURRENT one (no `--target`). Operates over the VISIBLE/FILTERED set: the
-  flagged sessions in flagged mode, the focused workspace's sessions when a workspace is focused, else
-  all sessions (clearing the flag/focus restores the full set). next/prev wrap around at the ends (last→first,
+  flagged sessions in flagged mode, the marked workspaces' sessions while the focus filter is applied,
+  else all sessions (clearing the flag / suspending the filter restores the full set). next/prev wrap around at the ends (last→first,
   first→last); first/last jump to the ends of that set; next-attention/prev-attention step only through the filtered
   sessions needing attention (status blocked/completed), wrapping. Returns the newly selected id.
 - `session move <workspace> [--target] [--window W]` — relocate the session to another workspace
@@ -645,8 +668,8 @@ workspace tree and the flat flagged working-set list (the durable per-session `f
 is labeled `session : workspace`, even across workspaces). `toggle` is the default; idempotent
 (delta-computed); an unknown mode is an error, and `no open window` when none is open. Persisted
 per-window. While in `flagged` mode, `session go` navigation (and the Ctrl-Tab MRU switcher) is scoped
-to the flagged sessions only; back in `tree` it spans the focused workspace's sessions (when focused)
-or all sessions. The GUI half is the bottom-bar flag button, View ▸ Show Flagged / Show All, and the
+to the flagged sessions only; back in `tree` it spans the marked workspaces' sessions (while the focus
+filter is applied) or all sessions. The GUI half is the bottom-bar flag button, View ▸ Show Flagged / Show All, and the
 ⌃⇧P palette. Use with `session flag` to build and view a cross-workspace working set.
 
 `agtermctl sidebar expand [--window W]` — expand every workspace row in a window's sidebar tree.
@@ -733,7 +756,8 @@ so `{AGT_SESSION_NAME}` and `{AGT_SESSION_PWD}` are as untrusted as `{AGT_SELECT
 
 Built-in action names for `map` include: `new_window`, `new_workspace`, `new_session`,
 `open_directory`, `rename_session`, `duplicate_session`, `close_session`, `reopen_recent`, `undo_close`, `clear_status`, `increase_font_size`,
-`decrease_font_size`, `reset_font_size`, `toggle_split`, `toggle_scratch`, `toggle_sidebar`, `quick_terminal`,
+`decrease_font_size`, `reset_font_size`, `toggle_split`, `toggle_scratch`, `toggle_sidebar`,
+`focus_workspace`, `toggle_workspace_filter`, `quick_terminal`,
 `session_palette`, `command_palette`, `custom_command_palette`, `dashboard`, and the navigation actions (`previous_session`, `next_session`,
 `first_session`, `last_session`, `previous_attention_session`, `next_attention_session`,
 `focus_left_pane`, `focus_right_pane`, `select_theme`). Editing the keymap from a terminal: open
@@ -814,8 +838,12 @@ here is app-global and touches only the captured commands, not those overrides.
 `no overlay` / `still running` / `no result` (overlay), `invalid flag mode` (session flag),
 `invalid fit` / `invalid position` / `invalid opacity` / `invalid color` / `text too long` /
 `unsupported image (PNG or JPEG only)` / `no such image file` / `image path must not contain control characters` / `invalid background mode` (session background),
-`invalid sidebar mode` (sidebar), `invalid focus mode` (workspace focus),
-`no open window` (quick/sidebar), `quick terminal not open` / `quick terminal not realized` (quick type) /
+`invalid sidebar mode` (sidebar),
+`invalid focus mode: <value> (on|off|toggle|add)` (workspace focus over the raw socket; the `agtermctl`
+CLI rejects the same value locally with `mode must be one of: on, off, toggle, add`),
+`invalid workspace filter mode: <value>` (workspace filter over the raw socket; the CLI rejects it
+locally with `mode must be on, off, or toggle`),
+`no open window` (quick/sidebar/workspace filter), `quick terminal not open` / `quick terminal not realized` (quick type) /
 `failed to read surface buffer` (quick text / session text),
 `invalid restore mode` / `session.restore set requires a command` / `command must not contain control characters` /
 `command too long (max 1024 bytes)` / `the scratch terminal is never restored` / `unknown pane id` /
