@@ -686,14 +686,23 @@ Menu behavior is covered by Task 15's e2e.
 - Modify: `agterm/Views/WorkspaceSidebar+ContextMenu.swift`
 - Modify: `agterm/AppActions+WorkspaceFocus.swift`
 
-- [ ] add `AppActions.setFocusMembership(_ id: UUID, member: Bool)` delegating to the store mutator
-- [ ] change the existing Focus item's label logic: "Unfocus" only when the set is exactly `{this}` AND the
-      filter is enabled, else "Focus"
-- [ ] add the membership item directly below it, labelled "Remove from Focus" when the workspace is a member
-      and "Add to Focus" otherwise, computing its own direction so no toggle mode is needed
-- [ ] restructure the menu with separators into three groups: New Session / Open Directory… | Focus /
-      Add-or-Remove from Focus | Delete Workspace
-- [ ] run the full gate — must pass before Task 13
+- [x] add `AppActions.setFocusMembership(_ id: UUID, member: Bool)` delegating to the store mutator —
+      guarded like its `focusWorkspace` sibling (`uiActionsEnabled` + an unknown-id no-op)
+- [x] change the existing Focus item's label logic: "Unfocus" only when the set is exactly `{this}` AND the
+      filter is enabled, else "Focus". ⚠️ VERIFICATION ONLY: the TASK 4 sweep already landed exactly this
+      predicate (`store.focusEnabled && store.focusedWorkspaceIDs == [node.id]`), so nothing was rewritten —
+      only its comment, which still described the item as collapsing the tree rather than REPLACING the set
+- [x] add the membership item directly below it, labelled "Remove from Focus" when the workspace is a member
+      and "Add to Focus" otherwise, computing its own direction so no toggle mode is needed.
+      ➕ `menuToggleFocusMembership` derives that direction by re-reading the Coordinator's OWN `store` (the
+      one the label was built from) rather than carrying a build-time `Bool` in a `SessionBatchRequest`-style
+      wrapper — three lines instead of a new type, and label and action read the same source
+- [x] restructure the menu with separators into three groups: New Session / Open Directory… | Focus /
+      Add-or-Remove from Focus | Delete Workspace. ⚠️ the workspace row's **Rename** item is added BEFORE
+      the `node.kind` switch (it is shared with session rows), so the first group actually renders as
+      Rename / New Session / Open Directory… — unchanged, and the new separator goes in right after
+      Open Directory… exactly as specified
+- [x] run the full gate — must pass before Task 13
 
 ### Task 13: Replace the focus pill with the bottom-bar filter toggle
 

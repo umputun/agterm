@@ -16,6 +16,16 @@ extension AppActions {
         store.setFocusedWorkspace(onlyThisFocused ? nil : id)
     }
 
+    /// Add or remove one workspace from the marked set, leaving the other members alone — the sidebar
+    /// workspace row's "Add to Focus"/"Remove from Focus" context-menu item, which computes its own
+    /// direction and so needs no toggle mode. Adding also enables the filter; removing disables it once
+    /// the set empties. Clean no-op on an unknown id.
+    func setFocusMembership(_ id: UUID, member: Bool) {
+        guard uiActionsEnabled else { return }
+        guard let store, store.workspaces.contains(where: { $0.id == id }) else { return }
+        store.setFocusMembership(id, member: member)
+    }
+
     /// Focus (or unfocus) the current workspace (the one new sessions land in) — the entry point for the
     /// `focus_workspace` keybind, the View menu, and the action palette, which have no clicked row.
     /// No-op when there is no current workspace.
