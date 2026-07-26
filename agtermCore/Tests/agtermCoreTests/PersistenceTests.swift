@@ -245,12 +245,12 @@ final class PersistenceTests {
 
         let restored = AppStore(persistence: store)
         restored.restore(from: store.load())
-        #expect(restored.focusedWorkspaceID == work.id)
+        #expect(restored.focusedWorkspaceIDs == [work.id] && restored.focusEnabled)
 
         app.setFocusedWorkspace(nil)
         let restoredCleared = AppStore(persistence: store)
         restoredCleared.restore(from: store.load())
-        #expect(restoredCleared.focusedWorkspaceID == nil)
+        #expect(restoredCleared.focusedWorkspaceIDs.isEmpty && !restoredCleared.focusEnabled)
     }
 
     @Test func legacySnapshotWithoutFocusedWorkspaceDecodesUnfocused() throws {
@@ -265,7 +265,7 @@ final class PersistenceTests {
 
         let app = AppStore(persistence: store)
         app.restore(from: loaded)
-        #expect(app.focusedWorkspaceID == nil)
+        #expect(app.focusedWorkspaceIDs.isEmpty && !app.focusEnabled)
     }
 
     @Test func sessionRecencyPersistsAndRestores() {

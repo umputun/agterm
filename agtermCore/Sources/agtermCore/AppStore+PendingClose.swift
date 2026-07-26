@@ -172,7 +172,8 @@ extension AppStore {
         for session in workspace.sessions { session.clearPendingRestoreOverrides() } // same undo hazard
         let removingActive = selectedSessionID.map { id in workspace.sessions.contains { $0.id == id } } ?? false
         let restoringSelection = removingActive ? selectedSessionID : nil
-        if focusedWorkspaceID == workspaceID { focusedWorkspaceID = nil }
+        focusedWorkspaceIDs.remove(workspaceID)
+        if focusedWorkspaceIDs.isEmpty { focusEnabled = false }
         if removingActive {
             let fallbackIndex = min(index, workspaces.count - 1)
             selectedSessionID = workspaces[fallbackIndex].sessions.first?.id

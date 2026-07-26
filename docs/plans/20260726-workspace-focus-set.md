@@ -348,27 +348,32 @@ move was clean.
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreOrganizationTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreCloseReselectionTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreNavigationTests.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/PersistenceTests.swift` (⚠️ missing from the original list — it
+  holds three `AppStore.focusedWorkspaceID` READS that must compile; its `Snapshot` reads are Task 5's)
 
-- [ ] replace `focusedWorkspaceID: UUID?` with `focusedWorkspaceIDs: Set<UUID>` + `focusEnabled: Bool`, both
+- [x] replace `focusedWorkspaceID: UUID?` with `focusedWorkspaceIDs: Set<UUID>` + `focusEnabled: Bool`, both
       documented as per-window persisted UI state (mirror the existing doc-comment style)
-- [ ] rewrite `visibleWorkspaces` with the `guard focusEnabled` + membership filter + defensive empty-result
+- [x] rewrite `visibleWorkspaces` with the `guard focusEnabled` + membership filter + defensive empty-result
       fallback, commenting that the fallback is unreachable given the two guards below
-- [ ] re-implement `setFocusedWorkspace(_ id: UUID?)` as replace-with-`{id}`-and-enable /
+- [x] re-implement `setFocusedWorkspace(_ id: UUID?)` as replace-with-`{id}`-and-enable /
       nil-clears-and-disables, keeping it delta-guarded (no `save()` when nothing changed)
-- [ ] add `setFocusMembership(_ id: UUID, member: Bool)` (delta-guarded; disables when the set empties) and
+- [x] add `setFocusMembership(_ id: UUID, member: Bool)` (delta-guarded; disables when the set empties) and
       `setFocusEnabled(_ on: Bool)` — the latter a NO-OP when enabling an empty set, so `enabled + empty` is
       unrepresentable
-- [ ] delete `focusedWorkspace: Workspace?` outright (its two callers are rewritten in Tasks 4/13/14; no
+- [x] delete `focusedWorkspace: Workspace?` outright (its two callers are rewritten in Tasks 4/13/14; no
       plural replacement — nothing would consume it)
-- [ ] update `AppStore+PendingClose.swift:175`'s `focusedWorkspaceID == workspaceID` nil-out to prune the id
+- [x] update `AppStore+PendingClose.swift:175`'s `focusedWorkspaceID == workspaceID` nil-out to prune the id
       from the set (behavior change lands in Task 3; this is the mechanical compile fix)
-- [ ] update `AppStoreOrganizationTests.swift:330`'s direct field WRITE (`store.focusedWorkspaceID = UUID()`)
-      and the reads in `AppStoreCloseReselectionTests.swift` (4) and `AppStoreNavigationTests.swift` (2)
-- [ ] write tests: set/replace/clear via `setFocusedWorkspace`, membership add/remove, empty-set-disables,
+- [x] update the remaining test call sites. ⚠️ the plan mislocated them: the direct field WRITE moved into
+      `AppStoreFocusTests.swift` in Task 1 (it is NOT at `AppStoreOrganizationTests.swift:330`), and
+      `AppStoreOrganizationTests.swift` holds 18 READS rather than one write. Translated:
+      `AppStoreOrganizationTests.swift` (18), `AppStoreCloseReselectionTests.swift` (4),
+      `AppStoreNavigationTests.swift` (2), `PersistenceTests.swift` (3)
+- [x] write tests: set/replace/clear via `setFocusedWorkspace`, membership add/remove, empty-set-disables,
       `setFocusEnabled` round-trip, that enabling an empty set is refused, and the delta-guard no-op cases
-- [ ] write tests for `visibleWorkspaces`: disabled → all, enabled with members → filtered subset in tree
+- [x] write tests for `visibleWorkspaces`: disabled → all, enabled with members → filtered subset in tree
       order, enabled with a partially stale set → the surviving members only
-- [ ] run `swift test` — must pass before Task 3. **`make build` is NOT gated here** (see Development
+- [x] run `swift test` — must pass before Task 3. **`make build` is NOT gated here** (see Development
       Approach): the app target stays broken until Task 4
 
 ### Task 3: Generalize the lifecycle rules (remove, create, cross-set select)

@@ -14,7 +14,7 @@ struct AppStoreNavigationTests {
         store.setFocusedWorkspace(work.id)
         store.navigateSession(.next) // nav is scoped to the focused workspace (only a); wrap cycles to itself
         #expect(store.selectedSessionID == a.id) // stays on a — the off-focus session is never revealed
-        #expect(store.focusedWorkspaceID == work.id) // nav never crosses the focus boundary, so focus stands
+        #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled) // nav never crosses the focus boundary, so focus stands
     }
 
     /// Builds a two-workspace tree (work: a, b; personal: c, d) so flattened order is [a, b, c, d].
@@ -227,7 +227,7 @@ struct AppStoreNavigationTests {
         #expect(store.selectedSessionID == ids[1]) // .last is the focused workspace's last, not the tree's
         store.navigateSession(.first)
         #expect(store.selectedSessionID == ids[0]) // .first is the focused workspace's first
-        #expect(store.focusedWorkspaceID == work.id) // never auto-unfocuses — every target was in-set
+        #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled) // never auto-unfocuses — every target was in-set
     }
 
     @Test func navigateScopesToFlaggedSet() {

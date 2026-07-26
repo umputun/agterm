@@ -67,7 +67,7 @@ struct AppStoreCloseReselectionTests {
 
         store.closeSession(closing.id)
         #expect(store.selectedSessionID == inWork.id) // stays put, though `elsewhere` is more recent
-        #expect(store.focusedWorkspaceID == nil) // the close must not introduce a focus filter
+        #expect(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled) // the close must not introduce a focus filter
     }
 
     @Test func closeActiveSessionEmptyingItsWorkspacePicksTheRecentSurvivorElsewhere() throws {
@@ -101,7 +101,7 @@ struct AppStoreCloseReselectionTests {
 
         store.closeSession(closing.id)
         #expect(store.selectedSessionID == first.id) // the MRU survivor, not the positional neighbor `/b`
-        #expect(store.focusedWorkspaceID == work.id) // the filter survives the close
+        #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled) // the filter survives the close
     }
 
     @Test func closeTheFocusedWorkspacesLastSessionPicksTheRecentSurvivorElsewhere() throws {
@@ -122,7 +122,7 @@ struct AppStoreCloseReselectionTests {
         store.closeSession(onlyInWork.id)
         #expect(store.workspaces[1].sessions.isEmpty)
         #expect(store.selectedSessionID == cameFrom.id) // not `/first`, the positional first-workspace jump
-        #expect(store.focusedWorkspaceID == nil) // the emptied focus is dropped to reveal the pick
+        #expect(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled) // the emptied focus is dropped to reveal the pick
     }
 
     @Test func closeActiveSessionWhileAnotherWorkspaceIsFocusedStaysInTheClosingWorkspace() throws {
@@ -143,7 +143,7 @@ struct AppStoreCloseReselectionTests {
 
         store.closeSession(closing.id)
         #expect(store.selectedSessionID == cameFrom.id) // not `elsewhere`, in the focused workspace
-        #expect(store.focusedWorkspaceID == nil) // the pick is outside the focus, so the filter drops
+        #expect(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled) // the pick is outside the focus, so the filter drops
     }
 
     @Test func closeActiveSessionInFlaggedModeStaysWithinTheFlaggedSet() throws {

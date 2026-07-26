@@ -50,13 +50,19 @@ public final class AppStore {
     /// control command via `setSidebarMode(_:)`.
     public var sidebarMode: SidebarMode = .tree
 
-    /// The workspace the sidebar tree is focused (zoomed) on, or nil for the full tree. Per-window UI
-    /// state, persisted in `Snapshot` (restored on relaunch). When set, the tree renders only that
-    /// workspace (see `visibleWorkspaces`); orthogonal to `sidebarMode` (flagged mode ignores focus).
-    /// Flipped by the workspace row menu, the bottom-bar pill, the View menu, the palette, and the
-    /// `workspace.focus` control command via `setFocusedWorkspace(_:)`. Auto-cleared when the focused
-    /// workspace is removed or when a session outside it becomes selected.
-    public var focusedWorkspaceID: UUID?
+    /// The workspaces marked for the sidebar focus filter — the working set the tree renders when
+    /// `focusEnabled` is on (see `visibleWorkspaces`). Per-window UI state, persisted in `Snapshot`
+    /// (restored on relaunch); orthogonal to `sidebarMode` (flagged mode ignores focus). Mutated by the
+    /// workspace row menu, the View menu, the palette, and the `workspace.focus` control command via
+    /// `setFocusedWorkspace(_:)` / `setFocusMembership(_:member:)`. A member is pruned when its
+    /// workspace is removed.
+    public var focusedWorkspaceIDs: Set<UUID> = []
+
+    /// Whether the focus filter applies, so a hand-curated set survives being switched off. Per-window
+    /// UI state, persisted in `Snapshot` (restored on relaunch). Enabled with an EMPTY set is
+    /// unrepresentable: `setFocusEnabled(true)` is a no-op on an empty set and every mutator disables
+    /// when the set empties, so a workspace is visible exactly when it is a member and this is true.
+    public var focusEnabled = false
 
     /// This window's sidebar width in points. Per-window UI state, persisted in `Snapshot`. Driven by the
     /// sidebar divider drag (clamped to `sidebarWidthMin...sidebarWidthMax`); restored on relaunch.
@@ -234,7 +240,7 @@ public final class AppStore {
             }
             return ControlWorkspaceNode(id: workspace.id.uuidString, name: workspace.name,
                                         active: workspace.id == activeWorkspaceID,
-                                        focused: workspace.id == focusedWorkspaceID ? true : nil,
+                                        focused: focusedWorkspaceIDs.contains(workspace.id) ? true : nil,
                                         collapsed: workspace.isExpanded ? nil : true,
                                         sessions: sessions)
         }
@@ -258,7 +264,10 @@ public final class AppStore {
     public func addWorkspace(name: String, collapsed: Bool = false, clearFocus: Bool = true) -> Workspace {
         let workspace = Workspace(name: name, isExpanded: !collapsed)
         workspaces.append(workspace)
-        if clearFocus { focusedWorkspaceID = nil }
+        if clearFocus {
+            focusedWorkspaceIDs.removeAll()
+            focusEnabled = false
+        }
         scheduleTreeChanged()
         save()
         return workspace
@@ -414,7 +423,8 @@ public final class AppStore {
             WatermarkStorage.removeRenderedText(sessionID: session.id) // drop any rendered .text PNG; the session is gone
             sessionRecency.remove(session.id)
         }
-        if focusedWorkspaceID == workspaceID { focusedWorkspaceID = nil } // the focused root is gone
+        focusedWorkspaceIDs.remove(workspaceID) // a marked root is gone
+        if focusedWorkspaceIDs.isEmpty { focusEnabled = false }
         workspaces.remove(at: index)
         if removingActive {
             let fallbackIndex = min(index, workspaces.count - 1)
@@ -746,7 +756,8 @@ public final class AppStore {
         }
         return Snapshot(selectedSessionID: selectedSessionID, workspaces: workspaceSnapshots,
                         sidebarWidth: sidebarWidth, sidebarVisible: sidebarVisible, sidebarMode: sidebarMode,
-                        focusedWorkspaceID: focusedWorkspaceID, sessionRecency: sessionRecency.items)
+                        focusedWorkspaceID: focusEnabled ? focusedWorkspaceIDs.first : nil,
+                        sessionRecency: sessionRecency.items)
     }
 
     /// Rebuilds the tree from a snapshot: fresh `Session`s (surfaces and shells
@@ -786,7 +797,8 @@ public final class AppStore {
         sidebarMode = snapshot.sidebarMode ?? .tree
         // a stale focus id (its workspace not in the restored tree) is harmless — `visibleWorkspaces`
         // falls back to the full tree — so restore it verbatim; nil stays unfocused.
-        focusedWorkspaceID = snapshot.focusedWorkspaceID
+        focusedWorkspaceIDs = snapshot.focusedWorkspaceID.map { [$0] } ?? []
+        focusEnabled = !focusedWorkspaceIDs.isEmpty
         if let id = snapshot.selectedSessionID, session(withID: id) == nil {
             selectedSessionID = nil
         } else {
