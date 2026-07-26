@@ -745,24 +745,45 @@ Menu behavior is covered by Task 15's e2e.
 - Modify: `agterm/AppActions+Palette.swift`
 - Modify: `agtermCore/Sources/agtermCore/PaletteCatalog.swift`
 - Modify: `agtermCore/Sources/agtermCore/BuiltinAction.swift`
+- Modify: `agterm/Views/WindowContentView.swift` (the Task 13 carry-over `helpHint` upgrade)
+- Modify: `.claude/rules/menu-actions.md` (the `helpHint` button count this task falsifies)
 - Modify: `agtermCore/Tests/agtermCoreTests/PaletteCatalogTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/BuiltinActionTests.swift`
 
-- [ ] add `AppActions.addActiveWorkspaceToFocus()` (targets `currentWorkspaceID`, the sibling of
+- [x] add `AppActions.addActiveWorkspaceToFocus()` (targets `currentWorkspaceID`, the sibling of
       `focusActiveWorkspace`)
-- [ ] add View-menu items "Add Workspace to Focus" and "Toggle Workspace Filter" beside the existing
-      Focus/Unfocus Workspace and Clear Focus entries, disabled when there is no active store
-- [ ] add two `PaletteCommand` cases in `PaletteCatalog.swift` with their `isVisible`, `title`, and
+- [x] add View-menu items "Add Workspace to Focus" and "Toggle Workspace Filter" beside the existing
+      Focus/Unfocus Workspace and Clear Focus entries, disabled when there is no active store.
+      ⚠️ the Toggle item's disabled predicate is the STRONGER
+      `focusedWorkspaceIDs.isEmpty != false || modalActive` (Clear Focus's existing expression, which
+      already covers the no-store case): the bottom-bar button disables and the palette entry hides in
+      exactly that state, and the action is a genuine no-op there since the store refuses to enable an
+      empty set — so all three surfaces agree. Add keeps the `currentWorkspaceID == nil` gate, matching
+      its Focus Workspace sibling
+- [x] add two `PaletteCommand` cases in `PaletteCatalog.swift` with their `isVisible`, `title`, and
       `builtinAction` arms, plus the matching `runPaletteCommand` arms in `AppActions+Palette.swift`
-- [ ] set the visibility predicates deliberately: "Add Workspace to Focus" always visible; "Toggle Workspace
+- [x] set the visibility predicates deliberately: "Add Workspace to Focus" always visible; "Toggle Workspace
       Filter" visible only when the set is non-empty (matching the disabled bottom-bar button); "Clear Focus"
       keeps keying on `hasFocusedWorkspace`, now `!focusedWorkspaceIDs.isEmpty` — so it is offered whenever
-      there is a set to clear, even with the filter off
-- [ ] add `case toggleWorkspaceFilter = "toggle_workspace_filter"` to `BuiltinAction` (keyless/expressible,
+      there is a set to clear, even with the filter off. ⚠️ VERIFIED, not changed: Task 4 already pointed
+      `paletteContext.hasFocusedWorkspace` at `focusedWorkspaceIDs.isEmpty == false`
+- [x] add `case toggleWorkspaceFilter = "toggle_workspace_filter"` to `BuiltinAction` (keyless/expressible,
       like `toggleFlaggedView`) and include it in the expressible list
-- [ ] write tests for the new `BuiltinAction` raw value and its expressible classification
-- [ ] write `PaletteCatalogTests` cases for both new entries' titles and visibility predicates
-- [ ] run the full gate — must pass before Task 15
+- [x] write tests for the new `BuiltinAction` raw value and its expressible classification.
+      ⚠️ there is no literal "expressible list" to join — expressibility is DERIVED (`starterKeymapConf`
+      renders a default that can't round-trip as `(not expressible)`, and a keyless action has no default
+      to render), so `toggleWorkspaceFilterIsKeylessAndMappable` pins what the classification actually
+      means for a keyless action: nil default, its raw name parses as a `map` target, and no glyph hint
+      until mapped
+- [x] write `PaletteCatalogTests` cases for both new entries' titles and visibility predicates
+- [x] ➕ Task 13 carry-over: upgrade the `focus-filter-toggle` button's plain `.help(…)` to
+      `helpHint(_:_:)` against the now-existing `.toggleWorkspaceFilter`, matching the neighbouring
+      `flagged-view-toggle`
+- [x] ➕ `.claude/rules/menu-actions.md` counted "the 8 `BuiltinAction`-backed toolbar/sidebar buttons"
+      that `helpHint` tooltips; the count was already stale at 9 and this task makes it 10, so it was
+      corrected here rather than left wrong until Task 18 (whose menu-actions checkbox covers only the
+      renamed helper)
+- [x] run the full gate — must pass before Task 15
 
 ### Task 15: Rewrite and extend the end-to-end tests
 

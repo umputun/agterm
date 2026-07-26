@@ -34,6 +34,15 @@ extension AppActions {
         focusWorkspace(id)
     }
 
+    /// Mark the current workspace (the one new sessions land in) as a set member, leaving the other
+    /// members alone — the View menu and action-palette entry point, which have no clicked row. The
+    /// additive sibling of `focusActiveWorkspace`, which REPLACES the set with the current workspace.
+    /// No-op when there is no current workspace.
+    func addActiveWorkspaceToFocus() {
+        guard let id = store?.currentWorkspaceID else { return }
+        setFocusMembership(id, member: true)
+    }
+
     /// Flip the focus filter on or off WITHOUT touching the marked set — the bottom-bar grid toggle, so
     /// peeking at the whole tree and coming back costs one click each way. The store refuses to enable an
     /// empty set, which is the same state the toggle renders disabled in, so the two agree by construction.

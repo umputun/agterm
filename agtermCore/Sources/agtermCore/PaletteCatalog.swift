@@ -44,6 +44,7 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
     case increaseFontSize, decreaseFontSize, resetFontSize, selectTheme
     case editKeymap, reloadKeymap, editGhosttyConfig, reloadConfig
     case deleteWorkspace, toggleFlaggedView, clearFlagged, clearFocus
+    case addWorkspaceToFocus, toggleWorkspaceFilter
     case expandWorkspaces, collapseWorkspaces, focusLeftPane, focusRightPane
 
     public func isVisible(in context: PaletteContext) -> Bool {
@@ -55,6 +56,10 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .clearFlagged:
             return context.hasFlaggedSessions
         case .clearFocus:
+            return context.hasFocusedWorkspace
+        case .toggleWorkspaceFilter:
+            // nothing marked means nothing to filter to, and the store refuses to enable an empty set —
+            // the same state the bottom-bar toggle renders disabled in, so the two surfaces agree.
             return context.hasFocusedWorkspace
         case .expandWorkspaces, .collapseWorkspaces:
             return context.sidebarShowsWorkspaceTree
@@ -114,6 +119,8 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .toggleFlaggedView: return context.sidebarShowsFlaggedOnly ? "Show All Sessions" : "Show Flagged Sessions"
         case .clearFlagged: return "Clear Flagged"
         case .clearFocus: return "Clear Focus"
+        case .addWorkspaceToFocus: return "Add Workspace to Focus"
+        case .toggleWorkspaceFilter: return "Toggle Workspace Filter"
         case .expandWorkspaces: return "Expand Workspaces"
         case .collapseWorkspaces: return "Collapse Workspaces"
         case .focusLeftPane: return "Focus Left Pane"
@@ -156,10 +163,11 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .selectTheme: return .selectTheme
         case .deleteWorkspace: return .deleteWorkspace
         case .toggleFlaggedView: return .toggleFlaggedView
+        case .toggleWorkspaceFilter: return .toggleWorkspaceFilter
         case .focusLeftPane: return .focusLeftPane
         case .focusRightPane: return .focusRightPane
         case .editKeymap, .reloadKeymap, .editGhosttyConfig, .reloadConfig,
-             .clearFlagged, .clearFocus, .expandWorkspaces, .collapseWorkspaces:
+             .clearFlagged, .clearFocus, .addWorkspaceToFocus, .expandWorkspaces, .collapseWorkspaces:
             return nil
         }
     }

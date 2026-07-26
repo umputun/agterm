@@ -793,7 +793,8 @@ struct WindowContentView: View {
                 // dimming, so mute it by hand — the flagged toggle's rule.
                 .disabled(store.focusedWorkspaceIDs.isEmpty)
                 .opacity(store.focusedWorkspaceIDs.isEmpty ? 0.35 : 1)
-                .help(store.focusEnabled ? "Show all workspaces" : "Show only focused workspaces")
+                .help(helpHint(store.focusEnabled ? "Show all workspaces" : "Show only focused workspaces",
+                               .toggleWorkspaceFilter))
                 .accessibilityLabel("Toggle Workspace Filter")
                 // the only accessibility-observable read of the filter state now that the pill is gone.
                 .accessibilityValue(store.focusEnabled ? "on" : "off")

@@ -43,6 +43,8 @@ struct PaletteCatalogTests {
             "Show Flagged Sessions",
             "Clear Flagged",
             "Clear Focus",
+            "Add Workspace to Focus",
+            "Toggle Workspace Filter",
             "Expand Workspaces",
             "Collapse Workspaces",
             "Focus Left Pane",
@@ -51,7 +53,7 @@ struct PaletteCatalogTests {
     }
 
     @Test func catalogHasTheExpectedStaticCommandCount() {
-        #expect(PaletteCommand.allCases.count == 43)
+        #expect(PaletteCommand.allCases.count == 45)
     }
 
     @Test func idsRoundTripThroughRawValue() {
@@ -98,6 +100,18 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.reopenRecent.isVisible(in: PaletteContext(hasRecentClosed: true)))
     }
 
+    @Test func workspaceFocusEntriesFollowTheMarkedSet() {
+        // marking is always offered; applying/suspending the filter only once something is marked —
+        // the same empty-set rule the bottom-bar toggle renders as disabled.
+        #expect(PaletteCommand.addWorkspaceToFocus.isVisible(in: PaletteContext(hasFocusedWorkspace: false)))
+        #expect(PaletteCommand.addWorkspaceToFocus.isVisible(in: PaletteContext(hasFocusedWorkspace: true)))
+        #expect(!PaletteCommand.toggleWorkspaceFilter.isVisible(in: PaletteContext(hasFocusedWorkspace: false)))
+        #expect(PaletteCommand.toggleWorkspaceFilter.isVisible(in: PaletteContext(hasFocusedWorkspace: true)))
+        // both titles are static — the marked set is read off the sidebar, not the palette row.
+        #expect(PaletteCommand.addWorkspaceToFocus.title(in: PaletteContext(hasFocusedWorkspace: true)) == "Add Workspace to Focus")
+        #expect(PaletteCommand.toggleWorkspaceFilter.title(in: PaletteContext(hasFocusedWorkspace: true)) == "Toggle Workspace Filter")
+    }
+
     @Test func builtinMappingsCoverRebindableCommands() {
         #expect(PaletteCommand.newSession.builtinAction == .newSession)
         #expect(PaletteCommand.find.builtinAction == .toggleSearch)
@@ -106,7 +120,9 @@ struct PaletteCatalogTests {
         #expect(PaletteCommand.dashboard.builtinAction == .dashboard)
         #expect(PaletteCommand.reopenRecent.builtinAction == .reopenRecent)
         #expect(PaletteCommand.undoClose.builtinAction == .undoClose)
+        #expect(PaletteCommand.toggleWorkspaceFilter.builtinAction == .toggleWorkspaceFilter)
         #expect(PaletteCommand.clearFlagged.builtinAction == nil)
+        #expect(PaletteCommand.addWorkspaceToFocus.builtinAction == nil)
         #expect(PaletteCommand.expandWorkspaces.builtinAction == nil)
     }
 }

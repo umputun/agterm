@@ -361,7 +361,7 @@ paths:
   (`equivalent(for:)?.glyphString`, nil = no shortcut) renders an
   action's CURRENT chord as macOS glyphs (`⌃⌘S`), tracking a `keymap.conf` rebind live.
   `paletteActions()` reads it for the right-aligned palette hint; `WindowContentView.helpHint(_:_:)`
-  appends `" (<glyph>)"` to the `.help(…)` tooltip of the 8 `BuiltinAction`-backed toolbar/sidebar buttons
+  appends `" (<glyph>)"` to the `.help(…)` tooltip of the 10 `BuiltinAction`-backed toolbar/sidebar buttons
   (a button with no configured shortcut shows just its label). One resolver so the two surfaces can't
   drift — the display analogue of the `defaultChord`-single-source-of-truth rule. Tooltip text is pure
   visual chrome, so it is control-API keep-in-sync EXEMPT (no command, nothing to drive headless).

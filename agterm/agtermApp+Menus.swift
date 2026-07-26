@@ -247,7 +247,22 @@ extension agtermApp {
                 }
                 .keyboardShortcut(shortcut(for: .focusWorkspace))
                 .disabled(library.activeStore?.currentWorkspaceID == nil || modalActive)
-                // plain (non-BuiltinAction) clear, like Clear Flagged; the bottom-bar pill ✕ is primary.
+                // the ADDITIVE sibling of Focus Workspace: mark the current workspace without dropping the
+                // other members, so a working set can be built from the menu. Plain (non-BuiltinAction)
+                // keyless item like Clear Focus below. The control half is workspace.focus add.
+                Button { actions.addActiveWorkspaceToFocus() } label: {
+                    Label("Add Workspace to Focus", systemImage: "square.grid.2x2")
+                }
+                .disabled(library.activeStore?.currentWorkspaceID == nil || modalActive)
+                // apply or suspend the filter without losing the marked set — the menu twin of the
+                // bottom-bar grid toggle, disabled in the same empty-set state (the store refuses to
+                // enable an empty set, so the item would be a no-op). The control half is workspace.filter.
+                Button { actions.toggleFocusFilter() } label: {
+                    Label("Toggle Workspace Filter", systemImage: "square.grid.2x2")
+                }
+                .keyboardShortcut(shortcut(for: .toggleWorkspaceFilter))
+                .disabled(library.activeStore?.focusedWorkspaceIDs.isEmpty != false || modalActive)
+                // plain (non-BuiltinAction) clear, like Clear Flagged; the bottom-bar toggle is primary.
                 Button { actions.clearFocus() } label: { Label("Clear Focus", systemImage: "scope") }
                     .disabled(library.activeStore?.focusedWorkspaceIDs.isEmpty != false || modalActive)
                 Button { actions.toggleSplit() } label: {

@@ -82,6 +82,8 @@ extension AppActions {
         case .toggleFlaggedView: toggleFlaggedView()
         case .clearFlagged: clearFlags()
         case .clearFocus: clearFocus()
+        case .addWorkspaceToFocus: addActiveWorkspaceToFocus()
+        case .toggleWorkspaceFilter: toggleFocusFilter()
         case .expandWorkspaces: expandAllWorkspaces()
         case .collapseWorkspaces: collapseOtherWorkspaces()
         case .focusLeftPane: focusPane(.main)

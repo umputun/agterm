@@ -21,6 +21,7 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.toggleSidebar.rawValue == "toggle_sidebar")
         #expect(BuiltinAction.selectTheme.rawValue == "select_theme")
         #expect(BuiltinAction.toggleFlaggedView.rawValue == "toggle_flagged_view")
+        #expect(BuiltinAction.toggleWorkspaceFilter.rawValue == "toggle_workspace_filter")
         #expect(BuiltinAction.toggleFlag.rawValue == "toggle_flag")
         #expect(BuiltinAction.focusWorkspace.rawValue == "focus_workspace")
         #expect(BuiltinAction.showAttention.rawValue == "show_attention")
@@ -29,7 +30,7 @@ struct BuiltinActionTests {
         #expect(BuiltinAction.toggleFullscreen.rawValue == "toggle_fullscreen")
         #expect(BuiltinAction.dashboard.rawValue == "dashboard")
         #expect(BuiltinAction.duplicateSession.rawValue == "duplicate_session")
-        #expect(BuiltinAction.allCases.count == 41)
+        #expect(BuiltinAction.allCases.count == 42)
     }
 
     @Test func rejectsUnknownName() {
@@ -99,6 +100,7 @@ struct BuiltinActionTests {
             .toggleFullscreen: Chord(mods: [.command, .control], key: "f"),
             .selectTheme: nil,      // keyless — gains a key only when the user maps one
             .toggleFlaggedView: nil, // keyless — gains a key only when the user maps one
+            .toggleWorkspaceFilter: nil, // keyless — gains a key only when the user maps one
             .toggleFlag: Chord(mods: [.command, .shift], key: "f"),
             .focusWorkspace: nil,   // keyless — gains a key only when the user maps one
             .focusLeftPane: Chord(mods: [.command, .option], key: "left"),
@@ -162,10 +164,24 @@ struct BuiltinActionTests {
         #expect(parseKeybind(chord.displayString) == [chord])
     }
 
+    @Test func toggleWorkspaceFilterIsKeylessAndMappable() {
+        // keyless like toggle_flagged_view, but its raw name must still be spellable in keymap.conf —
+        // a keyless action the grammar can't name would be unreachable from the keyboard forever.
+        #expect(BuiltinAction.toggleWorkspaceFilter.defaultChord == nil)
+        let (keymap, diagnostics) = parseKeymap("map cmd+shift+g toggle_workspace_filter")
+        #expect(diagnostics.isEmpty)
+        let override = Chord(mods: [.command, .shift], key: "g")
+        #expect(keymap.builtinOverrides == [.toggleWorkspaceFilter: override])
+        #expect(keymap.equivalent(for: .toggleWorkspaceFilter) == override)
+        // unmapped it shows no shortcut anywhere (menu, palette hint, tooltip).
+        #expect(Keymap(builtinOverrides: [:], commands: []).glyphHint(for: .toggleWorkspaceFilter) == nil)
+    }
+
     @Test func keylessActionsHaveNilDefault() {
         let keyless: Set<BuiltinAction> = [
             .renameWindow, .deleteWindow, .renameWorkspace, .deleteWorkspace, .renameSession, .duplicateSession,
             .clearStatus, .firstSession, .lastSession, .selectTheme, .toggleFlaggedView, .focusWorkspace,
+            .toggleWorkspaceFilter,
         ]
         for action in keyless {
             #expect(action.defaultChord == nil, "expected nil default for \(action.rawValue)")
