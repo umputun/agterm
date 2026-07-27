@@ -2001,8 +2001,10 @@
                 off its default), <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commands</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">diagnostics</span> (line and message, not just the
                 count), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">menu</span> — the key equivalents the menu
-                bar is actually dispatching. The last two lists can disagree, which is how you tell a keymap problem from a menu
-                one when a binding will not fire. App-global; takes no target or arguments.
+                bar carries, nested submenus included, each with its selector and marked
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">enabled: false</span> when the item is disabled and its
+                chord therefore inert. The action and menu lists can disagree, which is how you tell a keymap problem from a menu one
+                when a binding will not fire. App-global; takes no target or arguments.
               </p>
             </div>
           </section>

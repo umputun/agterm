@@ -113,14 +113,19 @@ extension ControlServer {
     ///
     /// `menu` stays the TOP-LEVEL menu's title throughout, so a nested item is still attributed to the
     /// menu-bar entry the reader can find it under.
+    ///
+    /// Internal rather than private so `CloseSessionChordTests`' companion can drive it over a hand-built
+    /// nested menu: agterm's own submenus carry no key equivalents and Services entries depend on the
+    /// user's system settings, so there is no nested chord an e2e could assert against.
     @MainActor
-    private static func collectKeyEquivalents(in submenu: NSMenu, menu: String) -> [ControlKeymapMenuItem] {
+    static func collectKeyEquivalents(in submenu: NSMenu, menu: String) -> [ControlKeymapMenuItem] {
         submenu.items.flatMap { item -> [ControlKeymapMenuItem] in
             var found: [ControlKeymapMenuItem] = []
             if !item.keyEquivalent.isEmpty {
                 found.append(ControlKeymapMenuItem(menu: menu, title: item.title,
                                                    chord: chordSyntax(for: item),
-                                                   selector: item.action.map(NSStringFromSelector)))
+                                                   selector: item.action.map(NSStringFromSelector),
+                                                   enabled: item.isEnabled ? nil : false))
             }
             if let nested = item.submenu { found += collectKeyEquivalents(in: nested, menu: menu) }
             return found
@@ -143,13 +148,19 @@ extension ControlServer {
     @MainActor
     private static func chordSyntax(for item: NSMenuItem) -> String {
         let mods = item.keyEquivalentModifierMask
+        let key = item.keyEquivalent
+        // an UPPERCASE key equivalent carries shift implicitly, whether or not the mask says so: AppKit
+        // matches `"C"` + [.command] against ⇧⌘C and not ⌘C. agterm's own items never spell it that way
+        // (`toShortcut` always puts shift in the mask), but this walk reports third-party items too, and
+        // lowercasing without adding shift would name a chord that item can never fire.
+        let impliedShift = key.count == 1 && key.first?.isUppercase == true
         var parts: [String] = []
         if mods.contains(.function) { parts.append("fn") }
         if mods.contains(.control) { parts.append("ctrl") }
         if mods.contains(.command) { parts.append("cmd") }
         if mods.contains(.option) { parts.append("opt") }
-        if mods.contains(.shift) { parts.append("shift") }
-        parts.append(namedKey(forKeyEquivalent: item.keyEquivalent) ?? item.keyEquivalent.lowercased())
+        if mods.contains(.shift) || impliedShift { parts.append("shift") }
+        parts.append(namedKey(forKeyEquivalent: key) ?? key.lowercased())
         return parts.joined(separator: "+")
     }
 

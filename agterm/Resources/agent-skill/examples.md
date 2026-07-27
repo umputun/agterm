@@ -778,11 +778,25 @@ If those disagree, the keymap is fine and the menu is stale or the chord was tak
 menu only on the next app activation, so switch away and back before concluding anything, and relaunch if
 it persists.
 
-Find every chord already in use before picking one for a new binding:
+A menu entry with `"enabled": false` holds the chord but is inert — AppKit consumes the key and fires
+nothing, including any same-chord sibling. Most File/View/Navigate items disable themselves while a modal
+is up, so check this before blaming the binding:
 
 ```bash
-agtermctl keymap list --json | jq -r '.result.keymap.actions[].chord | select(. != null)' | sort
-agtermctl keymap list --json | jq -r '.result.keymap.menu[].chord' | sort -u
+agtermctl keymap list --json \
+  | jq -r '.result.keymap.menu[] | select(.enabled == false) | "\(.chord)  \(.menu) > \(.title)"'
+```
+
+Find every chord already in use before picking one for a new binding. All THREE sources matter: a
+custom command's shortcut is delivered by the key monitor rather than a menu item, so it appears in
+`commands` and can never show up under `menu`. Miss it and a new `map` line on the same chord makes the
+next reload drop the custom binding.
+
+```bash
+agtermctl keymap list --json | jq -r '
+  [ .result.keymap.actions[].chord,
+    .result.keymap.commands[].shortcut,
+    .result.keymap.menu[].chord ] | map(select(. != null)) | unique | .[]'
 ```
 
 Read the parse problems in full rather than just their count:

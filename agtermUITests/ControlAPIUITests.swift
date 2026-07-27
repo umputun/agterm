@@ -1662,8 +1662,9 @@ final class ControlAPIUITests: ControlAPITestCase {
                       "a shift-bound built-in should carry shift in the mask, not fold into an uppercase key: \(chords)")
         XCTAssertEqual(chords.filter { $0 == "cmd+n" }.count, 1,
                        "only New Session holds ⌘N; a folded shift chord would duplicate it: \(chords)")
-        // the walk recurses, so a nested submenu's equivalents are included rather than silently dropped.
-        // App ▸ Services is the reachable case (its entries carry user-assigned system shortcuts).
+        // items are attributed to their top-level menu. The nested-submenu recursion cannot be asserted
+        // here — agterm's own submenus carry no key equivalents and Services entries depend on the user's
+        // system settings — so it is covered in agtermTests/LiveMenuKeyEquivalentsTests instead.
         let menus = Set(menu.compactMap { $0["menu"] as? String })
         XCTAssertTrue(menus.contains("File"), "top-level menus should be attributed by their menu-bar title: \(menus)")
         XCTAssertNotNil(keymap["path"] as? String, "the payload should name the keymap file")

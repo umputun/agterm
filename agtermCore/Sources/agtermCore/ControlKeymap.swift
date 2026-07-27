@@ -5,6 +5,11 @@ public struct ControlKeymapAction: Codable, Sendable, Equatable {
     /// The action's `keymap.conf` name, e.g. `close_session`.
     public var action: String
     /// The resolved chord in kitty syntax (`cmd+shift+e`), omitted when the action is keyless.
+    ///
+    /// One shipped default cannot be typed back into `keymap.conf`: `increase_font_size` is ⌘+, which
+    /// renders `cmd++` and does not re-parse (`+` is the chord joiner). It is reported verbatim anyway,
+    /// because the live `menu` half renders that item identically — substituting a placeholder here would
+    /// turn the one row that compares correctly into a false mismatch, which costs more than the wart.
     public var chord: String?
     /// `true` when the action's resolved chord DIFFERS from its shipped default; omitted otherwise.
     ///
@@ -35,6 +40,8 @@ public struct ControlKeymapCommand: Codable, Sendable, Equatable {
 
 /// A `keymap.conf` parse problem, the same pair the Key Mapping settings tab shows.
 public struct ControlKeymapDiagnostic: Codable, Sendable, Equatable {
+    /// 1-based. `0` is the sentinel for a whole-file or cross-section problem (a chord collision between
+    /// two sections) that belongs to no single line.
     public var line: Int
     public var message: String
 
@@ -60,12 +67,22 @@ public struct ControlKeymapMenuItem: Codable, Sendable, Equatable {
     /// anything else is an AppKit-supplied item (`performClose:`, `closeAll:`, …), which is what a
     /// stock item competing for an agterm chord looks like.
     public var selector: String?
+    /// `false` when the item is disabled and its chord therefore INERT — AppKit consumes the key
+    /// equivalent and fires nothing, so a same-chord enabled sibling does not run either. Omitted when
+    /// the item is enabled, which is the ordinary case.
+    ///
+    /// Worth reporting because disabled items are routine here rather than exotic: most File/View/Navigate
+    /// items carry a `modalActive` gate, so with the dashboard open the menu is largely inert while still
+    /// holding every chord. A caller comparing `actions` against `menu` would otherwise see the binding
+    /// present and conclude the menu is fine.
+    public var enabled: Bool?
 
-    public init(menu: String, title: String, chord: String, selector: String? = nil) {
+    public init(menu: String, title: String, chord: String, selector: String? = nil, enabled: Bool? = nil) {
         self.menu = menu
         self.title = title
         self.chord = chord
         self.selector = selector
+        self.enabled = enabled
     }
 }
 

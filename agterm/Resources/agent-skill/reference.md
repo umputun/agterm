@@ -743,8 +743,11 @@ parse diagnostics (0 = clean). App-global (no `--window`).
   or not, so you can also see which chords are free.
 - `commands[]` — the custom commands: `name`, and `shortcut` omitted for a palette-only one.
 - `diagnostics[]` — `line` + `message` per parse problem (`keymap.reload` returns only the count).
-- `menu[]` — what the menu bar is actually dispatching: `chord`, the owning `menu`, the item `title`,
-  and its `selector`. agterm's own items report `menuAction:`; anything else is an AppKit-supplied item.
+- `menu[]` — the key equivalents the menu bar carries: `chord`, the owning `menu`, the item `title`, its
+  `selector`, and `enabled: false` when the item is disabled. agterm's own items report `menuAction:`;
+  anything else is an AppKit-supplied item. Nested submenus are included, attributed to their top-level
+  menu. A disabled item's chord is INERT — AppKit consumes the key and fires nothing, including a
+  same-chord sibling — so an entry marked `enabled: false` explains a dead binding by itself.
 
 **`actions` and `menu` can disagree, and that is what this command is for.** SwiftUI rebuilds the menu
 only on the next app activation, so right after `keymap reload` a chord can be correct in `actions` and

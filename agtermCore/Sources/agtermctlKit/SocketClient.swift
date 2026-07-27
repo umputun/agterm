@@ -206,7 +206,11 @@ struct SocketClient {
         }
         if !keymap.diagnostics.isEmpty {
             lines.append(contentsOf: ["", "diagnostics:"])
-            lines.append(contentsOf: keymap.diagnostics.map { "    line \($0.line): \($0.message)" })
+            // line 0 is the whole-file / cross-section sentinel, not a real line — drop the number
+            // rather than sending the reader looking for it, matching SettingsView.diagnosticLine.
+            lines.append(contentsOf: keymap.diagnostics.map {
+                $0.line > 0 ? "    line \($0.line): \($0.message)" : "    \($0.message)"
+            })
         }
         if let menu = keymap.menu {
             lines.append(contentsOf: ["", "menu:"])

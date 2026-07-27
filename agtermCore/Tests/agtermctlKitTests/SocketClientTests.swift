@@ -126,6 +126,23 @@ struct SocketClientTests {
         for action in BuiltinAction.allCases { #expect(out.contains(action.rawValue)) }
     }
 
+    // line 0 is the whole-file / cross-section sentinel, not a real line. The GUI already drops the
+    // number for it (SettingsView.diagnosticLine), so the CLI must not send a reader hunting for line 0.
+    @Test func formatsKeymapDroppingTheLineNumberForWholeFileDiagnostics() {
+        let payload = ControlKeymap.project(
+            keymap: Keymap(builtinOverrides: [:], commands: []),
+            diagnostics: [KeymapDiagnostic(line: 0, message: "conflicts with a built-in; keybind dropped"),
+                          KeymapDiagnostic(line: 7, message: "unknown action")],
+            path: "/tmp/keymap.conf"
+        )
+
+        let out = SocketClient.formatKeymap(payload)
+
+        #expect(out.contains("    conflicts with a built-in; keybind dropped"))
+        #expect(!out.contains("line 0"), "the sentinel must not be printed as a line number")
+        #expect(out.contains("line 7: unknown action"), "a real line number is still shown")
+    }
+
     @Test func formatsKeymapWithoutOptionalSectionsWhenEmpty() {
         let payload = ControlKeymap.project(keymap: Keymap(builtinOverrides: [:], commands: []),
                                             diagnostics: [], path: "/tmp/keymap.conf")
