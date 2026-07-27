@@ -340,6 +340,12 @@ agtermctl session type --target "$AGTERM_SESSION_ID" $'\n'   # type into this ve
 agtermctl tree --socket "$AGTERM_SOCKET"                     # reach the same agterm this shell runs in
 ```
 
+## Cookbook
+
+The [cookbook](cookbook/) collects complete `agtermctl` workflows, each in its own directory with a README and, where it needs one, its scripts: switching the sidebar to a single project, closing a project's workspaces and bringing them back later, picking a path with `fzf` and typing it into the shell, and giving each tab its own Claude Code or Codex conversation across a restart. They are written to be copied into your own setup and edited, not only read; [cookbook/CONTRIBUTING.md](cookbook/CONTRIBUTING.md) has the rules for adding one.
+
+Recipes come from other people as well as the maintainer. Every one is reviewed before it is accepted, but they are shell scripts you run on your own machine against your own sessions, and several close sessions or delete workspaces, so read a recipe before you run it.
+
 ## Customizing keys
 
 `agterm` reads a user-editable, kitty-flavored keymap file at `~/.config/agterm/keymap.conf`. It does two things: rebind the built-in menu shortcuts, and define custom shell commands bound to keys (and listed in the action palette). The file is optional — the app ships with working defaults, and a commented starter `keymap.conf` is written on first launch. The directory holding it can be changed in **Settings ▸ Key Mapping** (the field shows the active path, with a "Choose…" picker and "Use Default").

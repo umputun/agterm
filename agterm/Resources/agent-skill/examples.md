@@ -3,6 +3,8 @@
 Worked `agtermctl` examples. See `reference.md` for exact flags and return shapes. All assume
 `agtermctl` is on PATH and you are inside an agterm session (`AGTERM_ENABLED=1`).
 
+Installable, human-facing versions of these workflows: https://github.com/umputun/agterm/tree/master/cookbook
+
 ## Inspect the current state
 
 ```bash
