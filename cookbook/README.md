@@ -16,7 +16,7 @@ Recipes come from other people as well as the maintainer. Every one is reviewed 
 | [claude-session-resume](claude-session-resume/) | each tab reopens its own Claude Code conversation after a restart | 0.3.1, zsh, Claude Code |
 | [codex-session-resume](codex-session-resume/) | each tab reopens its own codex conversation after a restart | 0.3.1, zsh, Codex CLI |
 
-Most recipes need `agtermctl` on your PATH; **Help ▸ Install Command Line Tool…** puts it there. The two session-resume recipes are shell functions that read the environment agterm gives a session and never call the CLI. Some recipes also need `jq`, `fzf`, or a particular shell, and each recipe's *Requirements* section says which, along with the agterm version it was tested against. Recipes are snapshots rather than a maintained surface: the control API grows by addition, so they rarely break, and one that does gets fixed when it is reported.
+Most recipes need `agtermctl` on your PATH; **Help ▸ Install Command Line Tool…** puts it there. The two session-resume recipes are shell functions that read the environment agterm gives a session and never call the CLI. Some recipes also need `jq`, `fzf`, or a particular shell, and each recipe's *Requirements* section says which, along with the minimum agterm version it needs. Recipes are snapshots rather than a maintained surface: the control API grows by addition, so they rarely break, and one that does gets fixed when it is reported.
 
 ## Contributing a recipe
 
