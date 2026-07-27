@@ -20,6 +20,9 @@ workspaces.json
 windows/
 *.sock
 
+# revmux review scaffolding: caller-written task context plus its run archive, local to a review
+.revmux/
+
 # track the path-scoped Claude rules (the global ~/.gitignore_global ignores .claude/)
 !.claude/
 .claude/*
