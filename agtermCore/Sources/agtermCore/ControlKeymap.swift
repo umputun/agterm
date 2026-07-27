@@ -6,7 +6,11 @@ public struct ControlKeymapAction: Codable, Sendable, Equatable {
     public var action: String
     /// The resolved chord in kitty syntax (`cmd+shift+e`), omitted when the action is keyless.
     public var chord: String?
-    /// `true` when a `map` line moved the action off its shipped default; omitted otherwise.
+    /// `true` when the action's resolved chord DIFFERS from its shipped default; omitted otherwise.
+    ///
+    /// Deliberately a comparison of chords rather than "a `map` line exists for this action": a
+    /// redundant `map cmd+w close_session` parses fine and leaves the action on its default, and marking
+    /// that as overridden would report a difference a caller cannot see anywhere else.
     public var overridden: Bool?
 
     public init(action: String, chord: String? = nil, overridden: Bool? = nil) {
@@ -95,9 +99,10 @@ public extension ControlKeymap {
     static func project(keymap: Keymap, diagnostics: [KeymapDiagnostic], path: String,
                         menu: [ControlKeymapMenuItem]? = nil) -> ControlKeymap {
         let actions = BuiltinAction.allCases.map { action in
-            ControlKeymapAction(action: action.rawValue,
-                                chord: keymap.equivalent(for: action)?.displayString,
-                                overridden: keymap.builtinOverrides[action] != nil ? true : nil)
+            let resolved = keymap.equivalent(for: action)
+            return ControlKeymapAction(action: action.rawValue,
+                                       chord: resolved?.displayString,
+                                       overridden: resolved != action.defaultChord ? true : nil)
         }
         let commands = keymap.commands.map {
             ControlKeymapCommand(name: $0.name, shortcut: $0.shortcut.isEmpty ? nil : $0.shortcut)

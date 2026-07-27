@@ -1655,6 +1655,17 @@ final class ControlAPIUITests: ControlAPITestCase {
         // the seeded override moved Close Session to ⌘E, and the stock File ▸ Close then holds ⌘W — the
         // exact pairing that made #296 diagnosable at a glance.
         XCTAssertTrue(chords.contains("cmd+e"), "the rebound Close Session chord should show in the menu: \(chords)")
+        // a shift-bound built-in has to render `cmd+shift+n`, NOT the uppercase-character spelling
+        // `cmd+n` AppKit also accepts — that would collide on the page with New Window's real ⌘N and
+        // report a binding that does not exist. Only a live menu can settle which spelling SwiftUI used.
+        XCTAssertTrue(chords.contains("cmd+shift+n"),
+                      "a shift-bound built-in should carry shift in the mask, not fold into an uppercase key: \(chords)")
+        XCTAssertEqual(chords.filter { $0 == "cmd+n" }.count, 1,
+                       "only New Session holds ⌘N; a folded shift chord would duplicate it: \(chords)")
+        // the walk recurses, so a nested submenu's equivalents are included rather than silently dropped.
+        // App ▸ Services is the reachable case (its entries carry user-assigned system shortcuts).
+        let menus = Set(menu.compactMap { $0["menu"] as? String })
+        XCTAssertTrue(menus.contains("File"), "top-level menus should be attributed by their menu-bar title: \(menus)")
         XCTAssertNotNil(keymap["path"] as? String, "the payload should name the keymap file")
     }
 

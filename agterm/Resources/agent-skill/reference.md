@@ -753,6 +753,10 @@ end up holding a chord an action claims. If a keybinding "does not work" while `
 compare the two lists: find the action's `chord`, then look for that chord in `menu` and check which
 item carries it.
 
+One built-in is legitimately absent from `menu`: `undo_close` (⌘Z by default) is delivered by a key
+monitor, not a menu item, so native text undo keeps working in the rename, palette and Settings fields.
+Its missing menu entry is expected and not a fault.
+
 Menu chords use the same vocabulary as the file (`cmd+opt+up`, `cmd+shift+return`), so the two lists
 compare as plain strings. One exception: the globe/fn modifier prints as `fn+`, which no `keymap.conf`
 line can express — such an item is AppKit's own and never matches an action.

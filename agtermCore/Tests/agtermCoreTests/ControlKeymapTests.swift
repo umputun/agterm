@@ -44,6 +44,32 @@ import Testing
         }
     }
 
+    // a redundant `map cmd+w close_session` parses fine and leaves the action on its shipped default.
+    // `overridden` compares CHORDS, not "is there a map line", so it does not claim a difference the
+    // caller cannot see anywhere else.
+    @Test func mappingAnActionToItsOwnDefaultIsNotAnOverride() throws {
+        let parsed = parseKeymap("map cmd+w close_session\n")
+        try #require(parsed.diagnostics.isEmpty, "an identity map is a clean line")
+        let payload = ControlKeymap.project(keymap: parsed.keymap, diagnostics: parsed.diagnostics,
+                                            path: "/tmp/keymap.conf")
+        let close = try #require(payload.actions.first { $0.action == "close_session" })
+
+        #expect(close.chord == "cmd+w")
+        #expect(close.overridden == nil, "the action is still on its default, so nothing was overridden")
+    }
+
+    // the mirror: mapping a keyless action gives it a chord it never had, which IS a difference from its
+    // (absent) default and must be marked.
+    @Test func mappingAKeylessActionCountsAsAnOverride() throws {
+        let keyless = try #require(BuiltinAction.allCases.first { $0.defaultChord == nil })
+        let keymap = Keymap(builtinOverrides: [keyless: Chord(mods: [.command], key: "y")], commands: [])
+        let payload = ControlKeymap.project(keymap: keymap, diagnostics: [], path: "/tmp/keymap.conf")
+        let row = try #require(payload.actions.first { $0.action == keyless.rawValue })
+
+        #expect(row.chord == "cmd+y")
+        #expect(row.overridden == true)
+    }
+
     @Test func carriesCustomCommandsAndDistinguishesPaletteOnlyOnes() throws {
         let text = """
         command "Bound" cmd+shift+e echo hi

@@ -273,8 +273,8 @@ paths:
   Setting echoes the resulting effective side in `result.text`; the BARE form (no name) reads the side
   the last config feed applied (`SettingsModel.lastAppliedIsDark`), which the test polls to prove the
   flip actually drove the reload.
-  `AppearanceFlipUITests` is its only consumer; the public command count stays 67
-  (`Command` has 68 cases, minus this one seam).
+  `AppearanceFlipUITests` is its only consumer; the public command count stays 68
+  (`Command` has 69 cases, minus this one seam).
 
   `workspace.delete` honors keep-at-least-one and returns an error instead of the GUI confirm alert (nothing
   blocks on a modal).
@@ -1689,7 +1689,7 @@ paths:
   (image/text/color set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
   `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
-  examples.md recipes) and the command count there is bumped to 67 to match.
+  examples.md recipes) and the command count there is bumped to match.
   It is a CODE gate too: `SkillInstallTests.bundledSkillDocumentsEventSubscriptionCommand` asserts the
   `Command summary (N commands)` heading against the bundled `SKILL.md`, so a stale count fails `swift test`.
   **Website mirror (HARD keep-in-sync):** the site's per-command reference `site/commands.html` documents
@@ -1708,5 +1708,12 @@ paths:
   Use something like `grep -rnE "\b[0-9]{2,3}\b[A-Za-z ,'-]{0,40}commands?\b"` scoped to `README.md`,
   `site/`, `agterm/Resources/agent-skill/`, and `.claude/rules/`, and reconcile EVERY hit against the
   `Command` case count.
+  **That pattern requires the word "commands" AFTER the number and so misses the phrasings this very file
+  uses** — "the public command count stays N", "`Command` has N cases" — which is how BOTH of them
+  survived the 67 → 68 bump while the paragraph above them was corrected.
+  Finish with a bare `rg -n '\b[0-9]{2,3}\b' .claude/rules/control-api.md` over this file and read every
+  hit, or state the count once and reference it everywhere else.
+  Note also that counting `case x = "…"` lines UNDERCOUNTS by five: `tree`, `dashboard`, `quick`,
+  `sidebar` and `notify` carry IMPLICIT raw values, so count `case` lines instead.
   It drifted once because the site keep-in-sync convention named only `docs.html`/`index.html`, so
   `dashboard` and `surface.zoom` shipped undocumented here.

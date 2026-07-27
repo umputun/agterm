@@ -23,9 +23,12 @@ public struct Modifier: OptionSet, Hashable, Sendable {
 /// The four arrows are here because the six arrow-bound built-ins ship their defaults on them, so the
 /// grammar must be able to spell what `BuiltinAction.defaultChord` returns.
 ///
-/// Adding a name here means updating four sites, two inbound and two outbound:
+/// Adding a name here means updating five sites, two inbound and three outbound:
 /// - `CustomCommandRunner` and `UndoCloseShortcut` resolve `NSEvent` → name via `namedKey(forKeyCode:)`,
 ///   so a name with no keycode parses in the file yet never fires;
+/// - `namedKey(forKeyEquivalent:)` resolves a live `NSMenuItem`'s key-equivalent CHARACTER back to the
+///   name for `keymap.list`, so a name missing there makes every menu item carrying that key render with
+///   the key absent and stop comparing against the resolved chord (its own test pins the two sets equal);
 /// - `Chord.glyphString` renders the name in palette hints and tooltips — it degrades to the raw name,
 ///   so a miss here is cosmetic;
 /// - `agtermApp.toShortcut` maps the name to a SwiftUI `KeyEquivalent`, and its `default` arm is

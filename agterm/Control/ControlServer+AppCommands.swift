@@ -99,17 +99,32 @@ extension ControlServer {
     /// a caller can compare the two lists directly. Only the app target can read `NSApp.mainMenu`, so this
     /// is the app-side half of the otherwise host-free `keymap.list` payload.
     @MainActor
-    static func liveMenuKeyEquivalents() -> [ControlKeymapMenuItem] {
-        var items: [ControlKeymapMenuItem] = []
-        for topItem in NSApp.mainMenu?.items ?? [] {
-            guard let submenu = topItem.submenu else { continue }
-            for item in submenu.items where !item.keyEquivalent.isEmpty {
-                items.append(ControlKeymapMenuItem(menu: topItem.title, title: item.title,
+    private static func liveMenuKeyEquivalents() -> [ControlKeymapMenuItem] {
+        (NSApp.mainMenu?.items ?? []).flatMap { topItem in
+            topItem.submenu.map { collectKeyEquivalents(in: $0, menu: topItem.title) } ?? []
+        }
+    }
+
+    /// Every key equivalent in `submenu`, RECURSING into nested submenus. AppKit's own
+    /// `performKeyEquivalent` recurses, so a chord one level down is just as live and can just as easily
+    /// shadow an agterm binding — App ▸ Services is the reachable case, since its entries carry whatever
+    /// shortcuts the user assigned in System Settings. Reporting only the top level would let a caller
+    /// compare the two lists and conclude nothing holds a chord when something does.
+    ///
+    /// `menu` stays the TOP-LEVEL menu's title throughout, so a nested item is still attributed to the
+    /// menu-bar entry the reader can find it under.
+    @MainActor
+    private static func collectKeyEquivalents(in submenu: NSMenu, menu: String) -> [ControlKeymapMenuItem] {
+        submenu.items.flatMap { item -> [ControlKeymapMenuItem] in
+            var found: [ControlKeymapMenuItem] = []
+            if !item.keyEquivalent.isEmpty {
+                found.append(ControlKeymapMenuItem(menu: menu, title: item.title,
                                                    chord: chordSyntax(for: item),
                                                    selector: item.action.map(NSStringFromSelector)))
             }
+            if let nested = item.submenu { found += collectKeyEquivalents(in: nested, menu: menu) }
+            return found
         }
-        return items
     }
 
     /// An `NSMenuItem`'s key equivalent in kitty syntax (`cmd+shift+e`), matching `Chord.displayString`'s

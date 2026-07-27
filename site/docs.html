@@ -1647,8 +1647,10 @@
               To check what is actually bound,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl keymap list</span> prints every
               built-in with the chord it resolved to, the custom commands, each diagnostic in full, and the key equivalents the menu
-              bar is really carrying. If a binding will not fire, compare the last two: an action whose chord no menu item holds is a
-              menu problem, not a keymap one.
+              bar is really carrying. If a binding will not fire, compare the last two: an action whose chord no menu item holds is
+              usually a menu problem, not a keymap one. The one deliberate exception is
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">undo_close</span> (⌘Z), delivered by a
+              key monitor rather than a menu item, so it never appears in the menu list.
             </p>
             <h3
               style="

@@ -37,6 +37,13 @@ After editing `keymap.conf`, nothing changes until you reload it.
 - **Settings ▸ Key Mapping** shows a read-only list of parse problems (a malformed line, a dropped binding, a conflict). This is the first place to look when a binding does not behave.
 - **File ▸ Reload Keymap** re-reads the file. A reload that found problems posts a banner with the count.
 - **`agtermctl keymap reload`** does the same from the command line and prints the diagnostic count (`0` means a clean reload).
+- **`agtermctl keymap list`** shows what is actually bound: every built-in with the chord it resolved to, the custom commands, each diagnostic in full rather than just a count, and the key equivalents the menu bar is really carrying.
+
+## A keybinding does not fire
+
+Run `agtermctl keymap list` and compare its two lists. If the action's chord is what you expect but no menu entry carries it (or a different item does), the keymap is fine and the menu is stale: agterm rebuilds the menu when the app next becomes active, so switch to another app and back, and relaunch if it persists.
+
+One built-in is legitimately missing from the menu list: `undo_close` (⌘Z) is delivered by a key monitor rather than a menu item, so that native text undo keeps working in the rename, palette and Settings fields. Its absence there is expected.
 
 ## The keymap editor will not open
 
