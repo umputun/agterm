@@ -5,7 +5,8 @@
 // dictation (their voice-control issue is still open). This file takes the opposite, dictation-specific
 // tack: it advertises the surface as an editable text area so hold-to-dictate widgets anchor to it, but
 // gated to the on-screen pane(s) so it does not regress screen readers or expose background sessions
-// (see the gating notes below). Only the WRITE path is additionally focus-gated.
+// (see the gating notes below). The WRITE path and the settable advertisement are additionally
+// focus-gated (the read-only exposure is not).
 
 import AppKit
 
@@ -49,6 +50,14 @@ import AppKit
 /// (MacWhisper, Dictation) targets the right pane; a client that enumerates by role/label sees the
 /// unfocused pane is not settable and skips it. Accepted: only one pane can be the live text destination
 /// at a time, and narrowing exposure to the focused pane would hide the other from screen readers.
+///
+/// One asymmetry follows from the settable gate being first-responder-only while the WRITE guard also
+/// requires `isKeyWindow` (`liveFocus`): the first-responder pane of a visible-but-NOT-key window (a
+/// second window while another holds key) advertises settable, yet its write is dropped because that
+/// window isn't key. This is deliberate — settable must not flip to NO merely because agterm isn't key,
+/// or a discovery-time probe would mis-cache it — and harmless in practice: a focus-anchoring dictation
+/// client can't reach a non-key window (`AXFocusedUIElement` is nil when agterm isn't key), so only a
+/// role/label-enumerating client hits it, the same class as the split case above.
 ///
 /// Contract note: a terminal is **append-at-cursor** — there is no addressable document value to
 /// replace, so `accessibilityValue` reports empty and a set inserts at the cursor rather than replacing.
@@ -123,9 +132,14 @@ extension GhosttySurfaceView {
     /// then silently drop. Gated on the first-responder term ONLY, NOT `liveFocus`: keying it on
     /// `isKeyWindow` too would flip settable to NO whenever agterm isn't key and break a client that probes
     /// settability at discovery time (before it activates agterm).
+    ///
+    /// The setter's answer is returned AUTHORITATIVELY (an explicit `false` off the first-responder pane),
+    /// not delegated to `super`: this class implements both `accessibilityValue()` and
+    /// `setAccessibilityValue(_:)`, and AppKit's default can report a getter/setter pair settable, which
+    /// would leak AXValueSettable = YES onto the unfocused pane and defeat the gate.
     override func isAccessibilitySelectorAllowed(_ selector: Selector) -> Bool {
-        if axExposed, window?.firstResponder === self, selector == #selector(setAccessibilityValue(_:)) {
-            return true
+        if selector == #selector(setAccessibilityValue(_:)) {
+            return axExposed && window?.firstResponder === self
         }
         return super.isAccessibilitySelectorAllowed(selector)
     }
