@@ -469,12 +469,18 @@ final class AppActions {
         revealActiveBlockedPane(captured: indicator)
     }
 
-    /// Delete a workspace and all of its sessions. Confirms first when the workspace still has
-    /// sessions (the delete ends their shells); an empty workspace deletes without a prompt.
-    /// No-ops when only one workspace remains — one is always kept.
-    func deleteWorkspace(_ workspaceID: UUID) {
-        guard uiActionsEnabled else { return }
-        guard let store, store.canRemoveWorkspace,
+    /// Delete a workspace from `store`'s window and all of its sessions. Confirms first when the workspace
+    /// still has sessions (the delete ends their shells); an empty workspace deletes without a prompt.
+    /// No-ops when only one workspace remains — one is always kept. Driven by the sidebar workspace row's
+    /// "Delete Workspace" context-menu item, which passes its OWN window-local store (like
+    /// Close/Flag/Duplicate/Focus) so a background window's row deletes the workspace it was opened over —
+    /// the item's enabled state was read from that same store, and routing through the frontmost one would
+    /// find no such id and silently do nothing. Ungated like the other store-scoped sidebar actions: a
+    /// window renders no sidebar while its terminal zoom or dashboard is up, so the row menu is unreachable
+    /// in exactly the state the gate covers, and the frontmost window's modal must not block a background
+    /// window's row.
+    func deleteWorkspace(_ workspaceID: UUID, in store: AppStore) {
+        guard store.canRemoveWorkspace,
               let workspace = store.workspaces.first(where: { $0.id == workspaceID }) else { return }
         if !workspace.sessions.isEmpty, !confirmDeleteWorkspace(workspace) { return }
         if closeGraceUndoEnabled {
@@ -487,10 +493,10 @@ final class AppActions {
     }
 
     /// Delete the current workspace (the one new sessions land in) — used by the menu bar and the
-    /// action palette, which have no clicked row.
+    /// action palette, which have no clicked row and so act on the frontmost window by definition.
     func deleteActiveWorkspace() {
-        guard let store, let id = store.currentWorkspaceID else { return }
-        deleteWorkspace(id)
+        guard uiActionsEnabled, let store, let id = store.currentWorkspaceID else { return }
+        deleteWorkspace(id, in: store)
     }
 
     private func confirmDeleteWorkspace(_ workspace: Workspace) -> Bool {

@@ -239,7 +239,10 @@ extension WorkspaceSidebar.Coordinator {
 
     @objc private func menuDeleteWorkspace(_ sender: NSMenuItem) {
         guard let node = sender.representedObject as? SidebarNode else { return }
-        actions.deleteWorkspace(node.id)
+        // pass THIS sidebar's window-local store, like Close/Flag/Duplicate/Focus: the item's enabled state
+        // came from `store.canRemoveWorkspace`, so a background window's row must delete its own workspace —
+        // routing through the frontmost store would not find the id there and would silently do nothing.
+        actions.deleteWorkspace(node.id, in: store)
     }
 
     @objc private func menuFocusWorkspace(_ sender: NSMenuItem) {

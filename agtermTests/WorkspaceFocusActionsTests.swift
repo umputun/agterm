@@ -6,8 +6,9 @@ import agtermCore
 /// Hosted coverage for the workspace-focus entry points on `AppActions`
 /// (`AppActions+WorkspaceFocus.swift`) — the keyless ones the View menu, the ⌃⇧P palette and the
 /// `focus_workspace` keybind drive, which have no clicked sidebar row and so target the frontmost window's
-/// `AppStore.currentWorkspaceID`, plus the store-scoped pair the sidebar row menu drives, which must act on
-/// the window the clicked row belongs to. They live in the app-hosted target rather than `agtermUITests`
+/// `AppStore.currentWorkspaceID`, plus the store-scoped workspace-row menu actions — Focus, Add to Focus,
+/// and Delete Workspace (the last from `AppActions.swift`), which must act on the window the clicked row
+/// belongs to. They live in the app-hosted target rather than `agtermUITests`
 /// because they reach `AppActions` directly through `@testable import agterm`, their whole outcome is
 /// MODEL state (the marked set plus the filter flag), and — unlike the XCUITest suite, which CI does not
 /// run — they run on every push via `scripts/test-app.sh`.
@@ -153,6 +154,23 @@ final class WorkspaceFocusActionsTests: XCTestCase {
 
         XCTAssertTrue(otherStore.focusedWorkspaceIDs.isEmpty, "the second invocation reads Unfocus and clears")
         XCTAssertFalse(otherStore.focusEnabled)
+    }
+
+    // "Delete Workspace" carries the same routing requirement as the two focus items above: the row's
+    // enabled state comes from its own store's `canRemoveWorkspace`, so a background window's row must
+    // delete the workspace it was opened over. Routed through the frontmost store the id is absent, the
+    // lookup returns nil, and the item silently does nothing — no deletion, no error, no feedback.
+    func testRowDeleteWorkspaceTargetsItsOwnStoreNotTheFrontmostOne() throws {
+        let (frontStore, otherStore) = try twoWindows()
+        let frontWorkspaces = frontStore.workspaces.map(\.id)
+        // an EMPTY workspace deletes without the confirm alert, and a second one satisfies keep-at-least-one.
+        let doomed = otherStore.addWorkspace(name: "doomed")
+        XCTAssertTrue(otherStore.canRemoveWorkspace, "the clicked row's window must allow the delete")
+
+        actions.deleteWorkspace(doomed.id, in: otherStore)
+
+        XCTAssertFalse(otherStore.workspaces.contains { $0.id == doomed.id }, "the clicked row's own window should lose it")
+        XCTAssertEqual(frontStore.workspaces.map(\.id), frontWorkspaces, "the frontmost window must not be mutated")
     }
 
     // "Add to Focus"/"Remove from Focus" carries the same routing requirement, and additionally computes

@@ -356,10 +356,14 @@ paths:
   All paths share the selection boundary and reveal helper so pre-reset status and pane semantics cannot drift.
   Only the control `session.go next-attention|prev-attention` does NOT reveal (`goSession` just drives
   `AppStore.navigateSession`), so the socket steps the selection without moving focus into the pane.
-- `Delete Workspace` lives once in `AppActions.deleteWorkspace(_:)` (confirm alert when the workspace
+- `Delete Workspace` lives once in `AppActions.deleteWorkspace(_:in:)` (confirm alert when the workspace
   still has sessions, then `AppStore.removeWorkspace`) and is invoked from all three surfaces — the sidebar
   workspace row's context menu, the menu bar, and the action palette (the latter two via `deleteActiveWorkspace()`,
-  which targets `currentWorkspaceID`).
+  which targets the frontmost store's `currentWorkspaceID` and owns the `uiActionsEnabled` gate).
+  It is STORE-SCOPED like every other workspace-row menu item (Close/Flag/Duplicate/Reveal/Focus): the row
+  menu passes its OWN window-local store, since the item's enabled state came from that store's
+  `canRemoveWorkspace` and a right-click does not raise a background window — routed through the frontmost
+  store the clicked id is absent, the lookup returns nil, and the item silently does nothing.
   `AppStore.removeWorkspace` tears down each session's surfaces, prunes recency,
   and reselects; `canRemoveWorkspace` (count > 1) enforces keep-at-least-one and gates the menu item
   / palette entry.
