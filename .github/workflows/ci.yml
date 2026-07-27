@@ -16,6 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       swift: ${{ steps.filter.outputs.swift }}
+      cookbook: ${{ steps.filter.outputs.cookbook }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -32,6 +33,8 @@ jobs:
               - "agtermTests/.swiftlint.yml"
               - "agtermUITests/.swiftlint.yml"
               - ".github/workflows/ci.yml"
+            cookbook:
+              - "cookbook/**"
 
   test:
     name: Unit tests
@@ -120,3 +123,57 @@ jobs:
         run: scripts/build.sh
       - name: Application-hosted unit tests
         run: scripts/test-app.sh
+
+  cookbook:
+    name: Cookbook checks
+    needs: changes
+    if: needs.changes.outputs.cookbook == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: recipe layout, index and headings
+        # bash explicitly: the block below uses process substitution, and pipefail
+        # is what makes a failed find in a command substitution red the step
+        shell: bash
+        run: |
+          fail=0
+
+          # directory set vs index set, BOTH directions
+          dirs=$(find cookbook -mindepth 1 -maxdepth 1 -type d -exec basename {} \; | sort)
+          # links come ONLY from canonical table rows, so a link in prose, an html
+          # comment or a fenced example cannot satisfy the check
+          links=$(grep -E '^\|' cookbook/README.md 2>/dev/null \
+                  | grep -oE '\]\([a-z0-9][a-z0-9-]*/\)' \
+                  | sed -e 's/^](//' -e 's|/)$||' | sort -u || true)
+          missing=$(comm -23 <(printf '%s\n' "$dirs") <(printf '%s\n' "$links"))
+          stale=$(comm -13 <(printf '%s\n' "$dirs") <(printf '%s\n' "$links"))
+          for n in $missing; do echo "::error::$n is missing from the index"; fail=1; done
+          for n in $stale;   do echo "::error::index row '$n' points at no such directory"; fail=1; done
+
+          for d in cookbook/*/; do
+            [ -d "$d" ] || continue
+            name=$(basename "$d")
+            if printf '%s' "$name" | grep -qE '[^a-z0-9-]|--|^-|-$'; then
+              echo "::error::$name is not kebab-case"; fail=1
+            fi
+            if [ ! -f "$d/README.md" ]; then
+              echo "::error::$name has no README.md"; fail=1; continue
+            fi
+            for h in "## What it does" "## Requirements" "## Setup" \
+                     "## Usage" "## How it works" "## Limits"; do
+              if ! grep -qxF "$h" "$d/README.md"; then
+                echo "::error::$name README is missing the '$h' heading"; fail=1
+              fi
+            done
+          done
+
+          # every script carries a shebang
+          while IFS= read -r -d '' f; do
+            if ! head -c 2 "$f" | grep -q '#!'; then
+              echo "::error::$f has no shebang"; fail=1
+            fi
+          done < <(find cookbook -type f \( -name '*.sh' -o -name '*.zsh' \) -print0)
+
+          exit $fail
+      - name: shellcheck
+        run: find cookbook -type f -name '*.sh' -print0 | xargs -0 -r shellcheck
