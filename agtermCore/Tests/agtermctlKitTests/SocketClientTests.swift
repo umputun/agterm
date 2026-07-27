@@ -107,6 +107,45 @@ struct SocketClientTests {
     }
 
     /// A create command's `run()` returns without throwing on `{"ok":true}` and prints the new id.
+    @Test func formatsKeymapWithEveryActionAndTheLiveMenu() {
+        let keymap = Keymap(builtinOverrides: [.closeSession: Chord(mods: [.command], key: "e")], commands: [])
+        let payload = ControlKeymap.project(
+            keymap: keymap, diagnostics: [KeymapDiagnostic(line: 3, message: "unknown action")],
+            path: "/tmp/keymap.conf",
+            menu: [ControlKeymapMenuItem(menu: "File", title: "Close", chord: "cmd+w", selector: "performClose:")]
+        )
+
+        let out = SocketClient.formatKeymap(payload)
+
+        #expect(out.contains("keymap: /tmp/keymap.conf"))
+        #expect(out.contains("* close_session"), "an overridden action is marked")
+        #expect(out.contains("cmd+e"))
+        #expect(out.contains("line 3: unknown action"))
+        #expect(out.contains("cmd+w  File ▸ Close"), "the live menu chord is listed for comparison")
+        // every action appears, keyless ones included, so the listing is the whole set
+        for action in BuiltinAction.allCases { #expect(out.contains(action.rawValue)) }
+    }
+
+    @Test func formatsKeymapWithoutOptionalSectionsWhenEmpty() {
+        let payload = ControlKeymap.project(keymap: Keymap(builtinOverrides: [:], commands: []),
+                                            diagnostics: [], path: "/tmp/keymap.conf")
+
+        let out = SocketClient.formatKeymap(payload)
+
+        #expect(!out.contains("commands:"))
+        #expect(!out.contains("diagnostics:"))
+        #expect(!out.contains("menu:"), "menu is omitted, not printed empty, when the caller supplied none")
+        #expect(out.contains("close_session"))
+    }
+
+    @Test func formatResponsePicksTheKeymapRenderer() {
+        let payload = ControlKeymap.project(keymap: Keymap(builtinOverrides: [:], commands: []),
+                                            diagnostics: [], path: "/tmp/keymap.conf")
+        let out = SocketClient.formatResponse(ControlResponse(ok: true, result: ControlResult(keymap: payload)),
+                                              json: false)
+        #expect(out.hasPrefix("keymap: /tmp/keymap.conf"))
+    }
+
     @Test func runEchoesNewIdForCreateCommand() throws {
         let server = StubServer(response: ControlResponse(ok: true, result: ControlResult(id: "9f3c")))
         try server.start()

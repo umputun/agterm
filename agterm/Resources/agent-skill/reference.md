@@ -733,6 +733,30 @@ isn't realized.
 `agtermctl keymap reload` — re-read and apply `keymap.conf`; returns `result.count` = the number of
 parse diagnostics (0 = clean). App-global (no `--window`).
 
+`agtermctl keymap list` — the read side of `keymap.reload`. App-global, no target and no args. Returns
+`result.keymap`:
+
+- `path` — the `keymap.conf` this came from.
+- `actions[]` — every rebindable built-in: `action` (its `keymap.conf` name), `chord` (the resolved
+  chord in the same kitty syntax the file uses, omitted when the action is keyless), and
+  `overridden: true` when a `map` line moved it off its shipped default. Every action is listed, bound
+  or not, so you can also see which chords are free.
+- `commands[]` — the custom commands: `name`, and `shortcut` omitted for a palette-only one.
+- `diagnostics[]` — `line` + `message` per parse problem (`keymap.reload` returns only the count).
+- `menu[]` — what the menu bar is actually dispatching: `chord`, the owning `menu`, the item `title`,
+  and its `selector`. agterm's own items report `menuAction:`; anything else is an AppKit-supplied item.
+
+**`actions` and `menu` can disagree, and that is what this command is for.** SwiftUI rebuilds the menu
+only on the next app activation, so right after `keymap reload` a chord can be correct in `actions` and
+stale in `menu`. It also resolves a chord collision by unbinding agterm's own item, so a stock item can
+end up holding a chord an action claims. If a keybinding "does not work" while `actions` looks right,
+compare the two lists: find the action's `chord`, then look for that chord in `menu` and check which
+item carries it.
+
+Menu chords use the same vocabulary as the file (`cmd+opt+up`, `cmd+shift+return`), so the two lists
+compare as plain strings. One exception: the globe/fn modifier prints as `fn+`, which no `keymap.conf`
+line can express — such an item is AppKit's own and never matches an action.
+
 ### keymap.conf format
 
 The file lives at `<config dir>/keymap.conf` (default `~/.config/agterm`; the dir is set in Settings ▸

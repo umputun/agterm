@@ -6,7 +6,7 @@
     <title>Command reference — agterm | agtermctl control API</title>
     <meta
       name="description"
-      content="Complete agtermctl reference: all 67 control commands for agterm — sessions, workspaces, windows, overlays, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
+      content="Complete agtermctl reference: all 68 control commands for agterm — sessions, workspaces, windows, overlays, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
     />
     <meta
       name="keywords"
@@ -18,7 +18,7 @@
     <meta property="og:title" content="Command reference — agterm" />
     <meta
       property="og:description"
-      content="All 67 agtermctl control commands with arguments, return values, and errors."
+      content="All 68 agtermctl control commands with arguments, return values, and errors."
     />
     <meta property="og:url" content="https://agterm.com/commands" />
     <meta property="og:image" content="https://agterm.com/assets/agterm-og.png" />
@@ -30,7 +30,7 @@
     <meta name="twitter:title" content="Command reference — agterm" />
     <meta
       name="twitter:description"
-      content="All 67 agtermctl control commands with arguments, return values, and errors."
+      content="All 68 agtermctl control commands with arguments, return values, and errors."
     />
     <meta name="twitter:image" content="https://agterm.com/assets/agterm-og.png" />
     <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
@@ -235,7 +235,7 @@
             Command reference
           </h1>
           <p style="font-size: 19px; line-height: 1.6; color: #bfbab0; margin: 0 0 8px">
-            All 67 commands of the agterm control API, with arguments and return values. Every one is reachable from the
+            All 68 commands of the agterm control API, with arguments and return values. Every one is reachable from the
             <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> CLI and from the local
             control socket.
           </p>
@@ -1983,6 +1983,26 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.count</span> — the number of parse diagnostics
                 (0 is a clean reload). App-global; the same path as File ▸ Reload Keymap. See
                 <a href="/docs#keymap" style="color: #6d82f3">Customizing keys</a> for the file format.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl keymap list
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">keymap.list</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Show the resolved keymap and the live menu key equivalents.
+                <strong style="color: #bfbab0">Returns</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.keymap</span> with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">path</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">actions</span> (every built-in with the chord it
+                resolved to, marked when a <span style="font-family: &quot;JetBrains Mono&quot;, monospace">map</span> line moved it
+                off its default), <span style="font-family: &quot;JetBrains Mono&quot;, monospace">commands</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">diagnostics</span> (line and message, not just the
+                count), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">menu</span> — the key equivalents the menu
+                bar is actually dispatching. The last two lists can disagree, which is how you tell a keymap problem from a menu
+                one when a binding will not fire. App-global; takes no target or arguments.
               </p>
             </div>
           </section>

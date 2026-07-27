@@ -41,6 +41,7 @@ final class MockControlActions: ControlActions {
         case dashboard(targets: [String], window: String?, close: Bool, fontMode: DashboardFontMode, mru: Bool)
         case font(target: String?, window: String?, pane: String?, String)
         case keymapReload
+        case keymapList
         case configReload
         case notify(target: String?, window: String?, title: String?, body: String)
         case themeSet(String?)
@@ -102,6 +103,7 @@ final class MockControlActions: ControlActions {
     var nextCollapseResponse = ControlResponse(ok: true)
     var nextFontResponse = ControlResponse(ok: true)
     var nextNotifyResponse = ControlResponse(ok: true)
+    var nextKeymapListResponse = ControlResponse(ok: true)
     var nextKeymapResponse = ControlResponse(ok: true)
     var nextConfigResponse = ControlResponse(ok: true)
     var nextThemeSetResponse = ControlResponse(ok: true)
@@ -310,6 +312,11 @@ final class MockControlActions: ControlActions {
     func reloadKeymap() -> ControlResponse {
         calls.append(.keymapReload)
         return nextKeymapResponse
+    }
+
+    func listKeymap() -> ControlResponse {
+        calls.append(.keymapList)
+        return nextKeymapListResponse
     }
 
     func reloadGhosttyConfig() -> ControlResponse {

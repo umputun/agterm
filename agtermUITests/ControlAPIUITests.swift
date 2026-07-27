@@ -1620,6 +1620,44 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertGreaterThanOrEqual(count, 1, "a broken keymap line should yield at least one diagnostic: \(response)")
     }
 
+    // keymap.list is the read side of keymap.reload: what the keymap resolved, plus what the menu bar is
+    // actually dispatching. Seed an override and a custom command, then assert both halves came back and
+    // that the override moved the chord.
+    func testKeymapListReportsResolvedChordsAndLiveMenu() throws {
+        try relaunch(withKeymap: "map cmd+e close_session\ncommand \"Bound\" cmd+shift+e echo hi\n")
+        let response = try sendCommand(#"{"cmd":"keymap.list"}"#)
+        XCTAssertEqual(response["ok"] as? Bool, true, "keymap.list should succeed: \(response)")
+        let result = try XCTUnwrap(response["result"] as? [String: Any], "keymap.list should carry a result")
+        let keymap = try XCTUnwrap(result["keymap"] as? [String: Any], "keymap.list should carry a keymap payload")
+
+        let actions = try XCTUnwrap(keymap["actions"] as? [[String: Any]], "the payload should list actions")
+        XCTAssertGreaterThan(actions.count, 40, "every built-in should be listed, not just the bound ones")
+        let close = try XCTUnwrap(actions.first { $0["action"] as? String == "close_session" },
+                                  "close_session should be listed: \(actions)")
+        XCTAssertEqual(close["chord"] as? String, "cmd+e", "the override should be reflected: \(close)")
+        XCTAssertEqual(close["overridden"] as? Bool, true, "an overridden action should be marked: \(close)")
+
+        let commands = try XCTUnwrap(keymap["commands"] as? [[String: Any]], "the payload should list custom commands")
+        XCTAssertEqual(commands.first?["name"] as? String, "Bound")
+        XCTAssertEqual(commands.first?["shortcut"] as? String, "cmd+shift+e")
+
+        // the live half: the menu bar carries real key equivalents, rendered in keymap syntax so the two
+        // lists compare directly. This is what a model-only listing cannot show.
+        let menu = try XCTUnwrap(keymap["menu"] as? [[String: Any]], "the payload should carry the live menu")
+        XCTAssertFalse(menu.isEmpty, "the menu bar should report key equivalents: \(menu)")
+        let chords = menu.compactMap { $0["chord"] as? String }
+        XCTAssertTrue(chords.contains("cmd+n"), "a stable built-in chord should appear in the menu: \(chords)")
+        // arrows and return arrive from AppKit as function-key/control CHARACTERS. They have to be
+        // rendered as the keymap's named keys or the chord comes back with the key missing (`cmd+opt+`)
+        // and cannot be compared against the action list above, which is the whole point of this section.
+        XCTAssertTrue(chords.contains("cmd+opt+up"), "an arrow chord should render its named key: \(chords)")
+        XCTAssertTrue(chords.contains("cmd+shift+return"), "a return chord should render its named key: \(chords)")
+        // the seeded override moved Close Session to ⌘E, and the stock File ▸ Close then holds ⌘W — the
+        // exact pairing that made #296 diagnosable at a glance.
+        XCTAssertTrue(chords.contains("cmd+e"), "the rebound Close Session chord should show in the menu: \(chords)")
+        XCTAssertNotNil(keymap["path"] as? String, "the payload should name the keymap file")
+    }
+
     // MARK: - Config
 
     // config.reload re-reads the agterm-scoped ghostty.conf and returns the config-diagnostic count.

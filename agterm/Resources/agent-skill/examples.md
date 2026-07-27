@@ -755,3 +755,38 @@ agtermctl theme set --dark none              # stop tracking; the light theme st
 agtermctl tree --json --window work          # the "work" window's tree (prefix match)
 agtermctl session new --window work --cwd "$HOME"
 ```
+
+## Checking a keybinding actually took effect
+
+`keymap.conf` says one thing; the menu bar dispatches another. After a rebind, verify both.
+
+```bash
+agtermctl keymap reload                      # apply the edited file (prints the diagnostic count)
+agtermctl keymap list                        # the resolved chords AND the live menu equivalents
+```
+
+Confirm one action's chord, then confirm the menu is really carrying it:
+
+```bash
+agtermctl keymap list --json \
+  | jq -r '.result.keymap.actions[] | select(.action == "close_session") | .chord'
+agtermctl keymap list --json \
+  | jq -r '.result.keymap.menu[] | select(.chord == "cmd+w") | "\(.menu) > \(.title)  [\(.selector)]"'
+```
+
+If those disagree, the keymap is fine and the menu is stale or the chord was taken: SwiftUI rebuilds the
+menu only on the next app activation, so switch away and back before concluding anything, and relaunch if
+it persists.
+
+Find every chord already in use before picking one for a new binding:
+
+```bash
+agtermctl keymap list --json | jq -r '.result.keymap.actions[].chord | select(. != null)' | sort
+agtermctl keymap list --json | jq -r '.result.keymap.menu[].chord' | sort -u
+```
+
+Read the parse problems in full rather than just their count:
+
+```bash
+agtermctl keymap list --json | jq -r '.result.keymap.diagnostics[] | "line \(.line): \(.message)"'
+```

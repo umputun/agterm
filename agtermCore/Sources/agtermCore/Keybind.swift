@@ -57,6 +57,32 @@ public func namedKey(forKeyCode keyCode: UInt16) -> String? {
     }
 }
 
+/// The named key for a menu item's key-equivalent CHARACTER, or `nil` for an ordinary printable key.
+///
+/// The character counterpart of `namedKey(forKeyCode:)`, for projecting live `NSMenuItem` key
+/// equivalents back into keymap syntax: a menu item carries a character rather than a virtual key code,
+/// and AppKit spells the arrows with private-use function-key scalars and return/tab/space/delete with
+/// control characters. Without this a menu chord renders as `cmd+opt+` with the key missing, which
+/// cannot be compared against the `cmd+opt+up` the keymap resolved.
+///
+/// Kept host-free by matching the scalar values rather than the AppKit constants, so `agtermCore` stays
+/// AppKit-free; the values are the documented `NSUpArrowFunctionKey` family.
+public func namedKey(forKeyEquivalent character: String) -> String? {
+    let scalars = character.unicodeScalars
+    guard scalars.count == 1, let scalar = scalars.first else { return nil }
+    switch scalar.value {
+    case 0xF700: return "up"
+    case 0xF701: return "down"
+    case 0xF702: return "left"
+    case 0xF703: return "right"
+    case 0x0D, 0x03: return "return" // carriage return, and the numeric keypad's enter
+    case 0x09: return "tab"
+    case 0x20: return "space"
+    case 0x08, 0x7F: return "delete" // backspace, and forward delete
+    default: return nil
+    }
+}
+
 /// Whether a chord is owned by the app's always-on `NSEvent` monitors (NOT a menu key-equivalent), so a
 /// keybind that starts with it would dead-race the monitor and must be rejected. This MIRRORS the
 /// monitors' real predicates, not a fixed list:

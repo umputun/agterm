@@ -166,7 +166,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 67-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 68-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -244,7 +244,7 @@ paths:
   rules, then remaining targets resolve inside that same store so one command never mutates multiple windows.
   The top-level `target` also carries the first explicit batch target so a new CLI talking to a still-running
   pre-batch server degrades to a named session instead of accidentally acting on `active`.
-- **Command catalog (67 commands):**
+- **Command catalog (68 commands):**
   - `tree`
   - `events.read` (the bounded per-app-run control event ring behind `agtermctl events`)
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`/`workspace.filter`/`workspace.collapse`/`workspace.expand`
@@ -256,7 +256,7 @@ paths:
   - `notify`
   - `font.inc`/`font.dec`/`font.reset`
   - `window.new`/`window.list`/`window.select`/`window.close`/`window.rename`/`window.delete`/`window.resize`/`window.move`/`window.zoom`/`window.fullscreen`/`window.minimize` (see the Windows section)
-  - `keymap.reload` (see the Keymap section)
+  - `keymap.reload`/`keymap.list` (see the Keymap section)
   - `config.reload` (see the Settings section)
   - `theme.set`/`theme.list` (see the Theme picker section)
   - `restore.clear` (see the Settings section)
@@ -1152,6 +1152,32 @@ paths:
   in `ControlServer`, (3) the `keymap reload` subcommand in `agtermctlKit`,
   (4) round-trip tests in `ControlProtocolTests` plus the e2e in `ControlAPIUITests`.
   See the Keymap section for the parser/menu/monitor design.
+  `keymap.list` is `keymap.reload`'s READ side, and it reports TWO things that can disagree:
+  `result.keymap.actions` is every `BuiltinAction` with the chord the keymap RESOLVED for it (kitty
+  syntax, `overridden: true` when a `map` moved it off its default, keyless actions listed with no
+  chord), while `result.keymap.menu` is what the menu bar is actually DISPATCHING — every live
+  `NSMenuItem` key equivalent, with its menu, title and Objective-C selector.
+  The menu half is the point: SwiftUI defers its menu rebuild to the next app activation and resolves a
+  chord collision by unbinding agterm's own item, so a chord can be correct in `actions` and wrong in
+  `menu`, and a model-only listing would report a clean keymap while ⌘W closes the window.
+  Also carries `path` (which `keymap.conf` produced it), `commands` (custom commands, `shortcut` omitted
+  for a palette-only one), and `diagnostics` (line + message — `keymap.reload` returns only their COUNT).
+  App-global like `keymap.reload`, so no `--window` selector, and it takes no target or args.
+  The projection is host-free (`ControlKeymap.project`, `agtermCore/ControlKeymap.swift`); only the live
+  `menu` is app-side, since `NSApp.mainMenu` is AppKit.
+  Menu chords are rendered through the host-free `namedKey(forKeyEquivalent:)` (the character twin of
+  `namedKey(forKeyCode:)`) so an arrow or return prints `cmd+opt+up`, not `cmd+opt+` with the key
+  missing — without it the two lists cannot be compared, which is the command's whole job.
+  The globe/fn modifier renders as `fn+` even though the grammar has no such modifier: this section
+  reports reality, and dropping it would print AppKit's own fn-modified items as bare unmodified keys.
+  Four-point keep-in-sync audit for `keymap.list`: (1) `case keymapList = "keymap.list"` +
+  `ControlResult.keymap` + the `ControlKeymap`/`ControlKeymapAction`/`ControlKeymapCommand`/
+  `ControlKeymapDiagnostic`/`ControlKeymapMenuItem` types in `agtermCore`, (2) the `.keymapList`
+  dispatcher arm → `ControlActions.listKeymap` (app-side `ControlServer+AppCommands`, which supplies
+  `liveMenuKeyEquivalents()`), (3) the `keymap list` subcommand in `agtermctlKit` + `SocketClient.formatKeymap`,
+  (4) `ControlKeymapTests` (projection + round-trip) + `KeybindTests` (the character map pinned against
+  `bindableNamedKeys`) + `ControlDispatcherTests` (routing) + `CommandsTests` (CLI mapping) +
+  `SocketClientTests` (rendering) + the e2e `testKeymapListReportsResolvedChordsAndLiveMenu`.
   `config.reload` re-reads the agterm-scoped `ghostty.conf` and returns the ghostty config-diagnostic
   count in `result.count` (0 reads as a clean reload; `agtermctl config reload` prints `ok` then,
   else `N diagnostic(s)`).
@@ -1671,7 +1697,7 @@ paths:
   arguments, and the `tree` read-back field, grouped into its command family's section.
   A new `Command` case REQUIRES a new `site/commands.html` entry (a changed command an updated one, a
   removed command a deleted one), in lockstep with the agent skill above and `README.md`/`site/docs.html`;
-  the page's "67 commands" copy must track the catalog count.
+  the page's "68 commands" copy must track the catalog count.
   A bump is a grep, not a single edit: the count sits in FOUR spots in `commands.html` alone (the
   `description` `<meta>`, the `og:description` and `twitter:description` `<meta>`s, plus the body copy),
   and again in `README.md`, `site/docs.html`, the bundled `SKILL.md`, and the `SkillInstallTests`

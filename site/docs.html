@@ -1115,7 +1115,7 @@
               "
             >
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0">
-                Looking for the full list? All 67 commands, with every argument, return value, and error, live on the
+                Looking for the full list? All 68 commands, with every argument, return value, and error, live on the
                 <a href="/commands" style="color: #6d82f3; font-weight: 500">Command reference →</a>
               </p>
             </div>
@@ -1642,6 +1642,13 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl keymap reload</span>. A
               malformed line never discards the rest — it surfaces in the diagnostics list in Settings ▸ Key Mapping while the good
               lines still apply.
+            </p>
+            <p style="font-size: 15.5px; line-height: 1.75; color: #cbc6bc; margin: 0 0 18px">
+              To check what is actually bound,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl keymap list</span> prints every
+              built-in with the chord it resolved to, the custom commands, each diagnostic in full, and the key equivalents the menu
+              bar is really carrying. If a binding will not fire, compare the last two: an action whose chord no menu item holds is a
+              menu problem, not a keymap one.
             </p>
             <h3
               style="

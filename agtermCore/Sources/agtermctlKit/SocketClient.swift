@@ -145,6 +145,9 @@ struct SocketClient {
             return formatThemes(themes, current: response.result?.theme, sync: response.result?.sync ?? false,
                                 light: response.result?.light, dark: response.result?.dark)
         }
+        if let keymap = response.result?.keymap {
+            return formatKeymap(keymap)
+        }
         if let text = response.result?.text {
             return text
         }
@@ -180,6 +183,36 @@ struct SocketClient {
         guard sync else { return body }
         let header = "syncing with macOS appearance — light: \(light ?? "default ghostty"), dark: \(dark ?? "default ghostty")"
         return header + "\n" + body
+    }
+
+    /// Render the `keymap.list` payload as sections: the resolved built-ins, then custom commands, parse
+    /// diagnostics, and the live menu key equivalents (no trailing newline). An overridden built-in is
+    /// marked `*`, and a keyless one prints `-` rather than being dropped, so the listing is the full
+    /// action set.
+    ///
+    /// The menu section is the point of the command: comparing it against the actions above is what shows
+    /// a chord the keymap resolved but the menu is not carrying. Menu items are printed in menu-bar order.
+    static func formatKeymap(_ keymap: ControlKeymap) -> String {
+        var lines = ["keymap: \(keymap.path)", "", "actions:"]
+        let width = keymap.actions.map(\.action.count).max() ?? 0
+        for action in keymap.actions {
+            let mark = action.overridden == true ? "*" : " "
+            let name = action.action.padding(toLength: max(width, action.action.count), withPad: " ", startingAt: 0)
+            lines.append("  \(mark) \(name)  \(action.chord ?? "-")")
+        }
+        if !keymap.commands.isEmpty {
+            lines.append(contentsOf: ["", "commands:"])
+            lines.append(contentsOf: keymap.commands.map { "    \($0.name)  \($0.shortcut ?? "(palette only)")" })
+        }
+        if !keymap.diagnostics.isEmpty {
+            lines.append(contentsOf: ["", "diagnostics:"])
+            lines.append(contentsOf: keymap.diagnostics.map { "    line \($0.line): \($0.message)" })
+        }
+        if let menu = keymap.menu {
+            lines.append(contentsOf: ["", "menu:"])
+            lines.append(contentsOf: menu.map { "    \($0.chord)  \($0.menu) ▸ \($0.title)" })
+        }
+        return lines.joined(separator: "\n")
     }
 
     /// Render the `window.list` payload as one `id  name  [open]  [active]` line per window (no trailing

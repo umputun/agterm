@@ -7,7 +7,7 @@ import agtermCore
 struct Keymap: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Keymap commands.",
-        subcommands: [Reload.self]
+        subcommands: [Reload.self, List.self]
     )
 
     struct Reload: RequestCommand {
@@ -16,6 +16,22 @@ struct Keymap: ParsableCommand {
         @OptionGroup var options: BasicOptions
 
         func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .keymapReload) }
+    }
+
+    struct List: RequestCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Show the resolved keymap and the live menu key equivalents.",
+            discussion: """
+            Prints every built-in with the chord the keymap resolved for it, the custom commands, any \
+            parse diagnostics, and the key equivalents the menu bar is actually carrying. The last \
+            section is what makes a stale or hijacked chord visible: SwiftUI rebuilds the menu only on \
+            the next app activation, so a chord can be right in the keymap and wrong in the menu.
+            """
+        )
+        // keymap.list is app-global like keymap.reload, so no `--window` selector.
+        @OptionGroup var options: BasicOptions
+
+        func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .keymapList) }
     }
 }
 

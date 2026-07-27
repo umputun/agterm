@@ -58,6 +58,11 @@ paths:
   not stick (the `removeNativeFullScreenMenuItem` pattern).
   ⌘W is the only chord asserted this way because it is the only built-in chord with a stock competitor;
   every other rebind takes effect on the next activation.
+  **Diagnose this class with `agtermctl keymap list`, not by reading the file.**
+  It returns BOTH what the keymap resolved (`actions`) and what the menu bar is dispatching (`menu`), so a
+  model-correct-but-menu-stale chord is one command away instead of an instrumented build.
+  Its menu chords go through the host-free `namedKey(forKeyEquivalent:)` so arrows and return render as
+  the same named keys the file uses and the two lists compare as strings; see the control-api rule.
   **A change affecting menu shortcuts needs a RELOAD-path test — seeding `keymap.conf` before launch does
   not exercise reload.**
   Cover both in `agtermTests/CloseSessionChordTests.swift` and

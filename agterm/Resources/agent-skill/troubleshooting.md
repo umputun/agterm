@@ -13,7 +13,13 @@ You are inside agterm (`AGTERM_ENABLED=1`). Use:
 
 - **Live state** — `agtermctl tree --json`, `agtermctl window list --json`.
 - **Keymap problems** — `agtermctl keymap reload` prints the parse-diagnostic count (`0` = clean). A
-  non-zero count means `keymap.conf` has problems; the user sees the list in Settings ▸ Key Mapping.
+  non-zero count means `keymap.conf` has problems; `agtermctl keymap list` prints each one with its line
+  and message, and the user also sees the list in Settings ▸ Key Mapping.
+- **A keybinding does not fire** — `agtermctl keymap list` shows the chord each action resolved to AND the
+  key equivalents the menu bar is actually dispatching. If the action's `chord` looks right but no `menu`
+  entry carries it (or a different item does), the keymap is fine and the menu is the problem: SwiftUI
+  rebuilds the menu only on the next app activation, so switch to another app and back, then relaunch if it
+  persists.
 - **Ghostty settings** - `agtermctl config reload` re-reads the ghostty config and prints the diagnostic
   count (`0` = clean). The count covers every config source, not just `ghostty.conf` (libghostty does not
   record which file a diagnostic came from), so check the Console log for the offending line. `ghostty.conf`

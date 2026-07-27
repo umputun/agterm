@@ -1086,6 +1086,15 @@ struct CommandsTests {
         #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["keymap", "reload", "--window", "w1"]) }
     }
 
+    @Test func keymapList() throws {
+        #expect(try request(["keymap", "list"]) == ControlRequest(cmd: .keymapList))
+    }
+
+    @Test func keymapListRejectsWindowSelector() {
+        // keymap.list is app-global like keymap.reload, so --window is meaningless.
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["keymap", "list", "--window", "w1"]) }
+    }
+
     @Test func configReload() throws {
         #expect(try request(["config", "reload"]) == ControlRequest(cmd: .configReload))
     }
