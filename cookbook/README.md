@@ -1,0 +1,18 @@
+# agterm cookbook
+
+Installable `agtermctl` workflows. Each recipe is a directory holding a README and, where it needs one, its scripts: what it does, what it needs, how to set it up, and where it stops. They are written to be copied into your own setup and edited, not only read.
+
+Recipes come from other people as well as the maintainer. Every one is reviewed before it is accepted, but they are shell scripts you run on your own machine against your own sessions, and several close sessions or delete workspaces, so read a recipe before you run it.
+
+## Recipes
+
+| recipe | what it does | needs |
+|---|---|---|
+
+Every recipe needs `agtermctl` on your PATH; **Help ▸ Install Command Line Tool…** puts it there. Some also need `jq`, `fzf`, or a particular shell, and each recipe's *Requirements* section says which, along with the agterm version it was tested against. Recipes are snapshots rather than a maintained surface: the control API grows by addition, so they rarely break, and one that does gets fixed when it is reported.
+
+## Contributing a recipe
+
+[CONTRIBUTING.md](CONTRIBUTING.md) in this directory has the rules: ship a workflow you actually run, one kebab-case directory, the six-heading README template, and an index row in the same pull request.
+
+For the command surface itself, the [command reference](https://agterm.com/commands) documents every `agtermctl` command with its arguments and return shape. The bundled agent skill teaches that surface to a coding agent instead of a reader, and carries its own worked examples in [`agterm/Resources/agent-skill/examples.md`](../agterm/Resources/agent-skill/examples.md); install it from **Help ▸ Install Agent Skill…**.
