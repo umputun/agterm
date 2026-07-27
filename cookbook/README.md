@@ -11,6 +11,8 @@ Recipes come from other people as well as the maintainer. Every one is reviewed 
 | [project-switcher](project-switcher/) | show only one project's workspaces in the sidebar | 0.18.0, jq |
 | [park-and-resume](park-and-resume/) | close a project's workspaces, bring them back later | 0.16.0, jq |
 | [window-per-project](window-per-project/) | park every other window in the Dock and raise one | 0.17.1, jq |
+| [fzf-path-picker](fzf-path-picker/) | pick a path with fzf and type it into the shell | 0.8.0, fzf, fd, zsh |
+| [overlay-and-split](overlay-and-split/) | keymap lines: a stateful split toggle and TUI overlays | 0.10.0, jq |
 
 Every recipe needs `agtermctl` on your PATH; **Help ▸ Install Command Line Tool…** puts it there. Some also need `jq`, `fzf`, or a particular shell, and each recipe's *Requirements* section says which, along with the agterm version it was tested against. Recipes are snapshots rather than a maintained surface: the control API grows by addition, so they rarely break, and one that does gets fixed when it is reported.
 
