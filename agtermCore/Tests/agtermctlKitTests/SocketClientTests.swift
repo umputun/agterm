@@ -143,6 +143,24 @@ struct SocketClientTests {
         #expect(out.contains("line 7: unknown action"), "a real line number is still shown")
     }
 
+    // a disabled item's chord is inert, and the default (non-JSON) output is the documented human
+    // workflow — leaving the flag out of the rendering drops the one fact that explains a dead binding.
+    @Test func formatsKeymapMarkingDisabledMenuItems() {
+        let payload = ControlKeymap.project(
+            keymap: Keymap(builtinOverrides: [:], commands: []), diagnostics: [], path: "/tmp/keymap.conf",
+            menu: [ControlKeymapMenuItem(menu: "Navigate", title: "Focus Left Pane", chord: "cmd+opt+left",
+                                         selector: "menuAction:", enabled: false),
+                   ControlKeymapMenuItem(menu: "File", title: "New Session", chord: "cmd+n",
+                                         selector: "menuAction:")]
+        )
+
+        let out = SocketClient.formatKeymap(payload)
+
+        #expect(out.contains("cmd+opt+left  Navigate ▸ Focus Left Pane  (disabled)"))
+        #expect(out.contains("cmd+n  File ▸ New Session\n") || out.hasSuffix("cmd+n  File ▸ New Session"),
+                "an enabled row carries no marker")
+    }
+
     @Test func formatsKeymapWithoutOptionalSectionsWhenEmpty() {
         let payload = ControlKeymap.project(keymap: Keymap(builtinOverrides: [:], commands: []),
                                             diagnostics: [], path: "/tmp/keymap.conf")

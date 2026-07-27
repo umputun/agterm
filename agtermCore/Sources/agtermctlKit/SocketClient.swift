@@ -214,7 +214,12 @@ struct SocketClient {
         }
         if let menu = keymap.menu {
             lines.append(contentsOf: ["", "menu:"])
-            lines.append(contentsOf: menu.map { "    \($0.chord)  \($0.menu) ▸ \($0.title)" })
+            // mark a disabled item: its chord is inert (AppKit consumes the key and fires nothing, not
+            // even a same-chord sibling), and the default non-JSON output is the documented human
+            // workflow — an unmarked row reads as a live binding.
+            lines.append(contentsOf: menu.map {
+                "    \($0.chord)  \($0.menu) ▸ \($0.title)" + ($0.enabled == false ? "  (disabled)" : "")
+            })
         }
         return lines.joined(separator: "\n")
     }
