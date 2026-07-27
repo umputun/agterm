@@ -43,8 +43,25 @@ paths:
   ride AppKit menu-key-equivalents: each built-in `Button` in `agtermApp`'s `.commands` reads `settingsModel.keymap.equivalent(for: .action)`
   via the `shortcut(for:)` helper (`Chord` → SwiftUI `KeyboardShortcut?`,
   applied only when non-nil so a keyless action stays keyless until mapped).
-  Because `keymap` is `@Observable` and `.commands` reads it, the menu shortcuts re-render on reload
-  — no notification needed for the menu.
+  **`keymap` being `@Observable` does NOT make the menu track it live — do not assume a reload reaches the
+  key equivalents.**
+  SwiftUI defers its menu rebuild to the next app ACTIVATION, so after a `keymap reload` the live
+  `NSMenuItem` key equivalents keep the OLD chords until the app is deactivated and reactivated.
+  The rebuild is also where SwiftUI's conflict resolution runs, and it resolves a collision by unbinding
+  **agterm's** item, never the stock one.
+  So once the stock File ▸ Close (`performClose:`) holds ⌘W, giving `close_session` the chord back leaves
+  agterm's item with NO chord and ⌘W closing the whole window.
+  `AppDelegate.applyCloseSessionChord` asserts that split from AppKit: clear the stock item's ⌘W while the
+  keymap gives the chord to `close_session`, restore it while it does not.
+  Re-run it at launch, on `.agtermKeymapChanged`, on `didBecomeActive` (async, so it lands after SwiftUI's
+  rebuild), and on menu tracking — SwiftUI re-applies its resolution on every rebuild, so a one-shot does
+  not stick (the `removeNativeFullScreenMenuItem` pattern).
+  ⌘W is the only chord asserted this way because it is the only built-in chord with a stock competitor;
+  every other rebind takes effect on the next activation.
+  **A change affecting menu shortcuts needs a RELOAD-path test — seeding `keymap.conf` before launch does
+  not exercise reload.**
+  Cover both in `agtermTests/CloseSessionChordTests.swift` and
+  `KeymapUITests.testCloseSessionReclaimsCommandWAfterReload`.
   Custom commands ride an app-wide `NSEvent` local `.keyDown` monitor in `CustomCommandRunner` (the same
   monitor pattern as the Ctrl-Tab switcher and Ctrl-1/2): it maps `NSEvent` → `Chord`,
   feeds a `KeybindMatcher` (firing simple chords + leader sequences like `ctrl+a>g`,

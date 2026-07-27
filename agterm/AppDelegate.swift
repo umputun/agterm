@@ -78,11 +78,89 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AppDelegate.removeNativeFullScreenMenuItem()
         NotificationCenter.default.addObserver(self, selector: #selector(menuBeganTracking),
                                                name: NSMenu.didBeginTrackingNotification, object: nil)
+        // SwiftUI defers its menu rebuild to the next app ACTIVATION, and that rebuild is what lets the
+        // stock File ▸ Close claim ⌘W. Reconcile after it (async, so we run once SwiftUI has rebuilt) and
+        // on every keymap change, so a `keymap reload` takes effect on the chord immediately.
+        NotificationCenter.default.addObserver(self, selector: #selector(appDidBecomeActive),
+                                               name: NSApplication.didBecomeActiveNotification, object: nil)
+        NotificationCenter.default.addObserver(self, selector: #selector(keymapChanged),
+                                               name: .agtermKeymapChanged, object: nil)
+        reconcileCloseSessionChord()
+    }
+
+    @objc private func appDidBecomeActive(_: Notification) {
+        DispatchQueue.main.async { [weak self] in
+            MainActor.assumeIsolated { self?.reconcileCloseSessionChord() }
+        }
+    }
+
+    @objc private func keymapChanged(_: Notification) {
+        MainActor.assumeIsolated { reconcileCloseSessionChord() }
     }
 
     @objc private func menuBeganTracking(_: Notification) {
-        MainActor.assumeIsolated { AppDelegate.removeNativeFullScreenMenuItem() }
+        MainActor.assumeIsolated {
+            AppDelegate.removeNativeFullScreenMenuItem()
+            reconcileCloseSessionChord()
+        }
     }
+
+    /// Keep ⌘W with agterm's File ▸ Close Session whenever the keymap says it owns that chord.
+    ///
+    /// SwiftUI hands the stock File ▸ Close (`performClose:`) a ⌘W key equivalent the moment agterm's own
+    /// item vacates the chord — a `map cmd+<other> close_session` plus `keymap reload` is enough. Putting
+    /// `close_session` back on ⌘W does NOT reclaim it: SwiftUI resolves the collision by dropping the
+    /// shortcut from its OWN item, leaving Close Session unbound and ⌘W closing the whole window until the
+    /// app is relaunched (issue #296). So agterm asserts the split itself rather than leaving it to
+    /// SwiftUI's one-time conflict resolution. Reconciled from the AppKit side, like
+    /// `removeNativeFullScreenMenuItem`, because there is no SwiftUI API for either half.
+    private func reconcileCloseSessionChord() {
+        guard let keymap = settingsModel?.keymap else { return }
+        AppDelegate.applyCloseSessionChord(keymap, in: NSApp.mainMenu)
+    }
+
+    /// Split ⌘W between agterm's Close Session item and the stock `performClose:` one, following `keymap`.
+    /// Operates on whichever submenu holds `performClose:`; a menu without both items is left alone.
+    ///
+    /// The stock item may hold ⌘W only while NO built-in resolves to it. Deciding that from `close_session`
+    /// alone is not enough: `parseKeymap` rejects a chord only when two DISTINCT actions resolve to it, so
+    /// `map cmd+e close_session` plus `map cmd+w new_session` is a clean keymap in which another action
+    /// legitimately owns ⌘W, and arming the stock item there would advertise the chord twice and let
+    /// SwiftUI's next rebuild unbind agterm's own item — the very failure this reconcile exists to prevent.
+    ///
+    /// agterm's item is a SwiftUI closure button with no distinguishing selector, so it can only be matched
+    /// by title — scoping that match to the submenu that owns `performClose:` keeps it narrow.
+    static func applyCloseSessionChord(_ keymap: Keymap, in mainMenu: NSMenu?) {
+        let closeSessionOwns = keymap.equivalent(for: .closeSession) == commandW
+        let anyBuiltinOwns = BuiltinAction.allCases.contains { keymap.equivalent(for: $0) == commandW }
+        let closeSelector = #selector(NSWindow.performClose(_:))
+        for topItem in mainMenu?.items ?? [] {
+            guard let submenu = topItem.submenu,
+                  let stockClose = submenu.items.first(where: { $0.action == closeSelector }),
+                  let ours = submenu.items.first(where: { $0.title == closeSessionItemTitle })
+            else { continue }
+            // our item carries ⌘W exactly while close_session owns it. Clearing a stale one matters because
+            // SwiftUI defers its rebuild to the next activation, so straight after a reload that rebound
+            // close_session away our item still advertises the chord the stock item is about to take.
+            if closeSessionOwns {
+                ours.keyEquivalent = "w"
+                ours.keyEquivalentModifierMask = .command
+            } else if hasCommandW(ours) {
+                ours.keyEquivalent = ""
+                ours.keyEquivalentModifierMask = []
+            }
+            stockClose.keyEquivalent = anyBuiltinOwns ? "" : "w"
+            stockClose.keyEquivalentModifierMask = anyBuiltinOwns ? [] : .command
+        }
+    }
+
+    private static func hasCommandW(_ item: NSMenuItem) -> Bool {
+        item.keyEquivalent == "w" && item.keyEquivalentModifierMask == .command
+    }
+
+    /// The File-menu title of agterm's own close-the-session item, matched by `applyCloseSessionChord`.
+    static let closeSessionItemTitle = "Close Session"
+    private static let commandW = Chord(mods: [.command], key: "w")
 
     /// Remove AppKit's auto-injected fullscreen menu item — the one whose action is `toggleFullScreen:`.
     /// agterm's own item uses a SwiftUI closure action (a different selector), so only the native item

@@ -6,7 +6,9 @@ extension agtermApp {
     /// The active SwiftUI shortcut for a built-in action, driven by the keymap: the user override when
     /// one is `map`ped, else the action's shipped default. `nil` only for a keyless action, which stays
     /// keyless until the user maps a chord.
-    /// Because `keymap` is `@Observable`, reading it here re-renders the menu shortcut on a reload.
+    /// `keymap` is `@Observable`, but SwiftUI does not rebuild the menu when it changes — it defers to the
+    /// next app activation, so a reload leaves the live key equivalents stale until then.
+    /// ⌘W is asserted from AppKit instead, by `AppDelegate.applyCloseSessionChord`.
     private func shortcut(for action: BuiltinAction) -> KeyboardShortcut? {
         settingsModel.keymap.equivalent(for: action).map(Self.toShortcut)
     }
