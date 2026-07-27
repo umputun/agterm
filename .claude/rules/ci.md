@@ -27,6 +27,8 @@ paths:
   All macOS jobs run on `macos-26`, and workflow concurrency cancels an older run for the same ref.
   There is NO `release.yml` — releases are cut locally; see `.claude/rules/release.md`.
 - **A second paths filter, `cookbook`, gates the one job that has nothing to do with Swift.**
+  The `changes` job carries a second output, `cookbook`, from a `cookbook: ["cookbook/**"]` filter,
+  and the `cookbook` job is `if: needs.changes.outputs.cookbook == 'true'`.
   `cookbook/**` matches no entry in the `swift` filter,
   so a recipe-only change runs zero macOS jobs and only the `cookbook` job on `ubuntu-latest`.
   Editing `ci.yml` itself still trips the `swift` filter, so a change to this workflow runs the macOS jobs too.
@@ -40,6 +42,11 @@ paths:
   `zsh` is NOT on that image, so `zsh -n` over the `.zsh` recipes stays a local check;
   the shebang check is the only thing in CI that looks at a `.zsh` file at all.
 - **Several details of the `cookbook` job are load-bearing and must not be "simplified".**
+  The explicit `shell: bash` on the layout step is one of them.
+  GitHub's default `run` shell is `bash -e` WITHOUT `pipefail`,
+  while `shell: bash` runs the step under `bash -eo pipefail`,
+  which is what the block was verified against and what makes a failed `find` inside a pipeline red the step.
+  It also guarantees the bash-only process substitution rather than leaving it to default-shell resolution.
   The `[ -d "$d" ] || continue` guard keeps the job green when `cookbook/` holds no recipe subdirectories:
   without it `cookbook/*/` does not expand, `basename` yields `*`,
   and the check errors on a directory named `*`.

@@ -411,6 +411,19 @@ always in context:
   It MUST gain, lose, or update an entry for EVERY control-command add/change/remove, in lockstep with
   the agent skill and `.claude/rules/control-api.md` (a new `Command` case owes a new commands.html entry).
   See the `## Website` section below for the deploy model.
+- **The cookbook (`cookbook/`) is deliberately NOT a keep-in-sync surface — do not add it as a sixth.**
+  It is full of `agtermctl` invocations, so the reflex on a control-API change is to sweep it like the skill
+  and the site; that reflex is wrong here, and the exemption is a decision, not an oversight.
+  Recipes are pinned snapshots: each one's *Requirements* names the agterm version it was written against,
+  and that pin is the contract.
+  A recipe is fixed reactively — when someone reports it broke — and dropped if it stays broken and nobody
+  claims it.
+  So a control-API change carries NO obligation to sweep `cookbook/`, and a PR is not incomplete for
+  leaving it alone.
+  The control API grows by addition, so real breakage is rare, and an honest reactive contract beats a
+  per-feature tax that would quietly stop being paid.
+  The `cookbook` CI job (`.claude/rules/ci.md`) checks layout, index, headings and shell hygiene only;
+  nothing checks a recipe against the current command surface.
 
 ## Website
 
