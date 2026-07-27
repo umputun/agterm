@@ -4,13 +4,14 @@
 // readers and AI tools; it deliberately does not advertise an editable field, so it does not engage
 // dictation (their voice-control issue is still open). This file takes the opposite, dictation-specific
 // tack: it advertises the surface as an editable text area so hold-to-dictate widgets anchor to it, but
-// gated to the single on-screen focused pane so it does not regress screen readers or expose background
-// sessions (see the gating notes below).
+// gated to the on-screen pane(s) so it does not regress screen readers or expose background sessions
+// (see the gating notes below). Only the WRITE path is additionally focus-gated.
 
 import AppKit
 
 /// Exposes the Metal-backed terminal surface to the macOS Accessibility (AX) system as an
-/// editable text area — but only for the pane that is actually on screen and focused.
+/// editable text area — but only for the pane(s) actually on screen. Exposure is NOT focus-gated
+/// (a visible split exposes both panes); only the write path and the settable advertisement are.
 ///
 /// The surface renders its own contents on the GPU and is otherwise deliberately absent from
 /// the a11y tree (see `DashboardView` — "the Metal-backed surface is not in the a11y tree").
@@ -29,7 +30,7 @@ import AppKit
 ///
 /// Two deliberate scoping choices keep this from harming non-dictation AX clients:
 ///
-/// - **Only the on-screen focused pane is exposed** (`axExposed`, below). The deck eagerly realizes
+/// - **Only the on-screen pane(s) are exposed** (`axExposed`, below). The deck eagerly realizes
 ///   every session's surface, so gating merely on `!viewOnly` would advertise one editable "Terminal"
 ///   per realized surface — N overlapping empty text areas over the visible one, and a writable AX
 ///   target for every *background* session. Gating on `deckVisible` (the same "on-screen pane, not
@@ -42,13 +43,12 @@ import AppKit
 ///   editable field so dictation engages; the value it reads back is empty.
 ///
 /// Known limitation: `deckVisible` is not split-focus-gated (both panes of a visible split qualify, by
-/// design — the same flag drag/cursor use), so a split advertises TWO "Terminal" text areas. Only the
-/// first-responder pane reports `isAccessibilityFocused` and accepts a write; the other's setter falls
-/// through to `super`. A client that anchors on `AXFocusedUIElement` (MacWhisper, Dictation) targets the
-/// right pane; a client that instead enumerates by role/label could pick the unfocused pane and have its
-/// write silently dropped. Accepted: only one pane can be the live text destination at a time, and
-/// narrowing exposure to the focused pane would hide the other from screen readers and break the write
-/// path whenever a non-activating dictation panel holds key focus.
+/// design — the same flag drag/cursor use), so a split exposes TWO "Terminal" text areas. Only the
+/// first-responder pane reports `isAccessibilityFocused`, advertises its value settable, and accepts a
+/// write; the other reads as a non-settable text area. A client that anchors on `AXFocusedUIElement`
+/// (MacWhisper, Dictation) targets the right pane; a client that enumerates by role/label sees the
+/// unfocused pane is not settable and skips it. Accepted: only one pane can be the live text destination
+/// at a time, and narrowing exposure to the focused pane would hide the other from screen readers.
 ///
 /// Contract note: a terminal is **append-at-cursor** — there is no addressable document value to
 /// replace, so `accessibilityValue` reports empty and a set inserts at the cursor rather than replacing.
@@ -58,8 +58,9 @@ import AppKit
 extension GhosttySurfaceView {
     /// True only for the pane that is actually on screen: interactive (`!viewOnly`, so dashboard cells
     /// are excluded) AND the visible deck pane (`deckVisible`, so eagerly-realized background sessions
-    /// and the hidden pane of an inactive split are excluded). Everything below falls through to `super`
-    /// when this is false, restoring the pre-change a11y-tree absence for off-screen surfaces.
+    /// and the hidden pane of an inactive split are excluded). When false, `isAccessibilityElement`
+    /// returns false and the text-area overrides fall through to `super`, so an off-screen surface is
+    /// absent from the a11y tree exactly as before.
     private var axExposed: Bool { !viewOnly && deckVisible }
 
     override func isAccessibilityElement() -> Bool { axExposed }
@@ -69,10 +70,11 @@ extension GhosttySurfaceView {
     override func accessibilityLabel() -> String? { axExposed ? "Terminal" : super.accessibilityLabel() }
 
     /// True while this surface holds first responder in the key window — the signal a dictation
-    /// tool uses to confirm the terminal is the live text destination.
+    /// tool uses to confirm the terminal is the live text destination. Reuses `liveFocus`, the same
+    /// key-window + first-responder predicate the cursor-focus path already owns.
     override func isAccessibilityFocused() -> Bool {
         guard axExposed else { return super.isAccessibilityFocused() }
-        return window?.isKeyWindow == true && window?.firstResponder === self
+        return liveFocus
     }
 
     // Report as an empty, editable text field. Enough for a dictation tool to recognise an
@@ -91,33 +93,40 @@ extension GhosttySurfaceView {
     }
 
     /// Route an AX value/text set into the terminal, so a tool that inserts through `AXValue` (rather than
-    /// synthesised keystrokes) still lands text. Requires LIVE focus — the same predicate as
-    /// `isAccessibilityFocused` (the shape the maintainer asked for) — so a client that enumerated the
-    /// window's text areas or cached a focused element across a session switch can't inject into a
-    /// background pane's pty. Inline text takes the keyboard/IME `insertText` path; a multi-line set routes
-    /// through `insertPasted` (bracketed paste), which — unlike `inject`'s newline→Return — treats the
-    /// payload as literal text, so embedded newlines don't type Return and run commands. The no-submit
-    /// guarantee tracks the program's bracketed-paste mode 2004: a raw prompt with 2004 off still submits a
-    /// trailing newline, exactly the caveat ⌘V and drop carry (see `insertPasted` / the libghostty note).
-    /// `insertPasted` runs outside `keyDown`, so it does not clear an in-flight IME preedit the way
-    /// `insertText` does; `unmarkText()` cancels any composition first so the paste can't duplicate it.
+    /// synthesised keystrokes) still lands text. Requires `liveFocus` (key window + first responder), so a
+    /// client that enumerated the window's text areas or cached a focused element across a session switch
+    /// can't inject into a background pane's pty. Inline text takes the keyboard/IME `insertText` path; a
+    /// multi-line set routes through `insertPasted` (bracketed paste), which — unlike `inject`'s
+    /// newline→Return — treats the payload as literal text, so embedded newlines don't type Return and run
+    /// commands. The no-submit guarantee tracks the program's bracketed-paste mode 2004: a raw prompt with
+    /// 2004 off still submits a trailing newline, exactly the caveat ⌘V and drop carry (see `insertPasted` /
+    /// the libghostty note). `discardMarkedText()` first abandons any in-flight IME/CJK composition on both
+    /// branches — otherwise a live marked-text composition survives the AX insert and re-commits on the
+    /// next keystroke; the paste branch additionally `unmarkText()`s to clear libghostty's own preedit
+    /// (`insertText` does that itself).
     override func setAccessibilityValue(_ accessibilityValue: Any?) {
-        guard axExposed, window?.isKeyWindow == true, window?.firstResponder === self else {
-            return super.setAccessibilityValue(accessibilityValue)
-        }
+        guard axExposed, liveFocus else { return super.setAccessibilityValue(accessibilityValue) }
         let text = (accessibilityValue as? String) ?? (accessibilityValue as? NSAttributedString)?.string ?? ""
         guard !text.isEmpty else { return }
+        inputContext?.discardMarkedText() // abandon any IME/CJK composition so it can't re-commit after the insert
         if text.contains("\n") || text.contains("\r") {
-            unmarkText() // insertText clears the preedit itself; the paste path must do it explicitly
+            unmarkText() // clear libghostty's preedit + _markedRange; the keyboard path's insertText does this itself
             insertPasted(text: text)
         } else {
             insertText(text, replacementRange: NSRange(location: NSNotFound, length: 0))
         }
     }
 
-    /// Advertise the value setter as settable (AXValueSettable = YES) so AX-based inserters attempt it.
+    /// Advertise the value setter as settable (AXValueSettable = YES) so AX-based inserters attempt it —
+    /// but ONLY on the first-responder pane, the one whose `setAccessibilityValue` will actually accept the
+    /// write, so an exposed-but-unfocused pane (the other half of a split) doesn't claim writability and
+    /// then silently drop. Gated on the first-responder term ONLY, NOT `liveFocus`: keying it on
+    /// `isKeyWindow` too would flip settable to NO whenever agterm isn't key and break a client that probes
+    /// settability at discovery time (before it activates agterm).
     override func isAccessibilitySelectorAllowed(_ selector: Selector) -> Bool {
-        if axExposed, selector == #selector(setAccessibilityValue(_:)) { return true }
+        if axExposed, window?.firstResponder === self, selector == #selector(setAccessibilityValue(_:)) {
+            return true
+        }
         return super.isAccessibilitySelectorAllowed(selector)
     }
 }

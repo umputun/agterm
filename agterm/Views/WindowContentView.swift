@@ -550,9 +550,11 @@ struct WindowContentView: View {
         if quickTerminal.isVisible {
             GeometryReader { geo in
                 ZStack {
-                    // the tap-catcher carries the `quick-terminal` accessibility id: a SwiftUI view is in
-                    // the a11y tree (the Metal-backed `QuickTerminalPane` is not), so tests query this one.
-                    // it spans the sidebar too, unlike the overlay's pane-scoped backdrop.
+                    // the tap-catcher carries the `quick-terminal` accessibility id, so tests query this
+                    // one. It spans the sidebar too, unlike the overlay's pane-scoped backdrop.
+                    // `QuickTerminalPane` is in the a11y tree as well: it takes the default
+                    // `deckVisible`/`viewOnly`, so the dictation bridge exposes its on-screen surface as a
+                    // "Terminal" text area. Do NOT set `deckVisible = false` here, that would drop it.
                     (store.activeSession.map { washColor(for: $0) } ?? terminalColor).opacity(muteWashOpacity)
                         .contentShape(Rectangle())
                         .onTapGesture { quickTerminal.hide() }

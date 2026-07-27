@@ -331,7 +331,9 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// responder AND that window is key — the key gate stops every window's active surface blinking at once.
     /// Reading the live responder rather than a cached flag keeps a re-hosted pane's focus true, so opening
     /// a split can't leave both panes solid.
-    private var liveFocus: Bool {
+    /// Not `private`: `+Accessibility.swift` reuses it for `isAccessibilityFocused` / the AX write guard,
+    /// the same way `currentTrackingArea` is internal so `+Tracking.swift` can reach it.
+    var liveFocus: Bool {
         guard let window else { return false }
         return window.isKeyWindow && window.firstResponder === self
     }

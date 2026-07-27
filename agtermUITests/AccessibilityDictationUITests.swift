@@ -41,17 +41,15 @@ final class AccessibilityDictationUITests: ControlAPITestCase {
     }
 
     // The core regression guard for the "background sessions become writable AX targets" bug: with three
-    // sessions realized, only the ON-SCREEN pane is an AX text area — the two background sessions are
-    // excluded by the `deckVisible` gate. `realizeAllSurfaces` cycles focus through every session so all
-    // three surfaces have entered the AX tree BEFORE the assertion, making the steady state deterministic:
-    // under the un-fixed code (gating on `!viewOnly` only) the settled count is 3, so the poll for 1 times
-    // out and the test fails; with the fix it is stably 1. This removes the timing race a first-match poll
-    // (or a hold that starts before the background surfaces realize) would have.
+    // sessions, only the ON-SCREEN pane is an AX text area — the two background sessions are excluded by
+    // the `deckVisible` gate. The deck mounts every session's surface eagerly and `axExposed` is a live
+    // read (not a latch), so under the un-fixed code (gating on `!viewOnly` only) all three surfaces are
+    // exposed and the settled count is 3; the poll-then-hold for 1 is what keeps this non-vacuous — it
+    // rejects the transient the count would pass through and fails on the settled 3.
     func testBackgroundSessionsAreNotAccessibleTargets() throws {
-        let ids = try prepareSessions(extra: 2) // 3 sessions total
-        try realizeAllSurfaces(ids)
-        assertStableTerminalTextAreaCount(1, timeout: 15, hold: 2,
-                                          "only the on-screen pane is an AX text area; realized background sessions are excluded")
+        try prepareSessions(extra: 2) // 3 sessions total
+        assertStableTerminalTextAreaCount(1, timeout: 15, hold: 3,
+                                          "only the on-screen pane is an AX text area; background sessions are excluded")
     }
 
     // A visible split has BOTH panes on screen and `deckVisible` (the flag is deliberately not
@@ -67,13 +65,13 @@ final class AccessibilityDictationUITests: ControlAPITestCase {
                                           "both visible split panes expose a Terminal text area")
     }
 
-    // The dashboard mounts every member surface as a VIEW-ONLY cell and hides the deck panes, so nothing is
-    // a live text destination: no Terminal text area is exposed while it is open. Closing it restores the
-    // single on-screen exposure — proving the exclusion is driven by live `viewOnly`/`deckVisible` state,
-    // not a one-way latch.
+    // The dashboard hides the deck panes (`deckVisible` false) and mounts every member surface as a cell,
+    // so nothing is a live text destination: no Terminal text area is exposed while it is open. This pins
+    // the `deckVisible` exclusion specifically — the `!viewOnly` half of the gate can't be what fails here,
+    // since no host mounts a `viewOnly` surface with `deckVisible: true`. Closing restores the single
+    // on-screen exposure, proving the exclusion is a live read, not a one-way latch.
     func testDashboardCellsAreNotAccessibleTextAreas() throws {
         let ids = try prepareSessions(extra: 2)
-        try realizeAllSurfaces(ids) // so a leaked background pane would settle at a WRONG count, not stay unrealized
         assertStableTerminalTextAreaCount(1, timeout: 15, hold: 1, "baseline: one exposed pane before opening the dashboard")
 
         try openDashboard(members: ids)
@@ -141,40 +139,6 @@ final class AccessibilityDictationUITests: ControlAPITestCase {
         let workspace = try XCTUnwrap((top["workspaces"] as? [[String: Any]])?.first, "a seeded workspace")
         let sessions = try XCTUnwrap(workspace["sessions"] as? [[String: Any]], "workspace sessions")
         return try sessions.map { try XCTUnwrap($0["id"] as? String, "session id") }
-    }
-
-    /// The id of the currently selected (active-flagged) session, or nil if the tree isn't readable yet.
-    private func selectedSessionID() -> String? {
-        guard let response = try? sendCommand(#"{"cmd":"tree"}"#),
-              let result = response["result"] as? [String: Any],
-              let top = result["tree"] as? [String: Any],
-              let workspaces = top["workspaces"] as? [[String: Any]] else { return nil }
-        for workspace in workspaces {
-            for session in (workspace["sessions"] as? [[String: Any]] ?? []) where session["active"] as? Bool == true {
-                return session["id"] as? String
-            }
-        }
-        return nil
-    }
-
-    /// Select `id` and wait until the tree reports it active, so the caller knows the switch landed.
-    private func selectSession(_ id: String, timeout: TimeInterval = 10) throws {
-        XCTAssertEqual(try sendCommand(#"{"cmd":"session.select","target":"\#(id)"}"#)["ok"] as? Bool, true,
-                       "session.select \(id) should succeed")
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if selectedSessionID()?.lowercased() == id.lowercased() { return }
-            usleep(200_000)
-        }
-        XCTFail("selecting \(id) did not land within \(timeout)s")
-    }
-
-    /// Bring every session on screen once (then settle back on the first), so each surface has been the
-    /// visible deck pane and is guaranteed into the AX tree — making the exposed-count assertion depend on
-    /// the gating, not on eager-realization timing.
-    private func realizeAllSurfaces(_ ids: [String]) throws {
-        for id in ids { try selectSession(id) }
-        if let first = ids.first { try selectSession(first) }
     }
 
     private var dashboardOverlay: XCUIElement {
