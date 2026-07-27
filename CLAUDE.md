@@ -481,7 +481,7 @@ This only changes raw-text line breaks — the rendered markdown is identical �
   `window.*` control.
   Triggers on `WindowLibrary`/`WindowGeometry`/`QuitPrompt`, `QuickTerminal.swift`,
   and the multi-window/quick-terminal UI tests.
-- `control-api.md` — the full 59-command control catalog, the three protocol layers,
+- `control-api.md` — the full control-command catalog, the three protocol layers,
   addressing, and the CLI/hooks/skill installers.
   Triggers on `ControlServer.swift`, `ControlProtocol`/`ControlResolve`,
   `agtermctlKit`/`agtermctl`, the three installers + their host-free `*Install` logic,

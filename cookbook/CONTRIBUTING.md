@@ -4,6 +4,8 @@ Send a workflow you actually run. A script written for the collection rather tha
 
 Open a pull request against `master` with the recipe directory, its README, and the index row, all in one change.
 
+These rules cover recipes. The project-wide rules for everything else are in [CONTRIBUTING.md](../CONTRIBUTING.md) at the repository root.
+
 ## Layout
 
 One directory per recipe, kebab-case, named after what the recipe does rather than after its script (`park-and-resume`, not `agt-park`). It holds a `README.md` and the scripts, nothing else.
