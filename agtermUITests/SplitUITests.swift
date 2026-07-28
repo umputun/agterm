@@ -274,6 +274,42 @@ final class SplitUITests: XCTestCase {
         XCTAssertEqual(survivorTTY, rightTTY, "after exiting the primary, the surviving right pane is focused")
     }
 
+    // Regression for #303: when the split is hidden with the PRIMARY shown, exiting that primary promotes
+    // the live right pane into the primary slot without changing the surrounding SwiftUI branch. The
+    // terminal host must therefore remount for the promoted surface, or the visible pane remains the dead
+    // primary while the live survivor is stranded off-screen. Verify by typing WITHOUT focusing after exit.
+    func testExitPrimaryPaneWhileSplitHiddenHostsAndFocusesSurvivor() throws {
+        let row = app.staticTexts["session-row"]
+        XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
+        row.click()
+        usleep(800_000)
+
+        let splitButton = app.buttons["split-toggle"]
+        XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
+
+        // Open the split and record the right pane's tty — this is the survivor that will be promoted.
+        splitButton.click()
+        usleep(800_000)
+        let rightTTY = ttyAfterCommand(named: "hidden-survivor")
+        XCTAssertNotNil(rightTTY, "right shell should write its tty")
+
+        // Show only the primary pane while keeping the right shell alive off-screen.
+        app.typeKey("1", modifierFlags: .control)
+        usleep(500_000)
+        splitButton.click()
+        XCTAssertTrue(waitSplitValue(splitButton, "left"), "the hidden split should show the primary pane")
+
+        // Exit the shown primary. The hidden right pane must promote into the visible host and take focus.
+        app.typeText("exit")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(waitSplitValue(splitButton, "none"), "promotion should leave a regular non-split session")
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "exiting the hidden primary must keep the session")
+
+        // Type WITHOUT focusing — this fails if SwiftUI kept hosting the torn-down primary surface.
+        XCTAssertEqual(ttyAfterCommand(named: "after-hidden-promotion"), rightTTY,
+                       "the promoted hidden survivor should be visible and focused")
+    }
+
     // promote → re-split → exit-main: the round-1 zombie scenario, driven through the REAL pane-exit
     // routing (typing `exit`, not calling closePrimaryPane directly like the host-free test). After the
     // primary exits, the right pane promotes into the sole/main slot; a fresh split then opens a new right

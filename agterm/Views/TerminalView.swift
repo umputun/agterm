@@ -80,8 +80,8 @@ struct TerminalView: NSViewRepresentable {
     /// observable invalidations) don't steal focus.
     ///
     /// Focus is taken once, when this representable first attaches to a window
-    /// (each `TerminalView(session).id(session.id)` is a fresh representable, so
-    /// this fires when a session becomes active). On later updates focus is left
+    /// (each terminal host carries stable session + surface identity, so replacing
+    /// the hosted surface creates a fresh representable). On later updates focus is left
     /// alone unless the surface already holds it — and never grabbed while a text
     /// field editor is first responder, so editing a sidebar rename survives a
     /// re-render. Mouse clicks (`mouseDown`) cover focus for the rest.
