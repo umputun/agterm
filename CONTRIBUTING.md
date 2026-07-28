@@ -19,7 +19,7 @@ Weigh what a feature adds against the code it brings with it.
 
 ## Development setup
 
-Building needs Xcode 26 and Homebrew. Run the one-time setup first:
+Building needs macOS 14 or later, Xcode 26 with `xcodegen` on `PATH`, and Homebrew. `xcodegen` is not installed for you and nothing checks for it, but `make build`, `make run`, `make release` and `make test-app` all call it, so install it first (`brew install xcodegen`). Run the one-time setup next:
 
 ```
 scripts/setup.sh
@@ -38,7 +38,15 @@ After that:
 
 All four must be green before you send a PR. `make lint` runs with `--strict`, so a warning fails it and the tree is kept at zero findings.
 
-`make prep`, `make run`, `make release`, `make deploy`, `make dist` and `make clean` cover the rest. A bare `make` lists them.
+None of those four runs the XCUITests in `agtermUITests/`. Those need the `agterm` scheme, which drives the running app through the accessibility API:
+
+```
+xcodebuild test -project agterm.xcodeproj -scheme agterm -destination 'platform=macOS'
+```
+
+Run it when your change touches UI behavior. It takes several minutes and wants the machine left alone while it drives the app, so the maintainer also runs it before merging.
+
+`make prep`, `make generate`, `make run`, `make release`, `make deploy`, `make dist` and `make clean` cover the rest. A bare `make` lists them.
 
 ## AI-assisted contributions
 

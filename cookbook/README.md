@@ -9,7 +9,7 @@ Recipes come from other people as well as the maintainer. Every one is reviewed 
 | recipe | what it does | needs |
 |---|---|---|
 | [project-switcher](project-switcher/) | show only one project's workspaces in the sidebar | 0.18.0, jq |
-| [park-and-resume](park-and-resume/) | close a project's workspaces, bring them back later | 0.16.0, jq |
+| [park-and-resume](park-and-resume/) | close a project's workspaces, bring them back later | 0.16.0, jq, zsh |
 | [window-per-project](window-per-project/) | park every other window in the Dock and raise one | 0.17.1, jq |
 | [fzf-path-picker](fzf-path-picker/) | pick a path with fzf and type it into the shell | 0.8.0, fzf, fd, zsh |
 | [overlay-and-split](overlay-and-split/) | keymap lines: a stateful split toggle and TUI overlays | 0.10.0, jq |

@@ -414,7 +414,7 @@ always in context:
 - **The cookbook (`cookbook/`) is deliberately NOT a keep-in-sync surface — do not add it as a sixth.**
   It is full of `agtermctl` invocations, so the reflex on a control-API change is to sweep it like the skill
   and the site; that reflex is wrong here, and the exemption is a decision, not an oversight.
-  Recipes are pinned snapshots: each one's *Requirements* names the agterm version it was written against,
+  Recipes are pinned snapshots: each one's *Requirements* names the MINIMUM agterm version it needs,
   and that pin is the contract.
   A recipe is fixed reactively — when someone reports it broke — and dropped if it stays broken and nobody
   claims it.

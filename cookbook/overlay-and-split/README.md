@@ -39,7 +39,7 @@ These lines call `agtermctl` and `jq` by bare name, which is the exception to th
 
 Press the leader, release, then the second key. Custom commands also show up in the ⌃⇧P action palette marked `custom`, so you can run any of them by name without the chord.
 
-`Smart Split` is idempotent in both directions, so holding it down or double-pressing it returns you to where you started rather than to a half-open state.
+`Smart Split` is a toggle, so each press flips the state and two presses put you back where you started, once the first has finished. Holding the key does not repeat it: agterm ignores key repeats for custom commands, so a held key fires exactly once and leaves you in the opposite state.
 
 ## How it works
 

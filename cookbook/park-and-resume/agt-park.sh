@@ -18,9 +18,16 @@ mkdir -p "$PARK_DIR"
 t=$("$AGTERMCTL" tree --json)
 
 # write the snapshot to a temp file first, so a failed capture cannot destroy
-# the previous one and cannot be followed by the deletions below
+# the previous one and cannot be followed by the deletions below.
+#
+# each cmd is the captured argv quoted twice: once per argument, then again around
+# the joined line, so the whole line reaches "zsh -lc" as one argument. The login
+# shell is there to restore PATH - argv comes back as it was typed, so a bare "nvim"
+# would not resolve under the app's own PATH. Swap zsh for the shell that reads your
+# profile if it is not zsh.
 printf '%s' "$t" | jq --arg p "$p" '[.result.tree.workspaces[] | select(.name|startswith($p))
-	| {name, sessions: [.sessions[] | {name, cwd, cmd: (.foreground // [] | map(@sh) | join(" "))}]}]' \
+	| {name, sessions: [.sessions[] | {name, cwd, cmd: (if (.foreground // []) == [] then ""
+		else "zsh -lc " + ((.foreground | map(@sh) | join(" ")) | @sh) end)}]}]' \
 	>"$PARK_DIR/$p.json.tmp"
 
 # a successful capture of nothing must not overwrite a good snapshot with an empty

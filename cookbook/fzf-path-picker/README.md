@@ -32,7 +32,7 @@ export AGT_FZF_ROOTS="$HOME/src:$HOME/work"
 
 Put that export in `.zshenv` or `.zprofile`, not in `.zshrc`. The keymap entry below runs the script under `zsh -lc`, a non-interactive login shell, which reads the first two and skips `.zshrc` entirely. The same applies to anything else the script needs from your shell config, `PATH` included. Use `zsh -ilc` if it has to come from `.zshrc`.
 
-`AGT_FZF_ROOTS` defaults to `$HOME/src`, and the script exits with a message if none of the listed directories exist. Keep the list to the trees you actually work in. Searching all of `$HOME` is slow, and it walks Documents, Desktop and Downloads, which makes macOS raise a privacy prompt per directory.
+`AGT_FZF_ROOTS` defaults to `$HOME/src`, and the script prints a message and exits if none of the listed directories exist. You will not see that message with the keymap entries below: they open the overlay without `--wait`, so it closes the moment the script exits and takes the text with it. Add `--wait` to the entry to hold the overlay on a "press any key to close" prompt while you are getting the roots right, or run the script in a shell. Keep the list to the trees you actually work in. Searching all of `$HOME` is slow, and it walks Documents, Desktop and Downloads, which makes macOS raise a privacy prompt per directory.
 
 Add two entries to `~/.config/agterm/keymap.conf`:
 

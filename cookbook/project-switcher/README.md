@@ -35,7 +35,9 @@ command "only B"  ctrl+alt+1  ~/bin/agt-only.sh "B"
 
 The token after the quoted name is a key chord when it carries a modifier. Leave it out and the entry is palette-only, which scales better than chords once there are more than two or three projects. Apply the file with File ▸ Reload Keymap or `agtermctl keymap reload`.
 
-If `agtermctl` is not on your `PATH`, set `AGTERMCTL` to its full path in the environment the script runs in.
+Fired from a key chord or the palette, the script runs under the app's `PATH` rather than your shell's. That is the launchd default: `/usr/local/bin` plus the system directories, with no `/opt/homebrew/bin` and nothing else your profile adds. Every binary the script calls has to resolve there or be written in full, `jq` as much as `agtermctl`. `agtermctl` normally does, because **Help ▸ Install Command Line Tool…** symlinks it into `/usr/local/bin`. `jq` does only if it is a system one; recent macOS ships `/usr/bin/jq`, but a Homebrew `jq` is out of reach and needs its absolute path written into the script. Set `AGTERMCTL` to the binary's full path if yours sits somewhere unusual.
+
+A binary that does not resolve fails silently here. A custom command's output goes nowhere, and a missing `jq` breaks the marking loop from inside a pipeline, which `set -e` does not catch, so the script still reaches its final `workspace filter on` and the sidebar comes back showing the set from the previous run. Run the script from a shell if the result looks wrong; that is where the error text goes.
 
 ## Usage
 
@@ -43,7 +45,7 @@ If `agtermctl` is not on your `PATH`, set `AGTERMCTL` to its full path in the en
 agt-only.sh A
 ```
 
-Or press ⌃⇧P, type the project name and hit Enter. Custom commands appear in the action palette marked `custom`.
+Or press ⌃⇧P, type the project name and hit Enter. Custom commands appear in the action palette marked `custom`. ⌃⇧O opens a palette holding the custom commands alone, which is the shorter route once you have a few of these.
 
 To see the whole tree again without losing the set, use the grid button in the sidebar's bottom bar, View ▸ Toggle Workspace Filter, or `agtermctl workspace filter off`.
 

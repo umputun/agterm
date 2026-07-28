@@ -66,7 +66,7 @@ On the agterm side that replay is a foreground-process capture. At quit agterm r
 ## Limits
 
 - **agterm-specific.** It needs a stable per-tab identifier and relies on agterm feeding the restored command back *through the login shell*, which is how the function intercepts it. It will not work as-is in another terminal; you would adapt it to that terminal's equivalent.
-- **Rests on restore behavior that is verified empirically, not documented.** It could change between agterm versions.
+- **Rests on restore behavior its author verified empirically rather than from documentation.** It could change between agterm versions.
 - **One conversation per tab.** Since conversation id equals tab id, two live `claude` processes in the same tab collide with `Session ID ... is already in use`. A split pane, a scratch pane and any overlay all run under the same `AGTERM_SESSION_ID` as the main pane, so a second `claude` in any of them hits this.
 - **It shadows the `claude` command** with a shell function. Passthrough is handled, but the list of subcommands and flags that must not be touched has to be kept current if the CLI grows new ones.
 - **It knows Claude Code's on-disk layout** (`~/.claude/projects/*/<id>.jsonl`). If that storage location changes, the "does this conversation exist" check breaks: it would always create, then hit "already in use" on restart. A one-line fix, but worth knowing.

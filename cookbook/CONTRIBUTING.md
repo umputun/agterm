@@ -36,7 +36,7 @@ Six headings, exactly these, in this order. CI checks that all six are present:
 ## Limits
 ```
 
-**Requirements** names the agterm version you tested against, plus any external tool the recipe calls. That version is the contract. Recipes are pinned snapshots: one that breaks against a later agterm is fixed when someone reports it, and dropped if it stays broken and nobody claims it.
+**Requirements** names the minimum agterm version the recipe needs, written as "X or later", plus any external tool it calls. Work out that minimum from the commands and flags the recipe uses rather than naming the version you happen to run, and say in the same line what shipped in it. The version is the contract: a recipe that breaks against a later agterm is fixed when someone reports it, and dropped if it stays broken and nobody claims it.
 
 **Setup** is the exact steps, including where the file goes and how it is invoked or sourced. Anything machine-specific is a variable the reader sets, named and explained here.
 

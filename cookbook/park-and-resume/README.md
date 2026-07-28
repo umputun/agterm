@@ -18,6 +18,7 @@ The snapshot is plain JSON, so it can be edited by hand into the launch configur
 
 - agterm 0.16.0 or later. `workspace new --collapsed` shipped in that release; the rest is older.
 - `jq`
+- `zsh`, whose login shell the replayed command runs under. *How it works* has the one-word change if your `PATH` comes from a bash profile instead.
 - workspace names carrying a per-project prefix, for example `A / frontend` and `A / backend`
 
 ## Setup
@@ -30,7 +31,7 @@ cp agt-park.sh agt-resume.sh ~/bin/
 chmod +x ~/bin/agt-park.sh ~/bin/agt-resume.sh
 ```
 
-Snapshots go to `~/.agterm-projects` by default. Set `AGT_PARK_DIR` to put them elsewhere; both scripts read the same variable, so they must agree.
+Snapshots go to `~/.agterm-projects` by default. Set `AGT_PARK_DIR` to put them elsewhere; both scripts read the same variable, so they must agree. That variable reaches the scripts only when you run them from a shell: agterm never read your shell config, so an export in `.zshrc` or `.zprofile` does not carry into a run started from a key chord or the palette. Change the fallback in both scripts if you want a different directory there.
 
 Add one pair of entries per project to `~/.config/agterm/keymap.conf`:
 
@@ -43,7 +44,7 @@ command "resume B"              ~/bin/agt-resume.sh "B"
 
 The token after the quoted name is a key chord when it carries a modifier. Leave it out and the entry is palette-only, which scales better than chords past two or three projects. Apply the file with File ▸ Reload Keymap or `agtermctl keymap reload`.
 
-If `agtermctl` is not on your `PATH`, set `AGTERMCTL` to its full path in the environment the scripts run in.
+Fired from a key chord or the palette, the scripts run under the app's `PATH` rather than your shell's. That is the launchd default: `/usr/local/bin` plus the system directories, with no `/opt/homebrew/bin` and nothing else your profile adds. Every binary the scripts call has to resolve there or be written in full, `jq` as much as `agtermctl`. `agtermctl` normally does, because **Help ▸ Install Command Line Tool…** symlinks it into `/usr/local/bin`. `jq` does only if it is a system one; recent macOS ships `/usr/bin/jq`, but a Homebrew `jq` is out of reach and needs its absolute path written into the scripts. Set `AGTERMCTL` to the binary's full path if yours sits somewhere unusual.
 
 ## Usage
 
@@ -64,9 +65,11 @@ The snapshot is written to a temporary file and moved into place only when it ho
 
 Resume replays the file. Each workspace is created with `workspace new <name> --collapsed --json`, which returns the new id, and each session with `session new --workspace <id> --no-select --cwd <dir> --name <name>`, plus `--command` when one was captured. `--no-select` keeps the current selection and focus in place while the tree is rebuilt, and `--collapsed` keeps a resumed workspace out of the sidebar focus set, so a resume does not widen a filter you have applied.
 
-agterm runs a `--command` value as `/bin/bash --noprofile --norc -c 'exec -l <command>'`, so the value passes through a shell and ordinary shell quote removal applies to it. That is why the snapshot quotes each argument with jq's `@sh`: a working directory or an argument containing spaces survives the round trip and replays as one argument rather than several.
+agterm runs a `--command` value as `/bin/bash --noprofile --norc -c 'exec -l <command>'`, so the value passes through a shell and ordinary shell quote removal applies to it. That shell reads no profile, so it inherits the app's `PATH`: the launchd default, with no `/opt/homebrew/bin`.
 
-The captured argv is absolute, for example `/opt/homebrew/bin/nvim` rather than `nvim`, so `--command` runs it directly. That matters because the shell above reads no profile and inherits the app's GUI `PATH`, which does not include the usual Homebrew directory. A relative command name would fail with exit 127.
+What comes back from `foreground` is the argv as it was typed. A Homebrew-installed tool is recorded as `nvim`, not as `/opt/homebrew/bin/nvim`, and run straight under that `PATH` it would fail with exit 127. So the replay goes through a login shell instead: `jq` quotes each argument with `@sh`, joins them into one line, quotes that whole line again, and prefixes `zsh -lc`, which makes the `--command` value `zsh -lc '<the original line>'`. The login shell sources your profile, so the command resolves against the `PATH` you normally have. The second round of quoting is what keeps the line intact: an argument holding a space, a single quote or a glob survives both rounds of quote removal and replays as one argument rather than several.
+
+`zsh -lc` is a non-interactive login shell, so it reads `.zshenv`, `.zprofile` and `.zlogin` and skips `.zshrc`. Use `zsh -ilc` if your `PATH` is set there, or `bash -lc` if it comes from a bash profile; either is a one-word change to the `"zsh -lc "` prefix in `agt-park.sh`. A hand-edited snapshot takes the same shape, so write `zsh -lc 'make watch'` rather than a bare `make watch`.
 
 ## Limits
 
@@ -81,5 +84,7 @@ Split panes are not restored. The snapshot records the main pane's command only,
 Session names come back as explicit custom names, including the ones agterm had derived automatically.
 
 A captured command line is re-quoted from its argv. A program invoked with unusual quoting may need the snapshot edited by hand before it replays correctly.
+
+Only processes are captured. A shell function or an alias is not one, so it never comes back by name: a session sitting in a function with nothing running under it is recorded with no command and returns as a plain shell, and one that had already started a program returns running that program directly.
 
 The prefix is used as the snapshot file name, so it has to be usable as one. Parking is per window, since `tree` reports the frontmost window's workspaces.
