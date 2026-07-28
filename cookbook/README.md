@@ -13,6 +13,7 @@ Recipes come from other people as well as the maintainer. Every one is reviewed 
 | [window-per-project](window-per-project/) | park every other window in the Dock and raise one | 0.17.1, jq |
 | [fzf-path-picker](fzf-path-picker/) | pick a path with fzf and type it into the shell | 0.8.0, fzf, fd, zsh |
 | [overlay-and-split](overlay-and-split/) | keymap lines: a stateful split toggle and TUI overlays | 0.10.0, jq |
+| [status-announcer](status-announcer/) | demo: speak agent status changes from a dedicated session | 0.16.0, jq |
 | [claude-session-resume](claude-session-resume/) | each tab reopens its own Claude Code conversation after a restart | 0.3.1, zsh, Claude Code |
 | [codex-session-resume](codex-session-resume/) | each tab reopens its own codex conversation after a restart | 0.3.1, zsh, Codex CLI |
 
