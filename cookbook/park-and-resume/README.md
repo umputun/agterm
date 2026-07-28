@@ -60,11 +60,13 @@ Resumed workspaces come back collapsed, so a resume does not rearrange the sideb
 
 Park takes one `agtermctl tree --json` and uses it twice. The first pass builds the snapshot: for each matching workspace it keeps the name and, per session, the `name`, `cwd` and `foreground` fields. `foreground` is the live argv of the pane's foreground process, absent when the pane sits at its shell prompt, so a session at a prompt is recorded with an empty command and comes back as a plain shell. The second pass deletes the workspaces by id with `workspace delete --target`.
 
-The snapshot is written to a temporary file and moved into place. A failed capture therefore cannot destroy the previous snapshot, and `set -e` stops the script before the deletions if anything in the capture goes wrong.
+The snapshot is written to a temporary file and moved into place only when it holds at least one workspace. A capture that fails cannot destroy the previous snapshot, because `set -e` stops the script before the move and the deletions. Neither can a capture that succeeds and matches nothing: the temporary file is discarded, the prefix is reported on stderr, and the script exits non-zero without deleting anything. That is what makes a second park of the same prefix, or a park run with a different window frontmost, safe — both match nothing, and both leave the earlier snapshot in place.
 
 Resume replays the file. Each workspace is created with `workspace new <name> --collapsed --json`, which returns the new id, and each session with `session new --workspace <id> --no-select --cwd <dir> --name <name>`, plus `--command` when one was captured. `--no-select` keeps the current selection and focus in place while the tree is rebuilt, and `--collapsed` keeps a resumed workspace out of the sidebar focus set, so a resume does not widen a filter you have applied.
 
-The captured argv is absolute, for example `/opt/homebrew/bin/nvim` rather than `nvim`, so `--command` runs it directly. That matters because `--command` execs argv without a shell and inherits the app's GUI `PATH`, which does not include the usual Homebrew directory. A relative command name would fail with exit 127.
+agterm runs a `--command` value as `/bin/bash --noprofile --norc -c 'exec -l <command>'`, so the value passes through a shell and ordinary shell quote removal applies to it. That is why the snapshot quotes each argument with jq's `@sh`: a working directory or an argument containing spaces survives the round trip and replays as one argument rather than several.
+
+The captured argv is absolute, for example `/opt/homebrew/bin/nvim` rather than `nvim`, so `--command` runs it directly. That matters because the shell above reads no profile and inherits the app's GUI `PATH`, which does not include the usual Homebrew directory. A relative command name would fail with exit 127.
 
 ## Limits
 

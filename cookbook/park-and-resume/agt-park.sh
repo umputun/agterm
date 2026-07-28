@@ -22,6 +22,15 @@ t=$("$AGTERMCTL" tree --json)
 printf '%s' "$t" | jq --arg p "$p" '[.result.tree.workspaces[] | select(.name|startswith($p))
 	| {name, sessions: [.sessions[] | {name, cwd, cmd: (.foreground // [] | map(@sh) | join(" "))}]}]' \
 	>"$PARK_DIR/$p.json.tmp"
+
+# a successful capture of nothing must not overwrite a good snapshot with an empty
+# one, so refuse to publish it and stop before the deletions below
+if [ "$(jq 'length' "$PARK_DIR/$p.json.tmp")" -eq 0 ]; then
+	rm -f "$PARK_DIR/$p.json.tmp"
+	echo "${0##*/}: no workspace name starts with '$p' in the frontmost window; nothing parked" >&2
+	exit 1
+fi
+
 mv "$PARK_DIR/$p.json.tmp" "$PARK_DIR/$p.json"
 
 printf '%s' "$t" | jq -r --arg p "$p" '.result.tree.workspaces[] | select(.name|startswith($p)) | .id' |

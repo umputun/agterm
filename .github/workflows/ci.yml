@@ -35,6 +35,7 @@ jobs:
               - ".github/workflows/ci.yml"
             cookbook:
               - "cookbook/**"
+              - ".github/workflows/ci.yml"
 
   test:
     name: Unit tests
@@ -176,4 +177,7 @@ jobs:
 
           exit $fail
       - name: shellcheck
+        # bash explicitly, for pipefail: xargs -0 -r exits 0 on empty input, so
+        # without it a failed find would leave the step green having checked nothing
+        shell: bash
         run: find cookbook -type f -name '*.sh' -print0 | xargs -0 -r shellcheck

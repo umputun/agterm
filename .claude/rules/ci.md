@@ -31,7 +31,12 @@ paths:
   and the `cookbook` job is `if: needs.changes.outputs.cookbook == 'true'`.
   `cookbook/**` matches no entry in the `swift` filter,
   so a recipe-only change runs zero macOS jobs and only the `cookbook` job on `ubuntu-latest`.
-  Editing `ci.yml` itself still trips the `swift` filter, so a change to this workflow runs the macOS jobs too.
+  `.github/workflows/ci.yml` is listed in BOTH filters, and its membership in the `cookbook` one is load-bearing:
+  the cookbook checks are written inline in this workflow,
+  so a PR that edits only the check block must still run the job it changed.
+  Without that entry the `cookbook` job is skipped on exactly the change that needs it and a broken check ships green.
+  Its membership in the `swift` filter only pulls in the macOS jobs,
+  which an edit confined to the cookbook block does not affect.
   The job is static verification of the recipe tree and builds nothing.
   It compares the `cookbook/README.md` index table against the directory set in BOTH directions,
   requires every recipe directory to be kebab-case and to carry a `README.md` with all six template headings,
@@ -42,11 +47,16 @@ paths:
   `zsh` is NOT on that image, so `zsh -n` over the `.zsh` recipes stays a local check;
   the shebang check is the only thing in CI that looks at a `.zsh` file at all.
 - **Several details of the `cookbook` job are load-bearing and must not be "simplified".**
-  The explicit `shell: bash` on the layout step is one of them.
+  The explicit `shell: bash` on BOTH steps is one of them.
   GitHub's default `run` shell is `bash -e` WITHOUT `pipefail`,
   while `shell: bash` runs the step under `bash -eo pipefail`,
-  which is what the block was verified against and what makes a failed `find` inside a pipeline red the step.
-  It also guarantees the bash-only process substitution rather than leaving it to default-shell resolution.
+  which is what the blocks were verified against and what makes a failed `find` inside a pipeline red the step.
+  On the layout step it also guarantees the bash-only process substitution
+  rather than leaving it to default-shell resolution.
+  On the `shellcheck` step it is what keeps a failed `find` from passing unnoticed:
+  without `pipefail` the pipeline's status comes from `xargs`,
+  which exits 0 on empty input under `-r`,
+  so the step would go green having checked nothing.
   The `[ -d "$d" ] || continue` guard keeps the job green when `cookbook/` holds no recipe subdirectories:
   without it `cookbook/*/` does not expand, `basename` yields `*`,
   and the check errors on a directory named `*`.

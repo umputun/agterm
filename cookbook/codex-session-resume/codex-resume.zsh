@@ -25,7 +25,7 @@ codex() {
   local mapf=~/.codex/agterm/$sid
   local cid; [[ -f $mapf ]] && cid=$(<$mapf)
   local -a s=(~/.codex/sessions/**/rollout-*-$cid.jsonl(N))
-  if [[ -n $cid && $#s ]]; then
+  if [[ -n $cid ]] && (( $#s )); then
     command codex resume "$cid" "$@"; return
   fi
 
