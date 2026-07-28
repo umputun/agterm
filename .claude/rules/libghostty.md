@@ -289,9 +289,16 @@ paths:
   **`OSCBackgroundPolicy` (agtermCore, unit-tested) owns the set-vs-reset routing and the dedupe**, because
   libghostty reports both through the SAME action with no flag telling them apart — a reset simply carries
   the terminal's default background.
-  So the surface's own BASELINE color identifies a reset: the session's `.color` watermark, a sessionless
-  overlay's `--background-color`, else the theme background (`baselineBackgroundHex()`) — whichever ghostty
-  last seeded `default` from.
+  So the BASELINE color identifies a reset — whichever color ghostty last seeded `default` from for this
+  surface (`OSCBackgroundPolicy.baseline`, fed by `baselineBackgroundHex()`).
+  With no OSC overlay installed that is the surface's OWN color: the session's `.color` watermark, a
+  sessionless overlay's `--background-color`, else the theme.
+  **While an OSC overlay IS installed it is always the THEME**, because that overlay emits no `background`
+  key, so the config in force is the base one and `default` holds the theme rather than the surface's color.
+  Getting this wrong routes a reset on a `.color` session (or a colored overlay) to `.apply` instead of
+  `.reset`: pixels are unaffected (the un-clearable `override` masks `default` either way), but the overlay
+  is never released and the latch stays pinned for a program that already exited, so every reload / opacity
+  tick / dashboard toggle re-installs it.
   A reported color equal to it means reset → `releaseOSCBackground()` drops the overlay and restores the
   surface's own config; an unchanged color means a per-prompt re-emit → ignored, so a shell re-asserting
   OSC 11 every prompt does not rebuild the surface config each time; anything else applies.

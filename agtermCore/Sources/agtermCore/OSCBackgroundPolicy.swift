@@ -40,6 +40,21 @@ public enum OSCBackgroundPolicy {
         return .apply(incoming)
     }
 
+    /// The color a reported change must equal to count as a reset: whatever ghostty last seeded the
+    /// terminal's `default` layer from for this surface.
+    ///
+    /// `surfaceBackground` is the color the surface's OWN config carries (a `.color` session watermark, a
+    /// sessionless overlay's `--background-color`), and `themeBackground` the base config's. The catch is
+    /// `oscOverlayActive`: the OSC overlay emits no `background` key, so while it is installed the config
+    /// in force is the base one and `default` holds the THEME, not the surface's color. Reporting the
+    /// surface color then makes a reset look like a set — the overlay is never released and the latch
+    /// stays pinned for a program that has already exited.
+    public static func baseline(oscOverlayActive: Bool, surfaceBackground: String?,
+                                themeBackground: String?) -> String? {
+        guard !oscOverlayActive else { return themeBackground }
+        return surfaceBackground ?? themeBackground
+    }
+
     /// A hex color reduced to its six lowercase digits, so `#1D1F21`, `1d1f21` and `#1d1f21` compare equal.
     private static func normalized(_ hex: String) -> String {
         let trimmed = hex.trimmingCharacters(in: .whitespaces)

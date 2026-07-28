@@ -50,4 +50,36 @@ struct OSCBackgroundPolicyTests {
     func malformedIncomingColorIsIgnored(_ hex: String) {
         #expect(OSCBackgroundPolicy.decide(incoming: hex, themeBackground: "#1d1f21", current: nil) == .ignore)
     }
+
+    @Test func baselineIsTheSurfaceColorWithNoOSCOverlayInstalled() {
+        let hex = OSCBackgroundPolicy.baseline(oscOverlayActive: false, surfaceBackground: "#aa0000",
+                                               themeBackground: "#1d1f21")
+        #expect(hex == "#aa0000")
+    }
+
+    @Test func baselineIsTheThemeWhileAnOSCOverlayIsInstalled() {
+        // the OSC overlay emits no `background` key, so the config in force is the base one and ghostty
+        // seeded the terminal's default layer from the THEME, not from the surface's own color. Reporting
+        // the surface color here makes a reset look like a set and strands the latch.
+        let hex = OSCBackgroundPolicy.baseline(oscOverlayActive: true, surfaceBackground: "#aa0000",
+                                               themeBackground: "#1d1f21")
+        #expect(hex == "#1d1f21")
+    }
+
+    @Test func baselineFallsBackToTheThemeWithNoSurfaceColor() {
+        #expect(OSCBackgroundPolicy.baseline(oscOverlayActive: false, surfaceBackground: nil,
+                                             themeBackground: "#1d1f21") == "#1d1f21")
+        #expect(OSCBackgroundPolicy.baseline(oscOverlayActive: false, surfaceBackground: nil,
+                                             themeBackground: nil) == nil)
+    }
+
+    @Test func resetOnAColoredSurfaceRoutesToResetNotApply() {
+        // the regression this pairs with: a `.color` session runs OSC 11, then the program resets. The
+        // reset reports the THEME (the OSC overlay dropped the watermark's background key), so a baseline
+        // still claiming the watermark color would return .apply and never release the overlay.
+        let baseline = OSCBackgroundPolicy.baseline(oscOverlayActive: true, surfaceBackground: "#aa0000",
+                                                    themeBackground: "#1d1f21")
+        #expect(OSCBackgroundPolicy.decide(incoming: "#1d1f21", themeBackground: baseline,
+                                           current: "#123456") == .reset)
+    }
 }
