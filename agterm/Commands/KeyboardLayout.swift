@@ -6,9 +6,12 @@ import Foundation
 ///
 /// A Latin layout (US, Dvorak, Colemak, US-International, French, German) reports true and binds by the
 /// character it types. A non-Latin one (Russian, Greek, Hebrew, Arabic, Thai) reports false and binds by
-/// physical position, since nothing it types can spell a chord. This is the same distinction AppKit draws
-/// for menu key equivalents, which is why built-in `map` shortcuts keep working on those layouts while
-/// the monitor-driven chords needed this.
+/// physical position, since nothing it types can spell a chord.
+///
+/// This covers the two MONITOR-driven paths only — custom commands and `undo_close`. Every other built-in
+/// rides an AppKit menu key equivalent, which resolves on its own; ⌘N and ⌘W were observed firing on a
+/// Russian layout, but how AppKit reaches them was not isolated here, and `.claude/rules/control-api.md`
+/// records a conflicting account for ⌘C/⌘V/⌘A. Do not cite this type as evidence either way.
 enum KeyboardLayout {
     /// Whether the active keyboard layout can type ASCII. Read fresh on every key press — the query costs
     /// well under a microsecond, so it needs no cache and no input-source-changed observer, and can never

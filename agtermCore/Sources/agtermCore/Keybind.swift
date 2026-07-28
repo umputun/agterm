@@ -135,21 +135,34 @@ func latinKey(forKeyCode keyCode: UInt16) -> String? {
 /// Greek types `;` on the Q position and Hebrew types `/` there, so a Latin-spelled letter chord would
 /// stay dead on exactly the layouts this exists to serve, and two physical keys could collapse onto one
 /// chord — on Hebrew the `'` key produces `,` while the `,` key falls back to `,`. Resolving the whole
-/// layout at once keeps `latinKey`'s one-key-per-position mapping intact.
+/// layout at once keeps `latinKey`'s one-key-per-position mapping intact, so no two TABLE positions can
+/// collapse. A key code outside the table keeps what it types, which still aliases the table for the
+/// keypad — keypad `5` and the number row both give `"5"` — exactly as it did before any of this, since
+/// the keypad's output does not vary by layout.
 ///
 /// This is a different rule from `InterruptKeystroke.isInterrupt`, which tests the produced character
 /// itself (is it a Latin letter?) rather than the layout. That one classifies a single hardcoded key, so
 /// it needs no layout context; a chord needs the whole ANSI vocabulary and does.
 ///
-/// Returns `nil` only when the press carries no usable base key at all: a bare modifier, or a position
-/// outside `latinKey`'s table that produced nothing. A dead key at a table position resolves to its Latin
-/// key rather than to `nil`.
+/// Returns `nil` when the press carries no usable base key. On a non-ASCII-capable layout that means a
+/// position outside `latinKey`'s table that produced nothing, plus the ISO section key; a dead key at a
+/// TABLE position resolves to its Latin key rather than to `nil`. On an ASCII-capable layout it means
+/// anything that produced nothing at all, table position or not — that branch never consults the table.
 public func chordKey(forKeyCode keyCode: UInt16, produced: String?, layoutIsASCIICapable: Bool) -> String? {
     // space is a named key (`namedKey(forKeyCode:)` claims keyCode 49); a produced space is not a base key.
     let base = produced?.first.map { String($0).lowercased() }.flatMap { $0 == " " ? nil : $0 }
     guard !layoutIsASCIICapable else { return base }
-    return latinKey(forKeyCode: keyCode) ?? base
+    if let latin = latinKey(forKeyCode: keyCode) { return latin }
+    // the ISO section key — the extra key an ISO keyboard carries and an ANSI one does not — has no
+    // position in the table AND types a layout-dependent character, so keeping it would alias whichever
+    // table position types the same thing: Ukrainian-PC types `\` there against the ANSI backslash key,
+    // Hebrew-PC types `;` there against the ANSI semicolon key. Both would fire one binding from two
+    // keys and swallow the keystroke. It cannot spell a chord on a layout resolved by position.
+    return keyCode == isoSectionKeyCode ? nil : base
 }
+
+/// The ISO-only key left of Z (macOS `kVK_ISO_Section`), absent from an ANSI keyboard and from `latinKey`.
+private let isoSectionKeyCode: UInt16 = 10
 
 /// The named key for a menu item's key-equivalent CHARACTER, or `nil` for an ordinary printable key.
 ///

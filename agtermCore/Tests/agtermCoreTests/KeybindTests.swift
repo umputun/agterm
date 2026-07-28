@@ -179,7 +179,8 @@ struct KeybindTests {
     }
 
     // two physical keys must never resolve to one chord key: the second would fire a binding aimed at the
-    // first AND be swallowed by the monitor. Only guaranteed while the whole layout resolves by position.
+    // first AND be swallowed by the monitor. Fixtures are the produced characters measured with
+    // UCKeyTranslate against the real layout data.
     @Test func chordKeyNeverCollapsesTwoPositionsOntoOneKeyOnANonASCIILayout() {
         let hebrew: [UInt16: String] = [39: ",", 43: "ת", 44: ".", 47: "ץ"]
         let greek: [UInt16: String] = [12: ";", 41: ""]
@@ -191,10 +192,25 @@ struct KeybindTests {
         }
     }
 
+    // the ISO key types a layout-dependent character from a position the table does not claim, so keeping
+    // it would alias the table position that types the same thing — one binding fired from two keys.
+    @Test func chordKeyDropsTheISOSectionKeyOnANonASCIILayout() {
+        #expect(chordKey(forKeyCode: 10, produced: "\\", layoutIsASCIICapable: false) == nil,
+                "Ukrainian-PC types a backslash here, which keyCode 42 already owns")
+        #expect(chordKey(forKeyCode: 10, produced: ";", layoutIsASCIICapable: false) == nil,
+                "Hebrew-PC types a semicolon here, which keyCode 41 already owns")
+        #expect(chordKey(forKeyCode: 10, produced: "§", layoutIsASCIICapable: true) == "§",
+                "on a Latin layout it binds what it types, exactly as before")
+    }
+
     @Test func chordKeyResolvesAPositionThatProducedNothing() {
         #expect(chordKey(forKeyCode: 31, produced: nil, layoutIsASCIICapable: false) == "o")
         #expect(chordKey(forKeyCode: 41, produced: "", layoutIsASCIICapable: false) == ";",
                 "a dead key at a table position resolves to its Latin key, not to nil")
+        // the ASCII-capable branch never consults the table, so a table position that produced nothing is
+        // nil there. US-International puts a dead acute on keyCode 39, which reports "" while composing.
+        #expect(chordKey(forKeyCode: 39, produced: "", layoutIsASCIICapable: true) == nil)
+        #expect(chordKey(forKeyCode: 31, produced: nil, layoutIsASCIICapable: true) == nil)
     }
 
     @Test func chordKeyReturnsNilWithoutAUsableBaseKey() {

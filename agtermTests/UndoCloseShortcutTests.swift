@@ -42,6 +42,14 @@ final class UndoCloseShortcutTests: XCTestCase {
         try await super.tearDown()
     }
 
+    /// Skip a case whose outcome only holds while the machine's own layout can type ASCII. The monitor
+    /// reads the live input source, so a tester sitting on the Russian layout the keymap rule prescribes
+    /// for hand-verifying this feature would otherwise see these fail on a correct build.
+    private func skipUnlessLayoutIsASCIICapable() throws {
+        try XCTSkipUnless(KeyboardLayout.isASCIICapable,
+                          "needs an ASCII-capable keyboard layout; the other branch is covered in KeybindTests")
+    }
+
     /// A key press as the active layout reports it: `characters` is what the layout puts on that physical
     /// position, `keyCode` is the position itself.
     private func keyDown(_ characters: String, keyCode: UInt16, flags: NSEvent.ModifierFlags = []) throws -> NSEvent {
@@ -60,6 +68,7 @@ final class UndoCloseShortcutTests: XCTestCase {
     // an alternative LATIN layout keeps its own letter positions: on Dvorak the physical Z position types
     // ";", so ⌘Z follows the Z the user actually types rather than the ANSI Z position.
     func testAlternativeLatinLayoutKeepsItsOwnLetterPositions() throws {
+        try skipUnlessLayoutIsASCIICapable()
         let event = try keyDown(";", keyCode: 6, flags: .command)
         XCTAssertEqual(shortcut.chord(from: event), Chord(mods: [.command], key: ";"))
     }
@@ -68,6 +77,7 @@ final class UndoCloseShortcutTests: XCTestCase {
     // the two the monitor passes through. A remapped Latin layout typing a non-ASCII character keeps it
     // and simply matches no chord, rather than being pulled onto the ANSI position.
     func testASCIICapableLayoutBindsTheProducedCharacterNotThePosition() throws {
+        try skipUnlessLayoutIsASCIICapable()
         let event = try keyDown("я", keyCode: 6, flags: .command)
         XCTAssertEqual(shortcut.chord(from: event), Chord(mods: [.command], key: "я"))
         XCTAssertNotEqual(shortcut.chord(from: event), BuiltinAction.undoClose.defaultChord)

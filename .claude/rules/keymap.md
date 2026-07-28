@@ -219,8 +219,14 @@ paths:
   `/` there, so Latin-spelled LETTER chords stayed dead on two of the three layouts the fix targets; and it let two physical keys
   collapse onto one chord key — on Hebrew the `'` key produces `,` while the `,` key falls back to `,`, so one binding fired from
   a key the user never pressed AND the monitor ate the keystroke (`handleKeyDown` returns true on `.fired`/`.armed`).
-  Resolving the whole layout at once keeps `latinKey`'s one-key-per-position mapping intact, which is what makes a collapse
-  impossible.
+  Resolving the whole layout at once keeps `latinKey`'s one-key-per-position mapping intact, so no two TABLE positions can
+  collapse.
+  Two positions OUTSIDE the table still need care, because an unclaimed key code keeps whatever it types and that can equal a
+  table value: the ISO section key (keyCode 10, the extra key an ISO keyboard has) types `\` on Ukrainian-PC and `;` on
+  Hebrew-PC, colliding with keyCodes 42 and 41 — it is therefore DROPPED on a non-ASCII layout (`isoSectionKeyCode`), and
+  removing that guard reintroduces the collapse.
+  The keypad also aliases (keypad `5` and the number row both give `"5"`), which is deliberate and pre-dates all of this — the
+  keypad's output does not vary by layout, so binding it by what it types is correct.
   This is a DIFFERENT rule from `InterruptKeystroke.isInterrupt`, which tests the produced CHARACTER (is it a Latin letter?)
   rather than the layout — do not "unify" them: that one classifies a single hardcoded key and needs no layout context, while a
   chord needs the whole ANSI vocabulary including punctuation.
@@ -240,6 +246,18 @@ paths:
   and `KeybindTests` carries the whole layout policy host-free, taking `layoutIsASCIICapable` as a parameter.
   Do NOT "fix" the split by switching the runner to `charactersIgnoringModifiers` for testability — that reintroduces the
   shifted-symbol bug (see the shift-symbol note above), and it would not make the non-Latin branch reachable anyway.
+  **The accessor split has a live consequence the shift-symbol bullet above does NOT cover: `undo_close` is exempt from
+  `shift+<base>` normalization.**
+  `charactersIgnoringModifiers` KEEPS shift, so a real Shift+/ press reaches `UndoCloseShortcut` as `(shift, "?")` while
+  `map shift+/ undo_close` parsed to `(shift, "/")` — the comparison fails and File ▸ Reopen Closed Item is silently dead, for
+  every shifted punctuation/digit (shifted LETTERS are fine, `chordKey` lowercases).
+  The deadness is pre-existing (master read the same accessor), but the layout branch now SPLITS it: on a non-ASCII layout the
+  press resolves through `latinKey`, which is shift-independent, so the identical `map` line FIRES on Cyrillic and stays dead on
+  US.
+  `undo_close` is the only built-in delivered by a monitor rather than a menu key-equivalent, so it is the only action this
+  reaches.
+  The hosted tests skip themselves when the tester's own layout is not ASCII-capable (`XCTSkipUnless`), so running `make
+  test-app` while hand-verifying on Russian reports skips rather than false failures.
   VERIFIED BY HAND on a Russian-Phonetic layout against an isolated dev instance: a simple letter chord, a `cmd+r>t` leader, a real
   `ctrl+a>d` leader from the maintainer's own keymap, and ⌘Z undo-close all fire on Cyrillic and keep working on U.S.
   Re-run that way after touching either monitor's `chord(from:)` — the automated suites cannot catch a regression there.
