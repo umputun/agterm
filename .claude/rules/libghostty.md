@@ -237,10 +237,14 @@ paths:
   a NotificationCenter event from it; it does not paint the surface).
   Under translucency the surface renders `background-opacity = 0`, so an OSC 11 background is invisible —
   the terminal is transparent and the AppKit window backing (theme) shows through.
-  `GhosttyCallbacks` handles `COLOR_CHANGE` for the BACKGROUND kind and calls `GhosttySurfaceView.applyOSCBackground(_:)`,
-  which gives THIS surface its own `.color` config overlay (`WatermarkConfig.overlayText` — the SAME
-  per-surface path as `session background color`), baking the window opacity into `background-opacity`, so
-  the pane renders its tint translucently, per-pane, without touching the window backing or any other surface.
+  `GhosttyCallbacks` handles `COLOR_CHANGE` for the BACKGROUND kind and hands the color to
+  `GhosttySurfaceView.handleOSCBackgroundChange(_:)`, which routes it through the host-free
+  `OSCBackgroundPolicy` and then calls `applyOSCBackground(_:)` / `releaseOSCBackground()`.
+  The apply gives THIS surface its own config overlay carrying ONLY `background-opacity = windowOpacity`
+  (`WatermarkConfig.oscBackgroundOverlayText`), so the pane renders its tint translucently, per-pane,
+  without touching the window backing or any other surface.
+  **That overlay must never carry a `background` key** — see the OSC 111 paragraph below;
+  restating the OSC color there is what broke the reset in #309.
   Held on `GhosttySurfaceView.oscBackgroundColorHex` and re-asserted across a config reload and a live
   opacity change (`reapplySessionConfigIfNeeded`/`reapplyColorBackgroundIfNeeded`), and preserved across a
   dashboard open/close (the `dashboardFontOverride` didSet re-emits it).
@@ -254,14 +258,21 @@ paths:
   There is NO embedding C API to clear the `override`: config updates touch only `default`, the `reset`
   binding action's `fullReset` (RIS) does NOT touch colors, `csi`/`esc`/`text` write to the child pty and
   not the VT parser, and `COLOR_CHANGE` is outbound-only.
-  Even OSC 111 does not null the override: in this pin `DynamicRGB.reset()` COPIES the current `default`
-  into `override`, so the override only changes when the program emits a color-reset sequence or the surface
-  is recreated (a fresh shell).
+  OSC 111 does not NULL the override either: in this pin `DynamicRGB.reset()` COPIES the current `default`
+  into `override`, so a reset renders whatever the config's `background` currently is.
+  **That is exactly why the OSC overlay must not restate the color.**
+  `ghostty_surface_update_config` reaches `Termio.changeConfig`, which re-seeds
+  `terminal.colors.background.default` from the config's `background` key on EVERY per-surface update
+  (`Termio.zig`) — so an overlay carrying `background = <the OSC color>` overwrites the default layer with
+  the program's own color, and the program's OSC 111 then "resets" to it.
+  That was #309: the pane stayed recolored after a TUI exited, and an OSC 11 QUERY still reported the
+  program's color, because `get()` = `override orelse default` and BOTH layers held it.
+  Lifting only `background-opacity` leaves `default` at the theme color, so the reset genuinely reverts.
   The explicit spec is therefore the DEFAULT layer, visible only when no OSC override is live; `tree`'s
   `background` reports the stored spec, which can differ from what a live OSC program is painting.
   `oscBackgroundColorHex` mirrors the OSC color currently applied to THIS surface's overlay (nil when a
-  watermark/plain config is applied instead): it is BOTH the dedupe key in the `COLOR_CHANGE` caller and the
-  re-assert source across reload / opacity / dashboard.
+  watermark/plain config is applied instead): it is BOTH the dedupe key (read by `OSCBackgroundPolicy`) and
+  the re-assert source across reload / opacity / dashboard.
   `applyWatermarkFromSession` (every `session.background` set/clear) RELEASES the latch, because it installs
   a config with no OSC overlay; without this, a re-`printf` of the SAME OSC 11 color right after `session
   background clear/set` matches the stale latch, is deduped away, and never renders.
@@ -275,11 +286,18 @@ paths:
   override RESURFACES and masks X; and because `session.background` is session-scoped, every realized
   session surface (main, split, and scratch) is affected even though the OSC tint was per-pane.
   Only BACKGROUND is wired — OSC 10/12 (fg/cursor) render regardless of translucency.
-  A per-prompt OSC re-emit is deduped in the `COLOR_CHANGE` caller (skip when the hex is unchanged) so a
-  shell re-asserting OSC 11 every prompt does not rebuild the surface config each time.
-  Reset (OSC 111) arrives as a `COLOR_CHANGE` to the theme color, so the pane reverts to the theme
-  background (intended — the callback cannot distinguish a reset from a deliberate set-to-theme-color); a
-  pane/tab close clears the latch outright.
+  **`OSCBackgroundPolicy` (agtermCore, unit-tested) owns the set-vs-reset routing and the dedupe**, because
+  libghostty reports both through the SAME action with no flag telling them apart — a reset simply carries
+  the terminal's default background.
+  So the surface's own BASELINE color identifies a reset: the session's `.color` watermark, a sessionless
+  overlay's `--background-color`, else the theme background (`baselineBackgroundHex()`) — whichever ghostty
+  last seeded `default` from.
+  A reported color equal to it means reset → `releaseOSCBackground()` drops the overlay and restores the
+  surface's own config; an unchanged color means a per-prompt re-emit → ignored, so a shell re-asserting
+  OSC 11 every prompt does not rebuild the surface config each time; anything else applies.
+  A program that deliberately sets OSC 11 to the exact baseline color is indistinguishable from one
+  resetting to it, which is harmless — both render that color.
+  A pane/tab close clears the latch outright.
   Diagnosed with codex; verified BY EYE (background color is not accessibility-observable, like the
   cursor solid/hollow case), only visible under translucency (at 100% opacity ghostty renders the OSC bg
   itself).

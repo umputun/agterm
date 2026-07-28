@@ -99,23 +99,52 @@ extension GhosttySurfaceView {
         ownedConfigs = [config]
     }
 
+    /// Route a dynamic background color libghostty reported for THIS surface (`GHOSTTY_ACTION_COLOR_CHANGE`,
+    /// kind background). The action carries no set-vs-reset flag — OSC 111 simply reports the terminal's
+    /// default background — so the surface's own baseline color is what identifies a reset: the session's
+    /// `.color` watermark, a sessionless overlay's `--background-color`, else the theme background. That is
+    /// exactly what ghostty seeded the terminal's `default` color layer from, so a reported color equal to
+    /// it means the program reset. `OSCBackgroundPolicy` owns the decision (and the per-prompt dedupe).
+    func handleOSCBackgroundChange(_ hex: String) {
+        switch OSCBackgroundPolicy.decide(incoming: hex, themeBackground: baselineBackgroundHex(),
+                                          current: oscBackgroundColorHex) {
+        case .apply(let color): applyOSCBackground(color)
+        case .reset: releaseOSCBackground()
+        case .ignore: break
+        }
+    }
+
+    /// The background color this surface renders with no OSC override live — what ghostty seeded the
+    /// terminal's `default` color layer from when it last took this surface's config.
+    private func baselineBackgroundHex() -> String? {
+        if let watermark = (session ?? watermarkSession)?.backgroundWatermark, watermark.kind == .color,
+           let hex = watermark.colorHex {
+            return hex
+        }
+        return overlayBackgroundColorHex ?? GhosttyApp.shared.terminalBackgroundColor?.agtermHexString
+    }
+
     /// Apply the dynamic background color a program set on THIS surface via OSC 11. libghostty already
-    /// stored the color in its terminal state, but under window translucency the surface renders
-    /// `background-opacity = 0` (the AppKit window backing supplies the tint), so the OSC color is
-    /// invisible. This gives the surface its OWN `.color` overlay — the SAME per-surface path as
-    /// `session background color`, baking the current window opacity into `background-opacity` — so the
-    /// pane renders its tint (translucent, honoring the opacity slider), per-pane, without touching the
-    /// window backing, the chrome, or any other surface. Reads the current font (dashboard override /
-    /// session zoom / live zoom / initial) so the config re-apply can't reset the pane's font — including a
-    /// sessionless scratch/overlay whose live cmd-+/- zoom would otherwise reset. A malformed hex is rejected.
-    /// Retains the per-surface config in `ownedConfigs`, freed on teardown.
+    /// stored the color in the terminal's dynamic `override` layer and the renderer draws
+    /// `override orelse default`, so the color itself needs no restating — but under window translucency
+    /// the surface renders `background-opacity = 0` (the AppKit window backing supplies the tint), which
+    /// makes the OSC color invisible. This gives the surface its OWN overlay lifting the opacity back to
+    /// the window's, so the pane renders its tint (translucent, honoring the opacity slider), per-pane,
+    /// without touching the window backing, the chrome, or any other surface.
+    ///
+    /// The overlay deliberately carries no `background` key: that would re-seed the terminal's `default`
+    /// color layer with the OSC color, and since OSC 111 resets the override TO that default, the program's
+    /// reset would restore its own color and strand the pane recolored (issue #309).
+    ///
+    /// Reads the current font (dashboard override / session zoom / live zoom / initial) so the config
+    /// re-apply can't reset the pane's font — including a sessionless scratch/overlay whose live cmd-+/-
+    /// zoom would otherwise reset. A malformed hex is rejected. Retains the per-surface config in
+    /// `ownedConfigs`, freed on teardown.
     func applyOSCBackground(_ hex: String) {
         guard let surface, WatermarkConfig.isValidColorHex(hex) else { return }
         oscBackgroundColorHex = hex
-        let overlay = WatermarkConfig.overlayText(watermark: BackgroundWatermark(kind: .color, colorHex: hex),
-                                                  resolvedImagePath: nil,
-                                                  fontSize: dashboardFontOverride ?? session?.fontSize ?? currentFontSize() ?? initialFontSize.map(Double.init),
-                                                  windowOpacity: GhosttyApp.shared.windowOpacity)
+        let overlay = WatermarkConfig.oscBackgroundOverlayText(fontSize: currentEffectiveFontSize(),
+                                                               windowOpacity: GhosttyApp.shared.windowOpacity)
         guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
             NSLog("osc background: per-surface config build failed")
             return
@@ -123,5 +152,32 @@ extension GhosttySurfaceView {
         ghostty_surface_update_config(surface, config)
         ownedConfigs.forEach { ghostty_config_free($0) }
         ownedConfigs = [config]
+    }
+
+    /// Drop this surface's OSC-11 overlay after a program reset the dynamic background, falling back to
+    /// the surface's own baseline config: the session's watermark/zoom, a sessionless overlay's
+    /// `--background-color`, else the plain config with the live font zoom preserved. libghostty has
+    /// already restored its own `override` to the default color, so this only takes the opacity lift away.
+    func releaseOSCBackground() {
+        oscBackgroundColorHex = nil
+        if session != nil || watermarkSession != nil { applyWatermarkFromSession(); return }
+        if overlayBackgroundColorHex != nil { applyOverlayBackgroundColor(); return }
+        guard let surface else { return }
+        let overlay = WatermarkConfig.overlayText(watermark: nil, resolvedImagePath: nil,
+                                                  fontSize: currentEffectiveFontSize())
+        guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
+            NSLog("osc background: per-surface config rebuild failed on reset")
+            return
+        }
+        ghostty_surface_update_config(surface, config)
+        ownedConfigs.forEach { ghostty_config_free($0) }
+        ownedConfigs = [config]
+    }
+
+    /// The font size a per-surface config re-apply must restate so it doesn't reset the pane's zoom:
+    /// the dashboard's transient override, else the session's zoom, else a sessionless surface's live
+    /// cmd-+/- size, else its creation size.
+    private func currentEffectiveFontSize() -> Double? {
+        dashboardFontOverride ?? session?.fontSize ?? currentFontSize() ?? initialFontSize.map(Double.init)
     }
 }

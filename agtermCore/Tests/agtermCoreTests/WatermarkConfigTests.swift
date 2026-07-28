@@ -213,4 +213,26 @@ struct WatermarkConfigTests {
         #expect(!WatermarkConfig.isValidText(""))
         #expect(!WatermarkConfig.isValidText(String(repeating: "a", count: WatermarkConfig.maxTextLength + 1)))
     }
+
+    @Test func oscOverlayNeverWritesTheBackgroundKey() {
+        let text = WatermarkConfig.oscBackgroundOverlayText(fontSize: nil, windowOpacity: 0.8)
+        #expect(text == "background-opacity = 0.8\n")
+        // the crux of issue #309: a `background = <hex>` line here reaches ghostty's `Termio.changeConfig`,
+        // which seeds the terminal's DEFAULT color layer from it. OSC 111 resets the override TO that
+        // default, so writing the OSC color here makes the reset restore the OSC color, not the theme.
+        #expect(!text.contains("background ="))
+    }
+
+    @Test func oscOverlayPreservesFontZoom() {
+        let text = WatermarkConfig.oscBackgroundOverlayText(fontSize: 16, windowOpacity: 1)
+        #expect(text.contains("background-opacity = 1\n"))
+        #expect(text.contains("font-size = 16\n"))
+        #expect(!text.contains("background ="))
+    }
+
+    @Test(arguments: [(2.0, "1"), (-1.0, "0"), (Double.nan, "1")])
+    func oscOverlayClampsOpacity(_ opacity: Double, _ expected: String) {
+        let text = WatermarkConfig.oscBackgroundOverlayText(fontSize: nil, windowOpacity: opacity)
+        #expect(text == "background-opacity = \(expected)\n")
+    }
 }

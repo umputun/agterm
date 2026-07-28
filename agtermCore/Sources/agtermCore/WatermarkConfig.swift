@@ -96,6 +96,25 @@ public enum WatermarkConfig {
         return lines.isEmpty ? "" : lines.joined(separator: "\n") + "\n"
     }
 
+    /// The per-surface ghostty config overlay that makes a program's LIVE OSC 11 background visible: a
+    /// `background-opacity = <windowOpacity>` line plus the usual `font-size` zoom preservation.
+    ///
+    /// It deliberately carries NO `background` key, which is what separates it from the `.color` overlay
+    /// above. libghostty holds the OSC color in the terminal's dynamic `override` layer and the renderer
+    /// already draws `override orelse default`, so the color needs no restating — only the opacity, which
+    /// the base config pins to 0 under window translucency (leaving the OSC tint invisible).
+    ///
+    /// Writing the color into `background` instead would reach ghostty's `Termio.changeConfig`, which
+    /// seeds the terminal's `default` color layer from the config on every surface update. Since OSC 111
+    /// resets the override TO that default, restating the OSC color here makes the reset a no-op and
+    /// strands the pane on the program's color after it exits.
+    public static func oscBackgroundOverlayText(fontSize: Double?, windowOpacity: Double) -> String {
+        let opacity = windowOpacity.isFinite ? min(max(windowOpacity, 0), 1) : 1
+        var lines = ["background-opacity = \(formatted(opacity))"]
+        if let fontSize { lines.append("font-size = \(formatted(fontSize))") }
+        return lines.joined(separator: "\n") + "\n"
+    }
+
     /// Format a `Double` for a ghostty config value: an integral value without a trailing `.0`
     /// (`14.0` → `14`), else the minimal decimal (`0.15` → `0.15`). Locale-independent (always `.`):
     /// `String(format:)` uses the C locale. Uses fixed-point, NOT `String(Double)`, because the latter

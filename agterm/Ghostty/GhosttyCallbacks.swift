@@ -144,20 +144,18 @@ final class GhosttyCallbacks: @unchecked Sendable {
             DispatchQueue.main.async { view.openLink(link) }
             return true
         case GHOSTTY_ACTION_COLOR_CHANGE:
-            // a program set a dynamic terminal color via OSC 10/11/12 (fg/bg/cursor). libghostty already
-            // applied it to its own render state, but under window translucency every surface renders
-            // background-opacity 0 (the AppKit window backing supplies the tint), so an OSC 11 BACKGROUND
-            // stays invisible until we give THIS surface its own `.color` overlay — a per-pane tint. Only
-            // background needs acting on; foreground/cursor render regardless of translucency. Copy the
-            // color out synchronously (the struct is only valid for this call), then hop to the apply.
+            // a program set or RESET a dynamic terminal color via OSC 10/11/12 (fg/bg/cursor) or their
+            // 110/111/112 resets. libghostty already applied it to its own render state, but under window
+            // translucency every surface renders background-opacity 0 (the AppKit window backing supplies
+            // the tint), so an OSC 11 BACKGROUND stays invisible until we lift THIS surface's opacity — a
+            // per-pane tint. Only background needs acting on; foreground/cursor render regardless of
+            // translucency. Copy the color out synchronously (the struct is only valid for this call), then
+            // hop to the main actor, where the set-vs-reset routing and the per-prompt dedupe are decided.
             guard let view = surfaceView(from: target) else { return true }
             let change = action.action.color_change
             guard change.kind == GHOSTTY_ACTION_COLOR_KIND_BACKGROUND else { return true }
             let hex = String(format: "#%02x%02x%02x", Int(change.r), Int(change.g), Int(change.b))
-            // dedupe the per-prompt OSC re-emit storm: a shell that re-asserts OSC 11 on every prompt would
-            // otherwise drive a full per-surface config rebuild each time. skip when unchanged — the reload
-            // and opacity re-assert callers still force a re-apply by calling applyOSCBackground directly.
-            DispatchQueue.main.async { guard view.oscBackgroundColorHex != hex else { return }; view.applyOSCBackground(hex) }
+            DispatchQueue.main.async { view.handleOSCBackgroundChange(hex) }
             return true
         default:
             return false
