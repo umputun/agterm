@@ -17,6 +17,7 @@ Recipes come from other people as well as the maintainer. Every one is reviewed 
 | [status-announcer](status-announcer/) | demo: speak agent status changes from a dedicated session | 0.16.0, jq |
 | [claude-session-resume](claude-session-resume/) | each tab reopens its own Claude Code conversation after a restart | 0.3.1, zsh, Claude Code |
 | [codex-session-resume](codex-session-resume/) | each tab reopens its own codex conversation after a restart | 0.3.1, zsh, Codex CLI |
+| [new-session-in-workspace](new-session-in-workspace/) | pick a workspace with fzf and start a session in it | 0.8.0, jq, fzf |
 
 Most recipes need `agtermctl` on your PATH; **Help ▸ Install Command Line Tool…** puts it there. The two session-resume recipes are shell functions that read the environment agterm gives a session and never call the CLI. Some recipes also need `jq`, `fzf`, or a particular shell, and each recipe's *Requirements* section says which, along with the minimum agterm version it needs. Recipes are snapshots rather than a maintained surface: the control API grows by addition, so they rarely break, and one that does gets fixed when it is reported.
 
