@@ -146,7 +146,7 @@ extension WindowContentView {
         case .primary:
             TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
                          isActive: true, deckVisible: true, reportsFocusChange: false)
-                .id("\(session.id.uuidString)-zoom-primary")
+                .id("\(primarySurfaceID(session))-zoom")
         case .split:
             TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
                          isActive: true, deckVisible: true, reportsFocusChange: false)

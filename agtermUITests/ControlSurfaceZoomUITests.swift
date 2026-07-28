@@ -39,6 +39,64 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
         XCTAssertTrue(pollSplitRatio(0.33, timeout: 10), "zoom round-trip must not change the split ratio")
     }
 
+    // A primary surface can exit while terminal zoom owns its host. When a live split exists, that exit
+    // promotes the split surface into the primary slot without changing the zoom target's semantic identity
+    // (`surface:<session>:left`). The zoom host must still replace its torn-down AppKit view and focus the
+    // promoted survivor; otherwise the zoom stays blank until the user exits it.
+    func testZoomedPrimaryExitRehostsAndFocusesPromotedSurvivor() throws {
+        let sessionID = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","args":{"mode":"on"}}"#)["ok"] as? Bool, true,
+                       "split on should succeed")
+        XCTAssertTrue(try pollSplit(sessionID, timeout: 10), "the split should be live before zoom")
+
+        // Prove the future survivor's shell is ready before the one-shot primary exit.
+        let survivorReady = markerDir.appendingPathComponent("zoom-survivor-ready")
+        var survivorValue: String?
+        for _ in 0..<4 where survivorValue == nil {
+            let typed = try sendCommand(typeRequest(
+                text: "printf ZOOMSURVIVOR > '\(survivorReady.path)'\n",
+                target: sessionID, select: false, pane: "right"))
+            XCTAssertEqual(typed["ok"] as? Bool, true, "typing to the split survivor should succeed: \(typed)")
+            survivorValue = pollMarker(survivorReady, timeout: 3)
+        }
+        XCTAssertEqual(survivorValue, "ZOOMSURVIVOR", "the split survivor should be reading commands")
+
+        let leftSurface = try activeSurfaceID(kind: "left")
+        let zoom = try sendCommand(#"{"cmd":"surface.zoom","target":"\#(leftSurface)","args":{"mode":"show"}}"#)
+        XCTAssertEqual(zoom["ok"] as? Bool, true, "surface zoom show should succeed: \(zoom)")
+        XCTAssertTrue(app.buttons["terminal-zoom-exit"].waitForExistence(timeout: 10),
+                      "zoom should own the primary host before it exits")
+
+        // Confirm keyboard focus reached the zoomed primary before sending the non-repeatable `exit`.
+        let primaryReady = markerDir.appendingPathComponent("zoom-primary-ready")
+        var primaryValue: String?
+        for _ in 0..<4 where primaryValue == nil {
+            app.typeText("printf ZOOMPRIMARY > '\(primaryReady.path)'")
+            app.typeKey(.return, modifierFlags: [])
+            primaryValue = pollMarker(primaryReady, timeout: 3)
+        }
+        XCTAssertEqual(primaryValue, "ZOOMPRIMARY", "the zoomed primary should own keyboard focus")
+
+        app.typeText("exit")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(poll(until: (try? sessionNodeIfPresent(id: sessionID)?["split"] as? Bool) == false, timeout: 15),
+                      "primary exit should promote the split survivor")
+        XCTAssertTrue(app.buttons["terminal-zoom-exit"].exists,
+                      "promotion should keep the semantic primary target zoomed")
+
+        // Type without clicking or leaving zoom. A stale representable still hosts the torn-down primary
+        // and can never write this marker; a remounted survivor receives focus and runs it.
+        let afterPromotion = markerDir.appendingPathComponent("zoom-after-promotion")
+        var promotedValue: String?
+        for _ in 0..<4 where promotedValue == nil {
+            app.typeText("printf ZOOMPROMOTED > '\(afterPromotion.path)'")
+            app.typeKey(.return, modifierFlags: [])
+            promotedValue = pollMarker(afterPromotion, timeout: 3)
+        }
+        XCTAssertEqual(promotedValue, "ZOOMPROMOTED",
+                       "the promoted survivor should be hosted and focused without leaving zoom")
+    }
+
     func testScratchOpenedWhileZoomedRealizesSurface() throws {
         let leftSurface = try activeSurfaceID(kind: "left")
         let zoom = try sendCommand(#"{"cmd":"surface.zoom","target":"\#(leftSurface)","args":{"mode":"show"}}"#)

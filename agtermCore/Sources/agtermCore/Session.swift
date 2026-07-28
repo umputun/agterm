@@ -64,9 +64,19 @@ public final class Session: Identifiable {
     /// so it survives a relaunch (and a workspace move — the flag travels with the session).
     public var flagged: Bool = false
 
+    /// Changes only when one live primary-slot surface is replaced by another. SwiftUI terminal hosts
+    /// include this stable revision in their identity: lazy nil → first-surface creation stays at zero,
+    /// while split-survivor promotion advances it so the host remounts the replacement AppKit view.
+    @ObservationIgnored public private(set) var primarySurfaceHostRevision = 0
+
     /// The app-side surface (a `GhosttySurfaceView`). Lazily created on first
     /// display and owned here so it survives sidebar/detail view churn.
-    @ObservationIgnored public var surface: (any TerminalSurface)?
+    @ObservationIgnored public var surface: (any TerminalSurface)? {
+        didSet {
+            guard let oldValue, let surface, oldValue !== surface else { return }
+            primarySurfaceHostRevision &+= 1
+        }
+    }
 
     /// Whether the session is shown as a one-level vertical split (two panes side by
     /// side). Observed, so the detail pane shows/hides the second pane when toggled.

@@ -112,6 +112,20 @@ struct SessionTests {
         #expect(session.focusedCwd == "/Users/user")       // the main cwd, not an initialCwd fallback
     }
 
+    @Test func primarySurfaceHostRevisionChangesOnlyForLiveReplacement() {
+        let session = Session(initialCwd: "/Users/user")
+        let original = FakeSurface()
+        let replacement = FakeSurface()
+
+        #expect(session.primarySurfaceHostRevision == 0)
+        session.surface = original
+        #expect(session.primarySurfaceHostRevision == 0) // lazy creation must not force a second mount
+        session.surface = original
+        #expect(session.primarySurfaceHostRevision == 0) // assigning the same instance is still stable
+        session.surface = replacement
+        #expect(session.primarySurfaceHostRevision == 1) // promotion replaces the hosted AppKit view
+    }
+
     @Test func subtitleDetailUsesCwdForNamedSessionWithoutTitle() {
         // named local session: local auto-title is suppressed so oscTitle is nil; the second line is the cwd.
         let session = Session(initialCwd: "/Users/user/dev/foo", customName: "build")

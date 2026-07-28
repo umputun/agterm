@@ -587,12 +587,12 @@ struct WindowContentView: View {
         }
     }
 
-    /// Keeps the primary host stable while its surface is unchanged, but remounts it when a split survivor
-    /// is promoted into `session.surface`. `TerminalView.updateNSView` cannot replace the AppKit view that
-    /// `makeNSView` returned, so session identity alone would keep hosting the torn-down prior primary.
-    private func primarySurfaceID(_ session: Session) -> String {
-        guard let surface = session.surface else { return "\(session.id.uuidString)-primary-none" }
-        return "\(session.id.uuidString)-primary-\(ObjectIdentifier(surface as AnyObject))"
+    /// Keeps a primary host stable through lazy surface creation and ordinary updates, but remounts it
+    /// when one live surface replaces another (split-survivor promotion). `TerminalView.updateNSView`
+    /// cannot replace the AppKit view that `makeNSView` returned, so session identity alone would keep
+    /// hosting the torn-down prior primary.
+    func primarySurfaceID(_ session: Session) -> String {
+        "\(session.id.uuidString)-primary-\(session.primarySurfaceHostRevision)"
     }
 
     /// Mutes the inactive split pane's TEXT so the active pane stands out, WITHOUT darkening the
