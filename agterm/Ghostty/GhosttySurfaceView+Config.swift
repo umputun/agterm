@@ -16,12 +16,18 @@ extension GhosttySurfaceView {
     }
 
     /// Builds this session's background-watermark config overlay (base files + `background-image*` lines +
-    /// the dashboard font override else the session's current font zoom, via `WatermarkConfig`/`WatermarkRenderer`)
+    /// the font from `currentEffectiveFontSize()`, via `WatermarkConfig`/`WatermarkRenderer`)
     /// and pushes it to the surface, retaining the config for teardown. Scratch surfaces inherit their
     /// owner's visual config through `watermarkSession` while remaining operationally sessionless; overlay
     /// and quick-terminal surfaces carry neither link. A nil watermark with no font override
     /// yields the plain base config, which CLEARS a previously-applied image. The `.text` PNG is (re)rendered
     /// here so it always matches the current string/color. Main-actor; reads the session imperatively.
+    ///
+    /// The font deliberately falls through to the LIVE size, not just `session.fontSize`: a split or
+    /// scratch pane has its `onFontSizeChange` unwired (see `ControlServer+SurfaceIO.font`), so its
+    /// cmd-+/- zoom is never persisted and is readable only from the surface. Composing from
+    /// `session.fontSize` alone snapped those panes back to the session's size (or the config default) on
+    /// every re-apply — a `session.background` set/clear, and now also an OSC reset.
     func applyWatermarkFromSession() {
         guard let surface, let session = session ?? watermarkSession else { return }
         // this installs a watermark/plain config with NO OSC-11 overlay, so release the OSC latch: it is the
@@ -32,7 +38,7 @@ extension GhosttySurfaceView {
         oscBackgroundColorHex = nil
         let resolvedImagePath = WatermarkRenderer.materialize(session.backgroundWatermark, sessionID: session.id)
         let overlay = WatermarkConfig.overlayText(watermark: session.backgroundWatermark,
-                                                  resolvedImagePath: resolvedImagePath, fontSize: dashboardFontOverride ?? session.fontSize,
+                                                  resolvedImagePath: resolvedImagePath, fontSize: currentEffectiveFontSize(),
                                                   windowOpacity: GhosttyApp.shared.windowOpacity)
         guard let config = GhosttyApp.shared.configWithOverlay(overlay) else {
             NSLog("watermark: per-surface config build failed for session %@", session.id.uuidString)
