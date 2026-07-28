@@ -135,29 +135,74 @@ struct KeybindTests {
         }
     }
 
-    @Test func chordKeyKeepsTheProducedCharacterOnLatinLayouts() {
-        #expect(chordKey(forKeyCode: 31, produced: "o") == "o")
-        #expect(chordKey(forKeyCode: 8, produced: "j") == "j", "Dvorak keeps its own letter positions")
-        #expect(chordKey(forKeyCode: 44, produced: "/") == "/", "punctuation is spellable as-is")
-        #expect(chordKey(forKeyCode: 0, produced: "A") == "a", "the base key is always lowercased")
+    // every entry of the table, pinned one by one. The aggregate tests above hold under any permutation of
+    // the 47 entries, and the real kVK_ANSI_* constants are non-monotonic at 4/5 (h/g), 22/23 (6/5) and
+    // 25/26/28/29 (9/7/8/0) — where a transposition is both easiest to make and hardest to eyeball. A swap
+    // would bind a chord to the wrong physical key on every non-Latin layout.
+    @Test func latinKeyMapsEachKeyCodeToItsOwnAnsiCharacter() {
+        let table: [UInt16: String] = [
+            0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x", 8: "c", 9: "v",
+            11: "b", 12: "q", 13: "w", 14: "e", 15: "r", 16: "y", 17: "t",
+            18: "1", 19: "2", 20: "3", 21: "4", 22: "6", 23: "5", 25: "9", 26: "7", 28: "8", 29: "0",
+            24: "=", 27: "-", 30: "]", 33: "[", 39: "'", 41: ";", 42: "\\", 43: ",", 44: "/", 47: ".", 50: "`",
+            31: "o", 32: "u", 34: "i", 35: "p", 37: "l", 38: "j", 40: "k", 45: "n", 46: "m",
+        ]
+        for (code, expected) in table {
+            #expect(latinKey(forKeyCode: code) == expected, "keyCode \(code) must be '\(expected)'")
+        }
+        let mapped = Set((0...127).compactMap { latinKey(forKeyCode: UInt16($0)) != nil ? UInt16($0) : nil })
+        #expect(mapped == Set(table.keys), "the table and the function must claim the same key codes")
     }
 
-    @Test func chordKeyResolvesANonLatinLayoutByPhysicalPosition() {
-        #expect(chordKey(forKeyCode: 31, produced: "щ") == "o", "Cyrillic O position binds cmd+o")
-        #expect(chordKey(forKeyCode: 17, produced: "е") == "t")
-        #expect(chordKey(forKeyCode: 15, produced: "к") == "r")
-        #expect(chordKey(forKeyCode: 5, produced: "п") == "g")
-        #expect(chordKey(forKeyCode: 8, produced: "ψ") == "c", "Greek resolves the same way")
+    @Test func chordKeyKeepsTheProducedCharacterOnAnASCIICapableLayout() {
+        #expect(chordKey(forKeyCode: 31, produced: "o", layoutIsASCIICapable: true) == "o")
+        #expect(chordKey(forKeyCode: 8, produced: "j", layoutIsASCIICapable: true) == "j",
+                "Dvorak keeps its own letter positions")
+        #expect(chordKey(forKeyCode: 44, produced: "/", layoutIsASCIICapable: true) == "/")
+        #expect(chordKey(forKeyCode: 0, produced: "A", layoutIsASCIICapable: true) == "a",
+                "the base key is always lowercased")
+        #expect(chordKey(forKeyCode: 19, produced: "é", layoutIsASCIICapable: true) == "é",
+                "a Latin layout binds what it types, so French cmd+é still fires")
     }
 
-    @Test func chordKeyFallsBackWhenTheEventCarriesNoCharacter() {
-        #expect(chordKey(forKeyCode: 31, produced: nil) == "o")
-        #expect(chordKey(forKeyCode: 31, produced: "") == "o")
+    @Test func chordKeyResolvesAnyNonASCIILayoutByPhysicalPosition() {
+        #expect(chordKey(forKeyCode: 31, produced: "щ", layoutIsASCIICapable: false) == "o")
+        #expect(chordKey(forKeyCode: 17, produced: "е", layoutIsASCIICapable: false) == "t")
+        #expect(chordKey(forKeyCode: 6, produced: "я", layoutIsASCIICapable: false) == "z")
+        // the positions the per-key ASCII test got wrong: Greek types ';' on Q and Hebrew types '/' there,
+        // so a letter chord stayed dead on the layouts this exists to serve.
+        #expect(chordKey(forKeyCode: 12, produced: ";", layoutIsASCIICapable: false) == "q", "Greek Q")
+        #expect(chordKey(forKeyCode: 12, produced: "/", layoutIsASCIICapable: false) == "q", "Hebrew Q")
+        #expect(chordKey(forKeyCode: 13, produced: "'", layoutIsASCIICapable: false) == "w", "Hebrew-PC W")
+        // and the punctuation the standard Russian layout re-homes: '/' types '.', which used to be kept.
+        #expect(chordKey(forKeyCode: 44, produced: ".", layoutIsASCIICapable: false) == "/")
+    }
+
+    // two physical keys must never resolve to one chord key: the second would fire a binding aimed at the
+    // first AND be swallowed by the monitor. Only guaranteed while the whole layout resolves by position.
+    @Test func chordKeyNeverCollapsesTwoPositionsOntoOneKeyOnANonASCIILayout() {
+        let hebrew: [UInt16: String] = [39: ",", 43: "ת", 44: ".", 47: "ץ"]
+        let greek: [UInt16: String] = [12: ";", 41: ""]
+        let russianWin: [UInt16: String] = [44: ".", 47: "ю"]
+        for layout in [hebrew, greek, russianWin] {
+            let keys = layout.map { chordKey(forKeyCode: $0.key, produced: $0.value, layoutIsASCIICapable: false) }
+            #expect(keys.allSatisfy { $0 != nil })
+            #expect(Set(keys.compactMap { $0 }).count == layout.count, "positions collapsed: \(keys)")
+        }
+    }
+
+    @Test func chordKeyResolvesAPositionThatProducedNothing() {
+        #expect(chordKey(forKeyCode: 31, produced: nil, layoutIsASCIICapable: false) == "o")
+        #expect(chordKey(forKeyCode: 41, produced: "", layoutIsASCIICapable: false) == ";",
+                "a dead key at a table position resolves to its Latin key, not to nil")
     }
 
     @Test func chordKeyReturnsNilWithoutAUsableBaseKey() {
-        #expect(chordKey(forKeyCode: 63, produced: nil) == nil, "the fn key carries no Latin key")
-        #expect(chordKey(forKeyCode: 63, produced: "ж") == nil)
+        #expect(chordKey(forKeyCode: 63, produced: nil, layoutIsASCIICapable: false) == nil,
+                "the fn key carries no Latin key")
+        #expect(chordKey(forKeyCode: 63, produced: nil, layoutIsASCIICapable: true) == nil)
+        #expect(chordKey(forKeyCode: 49, produced: " ", layoutIsASCIICapable: true) == nil,
+                "space is a named key, never a produced base key")
     }
 
     @Test func bindableArrowKeysIsASubsetOfBindableNamedKeys() {

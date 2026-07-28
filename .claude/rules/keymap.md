@@ -203,33 +203,48 @@ paths:
   That is exactly the shifted-symbol failure mode that shipped once (see the shift-symbol note above),
   which is why `KeybindTests` pins `namedKey(forKeyCode:)`'s range to equal `bindableNamedKeys` exactly,
   and why the runner path has its own e2e (`KeymapUITests.testCustomCommandArrowChordFires`).
-- **A chord resolves LATIN-FIRST, physical-position second — `chordKey(forKeyCode:produced:)` owns the policy.**
+- **A chord resolves per LAYOUT, not per key — `chordKey(forKeyCode:produced:layoutIsASCIICapable:)` owns the policy.**
   A `keymap.conf` chord is spelled in Latin (`cmd+o`), but the character an `NSEvent` reports is whatever the ACTIVE input
   source puts on that key, so matching the produced character alone left EVERY letter/digit chord dead on a Cyrillic/Greek/Hebrew
   layout, where the O key yields `щ` (issue #306).
-  The host-free `chordKey(forKeyCode:produced:)` (`Keybind.swift`) keeps the produced character while it is printable ASCII — so
-  an alternative LATIN layout (Dvorak/Colemak) keeps its own letter positions — and falls back to `latinKey(forKeyCode:)`, the
-  ANSI letter/digit/punctuation table, only when the layout produces something no keymap line can spell.
-  Same policy as `InterruptKeystroke.isInterrupt`, which resolves a bare Ctrl-C the same way; `latinKey` and `namedKey(forKeyCode:)`
-  claim DISJOINT key codes (pinned by `KeybindTests`) because both monitors resolve the named key first.
-  Consequence to keep in mind: a chord can only ever be spelled in ASCII, so a Cyrillic layout cannot bind the Cyrillic character
-  it types — the physical position is the binding.
-  **The custom-command runner's own `NSEvent` seam is NOT unit-testable and never will be.**
-  `chord(from:)` reads `characters(byApplyingModifiers: [])`, which AppKit RE-TRANSLATES from the key code through the machine's
-  live input source — a synthesized `NSEvent` carrying `characters: "щ"` comes back `"o"` on a Latin-layout machine (verified),
-  so a hosted test there would assert the tester's keyboard, not the code.
-  `UndoCloseShortcut.chord(from:)` reads `charactersIgnoringModifiers`, which a synthesized event DOES report verbatim, so that
-  monitor carries the hosted layout coverage (`agtermTests/UndoCloseShortcutTests.swift`) and the runner relies on the shared
-  host-free policy plus a by-hand check on a real non-Latin layout.
-  Do NOT "fix" this by switching the runner to `charactersIgnoringModifiers` for testability — that reintroduces the shifted-symbol
-  bug (see the shift-symbol note above).
+  The app target reads ONE bit — `KeyboardLayout.isASCIICapable` (`agterm/Commands/KeyboardLayout.swift`,
+  `TISCopyCurrentKeyboardLayoutInputSource` + `kTISPropertyInputSourceIsASCIICapable`) — and the host-free
+  `chordKey` branches on it: an ASCII-capable layout (US, Dvorak, Colemak, US-International, French, German) binds the produced
+  character, EXACTLY as master did, so no existing user's binding changes; a layout that cannot type ASCII (every Russian variant,
+  Greek, Hebrew, Arabic, Thai, Ukrainian) binds by physical position via `latinKey(forKeyCode:)`, the ANSI table.
+  The property is read FRESH on every key press — measured at ~0.22 µs, so it needs no cache and no
+  `kTISNotifySelectedKeyboardInputSourceChanged` observer, and cannot go stale mid-session.
+  **Do NOT "optimize" this into a per-key ASCII test** (keep the produced character whenever it happens to be ASCII).
+  That was the first attempt and it is measurably wrong on real layout data: Greek types `;` on the physical Q and Hebrew types
+  `/` there, so Latin-spelled LETTER chords stayed dead on two of the three layouts the fix targets; and it let two physical keys
+  collapse onto one chord key — on Hebrew the `'` key produces `,` while the `,` key falls back to `,`, so one binding fired from
+  a key the user never pressed AND the monitor ate the keystroke (`handleKeyDown` returns true on `.fired`/`.armed`).
+  Resolving the whole layout at once keeps `latinKey`'s one-key-per-position mapping intact, which is what makes a collapse
+  impossible.
+  This is a DIFFERENT rule from `InterruptKeystroke.isInterrupt`, which tests the produced CHARACTER (is it a Latin letter?)
+  rather than the layout — do not "unify" them: that one classifies a single hardcoded key and needs no layout context, while a
+  chord needs the whole ANSI vocabulary including punctuation.
+  `latinKey` and `namedKey(forKeyCode:)` claim DISJOINT key codes (pinned by `KeybindTests`) because both monitors resolve the
+  named key first; every `latinKey` entry is pinned INDIVIDUALLY there too, since the aggregate set/uniqueness assertions hold
+  under any permutation and the real `kVK_ANSI_*` constants are non-monotonic at 4/5, 22/23 and 25/26/28/29.
+  Consequence to keep in mind: on a non-ASCII layout a chord can only be spelled by position, so such a layout cannot bind the
+  Cyrillic character it types.
+  **The NON-Latin branch of either monitor's `NSEvent` seam is NOT unit-testable — the branch is chosen by the LIVE input source.**
+  A test cannot set the machine's keyboard, so a hosted test runs on whatever the tester has (a Latin layout everywhere in
+  practice) and can only reach the ASCII-capable branch.
+  Two separate reasons, and both stand: `CustomCommandRunner.chord(from:)` additionally reads
+  `characters(byApplyingModifiers: [])`, which AppKit RE-TRANSLATES from the key code through the live input source — a
+  synthesized `NSEvent` carrying `characters: "щ"` comes back `"o"` on a Latin-layout machine (verified) — while
+  `UndoCloseShortcut.chord(from:)` reads `charactersIgnoringModifiers`, which a synthesized event DOES report verbatim.
+  So the hosted tests (`agtermTests/UndoCloseShortcutTests.swift`) pin the WIRING (right key code, right accessor, named keys win)
+  and `KeybindTests` carries the whole layout policy host-free, taking `layoutIsASCIICapable` as a parameter.
+  Do NOT "fix" the split by switching the runner to `charactersIgnoringModifiers` for testability — that reintroduces the
+  shifted-symbol bug (see the shift-symbol note above), and it would not make the non-Latin branch reachable anyway.
   VERIFIED BY HAND on a Russian-Phonetic layout against an isolated dev instance: a simple letter chord, a `cmd+r>t` leader, a real
   `ctrl+a>d` leader from the maintainer's own keymap, and ⌘Z undo-close all fire on Cyrillic and keep working on U.S.
-  Re-run that way after touching either monitor's `chord(from:)` — the automated suites cannot catch a regression here.
-  One known edge the per-key ASCII test leaves open: a non-Latin layout whose PUNCTUATION positions still emit ASCII (Russian types
-  `.` on the physical `/` key) keeps the produced character, so `cmd+/` does not fire there while `cmd+.` does.
-  Letters and digits are unaffected, and forcing position for punctuation too would break Dvorak's punctuation; distinguishing
-  "this layout is non-Latin" needs Carbon TIS calls that cannot live in host-free `agtermCore`.
+  Re-run that way after touching either monitor's `chord(from:)` — the automated suites cannot catch a regression there.
+  Russian-Phonetic is the most FORGIVING layout in the set (every one of its punctuation positions emits correct ASCII), so it
+  alone does not exercise the Greek/Hebrew cases; those are covered by the host-free tests using measured layout data.
 - **A `keybind` in `ghostty.conf` does NOT get this treatment — that is libghostty's matcher, and its rule is different.**
   ghostty parses a bare `g` as a UNICODE trigger and `key_g` as a PHYSICAL one, then matches physical → the produced utf8 → the
   unshifted codepoint (`Binding.Set.getEvent`), so a unicode trigger cannot fire on a non-Latin layout.

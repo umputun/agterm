@@ -151,9 +151,10 @@ final class CustomCommandRunner {
     }
 
     /// Map an `NSEvent` key-down to an agtermCore `Chord`, or nil when it carries no usable base key.
-    /// Modifiers map to the agtermCore `Modifier` set; the base key is the named special key (for the
-    /// keys the parser names) else the unmodified character lowercased, matching `parseKeybind`.
-    func chord(from event: NSEvent) -> Chord? {
+    /// Modifiers map to the agtermCore `Modifier` set; the base key is the named special key (for the keys
+    /// the parser names), else the key `chordKey(forKeyCode:produced:layoutIsASCIICapable:)` resolves —
+    /// the unmodified character on a layout that can type ASCII, the physical position on one that cannot.
+    private func chord(from event: NSEvent) -> Chord? {
         var mods: Modifier = []
         let flags = event.modifierFlags
         if flags.contains(.control) { mods.insert(.control) }
@@ -170,11 +171,12 @@ final class CustomCommandRunner {
         // `characters(byApplyingModifiers: [])` applies NO modifiers, giving the base char for any key
         // (shift+/ → "/", shift+5 → "5", shift+u → "u"), matching how the keymap spells chords as
         // `shift+<base>` (same call `GhosttySurfaceView` uses for unmodified key input).
-        // `chordKey(forKeyCode:produced:)` then resolves a NON-Latin layout to the Latin key at the same
-        // physical position, so a `cmd+o` command still fires on a Cyrillic layout (where that key types
-        // `щ`) while a Latin layout keeps its own letter positions.
+        // `chordKey` then resolves the whole layout: a layout that cannot type ASCII binds by physical
+        // position, so a `cmd+o` command still fires on a Cyrillic layout (where that key types `щ`),
+        // while a Latin layout keeps binding by the character it produces.
         let produced = event.characters(byApplyingModifiers: []) ?? event.charactersIgnoringModifiers
-        guard let key = chordKey(forKeyCode: event.keyCode, produced: produced) else { return nil }
+        guard let key = chordKey(forKeyCode: event.keyCode, produced: produced,
+                                 layoutIsASCIICapable: KeyboardLayout.isASCIICapable) else { return nil }
         return Chord(mods: mods, key: key)
     }
 

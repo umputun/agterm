@@ -67,7 +67,7 @@ public func namedKey(forKeyCode keyCode: UInt16) -> String? {
 ///
 /// This is the layout-INDEPENDENT half of key resolution: a virtual key code names a physical position
 /// and never changes with the active input source, unlike the character that position produces.
-public func latinKey(forKeyCode keyCode: UInt16) -> String? {
+func latinKey(forKeyCode keyCode: UInt16) -> String? {
     switch keyCode {
     case 0: return "a"
     case 1: return "s"
@@ -120,29 +120,35 @@ public func latinKey(forKeyCode keyCode: UInt16) -> String? {
     }
 }
 
-/// The base key for a key press, resolving a non-Latin keyboard layout back to the Latin key at the same
-/// physical position. `produced` is the character the ACTIVE layout puts on that key with no modifiers
-/// applied; the app-side monitors pass what the `NSEvent` reports.
+/// The base key for a key press. `produced` is the character the ACTIVE layout puts on that key with no
+/// modifiers applied (the app-side monitors pass what the `NSEvent` reports), and
+/// `layoutIsASCIICapable` says whether that layout can type ASCII at all.
 ///
-/// A `keymap.conf` chord is written in Latin (`cmd+o`), so matching the produced character alone leaves
-/// every letter and digit chord dead on a Cyrillic/Greek/Hebrew layout, where the O key yields `щ`. The
-/// resolution therefore prefers the produced character while it is ASCII — so an alternative LATIN layout
-/// (Dvorak, Colemak) keeps its own letter positions and `cmd+o` follows the O it actually types — and
-/// falls back to `latinKey(forKeyCode:)` only when the layout produces something no keymap line can
-/// spell. Same policy as `InterruptKeystroke.isInterrupt`, which resolves bare Ctrl-C the same way.
+/// The choice is made per LAYOUT, not per key. An ASCII-capable layout — US, Dvorak, Colemak,
+/// US-International, French, German — binds by the character it produces, so a chord follows the letter
+/// the user sees on the key and an alternative Latin layout keeps its own letter positions. A layout that
+/// cannot type ASCII — Russian, Greek, Hebrew, Arabic, Thai — can never produce a character a
+/// `keymap.conf` chord is spelled with, so every one of its keys binds by physical position via
+/// `latinKey(forKeyCode:)`.
 ///
-/// Returns `nil` when the press carries no usable base key (a bare modifier, a dead key), which the
-/// caller treats as "no chord".
-public func chordKey(forKeyCode keyCode: UInt16, produced: String?) -> String? {
-    if let base = produced?.first.map({ String($0).lowercased() }), isASCIIKey(base) { return base }
-    return latinKey(forKeyCode: keyCode)
-}
-
-/// Whether a base key is a single printable ASCII character — the range `parseKeybind` can spell, and the
-/// test that separates a Latin layout (kept as-is) from a non-Latin one (resolved by physical position).
-private func isASCIIKey(_ key: String) -> Bool {
-    guard key.unicodeScalars.count == 1, let scalar = key.unicodeScalars.first else { return false }
-    return scalar.value > 0x20 && scalar.value < 0x7F
+/// Deciding per key instead (keeping any produced character that happens to be ASCII) does not work:
+/// Greek types `;` on the Q position and Hebrew types `/` there, so a Latin-spelled letter chord would
+/// stay dead on exactly the layouts this exists to serve, and two physical keys could collapse onto one
+/// chord — on Hebrew the `'` key produces `,` while the `,` key falls back to `,`. Resolving the whole
+/// layout at once keeps `latinKey`'s one-key-per-position mapping intact.
+///
+/// This is a different rule from `InterruptKeystroke.isInterrupt`, which tests the produced character
+/// itself (is it a Latin letter?) rather than the layout. That one classifies a single hardcoded key, so
+/// it needs no layout context; a chord needs the whole ANSI vocabulary and does.
+///
+/// Returns `nil` only when the press carries no usable base key at all: a bare modifier, or a position
+/// outside `latinKey`'s table that produced nothing. A dead key at a table position resolves to its Latin
+/// key rather than to `nil`.
+public func chordKey(forKeyCode keyCode: UInt16, produced: String?, layoutIsASCIICapable: Bool) -> String? {
+    // space is a named key (`namedKey(forKeyCode:)` claims keyCode 49); a produced space is not a base key.
+    let base = produced?.first.map { String($0).lowercased() }.flatMap { $0 == " " ? nil : $0 }
+    guard !layoutIsASCIICapable else { return base }
+    return latinKey(forKeyCode: keyCode) ?? base
 }
 
 /// The named key for a menu item's key-equivalent CHARACTER, or `nil` for an ordinary printable key.
