@@ -1568,6 +1568,15 @@
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ctrl+a&gt;g</span>), and their chord
               must include a modifier — a bare key can't shadow a plain terminal key.
             </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              Chords are written in Latin and keep working on a non-Latin keyboard layout. A layout that types Cyrillic, Greek, or
+              Hebrew resolves the chord by the physical key position instead, so
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">cmd+o</span> still fires on the key
+              marked O even though it types <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">щ</span>.
+              An alternative Latin layout keeps its own letter positions: on Dvorak,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">cmd+o</span> follows the O you actually
+              type.
+            </p>
 
             <h3
               style="
@@ -1775,6 +1784,23 @@
               agterm manages from Settings (font, theme, opacity, blur, scroll speed) still win. A common use:
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">macos-option-as-alt = true</span>. The
               full key reference is at <a href="https://ghostty.org/docs/config" style="color: #6d82f3">ghostty.org/docs/config</a>.
+            </p>
+            <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
+              A <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keybind</span> here follows ghostty's
+              own rules, which differ from
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">keymap.conf</span>: a bare letter or
+              digit binds the <em>character</em> the active layout produces, so
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >keybind = super+opt+ctrl+g=text:hello</span
+              >
+              stops firing on a non-Latin layout, where that key types
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">п</span>. Prefix the key with
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">key_</span> to bind the physical
+              position instead —
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc"
+                >keybind = super+opt+ctrl+key_g=text:hello</span
+              >
+              works on any layout. agterm's bundled defaults already use it for ⌘C, ⌘V, and ⌘A.
             </p>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 16px 0 0">
               Programs can read and write the macOS clipboard over OSC 52. agterm prompts before a program

@@ -365,6 +365,8 @@ command "Deploy"                    ./deploy.sh
 
 A chord is modifier words joined by `+` and a base key, e.g. `cmd+shift+e` or `ctrl+\``. The modifiers are `ctrl`, `cmd`, `opt`, and `shift`. The base key is a single character or one of `tab`, `space`, `return`, `delete`, `left`, `right`, `up`, `down`. A key you type with Shift is written as `shift+<base key>` (the base key, not the shifted symbol): `shift+/` for `?`, `shift+5` for `%`, `shift+=` for `+`, `shift+.` for `>`. A custom command's chord may also be a leader sequence — chords separated by `>`, e.g. `ctrl+a>g` (press `ctrl+a`, then `g`). A `command` with no chord is palette-only. A custom command's chord must include a modifier: a bare key like `a` is rejected with a diagnostic and the line is treated as palette-only, so a binding can't silently shadow a plain terminal key. The same diagnostic appears when the shell line simply starts with a bare key name — a single character, or one of the named keys like `up` or `tab` — and the line is kept as palette-only with its shell command intact.
 
+Chords are written in Latin and keep working on a non-Latin keyboard layout. A layout that types Cyrillic, Greek, or Hebrew resolves the chord by the physical key position instead, so `cmd+o` still fires on the key marked O even though it types `щ`. An alternative Latin layout keeps its own letter positions: on Dvorak, `cmd+o` follows the O you actually type.
+
 The bindable built-in action names are:
 
 ```
@@ -434,6 +436,14 @@ macos-option-as-alt = true
 ```
 
 Put that in `ghostty.conf`. It also works in your global `~/.config/ghostty/config` once you enable the toggle above. The full key reference is at <https://ghostty.org/docs/config>.
+
+A `keybind` you write here follows ghostty's own rules, which differ from `keymap.conf`: a bare letter or digit binds the *character* the active layout produces, so `keybind = super+opt+ctrl+g=text:hello` stops firing the moment you switch to a non-Latin layout, where that key types `п`. Prefix the key with `key_` to bind the physical position instead:
+
+```
+keybind = super+opt+ctrl+key_g=text:hello
+```
+
+That form works on any layout. agterm's own bundled defaults already use it for ⌘C, ⌘V, and ⌘A, which is why copy, paste, and select-all keep working on a Cyrillic or Greek layout.
 
 Programs running in the terminal can read and write the macOS clipboard over OSC 52. agterm prompts before a program **reads** your clipboard, because a read hands its contents (which may include passwords or tokens) back to the program; a normal ⌘V paste is never prompted. Clipboard **writes** go through by default, matching other terminals so a remote `tmux`/`vim` yank still reaches your clipboard. To gate writes too, set `clipboard-write = ask` (prompt) or `clipboard-write = deny` (block) in `ghostty.conf`. Each prompt offers *Don't ask again this session*, which remembers your choice until agterm quits.
 

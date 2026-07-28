@@ -30,7 +30,7 @@ final class UndoCloseShortcut {
         return true
     }
 
-    private func chord(from event: NSEvent) -> Chord? {
+    func chord(from event: NSEvent) -> Chord? {
         var mods: Modifier = []
         let flags = event.modifierFlags
         if flags.contains(.control) { mods.insert(.control) }
@@ -38,7 +38,11 @@ final class UndoCloseShortcut {
         if flags.contains(.option) { mods.insert(.option) }
         if flags.contains(.shift) { mods.insert(.shift) }
 
-        let key = namedKey(forKeyCode: event.keyCode) ?? event.charactersIgnoringModifiers?.lowercased()
+        // as in `CustomCommandRunner.chord(from:)`: the produced character wins while it is Latin, and a
+        // non-Latin layout resolves to the Latin key at the same physical position, so ⌘Z still reopens a
+        // closed item on a Cyrillic layout (where that key types `я`).
+        let key = namedKey(forKeyCode: event.keyCode)
+            ?? chordKey(forKeyCode: event.keyCode, produced: event.charactersIgnoringModifiers)
         guard let key, key.count == 1 || bindableNamedKeys.contains(key) else { return nil }
         return Chord(mods: mods, key: key)
     }

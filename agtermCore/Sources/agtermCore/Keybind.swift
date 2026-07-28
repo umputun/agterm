@@ -60,6 +60,91 @@ public func namedKey(forKeyCode keyCode: UInt16) -> String? {
     }
 }
 
+/// The Latin base character at a physical ANSI key position, or `nil` for a position that carries no
+/// Latin key (a named key, a function key, the keypad). The letters, digits, and punctuation of the ANSI
+/// layout, keyed by macOS virtual key code — the values are exactly the single characters `parseKeybind`
+/// accepts as a base key, so every entry is spellable in `keymap.conf`.
+///
+/// This is the layout-INDEPENDENT half of key resolution: a virtual key code names a physical position
+/// and never changes with the active input source, unlike the character that position produces.
+public func latinKey(forKeyCode keyCode: UInt16) -> String? {
+    switch keyCode {
+    case 0: return "a"
+    case 1: return "s"
+    case 2: return "d"
+    case 3: return "f"
+    case 4: return "h"
+    case 5: return "g"
+    case 6: return "z"
+    case 7: return "x"
+    case 8: return "c"
+    case 9: return "v"
+    case 11: return "b"
+    case 12: return "q"
+    case 13: return "w"
+    case 14: return "e"
+    case 15: return "r"
+    case 16: return "y"
+    case 17: return "t"
+    case 18: return "1"
+    case 19: return "2"
+    case 20: return "3"
+    case 21: return "4"
+    case 22: return "6"
+    case 23: return "5"
+    case 24: return "="
+    case 25: return "9"
+    case 26: return "7"
+    case 27: return "-"
+    case 28: return "8"
+    case 29: return "0"
+    case 30: return "]"
+    case 31: return "o"
+    case 32: return "u"
+    case 33: return "["
+    case 34: return "i"
+    case 35: return "p"
+    case 37: return "l"
+    case 38: return "j"
+    case 39: return "'"
+    case 40: return "k"
+    case 41: return ";"
+    case 42: return "\\"
+    case 43: return ","
+    case 44: return "/"
+    case 45: return "n"
+    case 46: return "m"
+    case 47: return "."
+    case 50: return "`"
+    default: return nil
+    }
+}
+
+/// The base key for a key press, resolving a non-Latin keyboard layout back to the Latin key at the same
+/// physical position. `produced` is the character the ACTIVE layout puts on that key with no modifiers
+/// applied; the app-side monitors pass what the `NSEvent` reports.
+///
+/// A `keymap.conf` chord is written in Latin (`cmd+o`), so matching the produced character alone leaves
+/// every letter and digit chord dead on a Cyrillic/Greek/Hebrew layout, where the O key yields `щ`. The
+/// resolution therefore prefers the produced character while it is ASCII — so an alternative LATIN layout
+/// (Dvorak, Colemak) keeps its own letter positions and `cmd+o` follows the O it actually types — and
+/// falls back to `latinKey(forKeyCode:)` only when the layout produces something no keymap line can
+/// spell. Same policy as `InterruptKeystroke.isInterrupt`, which resolves bare Ctrl-C the same way.
+///
+/// Returns `nil` when the press carries no usable base key (a bare modifier, a dead key), which the
+/// caller treats as "no chord".
+public func chordKey(forKeyCode keyCode: UInt16, produced: String?) -> String? {
+    if let base = produced?.first.map({ String($0).lowercased() }), isASCIIKey(base) { return base }
+    return latinKey(forKeyCode: keyCode)
+}
+
+/// Whether a base key is a single printable ASCII character — the range `parseKeybind` can spell, and the
+/// test that separates a Latin layout (kept as-is) from a non-Latin one (resolved by physical position).
+private func isASCIIKey(_ key: String) -> Bool {
+    guard key.unicodeScalars.count == 1, let scalar = key.unicodeScalars.first else { return false }
+    return scalar.value > 0x20 && scalar.value < 0x7F
+}
+
 /// The named key for a menu item's key-equivalent CHARACTER, or `nil` for an ordinary printable key.
 ///
 /// The character counterpart of `namedKey(forKeyCode:)`, for projecting live `NSMenuItem` key

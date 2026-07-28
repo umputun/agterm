@@ -153,7 +153,7 @@ final class CustomCommandRunner {
     /// Map an `NSEvent` key-down to an agtermCore `Chord`, or nil when it carries no usable base key.
     /// Modifiers map to the agtermCore `Modifier` set; the base key is the named special key (for the
     /// keys the parser names) else the unmodified character lowercased, matching `parseKeybind`.
-    private func chord(from event: NSEvent) -> Chord? {
+    func chord(from event: NSEvent) -> Chord? {
         var mods: Modifier = []
         let flags = event.modifierFlags
         if flags.contains(.control) { mods.insert(.control) }
@@ -170,10 +170,11 @@ final class CustomCommandRunner {
         // `characters(byApplyingModifiers: [])` applies NO modifiers, giving the base char for any key
         // (shift+/ → "/", shift+5 → "5", shift+u → "u"), matching how the keymap spells chords as
         // `shift+<base>` (same call `GhosttySurfaceView` uses for unmodified key input).
-        guard let chars = event.characters(byApplyingModifiers: []) ?? event.charactersIgnoringModifiers,
-              let first = chars.first else { return nil }
-        let key = String(first).lowercased()
-        guard !key.isEmpty, key != " " else { return nil }
+        // `chordKey(forKeyCode:produced:)` then resolves a NON-Latin layout to the Latin key at the same
+        // physical position, so a `cmd+o` command still fires on a Cyrillic layout (where that key types
+        // `щ`) while a Latin layout keeps its own letter positions.
+        let produced = event.characters(byApplyingModifiers: []) ?? event.charactersIgnoringModifiers
+        guard let key = chordKey(forKeyCode: event.keyCode, produced: produced) else { return nil }
         return Chord(mods: mods, key: key)
     }
 

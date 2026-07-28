@@ -111,6 +111,55 @@ struct KeybindTests {
         #expect(namedKey(forKeyCode: 0) == nil)
     }
 
+    @Test func latinKeyCoversEveryAnsiLetterAndDigit() {
+        let produced = (0...127).compactMap { latinKey(forKeyCode: UInt16($0)) }
+        #expect(produced.count == Set(produced).count, "a physical position must map to one Latin key")
+        let letters = Set("abcdefghijklmnopqrstuvwxyz".map(String.init))
+        let digits = Set("0123456789".map(String.init))
+        #expect(letters.isSubset(of: Set(produced)))
+        #expect(digits.isSubset(of: Set(produced)))
+        #expect(Set(produced).subtracting(letters).subtracting(digits) == ["=", "-", "]", "[", "'", ";", "\\", ",", "/", ".", "`"])
+    }
+
+    @Test func latinKeyValuesAreAllSpellableAsChords() {
+        // a fallback the grammar can't spell would fire nothing, the same failure mode the named keys have.
+        for key in (0...127).compactMap({ latinKey(forKeyCode: UInt16($0)) }) {
+            #expect(parseKeybind("cmd+\(key)") == [Chord(mods: .command, key: key)], "cmd+\(key) must parse")
+        }
+    }
+
+    @Test func latinKeyAndNamedKeyNeverClaimTheSameKeyCode() {
+        // the monitors resolve named keys FIRST, so an overlap would silently shadow one of the two maps.
+        for code in 0...127 where namedKey(forKeyCode: UInt16(code)) != nil {
+            #expect(latinKey(forKeyCode: UInt16(code)) == nil, "keyCode \(code) is claimed twice")
+        }
+    }
+
+    @Test func chordKeyKeepsTheProducedCharacterOnLatinLayouts() {
+        #expect(chordKey(forKeyCode: 31, produced: "o") == "o")
+        #expect(chordKey(forKeyCode: 8, produced: "j") == "j", "Dvorak keeps its own letter positions")
+        #expect(chordKey(forKeyCode: 44, produced: "/") == "/", "punctuation is spellable as-is")
+        #expect(chordKey(forKeyCode: 0, produced: "A") == "a", "the base key is always lowercased")
+    }
+
+    @Test func chordKeyResolvesANonLatinLayoutByPhysicalPosition() {
+        #expect(chordKey(forKeyCode: 31, produced: "щ") == "o", "Cyrillic O position binds cmd+o")
+        #expect(chordKey(forKeyCode: 17, produced: "е") == "t")
+        #expect(chordKey(forKeyCode: 15, produced: "к") == "r")
+        #expect(chordKey(forKeyCode: 5, produced: "п") == "g")
+        #expect(chordKey(forKeyCode: 8, produced: "ψ") == "c", "Greek resolves the same way")
+    }
+
+    @Test func chordKeyFallsBackWhenTheEventCarriesNoCharacter() {
+        #expect(chordKey(forKeyCode: 31, produced: nil) == "o")
+        #expect(chordKey(forKeyCode: 31, produced: "") == "o")
+    }
+
+    @Test func chordKeyReturnsNilWithoutAUsableBaseKey() {
+        #expect(chordKey(forKeyCode: 63, produced: nil) == nil, "the fn key carries no Latin key")
+        #expect(chordKey(forKeyCode: 63, produced: "ж") == nil)
+    }
+
     @Test func bindableArrowKeysIsASubsetOfBindableNamedKeys() {
         #expect(bindableArrowKeys.isSubset(of: bindableNamedKeys))
         #expect(bindableArrowKeys == ["left", "right", "up", "down"])

@@ -203,6 +203,41 @@ paths:
   That is exactly the shifted-symbol failure mode that shipped once (see the shift-symbol note above),
   which is why `KeybindTests` pins `namedKey(forKeyCode:)`'s range to equal `bindableNamedKeys` exactly,
   and why the runner path has its own e2e (`KeymapUITests.testCustomCommandArrowChordFires`).
+- **A chord resolves LATIN-FIRST, physical-position second — `chordKey(forKeyCode:produced:)` owns the policy.**
+  A `keymap.conf` chord is spelled in Latin (`cmd+o`), but the character an `NSEvent` reports is whatever the ACTIVE input
+  source puts on that key, so matching the produced character alone left EVERY letter/digit chord dead on a Cyrillic/Greek/Hebrew
+  layout, where the O key yields `щ` (issue #306).
+  The host-free `chordKey(forKeyCode:produced:)` (`Keybind.swift`) keeps the produced character while it is printable ASCII — so
+  an alternative LATIN layout (Dvorak/Colemak) keeps its own letter positions — and falls back to `latinKey(forKeyCode:)`, the
+  ANSI letter/digit/punctuation table, only when the layout produces something no keymap line can spell.
+  Same policy as `InterruptKeystroke.isInterrupt`, which resolves a bare Ctrl-C the same way; `latinKey` and `namedKey(forKeyCode:)`
+  claim DISJOINT key codes (pinned by `KeybindTests`) because both monitors resolve the named key first.
+  Consequence to keep in mind: a chord can only ever be spelled in ASCII, so a Cyrillic layout cannot bind the Cyrillic character
+  it types — the physical position is the binding.
+  **The custom-command runner's own `NSEvent` seam is NOT unit-testable and never will be.**
+  `chord(from:)` reads `characters(byApplyingModifiers: [])`, which AppKit RE-TRANSLATES from the key code through the machine's
+  live input source — a synthesized `NSEvent` carrying `characters: "щ"` comes back `"o"` on a Latin-layout machine (verified),
+  so a hosted test there would assert the tester's keyboard, not the code.
+  `UndoCloseShortcut.chord(from:)` reads `charactersIgnoringModifiers`, which a synthesized event DOES report verbatim, so that
+  monitor carries the hosted layout coverage (`agtermTests/UndoCloseShortcutTests.swift`) and the runner relies on the shared
+  host-free policy plus a by-hand check on a real non-Latin layout.
+  Do NOT "fix" this by switching the runner to `charactersIgnoringModifiers` for testability — that reintroduces the shifted-symbol
+  bug (see the shift-symbol note above).
+  VERIFIED BY HAND on a Russian-Phonetic layout against an isolated dev instance: a simple letter chord, a `cmd+r>t` leader, a real
+  `ctrl+a>d` leader from the maintainer's own keymap, and ⌘Z undo-close all fire on Cyrillic and keep working on U.S.
+  Re-run that way after touching either monitor's `chord(from:)` — the automated suites cannot catch a regression here.
+  One known edge the per-key ASCII test leaves open: a non-Latin layout whose PUNCTUATION positions still emit ASCII (Russian types
+  `.` on the physical `/` key) keeps the produced character, so `cmd+/` does not fire there while `cmd+.` does.
+  Letters and digits are unaffected, and forcing position for punctuation too would break Dvorak's punctuation; distinguishing
+  "this layout is non-Latin" needs Carbon TIS calls that cannot live in host-free `agtermCore`.
+- **A `keybind` in `ghostty.conf` does NOT get this treatment — that is libghostty's matcher, and its rule is different.**
+  ghostty parses a bare `g` as a UNICODE trigger and `key_g` as a PHYSICAL one, then matches physical → the produced utf8 → the
+  unshifted codepoint (`Binding.Set.getEvent`), so a unicode trigger cannot fire on a non-Latin layout.
+  agterm builds the key event exactly as Ghostty.app does (same `characters(byApplyingModifiers: [])` for `unshifted_codepoint`),
+  so this is upstream behavior, identical in Ghostty.app, and NOT fixable app-side — verified against the pinned rev AND
+  ghostty `main`.
+  The answer is the `key_` form, which is why `ghostty-defaults.conf` ships `super+key_c`/`key_v`/`key_a` (issue #30).
+  README + `site/docs.html` document the split; do not conflate the two files' chord grammars when answering a layout report.
 - **v1 scope cut (confirmed).**
   Built-in rebinds are single-chord only (leaders only for custom commands).
   The literal `+`/`>` still can't be a bare key TOKEN (they are the chord-joiner / leader separator), but
