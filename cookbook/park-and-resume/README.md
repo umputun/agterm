@@ -59,7 +59,7 @@ Resumed workspaces come back collapsed, so a resume does not rearrange the sideb
 
 ## How it works
 
-Park takes one `agtermctl tree --json` and uses it twice. The first pass builds the snapshot: for each matching workspace it keeps the name and, per session, the `name`, `cwd` and `foreground` fields. `foreground` is the live argv of the pane's foreground process, absent when the pane sits at its shell prompt, so a session at a prompt is recorded with an empty command and comes back as a plain shell. The second pass deletes the workspaces by id with `workspace delete --target`.
+Park takes one `agtermctl tree --json` and uses it twice. The first pass builds the snapshot: for each matching workspace it keeps the name and, per session, the `name`, `cwd` and `foreground` fields. `foreground` is the live argv of the pane's foreground process, absent when the pane sits at its shell prompt and also when agterm cannot read the process, so either way the session is recorded with an empty command and comes back as a plain shell. *Limits* has what that second case costs. The second pass deletes the workspaces by id with `workspace delete --target`.
 
 The snapshot is written to a temporary file and moved into place only when it holds at least one workspace. A capture that fails cannot destroy the previous snapshot, because `set -e` stops the script before the move and the deletions. Neither can a capture that succeeds and matches nothing: the temporary file is discarded, the prefix is reported on stderr, and the script exits non-zero without deleting anything. That is what makes a second park of the same prefix, or a park run with a different window frontmost, safe — both match nothing, and both leave the earlier snapshot in place.
 
@@ -84,6 +84,10 @@ Split panes are not restored. The snapshot records the main pane's command only,
 Session names come back as explicit custom names, including the ones agterm had derived automatically.
 
 A captured command line is re-quoted from its argv. A program invoked with unusual quoting may need the snapshot edited by hand before it replays correctly.
+
+**A snapshot holds the full command line of everything that was running**, so it can contain an API token, a database connection string or a password that was passed as an argument. `agt-park.sh` sets `umask 077` before it creates anything, so a directory and a snapshot it creates come out `0700` and `0600`, readable by you alone. A directory that already exists keeps the mode it has, so `chmod 700` one left behind by an earlier copy of the script.
+
+The snapshot can only record what the control API reports, and `foreground` comes back missing for two different reasons: the pane is idle at its shell prompt, or agterm could not read the process at all. The JSON does not distinguish them. A session whose process cannot be read is recorded as idle, comes back as a plain shell, and its workspace is deleted like any other, so the record of what it was running is gone with it. Look at `agtermctl tree --json` before parking if that matters.
 
 Only processes are captured. A shell function or an alias is not one, so it never comes back by name: a session sitting in a function with nothing running under it is recorded with no command and returns as a plain shell, and one that had already started a program returns running that program directly.
 

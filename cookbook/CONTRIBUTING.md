@@ -13,7 +13,7 @@ One directory per recipe, kebab-case, named after what the recipe does rather th
 Name scripts by their shell, because the extension decides what CI does with them:
 
 - `.sh` is POSIX or bash. CI runs `shellcheck` over every one, and it has to be clean.
-- `.zsh` is zsh, which shellcheck cannot parse, so nothing checks these for you. Run `zsh -n` over them yourself before sending.
+- `.zsh` is zsh. CI parses every one with `zsh -n`, so a syntax error is caught, but shellcheck cannot read zsh and nothing lints these. A parse is not a lint, so run `zsh -n` yourself and read the script over before sending.
 
 Every script carries a shebang. A script whose *Setup* tells the reader to execute it is committed with the executable bit set; a shell function the reader pastes into `~/.zshrc` is committed without it, and its *Setup* says to add it to the shell config, never to run it. A perfectly good script committed non-executable passes every check and then fails on the reader's machine with "permission denied".
 

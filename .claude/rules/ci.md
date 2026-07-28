@@ -41,19 +41,25 @@ paths:
   It compares the `cookbook/README.md` index table against the directory set in BOTH directions,
   requires every recipe directory to be kebab-case and to carry a `README.md` with all six template headings,
   requires every `.sh`/`.zsh` to start with a shebang,
-  and then runs `shellcheck` over every `.sh`.
-  `shellcheck` is preinstalled on the `ubuntu-latest` image — it is in the runner-images apt package set —
-  so the job installs nothing.
-  `zsh` is NOT on that image, so `zsh -n` over the `.zsh` recipes stays a local check;
-  the shebang check is the only thing in CI that looks at a `.zsh` file at all.
+  then runs `shellcheck` over every `.sh`,
+  and finally parses every `.zsh` with `zsh -n`.
+  `shellcheck` is preinstalled on the `ubuntu-latest` image (it is in the runner-images apt package set),
+  so nothing is installed for it.
+  `zsh` is NOT on that image, so the job apt-installs it in a separate `Install zsh` step
+  placed immediately before the parse step.
+  The parse step needs `xargs -0 -r -n1`, unlike `shellcheck`:
+  `zsh -n` reads ONE script per invocation and treats every further path as that script's arguments,
+  so without `-n1` only the first `.zsh` file is checked and the rest pass silently.
+  A parse is all a `.zsh` recipe gets, since shellcheck cannot read zsh,
+  so nothing lints those files.
 - **Several details of the `cookbook` job are load-bearing and must not be "simplified".**
-  The explicit `shell: bash` on BOTH steps is one of them.
+  The explicit `shell: bash` on the layout, `shellcheck` and `zsh -n` steps is one of them.
   GitHub's default `run` shell is `bash -e` WITHOUT `pipefail`,
   while `shell: bash` runs the step under `bash -eo pipefail`,
   which is what the blocks were verified against and what makes a failed `find` inside a pipeline red the step.
   On the layout step it also guarantees the bash-only process substitution
   rather than leaving it to default-shell resolution.
-  On the `shellcheck` step it is what keeps a failed `find` from passing unnoticed:
+  On the `shellcheck` and `zsh -n` steps it is what keeps a failed `find` from passing unnoticed:
   without `pipefail` the pipeline's status comes from `xargs`,
   which exits 0 on empty input under `-r`,
   so the step would go green having checked nothing.

@@ -5,6 +5,11 @@
 # Only the snapshot below survives, and agt-resume.sh replays it into fresh shells.
 set -e
 
+# the snapshot records the full argv of every process that was running, which can carry
+# tokens, connection strings and passwords given on a command line. Keep the directory and
+# the file private to this user: 0700 and 0600 rather than whatever the ambient umask gives.
+umask 077
+
 AGTERMCTL=${AGTERMCTL:-agtermctl}
 PARK_DIR=${AGT_PARK_DIR:-$HOME/.agterm-projects}
 
