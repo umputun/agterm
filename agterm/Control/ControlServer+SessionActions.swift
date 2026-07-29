@@ -631,6 +631,11 @@ extension ControlServer: ControlActions {
             guard let controller = TerminalZoomRegistry.shared.controller(for: resolved.windowID) else {
                 return ControlResponse(ok: false, error: "window not open — window.select it first")
             }
+            let want = mode.desiredValue(current: controller.target == resolved.target)
+            if want, controller.target != resolved.target,
+               PickRegistry.shared.controller(for: resolved.windowID)?.pending != nil {
+                return ControlResponse(ok: false, error: "pick pending")
+            }
             // `hide` is idempotent like the active-target arm: skip the availability check for `.off` —
             // the surface may have vanished since (an overlay exited, auto-clearing the zoom) and the
             // desired end state already holds; `set(.off, …)` on a non-matching target is a no-op.
@@ -652,6 +657,10 @@ extension ControlServer: ControlActions {
         case .success(let (windowID, store)):
             guard let controller = TerminalZoomRegistry.shared.controller(for: windowID) else {
                 return ControlResponse(ok: false, error: "window not open — window.select it first")
+            }
+            if controller.target == nil, mode != .off,
+               PickRegistry.shared.controller(for: windowID)?.pending != nil {
+                return ControlResponse(ok: false, error: "pick pending")
             }
             // this arm only picks the effective target — the current zoom when one is up (so
             // on/off/toggle act on it), else the resolved active surface — and shapes the response;

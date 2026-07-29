@@ -63,14 +63,12 @@ extension agtermApp {
             // grouped by entity into three sections — Window, then Workspace, then Session. The
             // system Close / Close All commands stay below in their own group.
             CommandGroup(replacing: .newItem) {
-                // While terminal zoom OR the dashboard grid is up the UI is modal (the AppActions gate already
-                // no-ops these); the .disabled mirrors that gate so the items read as unavailable instead of
-                // dead. modalActive folds the dashboard into the same gate so its menu key-equivalents
-                // (which route through performKeyEquivalent, PAST the grid's keyDown-only key-catcher) can't
-                // mutate the deck behind the grid — the Dashboard toggle itself stays zoomed-only so ⌘⇧D can
-                // still close the grid.
+                // While terminal zoom, the dashboard grid, OR the topmost native picker is up, the UI is modal
+                // (the AppActions gate already no-ops these). `.disabled` mirrors that gate so items read as
+                // unavailable instead of dead and key equivalents cannot mutate the covered deck.
                 let zoomed = actions.terminalZoomActive
-                let modalActive = zoomed || (actions.frontmostDashboard?.isOpen ?? false)
+                let pickActive = actions.pickActive(for: library.activeWindowID)
+                let modalActive = zoomed || (actions.frontmostDashboard?.isOpen ?? false) || pickActive
                 // Window: create/open/rename/delete the top-level window bundles. Open Window lists
                 // the library with a checkmark on already-open ones (picking a closed one opens it,
                 // an open one raises it). Delete is disabled with one window left (keep-at-least-one).
@@ -187,10 +185,10 @@ extension agtermApp {
             // "Enter Full Screen" item has an icon, so every custom item carries an SF Symbol too —
             // otherwise they render as blank, indented slots.
             CommandGroup(after: .toolbar) {
-                // same modal-while-zoomed/dashboard mirror as the File group: grey out what the action gate
-                // no-ops (modalActive = zoomed OR the frontmost dashboard grid open).
+                // Mirror the File group's modal gate: zoom, dashboard, or the topmost native picker.
                 let zoomed = actions.terminalZoomActive
-                let modalActive = zoomed || (actions.frontmostDashboard?.isOpen ?? false)
+                let pickActive = actions.pickActive(for: library.activeWindowID)
+                let modalActive = zoomed || (actions.frontmostDashboard?.isOpen ?? false) || pickActive
                 Button { actions.increaseFontSize() } label: { Label("Increase Font Size", systemImage: "textformat.size.larger") }
                     .keyboardShortcut(shortcut(for: .increaseFontSize))
                 Button { actions.decreaseFontSize() } label: { Label("Decrease Font Size", systemImage: "textformat.size.smaller") }
@@ -305,10 +303,10 @@ extension agtermApp {
             // the spatial session stepping, and the pane focus. all drive the SAME AppActions the View items
             // did; only their menu home changed (the control API / palette / keymap surfaces are untouched).
             CommandMenu("Navigate") {
-                // same modal-while-zoomed/dashboard mirror as the File/View groups (modalActive = zoomed OR
-                // the frontmost dashboard grid open); the Dashboard toggle below stays zoomed-only.
+                // Mirror the File/View modal gate: zoom, dashboard, or the topmost native picker.
                 let zoomed = actions.terminalZoomActive
-                let modalActive = zoomed || (actions.frontmostDashboard?.isOpen ?? false)
+                let pickActive = actions.pickActive(for: library.activeWindowID)
+                let modalActive = zoomed || (actions.frontmostDashboard?.isOpen ?? false) || pickActive
                 Button { actions.toggleSessionPalette() } label: { Label("Go to Session", systemImage: "rectangle.stack") }
                     .keyboardShortcut(shortcut(for: .sessionPalette))
                     .disabled(modalActive)
@@ -323,10 +321,9 @@ extension agtermApp {
                     .disabled(modalActive)
                 Button { actions.toggleDashboard() } label: { Label("Dashboard", systemImage: "rectangle.split.2x2") }
                     .keyboardShortcut(shortcut(for: .dashboard))
-                    // stays zoomed-only, NOT modalActive: ⌘⇧D must still CLOSE an open dashboard, so this
-                    // toggle is the escape hatch and is never disabled by the dashboard being open
-                    // (toggleDashboard guards on !terminalZoomActive only, so it stays callable too).
-                    .disabled(zoomed)
+                    // Do not disable merely because the dashboard itself is open: ⌘⇧D remains its close
+                    // escape hatch. Zoom and a topmost native picker still block the toggle.
+                    .disabled(zoomed || pickActive)
                 Divider()
                 // step between sessions in the sidebar's flattened order. Prev/Next ride ⌥⌘↑/↓ (NOT bare
                 // ⌘+arrows, which shadow text-field caret nav in the rename/palette/settings fields); ⌥⌘↑/↓

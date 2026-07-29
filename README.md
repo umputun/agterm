@@ -203,7 +203,7 @@ Each command targets a session or workspace by its UUID, a unique prefix of that
 
 `agtermctl pick` reads choices from stdin and opens agterm's native fuzzy picker.
 Input can be nonblank lines or a JSON array of objects with `id`, `label`, and an optional `subtitle`.
-The default call blocks and prints the selected item as JSON.
+The default call blocks and prints terminal-result JSON: picked item, custom query, or cancellation.
 Use `--allow-custom` to accept a query that does not match an item, `--window` to target another open window, and `--follow` to raise that window.
 
 ```sh

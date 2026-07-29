@@ -240,6 +240,10 @@ extension ControlServer {
             return ControlResponse(ok: false, error: "invalid quick mode: \(mode ?? "toggle")")
         }
         let want = parsedMode.desiredValue(current: controller.isVisible)
+        if want, !controller.isVisible,
+           PickRegistry.shared.controller(for: library.activeWindowID)?.pending != nil {
+            return ControlResponse(ok: false, error: "pick pending")
+        }
         if let zoom = TerminalZoomRegistry.shared.controller(for: library.activeWindowID), zoom.target != nil {
             // a script must always be able to DISMISS the quick terminal (hide was a guaranteed-ok
             // idempotent no-op pre-zoom, and cleanup code relies on that): hiding un-zooms a zoomed

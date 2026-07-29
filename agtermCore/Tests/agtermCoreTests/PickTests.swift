@@ -94,7 +94,8 @@ struct PickTests {
         registry.unregister(id)
 
         #expect(registry.controller(for: id) == nil)
-        #expect(registry.retainedResult(for: pick.id) == ControlPickResult(result: .cancelled))
+        #expect(registry.retainedResult(for: pick.id)?.windowID == id)
+        #expect(registry.retainedResult(for: pick.id)?.result == ControlPickResult(result: .cancelled))
 
         registry.clearRetainedResult(for: id)
         #expect(registry.retainedResult(for: pick.id) == nil)
@@ -102,6 +103,26 @@ struct PickTests {
 
     @Test func registryLookupWithNilIDReturnsNil() {
         #expect(PickRegistry.shared.controller(for: nil) == nil)
+    }
+
+    @Test func permanentWindowRemovalKeepsRetainedResultForExternalPoll() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("agterm-pick-registry-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let library = WindowLibrary(directory: directory)
+        let id = library.newWindow(name: "temporary").id
+        let controller = PickController()
+        let pick = makePick(id: "deleted-window")
+        PickRegistry.shared.register(id, controller: controller)
+        #expect(controller.open(pick))
+        PickRegistry.shared.unregister(id)
+        #expect(PickRegistry.shared.retainedResult(for: pick.id) != nil)
+
+        library.removeWindow(id)
+
+        #expect(PickRegistry.shared.retainedResult(for: pick.id)?.result ==
+            ControlPickResult(result: .cancelled))
+        PickRegistry.shared.clearRetainedResult(for: id)
     }
 
     private func makePick(id: String) -> PendingPick {

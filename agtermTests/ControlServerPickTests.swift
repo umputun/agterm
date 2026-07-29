@@ -14,6 +14,8 @@ final class ControlServerPickTests: XCTestCase {
     private var registeredPickIDs: Set<WindowInfo.ID> = []
     private var registeredWindows: [WindowInfo.ID: NSWindow] = [:]
     private var registeredZoomIDs: Set<WindowInfo.ID> = []
+    private var registeredQuickIDs: Set<WindowInfo.ID> = []
+    private var registeredDashboardIDs: Set<WindowInfo.ID> = []
 
     override func setUp() async throws {
         try await super.setUp()
@@ -44,12 +46,20 @@ final class ControlServerPickTests: XCTestCase {
             for id in registeredZoomIDs {
                 TerminalZoomRegistry.shared.unregister(id)
             }
+            for id in registeredQuickIDs {
+                QuickTerminalRegistry.shared.unregister(id)
+            }
+            for id in registeredDashboardIDs {
+                DashboardControllerRegistry.shared.unregister(id)
+            }
             for (id, window) in registeredWindows {
                 WindowRegistry.shared.unregister(id)
                 window.close()
             }
             registeredPickIDs.removeAll()
             registeredZoomIDs.removeAll()
+            registeredQuickIDs.removeAll()
+            registeredDashboardIDs.removeAll()
             registeredWindows.removeAll()
             server = nil
             actions = nil
@@ -183,6 +193,100 @@ final class ControlServerPickTests: XCTestCase {
         )
     }
 
+    func testUntargetedResultAndCancelFollowPickIDAcrossFrontmostChange() throws {
+        let ownerID = try XCTUnwrap(library.activeWindowID)
+        let owner = registerPick(ownerID)
+        let pick = makePick("globally-routed")
+        XCTAssertTrue(owner.open(pick))
+
+        let otherID = library.newWindow(name: "other").id
+        _ = registerPick(otherID)
+        XCTAssertEqual(library.activeWindowID, otherID)
+
+        XCTAssertEqual(
+            server.pickResult(pick.id, window: nil),
+            ControlResponse(ok: true, result: ControlResult(
+                pick: ControlPickResult(result: .pending)
+            ))
+        )
+        XCTAssertEqual(server.cancelPick(pick.id, window: nil), ControlResponse(ok: true))
+        XCTAssertEqual(
+            server.pickResult(pick.id, window: nil),
+            ControlResponse(ok: true, result: ControlResult(
+                pick: ControlPickResult(result: .cancelled)
+            ))
+        )
+    }
+
+    func testPendingPickRejectsControlDrivenCoversButAllowsDismissals() throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let pick = registerPick(windowID)
+        XCTAssertTrue(pick.open(makePick("modal-owner")))
+
+        let quick = QuickTerminalController()
+        QuickTerminalRegistry.shared.register(windowID, controller: quick)
+        registeredQuickIDs.insert(windowID)
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        registeredZoomIDs.insert(windowID)
+        let dashboard = DashboardController()
+        DashboardControllerRegistry.shared.register(windowID, controller: dashboard)
+        registeredDashboardIDs.insert(windowID)
+        let sessionID = try XCTUnwrap(library.activeStore?.activeSession?.id)
+
+        XCTAssertEqual(
+            server.setQuickTerminal(mode: "show"),
+            ControlResponse(ok: false, error: "pick pending")
+        )
+        XCTAssertEqual(
+            server.setSurfaceZoom(nil, window: windowID.uuidString, mode: .on),
+            ControlResponse(ok: false, error: "pick pending")
+        )
+        XCTAssertEqual(
+            server.setDashboard(
+                targets: [sessionID.uuidString],
+                window: windowID.uuidString,
+                close: false,
+                fontMode: .untouched,
+                mru: false
+            ),
+            ControlResponse(ok: false, error: "pick pending")
+        )
+
+        XCTAssertEqual(server.setQuickTerminal(mode: "hide"), ControlResponse(ok: true))
+        XCTAssertEqual(
+            server.setSurfaceZoom(nil, window: windowID.uuidString, mode: .off),
+            ControlResponse(ok: true)
+        )
+        XCTAssertEqual(
+            server.setDashboard(
+                targets: [],
+                window: windowID.uuidString,
+                close: true,
+                fontMode: .untouched,
+                mru: false
+            ),
+            ControlResponse(ok: true)
+        )
+    }
+
+    func testPendingPickRejectsControlSearchNavigationButAllowsClose() async throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let store = try XCTUnwrap(library.activeStore)
+        let sessionID = try XCTUnwrap(store.activeSession?.id)
+        let pick = registerPick(windowID)
+        XCTAssertTrue(pick.open(makePick("search-owner")))
+
+        let open = await server.searchSession(sessionID, store: store, text: "needle", to: nil)
+        XCTAssertEqual(open, ControlResponse(ok: false, error: "pick pending"))
+
+        let navigate = await server.searchSession(sessionID, store: store, text: nil, to: "next")
+        XCTAssertEqual(navigate, ControlResponse(ok: false, error: "pick pending"))
+
+        let close = await server.searchSession(sessionID, store: store, text: nil, to: "close")
+        XCTAssertEqual(close, ControlResponse(ok: true, result: ControlResult(id: sessionID.uuidString)))
+    }
+
     func testCloseSessionChordCancelsPickAheadOfTerminalZoom() throws {
         let windowID = try XCTUnwrap(library.activeWindowID)
         let session = try XCTUnwrap(library.activeStore?.activeSession)
@@ -225,6 +329,33 @@ final class ControlServerPickTests: XCTestCase {
                 result: ControlResult(pick: ControlPickResult(result: .cancelled))
             ),
             "a poll after the real window-close path must still observe the terminal cancellation"
+        )
+        let otherID = library.newWindow(name: "other").id
+        XCTAssertEqual(
+            server.pickResult(pick.id, window: otherID.uuidString),
+            ControlResponse(ok: false, error: "unknown pick: \(pick.id)"),
+            "an explicit window selector must match the retained pick's owner"
+        )
+    }
+
+    func testNextOpenClearsClosedWindowRetainedResult() throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let firstController = registerPick(windowID)
+        let first = makePick("old-closed-pick")
+        XCTAssertTrue(firstController.open(first))
+        PickRegistry.shared.unregister(windowID)
+        registeredPickIDs.remove(windowID)
+
+        let replacement = registerPick(windowID)
+        let next = makePick("next-pick")
+        XCTAssertEqual(
+            server.openPick(next, window: windowID.uuidString, follow: false),
+            ControlResponse(ok: true, result: ControlResult(id: next.id))
+        )
+        XCTAssertEqual(replacement.pending, next)
+        XCTAssertEqual(
+            server.pickResult(first.id, window: nil),
+            ControlResponse(ok: false, error: "unknown pick: \(first.id)")
         )
     }
 

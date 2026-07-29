@@ -660,7 +660,7 @@ whitespace-only lines are dropped, and each remaining line becomes both the id a
 be unique, labels must not be empty, labels and subtitles may not contain control characters, and a
 picker accepts at most 1,000 items. An empty list is rejected.
 
-`--prompt` adds text above the query field. `--allow-custom` adds a row for a nonmatching query and
+`--prompt` sets the query field's placeholder text. `--allow-custom` adds a row for a nonmatching query and
 returns it as a custom result. A background `--window` target is not raised by default; `--follow`
 raises it. Only one picker can be pending in a window, and a second open fails with
 `pick already pending`.
@@ -680,12 +680,16 @@ failures exit 1. The blocking client polls every 100 ms for the first second, th
 `agtermctl pick result <pick-id> [--window W]` for a one-shot read; it prints the same bare result JSON,
 including `{"result":"pending"}`, and exits 1 while pending. Use
 `agtermctl pick cancel <pick-id> [--window W]` to cancel it. Result and cancel require the exact picker
-id, and a wrong id returns `unknown pick: <id>`.
+id. Without `--window`, the globally unique id keeps result/cancel pinned to its owning window even if
+the frontmost window changes. With `--window`, a live or close-retained result must belong to that
+window. A wrong id returns `unknown pick: <id>`.
 
 Read the live picker id from the tree's top-level `pickPending` field. It is omitted after selection,
-custom input, cancellation, or window closure. Closing the picker, closing its window, ⌘W, and app
-termination resolve it as cancelled so a blocking caller can finish. A terminal result remains readable
-until the next picker opens in that window.
+custom input, cancellation, or window closure. Closing the picker, closing its window, and ⌘W resolve it
+as cancelled. App termination cancels in-memory picker state before stopping the socket, but a client
+whose next poll races process shutdown may observe a transport failure instead of the final cancellation.
+A close-retained terminal result remains readable until the next picker opens in that window, including
+after permanent window deletion.
 
 ## quick
 

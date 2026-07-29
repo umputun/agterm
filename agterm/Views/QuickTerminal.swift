@@ -38,6 +38,10 @@ final class QuickTerminalController {
     /// factories), which `destroySurface` nils on teardown.
     @ObservationIgnored var onUserInput: (() -> Void)?
 
+    /// Whether this cover may claim keyboard focus. The owning window disables it while a control picker
+    /// is above the quick terminal, stopping an in-flight show retry from stealing the picker's field.
+    @ObservationIgnored var focusAllowed: () -> Bool = { true }
+
     /// Toolbar-button action: show if hidden, hide if visible.
     func toggle() { isVisible.toggle() }
 
@@ -63,6 +67,7 @@ final class QuickTerminalController {
     /// Re-assert first responder on the surface for a short window so focus lands once the
     /// overlay is on-window (a one-shot would race the overlay's layout).
     func focus(attempt: Int = 0) {
+        guard focusAllowed() else { return }
         if let surfaceView, let window = surfaceView.window {
             window.makeFirstResponder(surfaceView)
         }

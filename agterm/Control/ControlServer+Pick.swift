@@ -22,8 +22,23 @@ extension ControlServer {
     }
 
     func pickResult(_ target: String, window: String?) -> ControlResponse {
-        if let result = PickRegistry.shared.retainedResult(for: target) {
-            return ControlResponse(ok: true, result: ControlResult(pick: result))
+        if window == nil {
+            if let live = PickRegistry.shared.livePick(for: target),
+               let result = live.controller.result(for: target) {
+                return ControlResponse(ok: true, result: ControlResult(pick: result))
+            }
+            if let retained = PickRegistry.shared.retainedResult(for: target) {
+                return ControlResponse(ok: true, result: ControlResult(pick: retained.result))
+            }
+            return ControlResponse(ok: false, error: "unknown pick: \(target)")
+        }
+        if let retained = PickRegistry.shared.retainedResult(for: target) {
+            return resolver.resolveWindowID(window) { windowID in
+                guard windowID == retained.windowID else {
+                    return ControlResponse(ok: false, error: "unknown pick: \(target)")
+                }
+                return ControlResponse(ok: true, result: ControlResult(pick: retained.result))
+            }
         }
         return withPickController(window: window) { controller, _ in
             guard let result = controller.result(for: target) else {
@@ -34,8 +49,22 @@ extension ControlServer {
     }
 
     func cancelPick(_ target: String, window: String?) -> ControlResponse {
-        if PickRegistry.shared.retainedResult(for: target) != nil {
-            return ControlResponse(ok: true)
+        if window == nil {
+            if let live = PickRegistry.shared.livePick(for: target) {
+                if live.controller.pending?.id == target { live.controller.cancel() }
+                return ControlResponse(ok: true)
+            }
+            if PickRegistry.shared.retainedResult(for: target) != nil {
+                return ControlResponse(ok: true)
+            }
+            return ControlResponse(ok: false, error: "unknown pick: \(target)")
+        }
+        if let retained = PickRegistry.shared.retainedResult(for: target) {
+            return resolver.resolveWindowID(window) { windowID in
+                windowID == retained.windowID
+                    ? ControlResponse(ok: true)
+                    : ControlResponse(ok: false, error: "unknown pick: \(target)")
+            }
         }
         return withPickController(window: window) { controller, _ in
             guard controller.result(for: target) != nil else {

@@ -43,6 +43,118 @@ final class ControlPickUITests: ControlAPITestCase {
         XCTAssertTrue(pickPalette.waitForNonExistence(timeout: 10), "cancellation should dismiss the picker")
     }
 
+    func testEscapeCancelsAndDismissesPicker() throws {
+        let pickID = try resultID(openPick([["id": "one", "label": "One"]]))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10))
+
+        app.typeKey(.escape, modifierFlags: [])
+
+        XCTAssertEqual(try awaitTerminalResult(id: pickID)["result"] as? String, "cancelled")
+        XCTAssertTrue(pickPalette.waitForNonExistence(timeout: 10))
+    }
+
+    func testScrimClickCancelsAndDismissesPicker() throws {
+        let pickID = try resultID(openPick([["id": "one", "label": "One"]]))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10))
+        let scrim = app.descendants(matching: .any).matching(identifier: "pick-scrim").firstMatch
+        XCTAssertTrue(scrim.waitForExistence(timeout: 5))
+
+        scrim.coordinate(withNormalizedOffset: CGVector(dx: 0.95, dy: 0.95)).click()
+
+        XCTAssertEqual(try awaitTerminalResult(id: pickID)["result"] as? String, "cancelled")
+        XCTAssertTrue(pickPalette.waitForNonExistence(timeout: 10))
+    }
+
+    func testPickKeepsKeyboardAfterClosingBuiltInPalette() throws {
+        app.menuBars.menuBarItems["Navigate"].click()
+        let commandPalette = app.menuItems["Command Palette"]
+        XCTAssertTrue(commandPalette.waitForExistence(timeout: 5))
+        commandPalette.click()
+        XCTAssertTrue(app.descendants(matching: .any)
+            .matching(identifier: "command-palette").firstMatch.waitForExistence(timeout: 5))
+
+        let query = "picker owns this text"
+        let pickID = try resultID(openPick(
+            [["id": "existing", "label": "Existing"]],
+            allowCustom: true
+        ))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10))
+        app.typeText(query)
+
+        XCTAssertTrue(paletteRow("pick-custom").waitForExistence(timeout: 5),
+                      "palette-close focus retries must not send picker input to the terminal")
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertEqual(try awaitTerminalResult(id: pickID)["query"] as? String, query)
+    }
+
+    func testPendingPickDisablesAndClosesRecentSessionsPopover() throws {
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.new"}"#)["ok"] as? Bool, true)
+        let recent = app.buttons["recent-sessions-button"]
+        XCTAssertTrue(recent.waitForExistence(timeout: 10))
+        XCTAssertTrue(poll(until: recent.isEnabled, timeout: 8))
+
+        recent.click()
+        let row = app.buttons["recent-session-row"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5), "the recent-sessions popover should start open")
+
+        let pickID = try resultID(openPick([["id": "one", "label": "One"]]))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10))
+
+        XCTAssertTrue(poll(until: !recent.isEnabled, timeout: 5),
+                      "a pending picker must disable the recent-sessions popover button")
+        XCTAssertTrue(row.waitForNonExistence(timeout: 5),
+                      "a socket-driven picker must close an already-open title-bar popover")
+        XCTAssertEqual(try sendCommand(request(command: "pick.cancel", target: pickID))["ok"] as? Bool, true)
+        XCTAssertEqual(try awaitTerminalResult(id: pickID)["result"] as? String, "cancelled")
+    }
+
+    func testBackgroundZoomedPickerClosesPaletteWhenItsWindowBecomesFrontmost() throws {
+        let pickerWindow = try XCTUnwrap(try windowIDs().first)
+        let created = try sendCommand(#"{"cmd":"window.new","args":{"name":"palette-owner"}}"#)
+        let paletteWindow = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String)
+        XCTAssertTrue(poll(until: (try? windowNode(id: paletteWindow)?["active"] as? Bool) == true, timeout: 10))
+
+        app.menuBars.menuBarItems["Navigate"].click()
+        let commandPaletteItem = app.menuItems["Command Palette"]
+        XCTAssertTrue(commandPaletteItem.waitForExistence(timeout: 5))
+        commandPaletteItem.click()
+        let commandPalette = app.descendants(matching: .any).matching(identifier: "command-palette").firstMatch
+        XCTAssertTrue(commandPalette.waitForExistence(timeout: 5))
+
+        let zoom = try sendCommand(request(
+            command: "surface.zoom",
+            args: ["mode": "show", "window": pickerWindow]
+        ))
+        XCTAssertEqual(zoom["ok"] as? Bool, true, "the background picker window should start zoomed: \(zoom)")
+
+        let query = "background picker owns focus"
+        let pickID = try resultID(openPick(
+            [["id": "existing", "label": "Existing"]],
+            allowCustom: true,
+            window: pickerWindow
+        ))
+        XCTAssertEqual(
+            try sendCommand(#"{"cmd":"window.select","target":"\#(pickerWindow)"}"#)["ok"] as? Bool,
+            true
+        )
+        XCTAssertTrue(poll(until: (try? windowNode(id: pickerWindow)?["active"] as? Bool) == true, timeout: 10))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10))
+        XCTAssertTrue(commandPalette.waitForNonExistence(timeout: 5),
+                      "the old window's built-in palette must not remount under the picker")
+
+        app.typeText(query)
+        XCTAssertTrue(paletteRow("pick-custom").waitForExistence(timeout: 5),
+                      "the visible picker must retain keyboard focus after the window handoff")
+        XCTAssertEqual(try sendCommand(request(command: "pick.cancel", target: pickID))["ok"] as? Bool, true)
+        XCTAssertEqual(try awaitTerminalResult(id: pickID)["result"] as? String, "cancelled")
+        XCTAssertEqual(try sendCommand(request(
+            command: "surface.zoom",
+            args: ["mode": "hide", "window": pickerWindow]
+        ))["ok"] as? Bool, true)
+        XCTAssertTrue(commandPalette.waitForNonExistence(timeout: 3),
+                      "the stale built-in palette must stay closed after the picker resolves and zoom exits")
+    }
+
     func testSecondPickOnSameWindowIsRejected() throws {
         let pickID = try resultID(openPick([["id": "first", "label": "First"]]))
         XCTAssertTrue(pickPalette.waitForExistence(timeout: 10), "the first picker should be visible")
@@ -107,6 +219,35 @@ final class ControlPickUITests: ControlAPITestCase {
         XCTAssertEqual(cancelled["ok"] as? Bool, true, "targeted pick.cancel should succeed: \(cancelled)")
         XCTAssertEqual(try awaitTerminalResult(id: pickID, window: backID)["result"] as? String, "cancelled")
         XCTAssertNil(try treePickPending(window: backID), "the background tree should clear after cancellation")
+    }
+
+    func testConcurrentPicksResolveIndependentlyAcrossWindows() throws {
+        let frontID = try XCTUnwrap(try windowIDs().first)
+        let created = try sendCommand(#"{"cmd":"window.new","args":{"name":"pick-peer","minimized":true}}"#)
+        let backID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String)
+
+        let frontPick = try resultID(openPick(
+            [["id": "front", "label": "Front"]],
+            window: frontID
+        ))
+        let backPick = try resultID(openPick(
+            [["id": "back", "label": "Back"]],
+            window: backID
+        ))
+        XCTAssertEqual(try treePickPending(window: frontID), frontPick)
+        XCTAssertEqual(try treePickPending(window: backID), backPick)
+
+        XCTAssertEqual(try sendCommand(request(
+            command: "pick.cancel", target: frontPick, args: ["window": frontID]
+        ))["ok"] as? Bool, true)
+        XCTAssertEqual(try awaitTerminalResult(id: frontPick, window: frontID)["result"] as? String, "cancelled")
+        XCTAssertEqual(try treePickPending(window: backID), backPick,
+                       "resolving one window must leave the other picker pending")
+
+        XCTAssertEqual(try sendCommand(request(
+            command: "pick.cancel", target: backPick, args: ["window": backID]
+        ))["ok"] as? Bool, true)
+        XCTAssertEqual(try awaitTerminalResult(id: backPick, window: backID)["result"] as? String, "cancelled")
     }
 
     // MARK: - Picker helpers

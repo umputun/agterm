@@ -122,6 +122,7 @@ extension WindowContentView {
                 captionBackground: terminalColor,
                 pillColor: dashboardPillColor,
                 pillTextColor: dashboardPillTextColor,
+                focusAllowed: pick.pending == nil,
                 onClick: { clickDashboardMember($0) },
                 onSelect: { selectDashboardMember($0) },
                 onClose: { closeDashboardFromKeyboard() }

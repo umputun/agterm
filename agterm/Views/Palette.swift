@@ -183,6 +183,8 @@ struct CommandPalette: View {
                 Color.black.opacity(0.2)
                     .contentShape(Rectangle())
                     .onTapGesture { dismiss() }
+                    .accessibilityElement()
+                    .accessibilityIdentifier(explicitItems == nil ? "palette-scrim" : "pick-scrim")
                 panel
                     .frame(width: 520)
                     .padding(.top, geo.size.height * 0.12)
@@ -217,7 +219,7 @@ struct CommandPalette: View {
         .onAppear {
             fieldFocused = true
             updateFiltered()
-            syncThemeSession()
+            if explicitItems == nil { syncThemeSession() }
             // a palette opened from a title-bar button (the attention bell) mounts while that button
             // still holds first responder, so the synchronous focus above loses the race and the field
             // never takes the keyboard. re-assert on the next runloop tick — after the click settles —
@@ -225,8 +227,15 @@ struct CommandPalette: View {
             // this is a no-op (see swiftui focus-pattern: onAppear focus may need a main-async kick).
             DispatchQueue.main.async { fieldFocused = true }
         }
-        .onChange(of: controller.mode) { selection = 0; updateFiltered(); syncThemeSession() }
-        .onDisappear { actions.cancelThemePreview() }
+        .onChange(of: controller.mode) {
+            guard explicitItems == nil else { return }
+            selection = 0
+            updateFiltered()
+            syncThemeSession()
+        }
+        .onDisappear {
+            if explicitItems == nil { actions.cancelThemePreview() }
+        }
     }
 
     private var results: some View {

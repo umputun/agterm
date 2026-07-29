@@ -5,6 +5,7 @@ description: >
   control socket. Use when running inside an agterm session and asked to control the terminal:
   create, rename, close, select, or reorder sessions and workspaces; split panes; toggle the
   per-session scratch terminal; open or close overlay terminals and read their exit status; display
+  the native fuzzy picker with caller-supplied choices and poll or cancel it; display
   an image inline via a bundled helper script; type
   into a session, copy its selection, or search its scrollback; post desktop notifications; manage windows (new, list,
   select, close, resize, move); change font size; or reload and edit the keymap and the agterm-scoped
@@ -15,7 +16,7 @@ description: >
   feature request / question as a GitHub Discussion.
 when_to_use: >
   Trigger on: agterm, agtermctl, agterm control socket, session.new, session.close, session.type,
-  session.split, session.scratch, session.focus, session.resize, surface.zoom, dashboard, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
+  session.split, session.scratch, session.focus, session.resize, surface.zoom, dashboard, pick, pick.open, pick.result, pick.cancel, native picker, session.go, session.copy, session.paste, session.selectall, session.text, session.search, session.status,
   session.flag, session.seen, session.reveal, session.duplicate, session.background, session.overlay, workspace.new, workspace.select, workspace.move, workspace.focus, workspace.filter, window.new, window.list,
   window.select, window.resize, window.move, window.zoom, window.fullscreen, window.minimize, quick terminal, sidebar, sidebar.mode, sidebar.expand, sidebar.collapse, flagged, notify, font.inc, keymap.reload, keymap.list, config.reload,
   theme.set, theme.list, events, events.read, event subscription, select theme, edit keymap, show an image, display an image inline, show-image,

@@ -22,8 +22,9 @@ extension WindowContentView {
     /// to switch to (only the current session). Opening a popover is interactive-only, so it's control-API
     /// keep-in-sync exempt (like the bell opening the attention palette).
     var recentSessionsButton: some View {
-        let enabled = !recentSessions.isEmpty
+        let enabled = !recentSessions.isEmpty && pick.pending == nil
         return Button {
+            guard pick.pending == nil else { return }
             recentSessionsShown.toggle()
         } label: {
             Label("Recent sessions", systemImage: "clock.arrow.circlepath")
@@ -100,6 +101,7 @@ extension WindowContentView {
     /// Commit a popover row click: note activity (so auto-follow can't pull the selection back), select the
     /// session, focus it, and close the popover — the mouse twin of the Ctrl-Tab release commit.
     private func selectRecent(_ id: UUID) {
+        guard pick.pending == nil else { return }
         store.noteUserActivity()
         store.selectSession(id)
         actions.focusActiveSession()
@@ -118,14 +120,16 @@ extension WindowContentView {
         let sessions = store.attentionSessions
         let blocked = sessions.contains { $0.agentIndicator.status == .blocked }
         let empty = sessions.isEmpty
+        let enabled = !empty && pick.pending == nil
         return Button {
+            guard pick.pending == nil else { return }
             attentionPopoverShown.toggle()
         } label: {
             Label("Attention", systemImage: blocked ? "bell.fill" : "bell")
         }
         .foregroundStyle(blocked ? Color(nsColor: GhosttyApp.shared.blockedStatusColor) : chromeText)
-        .opacity(empty ? 0.35 : 1)
-        .disabled(empty)
+        .opacity(enabled ? 1 : 0.35)
+        .disabled(!enabled)
         .help(helpHint(empty ? "No sessions need attention" : "Show sessions that need attention", .showAttention))
         .accessibilityIdentifier("attention-button")
         .accessibilityValue(empty ? "none" : (blocked ? "blocked" : "attention"))
@@ -172,6 +176,7 @@ extension WindowContentView {
     /// Commit an attention popover row click: select the session and reveal its blocked pane (the pane that
     /// set the status), then close the popover — the mouse twin of the ⌃⇧I palette's select-and-reveal.
     private func selectAttention(_ id: UUID) {
+        guard pick.pending == nil else { return }
         store.noteUserActivity()
         let indicator = store.selectSession(id)
         actions.revealActiveBlockedPane(captured: indicator)

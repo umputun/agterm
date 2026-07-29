@@ -3,6 +3,30 @@ import AppKit
 import SwiftUI
 
 extension WindowContentView {
+    /// Restore keyboard ownership to whichever full-window cover was already present below a picker.
+    /// The ordinary session focus helper intentionally refuses to cross these modal layers.
+    func restoreFocusAfterPick() {
+        if dashboard.isOpen {
+            dashboard.requestFocus()
+            return
+        }
+        if let target = terminalZoom.target {
+            switch target {
+            case .quick:
+                quickTerminal.focus()
+            case let .session(sessionID, surface):
+                guard let session = store.session(withID: sessionID) else { return }
+                focusZoomedSessionSurface(session: session, surface: surface)
+            }
+            return
+        }
+        if quickTerminal.isVisible {
+            quickTerminal.focus()
+            return
+        }
+        actions.focusActiveSession()
+    }
+
     /// The chrome above the zoomed terminal: the exit-zoom row, or — in hidden toolbar mode — the same
     /// invisible ~3px drag strip `customTitlebar` degrades to (no row; zoom exit stays on the keybinding
     /// and the control command), so hidden mode keeps its full-bleed terminal while zoomed.
@@ -168,6 +192,7 @@ extension WindowContentView {
     /// layer's `TerminalView` hasn't realized yet (e.g. zooming a scratch that was never shown); it
     /// dies as soon as the zoom target changes.
     func focusZoomedSessionSurface(session: Session, surface: TerminalZoomSurface, attempt: Int = 0) {
+        guard pick.pending == nil else { return }
         let expectedTarget = TerminalZoomTarget.session(session.id, surface)
         guard terminalZoom.target == expectedTarget else { return }
         let target: (any TerminalSurface)? = switch surface {

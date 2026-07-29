@@ -356,7 +356,7 @@ struct SocketClientTests {
         )
 
         #expect(requests.dropFirst().allSatisfy {
-            $0 == ControlRequest(cmd: .pickResult, target: "pick-1", args: ControlArgs(window: "w1"))
+            $0 == ControlRequest(cmd: .pickResult, target: "pick-1")
         })
         #expect(sleeps == Array(repeating: 0.1, count: 10) + [0.5])
         let result = try JSONDecoder().decode(
@@ -397,14 +397,19 @@ struct SocketClientTests {
 
     @Test func pickBlockFailsForOpenErrorAndMalformedResult() throws {
         let command = try Pick.Open.parse([])
+        var errors: [String] = []
         #expect(throws: ExitCode.failure) {
             try command.execute(
                 input: Data("One\n".utf8),
                 send: { _ in ControlResponse(ok: false, error: "boom") },
                 sleep: { _ in },
-                output: { _ in }
+                output: { _ in Issue.record("a non-JSON server error must not use stdout") },
+                errorOutput: { errors.append($0) }
             )
         }
+        #expect(errors == ["error: boom"])
+
+        errors.removeAll()
         #expect(throws: ExitCode.failure) {
             try command.execute(
                 input: Data("One\n".utf8),
@@ -414,9 +419,117 @@ struct SocketClientTests {
                         : ControlResponse(ok: true)
                 },
                 sleep: { _ in },
-                output: { _ in }
+                output: { _ in Issue.record("a protocol error must not use stdout") },
+                errorOutput: { errors.append($0) }
             )
         }
+        #expect(errors == ["error: pick.result missing result"])
+    }
+
+    @Test func pickBlockRoutesJSONServerErrorThroughInjectedStdout() throws {
+        let command = try Pick.Open.parse(["--json"])
+        var output: [String] = []
+
+        #expect(throws: ExitCode.failure) {
+            try command.execute(
+                input: Data("One\n".utf8),
+                send: { _ in ControlResponse(ok: false, error: "boom") },
+                sleep: { _ in },
+                output: { output.append($0) },
+                errorOutput: { _ in Issue.record("a JSON server error must not use stderr") }
+            )
+        }
+
+        let response = try JSONDecoder().decode(ControlResponse.self, from: Data(#require(output.first).utf8))
+        #expect(!response.ok)
+        #expect(response.error == "boom")
+    }
+
+    @Test(arguments: [
+        (ControlPickOutcome.picked, Int32(0)),
+        (.custom, Int32(0)),
+        (.pending, Int32(1)),
+        (.cancelled, Int32(2)),
+    ])
+    func pickResultExecutesRequestPrintsJSONAndMapsExit(
+        _ outcome: ControlPickOutcome,
+        _ expectedExit: Int32
+    ) throws {
+        let command = try Pick.Result.parse(["pick-1", "--window", "w1"])
+        var request: ControlRequest?
+        var output: [String] = []
+        let run = {
+            try command.execute(
+                send: {
+                    request = $0
+                    return ControlResponse(ok: true, result: ControlResult(
+                        pick: ControlPickResult(result: outcome)
+                    ))
+                },
+                output: { output.append($0) }
+            )
+        }
+
+        if expectedExit == 0 {
+            try run()
+        } else {
+            do {
+                try run()
+                Issue.record("expected mapped exit \(expectedExit)")
+            } catch let code as ExitCode {
+                #expect(code.rawValue == expectedExit)
+            }
+        }
+        #expect(request == ControlRequest(
+            cmd: .pickResult,
+            target: "pick-1",
+            args: ControlArgs(window: "w1")
+        ))
+        #expect(try JSONDecoder().decode(
+            ControlPickResult.self,
+            from: Data(#require(output.first).utf8)
+        ).result == outcome)
+    }
+
+    @Test func pickResultRoutesServerAndProtocolErrorsThroughInjectedStderr() throws {
+        let command = try Pick.Result.parse(["pick-1"])
+        var errors: [String] = []
+
+        #expect(throws: ExitCode.failure) {
+            try command.execute(
+                send: { _ in ControlResponse(ok: false, error: "boom") },
+                output: { _ in Issue.record("a non-JSON server error must not use stdout") },
+                errorOutput: { errors.append($0) }
+            )
+        }
+        #expect(errors == ["error: boom"])
+
+        errors.removeAll()
+        #expect(throws: ExitCode.failure) {
+            try command.execute(
+                send: { _ in ControlResponse(ok: true) },
+                output: { _ in Issue.record("a protocol error must not use stdout") },
+                errorOutput: { errors.append($0) }
+            )
+        }
+        #expect(errors == ["error: pick.result missing result"])
+    }
+
+    @Test func pickResultRoutesJSONServerErrorThroughInjectedStdout() throws {
+        let command = try Pick.Result.parse(["pick-1", "--json"])
+        var output: [String] = []
+
+        #expect(throws: ExitCode.failure) {
+            try command.execute(
+                send: { _ in ControlResponse(ok: false, error: "boom") },
+                output: { output.append($0) },
+                errorOutput: { _ in Issue.record("a JSON server error must not use stderr") }
+            )
+        }
+
+        let response = try JSONDecoder().decode(ControlResponse.self, from: Data(#require(output.first).utf8))
+        #expect(!response.ok)
+        #expect(response.error == "boom")
     }
 
     @Test func formatResponseBareOk() {

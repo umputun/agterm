@@ -10,6 +10,7 @@ final class PickFocusGuardTests: XCTestCase {
     private var library: WindowLibrary!
     private var actions: AppActions!
     private var registeredWindowIDs: Set<UUID> = []
+    private var registeredWindows: [UUID: NSWindow] = [:]
 
     override func setUp() async throws {
         try await super.setUp()
@@ -25,7 +26,13 @@ final class PickFocusGuardTests: XCTestCase {
         await MainActor.run {
             for id in registeredWindowIDs {
                 PickRegistry.shared.unregister(id)
+                PickRegistry.shared.clearRetainedResult(for: id)
             }
+            for (id, window) in registeredWindows {
+                WindowRegistry.shared.unregister(id)
+                window.orderOut(nil)
+            }
+            registeredWindows.removeAll()
             actions = nil
             library = nil
             try? FileManager.default.removeItem(at: stateDir)
@@ -48,6 +55,8 @@ final class PickFocusGuardTests: XCTestCase {
         )))
 
         XCTAssertTrue(actions.pickActive(for: activeID))
+        XCTAssertFalse(actions.uiActionsEnabled(for: activeID),
+                       "a pending picker must participate in the shared modal action gate")
         XCTAssertFalse(actions.pickActive(for: backgroundID),
                        "a pick must not suppress session-addressed focus in another window")
 
@@ -60,10 +69,58 @@ final class PickFocusGuardTests: XCTestCase {
         XCTAssertFalse(actions.pickActive(for: UUID()))
     }
 
+    func testTerminalRetryGuardTracksPickerForOwningAppKitWindow() throws {
+        let ownerID = try XCTUnwrap(library.activeWindowID)
+        let otherID = library.newWindow(name: "other").id
+        let ownerWindow = registerWindow(ownerID)
+        let otherWindow = registerWindow(otherID)
+        let controller = registerPick(ownerID)
+
+        XCTAssertFalse(GhosttySurfaceView.pickOwnsFocus(in: ownerWindow))
+        XCTAssertTrue(controller.open(PendingPick(
+            id: "in-flight-focus",
+            items: [ControlPickItem(id: "one", label: "One")]
+        )))
+
+        XCTAssertTrue(GhosttySurfaceView.pickOwnsFocus(in: ownerWindow),
+                      "an already-running focus retry must stop once this window gains a picker")
+        XCTAssertFalse(GhosttySurfaceView.pickOwnsFocus(in: otherWindow),
+                       "a picker must not stop a retry in another window")
+        XCTAssertFalse(GhosttySurfaceView.pickOwnsFocus(in: nil))
+    }
+
+    func testDeferredPickFocusRestorationWaitsForOwningWindowToBecomeFrontmost() {
+        var state = PickFocusRestorationState()
+
+        XCTAssertFalse(state.pickerResolved(isFrontmost: false),
+                       "resolving a background picker must not steal focus")
+        XCTAssertTrue(state.isDeferred)
+        XCTAssertFalse(state.windowBecameFrontmost(pickPending: true),
+                       "a replacement picker must retain focus when the window activates")
+        XCTAssertTrue(state.isDeferred)
+        XCTAssertTrue(state.windowBecameFrontmost(pickPending: false),
+                      "the owning window should restore its underlying cover once it is frontmost")
+        XCTAssertFalse(state.isDeferred)
+        XCTAssertFalse(state.windowBecameFrontmost(pickPending: false),
+                       "the deferred restoration must be consumed exactly once")
+    }
+
     private func registerPick(_ windowID: UUID) -> PickController {
         let controller = PickController()
         PickRegistry.shared.register(windowID, controller: controller)
         registeredWindowIDs.insert(windowID)
         return controller
+    }
+
+    private func registerWindow(_ windowID: UUID) -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        WindowRegistry.shared.register(windowID, window: window)
+        registeredWindows[windowID] = window
+        return window
     }
 }

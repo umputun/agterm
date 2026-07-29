@@ -360,6 +360,9 @@ struct agtermApp: App {
             // this END lands a tick later, so refocusing the deck's topmost surface here would steal
             // first responder back from the zoomed terminal (the zoom cover bails like the quick one).
             guard windowID.flatMap({ TerminalZoomRegistry.shared.controller(for: $0) })?.target == nil else { return }
+            // A control picker is the topmost modal. `session.search --to close` remains valid cleanup while
+            // one is pending, but its asynchronous END callback must not return focus behind the picker.
+            guard PickRegistry.shared.controller(for: windowID)?.pending == nil else { return }
             (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
         }
         view.onSearchTotal = { total in store.session(withID: sessionID)?.searchTotal = total }

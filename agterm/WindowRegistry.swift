@@ -36,6 +36,12 @@ final class WindowRegistry {
         windows.values.contains { $0 === window }
     }
 
+    /// Returns the stable control-window id for a live AppKit window. Focus retry loops use this reverse
+    /// lookup to honor window-scoped modal state without coupling each terminal surface to `WindowLibrary`.
+    func windowID(for window: NSWindow) -> WindowInfo.ID? {
+        windows.first { $0.value === window }?.key
+    }
+
     /// Brings the window for `id` to the front if one is live. Returns whether a window was raised.
     @discardableResult
     func raise(_ id: WindowInfo.ID) -> Bool {

@@ -291,7 +291,7 @@ struct Pick: ParsableCommand {
             abstract: "Read choices from stdin and open a native fuzzy picker."
         )
 
-        @Option(name: .long, help: "Text shown above the picker query field.") var prompt: String?
+        @Option(name: .long, help: "Placeholder text shown in the picker query field.") var prompt: String?
         @Flag(name: .long, help: "Accept the current query as a custom result.") var allowCustom = false
         @Flag(name: .long, help: "Raise the target window when the picker opens.") var follow = false
         @Flag(name: .long, help: "Print the picker id and return without waiting for a result.") var noBlock = false
@@ -335,25 +335,28 @@ struct Pick: ParsableCommand {
                 input: FileHandle.standardInput.readDataToEndOfFile(),
                 send: client.send,
                 sleep: Thread.sleep(forTimeInterval:),
-                output: { print($0) }
+                output: { print($0) },
+                errorOutput: Self.writeStandardError
             )
         }
 
         /// Execute open → poll with injectable I/O. The production wrapper supplies the socket, sleep,
-        /// stdin, and stdout; unit tests exercise the unbounded blocking flow without real delays or stdin.
+        /// stdin, stdout, and stderr; unit tests exercise the unbounded blocking flow without real delays
+        /// or process file descriptors.
         func execute(
             input: Data,
             send: (ControlRequest) throws -> ControlResponse,
             sleep: (TimeInterval) -> Void,
-            output: (String) -> Void
+            output: (String) -> Void,
+            errorOutput: (String) -> Void = Self.writeStandardError
         ) throws {
             let opened = try send(makeRequest(input: input))
             guard opened.ok else {
-                SocketClient.printResponse(opened, json: options.json)
+                Self.writeResponse(opened, json: options.json, output: output, errorOutput: errorOutput)
                 throw ExitCode.failure
             }
             guard let pickID = opened.result?.id else {
-                Self.printProtocolError("pick.open result missing id")
+                errorOutput("error: pick.open result missing id")
                 throw ExitCode.failure
             }
             if noBlock {
@@ -365,15 +368,14 @@ struct Pick: ParsableCommand {
             while true {
                 let response = try send(ControlRequest(
                     cmd: .pickResult,
-                    target: pickID,
-                    args: options.withWindow()
+                    target: pickID
                 ))
                 guard response.ok else {
-                    SocketClient.printResponse(response, json: options.json)
+                    Self.writeResponse(response, json: options.json, output: output, errorOutput: errorOutput)
                     throw ExitCode.failure
                 }
                 guard let result = response.result?.pick else {
-                    Self.printProtocolError("pick.result missing result")
+                    errorOutput("error: pick.result missing result")
                     throw ExitCode.failure
                 }
                 if result.result == .pending {
@@ -389,8 +391,22 @@ struct Pick: ParsableCommand {
             }
         }
 
-        private static func printProtocolError(_ message: String) {
-            FileHandle.standardError.write(Data("error: \(message)\n".utf8))
+        private static func writeResponse(
+            _ response: ControlResponse,
+            json: Bool,
+            output: (String) -> Void,
+            errorOutput: (String) -> Void
+        ) {
+            let line = SocketClient.formatResponse(response, json: json)
+            if json {
+                output(line)
+            } else {
+                errorOutput(line)
+            }
+        }
+
+        private static func writeStandardError(_ line: String) {
+            FileHandle.standardError.write(Data("\(line)\n".utf8))
         }
     }
 
@@ -406,18 +422,41 @@ struct Pick: ParsableCommand {
         }
 
         func run() throws {
-            let response = try SocketClient(path: options.socketPath()).send(makeRequest())
+            try execute(
+                send: SocketClient(path: options.socketPath()).send,
+                output: { print($0) },
+                errorOutput: Self.writeStandardError
+            )
+        }
+
+        /// Execute a one-shot read with injectable transport/stdout/stderr so every wire outcome and exit
+        /// mapping is covered without replacing process file descriptors.
+        func execute(
+            send: (ControlRequest) throws -> ControlResponse,
+            output: (String) -> Void,
+            errorOutput: (String) -> Void = Self.writeStandardError
+        ) throws {
+            let response = try send(makeRequest())
             guard response.ok else {
-                SocketClient.printResponse(response, json: options.json)
+                let line = SocketClient.formatResponse(response, json: options.json)
+                if options.json {
+                    output(line)
+                } else {
+                    errorOutput(line)
+                }
                 throw ExitCode.failure
             }
             guard let result = response.result?.pick else {
-                FileHandle.standardError.write(Data("error: pick.result missing result\n".utf8))
+                errorOutput("error: pick.result missing result")
                 throw ExitCode.failure
             }
-            print(try SocketClient.formatPickResult(result))
+            output(try SocketClient.formatPickResult(result))
             let code = SocketClient.pickExitCode(for: result.result)
             if code.rawValue != 0 { throw code }
+        }
+
+        private static func writeStandardError(_ line: String) {
+            FileHandle.standardError.write(Data("\(line)\n".utf8))
         }
     }
 

@@ -134,6 +134,18 @@ struct DashboardControllerTests {
         #expect(controller.appliedFontSize == 18)
     }
 
+    @Test func requestFocusAdvancesRevisionWithoutChangingDashboardState() {
+        let controller = DashboardController()
+        let member = primary(UUID())
+        controller.open(members: [member])
+
+        controller.requestFocus()
+
+        #expect(controller.focusRevision == 1)
+        #expect(controller.members == [member])
+        #expect(controller.highlighted == member)
+    }
+
     @Test func reopenOverSameMembersUpdatesFontMode() {
         // a same-members re-open with a new font mode must update the mode (the app-side wiring keys its
         // font re-apply off members+fontMode, so this is what a `dashboard A B --font-size 20` re-open sees).

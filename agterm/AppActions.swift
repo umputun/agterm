@@ -42,10 +42,11 @@ final class AppActions {
         frontmostTerminalZoom?.target != nil
     }
 
-    /// While terminal zoom OR the dashboard grid is active, the UI is modal: keyboard/menu/palette actions
-    /// must not mutate the deck behind it. The zoom/dashboard toggles, socket commands, and macOS window
-    /// controls remain separate paths (they never gate on this), so the user is never trapped and can always
-    /// dismiss the modal. This is the frontmost-window shorthand for the per-window check below, resolved on
+    /// While terminal zoom, the dashboard grid, OR the topmost native picker is active, the UI is modal:
+    /// keyboard/menu/palette actions must not mutate the deck behind it. Dismissal paths remain independently
+    /// callable so the user is never trapped: the dashboard toggle stays available while its grid is the
+    /// topmost modal, while zoom/dashboard toggles are blocked behind a picker. This is the frontmost-window
+    /// shorthand below, resolved on
     /// `library.activeWindowID` like the zoom target. With NO window open that id is nil and the gate DENIES
     /// (the per-window check's `guard let windowID else { return false }`), so a deck action can't run against
     /// no window while the app is tearing down.
@@ -57,6 +58,7 @@ final class AppActions {
         guard let windowID else { return false }
         return TerminalZoomRegistry.shared.controller(for: windowID)?.target == nil
             && DashboardControllerRegistry.shared.controller(for: windowID)?.isOpen != true
+            && PickRegistry.shared.controller(for: windowID)?.pending == nil
     }
 
     /// Set briefly while a rename is being started, so the focus-restore that runs when a palette
@@ -297,7 +299,7 @@ final class AppActions {
     /// Resolve all open windows' pending pickers during the synchronous app-termination notification.
     /// The window library deliberately retains its open ids through quit teardown, so every mounted
     /// controller remains addressable here.
-    private func cancelAllPendingPicks() {
+    func cancelAllPendingPicks() {
         for windowID in library.openIDs() {
             cancelPendingPick(for: windowID)
         }
@@ -807,10 +809,11 @@ final class AppActions {
     // MARK: - Quick terminal (frontmost window)
 
     /// Toggle the frontmost window's quick terminal (each window owns its own controller). Gated on the full
-    /// `uiActionsEnabled` (zoom AND dashboard), not zoom alone — defence in depth rather than a gap being
-    /// closed, since all three callers already gate: the View ▸ Quick Terminal item's `.disabled(modalActive)`
-    /// (which covers a `keymap.conf` rebind too, because that rebind is the item's own key equivalent), the
-    /// palette's `runPaletteCommand` check, and the Dock item's invocation-time `uiActionsEnabled(for:)`.
+    /// `uiActionsEnabled` (zoom, dashboard, AND native picker), not zoom alone — defence in depth rather
+    /// than a gap being closed, since all three callers already gate: the View ▸ Quick Terminal item's
+    /// `.disabled(modalActive)` (which covers a `keymap.conf` rebind too, because that rebind is the item's
+    /// own key equivalent), the palette's `runPaletteCommand` check, and the Dock item's invocation-time
+    /// `uiActionsEnabled(for:)`.
     func toggleQuickTerminal() {
         guard uiActionsEnabled else { return }
         frontmostQuickTerminal?.toggle()
@@ -818,15 +821,19 @@ final class AppActions {
 
     /// Toggle the frontmost window's full-window terminal zoom. Core resolves which surface is active
     /// (quick, overlay, scratch, split, or primary); the owning window renders it above all chrome.
-    func toggleTerminalZoom() { frontmostTerminalZoom?.toggle() }
+    func toggleTerminalZoom() {
+        guard !pickActive(for: library.activeWindowID) else { return }
+        frontmostTerminalZoom?.toggle()
+    }
 
     /// Toggle the frontmost window's dashboard — the keyboard/menu/palette opener for the MRU dashboard grid
     /// (the ⌘⇧D / Navigate ▸ Dashboard equivalent of `agtermctl dashboard --mru --auto-size`). Inert while
-    /// terminal zoom is active (mirrors the GUI siblings + the `.disabled(zoomed)` menu item; the control
-    /// path keeps its own zoom-clear). Open → close it and refocus the active session; closed → open it over
-    /// the window's most-recently-used sessions, auto-sized. A no-op when the window has no recent sessions.
+    /// terminal zoom or the topmost native picker is active (mirrors the GUI siblings and menu disablement).
+    /// Dashboard state alone does not block the toggle, so an open grid remains its own close escape hatch.
+    /// Open → close it and refocus the active session; closed → open it over the window's most-recently-used
+    /// sessions, auto-sized. A no-op when the window has no recent sessions.
     func toggleDashboard() {
-        guard !terminalZoomActive else { return }
+        guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
         guard let dashboard = frontmostDashboard else { return }
         if dashboard.isOpen {
             dashboard.close()
@@ -902,6 +909,7 @@ final class AppActions {
     /// target — `onSearchStart` opens the bar and pins the surface. Shared by the Find menu item, the
     /// palette, and ⌘F.
     func toggleSearch() {
+        guard !pickActive(for: library.activeWindowID) else { return }
         if store?.activeSession?.searchActive == true {
             (store?.activeSession?.searchSurface as? GhosttySurfaceView)?.endSearch()
             return

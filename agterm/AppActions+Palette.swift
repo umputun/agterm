@@ -197,24 +197,24 @@ extension AppActions {
     /// icon — none of these route through the action palette's `runItem`, so a synchronous toggle is
     /// correct. The ⌃⇧P launcher uses `openAttentionPalette()` instead (it must reopen async).
     func toggleAttentionPalette() {
-        guard !terminalZoomActive else { return }
+        guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
         palette?.toggle(.attention)
     }
 
     /// Menu/keymap palette launchers route through actions, not direct `palette.toggle`, so terminal zoom's
     /// modal UI guard is applied consistently to the keyboard shortcut and menu paths.
     func toggleSessionPalette() {
-        guard !terminalZoomActive else { return }
+        guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
         palette?.toggle(.sessions)
     }
 
     func toggleActionPalette() {
-        guard !terminalZoomActive else { return }
+        guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
         palette?.toggle(.actions)
     }
 
     func toggleCustomCommandPalette() {
-        guard !terminalZoomActive else { return }
+        guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
         palette?.toggle(.customCommands)
     }
 
@@ -224,9 +224,10 @@ extension AppActions {
     /// `toggle` would be undone by that close. The async `open` lets `.attention` reopen a tick later as a
     /// fresh view that survives the close.
     func openAttentionPalette() {
-        guard !terminalZoomActive else { return }
+        guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self, !self.terminalZoomActive else { return }
+            guard let self, !self.terminalZoomActive,
+                  !self.pickActive(for: self.library.activeWindowID) else { return }
             self.palette?.open(.attention)
         }
     }
@@ -239,9 +240,10 @@ extension AppActions {
     /// this returns, so reopening async lets `.themes` survive the close (the rename actions reopen the
     /// same way).
     func openThemePalette() {
-        guard !terminalZoomActive else { return }
+        guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
         DispatchQueue.main.async { [weak self] in
-            guard let self, !self.terminalZoomActive else { return }
+            guard let self, !self.terminalZoomActive,
+                  !self.pickActive(for: self.library.activeWindowID) else { return }
             self.palette?.open(.themes)
         }
     }

@@ -629,7 +629,8 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
     /// Starts the bounded auto-focus retry (overlay only), if not already done/in-flight.
     private func requestAutoFocus(in window: NSWindow?) {
-        guard autoFocus, deckActive, !didAutoFocus, !autoFocusInFlight, let window else { return }
+        guard autoFocus, deckActive, !didAutoFocus, !autoFocusInFlight, let window,
+              !Self.pickOwnsFocus(in: window) else { return }
         autoFocusInFlight = true
         restoreAutoFocus(in: window, attempt: 0)
     }
@@ -638,7 +639,10 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// actually holds first responder, then marks it focused. Bounded so it never spins forever; gives
     /// up if the view is torn down or moved windows. macterm's FocusRestoration pattern.
     private func restoreAutoFocus(in window: NSWindow, attempt: Int) {
-        guard autoFocus, deckActive, !didAutoFocus, !isDestroyed else { autoFocusInFlight = false; return }
+        guard autoFocus, deckActive, !didAutoFocus, !isDestroyed, !Self.pickOwnsFocus(in: window) else {
+            autoFocusInFlight = false
+            return
+        }
         if self.window === window, surface != nil {
             if window.firstResponder !== self { window.makeFirstResponder(self) }
             if window.firstResponder === self {
@@ -669,7 +673,10 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     }
 
     private func retryReparentFocus(attempt: Int, heldFor: Int) {
-        guard !isDestroyed else { reparentFocusInFlight = false; return }
+        guard !isDestroyed, !Self.pickOwnsFocus(in: window) else {
+            reparentFocusInFlight = false
+            return
+        }
         var holds = false
         if let window, surface != nil {
             if window.firstResponder !== self { window.makeFirstResponder(self) }
@@ -684,6 +691,14 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.autoFocusRetryInterval) { [weak self] in
             self?.retryReparentFocus(attempt: attempt + 1, heldFor: nextHeld)
         }
+    }
+
+    /// A picker is modal to terminal keyboard focus in its own window. This check deliberately lives inside
+    /// both retry loops (not just their callers): a picker can open after a retry starts, and the next tick
+    /// must stop before it steals first responder from the picker field.
+    static func pickOwnsFocus(in window: NSWindow?) -> Bool {
+        guard let window, let windowID = WindowRegistry.shared.windowID(for: window) else { return false }
+        return PickRegistry.shared.controller(for: windowID)?.pending != nil
     }
 
     func destroySurface() {

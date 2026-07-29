@@ -2,6 +2,24 @@ import agtermCore
 import AppKit
 import SwiftUI
 
+/// Window-local handoff between picker dismissal and the owning window becoming frontmost.
+/// A background window must not claim first responder, but its removed picker field cannot remain
+/// the responder when that window is activated later.
+struct PickFocusRestorationState {
+    private(set) var isDeferred = false
+
+    mutating func pickerResolved(isFrontmost: Bool) -> Bool {
+        isDeferred = !isFrontmost
+        return isFrontmost
+    }
+
+    mutating func windowBecameFrontmost(pickPending: Bool) -> Bool {
+        guard isDeferred, !pickPending else { return false }
+        isDeferred = false
+        return true
+    }
+}
+
 /// The actual per-window UI: the workspace/session sidebar + the active session's terminal, plus
 /// the quick-terminal / palette / switcher overlays. Holds the resolved non-optional `AppStore` so
 /// the binding-based wiring is unchanged from the single-window version; `ContentView` resolves the
@@ -32,6 +50,12 @@ struct WindowContentView: View {
     /// Per-window native picker presented through the shared palette view. Registered for control-socket
     /// lookup while this window is mounted; unlike `palette`, its pending state is window-scoped.
     @State var pick = PickController()
+    /// Tracks this view's balanced auto-follow suppression so window teardown can release it even when
+    /// SwiftUI removes the observer before the pick controller publishes its cancellation.
+    @State private var pickSuppressesAutoFollow = false
+    /// Defers picker focus restoration when a control request resolves in a background window. The
+    /// always-mounted frontmost observer consumes it without activating or ordering that window.
+    @State private var pickFocusRestoration = PickFocusRestorationState()
     /// The terminal background color, mirrored from the (non-observable) `GhosttyApp` into view
     /// state and used as the quick terminal's opaque backing, so a settings theme change (posting
     /// `.agtermAppearanceChanged`) re-renders it live.
@@ -86,10 +110,7 @@ struct WindowContentView: View {
             // the deck stays inset below the titlebar. While zoomed, keep that eager deck mounted so
             // background sessions and control-opened overlays still realize their terminal surfaces and run;
             // the zoom layer owns the visible window.
-            splitRoot
-                .padding(.top, titlebarHeight)
-                .opacity(terminalZoom.target == nil ? 1 : 0)
-                .allowsHitTesting(terminalZoom.target == nil)
+            alwaysMountedSplitLayer
             if let zoomTarget = terminalZoom.target {
                 terminalZoomLayer(zoomTarget)
                     .zIndex(10)
@@ -116,6 +137,11 @@ struct WindowContentView: View {
                         .zIndex(2)
                 }
             }
+            // A control picker is the window's topmost modal. It must stay visible and interactive even
+            // when terminal zoom or the dashboard was already active when the request arrived.
+            pickPaletteOverlay
+                .padding(.top, titlebarHeight)
+                .zIndex(20)
         }
         // with the title bar hidden (.hiddenTitleBar), pull our header to the very top so the traffic
         // lights overlay it as one row; no system title bar is left to clip the content.
@@ -166,6 +192,24 @@ struct WindowContentView: View {
                 store.suppressAutoFollow()
             }
         }
+        // A native picker owns keyboard focus just like a built-in palette. Pair auto-follow suppression
+        // per window, then return first responder to this window's terminal after every resolution path.
+        .onChange(of: pick.pending?.id) { old, new in
+            if old == nil, new != nil, !pickSuppressesAutoFollow {
+                // A socket-driven picker may arrive while either title-bar popover is already open.
+                // Dismiss both immediately so no second interactive surface remains above the modal picker.
+                recentSessionsShown = false
+                attentionPopoverShown = false
+                store.suppressAutoFollow()
+                pickSuppressesAutoFollow = true
+            } else if old != nil, new == nil, pickSuppressesAutoFollow {
+                store.resumeAutoFollow()
+                pickSuppressesAutoFollow = false
+                if pickFocusRestoration.pickerResolved(isFrontmost: isFrontmost) {
+                    restoreFocusAfterPick()
+                }
+            }
+        }
         // a settings appearance change isn't observable through GhosttyApp, so re-render on the
         // notification to pick up the new terminal color in the quick terminal backing.
         .onReceive(NotificationCenter.default.publisher(for: .agtermAppearanceChanged)) { _ in
@@ -192,6 +236,7 @@ struct WindowContentView: View {
             // typing in the quick terminal counts as activity, so an idle auto-follow fire can't change this
             // window's selected session behind the overlay while the user types (mirrors the overlay/scratch).
             quickTerminal.onUserInput = { [store] in store.noteUserActivity() }
+            quickTerminal.focusAllowed = { [pick] in pick.pending == nil }
             QuickTerminalRegistry.shared.register(windowID, controller: quickTerminal)
             terminalZoom.targetResolver = { [store, quickTerminal] in
                 TerminalZoomController.resolveTarget(store: store, quickTerminalVisible: quickTerminal.isVisible)
@@ -204,6 +249,10 @@ struct WindowContentView: View {
             QuickTerminalRegistry.shared.unregister(windowID)
             TerminalZoomRegistry.shared.unregister(windowID)
             tearDownDashboard()
+            if pickSuppressesAutoFollow {
+                store.resumeAutoFollow()
+                pickSuppressesAutoFollow = false
+            }
             PickRegistry.shared.unregister(windowID)
         }
     }
@@ -256,6 +305,23 @@ struct WindowContentView: View {
         // the mode switch below is safe to animate — it swaps sidebar CONTENT, not the split width, so
         // the detail column (and the deck) never resize.
         .animation(.easeInOut(duration: 0.15), value: store.sidebarMode)
+    }
+
+    /// The eager split/deck remains mounted behind every modal presentation, including terminal zoom.
+    /// Keep frontmost-driven cleanup here rather than on `windowOverlayLayer`, which is absent while
+    /// zoomed: otherwise a palette owned by the old front window can survive the handoff and remount
+    /// after the picker and zoom both close.
+    private var alwaysMountedSplitLayer: some View {
+        splitRoot
+            .padding(.top, titlebarHeight)
+            .opacity(terminalZoom.target == nil ? 1 : 0)
+            .allowsHitTesting(terminalZoom.target == nil)
+            .onChange(of: isFrontmost) { _, frontmost in
+                if frontmost, pick.pending != nil { palette.close() }
+                if frontmost, pickFocusRestoration.windowBecameFrontmost(pickPending: pick.pending != nil) {
+                    restoreFocusAfterPick()
+                }
+            }
     }
 
     private var sidebarColumn: some View {
@@ -691,7 +757,6 @@ struct WindowContentView: View {
         ZStack {
             quickTerminalOverlay
             commandPaletteOverlay
-            pickPaletteOverlay
             sessionSwitcherOverlay
             // the dashboard is the topmost window overlay: opening it closes the three above (mirrors the
             // zoom lifecycle), so ordering only settles the empty case, but it renders last for clarity.
@@ -740,7 +805,7 @@ struct WindowContentView: View {
     /// The command-palette overlay, mounted only while a palette is open in the frontmost window. Its
     /// content (search field + result list) is rebuilt from `palette.mode`.
     @ViewBuilder private var commandPaletteOverlay: some View {
-        if isFrontmost, palette.mode != nil {
+        if isFrontmost, pick.pending == nil, palette.mode != nil {
             CommandPalette(controller: palette, actions: actions)
         }
     }

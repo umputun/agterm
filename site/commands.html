@@ -1710,7 +1710,7 @@
                 unique, labels must not be empty, and the list is capped at 1,000 items.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--prompt</span> adds text above the query field.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--prompt</span> sets the query field placeholder.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--allow-custom</span> accepts a nonmatching query.
                 A background <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> target stays in the
                 background unless <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--follow</span> raises it. The
@@ -1723,6 +1723,18 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pickPending</span> carries the returned picker id
                 while it waits and is omitted after resolution.
               </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <strong style="color: #bfbab0">Errors:</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick.open requires at least one item</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">too many items (max 1000)</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick item label must not be empty</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick item ids must be unique</span>, or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">item text must not contain control characters</span>.
+                A second live picker returns <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick already pending</span>;
+                an unavailable target returns the standard window-resolution error,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no open window</span>, or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">no pick surface</span>.
+              </p>
             </div>
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
@@ -1731,14 +1743,16 @@
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">pick.result</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Read one picker by its exact id in the frontmost or
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> window. Prints bare JSON with
+                Read one picker by its globally unique exact id. Without
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span>, lookup remains pinned to its
+                owning window even if the frontmost window changes; an explicit window must match. Prints bare JSON with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result</span> set to
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pending</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">picked</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">custom</span>, or
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cancelled</span>. Picked and custom exit 0,
                 pending exits 1, and cancelled exits 2.
+                A wrong id returns <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown pick: &lt;id&gt;</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <strong style="color: #bfbab0">Tree read-back:</strong>
@@ -1754,10 +1768,11 @@
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">pick.cancel</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Cancel the exact picker id in the frontmost or
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> window. The terminal result becomes
+                Cancel the globally unique exact picker id; an explicit
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> must match its owner. The terminal result becomes
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{"result":"cancelled"}</span>; cancelling an already
-                completed matching picker is a successful no-op, and an unknown id is an error.
+                completed matching picker is a successful no-op, and an unknown id returns
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">unknown pick: &lt;id&gt;</span>.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <strong style="color: #bfbab0">Tree read-back:</strong> cancellation removes

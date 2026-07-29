@@ -84,9 +84,17 @@ public final class PickRegistry {
         return controllers[id]
     }
 
+    /// Locate a live picker by its globally unique id. Blocking clients intentionally use this lookup
+    /// when no window selector was supplied so a later frontmost-window change cannot orphan the request.
+    public func livePick(for pickID: String) -> (windowID: WindowInfo.ID, controller: PickController)? {
+        controllers.first { $0.value.result(for: pickID) != nil }
+            .map { (windowID: $0.key, controller: $0.value) }
+    }
+
     /// The last result retained when a window unregistered, matched by the globally unique pick id.
-    public func retainedResult(for pickID: String) -> ControlPickResult? {
-        retainedResults.values.first { $0.id == pickID }?.result
+    public func retainedResult(for pickID: String) -> (windowID: WindowInfo.ID, result: ControlPickResult)? {
+        retainedResults.first { $0.value.id == pickID }
+            .map { (windowID: $0.key, result: $0.value.result) }
     }
 
     /// A successfully opened next pick replaces the prior retained result for that window, mirroring

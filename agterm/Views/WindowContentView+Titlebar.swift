@@ -235,11 +235,12 @@ extension WindowContentView {
     /// Click the button again or the surrounding margin to hide; the shell stays alive until quit.
     private var quickTerminalButton: some View {
         Button {
-            quickTerminal.toggle()
+            actions.toggleQuickTerminal()
         } label: {
             Label("Quick Terminal", systemImage: "terminal")
         }
         .help(helpHint("Quick Terminal", .quickTerminal))
+        .disabled(pick.pending != nil)
         .accessibilityIdentifier("quick-terminal-toggle")
     }
 }

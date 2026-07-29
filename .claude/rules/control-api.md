@@ -988,12 +988,13 @@ paths:
   Host-free validation in `ControlDispatcher.dispatchPickCommand` rejects an empty list, too many items, empty labels, duplicate ids, and control characters in labels or subtitles before it creates the `PendingPick`.
   `ControlServer.openPick` resolves the target window's `PickController` through `PickRegistry`, rejects a second pending pick, and closes the built-in command palette only when the picker opens in the active window.
   A background target stays background by default, while `follow` raises it and synchronizes `WindowLibrary.frontmostWindowID`.
-  `pick.result` requires the exact picker id and returns `pending`, `picked` with `id`/`label`/`index`, `custom` with `query`, or `cancelled`.
-  `pick.cancel` requires the exact picker id, cancels a pending picker, and succeeds without changing an already terminal result.
+  `pick.result` requires the exact globally unique picker id and returns `pending`, `picked` with `id`/`label`/`index`, `custom` with `query`, or `cancelled`; without `window`, id lookup stays pinned to the owning window across frontmost changes.
+  `pick.cancel` uses the same id routing, cancels a pending picker, and succeeds without changing an already terminal result. An explicit `window` must match the live or close-retained pick's owner.
   `ControlTree.pickPending` is the read-back, populated from the target window's controller and omitted when no picker is pending.
   `WindowContentView` renders a pending pick through `CommandPalette(items:)`, and only one picker is mounted per window.
-  Selection, custom input, Esc, ⌘W, window close, and app termination all resolve the request, with every lifecycle exit mapping to `cancelled`.
-  `PickRegistry.unregister` retains the cancellation long enough for a blocking caller whose next poll follows window teardown, and the next successful open in that window clears the retained result.
+  Selection, custom input, Esc, ⌘W, and window close resolve the request, with lifecycle exits mapping to `cancelled`.
+  App termination cancels picker state before socket shutdown, but a polling client can race process exit and receive a transport failure rather than the terminal result.
+  `PickRegistry.unregister` retains the cancellation long enough for a blocking caller whose next poll follows window teardown; the next successful open in that window clears the retained result, including after permanent window deletion.
   The CLI group defaults to open, sniffs stdin as a JSON array when its first non-whitespace byte is `[`, and otherwise maps nonblank lines to items whose id equals the label.
   Blocking `agtermctl pick` polls `pick.result` every 100 ms for the first second and every 500 ms afterward, prints the bare result JSON, and exits 0 for `picked`/`custom`, 2 for `cancelled`, or 1 for failures.
   `--no-block` prints `{"id":"…"}`, while `pick result ID` and `pick cancel ID` expose the later one-shot operations with the same `--window` scope.
