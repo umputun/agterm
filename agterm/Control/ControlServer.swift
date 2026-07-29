@@ -547,6 +547,9 @@ final class ControlServer {
             scratchFontSize: { ($0.scratchSurface as? GhosttySurfaceView)?.currentFontSize() },
             quickVisible: { windowID.flatMap { QuickTerminalRegistry.shared.controller(for: $0)?.isVisible } ?? false },
             zoomedSurface: { windowID.flatMap { TerminalZoomRegistry.shared.controller(for: $0)?.target?.controlID } },
+            // Resolve through the projected window's registry entry on every tree build. This is deliberately
+            // tree-only: window.list is cache-backed, so mirroring a GUI-resolved pick there would go stale.
+            pickPending: { windowID.flatMap { PickRegistry.shared.controller(for: $0)?.pending?.id } },
             dashboardMembers: {
                 guard let dashboard, dashboard.isOpen else { return nil }
                 return dashboard.members.map(\.controlRef)

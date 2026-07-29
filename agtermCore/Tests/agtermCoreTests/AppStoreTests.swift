@@ -1513,6 +1513,17 @@ struct AppStoreTests {
         #expect(store.controlTree(zoomedSurface: { "quick" }).zoomedSurface == "quick")
     }
 
+    @Test func controlTreeReportsPickPendingFromClosure() {
+        let store = makeStore()
+        #expect(store.controlTree(pickPending: { "pick-42" }).pickPending == "pick-42")
+    }
+
+    @Test func controlTreeOmitsPickPendingWithoutClosure() {
+        let store = makeStore()
+        #expect(store.controlTree().pickPending == nil)
+        #expect(store.controlTree(pickPending: { nil }).pickPending == nil)
+    }
+
     @Test func controlTreeReportsDashboardFieldsFromClosures() {
         let store = makeStore()
         // no closures (host-free / default) or nothing open: all four omitted (nil).

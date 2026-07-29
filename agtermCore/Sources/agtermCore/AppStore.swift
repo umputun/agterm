@@ -201,6 +201,7 @@ public final class AppStore {
                             scratchFontSize: (Session) -> Double? = { _ in nil },
                             quickVisible: () -> Bool? = { nil },
                             zoomedSurface: () -> String? = { nil },
+                            pickPending: () -> String? = { nil },
                             dashboardMembers: () -> [String]? = { nil },
                             dashboardHighlighted: () -> String? = { nil },
                             dashboardFontSize: () -> Double? = { nil },
@@ -259,7 +260,8 @@ public final class AppStore {
                            dashboardMembers: dashboardMembers(),
                            dashboardHighlighted: dashboardHighlighted(),
                            dashboardFontSize: dashboardFontSize(),
-                           dashboardFontMode: dashboardFontMode())
+                           dashboardFontMode: dashboardFontMode(),
+                           pickPending: pickPending())
     }
 
     /// Creates a workspace and appends it. When `revealNewWorkspace` (the default) and the focus filter is

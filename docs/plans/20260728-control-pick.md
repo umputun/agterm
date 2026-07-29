@@ -461,12 +461,12 @@ as a phantom.
 - Modify: `agterm/Control/ControlServer.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTests.swift`
 
-- [ ] add a `pickPending: () -> String?` closure parameter to `AppStore.controlTree`, defaulting to nil for host-free tests (the `quickVisible`/`zoomedSurface` seam)
-- [ ] populate it app-side in `buildTree` from the projected window's `PickController` via the registry
-- [ ] confirm the field is LIVE and `tree`-only — do NOT mirror it onto the cached `window.list` nodes
-- [ ] write a `controlTreeReportsPickPendingFromClosure` test and one asserting omission when no pick is pending
-- [ ] verify `AppStore.swift` (was 977, the closest of any touched file to the cap) is still under 1000 lines; split to `AppStore+Pick.swift` if not
-- [ ] gates: `swift test`, `make lint`, `make build` — all must pass before task 10
+- [x] add a `pickPending: () -> String?` closure parameter to `AppStore.controlTree`, defaulting to nil for host-free tests (the `quickVisible`/`zoomedSurface` seam)
+- [x] populate it app-side in `buildTree` from the projected window's `PickController` via the registry
+- [x] confirm the field is LIVE and `tree`-only — do NOT mirror it onto the cached `window.list` nodes
+- [x] write a `controlTreeReportsPickPendingFromClosure` test and one asserting omission when no pick is pending
+- [x] verify `AppStore.swift` (was 977, the closest of any touched file to the cap) is still under 1000 lines; split to `AppStore+Pick.swift` if not
+- [x] gates: `swift test`, `make lint`, `make build` — all must pass before task 10
 
 ### Task 10: agtermctl pick subcommands
 
