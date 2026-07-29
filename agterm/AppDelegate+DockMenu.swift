@@ -68,6 +68,18 @@ extension AppDelegate {
             actions?.newSession()
         }
 
+        // The one app-level item: a new window belongs to no existing window, so unlike its neighbours it
+        // captures nothing, is always enabled, and skips the frontmost-window modal gate. It activates the
+        // app itself because ordinary window presentation does not — `WindowAccessor.bringForward` unhides
+        // and activates only on the UI-test path — so without this the new window opens behind whatever app
+        // the user right-clicked the Dock from.
+        addDockMenuItem("New Window", enabled: true, to: menu) { [weak self] in
+            guard let self else { return }
+            NSApp.unhide(nil)
+            NSApp.activate()
+            actions?.newWindow(ignoringModals: true)
+        }
+
         let quickTerminal = windowID.flatMap { QuickTerminalRegistry.shared.controller(for: $0) }
         addDockMenuItem(
             "Quick Terminal",

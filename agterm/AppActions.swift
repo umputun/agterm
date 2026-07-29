@@ -675,10 +675,20 @@ final class AppActions {
     /// Create a fresh window (one default workspace + session) and open its on-screen window via the
     /// scene's window opener (the same seam the control channel uses). No-op if the opener isn't wired
     /// yet (before the scene `.task` runs there's no window to open into).
-    func newWindow() {
-        guard uiActionsEnabled else { return }
+    ///
+    /// `ignoringModals` skips the frontmost-window modal gate. Creating a window is app-level — it
+    /// touches no existing window's state — so the Dock item passes true: a dashboard or terminal zoom
+    /// in whatever window happened to be last active must not make it inert, which is the whole point
+    /// of driving agterm from the Dock. The menu bar and palette keep the gate, and File ▸ New Window
+    /// mirrors it with `.disabled(modalActive)`.
+    func newWindow(ignoringModals: Bool = false) {
+        guard ignoringModals || uiActionsEnabled else { return }
+        // create only when there is somewhere to open into: `library.newWindow()` persists an entry
+        // marked open, so creating without an opener would leave a window the app counts as open with
+        // no NSWindow behind it.
+        guard let openWindow else { return }
         let info = library.newWindow()
-        openWindow?(info.id)
+        openWindow(info.id)
     }
 
     /// Surface a window: raise it if already open, else open it (the opener claims its id + spawns a

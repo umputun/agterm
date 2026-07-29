@@ -91,7 +91,7 @@ final class DockMenuTests: XCTestCase {
 
         var menu = try dockMenu()
         XCTAssertEqual(menu.items.map(\.title), [
-            "New Session", "Quick Terminal", "Dashboard", "",
+            "New Session", "New Window", "Quick Terminal", "Dashboard", "",
             "Recent Sessions", "Sessions Needing Attention",
         ])
         XCTAssertTrue(try item("New Session", in: menu).isEnabled)
@@ -136,6 +136,58 @@ final class DockMenuTests: XCTestCase {
         // would make the item inert here with the rest of the suite still green.
         try invokeWithNilSender(try item("Dashboard", in: menu))
         XCTAssertFalse(dashboard.isOpen, "a Dashboard item built while the dashboard was open should close it")
+    }
+
+    // New Window is the one app-level item: it captures no window, so unlike its neighbours it must stay
+    // enabled and live through every modal state that makes them inert, and it must open a window the
+    // library actually counts. Discussion #313.
+    func testNewWindowStaysEnabledUnderModalsAndOpensAWindow() throws {
+        let windowID = try activeWindowID()
+        let quick = QuickTerminalController()
+        let dashboard = DashboardController()
+        let zoom = TerminalZoomController()
+        register(windowID, quick: quick, dashboard: dashboard, zoom: zoom)
+        let current = try XCTUnwrap(library.activeStore?.activeSession)
+
+        zoom.set(.on, target: .session(current.id, .primary))
+        var menu = try dockMenu()
+        XCTAssertFalse(try item("New Session", in: menu).isEnabled, "the captured-window items gate on zoom")
+        XCTAssertTrue(try item("New Window", in: menu).isEnabled,
+                      "creating a window touches no existing window, so terminal zoom must not disable it")
+
+        zoom.clear()
+        dashboard.open(members: [DashboardMember(session: current.id, surface: .primary)])
+        menu = try dockMenu()
+        XCTAssertFalse(try item("New Session", in: menu).isEnabled)
+        XCTAssertTrue(try item("New Window", in: menu).isEnabled,
+                      "an open dashboard in the last-active window must not disable it either")
+
+        // the opener is the scene's, nil outside a mounted scene, so stand in for it and assert the
+        // action both creates the library entry and hands that id over to be opened.
+        var openedIDs: [UUID] = []
+        actions.openWindow = { openedIDs.append($0) }
+        let windowsBefore = library.windows.count
+
+        try invokeWithNilSender(try item("New Window", in: menu))
+
+        XCTAssertEqual(library.windows.count, windowsBefore + 1, "the Dock item should create a window")
+        XCTAssertEqual(openedIDs.count, 1, "and open exactly the one it created")
+        let created = try XCTUnwrap(library.windows.last)
+        XCTAssertEqual(openedIDs.first, created.id)
+    }
+
+    // The counterpart to the guard in `AppActions.newWindow`: with no opener wired there is nowhere to put
+    // a window, and creating one anyway would leave the library counting an open window with no NSWindow
+    // behind it — which `applicationShouldTerminateAfterLastWindowClosed` reads to decide whether to quit.
+    func testNewWindowWithoutAnOpenerCreatesNothing() throws {
+        let menu = try dockMenu()
+        let windowsBefore = library.windows.count
+
+        XCTAssertNil(actions.openWindow, "precondition: no scene, so no opener")
+        try invokeWithNilSender(try item("New Window", in: menu))
+
+        XCTAssertEqual(library.windows.count, windowsBefore,
+                       "no opener means no window entry, not an orphaned one")
     }
 
     func testRecentSessionsUseMRUOrderExcludeCurrentAndShareSwitcherCap() throws {

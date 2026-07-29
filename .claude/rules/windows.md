@@ -31,11 +31,12 @@ never two bundles in one window.
   Every top-level and session closure keeps the captured store/window scope even if window B becomes frontmost before a window A item is chosen.
   Invocation rechecks A's per-window modal/controller state, raises A, and synchronously writes `library.frontmostWindowID` plus posts `.agtermWindowFrontmostChanged` before shared actions resolve their store.
   New Session, Quick Terminal, Dashboard, selection, and pane-aware reveal therefore all target A.
+  New Window is the ONE item outside that scheme — it captures nothing, is always enabled, and skips the modal gate, because a new window belongs to no existing window; see the Dock-menu bullet in `menu-actions.md` for why, and for the activation it has to do itself.
   Do not defer that publication to `WindowAccessor`'s key-window notification because all action work must target A during the same Dock invocation.
   Recheck the captured window instead of invocation-time frontmost B because modal state is per-window.
   A stale item becomes inert if A closes or enters dashboard/terminal zoom while the menu is open.
   A Dashboard item built while A's dashboard is already open remains a valid close toggle, while one built closed becomes inert if the dashboard opens before invocation.
-  The Dock surface composes the existing `session.new`, `quick`, `dashboard`, and `session.select` control capabilities, so it requires no new control command.
+  The Dock surface composes the existing `session.new`, `window.new`, `quick`, `dashboard`, and `session.select` control capabilities, so it requires no new control command.
 
 - **Model (`agtermCore`, host-free).**
   `WindowLibrary.swift` holds `WindowInfo {id: UUID, name: String}` (named `WindowInfo`,

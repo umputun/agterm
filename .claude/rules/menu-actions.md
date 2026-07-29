@@ -38,7 +38,12 @@ paths:
   so the gate only ever blocks opening one over the grid, never strands one behind it.
 - **Application Dock menu (`AppDelegate.applicationDockMenu`).**
   AppKit asks for a fresh menu when the Dock icon is right-clicked.
-  The menu exposes New Session, Quick Terminal, Dashboard, the captured window's MRU sessions, and that window's attention ordering.
+  The menu exposes New Session, New Window, Quick Terminal, Dashboard, the captured window's MRU sessions, and that window's attention ordering.
+  **New Window is the one APP-LEVEL item and deliberately breaks the capture pattern** (Discussion #313): it captures no store or window id, is unconditionally enabled, and calls `AppActions.newWindow(ignoringModals: true)` to skip the frontmost-window modal gate.
+  Creating a window touches no existing window's state, so a dashboard or terminal zoom in whatever window happened to be last active must not make it inert — being reachable while the app is busy or backgrounded is the whole point of driving it from the Dock.
+  The menu bar and palette keep the gate (File ▸ New Window mirrors it with `.disabled(modalActive)`), so the bypass is the Dock's alone.
+  It also calls `NSApp.unhide` + `NSApp.activate` itself: ordinary window presentation does NOT activate the app (`WindowAccessor.bringForward` unhides and activates only on the UI-test path), so without it the new window opens behind whatever app the user right-clicked the Dock from.
+  `newWindow` creates only when `openWindow` is wired, since `library.newWindow()` persists an entry marked open and an opener-less create would leave a window the app counts as open with no NSWindow — which `applicationShouldTerminateAfterLastWindowClosed` reads to decide whether to quit.
   `AppStore.navigableRecentSessions(limit:)` supplies the same visible-scope, current-session-excluding MRU list used by the title-bar recent-session menu, capped by `SessionSwitcher.maxCandidates`.
   AppKit sends Dock actions with a nil sender, and `NSMenuItem.target` is weak.
   `AppDelegate.dockMenuActionTargets` is therefore the sole strong owner of one closure-backed target per dynamic item until the next menu build.
@@ -55,7 +60,7 @@ paths:
   Run it with `make test-app`, whose dedicated scheme supplies isolated `AGTERM_STATE_DIR` and `AGTERM_CONTROL_SOCKET` values before `agtermApp.init()` and sets `AGTERM_HOSTED_TESTS=1`.
   That sentinel renders a shell-free scene and never starts the control server.
   Do not add the sentinel to the `agterm` scheme because its Test action launches the real app for `agtermUITests`.
-  The Dock surface composes the existing `session.new`, `quick`, `dashboard`, and `session.select` capabilities, so it is exempt from adding a new control command.
+  The Dock surface composes the existing `session.new`, `window.new`, `quick`, `dashboard`, and `session.select` capabilities, so it is exempt from adding a new control command.
 - **Menu split: View vs Navigate.**
   The menu bar has TWO custom menus (besides File/Help).
   **View** (`CommandGroup(after: .toolbar)`) holds appearance + what-is-shown:
