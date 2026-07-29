@@ -437,18 +437,22 @@ as a phantom.
 ### Task 8: Dismissal and lifetime
 
 **Files:**
+- Modify: `agtermCore/Sources/agtermCore/Pick.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/PickTests.swift`
 - Modify: `agterm/AppActions.swift`
+- Modify: `agterm/Control/ControlServer+Pick.swift`
+- Modify: `agterm/Views/WindowAccessor.swift`
 - Modify: `agterm/Views/WindowContentView.swift`
 - Modify: `agtermTests/ControlServerPickTests.swift`
 
-- [ ] add the pending-pick check as the FIRST branch of `closeActiveSession()` (`AppActions.swift:251`), ahead of terminal zoom, cancelling the pick and returning `true`
-- [ ] resolve a pending pick to `cancelled` when its window closes
-- [ ] resolve every pending pick to `cancelled` on app termination, alongside the existing quit flush
-- [ ] confirm a pick left pending never blocks quit or the quit-confirmation prompt
-- [ ] write a hosted test for the ⌘W precedence — a pending pick cancels ahead of an active terminal zoom, and the zoom survives
-- [ ] write a hosted test for window-close resolving a pending pick to `cancelled`
-- [ ] verify `WindowContentView.swift` is still under 1000 lines
-- [ ] gates: `swift test`, `make lint`, `make build`, `make test-app` — all must pass before task 9
+- [x] add the pending-pick check as the FIRST branch of `closeActiveSession()` (`AppActions.swift:251`), ahead of terminal zoom, cancelling the pick and returning `true`
+- [x] resolve a pending pick to `cancelled` when its window closes
+- [x] resolve every pending pick to `cancelled` on app termination, alongside the existing quit flush
+- [x] confirm a pick left pending never blocks quit or the quit-confirmation prompt
+- [x] write a hosted test for the ⌘W precedence — a pending pick cancels ahead of an active terminal zoom, and the zoom survives
+- [x] write a hosted test for window-close resolving a pending pick to `cancelled`
+- [x] verify `WindowContentView.swift` is still under 1000 lines
+- [x] gates: `swift test`, `make lint`, `make build`, `make test-app` — all must pass before task 9
 
 ### Task 9: Tree read-back
 

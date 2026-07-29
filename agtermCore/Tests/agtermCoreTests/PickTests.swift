@@ -69,6 +69,7 @@ struct PickTests {
         let registry = PickRegistry.shared
         let id = UUID()
         let controller = PickController()
+        defer { registry.clearRetainedResult(for: id) }
         #expect(registry.controller(for: id) == nil)
 
         registry.register(id, controller: controller)
@@ -76,6 +77,27 @@ struct PickTests {
 
         registry.unregister(id)
         #expect(registry.controller(for: id) == nil)
+    }
+
+    @Test func registryUnregisterCancelsAndRetainsResultUntilNextOpen() {
+        let registry = PickRegistry.shared
+        let id = UUID()
+        let controller = PickController()
+        let pick = makePick(id: "closed-window")
+        defer {
+            registry.unregister(id)
+            registry.clearRetainedResult(for: id)
+        }
+        registry.register(id, controller: controller)
+        #expect(controller.open(pick))
+
+        registry.unregister(id)
+
+        #expect(registry.controller(for: id) == nil)
+        #expect(registry.retainedResult(for: pick.id) == ControlPickResult(result: .cancelled))
+
+        registry.clearRetainedResult(for: id)
+        #expect(registry.retainedResult(for: pick.id) == nil)
     }
 
     @Test func registryLookupWithNilIDReturnsNil() {

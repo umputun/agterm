@@ -61,6 +61,7 @@ public final class PickController {
 public final class PickRegistry {
     public static let shared = PickRegistry()
     private var controllers: [WindowInfo.ID: PickController] = [:]
+    private var retainedResults: [WindowInfo.ID: ResolvedPick] = [:]
 
     private init() {}
 
@@ -68,12 +69,29 @@ public final class PickRegistry {
         controllers[id] = controller
     }
 
+    /// Remove a window's live controller, cancelling a pending pick first and retaining its terminal
+    /// result so a control client whose next poll lands after window teardown can still read it.
     public func unregister(_ id: WindowInfo.ID) {
-        controllers[id] = nil
+        guard let controller = controllers.removeValue(forKey: id) else { return }
+        controller.cancel()
+        if let result = controller.lastResult {
+            retainedResults[id] = result
+        }
     }
 
     public func controller(for id: WindowInfo.ID?) -> PickController? {
         guard let id else { return nil }
         return controllers[id]
+    }
+
+    /// The last result retained when a window unregistered, matched by the globally unique pick id.
+    public func retainedResult(for pickID: String) -> ControlPickResult? {
+        retainedResults.values.first { $0.id == pickID }?.result
+    }
+
+    /// A successfully opened next pick replaces the prior retained result for that window, mirroring
+    /// `PickController.open` clearing its own `lastResult`.
+    public func clearRetainedResult(for id: WindowInfo.ID) {
+        retainedResults[id] = nil
     }
 }

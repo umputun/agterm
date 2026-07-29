@@ -8,6 +8,7 @@ extension ControlServer {
             guard controller.open(pick) else {
                 return ControlResponse(ok: false, error: "pick already pending")
             }
+            PickRegistry.shared.clearRetainedResult(for: windowID)
 
             if follow {
                 WindowRegistry.shared.raise(windowID)
@@ -21,7 +22,10 @@ extension ControlServer {
     }
 
     func pickResult(_ target: String, window: String?) -> ControlResponse {
-        withPickController(window: window) { controller, _ in
+        if let result = PickRegistry.shared.retainedResult(for: target) {
+            return ControlResponse(ok: true, result: ControlResult(pick: result))
+        }
+        return withPickController(window: window) { controller, _ in
             guard let result = controller.result(for: target) else {
                 return ControlResponse(ok: false, error: "unknown pick: \(target)")
             }
@@ -30,7 +34,10 @@ extension ControlServer {
     }
 
     func cancelPick(_ target: String, window: String?) -> ControlResponse {
-        withPickController(window: window) { controller, _ in
+        if PickRegistry.shared.retainedResult(for: target) != nil {
+            return ControlResponse(ok: true)
+        }
+        return withPickController(window: window) { controller, _ in
             guard controller.result(for: target) != nil else {
                 return ControlResponse(ok: false, error: "unknown pick: \(target)")
             }

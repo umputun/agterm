@@ -13,6 +13,7 @@ final class ControlServerPickTests: XCTestCase {
     private var server: ControlServer!
     private var registeredPickIDs: Set<WindowInfo.ID> = []
     private var registeredWindows: [WindowInfo.ID: NSWindow] = [:]
+    private var registeredZoomIDs: Set<WindowInfo.ID> = []
 
     override func setUp() async throws {
         try await super.setUp()
@@ -38,12 +39,17 @@ final class ControlServerPickTests: XCTestCase {
         await MainActor.run {
             for id in registeredPickIDs {
                 PickRegistry.shared.unregister(id)
+                PickRegistry.shared.clearRetainedResult(for: id)
+            }
+            for id in registeredZoomIDs {
+                TerminalZoomRegistry.shared.unregister(id)
             }
             for (id, window) in registeredWindows {
                 WindowRegistry.shared.unregister(id)
                 window.close()
             }
             registeredPickIDs.removeAll()
+            registeredZoomIDs.removeAll()
             registeredWindows.removeAll()
             server = nil
             actions = nil
@@ -171,6 +177,79 @@ final class ControlServerPickTests: XCTestCase {
         )
     }
 
+    func testCloseSessionChordCancelsPickAheadOfTerminalZoom() throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let session = try XCTUnwrap(library.activeStore?.activeSession)
+        let controller = registerPick(windowID)
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        registeredZoomIDs.insert(windowID)
+        let pick = makePick("command-w")
+        XCTAssertTrue(controller.open(pick))
+        zoom.set(.on, target: .session(session.id, .primary))
+
+        XCTAssertTrue(actions.closeActiveSession())
+
+        XCTAssertEqual(
+            controller.result(for: pick.id),
+            ControlPickResult(result: .cancelled)
+        )
+        XCTAssertEqual(
+            zoom.target,
+            .session(session.id, .primary),
+            "the terminal zoom behind a pending pick must survive the first close-session chord"
+        )
+    }
+
+    func testWindowCloseResolvesPendingPickAsCancelled() throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let controller = registerPick(windowID)
+        let window = try registerLifecycleWindow(windowID)
+        let pick = makePick("window-close")
+        XCTAssertTrue(controller.open(pick))
+
+        window.close()
+
+        XCTAssertFalse(library.isOpen(windowID))
+        XCTAssertNil(PickRegistry.shared.controller(for: windowID))
+        XCTAssertEqual(
+            server.pickResult(pick.id, window: windowID.uuidString),
+            ControlResponse(
+                ok: true,
+                result: ControlResult(pick: ControlPickResult(result: .cancelled))
+            ),
+            "a poll after the real window-close path must still observe the terminal cancellation"
+        )
+    }
+
+    func testApplicationTerminationCancelsEveryPendingPickWithoutChangingQuitCounts() throws {
+        let firstID = try XCTUnwrap(library.activeWindowID)
+        let first = registerPick(firstID)
+        let secondID = library.newWindow(name: "second").id
+        let second = registerPick(secondID)
+        let firstPick = makePick("quit-first")
+        let secondPick = makePick("quit-second")
+        XCTAssertTrue(first.open(firstPick))
+        XCTAssertTrue(second.open(secondPick))
+        let countsBeforeTermination = library.openCounts()
+
+        NotificationCenter.default.post(name: NSApplication.willTerminateNotification, object: NSApp)
+
+        XCTAssertEqual(first.result(for: firstPick.id), ControlPickResult(result: .cancelled))
+        XCTAssertEqual(second.result(for: secondPick.id), ControlPickResult(result: .cancelled))
+        let countsAfterTermination = library.openCounts()
+        XCTAssertEqual(
+            countsAfterTermination.windows,
+            countsBeforeTermination.windows,
+            "picker cancellation must not affect the window count that drives quit confirmation"
+        )
+        XCTAssertEqual(
+            countsAfterTermination.sessions,
+            countsBeforeTermination.sessions,
+            "picker cancellation must not affect the session count that drives quit confirmation"
+        )
+    }
+
     private func makePick(_ id: String) -> PendingPick {
         PendingPick(id: id, items: [ControlPickItem(id: "item", label: "Item")])
     }
@@ -190,6 +269,19 @@ final class ControlServerPickTests: XCTestCase {
             defer: false
         )
         WindowRegistry.shared.register(id, window: window)
+        registeredWindows[id] = window
+        return window
+    }
+
+    private func registerLifecycleWindow(_ id: WindowInfo.ID) throws -> NSWindow {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        let store = try XCTUnwrap(library.store(for: id))
+        window.contentView = WindowAccessor.TitleProbeView(windowID: id, library: library, store: store)
         registeredWindows[id] = window
         return window
     }

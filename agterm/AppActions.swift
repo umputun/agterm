@@ -97,6 +97,12 @@ final class AppActions {
     /// so an idle auto-follow in the key window moves first responder into the newly selected session.
     private var autoFollowObserver: NSObjectProtocol?
 
+    /// Cancels every window-scoped picker when AppKit begins termination. This observer runs on the
+    /// same synchronous notification as the delegate's quit flush, but never participates in
+    /// `applicationShouldTerminate`: a caller waiting on a pick gets `cancelled` without delaying either
+    /// the quit-confirmation prompt or termination itself.
+    private var terminationObserver: NSObjectProtocol?
+
     init(library: WindowLibrary) {
         self.library = library
         // bridge the host-free `AppStore.autoFollowFire` post to the app-target focus move: agtermCore can't
@@ -108,6 +114,11 @@ final class AppActions {
             let indicator = note.userInfo?[AppStore.autoFollowIndicatorKey] as? AgentIndicator
             MainActor.assumeIsolated { self?.autoFollowed(sessionID, indicator: indicator) }
         }
+        terminationObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.willTerminateNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.cancelAllPendingPicks() }
+        }
     }
 
     // isolated so it can read the `@MainActor` non-Sendable observer token; balances the block-based
@@ -115,6 +126,7 @@ final class AppActions {
     // unbalanced addObserver(forName:) is a latent leak either way.
     isolated deinit {
         if let autoFollowObserver { NotificationCenter.default.removeObserver(autoFollowObserver) }
+        if let terminationObserver { NotificationCenter.default.removeObserver(terminationObserver) }
     }
 
     // MARK: - Workspaces & sessions
@@ -249,6 +261,9 @@ final class AppActions {
     // dismissed, not only a full one.
     @discardableResult
     func closeActiveSession() -> Bool {
+        // A pick is an external caller waiting on an answer, so it is the first ⌘W layer even when a
+        // terminal is zoomed behind it. Resolve rather than merely hiding it so the caller can finish.
+        if cancelPendingPick(for: library.activeWindowID) { return true }
         // terminal zoom is the window-topmost cover of all: ⌘W dismisses it like the covers below
         // (stepwise — a zoomed quick terminal un-zooms first, the next ⌘W hides it) rather than
         // swallowing the keystroke, and still never mutates hidden session/window state behind it. the
@@ -266,6 +281,26 @@ final class AppActions {
         closeSessionAfterConfirmation(session.id, in: store)
         focusActiveSession()
         return true
+    }
+
+    /// Resolve the pending picker owned by `windowID` as cancelled. Used by ⌘W and app termination;
+    /// window teardown cancels through `PickRegistry.unregister` so it can retain the terminal result.
+    @discardableResult
+    func cancelPendingPick(for windowID: WindowInfo.ID?) -> Bool {
+        guard let controller = PickRegistry.shared.controller(for: windowID),
+              controller.pending != nil
+        else { return false }
+        controller.cancel()
+        return true
+    }
+
+    /// Resolve all open windows' pending pickers during the synchronous app-termination notification.
+    /// The window library deliberately retains its open ids through quit teardown, so every mounted
+    /// controller remains addressable here.
+    private func cancelAllPendingPicks() {
+        for windowID in library.openIDs() {
+            cancelPendingPick(for: windowID)
+        }
     }
 
     /// Close the session with `id` in `store` from a GUI surface (the sidebar row's Close), honoring the

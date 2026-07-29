@@ -151,6 +151,10 @@ struct WindowAccessor: NSViewRepresentable {
                         UserDefaults.standard.set(NSStringFromRect(window.frame), forKey: TitleProbeView.frameKey(windowID))
                     }
                     WindowRegistry.shared.unregister(windowID)
+                    // Unregister synchronously on the real AppKit close edge. The registry cancels any
+                    // pending pick and retains its result for a poll that arrives after this window and
+                    // its store have disappeared.
+                    PickRegistry.shared.unregister(windowID)
                     store.finalizeAllPendingCloses()
                     // flush cwd drift since the last structural mutation before dropping the store —
                     // AppStore doesn't save on a live `cd`, so a closed-then-reopened window would
