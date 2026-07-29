@@ -350,14 +350,14 @@ Exit codes: **0** got an answer (`picked` or `custom`), **1** command failed, **
 - Create: `agtermCore/Sources/agtermCore/Pick.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/PickTests.swift`
 
-- [ ] create `Pick.swift` with `PendingPick`, `PickController` (`@Observable @MainActor`), and `PickRegistry` (`@MainActor`, `shared`), modeled on `TerminalZoom.swift:109-193`
-- [ ] implement `open` returning false when one is already pending, plus `resolve`, `cancel`, and `result(for:)`
-- [ ] retain exactly one `ResolvedPick` per controller so a late poll still gets its answer, overwritten on the next `open`
-- [ ] keep the file Foundation + Observation only — no AppKit, GhosttyKit, Metal, or CoreGraphics geometry
-- [ ] write tests for open/resolve/cancel, the already-pending rejection, and reading a result after resolution
-- [ ] write tests for `result(for:)` with an unknown id, and for `lastResult` being replaced by the next open
-- [ ] write registry tests for register/unregister/lookup and lookup with a nil id
-- [ ] gates: `swift test`, `make lint`, `make build` — all must pass before task 4
+- [x] create `Pick.swift` with `PendingPick`, `PickController` (`@Observable @MainActor`), and `PickRegistry` (`@MainActor`, `shared`), modeled on `TerminalZoom.swift:109-193`
+- [x] implement `open` returning false when one is already pending, plus `resolve`, `cancel`, and `result(for:)`
+- [x] retain exactly one `ResolvedPick` per controller so a late poll still gets its answer, overwritten on the next `open`
+- [x] keep the file Foundation + Observation only — no AppKit, GhosttyKit, Metal, or CoreGraphics geometry
+- [x] write tests for open/resolve/cancel, the already-pending rejection, and reading a result after resolution
+- [x] write tests for `result(for:)` with an unknown id, and for `lastResult` being replaced by the next open
+- [x] write registry tests for register/unregister/lookup and lookup with a nil id
+- [x] gates: `swift test`, `make lint`, `make build` — all must pass before task 4
 
 ### Task 4: Dispatcher arms, ControlActions surface, and mock
 
