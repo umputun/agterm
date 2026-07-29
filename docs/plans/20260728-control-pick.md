@@ -380,8 +380,10 @@ Exit codes: **0** got an answer (`picked` or `custom`), **1** command failed, **
 
 ⚠️ Adding the three protocol requirements made the existing app-side `ControlServer` conformance fail
 before task 5, contradicting the per-task build gate. `ControlDispatcher+Pick.swift` therefore supplies
-explicit-failure `no pick surface` defaults for the intermediate state. Task 5 must add concrete
-`ControlServer` witnesses for all three methods; the mock already uses explicit witnesses.
+explicit-failure `no pick surface` defaults for the intermediate state. Task 5 removes those temporary
+defaults after adding concrete `ControlServer` witnesses for all three methods; the mock already uses
+explicit witnesses. The exhaustive app switch keeps a dedicated picker `preconditionFailure` arm after
+removing the commands from its generic dispatcher-failure fallthrough list.
 
 ### Task 5: App-side pick host
 
@@ -394,13 +396,13 @@ explicit-failure `no pick surface` defaults for the intermediate state. Task 5 m
 `no pick surface` for the whole window between this task and that one. That is expected — do not debug it
 as a phantom.
 
-- [ ] create `ControlServer+Pick.swift` implementing the three `ControlActions` methods
-- [ ] resolve the target store/window via `resolvePlacementStore(window)` (frontmost default), erroring `no open window` when there is none
-- [ ] look up the window's `PickController` through `PickRegistry` and return `pick already pending` when `open` refuses
-- [ ] close the built-in palette when the pick's window is frontmost, and raise + select the window only under `follow`
-- [ ] remove the three cases from the `ControlServer.swift:374` fallthrough list now that the dispatcher owns them
-- [ ] write hosted tests (`agtermTests`, the `DockMenuTests` precedent) for the no-window arm, the registry-miss arm, and the already-pending rejection
-- [ ] gates: `swift test`, `make lint`, `make build`, `make test-app` — all must pass before task 6
+- [x] create `ControlServer+Pick.swift` implementing the three `ControlActions` methods
+- [x] resolve the target store/window via `resolvePlacementStore(window)` (frontmost default), erroring `no open window` when there is none
+- [x] look up the window's `PickController` through `PickRegistry` and return `pick already pending` when `open` refuses
+- [x] close the built-in palette when the pick's window is frontmost, and raise + select the window only under `follow`
+- [x] remove the three cases from the `ControlServer.swift:374` fallthrough list now that the dispatcher owns them
+- [x] write hosted tests (`agtermTests`, the `DockMenuTests` precedent) for the no-window arm, the registry-miss arm, and the already-pending rejection
+- [x] gates: `swift test`, `make lint`, `make build`, `make test-app` — all must pass before task 6
 
 ### Task 6: CommandPalette accepts explicit items
 

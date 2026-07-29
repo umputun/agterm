@@ -385,11 +385,13 @@ final class ControlServer {
                 .sessionOverlayResult, .sessionBackground, .sessionText, .quick, .quickType, .quickText,
                 .windowNew, .windowList, .windowSelect,
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
-                .windowFullscreen, .windowMinimize, .pickOpen, .pickResult, .pickCancel,
+                .windowFullscreen, .windowMinimize,
                 .restoreClear, .dashboard:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         case .debugAppearance:
             return setDebugAppearance(args: request.args)
+        case .pickOpen, .pickResult, .pickCancel:
+            preconditionFailure("pick command returned nil from ControlDispatcher")
         }
     }
 

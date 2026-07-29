@@ -1,21 +1,5 @@
 import Foundation
 
-// Keeps existing hosts source-compatible while the picker surface is rolled out independently. A host
-// that supports pick commands supplies concrete witnesses; until then, routed commands fail safely.
-public extension ControlActions {
-    func openPick(_: PendingPick, window _: String?, follow _: Bool) -> ControlResponse {
-        ControlResponse(ok: false, error: "no pick surface")
-    }
-
-    func pickResult(_: String, window _: String?) -> ControlResponse {
-        ControlResponse(ok: false, error: "no pick surface")
-    }
-
-    func cancelPick(_: String, window _: String?) -> ControlResponse {
-        ControlResponse(ok: false, error: "no pick surface")
-    }
-}
-
 extension ControlDispatcher {
     /// Validates host-free picker arguments before handing window-scoped state to the app host.
     func dispatchPickCommand(_ request: ControlRequest) -> ControlResponse {
