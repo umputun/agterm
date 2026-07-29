@@ -366,13 +366,21 @@ struct Pick: ParsableCommand {
 
             var pendingPolls = 0
             while true {
-                let response = try send(ControlRequest(
-                    cmd: .pickResult,
-                    target: pickID
-                ))
+                let response: ControlResponse
+                do {
+                    response = try send(ControlRequest(cmd: .pickResult, target: pickID))
+                } catch {
+                    // a transport failure mid-wait — a refused connect, a truncated or empty reply —
+                    // leaves the picker up with nobody waiting on it. every request opens its own
+                    // connection, so the cancel can still land even though this poll could not.
+                    abandon(pickID, send: send)
+                    throw error
+                }
+                // the poll carries no window selector, so a pending picker is always found by id and
+                // answers ok. a not-ok response therefore means the server no longer holds one, and
+                // there is nothing left to dismiss.
                 guard response.ok else {
                     Self.writeResponse(response, json: options.json, output: output, errorOutput: errorOutput)
-                    abandon(pickID, send: send)
                     throw ExitCode.failure
                 }
                 guard let result = response.result?.pick else {

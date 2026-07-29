@@ -20,7 +20,7 @@ final class ControlPickUITests: ControlAPITestCase {
         XCTAssertTrue(app.staticTexts["Beta"].exists, "the second supplied label should be visible")
         XCTAssertEqual(try treePickPending(), pickID, "tree should expose the live picker id")
 
-        paletteRow("beta").click()
+        clickPaletteRow("beta")
 
         let result = try awaitTerminalResult(id: pickID)
         XCTAssertEqual(result["result"] as? String, "picked")
@@ -50,7 +50,7 @@ final class ControlPickUITests: ControlAPITestCase {
         XCTAssertTrue(paletteRow("alpha").waitForNonExistence(timeout: 5),
                       "the query should drop the non-matching rows, leaving the match alone on screen")
 
-        paletteRow("gamma").click()
+        clickPaletteRow("gamma")
 
         let result = try awaitTerminalResult(id: pickID)
         XCTAssertEqual(result["result"] as? String, "picked")
@@ -284,13 +284,18 @@ final class ControlPickUITests: ControlAPITestCase {
         app.descendants(matching: .any).matching(identifier: "pick-palette").firstMatch
     }
 
-    /// `PaletteRow` carries its identifier on the row, and SwiftUI propagates it to every text child, so a
-    /// row with a subtitle answers to it twice. The title child is never hittable — the row itself owns the
-    /// tap target — so take the first hittable match and fall back to `firstMatch` for existence waits,
-    /// which run before any element exists.
     private func paletteRow(_ id: String) -> XCUIElement {
+        app.descendants(matching: .any).matching(identifier: "palette-item-\(id)").firstMatch
+    }
+
+    /// `PaletteRow` carries its identifier on the row, and SwiftUI propagates it to every text child with
+    /// none of its own, so a row WITH a subtitle answers to it twice — and the title child is not hittable,
+    /// because the row itself owns the tap target. Click the first HITTABLE match rather than whichever the
+    /// query returns first. This stays separate from `paletteRow` because resolving the matches is eager:
+    /// doing it inside the existence waits, which run before the row exists, breaks them.
+    private func clickPaletteRow(_ id: String) {
         let matches = app.descendants(matching: .any).matching(identifier: "palette-item-\(id)")
-        return matches.allElementsBoundByIndex.first { $0.isHittable } ?? matches.firstMatch
+        (matches.allElementsBoundByIndex.first { $0.isHittable } ?? matches.firstMatch).click()
     }
 
     private func openPick(

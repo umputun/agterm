@@ -151,8 +151,12 @@ paths:
   subtitle child right below it IS.
   A row with no subtitle collapses to the full-width row element and clicks fine, which is what makes this
   look intermittent: the same helper works until an item carries a subtitle.
-  Resolve a row with the first HITTABLE match (`allElementsBoundByIndex.first { $0.isHittable }`), falling
-  back to `firstMatch` for the existence waits that run before anything exists — see `ControlPickUITests.paletteRow`.
+  CLICK a row through a helper that picks the first HITTABLE match
+  (`allElementsBoundByIndex.first { $0.isHittable } ?? matches.firstMatch`) and keep the plain lazy
+  `firstMatch` helper for the existence waits — see `ControlPickUITests.clickPaletteRow` vs `paletteRow`.
+  Keep the two SEPARATE: `allElementsBoundByIndex` resolves eagerly, and folding it into the helper the
+  `waitForExistence` calls use broke `testPickKeepsKeyboardAfterClosingBuiltInPalette`, whose row does not
+  exist yet when the helper is called.
   The symptom is a fast `Not hittable: StaticText …` failure, NOT the slow synthesize-event timeout that
   means occlusion; it reproduces with HazeOver quit and on a clean checkout.
 - **Driving a Picker in XCUITest depends on its style.**

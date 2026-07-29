@@ -429,17 +429,16 @@ struct SocketClientTests {
     @Test func pickBlockCancelsThePickerItCanNoLongerWaitOn() throws {
         let command = try Pick.Open.parse([])
         var sent: [ControlRequest] = []
-        let failingPoll: (ControlRequest) throws -> ControlResponse = { request in
+        // ok, but with no pick payload: the server still holds the picker, so it must be dismissed.
+        let malformedPoll: (ControlRequest) throws -> ControlResponse = { request in
             sent.append(request)
-            switch request.cmd {
-            case .pickOpen: return ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
-            case .pickResult: return ControlResponse(ok: false, error: "boom")
-            default: return ControlResponse(ok: true)
-            }
+            return request.cmd == .pickOpen
+                ? ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
+                : ControlResponse(ok: true)
         }
 
         #expect(throws: ExitCode.failure) {
-            try command.execute(input: Data("One\n".utf8), send: failingPoll,
+            try command.execute(input: Data("One\n".utf8), send: malformedPoll,
                                 sleep: { _ in }, output: { _ in }, errorOutput: { _ in })
         }
         #expect(sent.map(\.cmd) == [.pickOpen, .pickResult, .pickCancel],
@@ -452,13 +451,58 @@ struct SocketClientTests {
                 input: Data("One\n".utf8),
                 send: { request in
                     guard request.cmd != .pickCancel else { throw SocketClientError("socket gone") }
-                    return try failingPoll(request)
+                    return try malformedPoll(request)
                 },
                 sleep: { _ in }, output: { _ in }, errorOutput: { _ in }
             )
         }
         #expect(sent.map(\.cmd) == [.pickOpen, .pickResult],
                 "a failing cancel is best effort and must not replace the poll failure")
+    }
+
+    @Test func pickBlockDoesNotCancelWhenTheServerAlreadyLostThePicker() throws {
+        let command = try Pick.Open.parse([])
+        var sent: [ControlRequest] = []
+
+        #expect(throws: ExitCode.failure) {
+            try command.execute(
+                input: Data("One\n".utf8),
+                send: { request in
+                    sent.append(request)
+                    return request.cmd == .pickOpen
+                        ? ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
+                        : ControlResponse(ok: false, error: "unknown pick: pick-1")
+                },
+                sleep: { _ in }, output: { _ in }, errorOutput: { _ in }
+            )
+        }
+
+        #expect(sent.map(\.cmd) == [.pickOpen, .pickResult],
+                "the poll carries no window selector, so a not-ok result means there is nothing left to cancel")
+    }
+
+    @Test func pickBlockCancelsWhenThePollItselfThrows() throws {
+        let command = try Pick.Open.parse([])
+        var sent: [ControlRequest] = []
+
+        #expect(throws: SocketClientError.self) {
+            try command.execute(
+                input: Data("One\n".utf8),
+                send: { request in
+                    sent.append(request)
+                    switch request.cmd {
+                    case .pickOpen: return ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
+                    case .pickResult: throw SocketClientError("no response from /tmp/agterm.sock")
+                    default: return ControlResponse(ok: true)
+                    }
+                },
+                sleep: { _ in }, output: { _ in }, errorOutput: { _ in }
+            )
+        }
+
+        #expect(sent.map(\.cmd) == [.pickOpen, .pickResult, .pickCancel],
+                "a transport failure mid-wait must still dismiss the picker rather than leave it pending")
+        #expect(sent.last?.target == "pick-1")
     }
 
     @Test func pickBlockRoutesJSONServerErrorThroughInjectedStdout() throws {

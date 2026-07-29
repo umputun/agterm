@@ -41,13 +41,17 @@ public struct ControlPickResult: Codable, Sendable, Equatable {
     }
 }
 
-/// A completed picker result paired with the picker id that produced it.
+/// A completed picker result paired with the picker id that produced it. `sequence` orders results
+/// across windows so the app-wide retention evicts the oldest ANSWER rather than the oldest transfer;
+/// it is internal bookkeeping and never crosses the wire.
 public struct ResolvedPick: Codable, Sendable, Equatable {
     public let id: String
     public let result: ControlPickResult
+    public let sequence: Int
 
-    public init(id: String, result: ControlPickResult) {
+    public init(id: String, result: ControlPickResult, sequence: Int = 0) {
         self.id = id
         self.result = result
+        self.sequence = sequence
     }
 }

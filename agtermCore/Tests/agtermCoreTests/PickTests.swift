@@ -16,7 +16,8 @@ struct PickTests {
         controller.resolve(outcome)
 
         #expect(controller.pending == nil)
-        #expect(controller.recentResults == [ResolvedPick(id: pick.id, result: outcome)])
+        #expect(controller.recentResults.map(\.id) == [pick.id])
+        #expect(controller.recentResults.map(\.result) == [outcome])
         #expect(controller.result(for: pick.id) == outcome)
     }
 
@@ -105,6 +106,35 @@ struct PickTests {
         #expect(registry.controller(for: id) == nil)
         #expect(registry.retainedResult(for: pick.id)?.windowID == id)
         #expect(registry.retainedResult(for: pick.id)?.result == ControlPickResult(result: .cancelled))
+    }
+
+    @Test func registryTrimDropsTheOldestAnswerNotTheFirstTransferred() {
+        let registry = PickRegistry.shared
+        let marker = UUID().uuidString
+
+        // answer the fillers FIRST, so they are the older answers, but leave their windows open.
+        let fillers = (0..<PickRegistry.retainedResultLimit).map { index -> (UUID, PickController) in
+            let id = UUID()
+            let controller = PickController()
+            registry.register(id, controller: controller)
+            #expect(controller.open(makePick(id: "\(marker)-filler-\(index)")))
+            controller.cancel()
+            return (id, controller)
+        }
+        // answer the newest pick AFTER them, and close its window FIRST so it transfers to the front.
+        let newestWindow = UUID()
+        let newest = PickController()
+        registry.register(newestWindow, controller: newest)
+        #expect(newest.open(makePick(id: "\(marker)-newest")))
+        newest.cancel()
+        registry.unregister(newestWindow)
+
+        for (id, _) in fillers { registry.unregister(id) }
+
+        #expect(registry.retainedResult(for: "\(marker)-newest") != nil,
+                "trimming must not drop the newest answer just because its window closed first")
+        #expect(registry.retainedResult(for: "\(marker)-filler-0") == nil,
+                "the oldest answer is the one that goes")
     }
 
     @Test func registryRetainedResultsStopAtTheLimitDroppingTheOldest() {

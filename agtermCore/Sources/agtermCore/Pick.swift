@@ -25,6 +25,10 @@ public final class PickController {
     /// keying by pick id rather than one slot is what keeps `open` from discarding an unread answer.
     static let retainedResultLimit = 8
 
+    /// Monotonic across every controller, so results merged from different windows can be ordered by
+    /// when they were answered rather than by when their window closed.
+    private static var resolutionSequence = 0
+
     public private(set) var pending: PendingPick?
     /// Terminal results in resolution order, oldest first, capped at `retainedResultLimit`.
     public private(set) var recentResults: [ResolvedPick] = []
@@ -42,8 +46,9 @@ public final class PickController {
     /// Completes the pending picker with `outcome`, keeping it readable until it ages out.
     public func resolve(_ outcome: ControlPickResult) {
         guard let pending else { return }
+        Self.resolutionSequence += 1
         recentResults.removeAll { $0.id == pending.id }
-        recentResults.append(ResolvedPick(id: pending.id, result: outcome))
+        recentResults.append(ResolvedPick(id: pending.id, result: outcome, sequence: Self.resolutionSequence))
         if recentResults.count > Self.retainedResultLimit {
             recentResults.removeFirst(recentResults.count - Self.retainedResultLimit)
         }
@@ -88,9 +93,11 @@ public final class PickRegistry {
         guard let controller = controllers.removeValue(forKey: id) else { return }
         controller.cancel()
         retainedResults.append(contentsOf: controller.recentResults.map { (windowID: id, pick: $0) })
-        if retainedResults.count > Self.retainedResultLimit {
-            retainedResults.removeFirst(retainedResults.count - Self.retainedResultLimit)
-        }
+        guard retainedResults.count > Self.retainedResultLimit else { return }
+        // order by when each pick was ANSWERED before trimming: a window closing later arrives with a
+        // whole batch, and appending alone would evict a newer result an earlier-closing window held.
+        retainedResults.sort { $0.pick.sequence < $1.pick.sequence }
+        retainedResults.removeFirst(retainedResults.count - Self.retainedResultLimit)
     }
 
     public func controller(for id: WindowInfo.ID?) -> PickController? {
