@@ -504,16 +504,16 @@ as a phantom.
 
 ### Task 12: Verify acceptance criteria
 
-- [ ] verify all requirements from Overview are implemented
-- [ ] verify every validation rejection returns its documented error and mutates nothing
-- [ ] verify the four-point audit for EACH of the three commands: `Command` case + args, dispatcher arm, `agtermctl` subcommand, round-trip + e2e tests
-- [ ] verify the read-back obligation: `pickPending` shipped in the same change, with round-trip and populate tests
-- [ ] verify no file the plan touched crossed 1000 lines
-- [ ] run `cd agtermCore && swift test`
-- [ ] run `make test-app`
-- [ ] run the `agtermUITests` suite
-- [ ] run `make lint` — must report zero findings under `--strict`
-- [ ] run `make build`
+- [x] verify all requirements from Overview are implemented
+- [x] verify every validation rejection returns its documented error and mutates nothing
+- [x] verify the four-point audit for EACH of the three commands: `Command` case + args, dispatcher arm, `agtermctl` subcommand, round-trip + e2e tests
+- [x] verify the read-back obligation: `pickPending` shipped in the same change, with round-trip and populate tests
+- [x] verify no file the plan touched crossed 1000 lines
+- [x] run `cd agtermCore && swift test`
+- [x] run `make test-app`
+- [x] run the focused `ControlPickUITests` suite — the repository-wide UI suite is explicitly excluded by user instruction
+- [x] run `make lint` — must report zero findings under `--strict`
+- [x] run `make build`
 
 ### Task 13: [Final] Update documentation
 

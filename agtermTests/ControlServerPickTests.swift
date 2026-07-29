@@ -167,6 +167,7 @@ final class ControlServerPickTests: XCTestCase {
                 result: ControlResult(pick: ControlPickResult(result: .cancelled))
             )
         )
+        let resultBeforeUnknownRequests = controller.lastResult
         XCTAssertEqual(
             server.pickResult("unknown", window: nil),
             ControlResponse(ok: false, error: "unknown pick: unknown")
@@ -174,6 +175,11 @@ final class ControlServerPickTests: XCTestCase {
         XCTAssertEqual(
             server.cancelPick("unknown", window: nil),
             ControlResponse(ok: false, error: "unknown pick: unknown")
+        )
+        XCTAssertEqual(
+            controller.lastResult,
+            resultBeforeUnknownRequests,
+            "unknown result/cancel requests must not mutate the retained picker result"
         )
     }
 
