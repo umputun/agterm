@@ -13,6 +13,7 @@ Recipes come from other people as well as the maintainer. Every one is reviewed 
 | [park-and-resume](park-and-resume/) | close a project's workspaces, bring them back later | 0.16.0, jq, zsh |
 | [window-per-project](window-per-project/) | park every other window in the Dock and raise one | 0.17.1, jq |
 | [fzf-path-picker](fzf-path-picker/) | pick a path with fzf and type it into the shell | 0.8.0, fzf, fd, zsh |
+| [native-dir-picker](native-dir-picker/) | pick a directory in the native picker and type it into the shell | 0.19.0, fd, jq |
 | [overlay-and-split](overlay-and-split/) | keymap lines: a stateful split toggle and TUI overlays | 0.10.0, jq |
 | [status-announcer](status-announcer/) | demo: speak agent status changes from a dedicated session | 0.16.0, jq |
 | [claude-session-resume](claude-session-resume/) | each tab reopens its own Claude Code conversation after a restart | 0.3.1, zsh, Claude Code |
