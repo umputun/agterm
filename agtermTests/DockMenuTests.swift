@@ -176,6 +176,24 @@ final class DockMenuTests: XCTestCase {
         XCTAssertEqual(openedIDs.first, created.id)
     }
 
+    // `actions` is wired in the scene `.task`, so during the launch window it is nil while every other item
+    // is already disabled by the nil library — leaving New Window the only enabled item in the menu, one
+    // that would activate the app and then do nothing. It reads as unavailable instead.
+    func testNewWindowIsDisabledUntilTheActionHubIsWired() throws {
+        delegate.actions = nil
+
+        let menu = try dockMenu()
+        let newWindow = try item("New Window", in: menu)
+        XCTAssertFalse(newWindow.isEnabled, "with no action hub there is nothing for the item to drive")
+        try invokeWithNilSender(newWindow)
+
+        // and once wired it is enabled again even with no library on the delegate, since creating a window
+        // needs neither a captured window nor that reference.
+        delegate.actions = actions
+        delegate.library = nil
+        XCTAssertTrue(try item("New Window", in: try dockMenu()).isEnabled)
+    }
+
     // The counterpart to the guard in `AppActions.newWindow`: with no opener wired there is nowhere to put
     // a window, and creating one anyway would leave the library counting an open window with no NSWindow
     // behind it — which `applicationShouldTerminateAfterLastWindowClosed` reads to decide whether to quit.

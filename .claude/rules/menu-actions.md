@@ -39,7 +39,10 @@ paths:
 - **Application Dock menu (`AppDelegate.applicationDockMenu`).**
   AppKit asks for a fresh menu when the Dock icon is right-clicked.
   The menu exposes New Session, New Window, Quick Terminal, Dashboard, the captured window's MRU sessions, and that window's attention ordering.
-  **New Window is the one APP-LEVEL item and deliberately breaks the capture pattern** (Discussion #313): it captures no store or window id, is unconditionally enabled, and calls `AppActions.newWindow(ignoringModals: true)` to skip the frontmost-window modal gate.
+  **New Window is the one APP-LEVEL item and deliberately breaks the capture pattern** (Discussion #313): it captures no store or window id, and calls `AppActions.newWindow(ignoringModals: true)` to skip the frontmost-window modal gate.
+  Its enabled state reads `actions != nil` and NOTHING about the captured window — not "always true", which is the shape it started as.
+  `actions` is wired in the scene `.task`, so during the launch window every OTHER item is already disabled (nil library → nil `windowID` → false `actionsEnabled`) and an always-true New Window would be the only enabled item in the menu, one that runs `NSApp.activate` and then no-ops with no window and no feedback.
+  Pinned by `DockMenuTests.testNewWindowIsDisabledUntilTheActionHubIsWired`.
   Creating a window touches no existing window's state, so a dashboard or terminal zoom in whatever window happened to be last active must not make it inert — being reachable while the app is busy or backgrounded is the whole point of driving it from the Dock.
   The menu bar and palette keep the gate (File ▸ New Window mirrors it with `.disabled(modalActive)`), so the bypass is the Dock's alone.
   It also calls `NSApp.unhide` + `NSApp.activate` itself: ordinary window presentation does NOT activate the app (`WindowAccessor.bringForward` unhides and activates only on the UI-test path), so without it the new window opens behind whatever app the user right-clicked the Dock from.
