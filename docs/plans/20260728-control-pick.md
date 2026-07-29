@@ -423,14 +423,16 @@ as a phantom.
 **Files:**
 - Modify: `agterm/Views/WindowContentView.swift`
 - Modify: `agterm/AppActions+Focus.swift`
+- Modify: `agterm/Views/Palette.swift`
+- Create: `agtermTests/PickFocusGuardTests.swift`
 
-- [ ] mount a pick-driven `CommandPalette` from `WindowContentView` observing the window's `PickController`
-- [ ] register and unregister that controller with `PickRegistry` on the window's lifecycle, alongside the existing registry registrations at `WindowContentView.swift:192-196`
-- [ ] resolve `picked` with id/label/index, `custom` with the query, and Esc or scrim tap with `cancelled`
-- [ ] extend the `focusActiveSession` guard (`AppActions+Focus.swift:118-135`) to bail while the window has a pending pick — a separate `PickController` does not trip the existing `palette?.mode != nil` term, and opening a pick CLOSES the built-in palette, which is exactly what starts the ~12×0.03s `makeFirstResponder` retry loop that would steal the pick's field focus
-- [ ] extend the same term in `focusSplitPane` (`AppActions+Focus.swift:186`)
-- [ ] verify `WindowContentView.swift` (was 844) is still under 1000 lines; split to `WindowContentView+Pick.swift` if not
-- [ ] gates: `swift test`, `make lint`, `make build`, `make test-app` — all must pass before task 8
+- [x] mount a pick-driven `CommandPalette` from `WindowContentView` observing the window's `PickController`
+- [x] register and unregister that controller with `PickRegistry` on the window's lifecycle, alongside the existing registry registrations at `WindowContentView.swift:192-196`
+- [x] resolve `picked` with id/label/index, `custom` with the query, and Esc or scrim tap with `cancelled`
+- [x] extend the `focusActiveSession` guard (`AppActions+Focus.swift:118-135`) to bail while the window has a pending pick — a separate `PickController` does not trip the existing `palette?.mode != nil` term, and opening a pick CLOSES the built-in palette, which is exactly what starts the ~12×0.03s `makeFirstResponder` retry loop that would steal the pick's field focus
+- [x] extend the same term in `focusSplitPane` (`AppActions+Focus.swift:186`)
+- [x] verify `WindowContentView.swift` (was 844) is still under 1000 lines; split to `WindowContentView+Pick.swift` if not
+- [x] gates: `swift test`, `make lint`, `make build`, `make test-app` — all must pass before task 8
 
 ### Task 8: Dismissal and lifetime
 

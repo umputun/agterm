@@ -17,6 +17,12 @@ extension AppActions {
         DashboardControllerRegistry.shared.controller(for: library.activeWindowID)?.isOpen == true
     }
 
+    /// Whether the specified window has a native control picker pending. Kept as one window-scoped
+    /// predicate so both frontmost and session-addressed focus paths use the same modal invariant.
+    func pickActive(for windowID: WindowInfo.ID?) -> Bool {
+        PickRegistry.shared.controller(for: windowID)?.pending != nil
+    }
+
     /// Whether terminal zoom is active in the window OWNING this session. The right gate for the
     /// session-addressed focus paths: control commands resolve sessions across ALL windows, so gating
     /// them on the FRONTMOST window's zoom would silently drop the focus step for an un-zoomed
@@ -124,6 +130,7 @@ extension AppActions {
         // Theme…" launcher (which closes the action palette, then opens the .themes picker a tick later)
         // can't have its field focus stolen back by the close-restore's retry.
         if palette?.mode != nil { return }
+        if pickActive(for: library.activeWindowID) { return }
         if frontmostQuickTerminal?.isVisible == true { return }
         if let view = store?.activeSession?.topmostSurface as? GhosttySurfaceView, let window = view.window {
             window.makeFirstResponder(view)
@@ -166,6 +173,7 @@ extension AppActions {
         // reason: while it's up its key-catcher owns first responder, and a NON-member deck surface behind it
         // is not view-only, so grabbing first responder here would leak keystrokes into a hidden terminal.
         if dashboardActive(for: session) { return }
+        if pickActive(for: library.windowID(forSession: session.id)) { return }
         // the inline rename field and an open palette own the keyboard, exactly as in `focusActiveSession`,
         // which re-checks both on every one of its retries. this loop needs them for the same reason: the
         // `.left`/nil reveal routes here (a plain `session status blocked` with no `--pane` lands in that

@@ -29,6 +29,9 @@ struct WindowContentView: View {
     /// view-only grid. Registered in `DashboardControllerRegistry` on appear so the socket can drive it; the
     /// `+Dashboard` extension owns the overlay branch, deck yield, font override, and modal lifecycle.
     @State var dashboard = DashboardController()
+    /// Per-window native picker presented through the shared palette view. Registered for control-socket
+    /// lookup while this window is mounted; unlike `palette`, its pending state is window-scoped.
+    @State var pick = PickController()
     /// The terminal background color, mirrored from the (non-observable) `GhosttyApp` into view
     /// state and used as the quick terminal's opaque backing, so a settings theme change (posting
     /// `.agtermAppearanceChanged`) re-renders it live.
@@ -195,11 +198,13 @@ struct WindowContentView: View {
             }
             TerminalZoomRegistry.shared.register(windowID, controller: terminalZoom)
             registerDashboard()
+            PickRegistry.shared.register(windowID, controller: pick)
         }
         .onDisappear {
             QuickTerminalRegistry.shared.unregister(windowID)
             TerminalZoomRegistry.shared.unregister(windowID)
             tearDownDashboard()
+            PickRegistry.shared.unregister(windowID)
         }
     }
 
@@ -686,6 +691,7 @@ struct WindowContentView: View {
         ZStack {
             quickTerminalOverlay
             commandPaletteOverlay
+            pickPaletteOverlay
             sessionSwitcherOverlay
             // the dashboard is the topmost window overlay: opening it closes the three above (mirrors the
             // zoom lifecycle), so ordering only settles the empty case, but it renders last for clarity.
@@ -736,6 +742,34 @@ struct WindowContentView: View {
     @ViewBuilder private var commandPaletteOverlay: some View {
         if isFrontmost, palette.mode != nil {
             CommandPalette(controller: palette, actions: actions)
+        }
+    }
+
+    /// A control picker is per-window rather than frontmost-global, so a caller may present one in a
+    /// background window without duplicating it elsewhere. Selection preserves the caller's original
+    /// item index even though fuzzy filtering reorders the visible rows.
+    @ViewBuilder private var pickPaletteOverlay: some View {
+        if let pending = pick.pending {
+            CommandPalette(
+                controller: palette,
+                actions: actions,
+                items: pending.items.enumerated().map { index, item in
+                    PaletteItem(id: item.id, title: item.label, subtitle: item.subtitle) {
+                        pick.resolve(ControlPickResult(
+                            result: .picked,
+                            id: item.id,
+                            label: item.label,
+                            index: index
+                        ))
+                    }
+                },
+                prompt: pending.prompt,
+                allowCustom: pending.allowCustom,
+                onCustom: { query in
+                    pick.resolve(ControlPickResult(result: .custom, query: query))
+                },
+                onDismiss: { pick.cancel() }
+            )
         }
     }
 

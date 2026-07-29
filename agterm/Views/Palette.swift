@@ -91,6 +91,9 @@ struct CommandPalette: View {
     /// Whether an unmatched, non-empty explicit-picker query can be submitted as free text.
     let allowCustom: Bool
     let onCustom: ((String) -> Void)?
+    /// Called when an explicit picker is dismissed or completes. Built-in palettes leave this nil and
+    /// continue to close through `PaletteController`; a pick uses it to resolve cancellation.
+    let onDismiss: (() -> Void)?
 
     @State private var query = ""
     @State private var selection = 0
@@ -101,13 +104,15 @@ struct CommandPalette: View {
     @FocusState private var fieldFocused: Bool
 
     init(controller: PaletteController, actions: AppActions, items: [PaletteItem]? = nil,
-         prompt: String? = nil, allowCustom: Bool = false, onCustom: ((String) -> Void)? = nil) {
+         prompt: String? = nil, allowCustom: Bool = false, onCustom: ((String) -> Void)? = nil,
+         onDismiss: (() -> Void)? = nil) {
         self.controller = controller
         self.actions = actions
         self.explicitItems = items
         self.prompt = prompt
         self.allowCustom = allowCustom
         self.onCustom = onCustom
+        self.onDismiss = onDismiss
     }
 
     private var allItems: [PaletteItem] {
@@ -177,7 +182,7 @@ struct CommandPalette: View {
             ZStack(alignment: .top) {
                 Color.black.opacity(0.2)
                     .contentShape(Rectangle())
-                    .onTapGesture { controller.close() }
+                    .onTapGesture { dismiss() }
                 panel
                     .frame(width: 520)
                     .padding(.top, geo.size.height * 0.12)
@@ -197,7 +202,7 @@ struct CommandPalette: View {
                     .onChange(of: query) { selection = 0; updateFiltered(); previewSelected() }
                     .onKeyPress(.downArrow) { move(1); return .handled }
                     .onKeyPress(.upArrow) { move(-1); return .handled }
-                    .onKeyPress(.escape) { controller.close(); return .handled }
+                    .onKeyPress(.escape) { dismiss(); return .handled }
             }
             .padding(12)
             Divider()
@@ -270,7 +275,12 @@ struct CommandPalette: View {
 
     private func runItem(_ item: PaletteItem) {
         item.run()
-        controller.close()
+        dismiss()
+    }
+
+    private func dismiss() {
+        if explicitItems == nil { controller.close() }
+        onDismiss?()
     }
 }
 
