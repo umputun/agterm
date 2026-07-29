@@ -1,7 +1,45 @@
 ---
 paths:
   - "agtermUITests/**/*.swift"
+  - "agtermTests/**/*.swift"
 ---
+
+## Application-hosted tests (`agtermTests/`)
+
+These run INSIDE the real app, so a mistake here kills the process instead of failing an assertion.
+
+- **A window a test owns MUST set `isReleasedWhenClosed = false`.**
+  `NSWindow`'s designated initializer defaults it to true, so `close()` sends a release ARC never
+  balances while the suite still holds the window (a `registeredWindows` dictionary, `WindowRegistry`).
+  The over-release frees it under its surviving references and the next autorelease-pool pop on the main
+  queue dereferences freed memory.
+  The symptom is NOT a test failure: the host dies, xcodebuild says `Restarting after unexpected exit,
+  crash, or test timeout` with no assertion and no signal, and the suite restarts and finishes.
+  Freed memory is reused nondeterministically, so it passes locally and dies on the runner — and adding
+  unrelated tests to the same class can be what makes a latent one start firing.
+  `orderOut(nil)` does not trigger it; only `close()` does.
+- **Read a dead host, do not infer it.**
+  The streamed CI log names nothing useful.
+  `xcrun xcresulttool get test-results tests --path <xcresult>` gives the real message (e.g. "The test
+  runner exited with code 1 before finishing running tests").
+  The STACK comes from ghostty's crash handler: `~/.local/state/ghostty/crash/*.ghosttycrash` is a sentry
+  envelope whose attachment is a minidump — split the envelope (header line, then item-header/payload
+  pairs), write the `.dmp`, and read it with `lldb -b -o "bt all" -c <dmp>`.
+  CI discards both, so add a temporary `upload-artifact` step with `if: failure()` covering the crash
+  directory and `build/DerivedData/Logs/Test/*.xcresult`, then remove it once the cause is known.
+  Reaching for the artifact after the FIRST failed fix is cheaper than a second guess.
+- **Never stub out `GhosttyApp` to make a hosted test quieter.**
+  Ghostty's handler is the app's crash reporter; suppressing its init deletes the only record of why the
+  host died and converts an immediate death into a silent one.
+- **The hosted host is not the app you think.**
+  `AGTERM_HOSTED_TESTS=1` (set by the `agtermTests` scheme in `project.yml`) makes the scene render
+  `Color.clear`, which skips the `.task` that assigns `appDelegate.library` — so the delegate's `library`
+  is nil for the whole run, and code keying off it behaves differently than in the real app.
+  `NSApp.delegate as? AppDelegate` is also nil (SwiftUI wraps it in `@NSApplicationDelegateAdaptor`), so
+  reach the delegate another way rather than asserting on that cast.
+  Locally the placeholder window IS presented (`NSApp.windows.count == 1`, titled "Agterm"); launched by
+  another process on CI it is not — the same FB11763863 shape as the UI-test note below, and the reason
+  window-count assumptions differ between the two environments.
 
 ## UI tests
 
