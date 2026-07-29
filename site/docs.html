@@ -1121,7 +1121,7 @@
               "
             >
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 0">
-                Looking for the full list? All 68 commands, with every argument, return value, and error, live on the
+                Looking for the full list? All 71 commands, with every argument, return value, and error, live on the
                 <a href="/commands" style="color: #6d82f3; font-weight: 500">Command reference →</a>
               </p>
             </div>
@@ -1157,6 +1157,52 @@
               or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--socket PATH</span> to override
               the socket. The exit code is zero on success, non-zero on error.
             </p>
+
+            <h3
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 600;
+                font-size: 16px;
+                color: #5ea1f2;
+                margin: 24px 0 12px;
+              "
+            >
+              Native picker
+            </h3>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl pick</span> reads nonblank
+              lines or a JSON array of
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">{id,label,subtitle?}</span> objects
+              from stdin and opens agterm's fuzzy picker. It blocks by default and prints the picked, custom, or cancelled result as
+              bare JSON. Add <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--no-block</span> to
+              get the picker id immediately, then use
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pick result</span> or
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pick cancel</span>. The target tree's
+              top-level <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">pickPending</span> field
+              carries that id while the picker waits.
+            </p>
+            <div
+              style="
+                background: #15191c;
+                border: 1px solid rgba(255, 255, 255, 0.1);
+                border-radius: 10px;
+                padding: 18px 20px;
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-size: 13.5px;
+                line-height: 1.95;
+                overflow-x: auto;
+                color: #e6e1d7;
+              "
+            >
+              printf <span style="color: #f2b45c">'%s\n'</span> staging production | agtermctl pick --prompt
+              <span style="color: #f2b45c">"Deploy where?"</span><br /><br />
+              <span style="color: #6d82f3">id</span>=$(printf <span style="color: #f2b45c">'%s\n'</span> alpha beta |
+              agtermctl pick --no-block | jq -r <span style="color: #f2b45c">'.id'</span>)<br />
+              agtermctl pick result <span style="color: #f2b45c">"$id"</span><br />
+              agtermctl pick cancel <span style="color: #f2b45c">"$id"</span><br />
+              agtermctl tree --json | jq -r
+              <span style="color: #f2b45c">'.result.tree.pickPending // empty'</span>
+            </div>
 
             <h3
               style="

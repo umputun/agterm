@@ -527,18 +527,18 @@ as a phantom.
 - Modify: `README.md`
 - Modify: `.claude/rules/control-api.md`
 
-- [ ] add the three commands to the bundled agent skill: SKILL.md summary, reference.md per-command detail, examples.md recipes
-- [ ] add three entries to `site/commands.html` in the right family section, each carrying invocation, arguments, and the `tree` read-back field
-- [ ] add a `pick.open`/`pick.result`/`pick.cancel` bullet to the command CATALOG list in `.claude/rules/control-api.md:287` — separate from the count bump and easy to miss
-- [ ] add the pick section to `.claude/rules/control-api.md` using semantic line breaks (one sentence per line)
-- [ ] bump the command count from 68 to 71 EVERYWHERE — grep for the PATTERN, never for the old or new number, since a surface already stale at a third value is invisible to a search for either
-- [ ] update the known count sites: `README.md:187`, `SKILL.md:145`, `site/docs.html:1124`, `site/commands.html:9,21,33,238`, `.claude/rules/control-api.md:209,287,316,1740`
-- [ ] update the hardcoded assertion in `SkillInstallTests.swift:17` (`#expect(skill.contains("Command summary (68 commands)"))`) — it is a required EDIT, not merely a detector, and `swift test` ends red without it
-- [ ] finish with `rg -n '\b[0-9]{2,3}\b' .claude/rules/control-api.md` and read every hit — the phrasings "the public command count stays N" and "`Command` has N cases" do not match a "N commands" grep and have survived a bump before
-- [ ] update `README.md` and `site/docs.html`
-- [ ] confirm `CHANGELOG.md` is UNTOUCHED (release-only) and no `cookbook/` recipe was swept (deliberately not a keep-in-sync surface)
-- [ ] gates: `swift test`, `make lint`, `make build`
-- [ ] move this plan to `docs/plans/completed/`
+- [x] add the three commands to the bundled agent skill: SKILL.md summary, reference.md per-command detail, examples.md recipes
+- [x] add three entries to `site/commands.html` in the right family section, each carrying invocation, arguments, and the `tree` read-back field
+- [x] add a `pick.open`/`pick.result`/`pick.cancel` bullet to the command CATALOG list in `.claude/rules/control-api.md:287` — separate from the count bump and easy to miss
+- [x] add the pick section to `.claude/rules/control-api.md` using semantic line breaks (one sentence per line)
+- [x] bump the command count from 68 to 71 EVERYWHERE — grep for the PATTERN, never for the old or new number, since a surface already stale at a third value is invisible to a search for either
+- [x] update the known count sites: `README.md:187`, `SKILL.md:145`, `site/docs.html:1124`, `site/commands.html:9,21,33,238`, `.claude/rules/control-api.md:209,287,316,1740`
+- [x] update the hardcoded assertion in `SkillInstallTests.swift:17` (`#expect(skill.contains("Command summary (68 commands)"))`) — it is a required EDIT, not merely a detector, and `swift test` ends red without it
+- [x] finish with `rg -n '\b[0-9]{2,3}\b' .claude/rules/control-api.md` and read every hit — the phrasings "the public command count stays N" and "`Command` has N cases" do not match a "N commands" grep and have survived a bump before
+- [x] update `README.md` and `site/docs.html`
+- [x] confirm `CHANGELOG.md` is UNTOUCHED (release-only) and no `cookbook/` recipe was swept (deliberately not a keep-in-sync surface)
+- [x] gates: focused `swift test --filter 'SkillInstallTests.bundledSkillDocumentsEventSubscriptionCommand'` substituted for broad `swift test` per user override; `make lint`; `make build`
+- [x] move this plan to `docs/plans/completed/`
 ## Post-Completion
 
 *Items requiring manual intervention — no checkboxes, informational only*

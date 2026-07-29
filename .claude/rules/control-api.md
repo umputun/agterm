@@ -206,7 +206,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 68-command
+  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 71-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -284,13 +284,14 @@ paths:
   rules, then remaining targets resolve inside that same store so one command never mutates multiple windows.
   The top-level `target` also carries the first explicit batch target so a new CLI talking to a still-running
   pre-batch server degrades to a named session instead of accidentally acting on `active`.
-- **Command catalog (68 commands):**
+- **Command catalog (71 commands):**
   - `tree`
   - `events.read` (the bounded per-app-run control event ring behind `agtermctl events`)
   - `workspace.new`/`workspace.rename`/`workspace.delete`/`workspace.select`/`workspace.move`/`workspace.focus`/`workspace.filter`/`workspace.collapse`/`workspace.expand`
   - `session.new`/`session.duplicate`/`session.close`/`session.select`/`session.rename`/`session.reveal`/`session.move`/`session.type`/`session.split`/`session.scratch`/`session.focus`/`session.resize`/`session.go`/`session.copy`/`session.paste`/`session.selectall`/`session.text`/`session.search`/`session.status`/`session.flag`/`session.seen`/`session.restore`/`session.background`/`session.overlay.open`/`session.overlay.close`/`session.overlay.resize`/`session.overlay.result`
   - `surface.zoom`
   - `dashboard`
+  - `pick.open`/`pick.result`/`pick.cancel`
   - `quick`/`quick.type`/`quick.text`
   - `sidebar`/`sidebar.mode`/`sidebar.expand`/`sidebar.collapse`
   - `notify`
@@ -313,8 +314,8 @@ paths:
   Setting echoes the resulting effective side in `result.text`; the BARE form (no name) reads the side
   the last config feed applied (`SettingsModel.lastAppliedIsDark`), which the test polls to prove the
   flip actually drove the reload.
-  `AppearanceFlipUITests` is its only consumer; the public command count stays 68
-  (`Command` has 69 cases, minus this one seam).
+  `AppearanceFlipUITests` is its only consumer; the public command count stays 71
+  (`Command` has 72 cases, minus this one seam).
 
   `workspace.delete` honors keep-at-least-one and returns an error instead of the GUI confirm alert (nothing
   blocks on a modal).
@@ -982,6 +983,22 @@ paths:
   It is state-mutating-with-read-back EXEMPT: the resulting state IS `dashboardMembers`,
   so no new tree field is owed.
   See the `libghostty.md` dashboard note for the reparent/overlay/view-only + transient-font-override mechanics.
+  `pick.open` presents one caller-supplied, per-window native fuzzy picker and returns its globally unique id.
+  The wire request carries `ControlArgs.items` as 1 through 1,000 `{id,label,subtitle?}` records, optional `prompt`, `allowCustom`, `follow`, and the shared `window` selector.
+  Host-free validation in `ControlDispatcher.dispatchPickCommand` rejects an empty list, too many items, empty labels, duplicate ids, and control characters in labels or subtitles before it creates the `PendingPick`.
+  `ControlServer.openPick` resolves the target window's `PickController` through `PickRegistry`, rejects a second pending pick, and closes the built-in command palette only when the picker opens in the active window.
+  A background target stays background by default, while `follow` raises it and synchronizes `WindowLibrary.frontmostWindowID`.
+  `pick.result` requires the exact picker id and returns `pending`, `picked` with `id`/`label`/`index`, `custom` with `query`, or `cancelled`.
+  `pick.cancel` requires the exact picker id, cancels a pending picker, and succeeds without changing an already terminal result.
+  `ControlTree.pickPending` is the read-back, populated from the target window's controller and omitted when no picker is pending.
+  `WindowContentView` renders a pending pick through `CommandPalette(items:)`, and only one picker is mounted per window.
+  Selection, custom input, Esc, ⌘W, window close, and app termination all resolve the request, with every lifecycle exit mapping to `cancelled`.
+  `PickRegistry.unregister` retains the cancellation long enough for a blocking caller whose next poll follows window teardown, and the next successful open in that window clears the retained result.
+  The CLI group defaults to open, sniffs stdin as a JSON array when its first non-whitespace byte is `[`, and otherwise maps nonblank lines to items whose id equals the label.
+  Blocking `agtermctl pick` polls `pick.result` every 100 ms for the first second and every 500 ms afterward, prints the bare result JSON, and exits 0 for `picked`/`custom`, 2 for `cancelled`, or 1 for failures.
+  `--no-block` prints `{"id":"…"}`, while `pick result ID` and `pick cancel ID` expose the later one-shot operations with the same `--window` scope.
+  Keep-in-sync audit: `ControlProtocol.swift` owns the three cases, item/result types, args, and `pickPending`; `ControlDispatcher+Pick.swift` owns validation and routing; `ControlServer+Pick.swift`, `PickController`, `PickRegistry`, and `WindowContentView` own app state and presentation; `MiscCommands.swift` and `SocketClient.swift` own CLI input, polling, output, and exit codes.
+  Tests cover protocol round trips, dispatcher validation, controller state, hosted window/focus/lifetime paths, CLI parsing and backoff, palette rows, tree read-back, and focused `ControlPickUITests`.
   Mode-bearing commands (`session.split`/`quick`) compute the delta against current state so `on`/`off`/`show`/`hide`
   are idempotent, and an unknown mode is an error.
   `quick`'s visibility reads back on `ControlTree.quickVisible` at the tree TOP level — LIVE, resolved
@@ -1737,7 +1754,7 @@ paths:
   arguments, and the `tree` read-back field, grouped into its command family's section.
   A new `Command` case REQUIRES a new `site/commands.html` entry (a changed command an updated one, a
   removed command a deleted one), in lockstep with the agent skill above and `README.md`/`site/docs.html`;
-  the page's "68 commands" copy must track the catalog count.
+  the page's "71 commands" copy must track the catalog count.
   A bump is a grep, not a single edit: the count sits in FOUR spots in `commands.html` alone (the
   `description` `<meta>`, the `og:description` and `twitter:description` `<meta>`s, plus the body copy),
   and again in `README.md`, `site/docs.html`, the bundled `SKILL.md`, and the `SkillInstallTests`

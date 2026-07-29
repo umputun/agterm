@@ -142,7 +142,7 @@ prompt concatenates with yours, and the program starts on the merged line. (`--n
 focus, but the newline and shared-buffer hazards of `type`-as-launcher remain — `--command` is still the
 rule.) After `--command`, confirm in `tree --json` that the new node's `foreground` shows your program running, not a bare shell prompt.
 
-## Command summary (68 commands)
+## Command summary (71 commands)
 
 Run `agtermctl <area> <cmd> --help` for exact flags. Full detail in **reference.md**; recipes in
 **examples.md**.
@@ -178,6 +178,8 @@ the open dashboard shows, in grid order — `<session-id>:left` for a primary pa
 a split pane, so a split session appears as both), `dashboardHighlighted` (the highlighted cell's pane ref —
 the one Enter jumps into, focusing that exact pane), `dashboardFontSize` (the absolute font size in points
 applied to the cells, omitted when untouched), and `dashboardFontMode` (`auto`|`fixed`|`untouched`).
+The top level also carries `pickPending`, the id of the native picker currently awaiting an answer in
+that window, omitted when no pick is pending.
 
 **events**: continuously print control events, subscribing from the current tail when no cursor is
 given. Use `--json` for one bare event object per line; filter with repeatable or comma-separated
@@ -337,6 +339,14 @@ means no input, not no process effect. The most-recently-used grid also has a GU
 `dashboard` built-in action), **Navigate ▸ Dashboard**, and the command palette's **Dashboard** entry
 TOGGLE the frontmost window's MRU dashboard auto-sized (identical to `dashboard --mru --auto-size`); no new
 control command, the socket `dashboard` command is unchanged.
+
+**pick**: `pick [--prompt TEXT] [--allow-custom] [--follow] [--window W] [--no-block]` reads choices
+from stdin and opens the target window's native fuzzy picker. Supply nonblank lines (each line is both
+the id and label) or a JSON array of `{id,label,subtitle?}` items. The default blocks until the user
+chooses or cancels and prints the bare JSON result. `--no-block` prints the picker id instead;
+`pick result ID [--window W]` reads it later, and `pick cancel ID [--window W]` cancels it.
+Only one picker may be pending per window. It opens without raising a background target unless
+`--follow` is set. Read the live picker id from the tree's top-level `pickPending` field.
 
 **quick** — `[show|hide|toggle]` (visibility; read back from the tree's `quickVisible`) ·
 `type TEXT` (or `--stdin`) inject keystrokes into the frontmost window's quick terminal ·

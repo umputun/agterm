@@ -184,7 +184,7 @@ The theme picker (View ▸ Select Theme…, or the action palette) previews each
 
 To open a terminal at a directory without the CLI, `open -a agterm <path>` — or right-click a folder in Finder and choose **Open With ▸ agterm**. agterm adds a session in that directory to the last-active window. This works when agterm is already running (its usual state); if it isn't, launch agterm first, then run the command. The socket equivalent, and the way to place the session precisely, is `agtermctl session new --cwd <path>`.
 
-The sections below cover the common cases. All 68 commands, with every argument, return value, and error, are documented in the **[Command reference](https://agterm.com/commands)**.
+The sections below cover the common cases. All 71 commands, with every argument, return value, and error, are documented in the **[Command reference](https://agterm.com/commands)**.
 
 The app bundles `agtermctl` inside `agterm.app`. The easiest way to put it on your PATH is **Help ▸ Install Command Line Tool…**, which symlinks the bundled binary into `/usr/local/bin` (the first entry in macOS's default PATH). When that directory is user-writable it installs silently; otherwise it asks once for an administrator password.
 
@@ -198,6 +198,25 @@ cd agtermCore && swift build -c release
 ```
 
 Each command targets a session or workspace by its UUID, a unique prefix of that UUID (git-style), or the keyword `active` (the selected session / current workspace). `--target` defaults to `active`, so the current one rarely needs to be named. Mutating commands normally print the affected id; batch `session close` and `session move` accept repeated `--target` options and print the number of sessions actually changed. `tree` prints the workspace and session tree. Add `--json` for the raw response, or `--socket PATH` to override the socket path. The exit code is zero on success, non-zero on error.
+
+### Native picker
+
+`agtermctl pick` reads choices from stdin and opens agterm's native fuzzy picker.
+Input can be nonblank lines or a JSON array of objects with `id`, `label`, and an optional `subtitle`.
+The default call blocks and prints the selected item as JSON.
+Use `--allow-custom` to accept a query that does not match an item, `--window` to target another open window, and `--follow` to raise that window.
+
+```sh
+printf '%s\n' staging production | agtermctl pick --prompt "Deploy where?"
+
+pick_id=$(printf '%s\n' alpha beta | agtermctl pick --no-block | jq -r '.id')
+agtermctl pick result "$pick_id"      # bare JSON result; exit 1 while pending, 2 when cancelled
+agtermctl pick cancel "$pick_id"
+agtermctl tree --json | jq -r '.result.tree.pickPending // empty'
+```
+
+Only one picker can be pending per window.
+The top-level `pickPending` tree field carries its id and is omitted after it resolves.
 
 ### Control events
 

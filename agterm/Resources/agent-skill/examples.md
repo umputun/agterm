@@ -654,6 +654,52 @@ dashboard and terminal zoom are mutually exclusive (opening one closes the other
 each pane's pty to/from its cell, so a running program may redraw — view-only means no input, not no
 process effect.
 
+## Ask the user to choose from a generated list
+
+Pipe nonblank labels into `pick`. The call blocks until the user chooses or cancels, then prints a bare
+JSON result:
+
+```bash
+choice=$(
+  printf '%s\n' staging production |
+    agtermctl pick --prompt "Deploy where?"
+)
+
+case $(jq -r '.result' <<<"$choice") in
+  picked) jq -r '.id' <<<"$choice" ;;
+  custom) jq -r '.query' <<<"$choice" ;;
+esac
+```
+
+Use a JSON array when ids differ from labels or rows need subtitles. `--allow-custom` adds the current
+nonmatching query as a choice:
+
+```bash
+jq -n '[
+  {id: "stg", label: "Staging", subtitle: "staging.example.com"},
+  {id: "prod", label: "Production", subtitle: "production.example.com"}
+]' | agtermctl pick --prompt "Deploy target" --allow-custom
+```
+
+Open without blocking when another process owns the lifecycle. The picker id reads back from the target
+window's tree as `pickPending`; poll the same window, or cancel by exact id:
+
+```bash
+pick_id=$(
+  printf '%s\n' alpha beta gamma |
+    agtermctl pick --no-block --window "$AGTERM_WINDOW_ID" |
+    jq -r '.id'
+)
+
+agtermctl tree --json --window "$AGTERM_WINDOW_ID" |
+  jq -r '.result.tree.pickPending // empty'
+agtermctl pick result "$pick_id" --window "$AGTERM_WINDOW_ID"
+agtermctl pick cancel "$pick_id" --window "$AGTERM_WINDOW_ID"
+```
+
+Add `--follow` to raise a background target window when the picker opens. Without it, the picker waits in
+that window without stealing focus.
+
 ## Navigate and manage windows
 
 ```bash

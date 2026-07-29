@@ -6,7 +6,7 @@
     <title>Command reference — agterm | agtermctl control API</title>
     <meta
       name="description"
-      content="Complete agtermctl reference: all 68 control commands for agterm — sessions, workspaces, windows, overlays, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
+      content="Complete agtermctl reference: all 71 control commands for agterm, including sessions, workspaces, windows, overlays, the native picker, the quick terminal, sidebar, agent status, themes, and keymaps, with arguments and return values."
     />
     <meta
       name="keywords"
@@ -18,7 +18,7 @@
     <meta property="og:title" content="Command reference — agterm" />
     <meta
       property="og:description"
-      content="All 68 agtermctl control commands with arguments, return values, and errors."
+      content="All 71 agtermctl control commands with arguments, return values, and errors."
     />
     <meta property="og:url" content="https://agterm.com/commands" />
     <meta property="og:image" content="https://agterm.com/assets/agterm-og.png" />
@@ -30,7 +30,7 @@
     <meta name="twitter:title" content="Command reference — agterm" />
     <meta
       name="twitter:description"
-      content="All 68 agtermctl control commands with arguments, return values, and errors."
+      content="All 71 agtermctl control commands with arguments, return values, and errors."
     />
     <meta name="twitter:image" content="https://agterm.com/assets/agterm-og.png" />
     <link rel="icon" type="image/x-icon" href="/assets/favicon.ico" />
@@ -193,6 +193,7 @@
             <a href="#window" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">window</a>
             <a href="#surface" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">surface zoom</a>
             <a href="#dashboard" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">dashboard</a>
+            <a href="#pick" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">pick</a>
             <a href="#quick" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">quick</a>
             <a href="#sidebar" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">sidebar</a>
             <a href="#notify" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">notify</a>
@@ -235,7 +236,7 @@
             Command reference
           </h1>
           <p style="font-size: 19px; line-height: 1.6; color: #bfbab0; margin: 0 0 8px">
-            All 68 commands of the agterm control API, with arguments and return values. Every one is reachable from the
+            All 71 commands of the agterm control API, with arguments and return values. Every one is reachable from the
             <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl</span> CLI and from the local
             control socket.
           </p>
@@ -342,7 +343,7 @@
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc; white-space: nowrap">--window &lt;id|prefix|active&gt;</span>
-              (on session, workspace, tree, font, and notify commands) picks which window's tree to act on; the default is the
+              (on session, workspace, tree, font, notify, and pick commands) picks which window's tree to act on; the default is the
               frontmost. With it set, that window must be open; without it, an id/prefix session target is matched across all open
               windows. The <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">window.*</span> commands
               instead take the window selector as a positional argument, defaulting to
@@ -473,8 +474,10 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">sidebarMode</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceFilter</span> (whether the workspace focus
                 filter is applied — the flag half of the focus set, the read side of
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace filter</span>), and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quickVisible</span>. All six are read-only
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">workspace filter</span>),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quickVisible</span>, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pickPending</span> (the pending native picker's id,
+                omitted when none is open). All seven are read-only
                 projections of GUI state.
               </p>
             </div>
@@ -1671,6 +1674,94 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">dashboardFontSize</span> (the applied absolute size, omitted when
                 untouched), and <span style="font-family: &quot;JetBrains Mono&quot;, monospace">dashboardFontMode</span>
                 (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">auto</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">fixed</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">untouched</span>).
+              </p>
+            </div>
+          </section>
+
+          <!-- PICK -->
+          <section id="pick" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              pick
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
+              A caller-supplied fuzzy picker rendered by agterm. One picker may be pending in each window.
+            </p>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl pick [--prompt TEXT] [--allow-custom] [--follow] [--window W] [--no-block]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">pick.open</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Read choices from stdin and open the target window's native picker. Nonblank input lines become items whose id equals
+                the label. Input whose first non-whitespace byte is
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">[</span> is a JSON array of
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{id,label,subtitle?}</span> objects. Item ids must be
+                unique, labels must not be empty, and the list is capped at 1,000 items.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--prompt</span> adds text above the query field.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--allow-custom</span> accepts a nonmatching query.
+                A background <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> target stays in the
+                background unless <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--follow</span> raises it. The
+                default blocks and prints a bare picked, custom, or cancelled JSON result.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--no-block</span> prints
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{"id":"…"}</span> immediately.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <strong style="color: #bfbab0">Tree read-back:</strong> the target tree's top-level
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pickPending</span> carries the returned picker id
+                while it waits and is omitted after resolution.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl pick result &lt;id&gt; [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">pick.result</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Read one picker by its exact id in the frontmost or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> window. Prints bare JSON with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result</span> set to
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pending</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">picked</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">custom</span>, or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">cancelled</span>. Picked and custom exit 0,
+                pending exits 1, and cancelled exits 2.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <strong style="color: #bfbab0">Tree read-back:</strong>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pickPending</span> equals
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">&lt;id&gt;</span> while the result is pending and
+                disappears for every terminal result.
+              </p>
+            </div>
+
+            <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
+                agtermctl pick cancel &lt;id&gt; [--window W]
+              </div>
+              <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">pick.cancel</div>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Cancel the exact picker id in the frontmost or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> window. The terminal result becomes
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{"result":"cancelled"}</span>; cancelling an already
+                completed matching picker is a successful no-op, and an unknown id is an error.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <strong style="color: #bfbab0">Tree read-back:</strong> cancellation removes
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pickPending</span> from the target tree.
               </p>
             </div>
           </section>

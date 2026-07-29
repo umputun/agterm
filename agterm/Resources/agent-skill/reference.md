@@ -81,7 +81,7 @@ SIGTERM use normal process behavior.
   `text`, `background`, `status`, `copy`, …) that must act on the session you run in — otherwise it hits
   whatever the user has selected. `overlay open` opens in the background without switching the user
   (both full and floating); pass `--follow` to additionally SELECT the target, switching the user to it.
-- `--window <id|prefix|active>` (on session/workspace/tree/font/notify commands) picks which window's
+- `--window <id|prefix|active>` (on session/workspace/tree/font/notify/pick commands) picks which window's
   tree to act on; default is the frontmost. With `--window` set, that window must be open. Without it,
   an id/prefix session target is matched across all open windows.
 - `window.*` commands take the window selector as a positional argument, default `active` (frontmost).
@@ -149,7 +149,7 @@ members), and `collapsed` (whether this workspace is COLLAPSED in the sidebar tr
 `workspace collapse`/`workspace expand` and `workspace new --collapsed`; `true` when collapsed, omitted
 when expanded, so an all-expanded tree carries no `collapsed` keys).
 
-The tree object itself carries eleven top-level read-only fields: `idleMs` (milliseconds since the last
+The tree object itself carries twelve top-level read-only fields: `idleMs` (milliseconds since the last
 user input in the window, omitted before any activity), `autoFollowMs` (the window's Auto-follow
 timeout in milliseconds, omitted when the setting is Disabled), `sidebarVisible` (whether the
 window's sidebar is currently shown — the read side of the write-only `sidebar` command, so a script
@@ -169,11 +169,13 @@ no dashboard is open): `dashboardMembers` (the pane refs the open dashboard show
 as both), `dashboardHighlighted` (the highlighted cell's pane ref — the one Enter jumps into, focusing
 that exact pane), `dashboardFontSize` (the absolute font size in points applied to the cells, omitted when
 the mode is `untouched`), and `dashboardFontMode` (`auto` for `--auto-size`, `fixed` for `--font-size`, or
-`untouched`). `idleMs` is live
+`untouched`), plus `pickPending` (the id of the native picker currently awaiting an answer in this
+window, omitted when none is pending). `idleMs` is live
 and grows while the window is idle, so it is on `tree` only, never `window.list`; `sidebarVisible` is on
-both; `sidebarMode`, `workspaceFilter`, `quickVisible`, `zoomedSurface`, and the four `dashboard*` fields
+both; `sidebarMode`, `workspaceFilter`, `quickVisible`, `zoomedSurface`, the four `dashboard*` fields, and
+`pickPending`
 are `tree`-only (a GUI/keyboard change would leave a cached copy stale).
-All eleven are read-only projections of GUI state.
+All twelve are read-only projections of GUI state.
 
 ## workspace
 
@@ -645,6 +647,45 @@ untouched.
 Invalid invocations error (rejected at the CLI and re-checked server-side): `--font-size` with
 `--auto-size`, a non-positive `--font-size`, `--close` combined with ids, `--mru`, or a font option,
 `--mru` combined with explicit ids, and an open with neither ids nor `--mru`.
+
+## pick
+
+`agtermctl pick [--prompt TEXT] [--allow-custom] [--follow] [--window W] [--no-block]` reads choices
+from stdin and opens a native fuzzy picker in the target window. `pick` defaults to the open subcommand,
+so `agtermctl pick open` is not required.
+
+The first non-whitespace input byte selects the format. `[` starts a JSON array of objects with required
+`id` and `label` strings plus an optional `subtitle`; any other input is split into lines, blank and
+whitespace-only lines are dropped, and each remaining line becomes both the id and label. Item ids must
+be unique, labels must not be empty, labels and subtitles may not contain control characters, and a
+picker accepts at most 1,000 items. An empty list is rejected.
+
+`--prompt` adds text above the query field. `--allow-custom` adds a row for a nonmatching query and
+returns it as a custom result. A background `--window` target is not raised by default; `--follow`
+raises it. Only one picker can be pending in a window, and a second open fails with
+`pick already pending`.
+
+The default call polls until the user answers and prints one bare JSON result:
+
+```json
+{"result":"picked","id":"production","label":"Production","index":1}
+{"result":"custom","query":"new target"}
+{"result":"cancelled"}
+```
+
+Picked and custom results exit 0. Cancellation exits 2. Protocol, validation, transport, and server
+failures exit 1. The blocking client polls every 100 ms for the first second, then every 500 ms.
+
+`--no-block` returns immediately with `{"id":"<pick-id>"}`. Use
+`agtermctl pick result <pick-id> [--window W]` for a one-shot read; it prints the same bare result JSON,
+including `{"result":"pending"}`, and exits 1 while pending. Use
+`agtermctl pick cancel <pick-id> [--window W]` to cancel it. Result and cancel require the exact picker
+id, and a wrong id returns `unknown pick: <id>`.
+
+Read the live picker id from the tree's top-level `pickPending` field. It is omitted after selection,
+custom input, cancellation, or window closure. Closing the picker, closing its window, ⌘W, and app
+termination resolve it as cancelled so a blocking caller can finish. A terminal result remains readable
+until the next picker opens in that window.
 
 ## quick
 
