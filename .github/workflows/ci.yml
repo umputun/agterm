@@ -124,24 +124,6 @@ jobs:
         run: scripts/build.sh
       - name: Application-hosted unit tests
         run: scripts/test-app.sh
-      # the hosted host has died mid-suite on this runner while passing locally; the crash report and
-      # the result bundle are the only records of why, and both live in paths the job otherwise discards.
-      - name: Collect hosted-test crash evidence
-        if: failure()
-        run: |
-          mkdir -p /tmp/crash-evidence
-          cp -R ~/.local/state/ghostty/crash /tmp/crash-evidence/ghostty-crash 2>/dev/null || true
-          cp -R ~/Library/Logs/DiagnosticReports /tmp/crash-evidence/diagnostic-reports 2>/dev/null || true
-          cp -R build/DerivedData/Logs/Test/*.xcresult /tmp/crash-evidence/ 2>/dev/null || true
-          ls -laR /tmp/crash-evidence | head -50
-      - name: Upload hosted-test crash evidence
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: hosted-test-crash-evidence
-          path: /tmp/crash-evidence
-          retention-days: 5
-          if-no-files-found: warn
 
   cookbook:
     name: Cookbook checks
