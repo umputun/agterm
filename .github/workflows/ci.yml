@@ -27,6 +27,11 @@ jobs:
               - "**/*.swift"
               - "agtermCore/**"
               - "agterm/**"
+              # the agent skill and its plugin manifests: SkillInstallTests reads
+              # them, so a skill- or manifest-only change must still run the suite
+              - "plugins/**"
+              - ".claude-plugin/**"
+              - ".agents/**"
               - "project.yml"
               - "scripts/**"
               - ".swiftlint.yml"

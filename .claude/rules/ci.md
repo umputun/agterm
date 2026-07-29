@@ -6,7 +6,9 @@ paths:
 ## CI (`ci.yml`)
 
 - **`ci.yml` runs on push/PR to `master`, gated by a `dorny/paths-filter`.**
-  Swift-impacting paths include `**/*.swift`, `agtermCore/**`, `agterm/**`, `project.yml`, `scripts/**`, the root/test SwiftLint configs, and `ci.yml`.
+  Swift-impacting paths include `**/*.swift`, `agtermCore/**`, `agterm/**`, `plugins/**`, `.claude-plugin/**`, `.agents/**`, `project.yml`, `scripts/**`, the root/test SwiftLint configs, and `ci.yml`.
+  The three plugin entries are load-bearing and easy to lose: the agent skill and its Claude/Codex manifests live OUTSIDE `agterm/`, and `SkillInstallTests` asserts the bundled `SKILL.md` command count plus that every manifest path resolves and the three versions agree.
+  Without them a skill- or manifest-only commit — which is exactly what `release.sh`'s version-bump preflight produces — matches no filter entry and skips all four Swift jobs, so a stale command count or a disagreeing manifest version ships green.
   The `test` job runs `swift test --enable-code-coverage` in `agtermCore`, exports lcov, and uploads it as an artifact.
   The `coverage` job is the only Swift-gated `ubuntu-latest` job (the `cookbook` job below is the other Linux one)
   and downloads that artifact for a best-effort Coveralls upload.
