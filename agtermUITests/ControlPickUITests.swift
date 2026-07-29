@@ -26,9 +26,37 @@ final class ControlPickUITests: ControlAPITestCase {
         XCTAssertEqual(result["result"] as? String, "picked")
         XCTAssertEqual(result["id"] as? String, "beta")
         XCTAssertEqual(result["label"] as? String, "Beta")
-        XCTAssertEqual(result["index"] as? Int, 1, "the result index should preserve the input order")
+        XCTAssertEqual(result["index"] as? Int, 1, "clicking the second unfiltered row should report its input index")
         XCTAssertTrue(pickPalette.waitForNonExistence(timeout: 10), "selection should dismiss the picker")
         XCTAssertNil(try treePickPending(), "tree should omit pickPending after resolution")
+    }
+
+    /// With an empty query the palette skips ranking entirely, so filtered order equals input order and a
+    /// click there cannot tell the two apart. Typing a query that drops the earlier rows is what separates
+    /// them: the match is the only row on screen, at row position 0, while its caller index is 2.
+    func testFilteredSelectionReportsCallerIndexNotRowPosition() throws {
+        let pickID = try resultID(openPick([
+            ["id": "alpha", "label": "Alpha"],
+            ["id": "beta", "label": "Beta"],
+            ["id": "gamma", "label": "Gamma"],
+        ]))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10), "pick.open should present the picker")
+
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the picker query field should exist")
+        field.click()
+        field.typeText("gam")
+        XCTAssertTrue(paletteRow("gamma").waitForExistence(timeout: 5), "the query should keep the matching row")
+        XCTAssertTrue(paletteRow("alpha").waitForNonExistence(timeout: 5),
+                      "the query should drop the non-matching rows, leaving the match alone on screen")
+
+        paletteRow("gamma").click()
+
+        let result = try awaitTerminalResult(id: pickID)
+        XCTAssertEqual(result["result"] as? String, "picked")
+        XCTAssertEqual(result["id"] as? String, "gamma")
+        XCTAssertEqual(result["index"] as? Int, 2,
+                       "the index must be the caller's array position, not the filtered row position 0")
     }
 
     func testPickCancelReportsCancelled() throws {
@@ -256,8 +284,13 @@ final class ControlPickUITests: ControlAPITestCase {
         app.descendants(matching: .any).matching(identifier: "pick-palette").firstMatch
     }
 
+    /// `PaletteRow` carries its identifier on the row, and SwiftUI propagates it to every text child, so a
+    /// row with a subtitle answers to it twice. The title child is never hittable — the row itself owns the
+    /// tap target — so take the first hittable match and fall back to `firstMatch` for existence waits,
+    /// which run before any element exists.
     private func paletteRow(_ id: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(identifier: "palette-item-\(id)").firstMatch
+        let matches = app.descendants(matching: .any).matching(identifier: "palette-item-\(id)")
+        return matches.allElementsBoundByIndex.first { $0.isHittable } ?? matches.firstMatch
     }
 
     private func openPick(

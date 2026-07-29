@@ -426,6 +426,41 @@ struct SocketClientTests {
         #expect(errors == ["error: pick.result missing result"])
     }
 
+    @Test func pickBlockCancelsThePickerItCanNoLongerWaitOn() throws {
+        let command = try Pick.Open.parse([])
+        var sent: [ControlRequest] = []
+        let failingPoll: (ControlRequest) throws -> ControlResponse = { request in
+            sent.append(request)
+            switch request.cmd {
+            case .pickOpen: return ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
+            case .pickResult: return ControlResponse(ok: false, error: "boom")
+            default: return ControlResponse(ok: true)
+            }
+        }
+
+        #expect(throws: ExitCode.failure) {
+            try command.execute(input: Data("One\n".utf8), send: failingPoll,
+                                sleep: { _ in }, output: { _ in }, errorOutput: { _ in })
+        }
+        #expect(sent.map(\.cmd) == [.pickOpen, .pickResult, .pickCancel],
+                "a poll that cannot continue must dismiss the picker it opened")
+        #expect(sent.last?.target == "pick-1")
+
+        sent.removeAll()
+        #expect(throws: ExitCode.failure) {
+            try command.execute(
+                input: Data("One\n".utf8),
+                send: { request in
+                    guard request.cmd != .pickCancel else { throw SocketClientError("socket gone") }
+                    return try failingPoll(request)
+                },
+                sleep: { _ in }, output: { _ in }, errorOutput: { _ in }
+            )
+        }
+        #expect(sent.map(\.cmd) == [.pickOpen, .pickResult],
+                "a failing cancel is best effort and must not replace the poll failure")
+    }
+
     @Test func pickBlockRoutesJSONServerErrorThroughInjectedStdout() throws {
         let command = try Pick.Open.parse(["--json"])
         var output: [String] = []

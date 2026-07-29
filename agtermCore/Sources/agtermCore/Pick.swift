@@ -16,28 +16,37 @@ public struct PendingPick: Equatable, Sendable {
     }
 }
 
-/// Owns the pending picker and most recent answer for one window.
+/// Owns the pending picker and the recently answered pickers for one window.
 @Observable
 @MainActor
 public final class PickController {
+    /// How many terminal results stay readable per window. A blocking client polls every 500ms, so its
+    /// answer survives any plausible number of pickers opened in that window before the poll lands;
+    /// keying by pick id rather than one slot is what keeps `open` from discarding an unread answer.
+    static let retainedResultLimit = 8
+
     public private(set) var pending: PendingPick?
-    public private(set) var lastResult: ResolvedPick?
+    /// Terminal results in resolution order, oldest first, capped at `retainedResultLimit`.
+    public private(set) var recentResults: [ResolvedPick] = []
 
     public init() {}
 
-    /// Opens `pick` unless another picker is already pending.
+    /// Opens `pick` unless another picker is already pending. Prior results stay readable by their own id.
     @discardableResult
     public func open(_ pick: PendingPick) -> Bool {
         guard pending == nil else { return false }
         pending = pick
-        lastResult = nil
         return true
     }
 
-    /// Completes the pending picker with `outcome`.
+    /// Completes the pending picker with `outcome`, keeping it readable until it ages out.
     public func resolve(_ outcome: ControlPickResult) {
         guard let pending else { return }
-        lastResult = ResolvedPick(id: pending.id, result: outcome)
+        recentResults.removeAll { $0.id == pending.id }
+        recentResults.append(ResolvedPick(id: pending.id, result: outcome))
+        if recentResults.count > Self.retainedResultLimit {
+            recentResults.removeFirst(recentResults.count - Self.retainedResultLimit)
+        }
         self.pending = nil
     }
 
@@ -51,8 +60,7 @@ public final class PickController {
         if pending?.id == id {
             return ControlPickResult(result: .pending)
         }
-        guard lastResult?.id == id else { return nil }
-        return lastResult?.result
+        return recentResults.last { $0.id == id }?.result
     }
 }
 
@@ -60,8 +68,13 @@ public final class PickController {
 @MainActor
 public final class PickRegistry {
     public static let shared = PickRegistry()
+    /// How many results outlive their window across the whole app. Nothing frees an entry for a window
+    /// that never reopens, so scripted window churn would otherwise grow this without bound.
+    static let retainedResultLimit = 32
+
     private var controllers: [WindowInfo.ID: PickController] = [:]
-    private var retainedResults: [WindowInfo.ID: ResolvedPick] = [:]
+    /// Results whose window is gone, oldest first, capped at `retainedResultLimit`.
+    private var retainedResults: [(windowID: WindowInfo.ID, pick: ResolvedPick)] = []
 
     private init() {}
 
@@ -70,12 +83,13 @@ public final class PickRegistry {
     }
 
     /// Remove a window's live controller, cancelling a pending pick first and retaining its terminal
-    /// result so a control client whose next poll lands after window teardown can still read it.
+    /// results so a control client whose next poll lands after window teardown can still read them.
     public func unregister(_ id: WindowInfo.ID) {
         guard let controller = controllers.removeValue(forKey: id) else { return }
         controller.cancel()
-        if let result = controller.lastResult {
-            retainedResults[id] = result
+        retainedResults.append(contentsOf: controller.recentResults.map { (windowID: id, pick: $0) })
+        if retainedResults.count > Self.retainedResultLimit {
+            retainedResults.removeFirst(retainedResults.count - Self.retainedResultLimit)
         }
     }
 
@@ -91,15 +105,9 @@ public final class PickRegistry {
             .map { (windowID: $0.key, controller: $0.value) }
     }
 
-    /// The last result retained when a window unregistered, matched by the globally unique pick id.
+    /// A result retained when its window unregistered, matched by the globally unique pick id.
     public func retainedResult(for pickID: String) -> (windowID: WindowInfo.ID, result: ControlPickResult)? {
-        retainedResults.first { $0.value.id == pickID }
-            .map { (windowID: $0.key, result: $0.value.result) }
-    }
-
-    /// A successfully opened next pick replaces the prior retained result for that window, mirroring
-    /// `PickController.open` clearing its own `lastResult`.
-    public func clearRetainedResult(for id: WindowInfo.ID) {
-        retainedResults[id] = nil
+        retainedResults.last { $0.pick.id == pickID }
+            .map { (windowID: $0.windowID, result: $0.pick.result) }
     }
 }

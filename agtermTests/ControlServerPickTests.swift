@@ -41,7 +41,6 @@ final class ControlServerPickTests: XCTestCase {
         await MainActor.run {
             for id in registeredPickIDs {
                 PickRegistry.shared.unregister(id)
-                PickRegistry.shared.clearRetainedResult(for: id)
             }
             for id in registeredZoomIDs {
                 TerminalZoomRegistry.shared.unregister(id)
@@ -177,7 +176,7 @@ final class ControlServerPickTests: XCTestCase {
                 result: ControlResult(pick: ControlPickResult(result: .cancelled))
             )
         )
-        let resultBeforeUnknownRequests = controller.lastResult
+        let resultBeforeUnknownRequests = controller.recentResults
         XCTAssertEqual(
             server.pickResult("unknown", window: nil),
             ControlResponse(ok: false, error: "unknown pick: unknown")
@@ -187,9 +186,9 @@ final class ControlServerPickTests: XCTestCase {
             ControlResponse(ok: false, error: "unknown pick: unknown")
         )
         XCTAssertEqual(
-            controller.lastResult,
+            controller.recentResults,
             resultBeforeUnknownRequests,
-            "unknown result/cancel requests must not mutate the retained picker result"
+            "unknown result/cancel requests must not mutate the retained picker results"
         )
     }
 
@@ -338,7 +337,7 @@ final class ControlServerPickTests: XCTestCase {
         )
     }
 
-    func testNextOpenClearsClosedWindowRetainedResult() throws {
+    func testNextOpenKeepsClosedWindowRetainedResultReadable() throws {
         let windowID = try XCTUnwrap(library.activeWindowID)
         let firstController = registerPick(windowID)
         let first = makePick("old-closed-pick")
@@ -355,7 +354,33 @@ final class ControlServerPickTests: XCTestCase {
         XCTAssertEqual(replacement.pending, next)
         XCTAssertEqual(
             server.pickResult(first.id, window: nil),
-            ControlResponse(ok: false, error: "unknown pick: \(first.id)")
+            ControlResponse(ok: true, result: ControlResult(pick: ControlPickResult(result: .cancelled))),
+            "a later pick reusing that window must not erase an answer its own poller has not read yet"
+        )
+    }
+
+    func testResolvedPickStaysReadableAfterTheNextPickOpens() throws {
+        let windowID = try XCTUnwrap(library.activeWindowID)
+        let controller = registerPick(windowID)
+        let first = makePick("answered")
+        XCTAssertTrue(controller.open(first))
+        let answer = ControlPickResult(result: .picked, id: "one", label: "One", index: 0)
+        controller.resolve(answer)
+
+        let second = makePick("opened-before-the-poll-landed")
+        XCTAssertEqual(
+            server.openPick(second, window: nil, follow: false),
+            ControlResponse(ok: true, result: ControlResult(id: second.id))
+        )
+
+        XCTAssertEqual(
+            server.pickResult(first.id, window: nil),
+            ControlResponse(ok: true, result: ControlResult(pick: answer)),
+            "a blocking caller must still read its own answer when another pick opened before its poll landed"
+        )
+        XCTAssertEqual(
+            server.pickResult(second.id, window: nil),
+            ControlResponse(ok: true, result: ControlResult(pick: ControlPickResult(result: .pending)))
         )
     }
 

@@ -16,7 +16,7 @@ struct PickTests {
         controller.resolve(outcome)
 
         #expect(controller.pending == nil)
-        #expect(controller.lastResult == ResolvedPick(id: pick.id, result: outcome))
+        #expect(controller.recentResults == [ResolvedPick(id: pick.id, result: outcome)])
         #expect(controller.result(for: pick.id) == outcome)
     }
 
@@ -49,27 +49,39 @@ struct PickTests {
         #expect(controller.result(for: "unknown") == nil)
     }
 
-    @Test func nextOpenReplacesLastResult() {
+    @Test func nextOpenKeepsPriorResultReadableForItsOwnPoller() {
         let controller = PickController()
         let first = makePick(id: "first")
         let firstResult = ControlPickResult(result: .custom, query: "typed")
         #expect(controller.open(first))
         controller.resolve(firstResult)
-        #expect(controller.lastResult == ResolvedPick(id: first.id, result: firstResult))
 
         let second = makePick(id: "second")
         #expect(controller.open(second))
 
-        #expect(controller.lastResult == nil)
-        #expect(controller.result(for: first.id) == nil)
+        #expect(controller.result(for: first.id) == firstResult)
         #expect(controller.result(for: second.id) == ControlPickResult(result: .pending))
+    }
+
+    @Test func retainedResultsStopAtTheLimitDroppingTheOldest() {
+        let controller = PickController()
+        let total = PickController.retainedResultLimit + 2
+        for index in 0..<total {
+            #expect(controller.open(makePick(id: "pick-\(index)")))
+            controller.resolve(ControlPickResult(result: .picked, id: "one", label: "One", index: index))
+        }
+
+        #expect(controller.recentResults.count == PickController.retainedResultLimit)
+        #expect(controller.result(for: "pick-0") == nil)
+        #expect(controller.result(for: "pick-1") == nil)
+        #expect(controller.result(for: "pick-2")?.index == 2)
+        #expect(controller.result(for: "pick-\(total - 1)")?.index == total - 1)
     }
 
     @Test func registryRegistersLooksUpAndUnregisters() {
         let registry = PickRegistry.shared
         let id = UUID()
         let controller = PickController()
-        defer { registry.clearRetainedResult(for: id) }
         #expect(registry.controller(for: id) == nil)
 
         registry.register(id, controller: controller)
@@ -79,15 +91,12 @@ struct PickTests {
         #expect(registry.controller(for: id) == nil)
     }
 
-    @Test func registryUnregisterCancelsAndRetainsResultUntilNextOpen() {
+    @Test func registryUnregisterCancelsAndRetainsResultForItsPollers() {
         let registry = PickRegistry.shared
         let id = UUID()
         let controller = PickController()
         let pick = makePick(id: "closed-window")
-        defer {
-            registry.unregister(id)
-            registry.clearRetainedResult(for: id)
-        }
+        defer { registry.unregister(id) }
         registry.register(id, controller: controller)
         #expect(controller.open(pick))
 
@@ -96,9 +105,22 @@ struct PickTests {
         #expect(registry.controller(for: id) == nil)
         #expect(registry.retainedResult(for: pick.id)?.windowID == id)
         #expect(registry.retainedResult(for: pick.id)?.result == ControlPickResult(result: .cancelled))
+    }
 
-        registry.clearRetainedResult(for: id)
-        #expect(registry.retainedResult(for: pick.id) == nil)
+    @Test func registryRetainedResultsStopAtTheLimitDroppingTheOldest() {
+        let registry = PickRegistry.shared
+        let marker = UUID().uuidString
+        let total = PickRegistry.retainedResultLimit + 1
+        for index in 0..<total {
+            let id = UUID()
+            let controller = PickController()
+            registry.register(id, controller: controller)
+            #expect(controller.open(makePick(id: "\(marker)-\(index)")))
+            registry.unregister(id)
+        }
+
+        #expect(registry.retainedResult(for: "\(marker)-0") == nil)
+        #expect(registry.retainedResult(for: "\(marker)-\(total - 1)") != nil)
     }
 
     @Test func registryLookupWithNilIDReturnsNil() {
@@ -122,7 +144,6 @@ struct PickTests {
 
         #expect(PickRegistry.shared.retainedResult(for: pick.id)?.result ==
             ControlPickResult(result: .cancelled))
-        PickRegistry.shared.clearRetainedResult(for: id)
     }
 
     private func makePick(id: String) -> PendingPick {

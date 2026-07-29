@@ -994,7 +994,8 @@ paths:
   `WindowContentView` renders a pending pick through `CommandPalette(items:)`, and only one picker is mounted per window.
   Selection, custom input, Esc, ⌘W, and window close resolve the request, with lifecycle exits mapping to `cancelled`.
   App termination cancels picker state before socket shutdown, but a polling client can race process exit and receive a transport failure rather than the terminal result.
-  `PickRegistry.unregister` retains the cancellation long enough for a blocking caller whose next poll follows window teardown; the next successful open in that window clears the retained result, including after permanent window deletion.
+  `PickController` keeps terminal results keyed by pick id (the 8 most recent), so a later picker in that window never erases an answer whose blocking caller has not polled it yet — the poll interval is 500 ms, which is long enough for the next `pick.open` to land.
+  `PickRegistry.unregister` moves a closed window's results into a 32-entry app-wide retention, so a poll following window teardown — including permanent window deletion — still reads them; both stores evict oldest-first and nothing else frees them.
   The CLI group defaults to open, sniffs stdin as a JSON array when its first non-whitespace byte is `[`, and otherwise maps nonblank lines to items whose id equals the label.
   Blocking `agtermctl pick` polls `pick.result` every 100 ms for the first second and every 500 ms afterward, prints the bare result JSON, and exits 0 for `picked`/`custom`, 2 for `cancelled`, or 1 for failures.
   `--no-block` prints `{"id":"…"}`, while `pick result ID` and `pick cancel ID` expose the later one-shot operations with the same `--window` scope.

@@ -812,7 +812,9 @@ struct WindowContentView: View {
 
     /// A control picker is per-window rather than frontmost-global, so a caller may present one in a
     /// background window without duplicating it elsewhere. Selection preserves the caller's original
-    /// item index even though fuzzy filtering reorders the visible rows.
+    /// item index even though fuzzy filtering reorders the visible rows. Keyed by the pending id so one
+    /// picker replacing another in the same view update gets fresh palette state rather than keeping the
+    /// previous picker's rows, whose select closures capture the previous picker's items.
     @ViewBuilder private var pickPaletteOverlay: some View {
         if let pending = pick.pending {
             CommandPalette(
@@ -835,6 +837,7 @@ struct WindowContentView: View {
                 },
                 onDismiss: { pick.cancel() }
             )
+            .id(pending.id)
         }
     }
 

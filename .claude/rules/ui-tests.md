@@ -143,6 +143,18 @@ paths:
   just `xcodebuild test …` (builds then tests).
   Read the real reason from the xcresult (`xcrun xcresulttool get test-results tests --path <xcresult>`,
   find the `Failure Message` node) rather than trusting the "0 tests / crash" summary.
+- **A palette row answers to its identifier more than once, and the match you get first cannot be clicked.**
+  `PaletteRow` sets `palette-item-<id>` on the row, and SwiftUI propagates an identifier to every text
+  child that has none of its own, so a row WITH a subtitle exposes two matching elements.
+  `matching(identifier:).firstMatch` returns the title `StaticText`, which is never hittable — the row owns
+  the tap target, so the AX hit test at the title's center does not resolve to the title — while the
+  subtitle child right below it IS.
+  A row with no subtitle collapses to the full-width row element and clicks fine, which is what makes this
+  look intermittent: the same helper works until an item carries a subtitle.
+  Resolve a row with the first HITTABLE match (`allElementsBoundByIndex.first { $0.isHittable }`), falling
+  back to `firstMatch` for the existence waits that run before anything exists — see `ControlPickUITests.paletteRow`.
+  The symptom is a fast `Not hittable: StaticText …` failure, NOT the slow synthesize-event timeout that
+  means occlusion; it reproduces with HazeOver quit and on a clean checkout.
 - **Driving a Picker in XCUITest depends on its style.**
   A `.segmented` Picker exposes each option as a hittable descendant by label — match
   `picker.descendants(matching: .any).matching(label == "X").firstMatch` and `.click()` it directly.

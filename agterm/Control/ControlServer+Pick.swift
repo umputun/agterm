@@ -8,11 +8,10 @@ extension ControlServer {
             guard controller.open(pick) else {
                 return ControlResponse(ok: false, error: "pick already pending")
             }
-            PickRegistry.shared.clearRetainedResult(for: windowID)
 
             if follow {
                 WindowRegistry.shared.raise(windowID)
-                selectPickWindow(windowID)
+                takeFrontmost(windowID)
             }
             if library.activeWindowID == windowID {
                 actions.palette?.close()
@@ -92,18 +91,6 @@ extension ControlServer {
                 return ControlResponse(ok: false, error: "no pick surface")
             }
             return body(controller, windowID)
-        }
-    }
-
-    /// Make a followed picker window the logical frontmost target as well as raising its live NSWindow.
-    /// AppKit does not publish `didBecomeKey` while the app is inactive, so control-driven presentation
-    /// must mirror the `window.select` bookkeeping synchronously.
-    private func selectPickWindow(_ windowID: WindowInfo.ID) {
-        guard library.frontmostWindowID != windowID else { return }
-        library.frontmostWindowID = windowID
-        library.saveIndex()
-        if GhosttyApp.shared.autoHideSidebarInactiveWindows {
-            library.applyInactiveWindowSidebarHiding()
         }
     }
 }

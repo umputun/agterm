@@ -224,7 +224,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var follow: Bool?
     /// The finished caller-provided choices for `pick.open`.
     public var items: [ControlPickItem]?
-    /// Optional text shown above the query field for `pick.open`.
+    /// Optional placeholder text for `pick.open`'s query field.
     public var prompt: String?
     /// Whether `pick.open` accepts the current query as a custom result.
     public var allowCustom: Bool?

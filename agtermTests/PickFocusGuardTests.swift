@@ -26,7 +26,6 @@ final class PickFocusGuardTests: XCTestCase {
         await MainActor.run {
             for id in registeredWindowIDs {
                 PickRegistry.shared.unregister(id)
-                PickRegistry.shared.clearRetainedResult(for: id)
             }
             for (id, window) in registeredWindows {
                 WindowRegistry.shared.unregister(id)

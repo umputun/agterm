@@ -372,10 +372,12 @@ struct Pick: ParsableCommand {
                 ))
                 guard response.ok else {
                     Self.writeResponse(response, json: options.json, output: output, errorOutput: errorOutput)
+                    abandon(pickID, send: send)
                     throw ExitCode.failure
                 }
                 guard let result = response.result?.pick else {
                     errorOutput("error: pick.result missing result")
+                    abandon(pickID, send: send)
                     throw ExitCode.failure
                 }
                 if result.result == .pending {
@@ -389,6 +391,13 @@ struct Pick: ParsableCommand {
                 if code.rawValue != 0 { throw code }
                 return
             }
+        }
+
+        /// Dismiss the picker this command opened but can no longer wait on, so the window is not left
+        /// holding a picker whose owner is gone and the next `pick.open` there is not refused. Best effort:
+        /// the poll already failed, so a failing cancel adds nothing to report.
+        private func abandon(_ pickID: String, send: (ControlRequest) throws -> ControlResponse) {
+            _ = try? send(ControlRequest(cmd: .pickCancel, target: pickID))
         }
 
         private static func writeResponse(

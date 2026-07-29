@@ -125,6 +125,9 @@ public final class DashboardController {
         appliedFontSize = size
     }
 
+    /// requestFocus bumps `focusRevision` so the dashboard's AppKit key catcher reclaims first responder
+    /// once an overlay above it (a control picker) resolves. Called by `restoreFocusAfterPick`; the value
+    /// itself carries no meaning beyond changing.
     public func requestFocus() {
         focusRevision &+= 1
     }

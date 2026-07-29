@@ -688,8 +688,9 @@ Read the live picker id from the tree's top-level `pickPending` field. It is omi
 custom input, cancellation, or window closure. Closing the picker, closing its window, and ⌘W resolve it
 as cancelled. App termination cancels in-memory picker state before stopping the socket, but a client
 whose next poll races process shutdown may observe a transport failure instead of the final cancellation.
-A close-retained terminal result remains readable until the next picker opens in that window, including
-after permanent window deletion.
+A terminal result stays readable by its own id after the next picker opens in that window, and after the
+window closes — including permanent window deletion — so a blocking caller always reads back the answer
+it waited for. Results age out oldest-first: the 8 most recent per open window, and 32 across closed ones.
 
 ## quick
 
