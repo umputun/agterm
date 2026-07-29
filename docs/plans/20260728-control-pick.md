@@ -317,12 +317,12 @@ Exit codes: **0** got an answer (`picked` or `custom`), **1** command failed, **
 **Files:**
 - none (environment only)
 
-- [ ] `git fetch origin master` so the worktree forks the CURRENT remote tip, not a stale local ref
-- [ ] create the worktree via Claude Code's native support ("work in a worktree" / `EnterWorktree`), never a manual `git worktree add`
-- [ ] symlink `GhosttyKit.xcframework` from the main worktree
-- [ ] symlink `agterm/Resources/ghostty` and `agterm/Resources/terminfo` with ABSOLUTE targets
-- [ ] run `scripts/setup.sh` and confirm it prints `GhosttyKit and resources already present` (it must NOT rebuild libghostty)
-- [ ] `make build` succeeds in the worktree before any code changes
+- [x] `git fetch origin master` so the worktree forks the CURRENT remote tip, not a stale local ref
+- [x] create the worktree via Claude Code's native support ("work in a worktree" / `EnterWorktree`), never a manual `git worktree add` — Codex equivalent used an isolated Git worktree because it has no native `EnterWorktree` action
+- [x] symlink `GhosttyKit.xcframework` from the main worktree
+- [x] symlink `agterm/Resources/ghostty` and `agterm/Resources/terminfo` with ABSOLUTE targets
+- [x] run `scripts/setup.sh` and confirm it prints `GhosttyKit and resources already present` (it must NOT rebuild libghostty)
+- [x] `make build` succeeds in the worktree before any code changes
 
 ### Task 2: Pick wire types, protocol fields, and switch routing
 
