@@ -14,7 +14,11 @@ AGTERMCTL="${AGTERMCTL:-agtermctl}"
 # fzf, and a homebrew jq, are not on the app's launchd PATH — which a custom command and an overlay
 # both inherit. Both standard homebrew prefixes are prepended; set AGT_BIN_PATH to a colon-separated
 # list of your own if the binaries live elsewhere.
-PATH="${AGT_BIN_PATH:-/opt/homebrew/bin:/usr/local/bin}:$PATH"
+#
+# Resolved into a variable rather than used inline, because the launcher has to hand both this and
+# AGTERMCTL to the overlay explicitly — see the prefix on the overlay command at the bottom.
+AGT_BIN_PATH="${AGT_BIN_PATH:-/opt/homebrew/bin:/usr/local/bin}"
+PATH="$AGT_BIN_PATH:$PATH"
 export PATH
 
 # agtermctl resolves its socket from --socket, else AGTERM_STATE_DIR, else the app-support default.
@@ -91,5 +95,11 @@ self=$(cd "$(dirname "$0")" && pwd)/$(basename "$0")
 # space or a quote cannot break out of the quoting. Same helper as the bundled show-image.sh.
 sq() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 
-agt session overlay open "/bin/sh $(sq "$self") --pick" \
+# AGTERMCTL and AGT_BIN_PATH are carried across as assignments PREFIXED onto the overlay command,
+# not exported. The overlay's shell is spawned by the app from its own environment plus the AGTERM_*
+# set, so nothing this process exports reaches it, and a prefix on the keymap line reaches only the
+# launcher — leaving the half that actually runs fzf, jq and the tree call on the defaults. agterm
+# runs the overlay command through `eval`, so a leading `VAR=value` is honored.
+agt session overlay open \
+    "AGTERMCTL=$(sq "$AGTERMCTL") AGT_BIN_PATH=$(sq "$AGT_BIN_PATH") /bin/sh $(sq "$self") --pick" \
     --target "${AGT_SESSION_ID:-active}" --follow --size-percent "${AGT_OVERLAY_SIZE:-60}"
