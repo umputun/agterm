@@ -367,16 +367,21 @@ Exit codes: **0** got an answer (`picked` or `custom`), **1** command failed, **
 - Modify: `agtermCore/Tests/agtermCoreTests/MockControlActions.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/ControlDispatcherPickTests.swift`
 
-- [ ] widen `ControlDispatcher.actions` from `private` to internal (`ControlDispatcher.swift:143`) — `private` is FILE-scoped in Swift, so a `+Pick.swift` extension cannot reach it and the build fails
-- [ ] add `openPick`, `pickResult`, and `cancelPick` to the `ControlActions` protocol with doc comments naming what the host owns (registry lookup, window resolution, presentation)
-- [ ] create `ControlDispatcher+Pick.swift` holding `dispatchPickCommand`, owning all item validation, the missing-target checks, error strings, and the response shape
-- [ ] replace the three `return nil` stubs from task 2 with real routing to the new arm
-- [ ] add the three methods and their `Call` cases to `MockControlActions` — it is `final class MockControlActions: ControlActions` and will not compile until every requirement is satisfied
-- [ ] write tests for every validation rejection: empty items, empty label, duplicate ids, over `maxItems`, control characters, missing target on result/cancel
-- [ ] write tests asserting a rejection mutates nothing (the mock records no host call)
-- [ ] write tests for routing and for the success response shape of each command
-- [ ] verify `ControlDispatcher.swift` is still under 1000 lines
-- [ ] gates: `swift test`, `make lint`, `make build` — all must pass before task 5
+- [x] widen `ControlDispatcher.actions` from `private` to internal (`ControlDispatcher.swift:143`) — `private` is FILE-scoped in Swift, so a `+Pick.swift` extension cannot reach it and the build fails
+- [x] add `openPick`, `pickResult`, and `cancelPick` to the `ControlActions` protocol with doc comments naming what the host owns (registry lookup, window resolution, presentation)
+- [x] create `ControlDispatcher+Pick.swift` holding `dispatchPickCommand`, owning all item validation, the missing-target checks, error strings, and the response shape
+- [x] replace the three `return nil` stubs from task 2 with real routing to the new arm
+- [x] add the three methods and their `Call` cases to `MockControlActions` — it is `final class MockControlActions: ControlActions` and will not compile until every requirement is satisfied
+- [x] write tests for every validation rejection: empty items, empty label, duplicate ids, over `maxItems`, control characters, missing target on result/cancel
+- [x] write tests asserting a rejection mutates nothing (the mock records no host call)
+- [x] write tests for routing and for the success response shape of each command
+- [x] verify `ControlDispatcher.swift` is still under 1000 lines
+- [x] gates: `swift test`, `make lint`, `make build` — all must pass before task 5
+
+⚠️ Adding the three protocol requirements made the existing app-side `ControlServer` conformance fail
+before task 5, contradicting the per-task build gate. `ControlDispatcher+Pick.swift` therefore supplies
+explicit-failure `no pick surface` defaults for the intermediate state. Task 5 must add concrete
+`ControlServer` witnesses for all three methods; the mock already uses explicit witnesses.
 
 ### Task 5: App-side pick host
 

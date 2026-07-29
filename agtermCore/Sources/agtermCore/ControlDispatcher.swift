@@ -82,6 +82,12 @@ public protocol ControlActions {
     func windowZoom(_ target: String?) -> ControlResponse
     func windowFullscreen(_ target: String?) -> ControlResponse
     func windowMinimize(_ target: String?, mode: ControlToggleMode) async -> ControlResponse
+    /// Open a native picker. The host owns window resolution, registry lookup, and presentation.
+    func openPick(_ pick: PendingPick, window: String?, follow: Bool) -> ControlResponse
+    /// Read a native picker's current result. The host owns window resolution and registry lookup.
+    func pickResult(_ target: String, window: String?) -> ControlResponse
+    /// Cancel a native picker. The host owns window resolution, registry lookup, and dismissal.
+    func cancelPick(_ target: String, window: String?) -> ControlResponse
     func clearRestoreCommands() -> ControlResponse
 }
 
@@ -140,7 +146,7 @@ public struct ControlSessionTextOptions: Equatable, Sendable {
 /// response shape; host actions keep target resolution, AppKit state, and terminal-surface side effects.
 @MainActor
 public struct ControlDispatcher {
-    private let actions: any ControlActions
+    let actions: any ControlActions
 
     public init(actions: any ControlActions) {
         self.actions = actions
@@ -178,8 +184,7 @@ public struct ControlDispatcher {
             // UI-test-only seam handled app-side in `ControlServer` (needs AppKit + `ContentView.isUITestLaunch`).
             return nil
         case .pickOpen, .pickResult, .pickCancel:
-            // Picker state is window-scoped and is handled app-side once the picker registry exists.
-            return nil
+            return dispatchPickCommand(request)
         }
     }
 

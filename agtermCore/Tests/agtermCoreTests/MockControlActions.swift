@@ -75,6 +75,9 @@ final class MockControlActions: ControlActions {
         case windowZoom(target: String?)
         case windowFullscreen(target: String?)
         case windowMinimize(target: String?, mode: ControlToggleMode)
+        case pickOpen(PendingPick, window: String?, follow: Bool)
+        case pickResult(target: String, window: String?)
+        case pickCancel(target: String, window: String?)
         case restoreClear
     }
 
@@ -135,6 +138,9 @@ final class MockControlActions: ControlActions {
     var nextWindowZoomResponse = ControlResponse(ok: true)
     var nextWindowFullscreenResponse = ControlResponse(ok: true)
     var nextWindowMinimizeResponse = ControlResponse(ok: true)
+    var nextPickOpenResponse = ControlResponse(ok: true)
+    var nextPickResultResponse = ControlResponse(ok: true)
+    var nextPickCancelResponse = ControlResponse(ok: true)
     var nextRestoreClearResponse = ControlResponse(ok: true)
     var nextSessionRestoreResponse = ControlResponse(ok: true)
 
@@ -487,6 +493,21 @@ final class MockControlActions: ControlActions {
     func windowMinimize(_ target: String?, mode: ControlToggleMode) async -> ControlResponse {
         calls.append(.windowMinimize(target: target, mode: mode))
         return nextWindowMinimizeResponse
+    }
+
+    func openPick(_ pick: PendingPick, window: String?, follow: Bool) -> ControlResponse {
+        calls.append(.pickOpen(pick, window: window, follow: follow))
+        return nextPickOpenResponse
+    }
+
+    func pickResult(_ target: String, window: String?) -> ControlResponse {
+        calls.append(.pickResult(target: target, window: window))
+        return nextPickResultResponse
+    }
+
+    func cancelPick(_ target: String, window: String?) -> ControlResponse {
+        calls.append(.pickCancel(target: target, window: window))
+        return nextPickCancelResponse
     }
 
     func clearRestoreCommands() -> ControlResponse {
