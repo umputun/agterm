@@ -124,19 +124,8 @@ final class GhosttyApp {
     let callbacks = GhosttyCallbacks()
     private var resourcesDir: String?
 
-    /// True in an application-hosted unit-test run. XCTest sets `XCTestConfigurationFilePath` in the host
-    /// process it injects the test bundle into; an XCUITest launches the app fresh WITHOUT it, so the
-    /// end-to-end suites still exercise the real libghostty app.
-    private static var isUnitTestHost: Bool {
-        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
-    }
-
     private init() {
         resolveResources()
-        // hosted unit tests exercise the mirrored settings and the AppKit chrome, never a terminal
-        // surface. Booting libghostty for them buys nothing and is not survivable on a CI runner, so the
-        // settings mirrors below stay usable while `app` remains nil.
-        guard !Self.isUnitTestHost else { return }
         guard ghostty_init(UInt(CommandLine.argc), CommandLine.unsafeArgv) == GHOSTTY_SUCCESS else {
             logger.error("ghostty_init failed")
             return

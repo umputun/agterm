@@ -387,7 +387,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // window (or a re-render that briefly drops the surviving NSWindow) can leave a momentary
         // zero-window state while the library still has an open window, and quitting there would kill
         // the app (and the control server) mid-session. Quit only when no window is open in the model.
-        guard let library else { return true }
+        //
+        // With no library there is no open-set to consult, so "every window is closed" is not a
+        // conclusion this can draw — stay alive. The nil case is not reachable in a running app (the
+        // scene's `.task` wires the library before any window can close); it is the state the
+        // application-hosted test host runs in, where quitting would kill the test process itself.
+        guard let library else { return false }
         return library.openIDs().isEmpty
     }
 }
