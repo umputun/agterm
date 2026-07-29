@@ -333,16 +333,16 @@ Exit codes: **0** got an answer (`picked` or `custom`), **1** command failed, **
 - Modify: `agterm/Control/ControlServer.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlProtocolTests.swift`
 
-- [ ] create `ControlPick.swift` with `ControlPickItem`, `ControlPickOutcome`, `ControlPickResult`, `ResolvedPick`, and the `maxItems` constant
-- [ ] add `pickOpen`/`pickResult`/`pickCancel` cases to `Command` in `ControlProtocol.swift`
-- [ ] add `items`/`prompt`/`allowCustom` to `ControlArgs` (reuse the existing `window` and `follow` fields)
-- [ ] add `pick: ControlPickResult?` to `ControlResult` and `pickPending: String?` to `ControlTree`
-- [ ] route the three cases in `ControlDispatcher.dispatch` to `return nil` — the switch at `:150` is EXHAUSTIVE with no `default:`, so omitting this breaks the `agtermCore` build and makes this task's own `swift test` gate unrunnable
-- [ ] add the three cases to the fallthrough case list in `ControlServer.swift:374` — that switch is exhaustive too, so omitting this breaks the app target
-- [ ] write round-trip tests for all three commands and every `ControlPickResult` outcome shape
-- [ ] write `…OmitsWhenNil` tests for `ControlResult.pick`, `ControlTree.pickPending`, and `ControlPickItem.subtitle`
-- [ ] verify `ControlProtocol.swift` (was 806) and `ControlDispatcher.swift` (was 794) are still under 1000 lines
-- [ ] gates: `swift test`, `make lint`, `make build` — all must pass before task 3
+- [x] create `ControlPick.swift` with `ControlPickItem`, `ControlPickOutcome`, `ControlPickResult`, `ResolvedPick`, and the `maxItems` constant
+- [x] add `pickOpen`/`pickResult`/`pickCancel` cases to `Command` in `ControlProtocol.swift`
+- [x] add `items`/`prompt`/`allowCustom` to `ControlArgs` (reuse the existing `window` and `follow` fields)
+- [x] add `pick: ControlPickResult?` to `ControlResult` and `pickPending: String?` to `ControlTree`
+- [x] route the three cases in `ControlDispatcher.dispatch` to `return nil` — the switch at `:150` is EXHAUSTIVE with no `default:`, so omitting this breaks the `agtermCore` build and makes this task's own `swift test` gate unrunnable
+- [x] add the three cases to the fallthrough case list in `ControlServer.swift:374` — that switch is exhaustive too, so omitting this breaks the app target
+- [x] write round-trip tests for all three commands and every `ControlPickResult` outcome shape
+- [x] write `…OmitsWhenNil` tests for `ControlResult.pick`, `ControlTree.pickPending`, and `ControlPickItem.subtitle`
+- [x] verify `ControlProtocol.swift` (was 806) and `ControlDispatcher.swift` (was 794) are still under 1000 lines
+- [x] gates: `swift test`, `make lint`, `make build` — all must pass before task 3
 
 ### Task 3: PickController and PickRegistry
 

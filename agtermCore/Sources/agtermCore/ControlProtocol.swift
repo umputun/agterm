@@ -71,6 +71,9 @@ public enum Command: String, Codable, Sendable {
     case configReload = "config.reload"
     case themeSet = "theme.set"
     case themeList = "theme.list"
+    case pickOpen = "pick.open"
+    case pickResult = "pick.result"
+    case pickCancel = "pick.cancel"
     case restoreClear = "restore.clear"
     /// UI-TEST-ONLY: force the app-level appearance (`light`|`dark` via `args.name`) so an XCUITest can
     /// simulate a macOS light/dark flip; with NO name it READS the side the last config feed applied,
@@ -219,6 +222,12 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// opens in the background without changing the active session (the default for both full and
     /// floating overlays).
     public var follow: Bool?
+    /// The finished caller-provided choices for `pick.open`.
+    public var items: [ControlPickItem]?
+    /// Optional text shown above the query field for `pick.open`.
+    public var prompt: String?
+    /// Whether `pick.open` accepts the current query as a custom result.
+    public var allowCustom: Bool?
     /// Target window for session/workspace/tree/font commands: id / prefix / `active` (=frontmost).
     /// Selects the window whose tree the command operates on.
     public var window: String?
@@ -269,7 +278,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 noSelect: Bool? = nil,
                 text: String? = nil, select: Bool? = nil, mode: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
-                follow: Bool? = nil, window: String? = nil,
+                follow: Bool? = nil, items: [ControlPickItem]? = nil, prompt: String? = nil,
+                allowCustom: Bool? = nil, window: String? = nil,
                 pane: String? = nil, paneID: String? = nil, to: String? = nil,
                 after: String? = nil, before: String? = nil, run: String? = nil,
                 kinds: [String]? = nil, limit: Int? = nil,
@@ -299,6 +309,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.sizePercent = sizePercent
         self.full = full
         self.follow = follow
+        self.items = items
+        self.prompt = prompt
+        self.allowCustom = allowCustom
         self.window = window
         self.pane = pane
         self.paneID = paneID
@@ -621,13 +634,15 @@ public struct ControlTree: Codable, Sendable, Equatable {
     /// nil/omitted when no dashboard is open. LIVE — resolved app-side per request from the window's
     /// `DashboardController` — the read side of the font flags. `tree`-only, like `dashboardMembers`.
     public let dashboardFontMode: String?
+    /// The id of the picker currently awaiting a choice, or nil when no picker is open.
+    public let pickPending: String?
 
     public init(workspaces: [ControlWorkspaceNode], idleMs: Int? = nil, autoFollowMs: Int? = nil,
                 sidebarVisible: Bool? = nil, sidebarMode: String? = nil, workspaceFilter: Bool? = nil,
                 quickVisible: Bool? = nil,
                 zoomedSurface: String? = nil, dashboardMembers: [String]? = nil,
                 dashboardHighlighted: String? = nil, dashboardFontSize: Double? = nil,
-                dashboardFontMode: String? = nil) {
+                dashboardFontMode: String? = nil, pickPending: String? = nil) {
         self.workspaces = workspaces
         self.idleMs = idleMs
         self.autoFollowMs = autoFollowMs
@@ -640,6 +655,7 @@ public struct ControlTree: Codable, Sendable, Equatable {
         self.dashboardHighlighted = dashboardHighlighted
         self.dashboardFontSize = dashboardFontSize
         self.dashboardFontMode = dashboardFontMode
+        self.pickPending = pickPending
     }
 }
 
@@ -752,13 +768,16 @@ public struct ControlResult: Codable, Sendable, Equatable {
     public var events: ControlEventBatch?
     /// The resolved keymap plus the live menu key equivalents, for `keymap.list`.
     public var keymap: ControlKeymap?
+    /// The current or terminal picker outcome for `pick.result`.
+    public var pick: ControlPickResult?
 
     public init(id: String? = nil, tree: ControlTree? = nil, text: String? = nil,
                 windows: [ControlWindowNode]? = nil, exitCode: Int? = nil, count: Int? = nil,
                 affected: Int? = nil,
                 theme: String? = nil, themes: [String]? = nil, ratio: Double? = nil,
                 sync: Bool? = nil, light: String? = nil, dark: String? = nil,
-                events: ControlEventBatch? = nil, keymap: ControlKeymap? = nil) {
+                events: ControlEventBatch? = nil, keymap: ControlKeymap? = nil,
+                pick: ControlPickResult? = nil) {
         self.id = id
         self.tree = tree
         self.text = text
@@ -774,6 +793,7 @@ public struct ControlResult: Codable, Sendable, Equatable {
         self.dark = dark
         self.events = events
         self.keymap = keymap
+        self.pick = pick
     }
 }
 

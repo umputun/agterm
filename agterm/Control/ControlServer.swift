@@ -385,7 +385,8 @@ final class ControlServer {
                 .sessionOverlayResult, .sessionBackground, .sessionText, .quick, .quickType, .quickText,
                 .windowNew, .windowList, .windowSelect,
                 .windowClose, .windowRename, .windowDelete, .windowResize, .windowMove, .windowZoom,
-                .windowFullscreen, .windowMinimize, .restoreClear, .dashboard:
+                .windowFullscreen, .windowMinimize, .pickOpen, .pickResult, .pickCancel,
+                .restoreClear, .dashboard:
             return ControlResponse(ok: false, error: "control dispatcher did not handle \(request.cmd.rawValue)")
         case .debugAppearance:
             return setDebugAppearance(args: request.args)

@@ -177,6 +177,9 @@ public struct ControlDispatcher {
         case .debugAppearance:
             // UI-test-only seam handled app-side in `ControlServer` (needs AppKit + `ContentView.isUITestLaunch`).
             return nil
+        case .pickOpen, .pickResult, .pickCancel:
+            // Picker state is window-scoped and is handled app-side once the picker registry exists.
+            return nil
         }
     }
 
