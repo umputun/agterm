@@ -409,14 +409,14 @@ as a phantom.
 **Files:**
 - Modify: `agterm/Views/Palette.swift`
 
-- [ ] change `CommandPalette.allItems` (`Palette.swift:96-105`) so an explicitly-supplied `[PaletteItem]` array takes precedence over the `controller.mode` switch, leaving all five existing modes untouched
-- [ ] render the synthetic `Use "<query>"` row when `allowCustom` is set and the filtered list is empty, selected so Enter resolves it
-- [ ] use the supplied `prompt` as the field placeholder, defaulting to `Select…` when absent — do NOT fall through to the `placeholder` switch's `default:` arm (`Palette.swift:134`), which returns the action-palette's `Run an action…` and would be plainly wrong on a pick
-- [ ] give the pick-driven instance the accessibility identifier `pick-palette` (distinct from the shared `command-palette` at `Palette.swift:182`) and give rows a per-item identifier, so task 11's e2e can address them
-- [ ] hoist the custom-row decision into a host-free helper in `agtermCore` (given a query and a filtered count, does a custom row exist and what is its label) so it is unit-testable — the SwiftUI view itself is not reachable from `swift test`
-- [ ] write host-free tests for that helper: empty query, query matching nothing with and without `allowCustom`, query matching something
-- [ ] verify the five existing palette modes still render and filter unchanged
-- [ ] gates: `swift test`, `make lint`, `make build`, `make test-app` — all must pass before task 7
+- [x] change `CommandPalette.allItems` (`Palette.swift:96-105`) so an explicitly-supplied `[PaletteItem]` array takes precedence over the `controller.mode` switch, leaving all five existing modes untouched
+- [x] render the synthetic `Use "<query>"` row when `allowCustom` is set and the filtered list is empty, selected so Enter resolves it
+- [x] use the supplied `prompt` as the field placeholder, defaulting to `Select…` when absent — do NOT fall through to the `placeholder` switch's `default:` arm (`Palette.swift:134`), which returns the action-palette's `Run an action…` and would be plainly wrong on a pick
+- [x] give the pick-driven instance the accessibility identifier `pick-palette` (distinct from the shared `command-palette` at `Palette.swift:182`) and give rows a per-item identifier, so task 11's e2e can address them
+- [x] hoist the custom-row decision into a host-free helper in `agtermCore` (given a query and a filtered count, does a custom row exist and what is its label) so it is unit-testable — the SwiftUI view itself is not reachable from `swift test`
+- [x] write host-free tests for that helper: empty query, query matching nothing with and without `allowCustom`, query matching something
+- [x] verify the five existing palette modes still render and filter unchanged
+- [x] gates: `swift test`, `make lint`, `make build`, `make test-app` — all must pass before task 7
 
 ### Task 7: Mount the pick palette and guard focus
 

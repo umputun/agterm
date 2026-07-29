@@ -83,6 +83,14 @@ final class PaletteController {
 struct CommandPalette: View {
     let controller: PaletteController
     let actions: AppActions
+    /// Caller-provided rows for a control-API pick. A non-nil array replaces the built-in mode's
+    /// catalog, including when the array is empty.
+    let explicitItems: [PaletteItem]?
+    /// Search-field prompt for an explicit picker; nil uses the neutral picker default.
+    let prompt: String?
+    /// Whether an unmatched, non-empty explicit-picker query can be submitted as free text.
+    let allowCustom: Bool
+    let onCustom: ((String) -> Void)?
 
     @State private var query = ""
     @State private var selection = 0
@@ -92,7 +100,18 @@ struct CommandPalette: View {
     @State private var filtered: [PaletteItem] = []
     @FocusState private var fieldFocused: Bool
 
+    init(controller: PaletteController, actions: AppActions, items: [PaletteItem]? = nil,
+         prompt: String? = nil, allowCustom: Bool = false, onCustom: ((String) -> Void)? = nil) {
+        self.controller = controller
+        self.actions = actions
+        self.explicitItems = items
+        self.prompt = prompt
+        self.allowCustom = allowCustom
+        self.onCustom = onCustom
+    }
+
     private var allItems: [PaletteItem] {
+        if let explicitItems { return explicitItems }
         switch controller.mode {
         case .actions: return actions.paletteActions()
         case .sessions: return actions.paletteSessions()
@@ -113,7 +132,7 @@ struct CommandPalette: View {
         // to the alphabetical tie-break below — every row scores 0 for an empty query, so that tie-break
         // would re-sort them A→Z and Return would jump to the alphabetically-first session, not the blocked
         // one. fuzzy filtering still applies once the user types.
-        if controller.mode == .attention, q.isEmpty {
+        if explicitItems == nil, controller.mode == .attention, q.isEmpty {
             filtered = allItems
             selection = filtered.isEmpty ? 0 : min(selection, filtered.count - 1)
             return
@@ -121,10 +140,16 @@ struct CommandPalette: View {
         filtered = fuzzyRank(query: q, items: allItems) { item in
             item.subtitle.map { [item.title, $0] } ?? [item.title]
         }
+        if explicitItems != nil,
+           let label = pickCustomRowLabel(query: q, filteredCount: filtered.count, allowCustom: allowCustom) {
+            let value = q
+            filtered = [PaletteItem(id: "pick-custom", title: label) { onCustom?(value) }]
+        }
         selection = filtered.isEmpty ? 0 : min(selection, filtered.count - 1)
     }
 
     private var placeholder: String {
+        if explicitItems != nil { return prompt ?? "Select…" }
         switch controller.mode {
         case .sessions: return "Go to session…"
         case .themes: return "Select a theme…"
@@ -139,7 +164,10 @@ struct CommandPalette: View {
     /// the current theme's row; leaving it (to another mode or closed) reverts any uncommitted preview.
     /// Idempotent — `AppActions` guards begin/cancel on its active flag.
     private func syncThemeSession() {
-        guard controller.mode == .themes else { actions.cancelThemePreview(); return }
+        guard explicitItems == nil, controller.mode == .themes else {
+            actions.cancelThemePreview()
+            return
+        }
         actions.beginThemePreview()
         if let index = filtered.firstIndex(where: { $0.id == actions.currentThemeID }) { selection = index }
     }
@@ -180,7 +208,7 @@ struct CommandPalette: View {
         .background { PalettePanelBackground() }
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.1)))
         .shadow(radius: 24)
-        .accessibilityIdentifier("command-palette")
+        .accessibilityIdentifier(explicitItems == nil ? "command-palette" : "pick-palette")
         .onAppear {
             fieldFocused = true
             updateFiltered()
@@ -304,5 +332,6 @@ private struct PaletteRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(isSelected ? Color.accentColor.opacity(0.25) : Color.clear)
         .contentShape(Rectangle())
+        .accessibilityIdentifier("palette-item-\(item.id)")
     }
 }
