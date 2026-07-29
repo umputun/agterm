@@ -111,6 +111,9 @@ final class PickFocusGuardTests: XCTestCase {
         return controller
     }
 
+    /// Opt out of `isReleasedWhenClosed` for the same reason `ControlServerPickTests` does: this suite only
+    /// hides its windows today, but a window it holds must not be released out from under ARC if one ever
+    /// gets closed.
     private func registerWindow(_ windowID: UUID) -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
@@ -118,6 +121,7 @@ final class PickFocusGuardTests: XCTestCase {
             backing: .buffered,
             defer: false
         )
+        window.isReleasedWhenClosed = false
         WindowRegistry.shared.register(windowID, window: window)
         registeredWindows[windowID] = window
         return window

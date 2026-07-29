@@ -423,6 +423,11 @@ final class ControlServerPickTests: XCTestCase {
         return controller
     }
 
+    /// `NSWindow`'s designated initializer defaults `isReleasedWhenClosed` to true, so `close()` sends a
+    /// release ARC never balances while this test still holds the window (here and in `WindowRegistry`).
+    /// The over-release frees it under the surviving references, and the next autorelease-pool pop on the
+    /// main queue crashes the test HOST rather than failing a test — nondeterministically, which is why it
+    /// only showed up on CI. Every window these tests own is closed in teardown, so all of them opt out.
     private func registerWindow(_ id: WindowInfo.ID) -> NSWindow {
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 320, height: 200),
@@ -430,6 +435,7 @@ final class ControlServerPickTests: XCTestCase {
             backing: .buffered,
             defer: false
         )
+        window.isReleasedWhenClosed = false
         WindowRegistry.shared.register(id, window: window)
         registeredWindows[id] = window
         return window
@@ -442,6 +448,7 @@ final class ControlServerPickTests: XCTestCase {
             backing: .buffered,
             defer: false
         )
+        window.isReleasedWhenClosed = false
         let store = try XCTUnwrap(library.store(for: id))
         window.contentView = WindowAccessor.TitleProbeView(windowID: id, library: library, store: store)
         registeredWindows[id] = window
