@@ -476,17 +476,17 @@ as a phantom.
 - Modify: `agtermCore/Tests/agtermctlKitTests/CommandsTests.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/SocketClientTests.swift`
 
-- [ ] add a `pick` command group with `Open` (the default), `Result`, and `Cancel` subcommands, mirroring `session overlay`'s `[Open, Close, Resize, Result]` at `SessionCommands.swift:606` — all three control commands need a CLI verb to satisfy point 3 of the four-point audit, and without them `--no-block` is unusable
-- [ ] give `Open` the `--prompt`, `--allow-custom`, `--follow`, `--window`, `--no-block` options — there is deliberately NO `--timeout`, since a caller wanting a deadline writes `timeout 60 agtermctl pick …` and clears the orphaned modal with `pick cancel`
-- [ ] read stdin and sniff the first non-whitespace byte: `[` parses as a JSON item array, anything else is one label per line with blank lines dropped
-- [ ] implement the blocking path — open, poll `pick.result` until it leaves `pending`, print the result JSON on stdout — with `--no-block` printing the pick id instead
-- [ ] use a backing-off poll (0.1s for the first second, then 0.5s) rather than the overlay's flat 0.1s, which is tuned for sub-second programs and would hammer the serial accept loop across an unbounded human decision
-- [ ] map outcomes to exit codes 0 (picked/custom), 1 (failure), 2 (cancelled)
-- [ ] write tests for the stdin sniff across JSON, bare lines, blank lines, empty stdin, and malformed JSON
-- [ ] write tests for CLI-to-request argument mapping for all three subcommands
-- [ ] write tests for the exit-code mapping of every outcome, and for the poll backoff schedule
-- [ ] verify `MiscCommands.swift` (was 402) is still under 1000 lines
-- [ ] gates: `swift test`, `make lint`, `make build` — all must pass before task 11
+- [x] add a `pick` command group with `Open` (the default), `Result`, and `Cancel` subcommands, mirroring `session overlay`'s `[Open, Close, Resize, Result]` at `SessionCommands.swift:606` — all three control commands need a CLI verb to satisfy point 3 of the four-point audit, and without them `--no-block` is unusable
+- [x] give `Open` the `--prompt`, `--allow-custom`, `--follow`, `--window`, `--no-block` options — there is deliberately NO `--timeout`, since a caller wanting a deadline writes `timeout 60 agtermctl pick …` and clears the orphaned modal with `pick cancel`
+- [x] read stdin and sniff the first non-whitespace byte: `[` parses as a JSON item array, anything else is one label per line with blank lines dropped
+- [x] implement the blocking path — open, poll `pick.result` until it leaves `pending`, print the result JSON on stdout — with `--no-block` printing the pick id instead
+- [x] use a backing-off poll (0.1s for the first second, then 0.5s) rather than the overlay's flat 0.1s, which is tuned for sub-second programs and would hammer the serial accept loop across an unbounded human decision
+- [x] map outcomes to exit codes 0 (picked/custom), 1 (failure), 2 (cancelled)
+- [x] write tests for the stdin sniff across JSON, bare lines, blank lines, empty stdin, and malformed JSON
+- [x] write tests for CLI-to-request argument mapping for all three subcommands
+- [x] write tests for the exit-code mapping of every outcome, and for the poll backoff schedule
+- [x] verify `MiscCommands.swift` (was 402) is still under 1000 lines
+- [x] gates: `swift test`, `make lint`, `make build` — all must pass before task 11
 
 ### Task 11: End-to-end tests
 

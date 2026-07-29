@@ -271,6 +271,154 @@ struct SocketClientTests {
         #expect(throws: ExitCode.failure) { try command.run() }
     }
 
+    @Test func formatsPickIDAsJSON() throws {
+        let line = try SocketClient.formatPickID("pick-1")
+        let object = try #require(JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: String])
+
+        #expect(object == ["id": "pick-1"])
+    }
+
+    @Test func formatsPickResultAsJSON() throws {
+        let result = ControlPickResult(result: .picked, id: "two", label: "Two", index: 1)
+        let line = try SocketClient.formatPickResult(result)
+
+        #expect(try JSONDecoder().decode(ControlPickResult.self, from: Data(line.utf8)) == result)
+    }
+
+    @Test(arguments: [
+        (ControlPickOutcome.pending, Int32(1)),
+        (.picked, Int32(0)),
+        (.custom, Int32(0)),
+        (.cancelled, Int32(2))
+    ])
+    func pickExitCodeMapsEveryOutcome(_ outcome: ControlPickOutcome, _ expected: Int32) {
+        #expect(SocketClient.pickExitCode(for: outcome).rawValue == expected)
+    }
+
+    @Test func pickPollBackoffUsesTenFastSleepsThenSlowSleeps() {
+        #expect((1...10).map(SocketClient.pickPollDelay(afterPendingPoll:)) ==
+            Array(repeating: 0.1, count: 10))
+        #expect(SocketClient.pickPollDelay(afterPendingPoll: 11) == 0.5)
+        #expect(SocketClient.pickPollDelay(afterPendingPoll: 100) == 0.5)
+    }
+
+    @Test func pickNoBlockPrintsIDWithoutPolling() throws {
+        let command = try Pick.Open.parse(["--no-block"])
+        var requests: [ControlRequest] = []
+        var output: [String] = []
+
+        try command.execute(
+            input: Data("One\n".utf8),
+            send: { request in
+                requests.append(request)
+                return ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
+            },
+            sleep: { _ in Issue.record("--no-block must not sleep") },
+            output: { output.append($0) }
+        )
+
+        #expect(requests == [
+            ControlRequest(
+                cmd: .pickOpen,
+                args: ControlArgs(items: [ControlPickItem(id: "One", label: "One")])
+            )
+        ])
+        #expect(try JSONSerialization.jsonObject(with: Data(#require(output.first).utf8)) as? [String: String] ==
+            ["id": "pick-1"])
+    }
+
+    @Test func pickBlockPollsWithBackoffPrintsResultAndExitsZero() throws {
+        let command = try Pick.Open.parse(["--window", "w1"])
+        var requests: [ControlRequest] = []
+        var sleeps: [TimeInterval] = []
+        var output: [String] = []
+        var polls = 0
+
+        try command.execute(
+            input: Data("One\n".utf8),
+            send: { request in
+                requests.append(request)
+                if request.cmd == .pickOpen {
+                    return ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
+                }
+                polls += 1
+                if polls <= 11 {
+                    return ControlResponse(ok: true, result: ControlResult(
+                        pick: ControlPickResult(result: .pending)
+                    ))
+                }
+                return ControlResponse(ok: true, result: ControlResult(
+                    pick: ControlPickResult(result: .picked, id: "One", label: "One", index: 0)
+                ))
+            },
+            sleep: { sleeps.append($0) },
+            output: { output.append($0) }
+        )
+
+        #expect(requests.dropFirst().allSatisfy {
+            $0 == ControlRequest(cmd: .pickResult, target: "pick-1", args: ControlArgs(window: "w1"))
+        })
+        #expect(sleeps == Array(repeating: 0.1, count: 10) + [0.5])
+        let result = try JSONDecoder().decode(
+            ControlPickResult.self,
+            from: Data(#require(output.first).utf8)
+        )
+        #expect(result == ControlPickResult(result: .picked, id: "One", label: "One", index: 0))
+    }
+
+    @Test func pickBlockThrowsCancelledExitCodeAfterPrintingResult() throws {
+        let command = try Pick.Open.parse([])
+        var output: [String] = []
+
+        do {
+            try command.execute(
+                input: Data("One\n".utf8),
+                send: { request in
+                    request.cmd == .pickOpen
+                        ? ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
+                        : ControlResponse(ok: true, result: ControlResult(
+                            pick: ControlPickResult(result: .cancelled)
+                        ))
+                },
+                sleep: { _ in Issue.record("a terminal result must not sleep") },
+                output: { output.append($0) }
+            )
+            Issue.record("expected the cancelled exit code")
+        } catch let code as ExitCode {
+            #expect(code.rawValue == 2)
+        }
+
+        let result = try JSONDecoder().decode(
+            ControlPickResult.self,
+            from: Data(#require(output.first).utf8)
+        )
+        #expect(result.result == .cancelled)
+    }
+
+    @Test func pickBlockFailsForOpenErrorAndMalformedResult() throws {
+        let command = try Pick.Open.parse([])
+        #expect(throws: ExitCode.failure) {
+            try command.execute(
+                input: Data("One\n".utf8),
+                send: { _ in ControlResponse(ok: false, error: "boom") },
+                sleep: { _ in },
+                output: { _ in }
+            )
+        }
+        #expect(throws: ExitCode.failure) {
+            try command.execute(
+                input: Data("One\n".utf8),
+                send: { request in
+                    request.cmd == .pickOpen
+                        ? ControlResponse(ok: true, result: ControlResult(id: "pick-1"))
+                        : ControlResponse(ok: true)
+                },
+                sleep: { _ in },
+                output: { _ in }
+            )
+        }
+    }
+
     @Test func formatResponseBareOk() {
         #expect(SocketClient.formatResponse(ControlResponse(ok: true), json: false) == "ok")
     }

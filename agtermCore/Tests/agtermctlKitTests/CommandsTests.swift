@@ -924,6 +924,93 @@ struct CommandsTests {
             ControlRequest(cmd: .surfaceZoom, target: "active", args: ControlArgs(mode: "hide", window: "win")))
     }
 
+    // MARK: - pick
+
+    @Test func pickDefaultsToOpen() throws {
+        #expect(try Agtermctl.parseAsRoot(["pick"]) is Pick.Open)
+    }
+
+    @Test func pickOpenSniffsJSONArray() throws {
+        let input = Data("""
+          [
+            {"id":"one","label":"One","subtitle":"First"},
+            {"id":"two","label":"Two"}
+          ]
+        """.utf8)
+
+        #expect(try Pick.Open.parseItems(input) == [
+            ControlPickItem(id: "one", label: "One", subtitle: "First"),
+            ControlPickItem(id: "two", label: "Two")
+        ])
+    }
+
+    @Test func pickOpenSniffsBareLines() throws {
+        #expect(try Pick.Open.parseItems(Data("One\nTwo\n".utf8)) == [
+            ControlPickItem(id: "One", label: "One"),
+            ControlPickItem(id: "Two", label: "Two")
+        ])
+    }
+
+    @Test func pickOpenDropsBlankLines() throws {
+        #expect(try Pick.Open.parseItems(Data("\nOne\n \t \n\nTwo\n".utf8)) == [
+            ControlPickItem(id: "One", label: "One"),
+            ControlPickItem(id: "Two", label: "Two")
+        ])
+    }
+
+    @Test func pickOpenAcceptsEmptyStdinAsNoItems() throws {
+        #expect(try Pick.Open.parseItems(Data()).isEmpty)
+    }
+
+    @Test func pickOpenRejectsMalformedJSON() {
+        #expect(throws: (any Error).self) {
+            try Pick.Open.parseItems(Data("[{\"id\":\"one\"".utf8))
+        }
+    }
+
+    @Test func pickOpenMapsEveryOptionToRequest() throws {
+        let command = try Pick.Open.parse([
+            "--prompt", "Choose one", "--allow-custom", "--follow",
+            "--window", "w1", "--no-block"
+        ])
+        let items = [ControlPickItem(id: "One", label: "One")]
+        let expected = ControlRequest(
+            cmd: .pickOpen,
+            args: ControlArgs(
+                follow: true, items: items, prompt: "Choose one",
+                allowCustom: true, window: "w1"
+            )
+        )
+
+        #expect(try command.makeRequest(input: Data("One\n".utf8)) == expected)
+        #expect(command.noBlock)
+    }
+
+    @Test func pickOpenDefaultsToBlockingWithoutOptionalArgs() throws {
+        let command = try Pick.Open.parse([])
+        let items = [ControlPickItem(id: "One", label: "One")]
+
+        #expect(try command.makeRequest(input: Data("One\n".utf8)) ==
+            ControlRequest(cmd: .pickOpen, args: ControlArgs(items: items)))
+        #expect(!command.noBlock)
+    }
+
+    @Test func pickResultMapsIDAndWindow() throws {
+        #expect(try request(["pick", "result", "pick-1", "--window", "w1"]) ==
+            ControlRequest(cmd: .pickResult, target: "pick-1", args: ControlArgs(window: "w1")))
+    }
+
+    @Test func pickCancelMapsIDAndWindow() throws {
+        #expect(try request(["pick", "cancel", "pick-1", "--window", "w1"]) ==
+            ControlRequest(cmd: .pickCancel, target: "pick-1", args: ControlArgs(window: "w1")))
+    }
+
+    @Test func pickOpenHasNoTimeoutOption() {
+        #expect(throws: (any Error).self) {
+            try Agtermctl.parseAsRoot(["pick", "--timeout", "60"])
+        }
+    }
+
     // MARK: - dashboard
 
     @Test func dashboardOpenWithIdsAndFontSize() throws {
