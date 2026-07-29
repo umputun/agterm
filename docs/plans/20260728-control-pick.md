@@ -493,14 +493,14 @@ as a phantom.
 **Files:**
 - Create: `agtermUITests/ControlPickUITests.swift`
 
-- [ ] create `ControlPickUITests` as a `ControlAPITestCase` subclass
-- [ ] test open → the `pick-palette` modal appears with the supplied rows → select → `pick.result` returns `picked` with the right id, label, and index
-- [ ] test open → `pick.cancel` → `pick.result` returns `cancelled`
-- [ ] test a second `pick.open` on the same window is rejected with `pick already pending`
-- [ ] test the `tree` read-back reports `pickPending` while open and omits it after resolution
-- [ ] test the free-text path: `--allow-custom` with a non-matching query returns `custom` carrying the query
-- [ ] test the `--window` leg drives a background window, using a MINIMIZED second window so an arm ignoring the selector lands on the wrong store
-- [ ] run the suite — must pass before task 12
+- [x] create `ControlPickUITests` as a `ControlAPITestCase` subclass
+- [x] test open → the `pick-palette` modal appears with the supplied rows → select → `pick.result` returns `picked` with the right id, label, and index
+- [x] test open → `pick.cancel` → `pick.result` returns `cancelled`
+- [x] test a second `pick.open` on the same window is rejected with `pick already pending`
+- [x] test the `tree` read-back reports `pickPending` while open and omits it after resolution
+- [x] test the free-text path: `--allow-custom` with a non-matching query returns `custom` carrying the query
+- [x] test the `--window` leg drives a background window, using a MINIMIZED second window so an arm ignoring the selector lands on the wrong store
+- [x] run the suite — must pass before task 12
 
 ### Task 12: Verify acceptance criteria
 
