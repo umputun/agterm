@@ -215,7 +215,7 @@ The app must build, `swift test` and `make test-app` must stay green, and `make 
   The kill/relaunch ban below is only part of the rule: a bare `agtermctl window move|resize|minimize|new`,
   `session new|close|type`, `workspace …` reaches the DEPLOYED app, because `agtermctl` on PATH is the
   deployed copy and its socket auto-resolves to `~/Library/Application Support/agterm/agterm.sock`.
-  This has already cost real damage: a review subagent "checked" the bundled `agent-skill/examples.md`
+  This has already cost real damage: a review subagent "checked" the bundled `skills/agterm/examples.md`
   window-stacking recipe by RUNNING it and restacked all four of the user's live windows onto one frame.
   Read-only probes (`tree`, `window list`) are tolerable; anything that WRITES must target an isolated
   instance with an explicit `--socket <tmp>/agterm.sock`.

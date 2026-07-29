@@ -55,14 +55,15 @@ if [ "${1:-}" = "--emit" ]; then
       needc=iw/(pw/cols); needr=ih/(ph/rows)
       avail=rows-3; if (avail<1) avail=1
       s=cols/needc; if (avail/needr < s) s=avail/needr
-      oc=int(needc*s); or=int(needr*s)
-      if (oc<1) oc=1; if (or<1) or=1
+      # orow, not or: or() is a gawk builtin, so `or` as a variable is a syntax error there.
+      oc=int(needc*s); orow=int(needr*s)
+      if (oc<1) oc=1; if (orow<1) orow=1
       # leftover cells split evenly so the image sits centered in the overlay. the prompt column is
       # floored at 1: on an overlay narrower than the prompt it would otherwise go negative, and a
       # negative parameter makes the CUP escape malformed, so the terminal drops it and the prompt
       # lands on top of the image instead of the last row.
       pc=int((cols-20)/2)+1; if (pc<1) pc=1
-      printf "%d %d %d %d %d", oc, or, int((cols-oc)/2), int((rows-1-or)/2), pc
+      printf "%d %d %d %d %d", oc, orow, int((cols-oc)/2), int((rows-1-orow)/2), pc
     }')
     # C=1 keeps the cursor put, so a bottom-edge image cannot scroll the screen and shift itself up.
     [ -n "$fit" ] && read -r oc or padc padr promptcol <<<"$fit" && box="c=$oc,r=$or,C=1,"
