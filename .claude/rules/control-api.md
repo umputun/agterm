@@ -14,7 +14,7 @@ paths:
   - "agtermCore/Sources/agtermCore/SkillInstall.swift"
   - "agtermUITests/Control*.swift"
   - "agtermUITests/SessionTextUITests.swift"
-  - "agterm/Resources/agent-skill/**"
+  - "plugins/agterm/skills/agterm/**"
 ---
 
 ## Control API
@@ -206,7 +206,7 @@ paths:
   The skill is a REFERENCE/knowledge skill (both user-invocable via `/agterm` and model-triggered,
   `allowed-tools: Bash(agtermctl *)`; the agent-neutral `description` carries the trigger nouns since
   Codex may ignore the extra `when_to_use` field — unknown frontmatter is harmless),
-  authored at `agterm/Resources/agent-skill/` (`SKILL.md` overview + model + addressing + 71-command
+  authored at `plugins/agterm/skills/agterm/` (`SKILL.md` overview + model + addressing + 71-command
   summary + the image-display helper + a troubleshooting/reporting pointer;
   `reference.md` full per-command detail + keymap format; `examples.md` agtermctl recipes;
   `troubleshooting.md` diagnosing the common problems (keymap editor, custom actions,
@@ -224,10 +224,16 @@ paths:
   the `.File`/`.FilePart`/`.FileEnd`/`.MultipartFile` keys land in the `unimplemented OSC 1337` bucket.
   The agent CANNOT print graphics escapes to its own tool stdout — the harness escapes the control bytes
   — nor run a viewer in its tool shell — no `/dev/tty`; the overlay sidesteps both,
-  so the method is agent-harness-agnostic and works identically for Codex.) It is invoked by absolute
-  install path (`~/.claude/skills/agterm/scripts/show-image.sh` or `~/.codex/...`),
-  NOT `${CLAUDE_SKILL_DIR}` — that token is Claude-Code-only and would not expand in the Codex copy of
-  the SAME authored `SKILL.md`.
+  so the method is agent-harness-agnostic and works identically for Codex.) It is invoked by a path
+  the agent RESOLVES against the directory it loaded `SKILL.md` from, NOT a hardcoded install path and
+  NOT `${CLAUDE_PLUGIN_ROOT}`.
+  Both alternatives break a real install: the skill now ships four ways (the app's copy into
+  `~/.claude/skills/agterm/` or `~/.codex/skills/agterm/`, and the two plugin caches), so a hardcoded
+  `~/.claude/skills/agterm/scripts/show-image.sh` is wrong for a plugin install;
+  `${CLAUDE_PLUGIN_ROOT}` does expand inside SKILL.md body text but is Claude-Code-only AND
+  plugin-only, so it would not resolve in the Codex copy nor in the app-installed one, and Codex has
+  no documented equivalent that expands in skill markdown.
+  The relative-to-`SKILL.md` phrasing is the ONE form correct in all four.
   **Install policy:** write to each agent base that EXISTS (`~/.claude` and/or `~/.codex`);
   if neither, fall back to creating `~/.claude` (`SkillInstall.installTargets`).
   Pure file-drop (no manifest): per-target remove-then-copy for a clean reinstall,
@@ -237,9 +243,36 @@ paths:
   `SkillInstaller` (app-side) owns the AppKit copy, manually verified.
   Install is GUI-only and keep-in-sync EXEMPT (a skill that documents the socket isn't itself driven
   over it).
+  **The skill directory is ALSO the source for the Claude Code and Codex PLUGIN published from this
+  repo — one directory, three consumers, no copy and no sync step.**
+  `plugins/agterm/skills/agterm/` is the single source: `project.yml` bundles that leaf as a folder
+  reference (landing at `Contents/Resources/agterm`, so `SkillInstaller.bundledFolder` reads
+  `SkillInstall.skillName` rather than a separate literal), while four manifests point at the same tree
+  — `.claude-plugin/marketplace.json` (`source: "./plugins/agterm"`),
+  `plugins/agterm/.claude-plugin/plugin.json` (`skills: ["./skills/agterm"]`, an ARRAY of dirs each
+  holding a SKILL.md), `.agents/plugins/marketplace.json` (Codex's marketplace location — NOT
+  `.codex-plugin/marketplace.json`, and its entry takes a `source` OBJECT
+  `{"source":"local","path":"./plugins/agterm"}`), and `plugins/agterm/.codex-plugin/plugin.json`
+  (`skills: "./skills/"`, a STRING naming a PARENT dir that Codex scans recursively for `SKILL.md`).
+  The two `skills` shapes differ per agent and are NOT interchangeable.
+  The leaf is named `agterm` on purpose: Claude's default `skills/` scan names a skill by its
+  DIRECTORY, so a leaf named anything else would install as that name on the path where the frontmatter
+  is not consulted.
+  The plugin ROOT is `plugins/agterm/` rather than the repo root because whatever the root is gets
+  copied wholesale into the install cache — a repo-root plugin would put the entire ~21 MiB checkout in
+  every user's cache.
+  Both plugin managers key their install cache on the manifest `version`, so `scripts/release.sh` bumps
+  all three versioned manifests in a preflight and STOPS for the diff to be committed (the tag is cut
+  from HEAD, so an unbumped manifest publishes a stale skill silently).
+  `SkillInstallTests.pluginManifestsPointAtTheBundledSkillDirectory` and
+  `…marketplacesPointAtThePluginRootAndAgreeOnVersion` are the drift gate: they assert every declared
+  path resolves to the real skill directory and that the three versions agree.
+  A user who installs BOTH ways gets two copies (`agterm` from the app, `agterm:agterm` from the Codex
+  plugin namespace); Codex lists both and does not define which wins, so the docs present the two routes
+  as alternatives rather than complements.
   **KEEP-IN-SYNC (HARD): the bundled skill is a documentation mirror of the control surface — whenever
   you change the Control API (commands/args/returns), the keymap format,
-  or the window/workspace/session/pane model, update `agterm/Resources/agent-skill/` (SKILL.md + reference.md
+  or the window/workspace/session/pane model, update `plugins/agterm/skills/agterm/` (SKILL.md + reference.md
   + examples.md + `troubleshooting.md` + `scripts/`, incl. the command count) so the installed agent-driver
   doc stays accurate.
   It is the fourth keep-in-sync surface alongside the GUI/menu/CLI.
@@ -1747,7 +1780,7 @@ paths:
   (CLI parse + bad-arg rejection) + the e2e `testSessionBackgroundSetClearAndValidation` in `ControlAPIUITests`
   (image/text/color set/clear + tree read-back).
   **Agent-skill mirror (HARD keep-in-sync, 4th surface):** all commands are documented in the bundled
-  `agterm/Resources/agent-skill/` (SKILL.md summary, reference.md detail,
+  `plugins/agterm/skills/agterm/` (SKILL.md summary, reference.md detail,
   examples.md recipes) and the command count there is bumped to match.
   It is a CODE gate too: `SkillInstallTests.bundledSkillDocumentsEventSubscriptionCommand` asserts the
   `Command summary (N commands)` heading against the bundled `SKILL.md`, so a stale count fails `swift test`.
@@ -1765,7 +1798,7 @@ paths:
   is invisible to a search for either, which is exactly how `commands.html`'s `description` `<meta>` sat at
   65 through a 66 → 67 bump that corrected the other three.
   Use something like `grep -rnE "\b[0-9]{2,3}\b[A-Za-z ,'-]{0,40}commands?\b"` scoped to `README.md`,
-  `site/`, `agterm/Resources/agent-skill/`, and `.claude/rules/`, and reconcile EVERY hit against the
+  `site/`, `plugins/agterm/skills/agterm/`, and `.claude/rules/`, and reconcile EVERY hit against the
   `Command` case count.
   **That pattern requires the word "commands" AFTER the number and so misses the phrasings this very file
   uses** — "the public command count stays N", "`Command` has N cases" — which is how BOTH of them

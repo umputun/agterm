@@ -190,6 +190,20 @@ The app bundles `agtermctl` inside `agterm.app`. The easiest way to put it on yo
 
 To let a coding agent drive agterm without you explaining the API, install the bundled agent skill with **Help ▸ Install Agent Skill…**. Claude Code and Codex share the same skill format, so it installs to whichever you have, `~/.claude/skills/agterm/` and/or `~/.codex/skills/agterm/`. The skill teaches the agent the control model and the full `agtermctl` command set, so an agent running inside agterm can create sessions, run overlays, manage windows, and reload the keymap on its own. It drives the app through `agtermctl`, so install the CLI too.
 
+The same skill is also published as a plugin from this repository, which is the better route if you keep your agent's config somewhere other than `~/.claude` or `~/.codex` — the agent does the installing, so the skill lands wherever that agent actually looks, and updates through the agent's own plugin commands:
+
+```sh
+# Claude Code
+claude plugin marketplace add umputun/agterm
+claude plugin install agterm@agterm
+
+# Codex
+codex plugin marketplace add umputun/agterm
+codex plugin add agterm@agterm
+```
+
+Use one route or the other, not both — a machine with both ends up with two copies of the skill, and which one the agent picks is not defined. Adding the marketplace clones this whole repository, which is an app rather than a skill library; both CLIs take a `--sparse` option on `marketplace add` to limit the checkout, and it needs to cover the marketplace manifest as well as `plugins/agterm`.
+
 `agtermctl` also lives in the `agtermCore` Swift package and builds standalone without Xcode or libghostty:
 
 ```sh

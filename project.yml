@@ -51,7 +51,6 @@ targets:
           - "Resources/ghostty"
           - "Resources/terminfo"
           - "Resources/agent-status"
-          - "Resources/agent-skill"
           # committed SOURCE for agterm's own bundled theme(s); setup.sh stages it
           # into Resources/ghostty/themes (above), so the source dir itself must not
           # be pulled into the project tree or the app bundle.
@@ -81,10 +80,12 @@ targets:
       - path: agterm/Resources/agent-status
         type: folder
         buildPhase: resources
-      # Claude Code skill package (SKILL.md + reference.md + examples.md). Folder reference so the
-      # whole dir copies verbatim to Contents/Resources/agent-skill; the installer copies it from
+      # Agent skill package (SKILL.md + reference.md + examples.md + troubleshooting.md + scripts).
+      # It lives at plugins/agterm/skills/agterm so the SAME directory is also the skill source for
+      # the Claude Code and Codex plugin manifests — one copy, three consumers. Folder reference so
+      # the whole dir copies verbatim to Contents/Resources/agterm; the installer copies it from
       # there to ~/.claude/skills/agterm.
-      - path: agterm/Resources/agent-skill
+      - path: plugins/agterm/skills/agterm
         type: folder
         buildPhase: resources
     settings:

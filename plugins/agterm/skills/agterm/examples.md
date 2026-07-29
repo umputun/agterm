@@ -243,9 +243,11 @@ image there via the kitty graphics protocol, which ghostty draws natively — no
 external image tool, just `base64` + `printf`. An optional second argument sets the panel size percent
 (default 60):
 
+Resolve the script against the directory this skill was loaded from — it sits beside `SKILL.md` in
+every install layout (plugin cache or the app's `~/.claude/skills/agterm/` / `~/.codex/skills/agterm/`):
+
 ```bash
-bash ~/.claude/skills/agterm/scripts/show-image.sh /abs/path/to/img.png 60   # Claude Code
-bash ~/.codex/skills/agterm/scripts/show-image.sh /abs/path/to/img.png 60    # Codex
+bash <this-skill-directory>/scripts/show-image.sh /abs/path/to/img.png 60
 ```
 
 The image shows in a floating overlay over the active session; dismiss it with Enter in the panel or
@@ -253,7 +255,12 @@ The image shows in a floating overlay over the active session; dismiss it with E
 escapes the control bytes) and do NOT run an image viewer in your tool shell (no controlling
 terminal) — the overlay's real terminal is what renders.
 
-Tiny images (a favicon) enlarge with nearest-neighbor first, so the pixels stay crisp:
+The script scales the image to the overlay and centers it, up or down, preserving aspect ratio, so
+there is no need to resize a large screenshot first. Only when the terminal does not answer the
+geometry query does it fall back to drawing at native pixel size in the top-left corner.
+
+Tiny images (a favicon) upscale smoothly, which blurs the pixels. To keep them crisp, enlarge with
+nearest-neighbor first:
 
 ```bash
 magick favicon.png -filter point -resize 256x256 /tmp/big.png

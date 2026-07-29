@@ -11,10 +11,11 @@ import agtermCore
 enum SkillInstaller {
     private struct InstallError: Error { let message: String }
 
-    /// The bundled source folder at `Contents/Resources/agent-skill`, or nil when this build skipped
-    /// the resource bundling (e.g. a bare `swift build`).
+    /// The bundled source folder at `Contents/Resources/agterm`, or nil when this build skipped the
+    /// resource bundling (e.g. a bare `swift build`). The name follows the skill directory's own
+    /// basename in `plugins/agterm/skills/agterm`, which `project.yml` copies verbatim.
     private static var bundledFolder: URL? {
-        Bundle.main.resourceURL?.appendingPathComponent("agent-skill")
+        Bundle.main.resourceURL?.appendingPathComponent(SkillInstall.skillName)
     }
 
     private struct Report {

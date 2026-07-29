@@ -1,0 +1,19 @@
+{
+  "name": "agterm",
+  "interface": {
+    "displayName": "agterm"
+  },
+  "plugins": [
+    {
+      "name": "agterm",
+      "source": {
+        "source": "local",
+        "path": "./plugins/agterm"
+      },
+      "policy": {
+        "installation": "AVAILABLE"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

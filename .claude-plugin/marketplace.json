@@ -1,0 +1,33 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "agterm",
+  "owner": {
+    "name": "Umputun",
+    "email": "umputun@gmail.com"
+  },
+  "metadata": {
+    "description": "The agterm agent skill: drive the agterm macOS terminal over its control socket."
+  },
+  "plugins": [
+    {
+      "name": "agterm",
+      "source": "./plugins/agterm",
+      "description": "Drive agterm, a native macOS terminal, programmatically via its agtermctl CLI and local control socket.",
+      "version": "0.18.1",
+      "author": {
+        "name": "Umputun"
+      },
+      "homepage": "https://agterm.com",
+      "repository": "https://github.com/umputun/agterm",
+      "license": "MIT",
+      "category": "productivity",
+      "keywords": [
+        "agterm",
+        "terminal",
+        "macos",
+        "automation",
+        "control-socket"
+      ]
+    }
+  ]
+}

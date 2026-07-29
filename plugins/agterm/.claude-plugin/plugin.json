@@ -1,0 +1,21 @@
+{
+  "name": "agterm",
+  "version": "0.18.1",
+  "description": "Drive agterm, a native macOS terminal, programmatically via its agtermctl CLI and local control socket.",
+  "author": {
+    "name": "Umputun"
+  },
+  "homepage": "https://agterm.com",
+  "repository": "https://github.com/umputun/agterm",
+  "license": "MIT",
+  "keywords": [
+    "agterm",
+    "terminal",
+    "macos",
+    "automation",
+    "control-socket"
+  ],
+  "skills": [
+    "./skills/agterm"
+  ]
+}

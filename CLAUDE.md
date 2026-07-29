@@ -281,7 +281,7 @@ The app must build, `swift test` and `make test-app` must stay green, and `make 
   open to trigger those rules:
   **`CHANGELOG.md` is RELEASE-ONLY — never touch it in a feature PR.**
   It is written only at release time (the `docs: update changelog for vX.Y.Z` commit / the release flow).
-  A feature's own doc updates go to `README.md`, the bundled `agterm/Resources/agent-skill/`,
+  A feature's own doc updates go to `README.md`, the bundled `plugins/agterm/skills/agterm/`,
   and the relevant `.claude/rules/*.md` note — not the changelog.
 
 ## GhosttyKit.xcframework
@@ -393,10 +393,10 @@ always in context:
   only during the final acceptance sweep, after every other leg was already in.
 - **The bundled agent skill is the fourth keep-in-sync surface.**
   Whenever you change the Control API (commands/args/returns), the keymap format,
-  or the window/workspace/session/pane model, update `agterm/Resources/agent-skill/` (SKILL.md + reference.md
+  or the window/workspace/session/pane model, update `plugins/agterm/skills/agterm/` (SKILL.md + reference.md
   + examples.md + troubleshooting.md + scripts, incl. the command count) so the installed agent-driver
   doc stays accurate.
-  The app-repo `agterm/Resources/agent-skill/` is the SINGLE source of truth — edit ONLY there.
+  The app-repo `plugins/agterm/skills/agterm/` is the SINGLE source of truth — edit ONLY there.
   NEVER edit, copy into, or "mirror" the installed copies at `~/.claude/skills/agterm/` or `~/.codex/skills/agterm/`;
   they are install OUTPUTS that Help ▸ Install Agent Skill (`SkillInstaller`) regenerates from the bundle,
   so a manual edit there is wrong and must never even be offered (`~/.claude/skills/agterm/` is snapshotted
@@ -498,7 +498,7 @@ This only changes raw-text line breaks — the rendered markdown is identical �
   addressing, and the CLI/hooks/skill installers.
   Triggers on `ControlServer.swift`, `ControlProtocol`/`ControlResolve`,
   `agtermctlKit`/`agtermctl`, the three installers + their host-free `*Install` logic,
-  `Resources/agent-skill/`, and the control UI tests.
+  `plugins/agterm/skills/agterm/`, and the control UI tests.
 - `settings.md` — `AppSettings`/`SettingsModel`, the 6-tab Settings scene,
   ghostty-config emission, window translucency.
   Triggers on `SettingsModel.swift`, `SettingsView`/`SettingsCatalog`/`WindowAppearance`/`NSColor+AgtermHex`,

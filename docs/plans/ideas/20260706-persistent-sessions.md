@@ -49,7 +49,7 @@ Files/components involved:
   ~lines 206/212; launch/restore).
 - **UI:** `agterm/Views/WorkspaceSidebar.swift`, `agterm/AppActions.swift`, `agterm/agtermApp+Menus.swift`.
 - **Build:** `scripts/setup.sh`, `project.yml`.
-- **Keep-in-sync docs:** `README.md`, `site/docs.html`, `site/index.html`, `agterm/Resources/agent-skill/`
+- **Keep-in-sync docs:** `README.md`, `site/docs.html`, `site/index.html`, `plugins/agterm/skills/agterm/`
   (`SKILL.md`, `reference.md`, `examples.md`, `troubleshooting.md`), `.claude/rules/control-api.md`.
 
 Related patterns found:
@@ -457,7 +457,7 @@ adds only the create-time flag + response reflection + the XCUITest.)*
 **Files:**
 - Modify: `README.md`
 - Modify: `site/docs.html`, `site/index.html` (features + `softwareVersion` JSON-LD)
-- Modify: `agterm/Resources/agent-skill/SKILL.md`, `reference.md`, `examples.md`, `troubleshooting.md`
+- Modify: `plugins/agterm/skills/agterm/SKILL.md`, `reference.md`, `examples.md`, `troubleshooting.md`
 - Modify: `.claude/rules/control-api.md`
 
 - [ ] document persistent sessions in `README.md` (what it is, `--persist`, `session persist`, lifecycle,
