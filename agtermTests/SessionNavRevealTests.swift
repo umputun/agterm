@@ -34,12 +34,10 @@ final class SessionNavRevealTests: XCTestCase {
         try await super.tearDown()
     }
 
-    // A plain nav step that resolves to the session ALREADY selected must not run the pane reveal. `next`
-    // wraps within the filtered set, so a one-element set re-selects the current session, and
-    // `selectSession` does not short-circuit a same-target select — it still returns an indicator. Revealing
-    // on that indicator would clear `splitFocused` and pull the user onto the primary pane on a keystroke
-    // that moved nothing. An UNTAGGED `blocked` is the shape a plain `agtermctl session status blocked`
-    // sends and routes to the `.left`/nil arm, which is the arm that does the clearing.
+    // `next` wraps within the filtered set, so a one-element set re-selects the current session, and
+    // `selectSession` does not short-circuit a same-target select — it still returns an indicator, and
+    // revealing on it would clear `splitFocused` on a keystroke that moved nothing. An UNTAGGED `blocked`
+    // routes to the `.left`/nil arm, the arm that does the clearing.
     func testPlainNavThatMovesNothingKeepsSplitFocus() throws {
         let store = try XCTUnwrap(library.activeStore)
         let session = try XCTUnwrap(store.activeSession)
@@ -55,9 +53,8 @@ final class SessionNavRevealTests: XCTestCase {
                       "a nav step that moved nothing must leave the user on the split pane he was typing in")
     }
 
-    // The other direction, so the test above cannot pass by the reveal being dead everywhere: a step that
-    // DOES move still reveals the moved-to session's tagged pane. Same untagged `blocked` shape, so the
-    // same `.left`/nil arm runs — here it should clear `splitFocused`, targeting the primary pane.
+    // the other direction, so the test above cannot pass by the reveal being dead everywhere: the same
+    // untagged `blocked` shape runs the same `.left`/nil arm, which here must clear `splitFocused`.
     func testPlainNavThatMovesRunsTheReveal() throws {
         let store = try XCTUnwrap(library.activeStore)
         let first = try XCTUnwrap(store.activeSession)

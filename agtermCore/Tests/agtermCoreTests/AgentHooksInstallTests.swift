@@ -5,7 +5,6 @@ import Testing
 struct AgentHooksInstallTests {
     private let scriptDir = "/Users/me/.config/agterm/agent-status"
 
-    // decode the merged JSON back to a dictionary for structural assertions
     private func object(_ json: String) -> [String: Any] {
         let data = json.data(using: .utf8)!
         return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] ?? [:]
@@ -41,7 +40,6 @@ struct AgentHooksInstallTests {
         #expect(command(evts["UserPromptSubmit"]![0])?.contains("--auto-reset") == false)
         #expect(command(evts["Notification"]![0])?.contains("--auto-reset") == false)
         #expect(evts["Notification"]![0]["matcher"] as? String == "permission_prompt")
-        // the unmatched events carry no matcher key
         #expect(evts["UserPromptSubmit"]![0]["matcher"] == nil)
         #expect(evts["PostToolUse"]![0]["matcher"] == nil)
     }
@@ -70,17 +68,14 @@ struct AgentHooksInstallTests {
         let result = try AgentHooksInstall.mergeClaudeSettings(existing: existing, scriptDir: scriptDir)
         #expect(result.changed)
         let root = object(result.json)
-        #expect(root["model"] as? String == "opus") // unrelated top-level key preserved
+        #expect(root["model"] as? String == "opus")
         let evts = events(result.json)
-        // the pre-existing PreToolUse hook is untouched
         #expect(evts["PreToolUse"]?.count == 1)
         #expect(command(evts["PreToolUse"]![0]) == "/usr/bin/guard.sh")
-        // UserPromptSubmit keeps the other hook AND gains the agterm one
         #expect(evts["UserPromptSubmit"]?.count == 2)
         let commands = evts["UserPromptSubmit"]!.compactMap { command($0) }
         #expect(commands.contains("/usr/bin/other-hook.sh"))
         #expect(commands.contains { $0.hasSuffix("agent-status.sh' active --blink") })
-        // PostToolUse + Stop + Notification are still added fresh
         #expect(evts["PostToolUse"]?.count == 1)
         #expect(evts["Stop"]?.count == 1)
         #expect(evts["Notification"]?.count == 1)
@@ -92,14 +87,13 @@ struct AgentHooksInstallTests {
         """
         let first = try AgentHooksInstall.mergeClaudeSettings(existing: existing, scriptDir: scriptDir)
         let second = try AgentHooksInstall.mergeClaudeSettings(existing: first.json, scriptDir: scriptDir)
-        #expect(!second.changed) // re-running is idempotent even with the foreign hook present
+        #expect(!second.changed)
         let commands = events(second.json)["UserPromptSubmit"]!.compactMap { command($0) }
         #expect(commands.contains("/usr/bin/other.sh"))
     }
 
     @Test func mergeRefusesMalformedExisting() {
-        // a non-empty file that isn't a valid JSON object must NOT be overwritten — refuse so the
-        // installer leaves the user's hand-maintained settings.json untouched
+        // refusing leaves the user's hand-maintained settings.json untouched
         #expect(throws: AgentHooksInstall.MergeError.self) {
             try AgentHooksInstall.mergeClaudeSettings(existing: "{ this is not json", scriptDir: scriptDir)
         }
@@ -133,8 +127,8 @@ struct AgentHooksInstallTests {
     @Test func codexHooksBlockMapsActionsAndBakesWrapperPath() {
         let block = AgentHooksInstall.codexHooksBlock(scriptDir: scriptDir)
         let hook = scriptDir + "/agterm-codex-status.sh"
-        // Codex-specific behavior stays in the installed Codex hook. agterm only generates the six
-        // lifecycle entries and copies the hook package from its app resources.
+        // Codex-specific behavior stays in the installed adapter; agterm only generates the six
+        // lifecycle entries.
         #expect(block.contains("command = \"'\(hook)' session-start\""))
         #expect(block.contains("command = \"'\(hook)' user-prompt-submit\""))
         #expect(block.contains("command = \"'\(hook)' pre-tool-use\""))
@@ -158,7 +152,6 @@ struct AgentHooksInstallTests {
         #expect(block.contains("'/Users/O'\\\\''Brien/agent-status/agterm-codex-status.sh' session-start"))
     }
 
-    // extract the written contents from a `.merged` outcome, failing the test otherwise.
     private func mergedContents(_ outcome: AgentHooksInstall.CodexMergeOutcome) -> String {
         guard case .merged(let contents) = outcome else {
             Issue.record("expected .merged, got \(outcome)")
@@ -228,7 +221,7 @@ struct AgentHooksInstallTests {
     @Test func mergeCodexConfigStripsLegacyNotifyLine() {
         let existing = "notify = [\"/Users/me/.config/agterm/agent-status/codex-notify.sh\"]\n"
         let contents = mergedContents(AgentHooksInstall.mergeCodexConfig(existing: existing, scriptDir: scriptDir))
-        #expect(!contents.contains("codex-notify.sh")) // the retired notify line is removed
+        #expect(!contents.contains("codex-notify.sh"))
         #expect(contents.contains("[[hooks.Stop]]"))
     }
 
@@ -239,24 +232,22 @@ struct AgentHooksInstallTests {
         notify = ["/home/me/my-own-notify.sh"]
         """
         let contents = mergedContents(AgentHooksInstall.mergeCodexConfig(existing: existing, scriptDir: scriptDir))
-        #expect(contents.contains("# my codex config")) // comments preserved (surgical append, no reserialize)
+        #expect(contents.contains("# my codex config")) // surgical append, no reserialize
         #expect(contents.contains("model = \"gpt-5\""))
-        #expect(contents.contains("notify = [\"/home/me/my-own-notify.sh\"]")) // user's own notify kept
+        #expect(contents.contains("notify = [\"/home/me/my-own-notify.sh\"]"))
         #expect(contents.contains("[[hooks.PermissionRequest]]"))
         #expect(contents.contains("my-own-notify.sh\"]\n\n\(AgentHooksInstall.rcMarkerBegin)"))
     }
 
     @Test func mergeCodexConfigKeepsNotifyWhenCodexNameOnlyInComment() {
-        // over-match guard: the notify VALUE is a custom program; codex-notify.sh appears only in a
-        // comment, so the parsed value has no codex-notify.sh and the line must be KEPT
+        // over-match guard: codex-notify.sh appears only in a COMMENT, so the parsed value never names it
         let existing = "notify = [\"/home/me/custom.sh\"] # replaces codex-notify.sh\n"
         let contents = mergedContents(AgentHooksInstall.mergeCodexConfig(existing: existing, scriptDir: scriptDir))
-        #expect(contents.contains("notify = [\"/home/me/custom.sh\"]")) // user's notify survives
+        #expect(contents.contains("notify = [\"/home/me/custom.sh\"]"))
     }
 
     @Test func mergeCodexConfigSkipsWhenUserHasOwnHooks() {
-        // a config that already defines hooks (its own array-of-tables) must NOT be appended to — that
-        // would duplicate/break them; the merge reports .hooksExist so the caller prints the block
+        // appending to a config that already defines hooks would duplicate/break them
         let existing = """
         [[hooks.Stop]]
         [[hooks.Stop.hooks]]
@@ -267,7 +258,6 @@ struct AgentHooksInstallTests {
     }
 
     @Test func mergeCodexConfigReportsUnparseable() {
-        // a file that is not valid TOML must be left untouched, not rewritten
         #expect(AgentHooksInstall.mergeCodexConfig(existing: "this = is = not = toml\n", scriptDir: scriptDir) == .unparseable)
     }
 
@@ -277,7 +267,7 @@ struct AgentHooksInstallTests {
         #expect(result.contents.contains(AgentHooksInstall.rcMarkerBegin))
         #expect(result.contents.contains(AgentHooksInstall.rcMarkerEnd))
         #expect(result.contents.contains("source '\(scriptDir)/shell/integration.sh'"))
-        #expect(result.contents.hasPrefix("export FOO=1\n")) // prior content preserved
+        #expect(result.contents.hasPrefix("export FOO=1\n"))
     }
 
     @Test func appendShellRCSecondCallIsNoOp() {
@@ -285,7 +275,6 @@ struct AgentHooksInstallTests {
         let second = AgentHooksInstall.appendShellRC(existing: first.contents, scriptDir: scriptDir)
         #expect(!second.changed)
         #expect(second.contents == first.contents)
-        // exactly one occurrence of the begin marker
         let count = first.contents.components(separatedBy: AgentHooksInstall.rcMarkerBegin).count - 1
         #expect(count == 1)
     }
@@ -399,7 +388,7 @@ struct AgentHooksInstallTests {
         try FileManager.default.setAttributes([.posixPermissions: NSNumber(value: 0o600)], ofItemAtPath: path)
         let mode = AgentHooksInstall.posixMode(ofFile: path)
         try AgentHooksInstall.writeFile("new contents", toPath: path, posixMode: mode)
-        #expect(AgentHooksInstall.posixMode(ofFile: path)?.intValue == 0o600) // mode survives the rewrite
+        #expect(AgentHooksInstall.posixMode(ofFile: path)?.intValue == 0o600)
         #expect((try? String(contentsOfFile: path, encoding: .utf8)) == "new contents")
     }
 
@@ -410,7 +399,7 @@ struct AgentHooksInstallTests {
         try AgentHooksInstall.writeFile("hello", toPath: path, posixMode: nil)
         #expect(FileManager.default.fileExists(atPath: path))
         #expect((try? String(contentsOfFile: path, encoding: .utf8)) == "hello")
-        #expect(AgentHooksInstall.posixMode(ofFile: path) != nil) // some default mode was assigned
+        #expect(AgentHooksInstall.posixMode(ofFile: path) != nil)
     }
 
     @Test func posixModeReturnsModeAndNilForAbsent() throws {

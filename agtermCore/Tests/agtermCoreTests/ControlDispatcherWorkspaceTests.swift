@@ -2,14 +2,10 @@ import Foundation
 import Testing
 @testable import agtermCore
 
-// dispatcher tests for the `workspace.*` commands — the focus-mode parse and the `workspace.filter`
-// routing. They live here rather than in `ControlDispatcherTests.swift` only because that file is
-// already close to the 2000-line test-file cap; they share its `MockControlActions` (internal for
-// exactly that reason), the same split `ControlDispatcherDashboardTests` uses.
+// dispatcher tests for the `workspace.*` commands. Split out of `ControlDispatcherTests.swift` (near the
+// 2000-line test-file cap); they share its `MockControlActions`, which is internal for exactly that reason.
 @MainActor
 struct ControlDispatcherWorkspaceTests {
-    // migrated here from `ControlDispatcherTests.workspaceFocusRoutesModeForHostSideValidation`, whose
-    // contract (the raw mode routed through for the host to validate) this task moved into the dispatcher.
     @Test func workspaceFocusRoutesToTheAction() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)

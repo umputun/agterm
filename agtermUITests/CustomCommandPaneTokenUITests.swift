@@ -1,39 +1,25 @@
 import Foundation
 import XCTest
 
-// Verifies the `CustomCommandRunner` pane derivation that populates `{AGT_PANE}`/`$AGT_PANE`: a custom
-// command reports the pane it fired FROM — "left" (main), "right" (split), or "scratch" (the session's
-// scratch terminal). This is the only test that pins that logic. The keybind path derives the pane from
-// the focused SURFACE's identity (NOT the session's `splitFocused` flag), and the palette path from the
-// flag. The probe command writes `$AGT_PANE` to a marker file, which the test reads back. A
-// `ControlAPITestCase` subclass so it can split/focus/scratch panes over the control socket while firing
-// real keystrokes for the keybind path.
+// Pins the `CustomCommandRunner` pane derivation behind `{AGT_PANE}`/`$AGT_PANE`: the keybind path derives
+// the pane from the focused SURFACE's identity (NOT the session's `splitFocused` flag), the palette path
+// from the flag. The probe command writes `$AGT_PANE` to a marker file, which the test reads back.
 @MainActor
 final class CustomCommandPaneTokenUITests: ControlAPITestCase {
-    // keybind path: fire the SAME chord from the main pane (no split) and then from the split's focused
-    // right pane; $AGT_PANE must be "left" then "right", exercising both branches of `runFromKeybind`'s
-    // surface-identity derivation end-to-end through the real NSEvent monitor.
-    //
-    // NOTE: this does NOT isolate "surface identity" from "the splitFocused flag" — in both fired states
-    // the flag and the actual first responder AGREE (the surfaces' onFocusChange closures keep splitFocused
-    // synced to real focus), so a regression deriving the pane from splitFocused would pass here too. A
-    // flag-vs-focus divergence isn't deterministically reproducible: the only way to set the flag without a
-    // focus change is `session.split on` over the socket, after which the main surface is re-hosted into the
-    // HSplitView and holds no reliable first responder — so the chord's "a GhosttySurfaceView must hold
-    // first responder" gate can't be pinned. The surface-identity choice itself is covered by inspection
-    // (`CustomCommandRunner.runFromKeybind`) plus the promoted-survivor reasoning in keymap.md.
+    // NOTE: this does NOT isolate "surface identity" from "the splitFocused flag" — in both fired states the
+    // flag and the actual first responder AGREE, so a regression deriving the pane from splitFocused would
+    // pass here too. A divergence isn't deterministically reproducible: only `session.split on` over the
+    // socket sets the flag without a focus change, and the main surface is then re-hosted into the HSplitView
+    // holding no reliable first responder, so the chord's first-responder gate can't be pinned.
     func testAgtPaneKeybindReflectsFiredFromPane() throws {
         let marker = markerDir.appendingPathComponent("agt-pane-keybind")
-        // ⌘⇧E → write $AGT_PANE to the marker. The runner already wraps the line in `/bin/sh -c`, so
-        // `$AGT_PANE` expands from the exported env; no inner `sh -c` is needed.
+        // the runner already wraps the line in `/bin/sh -c`, so `$AGT_PANE` expands with no inner `sh -c`.
         try relaunch(withKeymap: "command \"Pane Probe\" cmd+shift+e printf %s \"$AGT_PANE\" > \"\(marker.path)\"\n")
 
-        // MAIN pane (no split yet): focus the seeded terminal, fire the chord → "left".
         focusMainTerminal()
         XCTAssertEqual(firePaneProbe(marker) { self.app.typeKey("e", modifierFlags: [.command, .shift]) }, "left",
                        "a chord fired from the main pane should report $AGT_PANE=left")
 
-        // SPLIT right pane: split on, move keyboard focus to the right pane, fire the SAME chord → "right".
         let split = try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"on"}}"#)
         XCTAssertEqual(split["ok"] as? Bool, true, "split on should succeed: \(split)")
         XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the active session should report split:true")
@@ -45,12 +31,8 @@ final class CustomCommandPaneTokenUITests: ControlAPITestCase {
                        "a chord fired from the split's right pane should report $AGT_PANE=right")
     }
 
-    // keybind path, SCRATCH: open the session's scratch terminal over the socket (it auto-focuses on
-    // show), then fire the SAME chord from it → "scratch". This is the app-side proof of
-    // `runFromSessionlessSurface`'s scratch branch: the scratch surface has no `view.session`, so the
-    // runner identifies it as the ACTIVE session's `scratchSurface` and reports `.scratch`, the read leg
-    // of the `$AGT_PANE` → `session type --pane scratch` round-trip. The host-free tests can't reach the
-    // runner. The quick terminal and overlays deliberately have no pane value (their state is on `tree`).
+    // the scratch surface has no `view.session`, so `runFromSessionlessSurface` must identify it as the ACTIVE
+    // session's `scratchSurface` — the read leg of the `$AGT_PANE` → `session type --pane scratch` round-trip.
     func testAgtPaneKeybindReportsScratch() throws {
         let marker = markerDir.appendingPathComponent("agt-pane-scratch")
         try relaunch(withKeymap: "command \"Pane Probe\" cmd+shift+e printf %s \"$AGT_PANE\" > \"\(marker.path)\"\n")
@@ -58,23 +40,20 @@ final class CustomCommandPaneTokenUITests: ControlAPITestCase {
         focusMainTerminal()
         let scratch = try sendCommand(#"{"cmd":"session.scratch","target":"active","args":{"mode":"on"}}"#)
         XCTAssertEqual(scratch["ok"] as? Bool, true, "scratch on should succeed: \(scratch)")
-        // wait for the scratch surface to realize (shell spawned, readable) so the focus it grabs is real.
         XCTAssertTrue(pollScratchRealized(timeout: 10), "the control-opened scratch should realize its surface")
         app.activate()
 
-        // the scratch auto-focuses on show, but that focus is async — retry the chord until it reports the
-        // scratch (a chord landing before the scratch grabs first responder reports the main pane).
+        // the scratch's auto-focus on show is async, so a chord landing before it grabs first responder
+        // reports the main pane — retry until it reports the scratch.
         XCTAssertEqual(fireUntil("scratch", marker: marker) { self.app.typeKey("e", modifierFlags: [.command, .shift]) },
                        "scratch", "a chord fired from the scratch terminal should report $AGT_PANE=scratch")
     }
 
-    // palette path: the runner's `run(_:)` (no fired-from surface to key off) derives the pane from the
-    // active session's `splitFocused` flag. Split on + focus right, then run the command from the Custom
-    // Commands palette; opening the menu doesn't touch `splitFocused`, so the flag stays true → "right".
+    // `run(_:)` has no fired-from surface to key off, so it derives the pane from `splitFocused`; opening the
+    // palette menu doesn't touch that flag, so it stays true across the run.
     func testAgtPanePaletteUsesFocusedPane() throws {
         let marker = markerDir.appendingPathComponent("agt-pane-palette")
-        // no chord → palette-only (the `printf` token is not a valid chord, so the whole remainder is the
-        // shell line).
+        // no chord, so the `printf` token is not read as one and the whole remainder is the shell line.
         try relaunch(withKeymap: "command \"Pane Probe\" printf %s \"$AGT_PANE\" > \"\(marker.path)\"\n")
 
         let split = try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"on"}}"#)
@@ -90,26 +69,21 @@ final class CustomCommandPaneTokenUITests: ControlAPITestCase {
                        "a command run from the palette while the right pane is focused should report $AGT_PANE=right")
     }
 
-    // palette path, default (no split): the seeded session has no split, so `run(_:)`'s
-    // `splitFocused ? .right : .left` takes the `.left` branch — the common case, and the half of that
-    // ternary the split+focus-right test above never exercises through the real runner. Pins that a
-    // swapped ternary or a hardcoded `.right` in the palette path would be caught.
+    // the `.left` half of `run(_:)`'s `splitFocused ? .right : .left`, which the split+focus-right test above
+    // never exercises — without it a swapped ternary or a hardcoded `.right` would go unnoticed.
     func testAgtPanePaletteDefaultsToLeftWithoutSplit() throws {
         let marker = markerDir.appendingPathComponent("agt-pane-palette-left")
         try relaunch(withKeymap: "command \"Pane Probe\" printf %s \"$AGT_PANE\" > \"\(marker.path)\"\n")
 
-        // no split on the seeded session → the active pane is the main pane, so the palette path reports left.
         try? FileManager.default.removeItem(at: marker)
         runFromCustomCommandsPalette("Pane Probe")
         XCTAssertEqual(pollMarker(marker, timeout: 5), "left",
                        "a command run from the palette with no split should report $AGT_PANE=left")
     }
 
-    // promoted single-pane: split on, then exit the PRIMARY (main/left) shell so `closePrimaryPane`
-    // promotes the survivor INTO the main slot (surface=survivor, splitSurface=nil, hasSplit=false,
-    // splitFocused=false — a plain single pane). {AGT_PANE} must report "left": the survivor is now the
-    // main pane, and `session.type --pane left` reaches it. Then prove the round-trip the token exists
-    // for: `session.type --pane <reported>` lands in the promoted pane's own buffer.
+    // exiting the PRIMARY shell makes `closePrimaryPane` promote the survivor INTO the main slot
+    // (splitSurface=nil, hasSplit=false, splitFocused=false), so the survivor must report "left" and
+    // `session.type --pane left` must reach it.
     func testAgtPanePromotedSurvivorReportsLeft() throws {
         let marker = markerDir.appendingPathComponent("agt-pane-promoted")
         try relaunch(withKeymap: "command \"Pane Probe\" printf %s \"$AGT_PANE\" > \"\(marker.path)\"\n")
@@ -119,10 +93,8 @@ final class CustomCommandPaneTokenUITests: ControlAPITestCase {
         XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the active session should report split:true")
         let activeID = try activeSessionID()
 
-        // a no-pane session.type injects into the main (left) surface regardless of focus, so `exit` closes
-        // the primary pane; with a live split pane, `closePrimaryPane` promotes the survivor rather than
-        // closing the session. Retry the exit until the split flag drops (the shell may not be at a prompt
-        // for the first keystrokes — the same readiness idiom the pane-text polls use).
+        // a no-pane session.type injects into the main surface regardless of focus, so this `exit` closes the
+        // primary pane. Retry it: the shell may not be at a prompt yet for the first keystrokes.
         var promoted = false
         for _ in 0..<5 {
             _ = try sendCommand(typeRequest(text: "exit\n", target: activeID, select: false))
@@ -130,15 +102,12 @@ final class CustomCommandPaneTokenUITests: ControlAPITestCase {
         }
         XCTAssertTrue(promoted, "exiting the primary pane should promote the survivor to a single (non-split) pane")
 
-        // palette path: the promoted survivor is now the main pane (splitSurface == nil, splitFocused ==
-        // false), so run() reports left.
         try? FileManager.default.removeItem(at: marker)
         runFromCustomCommandsPalette("Pane Probe")
         let reported = pollMarker(marker, timeout: 5)
         XCTAssertEqual(reported, "left", "a promoted split survivor is the main pane, so $AGT_PANE=left")
 
-        // round-trip: session.type --pane <reported> must reach THAT pane's buffer (the survivor). Typed as
-        // `$((6*7))` arithmetic so a match proves the survivor's shell RAN the line, not merely echoed it.
+        // typed as `$((6*7))` arithmetic so a match proves the survivor's shell RAN the line, not echoed it.
         let pane = try XCTUnwrap(reported)
         let tag = "PROMO-\(UUID().uuidString.prefix(8))"
         let text = try pollPaneText(target: activeID, pane: pane, contains: "\(tag)-42", retype: {

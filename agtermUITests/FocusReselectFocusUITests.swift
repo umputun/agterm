@@ -52,8 +52,7 @@ final class FocusReselectFocusUITests: ControlAPITestCase {
                           "keystrokes reaching the hidden session is the regression this guards")
     }
 
-    /// A visible quick terminal OWNS first responder, so a narrowing behind it must not pull focus into the
-    /// covered deck. Driven over the socket, since the bottom-bar toggle is under the cover.
+    /// Driven over the socket rather than the bottom-bar toggle, which sits under the quick terminal.
     func testNarrowingBehindTheQuickTerminalLeavesItsFocusAlone() throws {
         let hidden = try activeSessionID()
         let hiddenTTY = markerDir.appendingPathComponent("qt-hidden-tty")

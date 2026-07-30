@@ -184,7 +184,6 @@ struct AppStoreOrganizationTests {
         store.setFlag(true, forSession: a.id)
         store.setFlag(true, forSession: b.id)
         #expect(store.flaggedSessions.map(\.id) == [a.id, b.id])
-        // moving a into personal (after b) keeps its flag and re-sorts the derived list
         store.moveSession(a.id, toWorkspace: personal.id)
         #expect(a.flagged)
         #expect(store.flaggedSessions.map(\.id) == [b.id, a.id])
@@ -195,26 +194,17 @@ struct AppStoreOrganizationTests {
         let ws1 = store.addWorkspace(name: "one")
         store.setFocusedWorkspace(ws1.id)
         #expect(store.focusedWorkspaceIDs == [ws1.id] && store.focusEnabled)
-        // a normal create joins the marked set so the new workspace is revealed without dropping the filter.
         let two = store.addWorkspace(name: "two")
         #expect(store.focusedWorkspaceIDs == [ws1.id, two.id] && store.focusEnabled)
-        // re-focus, then a background create (revealNewWorkspace: false, backing session.new --no-select
-        // --create-workspace) leaves the focus filter untouched.
+        // revealNewWorkspace: false backs `session.new --no-select --create-workspace`
         store.setFocusedWorkspace(ws1.id)
         let created = store.ensureWorkspace(named: "bg", revealNewWorkspace: false)
         #expect(created != nil)
         #expect(store.focusedWorkspaceIDs == [ws1.id] && store.focusEnabled)
-        // reusing an existing workspace never touches focus regardless of revealNewWorkspace.
         let reused = store.ensureWorkspace(named: "bg", revealNewWorkspace: true)
         #expect(reused?.id == created?.id)
         #expect(store.focusedWorkspaceIDs == [ws1.id] && store.focusEnabled)
     }
-
-    // the focus-filter cases that used to sit here (remove a focused / non-focused workspace, select a
-    // session outside / inside the set) now live in `AppStoreFocusTests` as multi-member supersets of the
-    // same behavior — `removingTheLastMemberWorkspaceDisablesTheFilter`,
-    // `removingANonMemberWorkspaceLeavesTheFilterUntouched`,
-    // `selectingOutsideTheSetDisablesTheFilterButKeepsEveryMember`, `selectingInsideTheSetChangesNothing`.
 
     @Test func newWorkspaceStartsExpanded() {
         let store = makeStore()
@@ -236,7 +226,6 @@ struct AppStoreOrganizationTests {
         let store = AppStore(persistence: persistence)
         let a = store.addWorkspace(name: "a")
         let b = store.addWorkspace(name: "b")
-        // only `a` stays expanded; `b` collapses.
         store.setWorkspacesExpanded([a.id])
         #expect(store.workspaces[0].isExpanded)
         #expect(!store.workspaces[1].isExpanded)
@@ -251,8 +240,7 @@ struct AppStoreOrganizationTests {
         let persistence = PersistenceStore(directory: dir)
         let store = AppStore(persistence: persistence)
         let a = store.addWorkspace(name: "a")
-        // collapse a, flush to disk, then hand-edit the on-disk file to a sentinel and re-issue the SAME
-        // state: a no-op mutator must not overwrite the sentinel (proving it skipped save()).
+        // the sentinel proves the no-op setter skipped save(): a real write would replace this bad JSON.
         store.setWorkspacesExpanded([]) // a collapsed, saved
         let sentinelURL = dir.appendingPathComponent("workspaces.json")
         try! Data("{ not json }".utf8).write(to: sentinelURL)
@@ -304,7 +292,6 @@ struct AppStoreOrganizationTests {
         store.closeSession(only.id) // reselects the personal session — outside the now-empty focused work
         #expect(store.activeSession != nil)
         #expect(store.workspace(forSession: store.selectedSessionID!)?.id == personal.id)
-        // the filter switches off to reveal the new active session; the marked set is preserved.
         #expect(store.focusedWorkspaceIDs == [work.id] && !store.focusEnabled)
     }
 
@@ -423,7 +410,6 @@ struct AppStoreOrganizationTests {
         store.setFocusedWorkspace(work.id)
         let created = store.addSession(toWorkspace: other.id, cwd: "/o")! // a control add into another workspace
         #expect(store.selectedSessionID == created.id)
-        // the filter switches off to reveal the just-created off-set session; the marked set is preserved.
         #expect(store.focusedWorkspaceIDs == [work.id] && !store.focusEnabled)
     }
 
@@ -456,7 +442,6 @@ struct AppStoreOrganizationTests {
         store.setFocusedWorkspace(work.id)
         store.moveSession(a.id, toWorkspace: other.id) // the active session leaves the focused workspace
         #expect(store.selectedSessionID == a.id)
-        // the filter switches off to reveal the moved active session; the marked set is preserved.
         #expect(store.focusedWorkspaceIDs == [work.id] && !store.focusEnabled)
     }
 

@@ -27,15 +27,13 @@ struct AgentStatusTests {
     }
 
     @Test func clearedByKeystrokeClearsAttentionAlwaysAndActiveOnlyOnInterrupt() {
-        // blocked/completed clear on ANY key — you've engaged with the prompt / finished result
         #expect(AgentStatus.blocked.clearedByKeystroke(isInterrupt: false))
         #expect(AgentStatus.blocked.clearedByKeystroke(isInterrupt: true))
         #expect(AgentStatus.completed.clearedByKeystroke(isInterrupt: false))
         #expect(AgentStatus.completed.clearedByKeystroke(isInterrupt: true))
-        // active clears ONLY on an interrupt keystroke (Esc or Ctrl-C); ordinary typing leaves the glyph
+        // isInterrupt = Esc or Ctrl-C; ordinary typing leaves the glyph
         #expect(!AgentStatus.active.clearedByKeystroke(isInterrupt: false))
         #expect(AgentStatus.active.clearedByKeystroke(isInterrupt: true))
-        // idle has no glyph to clear
         #expect(!AgentStatus.idle.clearedByKeystroke(isInterrupt: false))
         #expect(!AgentStatus.idle.clearedByKeystroke(isInterrupt: true))
     }
@@ -79,19 +77,15 @@ struct AgentStatusTests {
     }
 
     @Test func clearedByMatchingPaneFollowsClearedByKeystroke() {
-        // matching pane clears iff the status itself is clearable by that keystroke
         #expect(AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .right, isInterrupt: false))
         #expect(AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .right, isInterrupt: true))
         #expect(AgentIndicator(status: .completed, statusPane: .scratch).clearedBy(pane: .scratch, isInterrupt: false))
-        // active clears only on an interrupt keystroke, and only for its own pane
         #expect(!AgentIndicator(status: .active, statusPane: .right).clearedBy(pane: .right, isInterrupt: false))
         #expect(AgentIndicator(status: .active, statusPane: .right).clearedBy(pane: .right, isInterrupt: true))
-        // idle never clears
         #expect(!AgentIndicator(status: .idle, statusPane: .right).clearedBy(pane: .right, isInterrupt: true))
     }
 
     @Test func clearedByNonMatchingPaneNeverClears() {
-        // a keystroke from a different pane must never clear a background block
         #expect(!AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .left, isInterrupt: false))
         #expect(!AgentIndicator(status: .blocked, statusPane: .right).clearedBy(pane: .left, isInterrupt: true))
         #expect(!AgentIndicator(status: .blocked, statusPane: .scratch).clearedBy(pane: .left, isInterrupt: false))
@@ -99,7 +93,6 @@ struct AgentStatusTests {
     }
 
     @Test func clearedByNilStatusPaneTreatedAsLeft() {
-        // nil statusPane behaves as .left (main): a left keystroke clears, right/scratch do not
         #expect(AgentIndicator(status: .blocked).clearedBy(pane: .left, isInterrupt: false))
         #expect(!AgentIndicator(status: .blocked).clearedBy(pane: .right, isInterrupt: false))
         #expect(!AgentIndicator(status: .blocked).clearedBy(pane: .scratch, isInterrupt: true))
@@ -114,13 +107,11 @@ struct AgentStatusTests {
     }
 
     @Test func effectiveSoundPrefersPerCallOverDefault() {
-        // explicit per-call sound wins on any status, even when a blocked default is set.
         #expect(AgentStatus.blocked.effectiveSound(perCall: "Glass", blockedDefault: "Sosumi") == "Glass")
         #expect(AgentStatus.active.effectiveSound(perCall: "Glass", blockedDefault: "Sosumi") == "Glass")
     }
 
     @Test func effectiveSoundUsesBlockedDefaultOnlyForBlocked() {
-        // no per-call sound: the configured default plays for blocked, but never for the other states.
         #expect(AgentStatus.blocked.effectiveSound(perCall: nil, blockedDefault: "Sosumi") == "Sosumi")
         #expect(AgentStatus.active.effectiveSound(perCall: nil, blockedDefault: "Sosumi") == nil)
         #expect(AgentStatus.completed.effectiveSound(perCall: nil, blockedDefault: "Sosumi") == nil)
@@ -143,13 +134,12 @@ struct AgentStatusTests {
     }
 
     @Test func attentionRankOrdersBlockedActiveCompleted() {
-        // blocked is most urgent, then active, then completed
         #expect(AgentStatus.blocked.attentionRank < AgentStatus.active.attentionRank)
         #expect(AgentStatus.active.attentionRank < AgentStatus.completed.attentionRank)
         #expect(AgentStatus.blocked.attentionRank == 0)
         #expect(AgentStatus.active.attentionRank == 1)
         #expect(AgentStatus.completed.attentionRank == 2)
-        // idle is never sorted (filtered out first); sorts after the non-idle states
+        // idle is filtered out before sorting, so it ranks after the non-idle states
         #expect(AgentStatus.completed.attentionRank < AgentStatus.idle.attentionRank)
     }
 
@@ -158,7 +148,6 @@ struct AgentStatusTests {
         #expect(AgentStatus.active.symbolName(override: nil, configured: nil) == "circle.fill")
         #expect(AgentStatus.blocked.symbolName(override: nil, configured: nil) == "circle.fill")
         #expect(AgentStatus.completed.symbolName(override: nil, configured: nil) == "circle.fill")
-        // idle never renders a glyph
         #expect(AgentStatus.idle.symbolName(override: nil, configured: nil) == "")
     }
 
@@ -172,8 +161,7 @@ struct AgentStatusTests {
     }
 
     @Test func statusShapeDisplayNamesAreCapitalizedRawValues() {
-        // the Settings picker's option label and its accessibility value, so the e2e's menu-item titles
-        // ("Triangle") and its post-relaunch picker value are pinned here rather than in the view.
+        // the e2e's menu-item titles and its post-relaunch picker value are pinned here, not in the view
         #expect(StatusShape.circle.displayName == "Circle")
         #expect(StatusShape.square.displayName == "Square")
         #expect(StatusShape.triangle.displayName == "Triangle")
@@ -214,8 +202,6 @@ struct AgentStatusTests {
     }
 
     @Test func symbolNameBothNilIsThePlainCircleDefault() {
-        // the built-in default is StatusShape.circle for every non-idle state, so an unset shape and an
-        // explicit circle render identically
         #expect(AgentStatus.active.symbolName(override: nil, configured: nil) == StatusShape.circle.symbolName)
         #expect(AgentStatus.blocked.symbolName(override: nil, configured: nil) == StatusShape.circle.symbolName)
         #expect(AgentStatus.completed.symbolName(override: nil, configured: nil) == StatusShape.circle.symbolName)
@@ -224,7 +210,6 @@ struct AgentStatusTests {
     }
 
     @Test func symbolNameIdleIsEmptyInEveryCombination() {
-        // idle renders no glyph, so a shape is accepted and ignored
         #expect(AgentStatus.idle.symbolName(override: nil, configured: nil) == "")
         #expect(AgentStatus.idle.symbolName(override: .star, configured: nil) == "")
         #expect(AgentStatus.idle.symbolName(override: nil, configured: .square) == "")
@@ -236,7 +221,7 @@ struct AgentStatusTests {
         #expect(AgentIndicator(status: .blocked, shape: .triangle) != AgentIndicator(status: .blocked))
         #expect(AgentIndicator(status: .blocked, shape: .triangle) != AgentIndicator(status: .blocked, shape: .square))
         #expect(AgentIndicator(status: .blocked, shape: .triangle) == AgentIndicator(status: .blocked, shape: .triangle))
-        #expect(AgentIndicator(status: .blocked).shape == nil) // unset by default
+        #expect(AgentIndicator(status: .blocked).shape == nil)
     }
 
     @Test func tooltipTextNamesVisibleStatusesAndOmitsIdle() {

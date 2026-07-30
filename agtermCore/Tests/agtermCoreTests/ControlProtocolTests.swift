@@ -140,7 +140,6 @@ struct ControlProtocolTests {
         let decoded = try roundTrip(request)
         #expect(decoded == request)
         #expect(decoded.args?.full == nil)
-        // omit-when-nil WIRE contract for the new `full` field: a percent resize must not emit `full` at all.
         let json = String(data: try JSONEncoder().encode(request), encoding: .utf8) ?? ""
         #expect(!json.contains("full"), "a nil full must be omitted from the JSON; got \(json)")
     }
@@ -164,8 +163,6 @@ struct ControlProtocolTests {
         let decoded = try roundTrip(request)
         #expect(decoded == request)
         #expect(decoded.args?.follow == nil)
-        // verify the omit-when-nil WIRE contract (the reason follow is Bool?): a nil follow must not be
-        // encoded at all, not emitted as null.
         let json = String(data: try JSONEncoder().encode(request), encoding: .utf8) ?? ""
         #expect(!json.contains("follow"), "a nil follow must be omitted from the JSON; got \(json)")
     }
@@ -345,7 +342,6 @@ struct ControlProtocolTests {
     }
 
     @Test func sessionStatusUnknownStateDecodesForServerToReject() throws {
-        // an unknown status string decodes fine; the server rejects it via AgentStatus(rawValue:) -> nil.
         let json = #"{"cmd":"session.status","args":{"status":"bogus"}}"#
         let decoded = try JSONDecoder().decode(ControlRequest.self, from: Data(json.utf8))
         #expect(decoded.cmd == .sessionStatus)
@@ -448,8 +444,7 @@ struct ControlProtocolTests {
     }
 
     @Test func workspaceFilterRoundTripsWithWindow() throws {
-        // workspace.filter is window-scoped and takes no --target: it flips the whole focus filter, so the
-        // only selector it carries is the global --window.
+        // workspace.filter is window-scoped and takes no --target.
         let request = ControlRequest(cmd: .workspaceFilter, args: ControlArgs(mode: "on", window: "9f3c"))
         let decoded = try roundTrip(request)
         #expect(decoded == request)
@@ -519,7 +514,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeOmitsTitleWhenNil() throws {
-        // a session with no reported title must omit the key entirely (backward-compatible), not emit null.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
         #expect(!json.contains("title"), "a nil title must be omitted from the JSON; got \(json)")
@@ -540,7 +534,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeOmitsForegroundWhenNil() throws {
-        // a pane at its prompt has no foreground command — the keys must be omitted, not emitted as null.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
         #expect(!json.contains("foreground"), "a nil foreground must be omitted from the JSON; got \(json)")
@@ -560,11 +553,9 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeOmitsFontSizesWhenNil() throws {
-        // an unrealized pane has no live font size — the keys must be omitted, not emitted as null.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
-        // contains is case-sensitive: "fontSize" catches only the main key, "FontSize" catches the
-        // suffixed splitFontSize/scratchFontSize keys — assert both so all three omissions are covered.
+        // contains is case-sensitive: assert both "fontSize" and "FontSize" so all three keys are covered.
         #expect(!json.contains("fontSize"), "the main fontSize key must be omitted when nil; got \(json)")
         #expect(!json.contains("FontSize"), "splitFontSize/scratchFontSize must be omitted when nil; got \(json)")
     }
@@ -579,7 +570,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeOmitsStatusWhenNil() throws {
-        // an idle session has no agent status — the key must be omitted, not emitted as null.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
         #expect(!json.contains("status"), "a nil status must be omitted from the JSON; got \(json)")
@@ -588,7 +578,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeRoundTripsWithStatusPane() throws {
-        // the read side of session.status --pane: which pane set the status rides the tree node.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true,
                                          status: "blocked", statusPane: "right")
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
@@ -599,7 +588,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeOmitsStatusPaneWhenNil() throws {
-        // a session with no pane tag — the key must be omitted, not emitted as null.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
         #expect(!json.contains("statusPane"), "a nil statusPane must be omitted from the JSON; got \(json)")
@@ -608,7 +596,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeRoundTripsWithStatusBlinkAndColor() throws {
-        // the read side of session.status --blink/--color: the status modifiers ride the tree node.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
                                          status: "blocked", statusBlink: true, statusColor: "#ff8800")
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
@@ -621,7 +608,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeOmitsStatusBlinkAndColorWhenNil() throws {
-        // an idle / non-blinking / default-color status — both keys must be omitted, not emitted as null.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false, status: "blocked")
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
         #expect(!json.contains("statusBlink"), "a nil statusBlink must be omitted; got \(json)")
@@ -632,7 +618,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeRoundTripsWithStatusShape() throws {
-        // the read side of session.status --shape: the per-call silhouette rides the tree node.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
                                          status: "blocked", statusShape: "triangle")
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
@@ -643,7 +628,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeOmitsStatusShapeWhenNil() throws {
-        // a glyph using the Settings shape or the built-in circle — the key must be omitted, not null.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false, status: "blocked")
         let json = String(decoding: try JSONEncoder().encode(session), as: UTF8.self)
         #expect(!json.contains("statusShape"), "a nil statusShape must be omitted; got \(json)")
@@ -652,7 +636,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeRoundTripsWithBackground() throws {
-        // the read side of session.background: the watermark spec rides the tree node so a script can query it.
         let watermark = BackgroundWatermark(kind: .text, text: "PROD", colorHex: "#ff0000",
                                             opacity: 0.2, fit: .cover, position: .topRight)
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
@@ -663,12 +646,11 @@ struct ControlProtocolTests {
         #expect(decoded == response)
         let node = decoded.result?.tree?.workspaces.first?.sessions.first
         #expect(node?.background == watermark)
-        #expect(node?.background?.fit == .cover)          // the typed enum survives the wire round-trip
+        #expect(node?.background?.fit == .cover)
         #expect(node?.background?.position == .topRight)
     }
 
     @Test func treeSessionNodeOmitsBackgroundWhenNil() throws {
-        // a session with no watermark — the key must be omitted, not emitted as null.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
         #expect(!json.contains("background"), "a nil background must be omitted from the JSON; got \(json)")
@@ -677,8 +659,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeRoundTripsWithUnseen() throws {
-        // the read side of the notification badge: the unseen count rides the tree node so a script can
-        // query it (and pair it with session.seen to clear).
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: false, split: false, unseen: 3)
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
             workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
@@ -688,7 +668,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeOmitsUnseenWhenNil() throws {
-        // a session with no pending notifications — the key must be omitted, not emitted as null or 0.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
         #expect(!json.contains("unseen"), "a nil unseen count must be omitted from the JSON; got \(json)")
@@ -697,8 +676,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeRoundTripsWithCommandWait() throws {
-        // the read side of session.new --wait: a held command session carries the flag so a script can
-        // record it and restore the session with --wait (it persists across restart, unlike overlay wait).
         let session = ControlSessionNode(id: "s1", name: "build", cwd: "/tmp", active: false, split: false,
                                          commandWait: true)
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
@@ -709,7 +686,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeOmitsCommandWaitWhenNil() throws {
-        // a plain session or a non-holding command session — the key must be omitted, not emitted as null.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
         #expect(!json.contains("commandWait"), "a nil commandWait must be omitted from the JSON; got \(json)")
@@ -718,8 +694,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeRoundTripsWithOverlaySizePercent() throws {
-        // the read side of session.overlay.resize: a floating overlay's percent rides the tree node so a
-        // script can record it before resizing to full and restore the exact size afterwards.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
                                          overlay: true, overlaySizePercent: 95)
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
@@ -730,8 +704,7 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeOmitsOverlaySizePercentWhenNil() throws {
-        // no overlay, or a FULL-pane overlay — the key must be omitted, not emitted as null (so a script
-        // reads absent as "full or no overlay", gating on the `overlay` bool first).
+        // an absent key means a full-pane overlay OR no overlay — gate on the `overlay` bool first.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false, overlay: true)
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
         #expect(!json.contains("overlaySizePercent"), "a nil overlay size must be omitted from the JSON; got \(json)")
@@ -740,8 +713,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeRoundTripsWithRestoreCommand() throws {
-        // the read side of session.restore: the pinned shell line rides the tree node per pane so a script
-        // can record what is pinned, change it, and restore the original.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true,
                                          restoreCommand: "claude --resume abc",
                                          splitRestoreCommand: "tail -f log")
@@ -755,8 +726,7 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeRoundTripsRestoreCommandPinnedToNothing() throws {
-        // "" = pinned to nothing (a plain shell). The key must be PRESENT and empty — distinct from the
-        // omitted no-override state, which is the whole tri-state, so assert on the encoded JSON too.
+        // "" = pinned to nothing (a plain shell); the key must be present and empty, not omitted.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true,
                                          restoreCommand: "", splitRestoreCommand: "")
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
@@ -768,8 +738,7 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeOmitsRestoreCommandWhenNil() throws {
-        // no override — the keys must be omitted, not emitted as null or as an empty string, so a script
-        // can tell "auto-capture" (absent) from "pinned to nothing" ("").
+        // absent (auto-capture) must stay distinguishable from "" (pinned to nothing).
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
         #expect(!json.contains("restoreCommand"), "a nil override must be omitted from the JSON; got \(json)")
@@ -780,8 +749,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeRoundTripsWithSplitRatio() throws {
-        // the read side of session.resize: the current divider fraction rides the tree node so a script
-        // can record it before maximizing a pane and restore the exact ratio afterwards.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true, splitRatio: 0.35)
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
             workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
@@ -791,7 +758,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeOmitsSplitRatioWhenNil() throws {
-        // no split, or a split still at the default 0.5 — the key must be omitted, not emitted as null.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
         #expect(!json.contains("splitRatio"), "a nil split ratio must be omitted from the JSON; got \(json)")
@@ -800,8 +766,7 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeRoundTripsWithSplitFocused() throws {
-        // the read side of session.focus: which pane holds focus rides the tree node so a script can record
-        // it and restore focus afterwards. false = the main (left) pane, true = the split (right) pane.
+        // false = the main (left) pane, true = the split (right) pane.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true, splitFocused: false)
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
             workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
@@ -811,8 +776,7 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeOmitsSplitFocusedWhenNil() throws {
-        // no split — the key must be omitted, not emitted as null (a false value IS emitted, since it means
-        // the left pane is focused, distinct from "no split").
+        // a false IS emitted (the left pane is focused); only "no split" omits the key.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
         let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
         #expect(!json.contains("splitFocused"), "a nil split focus must be omitted from the JSON; got \(json)")
@@ -837,8 +801,7 @@ struct ControlProtocolTests {
     }
 
     @Test func treeSessionNodeToleratesMissingSurfaces() throws {
-        // a pre-`surface.zoom` server omits the key — it must decode as nil, and a node built without
-        // surfaces must omit the key from the JSON (the optional-field pattern of the other tree additions).
+        // a pre-`surface.zoom` server omits the key entirely, so it must decode as nil.
         let raw = #"{"id":"s1","name":"shell","cwd":"/tmp","active":true,"split":false,"# +
             #""overlay":false,"scratch":false,"flagged":false}"#
         let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(raw.utf8))
@@ -849,7 +812,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeRoundTripsWithLiveWindowFields() throws {
-        // the tree carries the live idle metric + the auto-follow config (both ms) + sidebar visibility.
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false)
         let tree = ControlTree(workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true,
                                                                  sessions: [session])],
@@ -863,7 +825,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeOmitsLiveWindowFieldsWhenNil() throws {
-        // no activity yet + auto-follow disabled + unknown sidebar — every key must be omitted, not null.
         let tree = ControlTree(workspaces: [])
         let json = String(data: try JSONEncoder().encode(tree), encoding: .utf8) ?? ""
         #expect(!json.contains("idleMs"), "a nil idleMs must be omitted from the JSON; got \(json)")
@@ -886,7 +847,6 @@ struct ControlProtocolTests {
     }
 
     @Test func windowNodeOmitsPerWindowFieldsWhenNil() throws {
-        // auto-follow disabled + a closed window with no store — both keys must be omitted, not null.
         let node = ControlWindowNode(id: "w1", name: "work", open: true, active: false)
         let json = String(data: try JSONEncoder().encode(node), encoding: .utf8) ?? ""
         #expect(!json.contains("autoFollowMs"), "a nil autoFollowMs must be omitted from the JSON; got \(json)")
@@ -897,8 +857,7 @@ struct ControlProtocolTests {
     }
 
     @Test func windowNodeRoundTripsWithGeometry() throws {
-        // the read side of window.move/window.resize: the live frame rides the window node so a script can
-        // record it, resize/move, then restore the exact frame (fields match the CLI's --x/--y/--width/etc).
+        // the frame fields match the CLI's --x/--y/--width/--height, so a read-back restores verbatim.
         let node = ControlWindowNode(id: "w1", name: "work", open: true, active: true,
                                      geometry: ControlWindowFrame(x: 100, y: 40, width: 1200, height: 800, display: 1))
         let response = ControlResponse(ok: true, result: ControlResult(windows: [node]))
@@ -909,7 +868,6 @@ struct ControlProtocolTests {
     }
 
     @Test func windowNodeOmitsGeometryWhenNil() throws {
-        // a closed window with no live NSWindow — the key must be omitted, not emitted as null.
         let node = ControlWindowNode(id: "w1", name: "work", open: false, active: false)
         let json = String(data: try JSONEncoder().encode(node), encoding: .utf8) ?? ""
         #expect(!json.contains("geometry"), "a nil geometry must be omitted from the JSON; got \(json)")
@@ -918,8 +876,6 @@ struct ControlProtocolTests {
     }
 
     @Test func windowNodeRoundTripsWithFullscreenAndZoom() throws {
-        // the read side of window.fullscreen/window.zoom: both live toggle states ride the window node so a
-        // script can make the toggles idempotent (only enter/exit when needed).
         let node = ControlWindowNode(id: "w1", name: "work", open: true, active: true, fullscreen: true, zoomed: false)
         let response = ControlResponse(ok: true, result: ControlResult(windows: [node]))
         let decoded = try roundTrip(response)
@@ -929,7 +885,6 @@ struct ControlProtocolTests {
     }
 
     @Test func windowNodeOmitsFullscreenAndZoomWhenNil() throws {
-        // a closed window with no live NSWindow — both keys must be omitted, not emitted as null.
         let node = ControlWindowNode(id: "w1", name: "work", open: false, active: false)
         let json = String(data: try JSONEncoder().encode(node), encoding: .utf8) ?? ""
         #expect(!json.contains("fullscreen"), "a nil fullscreen must be omitted from the JSON; got \(json)")
@@ -940,8 +895,6 @@ struct ControlProtocolTests {
     }
 
     @Test func windowNodeRoundTripsWithMinimized() throws {
-        // the read side of window.minimize, so a script can skip a redundant minimize and restore the set of
-        // windows it put away. A minimized window still reports the frame it comes back to.
         let frame = ControlWindowFrame(x: 100, y: 50, width: 900, height: 600, display: 0)
         let node = ControlWindowNode(id: "w1", name: "work", open: true, active: false,
                                      geometry: frame, minimized: true)
@@ -953,7 +906,6 @@ struct ControlProtocolTests {
     }
 
     @Test func windowNodeOmitsMinimizedWhenNil() throws {
-        // a closed window with no live NSWindow — the key must be omitted, not emitted as null.
         let node = ControlWindowNode(id: "w1", name: "work", open: false, active: false)
         let json = String(data: try JSONEncoder().encode(node), encoding: .utf8) ?? ""
         #expect(!json.contains("minimized"), "a nil minimized must be omitted from the JSON; got \(json)")
@@ -962,8 +914,7 @@ struct ControlProtocolTests {
     }
 
     @Test func workspaceNodeRoundTripsWithFocused() throws {
-        // the read side of workspace.focus: the sidebar-focused workspace is flagged so a script can record
-        // which one is focused and restore it (distinct from `active`, the selected workspace).
+        // `focused` (a member of the sidebar focus set) is distinct from `active` (the selected one).
         let ws = ControlWorkspaceNode(id: "w1", name: "work", active: true, focused: true, sessions: [])
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(workspaces: [ws])))
         let decoded = try roundTrip(response)
@@ -972,7 +923,6 @@ struct ControlProtocolTests {
     }
 
     @Test func workspaceNodeOmitsFocusedWhenNil() throws {
-        // not the focused workspace (or none focused) — the key must be omitted, not emitted as null.
         let ws = ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [])
         let json = String(data: try JSONEncoder().encode(ws), encoding: .utf8) ?? ""
         #expect(!json.contains("focused"), "a nil focused must be omitted from the JSON; got \(json)")
@@ -981,8 +931,6 @@ struct ControlProtocolTests {
     }
 
     @Test func workspaceNodeRoundTripsWithCollapsed() throws {
-        // the read side of workspace.collapse/expand: a collapsed workspace is flagged so a script can
-        // record its open/closed state and restore it, or toggle by reading it first.
         let ws = ControlWorkspaceNode(id: "w1", name: "work", active: true, collapsed: true, sessions: [])
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(workspaces: [ws])))
         let decoded = try roundTrip(response)
@@ -991,8 +939,6 @@ struct ControlProtocolTests {
     }
 
     @Test func workspaceNodeOmitsCollapsedWhenNil() throws {
-        // an expanded workspace (the default) omits the key rather than emitting null, so an all-expanded
-        // tree stays byte-compatible with a legacy response.
         let ws = ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [])
         let json = String(data: try JSONEncoder().encode(ws), encoding: .utf8) ?? ""
         #expect(!json.contains("collapsed"), "a nil collapsed must be omitted from the JSON; got \(json)")
@@ -1012,7 +958,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeRoundTripsWithSidebarMode() throws {
-        // the read side of sidebar.mode: the sidebar view mode (tree/flagged) rides the tree top level.
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
             workspaces: [], sidebarMode: "flagged")))
         let decoded = try roundTrip(response)
@@ -1021,9 +966,7 @@ struct ControlProtocolTests {
     }
 
     @Test func treeRoundTripsWithWorkspaceFilter() throws {
-        // the read side of workspace.filter: the flag half of the focus set rides the tree top level, while
-        // the member half rides each workspace node's `focused` — the two together are the filter term of
-        // the row-visibility contract, which also requires sidebarVisible and tree mode.
+        // a workspace row is visible only when sidebarVisible && tree mode && (filter off || focused).
         let marked = ControlWorkspaceNode(id: "w1", name: "work", active: true, focused: true, sessions: [])
         let other = ControlWorkspaceNode(id: "w2", name: "play", active: false, sessions: [])
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
@@ -1036,8 +979,7 @@ struct ControlProtocolTests {
     }
 
     @Test func treeRoundTripsWithWorkspaceFilterOff() throws {
-        // a marked set with the filter OFF must round-trip as false, not omitted — membership is reported
-        // independently of the flag, so `false` is a real state a script restores.
+        // membership is reported independently of the flag, so `false` is a real state, not an omission.
         let marked = ControlWorkspaceNode(id: "w1", name: "work", active: true, focused: true, sessions: [])
         let tree = ControlTree(workspaces: [marked], workspaceFilter: false)
         let json = String(data: try JSONEncoder().encode(tree), encoding: .utf8) ?? ""
@@ -1048,7 +990,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeOmitsWorkspaceFilterWhenNil() throws {
-        // a host-produced tree that projects no window — the key must be omitted, not emitted as null.
         let tree = ControlTree(workspaces: [])
         let json = String(data: try JSONEncoder().encode(tree), encoding: .utf8) ?? ""
         #expect(!json.contains("workspaceFilter"), "a nil workspaceFilter must be omitted from the JSON; got \(json)")
@@ -1057,8 +998,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeRoundTripsWithQuickVisible() throws {
-        // the read side of quick: the quick-terminal visibility rides the tree top level so a script can
-        // make the toggle idempotent.
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
             workspaces: [], quickVisible: true)))
         let decoded = try roundTrip(response)
@@ -1067,7 +1006,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeOmitsQuickVisibleWhenNil() throws {
-        // a host-produced tree with no app closure — the key must be omitted, not emitted as null.
         let tree = ControlTree(workspaces: [])
         let json = String(data: try JSONEncoder().encode(tree), encoding: .utf8) ?? ""
         #expect(!json.contains("quickVisible"), "a nil quickVisible must be omitted from the JSON; got \(json)")
@@ -1076,8 +1014,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeRoundTripsWithZoomedSurface() throws {
-        // the read side of surface.zoom: the zoomed surface's control id rides the tree top level so a
-        // script can check "is it already zoomed" and record-then-restore.
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
             workspaces: [], zoomedSurface: "surface:5E5B1C5B-75C5-49E6-8806-2C61D8D6BBA9:right")))
         let decoded = try roundTrip(response)
@@ -1086,7 +1022,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeOmitsZoomedSurfaceWhenNil() throws {
-        // nothing zoomed (or a host-produced tree with no app closure) — the key must be omitted, not null.
         let tree = ControlTree(workspaces: [])
         let json = String(data: try JSONEncoder().encode(tree), encoding: .utf8) ?? ""
         #expect(!json.contains("zoomedSurface"), "a nil zoomedSurface must be omitted from the JSON; got \(json)")
@@ -1119,8 +1054,6 @@ struct ControlProtocolTests {
     }
 
     @Test func dashboardArgsOmitFieldsWhenNil() throws {
-        // the new fields ride Bool?/Double? for the omit-when-nil wire contract: an open request with only
-        // targets must not emit close/fontSize/autoSize at all.
         let request = ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ["9f3c"]))
         let json = String(data: try JSONEncoder().encode(request), encoding: .utf8) ?? ""
         #expect(!json.contains("close"), "a nil close must be omitted from the JSON; got \(json)")
@@ -1130,9 +1063,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeRoundTripsWithDashboardFields() throws {
-        // the read side of dashboard: members / highlighted / applied font / mode ride the tree top level so
-        // a script can read the live grid state. Members/highlighted are pane refs (`<uuid>:left`/`:right`) —
-        // a split session appears as both its `:left` and `:right` cells. LIVE, tree-only like zoomedSurface.
         let members = ["9f3c:left", "9f3c:right", "abcd:left"]
         let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
             workspaces: [], dashboardMembers: members, dashboardHighlighted: "9f3c:right",
@@ -1147,7 +1077,6 @@ struct ControlProtocolTests {
     }
 
     @Test func treeOmitsDashboardFieldsWhenNil() throws {
-        // no dashboard open (or a host-produced tree with no app closure) — the keys must be omitted, not null.
         let tree = ControlTree(workspaces: [])
         let json = String(data: try JSONEncoder().encode(tree), encoding: .utf8) ?? ""
         #expect(!json.contains("dashboardMembers"), "a nil dashboardMembers must be omitted; got \(json)")
@@ -1162,21 +1091,17 @@ struct ControlProtocolTests {
     }
 
     @Test func backgroundWatermarkFitPositionSerializeAsRawStrings() throws {
-        // the Fit/Position enums must serialize to ghostty's exact key strings (identical to the former
-        // String), so the wire + persisted JSON are unchanged by the enum migration.
+        // the enums must serialize as ghostty's exact key strings.
         let watermark = BackgroundWatermark(kind: .image, imagePath: "/a.png", fit: .stretch, position: .bottomCenter)
         let json = String(data: try JSONEncoder().encode(watermark), encoding: .utf8) ?? ""
         #expect(json.contains("\"fit\":\"stretch\""))
         #expect(json.contains("\"position\":\"bottom-center\""))
-        // a decoded-back value equals the original (rawValue mapping is lossless).
         let decoded = try JSONDecoder().decode(BackgroundWatermark.self, from: Data(json.utf8))
         #expect(decoded == watermark)
     }
 
     @Test func backgroundWatermarkColorKindSerializes() throws {
-        // the `.color` kind serializes as "color" and carries only the hex (no opacity — a solid color
-        // honors the Settings window translucency at render time). Round-trip through ControlSessionNode too,
-        // so the actual `tree` wire path (not just the struct in isolation) covers the color read-back.
+        // a `.color` watermark carries only the hex — no opacity, since it takes the window translucency.
         let watermark = BackgroundWatermark(kind: .color, colorHex: "#112233")
         let json = String(decoding: try JSONEncoder().encode(watermark), as: UTF8.self)
         #expect(json.contains("\"kind\":\"color\""))

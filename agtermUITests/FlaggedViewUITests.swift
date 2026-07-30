@@ -17,8 +17,8 @@ final class FlaggedViewUITests: XCTestCase {
 
     override func setUp() async throws {
         continueAfterFailure = false
-        // hermetic state: a fresh temp dir per test so the app seeds exactly one "workspace 1" + one
-        // session, and we never touch the real workspaces.json.
+        // a fresh temp dir per test: the app seeds exactly one "workspace 1" + one session, and the real
+        // workspaces.json is never touched.
         stateDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("agterm-uitest-\(UUID().uuidString)", isDirectory: true)
         app = XCUIApplication()
@@ -31,10 +31,6 @@ final class FlaggedViewUITests: XCTestCase {
         if let stateDir { try? FileManager.default.removeItem(at: stateDir) }
     }
 
-    /// End-to-end flagged view: seed three sessions across two workspaces, flag one in each, flip to
-    /// the flat flagged list (exactly the two flagged rows, labeled `session : workspace`, the unflagged
-    /// row absent), confirm a flagged-row click selects that session and toggling back restores the tree,
-    /// then Clear Flagged empties the view back to the empty-state hint.
     func testFlaggedViewToggleSelectAndClear() throws {
         // workspace 1: alpha (flagged), beta (unflagged); workspace 2: gamma (flagged).
         seedThreeSessions()
@@ -44,18 +40,16 @@ final class FlaggedViewUITests: XCTestCase {
         XCTAssertTrue(pollFlagged("alpha", timeout: 8), "alpha should persist flagged == true")
         XCTAssertTrue(pollFlagged("gamma", timeout: 8), "gamma should persist flagged == true")
 
-        addWorkspace() // workspace 2
+        addWorkspace()
         XCTAssertTrue(app.staticTexts["workspace 2"].waitForExistence(timeout: 5), "second workspace should appear")
         moveSession(named: "gamma", toWorkspace: "workspace 2")
         XCTAssertTrue(pollSessionCount(workspace: "workspace 2", expected: 1, timeout: 8),
                       "gamma should land under workspace 2 (keeping its flag)")
 
-        // flip to the flat flagged list via the bottom-bar toggle.
         let toggle = app.buttons["flagged-view-toggle"]
         XCTAssertTrue(toggle.waitForHittable(timeout: 8), "flagged-view toggle should be hittable")
         toggle.click()
 
-        // exactly the two flagged rows, each labeled `session : workspace`; the unflagged row is absent.
         XCTAssertTrue(sessionRow(named: "alpha : workspace 1").waitForExistence(timeout: 8),
                       "the flagged list should show alpha labeled with its workspace")
         XCTAssertTrue(sessionRow(named: "gamma : workspace 2").waitForExistence(timeout: 8),
@@ -65,11 +59,8 @@ final class FlaggedViewUITests: XCTestCase {
         XCTAssertTrue(pollRowCount(2, timeout: 8),
                       "the flagged list should show exactly the two flagged rows")
 
-        // clicking a flagged row selects that session (observable side effect: the persisted selection).
         clickFlaggedRowSelectsItsSession()
 
-        // toggling back restores the full tree: the unflagged session returns and the `: workspace` label
-        // is gone.
         toggle.click()
         XCTAssertTrue(sessionRow(named: "beta").waitForExistence(timeout: 8),
                       "toggling back to tree mode should restore the unflagged session row")
@@ -78,8 +69,7 @@ final class FlaggedViewUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["workspace 1"].waitForExistence(timeout: 5), "the workspace tree should be back")
         XCTAssertTrue(app.staticTexts["workspace 2"].waitForExistence(timeout: 5), "both workspaces should be back")
 
-        // Clear Flagged empties the flagged view back to the empty-state hint.
-        toggle.click() // back to flagged mode
+        toggle.click()
         XCTAssertTrue(sessionRow(named: "alpha : workspace 1").waitForExistence(timeout: 8),
                       "flagged mode should again show the flagged rows before clearing")
         invokeViewMenuItem("Clear Flagged")
@@ -103,14 +93,12 @@ final class FlaggedViewUITests: XCTestCase {
         flagRow(named: "alpha")
         XCTAssertTrue(pollFlagged("alpha", timeout: 8), "alpha should persist flagged == true")
 
-        // flip to the flat flagged view: the row now shows the decorated `alpha : workspace 1` label.
         let toggle = app.buttons["flagged-view-toggle"]
         XCTAssertTrue(toggle.waitForHittable(timeout: 8), "flagged-view toggle should be hittable")
         toggle.click()
         let decorated = sessionRow(named: "alpha : workspace 1")
         XCTAssertTrue(decorated.waitForHittable(timeout: 8), "the flagged row should show the decorated label")
 
-        // enter inline rename via double-click.
         let field = app.descendants(matching: .any).matching(identifier: "edit-field").firstMatch
         var editing = false
         for _ in 0..<5 {
@@ -119,9 +107,8 @@ final class FlaggedViewUITests: XCTestCase {
         }
         XCTAssertTrue(editing, "rename did not enter edit mode in the flagged view (field never appeared)")
 
-        // the reporter's flow: edit WITHOUT clearing the seed. collapse the selection to the end of the
-        // pre-filled text (right arrow), append, and commit. the stored custom name must be the bare
-        // `alpha-x` — if the editor was seeded with the decorated label, it would bake in ` : workspace 1`.
+        // the reporter's flow: edit WITHOUT clearing the seed — the right arrow collapses to the end of the
+        // pre-filled text, so a decorated seed would bake ` : workspace 1` into the stored name.
         app.typeKey(.rightArrow, modifierFlags: [])
         app.typeText("-x\r")
         XCTAssertTrue(stateDir.pollSnapshot(equals: "alpha-x", timeout: 8) { obj in

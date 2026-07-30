@@ -33,14 +33,12 @@ final class SessionNavUITests: XCTestCase {
     func testSessionNavigationFollowsFocus() throws {
         let firstRow = app.staticTexts["session-row"]
         XCTAssertTrue(firstRow.waitForExistence(timeout: 20), "seeded session should exist")
-        // click the row to put first responder in its terminal (the row click bounces focus into
-        // the surface), then record the first session's shell tty.
+        // the row click bounces first responder into the surface, which the tty oracle needs.
         firstRow.click()
         usleep(800_000)
         let firstTTY = ttyAfterCommand(named: "first")
         XCTAssertNotNil(firstTTY, "first session shell should write its tty (terminal must be focused)")
 
-        // add a second session via the bottom-bar add-session menu.
         let add = app.descendants(matching: .any).matching(identifier: "add-session").firstMatch
         XCTAssertTrue(add.waitForExistence(timeout: 5), "bottom-bar add-session menu should exist")
         add.click()
@@ -48,8 +46,7 @@ final class SessionNavUITests: XCTestCase {
         XCTAssertTrue(newItem.waitForExistence(timeout: 5), "New Session menu item should appear")
         newItem.click()
 
-        // two session rows now; click the second to focus its terminal and record its tty. (the menu
-        // interaction can leave focus off the surface, so a deterministic row click establishes it.)
+        // the menu interaction can leave focus off the surface, so a row click re-establishes it.
         let rows = app.staticTexts.matching(identifier: "session-row")
         XCTAssertTrue(waitForCount(rows, 2, timeout: 8), "a second session row should appear")
         let secondRow = rows.element(boundBy: 1)
@@ -59,12 +56,10 @@ final class SessionNavUITests: XCTestCase {
         XCTAssertNotNil(secondTTY, "second session shell should write its tty")
         XCTAssertNotEqual(secondTTY, firstTTY, "the second session is a separate shell")
 
-        // 3. ⌥⌘↑ (Previous Session) steps back to the first session — focus follows.
         app.typeKey(.upArrow, modifierFlags: [.command, .option])
         usleep(500_000)
         XCTAssertEqual(ttyAfterCommand(named: "prev"), firstTTY, "Opt+Cmd+Up selects the previous session")
 
-        // 4. ⌥⌘↓ (Next Session) steps forward to the second session.
         app.typeKey(.downArrow, modifierFlags: [.command, .option])
         usleep(500_000)
         XCTAssertEqual(ttyAfterCommand(named: "next"), secondTTY, "Opt+Cmd+Down selects the next session")

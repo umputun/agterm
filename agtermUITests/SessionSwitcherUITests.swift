@@ -27,14 +27,13 @@ final class SessionSwitcherUITests: XCTestCase {
     func testCtrlTabSwitchesToPreviousSession() throws {
         let first = try XCTUnwrap(firstSessionID())
 
-        // add a second session; it becomes selected (so [second, first] is the MRU order).
+        // the new session becomes selected, making the MRU order [second, first].
         app.menuBars.menuBarItems["File"].click()
         app.menuItems["New Session"].click()
         XCTAssertTrue(poll { self.sessionCount() == 2 }, "a second session should be added")
         let second = try XCTUnwrap(selectedID())
         XCTAssertNotEqual(second, first, "the new session should be selected after add")
 
-        // Ctrl+Tab → switch to the previously visited (first) session.
         app.typeKey("\t", modifierFlags: .control)
         XCTAssertTrue(poll { self.selectedID() == first }, "Ctrl+Tab should switch to the previously visited session")
 

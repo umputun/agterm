@@ -78,13 +78,12 @@ final class RecentClosedTests {
 
         let loaded = RecentClosedStore(directory: directory).load()
         #expect(loaded.count == 1)
-        #expect(loaded[0].workspace?.focusMember == nil) // absent reads as "not a member"
+        #expect(loaded[0].workspace?.focusMember == nil)
     }
 
     @Test func workspaceEntryWithALegacyFocusEnabledKeyStillDecodes() throws {
-        // the other direction of the same rule: a key that was DROPPED must not fail the decode either, or
-        // the first launch after the upgrade wipes the recent list of anyone who ran the build that wrote
-        // it. `focusEnabled` was one — the reopen leg marks only, so nothing reads a stored filter flag.
+        // the other direction of the same rule: a DROPPED key must not fail the decode either.
+        // `focusEnabled` was one — the reopen leg marks only, so nothing reads a stored filter flag.
         let encoded = try JSONEncoder().encode(RecentClosedState(items: [workspaceItem(title: "work")]))
         var object = try #require(try JSONSerialization.jsonObject(with: encoded) as? [String: Any])
         var items = try #require(object["items"] as? [[String: Any]])
@@ -97,12 +96,11 @@ final class RecentClosedTests {
 
         let loaded = RecentClosedStore(directory: directory).load()
         #expect(loaded.count == 1) // not the empty list a decode failure would produce
-        #expect(loaded[0].workspace?.focusMember == true) // and the surviving field still reads back
+        #expect(loaded[0].workspace?.focusMember == true)
     }
 
-    /// Reopen Closed Item rebuilds the session from its snapshot through `session(from:)`, which defaults
-    /// to arming nothing: the persisted pin comes back (so `tree` reads it and the next launch fires it),
-    /// but no payload is pending, so reopening cannot execute a sticky override mid-process.
+    // the persisted pin comes back, but nothing is armed — a reopen cannot execute a sticky override
+    // mid-process.
     @MainActor
     @Test func reopeningAClosedSessionRestoresThePinWithoutArmingIt() throws {
         let (store, recentClosed, _) = makeStoreWithRecentClosed()
@@ -115,7 +113,7 @@ final class RecentClosedTests {
         #expect(store.restoreRecentClosed(item))
 
         let reopened = try #require(store.session(withID: session.id))
-        #expect(reopened !== session) // rebuilt from the snapshot, not the original object
+        #expect(reopened !== session)
         #expect(reopened.restoreCommand == "claude --resume abc")
         #expect(reopened.pendingRestoreCommand == nil)
         #expect(reopened.pendingSplitRestoreCommand == nil)

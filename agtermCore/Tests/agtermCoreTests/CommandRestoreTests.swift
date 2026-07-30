@@ -26,7 +26,6 @@ struct CommandRestoreTests {
 
     @Test func parseProcArgsRejectsTruncatedAndEmpty() {
         #expect(CommandRestore.parseProcArgs(Data()) == nil)
-        // argc says 2 but only one arg present -> nil (no overread, no partial result).
         let truncated = blob(argc: 2, execPath: "/bin/sh", padding: 0, args: ["sh"])
         #expect(CommandRestore.parseProcArgs(truncated) == nil)
         // a blob shorter than the argc header.
@@ -44,22 +43,19 @@ struct CommandRestoreTests {
         #expect(CommandRestore.isKnownShell("-zsh"))
         #expect(CommandRestore.isKnownShell("-bash", extra: "bash"))
         #expect(CommandRestore.isKnownShell(CommandRestore.basename("-/bin/zsh"))) // path form -> "zsh"
-        // an empty $SHELL basename must not classify an empty argv0 as a shell.
         #expect(!CommandRestore.isKnownShell("", extra: ""))
     }
 
     @Test func isIdleShellSkipsBarePromptButNotScripts() {
-        // a bare interactive/login shell at its prompt is idle (skip).
         #expect(CommandRestore.isIdleShell(argv: ["-zsh"]))
         #expect(CommandRestore.isIdleShell(argv: ["/bin/zsh"]))
         #expect(CommandRestore.isIdleShell(argv: ["-/bin/zsh"]))
         #expect(CommandRestore.isIdleShell(argv: ["zsh", "-i", "-l"]))            // only option flags
         #expect(CommandRestore.isIdleShell(argv: ["bash"], extra: "bash"))
-        // a shell RUNNING a script or -c command is NOT idle — capture it (the cld bug).
+        // a shell running a script or -c is NOT idle — the real-world `cld` launcher bug.
         #expect(!CommandRestore.isIdleShell(argv: ["/bin/sh", "/usr/local/bin/cld"]))
         #expect(!CommandRestore.isIdleShell(argv: ["/bin/sh", "/usr/local/bin/cld", "--flag"]))
         #expect(!CommandRestore.isIdleShell(argv: ["bash", "-c", "echo hi"]))
-        // not a shell at all, or empty.
         #expect(!CommandRestore.isIdleShell(argv: ["htop"]))
         #expect(!CommandRestore.isIdleShell(argv: []))
     }
@@ -71,11 +67,9 @@ struct CommandRestoreTests {
         // interpreters / servers are NOT denied (not in the list): usually scripts or servers worth restoring.
         #expect(CommandRestore.shouldRestore(argv: ["python3", "worker.py"], denylist: denylist))
         #expect(CommandRestore.shouldRestore(argv: ["node", "server.js"], denylist: denylist))
-        // denylisted entries are matched on the basename.
         #expect(!CommandRestore.shouldRestore(argv: ["/usr/bin/vim", "file"], denylist: denylist))
         #expect(!CommandRestore.shouldRestore(argv: ["tmux"], denylist: denylist))
         #expect(!CommandRestore.shouldRestore(argv: ["/opt/homebrew/bin/hx", "."], denylist: denylist))
-        // an empty denylist restores every non-empty argv; an empty argv never restores.
         #expect(CommandRestore.shouldRestore(argv: ["vim", "x"], denylist: []))
         #expect(!CommandRestore.shouldRestore(argv: [], denylist: denylist))
         #expect(!CommandRestore.shouldRestore(argv: [""], denylist: denylist))
@@ -112,8 +106,7 @@ struct CommandRestoreTests {
     }
 
     @Test func parseProcArgsRejectsUnterminatedExecPath() {
-        // argc=1 but the bytes after it run to EOF with no NUL: the exec-path walk hits EOF, no args
-        // are parsed, and the count mismatch returns nil (no overread).
+        // the exec-path walk hits EOF, so no args are parsed and the count mismatch returns nil.
         var d = withUnsafeBytes(of: Int32(1)) { Data($0) }
         d.append(Data("/bin/shhhhhh".utf8)) // no terminating NUL
         #expect(CommandRestore.parseProcArgs(d) == nil)
@@ -136,7 +129,6 @@ struct CommandRestoreTests {
     // MARK: - restorePlan (the surface-seed gate/precedence)
 
     @Test func freshCommandSessionAlwaysRunsItsCommand() {
-        // a freshly created --command session runs its command via the exec path, toggle irrelevant
         for enabled in [true, false] {
             let plan = CommandRestore.restorePlan(.init(wasRestored: false, restoreEnabled: enabled, hadForeground: false,
                                                         foregroundInput: nil, initialCommand: "ssh host", restoreOverride: nil))
@@ -154,15 +146,13 @@ struct CommandRestoreTests {
     }
 
     @Test func capturedForegroundPreemptsInitialCommand() {
-        // a live child captured at quit wins over the persisted creation command (typed, not exec)
         let plan = CommandRestore.restorePlan(.init(wasRestored: true, restoreEnabled: true, hadForeground: true,
                                                     foregroundInput: "top\n", initialCommand: "ssh host", restoreOverride: nil))
         #expect(plan == CommandRestore.RestorePlan(command: nil, initialInput: "top\n"))
     }
 
     @Test func suppressedForegroundYieldsPlainShellNotStaleCommand() {
-        // a foreground was captured but suppressed (denylisted/off → nil input): a plain shell, NOT a
-        // fall-through to the stale creation command
+        // hadForeground with a nil input = captured but suppressed (denylisted, or the toggle off)
         let plan = CommandRestore.restorePlan(.init(wasRestored: true, restoreEnabled: true, hadForeground: true,
                                                     foregroundInput: nil, initialCommand: "ssh host", restoreOverride: nil))
         #expect(plan == CommandRestore.RestorePlan(command: nil, initialInput: nil))
@@ -177,8 +167,7 @@ struct CommandRestoreTests {
     // MARK: - restoreInput (the pinned-override precedence)
 
     @Test func restoreInputFallsThroughWithoutOverride() {
-        // nil override = today's behavior: the captured input passes through untouched, gate irrelevant
-        // (the app side already applied the toggle + denylist to it)
+        // the app side already applied the toggle + denylist to the captured input, so the gate is moot
         for enabled in [true, false] {
             #expect(CommandRestore.restoreInput(restoreEnabled: enabled, restoreOverride: nil,
                                                 capturedInput: "top\n") == "top\n")
@@ -187,10 +176,9 @@ struct CommandRestoreTests {
     }
 
     @Test func restoreInputRunsPinnedCommandOnlyWhenEnabled() {
-        // pinned + enabled: typed verbatim with a newline, never re-quoted, and it beats the capture
+        // a pinned command is typed verbatim with a newline, never re-quoted
         #expect(CommandRestore.restoreInput(restoreEnabled: true, restoreOverride: "cd x && claude --resume y",
                                             capturedInput: "top\n") == "cd x && claude --resume y\n")
-        // the toggle stays the master switch: pinned but disabled → a plain shell, capture ignored too
         #expect(CommandRestore.restoreInput(restoreEnabled: false, restoreOverride: "claude --resume y",
                                             capturedInput: "top\n") == nil)
     }
@@ -203,12 +191,10 @@ struct CommandRestoreTests {
     }
 
     @Test func overrideNeverTakesExecPathAndBeatsInitialCommand() {
-        // an override is typed into the login shell, never exec'd — even for a fresh --command session
         let fresh = CommandRestore.restorePlan(.init(wasRestored: false, restoreEnabled: true, hadForeground: false,
                                                      foregroundInput: nil, initialCommand: "ssh host",
                                                      restoreOverride: "claude --resume y"))
         #expect(fresh == CommandRestore.RestorePlan(command: nil, initialInput: "claude --resume y\n"))
-        // and it wins over a captured foreground too
         let captured = CommandRestore.restorePlan(.init(wasRestored: true, restoreEnabled: true, hadForeground: true,
                                                         foregroundInput: "top\n", initialCommand: nil,
                                                         restoreOverride: "claude --resume y"))

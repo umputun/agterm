@@ -135,10 +135,9 @@ struct KeybindTests {
         }
     }
 
-    // every entry of the table, pinned one by one. The aggregate tests above hold under any permutation of
-    // the 47 entries, and the real kVK_ANSI_* constants are non-monotonic at 4/5 (h/g), 22/23 (6/5) and
-    // 25/26/28/29 (9/7/8/0) — where a transposition is both easiest to make and hardest to eyeball. A swap
-    // would bind a chord to the wrong physical key on every non-Latin layout.
+    // the aggregate tests above hold under any permutation of the 47 entries, and the real kVK_ANSI_*
+    // constants are non-monotonic at 4/5 (h/g), 22/23 (6/5) and 25/26/28/29 (9/7/8/0), where a transposition
+    // is easiest to make and hardest to eyeball.
     @Test func latinKeyMapsEachKeyCodeToItsOwnAnsiCharacter() {
         let table: [UInt16: String] = [
             0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x", 8: "c", 9: "v",
@@ -169,12 +168,12 @@ struct KeybindTests {
         #expect(chordKey(forKeyCode: 31, produced: "щ", layoutIsASCIICapable: false) == "o")
         #expect(chordKey(forKeyCode: 17, produced: "е", layoutIsASCIICapable: false) == "t")
         #expect(chordKey(forKeyCode: 6, produced: "я", layoutIsASCIICapable: false) == "z")
-        // the positions the per-key ASCII test got wrong: Greek types ';' on Q and Hebrew types '/' there,
-        // so a letter chord stayed dead on the layouts this exists to serve.
+        // Greek types ';' on Q and Hebrew types '/' there, so keeping the produced character leaves a letter
+        // chord dead on exactly the layouts this serves.
         #expect(chordKey(forKeyCode: 12, produced: ";", layoutIsASCIICapable: false) == "q", "Greek Q")
         #expect(chordKey(forKeyCode: 12, produced: "/", layoutIsASCIICapable: false) == "q", "Hebrew Q")
         #expect(chordKey(forKeyCode: 13, produced: "'", layoutIsASCIICapable: false) == "w", "Hebrew-PC W")
-        // and the punctuation the standard Russian layout re-homes: '/' types '.', which used to be kept.
+        // the standard Russian layout re-homes punctuation: '/' types '.'.
         #expect(chordKey(forKeyCode: 44, produced: ".", layoutIsASCIICapable: false) == "/")
     }
 
@@ -243,7 +242,6 @@ struct KeybindTests {
     }
 
     @Test func parseRejectsModifierOnly() {
-        // no base key after the modifiers.
         #expect(parseKeybind("ctrl+cmd") == nil)
     }
 
@@ -284,7 +282,6 @@ struct KeybindTests {
     }
 
     @Test func detectsPrefixOverlapRegardlessOfOrder() {
-        // the longer bind listed first still conflicts with the shorter prefix.
         let seq = CustomCommand(name: "seq", command: "", shortcut: "ctrl+a>b")
         let leader = CustomCommand(name: "leader", command: "", shortcut: "ctrl+a")
         let conflicts = keybindConflicts([seq, leader])
@@ -292,8 +289,7 @@ struct KeybindTests {
     }
 
     @Test func detectsThreeWayOverlap() {
-        // ctrl+a, ctrl+a>b, ctrl+a>b>c — every shorter bind is a prefix of every longer one, so all
-        // three pairs conflict.
+        // every shorter bind is a prefix of every longer one, so all three pairs conflict.
         let leader = CustomCommand(name: "leader", command: "", shortcut: "ctrl+a")
         let two = CustomCommand(name: "two", command: "", shortcut: "ctrl+a>b")
         let three = CustomCommand(name: "three", command: "", shortcut: "ctrl+a>b>c")
@@ -305,7 +301,6 @@ struct KeybindTests {
     }
 
     @Test func siblingSequencesSharingLeaderDoNotConflict() {
-        // ctrl+a>b and ctrl+a>c share a leader but neither is a prefix of the other.
         let b = CustomCommand(name: "b", command: "", shortcut: "ctrl+a>b")
         let c = CustomCommand(name: "c", command: "", shortcut: "ctrl+a>c")
         #expect(keybindConflicts([b, c]).isEmpty)
@@ -319,8 +314,8 @@ struct KeybindTests {
     }
 
     @Test func isReservedMonitorChordMatchesTheMonitorPredicates() {
-        // Ctrl-Tab switcher: Tab while Control is held, with ANY other modifiers (it checks
-        // .contains(.control), not exact equality), so all four combinations are reserved.
+        // the switcher checks .contains(.control), not exact equality, so Tab is reserved under any extra
+        // modifiers.
         #expect(isReservedMonitorChord(Chord(mods: [.control], key: "tab")))
         #expect(isReservedMonitorChord(Chord(mods: [.control, .shift], key: "tab")))
         #expect(isReservedMonitorChord(Chord(mods: [.control, .option], key: "tab")))
@@ -331,8 +326,6 @@ struct KeybindTests {
     }
 
     @Test func isReservedMonitorChordRejectsNonMonitorChords() {
-        // tab without control is fine; 1/2 with an extra modifier is NOT reserved (the monitor needs
-        // control alone); 3 is never reserved.
         #expect(!isReservedMonitorChord(Chord(mods: [.command], key: "tab")))
         #expect(!isReservedMonitorChord(Chord(mods: [], key: "tab")))
         #expect(!isReservedMonitorChord(Chord(mods: [.control, .shift], key: "1")))
@@ -347,7 +340,6 @@ struct KeybindTests {
         #expect(Chord(mods: [.control], key: "tab").displayString == "ctrl+tab")
         // fixed ctrl+cmd+opt+shift modifier order regardless of insertion order.
         #expect(Chord(mods: [.shift, .option, .command, .control], key: "x").displayString == "ctrl+cmd+opt+shift+x")
-        // every displayString parses back to the same single chord.
         let chord = Chord(mods: [.command, .option], key: "n")
         #expect(parseKeybind(chord.displayString) == [chord])
     }
@@ -358,7 +350,6 @@ struct KeybindTests {
         #expect(Chord(mods: [.command, .option], key: "n").glyphString == "⌥⌘N")
         #expect(Chord(mods: [.command, .shift], key: "n").glyphString == "⇧⌘N")
         #expect(Chord(mods: [.control], key: "p").glyphString == "⌃P")
-        // fixed macOS ⌃⌥⇧⌘ modifier order regardless of insertion order.
         #expect(Chord(mods: [.shift, .option, .command, .control], key: "x").glyphString == "⌃⌥⇧⌘X")
         // symbols are left as-is; named keys render as their glyphs.
         #expect(Chord(mods: [.command], key: "+").glyphString == "⌘+")

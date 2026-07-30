@@ -3,7 +3,7 @@ import Testing
 @testable import agtermCore
 
 // SessionSnapshot / Snapshot serialization + restore round-trips, forward-compat legacy decodes, and
-// restore-time clamping. Split out of AppStoreTests to keep both files within the line budget.
+// restore-time clamping.
 @MainActor
 struct SnapshotRoundTripTests {
     @Test func splitCwdRoundTripsThroughSnapshot() {
@@ -17,7 +17,6 @@ struct SnapshotRoundTripTests {
         let snapped = snap.workspaces[0].sessions[0]
         #expect(snapped.cwd == "/a/primary")
         #expect(snapped.splitCwd == "/var/log")
-        // restore into a fresh store: each pane keeps its own seed.
         let restored = makeStore()
         restored.restore(from: snap)
         let r = restored.workspaces[0].sessions[0]
@@ -44,7 +43,6 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func legacySnapshotWithoutForegroundCommandDecodesNil() throws {
-        // a snapshot written before this field existed must still decode (nil = plain shell on restore).
         let json = #"{"id":"00000000-0000-0000-0000-000000000001","cwd":"/tmp"}"#
         let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
         #expect(snap.foregroundCommand == nil)
@@ -54,25 +52,22 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func initialCommandRoundTripsThroughSnapshot() {
-        // a command session (e.g. `--command ssh …`) persists its creation command so it re-runs on
-        // restore instead of coming back a plain shell.
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         session.initialCommand = "ssh user@host -t 'ssh inner'"
-        #expect(session.wasRestored == false) // a fresh session is not marked restored
+        #expect(session.wasRestored == false)
         let snap = store.snapshot()
         #expect(snap.workspaces[0].sessions[0].initialCommand == "ssh user@host -t 'ssh inner'")
         let restored = makeStore()
         restored.restore(from: snap)
         let r = restored.workspaces[0].sessions[0]
         #expect(r.initialCommand == "ssh user@host -t 'ssh inner'")
-        #expect(r.wasRestored == true) // restore marks the session, so the surface factory can gate its re-run
+        #expect(r.wasRestored == true) // the surface factory gates the re-run on this
     }
 
     @Test func commandWaitRoundTripsThroughSnapshot() {
-        // a held --command session persists the flag so a restored session that re-runs its command holds
-        // again, keeping the held/closed behavior consistent across restart (issue #254).
+        // a restored session that re-runs its command must hold again, like the original (issue #254).
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a", command: "make test", wait: true)!
@@ -85,9 +80,8 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func commandWaitFalseRoundTripsAsNilAndRestoresFalse() {
-        // a command session created WITHOUT --wait writes commandWait as nil (false is omitted), and restore
-        // maps that nil back to false via session(from:)'s `?? false` — not true. Exercises both the write
-        // gate and the nil->false restore mapping (a `?? true` mutant would restore true and fail here).
+        // false is omitted on write, so restore maps the resulting nil back through `?? false`; a `?? true`
+        // mutant would restore true and fail here.
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a", command: "make test")!
@@ -100,8 +94,7 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func legacySnapshotWithoutCommandWaitDecodesNil() throws {
-        // a snapshot written before --wait existed has no commandWait key; it must decode as nil (not fail
-        // the whole load), like every other post-v1 optional field; restore maps nil to false.
+        // the missing key must decode as nil rather than failing the whole load, like every post-v1 field.
         let json = #"{"id":"\#(UUID().uuidString)","customName":null,"cwd":"/a","initialCommand":"make test"}"#
         let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
         #expect(snap.commandWait == nil)
@@ -122,7 +115,6 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func sidebarDefaultsWhenSnapshotOmitsThem() {
-        // a snapshot written before these fields existed decodes them as nil; restore falls back to defaults.
         let store = makeStore()
         store.sidebarWidth = 400
         store.sidebarVisible = false
@@ -132,7 +124,6 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func restoreClampsOutOfRangeSidebarWidth() {
-        // a corrupt or hand-edited snapshot must not drive an out-of-range frame width; restore clamps it.
         let store = makeStore()
         store.restore(from: Snapshot(workspaces: [], sidebarWidth: 2000))
         #expect(store.sidebarWidth == AppStore.sidebarWidthMax)
@@ -141,7 +132,7 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func restoreClampsOutOfRangeSplitRatio() {
-        // a corrupt snapshot ratio must not feed an out-of-range fraction into NSSplitView.setPosition.
+        // an out-of-range fraction would reach NSSplitView.setPosition unclamped.
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
@@ -183,8 +174,8 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func emptyRestoreCommandRoundTripsAsEmptyNotNil() throws {
-        // "" is the "pinned to nothing" state of the tri-state and must survive JSON as an empty string —
-        // collapsing it to nil would silently turn the opt-out back into auto-capture.
+        // "" is the tri-state's "pinned to nothing"; collapsing it to nil turns the opt-out back into
+        // auto-capture.
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
@@ -202,8 +193,7 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func legacySnapshotWithoutRestoreCommandDecodesNil() throws {
-        // a snapshot written before the override existed must still decode (nil = no override, the
-        // auto-capture behavior) rather than throwing and wiping the saved tree.
+        // a throw here would fail the whole load and wipe the saved tree.
         let json = #"{"id":"\#(UUID().uuidString)","cwd":"/tmp","foregroundCommand":["claude"]}"#
         let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
         #expect(snap.restoreCommand == nil)
@@ -220,7 +210,7 @@ struct SnapshotRoundTripTests {
         store.setFocusMembership(one.id, member: true)
         store.setFocusEnabled(true) // marking only marks; applying the set is its own step
         let snap = store.snapshot()
-        #expect(snap.focusedWorkspaceIDs == [one.id, three.id]) // written in tree order, not Set order
+        #expect(snap.focusedWorkspaceIDs == [one.id, three.id]) // tree order, never the Set's hash order
         #expect(snap.focusEnabled == true)
         let decoded = try JSONDecoder().decode(Snapshot.self, from: JSONEncoder().encode(snap))
         let restored = makeStore()
@@ -230,8 +220,6 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func disabledFilterRoundTripsKeepingItsMarkedSet() {
-        // the set persists apart from the flag, so a relaunch with the filter off still remembers what
-        // was marked — one flip of the bottom-bar toggle brings the working set back.
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
         _ = store.addWorkspace(name: "personal")
@@ -246,20 +234,18 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func unmarkedStoreOmitsBothFocusKeys() throws {
-        // nothing marked writes neither key, so an unfiltered tree serializes like a legacy snapshot.
+        // an unfiltered tree must serialize byte-identically to a legacy snapshot.
         let store = makeStore()
         _ = store.addWorkspace(name: "work")
         let snap = store.snapshot()
         #expect(snap.focusedWorkspaceIDs == nil && snap.focusEnabled == nil)
         let json = try String(decoding: JSONEncoder().encode(snap), as: UTF8.self)
-        // covers the legacy `focusedWorkspaceID` too — it has no stored property at all now, so nothing
-        // starting with `focusedWorkspace` may appear.
+        // the prefix match also covers the legacy `focusedWorkspaceID` key.
         #expect(!json.contains("focusedWorkspace") && !json.contains("focusEnabled"))
     }
 
     @Test func legacySnapshotWithSingleFocusedWorkspaceDecodesAsAnEnabledSet() throws {
-        // the pre-set release wrote only `focusedWorkspaceID`, whose presence meant the filter was on;
-        // it must migrate to a one-member enabled set instead of decoding as nothing marked.
+        // in the pre-set format the key's mere presence meant the filter was on.
         let ws = UUID()
         let json = #"{"version":1,"workspaces":[],"focusedWorkspaceID":"\#(ws.uuidString)"}"#
         let snap = try JSONDecoder().decode(Snapshot.self, from: Data(json.utf8))
@@ -268,10 +254,8 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func reEncodingAMigratedSnapshotDropsTheLegacyFocusKey() throws {
-        // decode-only means decode-only: a legacy file that rides a load -> mutate -> save path (e.g.
-        // `WindowLibrary.clearClosedWindowFontSizes`) must be rewritten with the SET keys alone. While the
-        // legacy value was kept in a stored property it was re-encoded alongside them, so the file kept a
-        // key this build never means to write.
+        // a legacy file riding a load -> mutate -> save path (e.g. `WindowLibrary.clearClosedWindowFontSizes`)
+        // must be rewritten with the SET keys alone.
         let ws = UUID()
         let json = #"{"version":1,"workspaces":[],"focusedWorkspaceID":"\#(ws.uuidString)"}"#
         let decoded = try JSONDecoder().decode(Snapshot.self, from: Data(json.utf8))
@@ -281,12 +265,12 @@ struct SnapshotRoundTripTests {
         #expect(!reEncoded.contains("\"focusedWorkspaceID\""))
         #expect(reEncoded.contains("\"focusedWorkspaceIDs\"") && reEncoded.contains("\"focusEnabled\""))
         let again = try JSONDecoder().decode(Snapshot.self, from: Data(reEncoded.utf8))
-        #expect(again.focusedWorkspaceIDs == [ws] && again.focusEnabled == true) // the filter survives the rewrite
+        #expect(again.focusedWorkspaceIDs == [ws] && again.focusEnabled == true)
     }
 
     @Test func snapshotWithBothFocusKeysPrefersTheSet() throws {
-        // a file carrying both (a downgrade-then-upgrade round trip) must take the SET: the legacy key
-        // holds at most one member and would silently narrow a multi-workspace filter.
+        // both keys means a downgrade-then-upgrade round trip; the legacy key holds at most one member,
+        // so taking it would silently narrow a multi-workspace filter.
         let a = UUID(), b = UUID(), stale = UUID()
         let json = #"""
         {"version":1,"workspaces":[],"focusedWorkspaceID":"\#(stale.uuidString)",
@@ -298,8 +282,7 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func snapshotWithoutAnyFocusKeyDecodesToNilWithoutThrowing() throws {
-        // neither key present must decode (nil/nil) rather than throwing — a throw here would fail the
-        // whole load and wipe the saved tree over a per-window view filter.
+        // a throw here would wipe the saved tree over a per-window view filter.
         let json = #"{"version":1,"workspaces":[]}"#
         let snap = try JSONDecoder().decode(Snapshot.self, from: Data(json.utf8))
         #expect(snap.focusedWorkspaceIDs == nil && snap.focusEnabled == nil)
@@ -309,8 +292,6 @@ struct SnapshotRoundTripTests {
     }
 
     @Test func sessionSnapshotDecodesWithoutSplitRatio() throws {
-        // a SessionSnapshot persisted before splitRatio existed (the key absent) must decode to nil, not
-        // fail the load — the forward-compat contract the optional field documents.
         let json = "{\"id\":\"\(UUID().uuidString)\",\"cwd\":\"/a\"}"
         let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
         #expect(snap.splitRatio == nil)

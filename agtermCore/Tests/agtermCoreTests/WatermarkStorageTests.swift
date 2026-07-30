@@ -32,7 +32,7 @@ struct WatermarkStorageTests {
         let stateDir = try makeTempStateDir()
         defer { try? FileManager.default.removeItem(at: stateDir) }
         let dir = WatermarkStorage.directoryURL(stateDir: stateDir)
-        #expect(!FileManager.default.fileExists(atPath: dir.path)) // pure path resolution, no side effect
+        #expect(!FileManager.default.fileExists(atPath: dir.path))
         let ensured = WatermarkStorage.ensureDirectory(stateDir: stateDir)
         #expect(ensured == dir)
         var isDir: ObjCBool = false
@@ -44,7 +44,6 @@ struct WatermarkStorageTests {
         let stateDir = try makeTempStateDir()
         defer { try? FileManager.default.removeItem(at: stateDir) }
         let id = UUID()
-        // no-op when absent (must not throw)
         WatermarkStorage.removeRenderedText(sessionID: id, stateDir: stateDir)
 
         WatermarkStorage.ensureDirectory(stateDir: stateDir)

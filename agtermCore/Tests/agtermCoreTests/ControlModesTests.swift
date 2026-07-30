@@ -75,7 +75,6 @@ struct ControlModesTests {
     }
 
     @Test func workspaceFocusModeDerivesValidNamesFromAllCases() {
-        // both spellings derive from allCases, so a new mode cannot leave an error/help string stale.
         #expect(ControlWorkspaceFocusMode.validNamesList == ControlWorkspaceFocusMode.allCases.map(\.rawValue).joined(separator: "|"))
         #expect(ControlWorkspaceFocusMode.validNamesPhrase == ControlWorkspaceFocusMode.allCases.map(\.rawValue).joined(separator: ", "))
         #expect(ControlWorkspaceFocusMode.validNamesList == "on|off|toggle|add")
@@ -83,9 +82,8 @@ struct ControlModesTests {
     }
 
     @Test func workspaceFocusModeHelpNamesEveryModeAndItsFilterEffect() {
-        // the CLI's `--help` prose is assembled from these clauses, so a new case reaches the help text by
-        // construction. Each clause has to name what the mode does to the FILTER FLAG: `add` is the only
-        // one that leaves it alone, and stating that in isolation reads as if the others did too.
+        // each clause has to name what the mode does to the FILTER FLAG: `add` is the only one that
+        // leaves it alone, and stating that in isolation reads as if the others did too.
         let phrase = ControlWorkspaceFocusMode.helpPhrase
         for mode in ControlWorkspaceFocusMode.allCases {
             #expect(phrase.contains(mode.helpSummary), "the help phrase should carry \(mode.rawValue)'s clause")

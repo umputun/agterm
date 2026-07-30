@@ -48,8 +48,7 @@ struct TerminalZoomTests {
         #expect(session.hasSplit == true)
         #expect(TerminalZoomController.isTargetValid(.session(session.id, .split), in: store, quickTerminalVisible: false))
 
-        // the primary exits: the survivor is PROMOTED into the main slot, so no right pane exists
-        // anymore — a zoom on the split target must end, not keep covering the promoted main pane.
+        // the primary exiting PROMOTES the survivor into the main slot, leaving no right pane to zoom.
         session.surface = SpySurface()
         session.splitSurface = SpySurface()
         store.closePrimaryPane(session.id)
@@ -57,7 +56,6 @@ struct TerminalZoomTests {
         #expect(session.splitSurface == nil)
         #expect(!TerminalZoomController.isTargetValid(.session(session.id, .split), in: store, quickTerminalVisible: false))
 
-        // closing a live split clears the target the ordinary way too.
         store.toggleSplit(session.id)
         #expect(TerminalZoomController.isTargetValid(.session(session.id, .split), in: store, quickTerminalVisible: false))
         store.closeSplit(session.id)
@@ -78,8 +76,6 @@ struct TerminalZoomTests {
         session.hasSplit = true
         store.closePrimaryPane(session.id)
 
-        // the survivor MOVES into the primary slot: the primary target keeps pointing at the live
-        // shell (now the survivor), and the split target dies with the vacated right pane.
         #expect(session.surface === survivor)
         #expect(session.splitSurface == nil)
         #expect(session.splitFocused == false)

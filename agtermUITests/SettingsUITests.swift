@@ -25,12 +25,10 @@ final class SettingsUITests: XCTestCase {
     func testSettingsWindowHasSixTabsAndThemePersists() throws {
         app.typeKey(",", modifierFlags: .command)
 
-        // the six tabs are reachable.
         for tab in ["General", "Appearance", "Interface", "Notifications", "Agent Status", "Key Mapping"] {
             XCTAssertTrue(app.buttons[tab].firstMatch.waitForHittable(timeout: 12), "Settings should have a \(tab) tab")
         }
 
-        // pick a known theme from the theme picker and confirm it lands in settings.json.
         let themePicker = settingsControl(tab: "Appearance", control: "settings-theme")
         themePicker.click()
         let choice = app.menuItems["Alabaster"]
@@ -60,7 +58,6 @@ final class SettingsUITests: XCTestCase {
     func testDockBouncePickerPersists() throws {
         let picker = settingsControl(tab: "Notifications", control: "settings-dock-bounce")
 
-        // Until focused → dockBounce="untilFocused".
         picker.click()
         let untilFocused = app.menuItems["Until focused"]
         XCTAssertTrue(untilFocused.waitForExistence(timeout: 5), "the dock-bounce picker should offer 'Until focused'")
@@ -68,7 +65,6 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(poll { self.settingsValue("dockBounce") == "untilFocused" },
                       "selecting 'Until focused' should persist dockBounce=untilFocused to settings.json")
 
-        // Once → dockBounce="once".
         picker.click()
         let once = app.menuItems["Once"]
         XCTAssertTrue(once.waitForExistence(timeout: 5), "the dock-bounce picker should offer 'Once'")
@@ -76,7 +72,6 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(poll { self.settingsValue("dockBounce") == "once" },
                       "selecting 'Once' should persist dockBounce=once to settings.json")
 
-        // None → the default, mapped back to nil, so the key is REMOVED.
         picker.click()
         let none = app.menuItems["None"]
         XCTAssertTrue(none.waitForExistence(timeout: 5), "the dock-bounce picker should offer 'None'")
@@ -88,7 +83,6 @@ final class SettingsUITests: XCTestCase {
     func testNotificationSoundPickerPersists() throws {
         let picker = settingsControl(tab: "Notifications", control: "settings-notification-sound")
 
-        // Glass → notificationSoundName="Glass".
         picker.click()
         let glass = app.menuItems["Glass"]
         XCTAssertTrue(glass.waitForExistence(timeout: 5), "the notification-sound picker should offer 'Glass'")
@@ -96,7 +90,6 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(poll { self.settingsValue("notificationSoundName") == "Glass" },
                       "selecting 'Glass' should persist notificationSoundName=Glass to settings.json")
 
-        // None → the default, mapped back to nil, so the key is REMOVED.
         picker.click()
         let none = app.menuItems["None"]
         XCTAssertTrue(none.waitForExistence(timeout: 5), "the notification-sound picker should offer 'None'")
@@ -105,20 +98,18 @@ final class SettingsUITests: XCTestCase {
                       "selecting None (the default) should remove the notificationSoundName key from settings.json")
     }
 
-    // the row geometry and the option list, split off the persistence flow below: these are the most
-    // fragile assertions (they move with any Form-style, font or OS-metric change) and running them in
-    // the same test would mask every persistence leg behind a layout failure.
+    // split off the persistence flow deliberately: a layout failure here would otherwise mask every
+    // persistence leg.
     func testAgentStatusShapePickerRowLayoutAndOptions() throws {
         let picker = settingsControl(tab: "Agent Status", control: "settings-status-shape-blocked")
 
-        // the Sound section's picker is the flush-right reference: every sibling section's trailing
-        // control ends at the tab's right margin, so a glyph row that floats inboard is a ragged edge.
+        // the Sound picker is the flush-right reference: every sibling section's trailing control ends
+        // at the tab's right margin.
         let soundPicker = settingsControl(tab: "Agent Status", control: "settings-status-blocked-sound")
         assertGlyphRowsLineUp(against: soundPicker, context: "default shapes")
 
-        // the same geometry with the rows showing DIFFERENT silhouettes: a menu button sizes to the glyph
-        // it shows and the six shapes differ by a few points, so the widest one is what a reserved column
-        // that is too narrow (or aligned anywhere but trailing) knocks out of line.
+        // Capsule is the widest silhouette and a menu button sizes to its glyph, so a too-narrow or
+        // non-trailing column only knocks the row out of line here.
         picker.click()
         let capsuleOption = app.menuItems["Capsule"]
         XCTAssertTrue(capsuleOption.waitForExistence(timeout: 5), "the shape picker should offer 'Capsule'")
@@ -127,12 +118,11 @@ final class SettingsUITests: XCTestCase {
                       "selecting 'Capsule' should reach the Blocked row before its geometry is measured")
         assertGlyphRowsLineUp(against: soundPicker, context: "Blocked row on the widest silhouette")
 
-        // everything below still fits the fixed-size window, so the tab needs no scrolling.
         XCTAssertTrue(app.buttons["settings-status-reset"].firstMatch.waitForHittable(timeout: 5),
                       "the Reset button should stay reachable without scrolling")
 
-        // the options are symbols only, but each keeps its shape name for VoiceOver (and for this test);
-        // the six shapes are the whole list, since an unset shape now renders the plain circle.
+        // the options are symbols only; each keeps its shape name for VoiceOver, which is what these
+        // menu-item lookups match on.
         picker.click()
         let triangle = app.menuItems["Triangle"]
         XCTAssertTrue(triangle.waitForExistence(timeout: 5), "the shape picker should offer 'Triangle'")
@@ -148,7 +138,6 @@ final class SettingsUITests: XCTestCase {
         let picker = settingsControl(tab: "Agent Status", control: "settings-status-shape-blocked")
         let activeShape = settingsControl(tab: "Agent Status", control: "settings-status-shape-active")
 
-        // Triangle → blockedStatusShape="triangle".
         picker.click()
         let triangle = app.menuItems["Triangle"]
         XCTAssertTrue(triangle.waitForExistence(timeout: 5), "the shape picker should offer 'Triangle'")
@@ -156,8 +145,8 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(poll { self.settingsValue("blockedStatusShape") == "triangle" },
                       "selecting 'Triangle' should persist blockedStatusShape=triangle to settings.json")
 
-        // a SECOND status through the same flow: each row must write its OWN key, so a copy-pasted
-        // binding that drove the wrong status shows up here rather than passing on the blocked row alone.
+        // a second status through the same flow: a copy-pasted binding driving the wrong status only
+        // shows up once two rows are exercised.
         activeShape.click()
         let star = app.menuItems["Star"]
         XCTAssertTrue(star.waitForExistence(timeout: 5), "the active shape picker should offer 'Star'")
@@ -166,7 +155,6 @@ final class SettingsUITests: XCTestCase {
                       "selecting 'Star' on the Active row should persist activeStatusShape=star to settings.json")
         XCTAssertEqual(settingsValue("blockedStatusShape"), "triangle", "the Active row must not rewrite the Blocked shape")
 
-        // both choices survive a relaunch: the pickers read them back from the same isolated state dir.
         app.terminate()
         app.launchForUITest()
         XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForHittable(timeout: 20), "seeded session should be hittable")
@@ -177,7 +165,6 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(poll { (restoredActive.value as? String) == "Star" },
                       "after a relaunch the Active picker should show the stored Star, got \(String(describing: restoredActive.value))")
 
-        // Circle is the built-in default and maps back to nil, so picking it REMOVES that row's key only.
         restored.click()
         let fallback = app.menuItems["Circle"]
         XCTAssertTrue(fallback.waitForExistence(timeout: 5), "the shape picker should offer 'Circle'")
@@ -186,8 +173,7 @@ final class SettingsUITests: XCTestCase {
                       "selecting Circle (the default) should remove the blockedStatusShape key from settings.json")
         XCTAssertEqual(settingsValue("activeStatusShape"), "star", "clearing the Blocked shape must leave the Active one alone")
 
-        // Reset to defaults clears the remaining shape too — the leg that would otherwise ship green
-        // with the three shape-clearing lines missing from resetAgentStatus().
+        // without this leg, a resetAgentStatus() missing its three shape-clearing lines ships green.
         let reset = app.buttons["settings-status-reset"].firstMatch
         XCTAssertTrue(reset.waitForHittable(timeout: 5), "the Reset button should be clickable")
         reset.click()
@@ -198,11 +184,9 @@ final class SettingsUITests: XCTestCase {
     }
 
     func testToolbarModePickerPersists() throws {
-        // the Toolbar dropdown offers Normal/Compact/Hidden. compact is the default and maps back to nil;
-        // Normal/Hidden write a stable key.
+        // compact is the default and maps back to nil; Normal/Hidden write a stable key.
         let picker = settingsControl(tab: "Appearance", control: "settings-toolbar-mode")
 
-        // Hidden → toolbarMode="hidden".
         picker.click()
         let hidden = app.menuItems["Hidden"]
         XCTAssertTrue(hidden.waitForExistence(timeout: 5), "the toolbar dropdown should offer a Hidden item")
@@ -210,7 +194,6 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(poll { self.settingsValue("toolbarMode") == "hidden" },
                       "selecting Hidden should persist toolbarMode=hidden to settings.json")
 
-        // Compact → the default, mapped back to nil, so the key is REMOVED (the nil-mapping branch).
         picker.click()
         let compact = app.menuItems["Compact"]
         XCTAssertTrue(compact.waitForExistence(timeout: 5), "the toolbar dropdown should offer a Compact item")
@@ -218,7 +201,6 @@ final class SettingsUITests: XCTestCase {
         XCTAssertTrue(poll { self.settingsValue("toolbarMode") == nil },
                       "selecting Compact (the default) should remove the toolbarMode key from settings.json")
 
-        // Normal → toolbarMode="normal".
         picker.click()
         let normal = app.menuItems["Normal"]
         XCTAssertTrue(normal.waitForExistence(timeout: 5), "the toolbar dropdown should offer a Normal item")
@@ -263,14 +245,13 @@ final class SettingsUITests: XCTestCase {
     }
 
     func testInterfaceElementTogglePersists() throws {
-        // the Interface tab's toggles are default-on (element visible); turning one off adds its raw name
-        // to hiddenInterfaceElements, and turning it back on empties the set so the key is removed.
+        // the Interface tab's toggles are default-on (element visible).
         let toggle = settingsControl(tab: "Interface", control: "settings-interface-split")
-        toggle.click() // hide the Split view element (default shown)
+        toggle.click()
         XCTAssertTrue(poll { self.settingsStringArray("hiddenInterfaceElements")?.contains("split") == true },
                       "hiding the Split view element should persist \"split\" into hiddenInterfaceElements")
 
-        toggle.click() // show it again → the set empties
+        toggle.click()
         XCTAssertTrue(poll { self.settingsObject()?["hiddenInterfaceElements"] == nil },
                       "re-showing the last hidden element should remove hiddenInterfaceElements from settings.json")
     }

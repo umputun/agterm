@@ -29,10 +29,8 @@ final class FontSizeUITests: XCTestCase {
         row.click()
         usleep(800_000)
 
-        // baseline: the surface reports its size on first render, so a value should appear.
         let baseline = try XCTUnwrap(pollFontSize(timeout: 8), "the terminal should report a font size on launch")
 
-        // increase the font a few times (cmd +); the persisted size must grow.
         for _ in 0..<4 {
             app.typeKey("=", modifierFlags: .command)
             usleep(250_000)
@@ -41,7 +39,6 @@ final class FontSizeUITests: XCTestCase {
                                       "increasing the font (cmd +) should grow the persisted size")
         XCTAssertGreaterThan(increased, baseline)
 
-        // relaunch with the same state dir; the increased size must be restored.
         app.terminate()
         app = XCUIApplication()
         app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path

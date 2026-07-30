@@ -83,10 +83,9 @@ final class PersistenceTests {
         #expect(first.sessions[1].initialCwd == "/var/log")
         #expect(first.sessions[1].displayName == "log")
         #expect(app.workspaces[1].sessions[0].displayName == "/")
-        // surfaces stay lazy/nil until first display
+        // surfaces stay lazy until first display
         #expect(first.sessions[0].surface == nil)
-        // currentCwd is nil after restore — only a live PWD report sets it; the
-        // persisted cwd becomes initialCwd.
+        // only a live PWD report sets currentCwd; the persisted cwd becomes initialCwd.
         #expect(first.sessions[0].currentCwd == nil)
         #expect(first.sessions[1].currentCwd == nil)
     }
@@ -99,7 +98,6 @@ final class PersistenceTests {
         ])
         let app = AppStore(persistence: store)
         app.restore(from: snapshot)
-        // the persisted selection points at no existing session, so it's cleared.
         #expect(app.selectedSessionID == nil)
         #expect(app.activeSession == nil)
     }
@@ -113,7 +111,6 @@ final class PersistenceTests {
         ])
         let app = AppStore(persistence: store)
         app.restore(from: snapshot)
-        // restore loads what was just read from disk; it must not re-persist.
         #expect(!FileManager.default.fileExists(atPath: fileURL.path))
     }
 
@@ -133,8 +130,7 @@ final class PersistenceTests {
     }
 
     @Test func legacyFileWithRemovedKeysLoadsAndKeepsWorkspaces() throws {
-        // a workspaces.json written by an older build carries removed keys (statusBarHidden,
-        // titleBarHidden). they must be ignored, not fail the load and wipe the tree.
+        // removed keys from an older build must be ignored, not fail the load and wipe the tree.
         let id = UUID()
         let json = #"{ "version": 1, "statusBarHidden": true, "titleBarHidden": true, "workspaces": [ { "id": "\#(id.uuidString)", "name": "work", "sessions": [] } ] }"#
         try Data(json.utf8).write(to: fileURL)
@@ -172,8 +168,7 @@ final class PersistenceTests {
     }
 
     @Test func legacySnapshotWithoutFlaggedDecodesUnflagged() throws {
-        // a workspaces.json written before `flagged` existed has no key; it must decode (not throw and
-        // wipe the tree) with the session unflagged.
+        // a file written before `flagged` existed has no key; it must decode rather than wipe the tree.
         let ws = UUID()
         let sid = UUID()
         let json = #"{ "version": 1, "workspaces": [ { "id": "\#(ws.uuidString)", "name": "work", "sessions": [ { "id": "\#(sid.uuidString)", "customName": null, "cwd": "/a" } ] } ] }"#
@@ -222,8 +217,7 @@ final class PersistenceTests {
     }
 
     @Test func legacySnapshotWithoutSidebarModeDecodesTree() throws {
-        // a workspaces.json written before `sidebarMode` existed has no key; it must decode (not throw
-        // and wipe the tree) and restore to `.tree`.
+        // a file written before `sidebarMode` existed has no key; it must decode rather than wipe the tree.
         let ws = UUID()
         let json = #"{ "version": 1, "workspaces": [ { "id": "\#(ws.uuidString)", "name": "work", "sessions": [] } ] }"#
         try Data(json.utf8).write(to: fileURL)
@@ -239,7 +233,7 @@ final class PersistenceTests {
     @Test func focusedWorkspacePersistsAndRestores() {
         let app = AppStore(persistence: store)
         let work = app.addWorkspace(name: "work")
-        #expect(store.load().focusedWorkspaceIDs == nil) // default: nothing marked
+        #expect(store.load().focusedWorkspaceIDs == nil)
         app.setFocusedWorkspace(work.id)
         #expect(store.load().focusedWorkspaceIDs == [work.id] && store.load().focusEnabled == true)
 
@@ -254,8 +248,7 @@ final class PersistenceTests {
     }
 
     @Test func legacySnapshotWithoutFocusedWorkspaceDecodesUnfocused() throws {
-        // a workspaces.json written before any focus key existed has neither; it must decode (not throw
-        // and wipe the tree) and restore to an empty, disabled filter.
+        // a file written before any focus key existed has neither; it must decode rather than wipe the tree.
         let ws = UUID()
         let json = #"{ "version": 1, "workspaces": [ { "id": "\#(ws.uuidString)", "name": "work", "sessions": [] } ] }"#
         try Data(json.utf8).write(to: fileURL)
@@ -269,8 +262,8 @@ final class PersistenceTests {
     }
 
     @Test func legacySnapshotWithSingleFocusedWorkspaceMigratesToAnEnabledSet() throws {
-        // a workspaces.json written by the release BEFORE the focus set existed carries only the single
-        // `focusedWorkspaceID`; it must migrate to a one-member ENABLED set rather than losing the filter.
+        // the release BEFORE the focus set wrote only `focusedWorkspaceID`; it must migrate to a one-member
+        // ENABLED set rather than losing the filter.
         let ws = UUID()
         let json = #"""
         { "version": 1, "focusedWorkspaceID": "\#(ws.uuidString)",
@@ -287,8 +280,8 @@ final class PersistenceTests {
     }
 
     @Test func savedSnapshotStopsWritingTheLegacyFocusKey() throws {
-        // the legacy key is decode-only: once this build saves, the file must carry the set instead, so a
-        // multi-member filter cannot be silently narrowed to one member on the next load.
+        // the legacy key is decode-only, so a multi-member filter cannot be silently narrowed to one
+        // member on the next load.
         let app = AppStore(persistence: store)
         let work = app.addWorkspace(name: "work")
         let personal = app.addWorkspace(name: "personal")
@@ -325,13 +318,13 @@ final class PersistenceTests {
         ], sessionRecency: [stale, id])
         let app = AppStore(persistence: store)
         app.restore(from: snapshot)
-        // the stale id points at no restored session; it must never reach the switcher.
         #expect(app.sessionRecency.items == [id])
     }
 
     @Test func restoreFloatsSelectionToRecencyFront() {
         let a = UUID()
         let b = UUID()
+        // the persisted order is out of sync with the selection, as a hand-edited file can be.
         let snapshot = Snapshot(selectedSessionID: b, workspaces: [
             WorkspaceSnapshot(id: UUID(), name: "work", sessions: [
                 SessionSnapshot(id: a, customName: nil, cwd: "/a"),
@@ -340,13 +333,12 @@ final class PersistenceTests {
         ], sessionRecency: [a, b])
         let app = AppStore(persistence: store)
         app.restore(from: snapshot)
-        // a hand-edited/out-of-sync order still puts the restored selection first.
         #expect(app.sessionRecency.items == [b, a])
     }
 
     @Test func malformedRecencyDropsToNilKeepingTree() throws {
-        // a present-but-invalid sessionRecency (hand-edit typo, wrong type) must drop to nil
-        // lossily — never fail the whole Snapshot decode and wipe the tree on the next save.
+        // an invalid sessionRecency must drop to nil lossily, never fail the whole Snapshot decode and
+        // wipe the tree on the next save.
         let ws = UUID()
         let session = UUID()
         let tree = #""selectedSessionID": "\#(session.uuidString)", "workspaces": "# +
@@ -373,13 +365,12 @@ final class PersistenceTests {
         ], sessionRecency: [a, b])
         let app = AppStore(persistence: store)
         app.restore(from: snapshot)
-        // a selection missing from the persisted seed is inserted at the FRONT, not appended.
         #expect(app.sessionRecency.items == [c, a, b])
     }
 
     @Test func legacySnapshotWithoutRecencyDecodesSelectionOnly() throws {
-        // a workspaces.json written before `sessionRecency` existed has no key; it must decode (not
-        // throw and wipe the tree) and restore with just the selection in the Ctrl-Tab order.
+        // a file written before `sessionRecency` existed has no key; it must decode rather than wipe the
+        // tree, leaving just the selection in the Ctrl-Tab order.
         let ws = UUID()
         let session = UUID()
         let json = #"{ "version": 1, "selectedSessionID": "\#(session.uuidString)", "workspaces": "# +
@@ -412,19 +403,18 @@ final class PersistenceTests {
         let b = app.addWorkspace(name: "b")
         app.setWorkspacesExpanded([a.id]) // collapse b, keep a expanded
         let disk = store.load()
-        #expect(disk.workspaces[0].collapsed == nil)  // expanded → omitted
-        #expect(disk.workspaces[1].collapsed == true) // collapsed → written
+        #expect(disk.workspaces[0].collapsed == nil)  // expanded → omitted from the file
+        #expect(disk.workspaces[1].collapsed == true)
 
         let restored = AppStore(persistence: store)
         restored.restore(from: disk)
-        #expect(restored.workspaces[0].isExpanded)     // a
-        #expect(!restored.workspaces[1].isExpanded)    // b
+        #expect(restored.workspaces[0].isExpanded)
+        #expect(!restored.workspaces[1].isExpanded)
         _ = b
     }
 
     @Test func legacyWorkspaceWithoutCollapsedDecodesExpanded() throws {
-        // a workspaces.json written before `collapsed` existed has no key; it must decode (not throw and
-        // wipe the tree) and restore expanded — lack of the field means expanded, for back-compat.
+        // a file written before `collapsed` existed has no key; lack of the field means expanded.
         let ws = UUID()
         let session = UUID()
         let json = #"{ "version": 1, "workspaces": "# +
@@ -440,8 +430,8 @@ final class PersistenceTests {
     }
 
     @Test func explicitCollapsedFalseDecodesExpanded() throws {
-        // an explicit `collapsed: false` (a hand-edit, or a snapshot from a future build that always writes
-        // the field) must decode to expanded, same as an absent key — `!(false ?? false)` == expanded.
+        // an explicit `collapsed: false` (a hand-edit, or a future build that always writes the field)
+        // must decode to expanded, same as an absent key.
         let ws = UUID()
         let session = UUID()
         let json = #"{ "version": 1, "workspaces": [ { "id": "\#(ws.uuidString)", "name": "work", "# +

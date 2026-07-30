@@ -31,12 +31,9 @@ struct SkillInstallTests {
         #expect(reference.contains("## events"))
         #expect(reference.contains("event cursor expired"))
         #expect(examples.contains("agtermctl events --json"))
-        // the window-minimize mirror: summary line, per-command detail, and a recipe
         #expect(skill.contains("minimize <id> [on|off|toggle]"))
         #expect(reference.contains("`window minimize <id> [on|off|toggle]`"))
         #expect(examples.contains("agtermctl window minimize"))
-        // the workspace focus-set mirror: the fourth `add` mode, the new workspace.filter command, and
-        // the tree read-back pair a script builds a working set with
         #expect(skill.contains("focus [on|off|toggle|add]"))
         #expect(skill.contains("filter [on|off|toggle]"))
         #expect(reference.contains("`workspace focus [on|off|toggle|add] [--target] [--window W]`"))
@@ -46,9 +43,8 @@ struct SkillInstallTests {
         #expect(examples.contains("agtermctl workspace filter on"))
     }
 
-    // the plugin manifests and the app bundle read the SAME directory, so nothing here may drift:
-    // a moved skill, a renamed leaf, or a manifest pointing somewhere else breaks one consumer
-    // silently while the others keep working.
+    // the plugin manifests and the app bundle read the SAME directory, so a moved skill or a renamed leaf
+    // breaks one consumer silently while the others keep working.
     @Test func pluginManifestsPointAtTheBundledSkillDirectory() throws {
         let pluginRoot = "plugins/agterm"
         let skillLeaf = "skills/\(SkillInstall.skillName)"
@@ -61,12 +57,11 @@ struct SkillInstallTests {
         let codexPlugin = try json("\(pluginRoot)/.codex-plugin/plugin.json")
         #expect(codexPlugin["skills"] as? String == "./skills/")
 
-        // both manifests name the plugin after the skill, which is what makes the codex namespace
-        // `agterm:agterm` and keeps the claude install name stable
+        // naming the plugin after the skill is what makes the codex namespace `agterm:agterm` and keeps
+        // the claude install name stable
         #expect(claudePlugin["name"] as? String == SkillInstall.skillName)
         #expect(codexPlugin["name"] as? String == SkillInstall.skillName)
 
-        // every declared path resolves to the one real skill directory
         let skill = repository.appendingPathComponent("\(pluginRoot)/\(skillLeaf)")
         for file in ["SKILL.md", "reference.md", "examples.md", "troubleshooting.md", "scripts/show-image.sh"] {
             #expect(FileManager.default.fileExists(atPath: skill.appendingPathComponent(file).path),
@@ -80,16 +75,16 @@ struct SkillInstallTests {
         let claudeEntry = try #require(claudeEntries.first)
         #expect(claudeEntry["source"] as? String == "./plugins/agterm")
 
-        // codex's marketplace manifest lives at .agents/plugins/, NOT alongside .codex-plugin/,
-        // and takes a source object rather than a bare path
+        // codex's marketplace manifest lives at .agents/plugins/, NOT alongside .codex-plugin/, and takes
+        // a source object rather than a bare path
         let codexMarketplace = try json(".agents/plugins/marketplace.json")
         let codexEntries = try #require(codexMarketplace["plugins"] as? [[String: Any]])
         let codexSource = try #require(codexEntries.first?["source"] as? [String: Any])
         #expect(codexSource["source"] as? String == "local")
         #expect(codexSource["path"] as? String == "./plugins/agterm")
 
-        // the plugin managers key their install cache on the manifest version, so a release that
-        // bumps one and not the other leaves an agent pinned to a stale skill
+        // the plugin managers key their install cache on the manifest version, so bumping one and not the
+        // other leaves an agent pinned to a stale skill
         let version = try #require(claudeEntry["version"] as? String)
         #expect(try json("plugins/agterm/.claude-plugin/plugin.json")["version"] as? String == version)
         #expect(try json("plugins/agterm/.codex-plugin/plugin.json")["version"] as? String == version)

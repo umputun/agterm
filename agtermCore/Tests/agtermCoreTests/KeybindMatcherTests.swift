@@ -37,7 +37,6 @@ struct KeybindMatcherTests {
         #expect(matcher.advance(ctrlA) == .armed)
         #expect(matcher.advance(c) == .unmatched)
         #expect(!matcher.isArmed)
-        // after reset the leader can be re-armed.
         #expect(matcher.advance(ctrlA) == .armed)
     }
 
@@ -47,7 +46,6 @@ struct KeybindMatcherTests {
         #expect(matcher.advance(ctrlA) == .armed)
         matcher.reset()
         #expect(!matcher.isArmed)
-        // the follow-key alone now no longer completes the sequence.
         #expect(matcher.advance(b) == .unmatched)
     }
 
@@ -72,8 +70,6 @@ struct KeybindMatcherTests {
     }
 
     @Test func rePressingLeaderWhileArmedReArms() {
-        // armed on ctrl+a, a second ctrl+a is not a valid continuation but IS a fresh leader: it
-        // restarts the sequence rather than abandoning it, so the next 'b' still completes.
         let id = UUID()
         var matcher = KeybindMatcher([([ctrlA, b], id)])
         #expect(matcher.advance(ctrlA) == .armed)
@@ -83,8 +79,6 @@ struct KeybindMatcherTests {
     }
 
     @Test func wrongChordWhileArmedThatIsItselfASimpleBindFires() {
-        // armed on ctrl+a, a chord that completes no sequence but is itself a simple bind fires it
-        // (the press is not dropped just because a leader was pending).
         let seqID = UUID()
         let simpleID = UUID()
         var matcher = KeybindMatcher([([ctrlA, b], seqID), ([cmdShiftU], simpleID)])

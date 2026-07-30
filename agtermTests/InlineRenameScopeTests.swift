@@ -39,10 +39,8 @@ final class InlineRenameScopeTests: XCTestCase {
         try await super.tearDown()
     }
 
-    // A rename started from the menu / palette / keymap must open an editor in the FRONTMOST window only.
-    // Posting with a nil object reached every open window's coordinator — their `selectedSessionID` guard
-    // is not a scope, since every window has a selection — so each one opened an editor the user never
-    // asked for and leaked an unbalanced `suppressAutoFollow`, wedging that window's idle auto-follow off.
+    // the coordinator's own `selectedSessionID` guard is not a scope — every window has a selection — so
+    // the post's object is the only thing that narrows delivery.
     func testRenameSessionPostsScopedToTheFrontmostStore() throws {
         let (frontStore, otherStore) = try twoWindows()
         let front = observe(.agtermBeginRenameSession, object: frontStore)

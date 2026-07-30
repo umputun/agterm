@@ -29,7 +29,6 @@ struct AppStoreAutoFollowTests {
         let ws = store.addWorkspace(name: "w")
         let current = addBlocked(store, to: ws.id, cwd: "/cur", at: 50)
         let other = addBlocked(store, to: ws.id, cwd: "/other", at: 200)
-        // parked on a blocked session -> stay put, regardless of another older/newer block
         #expect(store.autoFollowTarget(current: current, blocked: [current, other], stayOnActive: false) == nil)
         #expect(store.autoFollowTarget(current: current, blocked: [current, other], stayOnActive: true) == nil)
     }
@@ -40,9 +39,7 @@ struct AppStoreAutoFollowTests {
         let current = store.addSession(toWorkspace: ws.id, cwd: "/cur")!
         store.setAgentIndicator(AgentIndicator(status: .active), forSession: current.id)
         let blocked = addBlocked(store, to: ws.id, cwd: "/b", at: 100)
-        // opt-in on: don't leave a running agent
         #expect(store.autoFollowTarget(current: current, blocked: [blocked], stayOnActive: true) == nil)
-        // opt-in off: an active current does not suppress
         #expect(store.autoFollowTarget(current: current, blocked: [blocked], stayOnActive: false) == blocked.id)
     }
 
@@ -60,7 +57,7 @@ struct AppStoreAutoFollowTests {
         let stamped = addBlocked(store, to: ws.id, cwd: "/stamped", at: 500)
         let unstamped = store.addSession(toWorkspace: ws.id, cwd: "/unstamped")!
         store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: unstamped.id)
-        unstamped.statusChangedAt = nil // a missing stamp is treated as newest, so the stamped one wins
+        unstamped.statusChangedAt = nil
         #expect(store.autoFollowTarget(current: nil, blocked: [unstamped, stamped], stayOnActive: false) == stamped.id)
     }
 
@@ -71,11 +68,11 @@ struct AppStoreAutoFollowTests {
         let here = store.addWorkspace(name: "here")
         let away = store.addWorkspace(name: "away")
         let idle = store.addSession(toWorkspace: here.id, cwd: "/idle")!
-        let older = addBlocked(store, to: away.id, cwd: "/older", at: 100) // window-wide: another workspace
+        let older = addBlocked(store, to: away.id, cwd: "/older", at: 100)
         _ = addBlocked(store, to: here.id, cwd: "/newer", at: 200)
         store.selectSession(idle.id)
         store.autoFollowFire()
-        #expect(store.selectedSessionID == older.id) // jumps to the oldest blocked, crossing workspaces
+        #expect(store.selectedSessionID == older.id)
     }
 
     @Test func autoFollowFireSuppressedWhenParkedOnBlocked() {
@@ -85,7 +82,7 @@ struct AppStoreAutoFollowTests {
         _ = addBlocked(store, to: ws.id, cwd: "/other", at: 200)
         store.selectSession(current.id)
         store.autoFollowFire()
-        #expect(store.selectedSessionID == current.id) // stays; being on a blocked session is the suppressor
+        #expect(store.selectedSessionID == current.id)
     }
 
     @Test func autoFollowFireNoOpWhenNoBlocked() {
@@ -96,7 +93,7 @@ struct AppStoreAutoFollowTests {
         store.setAgentIndicator(AgentIndicator(status: .active), forSession: b.id)
         store.selectSession(a.id)
         store.autoFollowFire()
-        #expect(store.selectedSessionID == a.id) // no blocked session -> no jump
+        #expect(store.selectedSessionID == a.id)
     }
 
     @Test func autoFollowFireAdvancesAfterCurrentCleared() {
@@ -107,10 +104,10 @@ struct AppStoreAutoFollowTests {
         let newer = addBlocked(store, to: ws.id, cwd: "/newer", at: 200)
         store.selectSession(idle.id)
         store.autoFollowFire()
-        #expect(store.selectedSessionID == older.id) // first fire -> oldest
-        store.setAgentIndicator(AgentIndicator(), forSession: older.id) // typing a reply clears the block
+        #expect(store.selectedSessionID == older.id)
+        store.setAgentIndicator(AgentIndicator(), forSession: older.id)
         store.autoFollowFire()
-        #expect(store.selectedSessionID == newer.id) // next fire advances to the next oldest
+        #expect(store.selectedSessionID == newer.id)
     }
 
     @Test func autoFollowFireDoesNotNoteActivity() {
@@ -120,7 +117,7 @@ struct AppStoreAutoFollowTests {
         _ = addBlocked(store, to: ws.id, cwd: "/b", at: 100)
         store.selectSession(idle.id)
         store.autoFollowFire()
-        #expect(store.lastActivityAt == nil) // the app's own jump must not stamp activity (no self-reset)
+        #expect(store.lastActivityAt == nil)
     }
 
     // MARK: - mute a block already followed (autoFollowConsumed)
@@ -130,9 +127,9 @@ struct AppStoreAutoFollowTests {
         let ws = store.addWorkspace(name: "w")
         let older = addBlocked(store, to: ws.id, cwd: "/older", at: 100)
         let newer = addBlocked(store, to: ws.id, cwd: "/newer", at: 200)
-        older.autoFollowConsumed = true // already pulled to the older block once
+        older.autoFollowConsumed = true
         #expect(store.autoFollowTarget(current: nil, blocked: [older, newer], stayOnActive: false) == newer.id)
-        newer.autoFollowConsumed = true // both consumed -> nothing left to follow
+        newer.autoFollowConsumed = true
         #expect(store.autoFollowTarget(current: nil, blocked: [older, newer], stayOnActive: false) == nil)
     }
 
@@ -143,12 +140,11 @@ struct AppStoreAutoFollowTests {
         let x = addBlocked(store, to: ws.id, cwd: "/x", at: 100)
         store.selectSession(idle.id)
         store.autoFollowFire()
-        #expect(store.selectedSessionID == x.id) // pulled to the block once
+        #expect(store.selectedSessionID == x.id)
         #expect(x.autoFollowConsumed == true)
-        // user looks, decides to do nothing, navigates back to another session, then goes idle again
         store.selectSession(idle.id)
         store.autoFollowFire()
-        #expect(store.selectedSessionID == idle.id) // NOT yanked back to the same still-blocked session
+        #expect(store.selectedSessionID == idle.id)
     }
 
     @Test func autoFollowFireWalksEachBlockOnceThenStops() {
@@ -159,13 +155,13 @@ struct AppStoreAutoFollowTests {
         let z = addBlocked(store, to: ws.id, cwd: "/z", at: 200)
         store.selectSession(idle.id)
         store.autoFollowFire()
-        #expect(store.selectedSessionID == x.id) // oldest unseen block first
-        store.selectSession(idle.id) // leave without acting
+        #expect(store.selectedSessionID == x.id)
+        store.selectSession(idle.id)
         store.autoFollowFire()
-        #expect(store.selectedSessionID == z.id) // next unseen block
-        store.selectSession(idle.id) // leave again
+        #expect(store.selectedSessionID == z.id)
+        store.selectSession(idle.id)
         store.autoFollowFire()
-        #expect(store.selectedSessionID == idle.id) // both blocks already followed -> quiet
+        #expect(store.selectedSessionID == idle.id)
     }
 
     @Test func autoFollowConsumedSurvivesBlockedReassert() {
@@ -181,7 +177,7 @@ struct AppStoreAutoFollowTests {
         store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: x.id)
         #expect(x.autoFollowConsumed == true)
         store.autoFollowFire()
-        #expect(store.selectedSessionID == idle.id) // still muted, no re-jump
+        #expect(store.selectedSessionID == idle.id)
     }
 
     @Test func autoFollowFireReturnsAfterBlockReenters() {
@@ -193,13 +189,13 @@ struct AppStoreAutoFollowTests {
         store.autoFollowFire()
         store.selectSession(idle.id)
         store.autoFollowFire()
-        #expect(store.selectedSessionID == idle.id) // muted while it stays the same block
-        // the agent resumes (blocked -> active) then blocks again (active -> blocked): a new episode
+        #expect(store.selectedSessionID == idle.id)
+        // blocked -> active -> blocked is a new episode, so it clears the mute
         store.setAgentIndicator(AgentIndicator(status: .active), forSession: x.id)
         store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: x.id)
-        #expect(x.autoFollowConsumed == false) // re-entering blocked cleared the mute
+        #expect(x.autoFollowConsumed == false)
         store.autoFollowFire()
-        #expect(store.selectedSessionID == x.id) // pulled once more for the fresh block
+        #expect(store.selectedSessionID == x.id)
     }
 
     @Test func selectSessionAloneDoesNotNoteActivity() {
@@ -209,12 +205,9 @@ struct AppStoreAutoFollowTests {
         let b = store.addSession(toWorkspace: ws.id, cwd: "/b")!
         store.selectSession(a.id)
         store.selectSession(b.id)
-        // selectSession is the shared seam auto-follow also drives; it must stay silent so the app's own
-        // jump never resets the idle timer. only the user entry points (which pair it with noteUserActivity)
-        // count -- Task 4 wires those, not selectSession itself.
+        // selectSession is the seam auto-follow itself drives, so it must not stamp; only the user entry
+        // points, which pair it with noteUserActivity, buy the idle grace.
         #expect(store.lastActivityAt == nil)
-        // a user-initiated selection (the AppActions nav wrappers / sidebar row click) additionally calls
-        // noteUserActivity, which DOES stamp -- this is what buys the idle grace.
         store.noteUserActivity()
         store.selectSession(a.id)
         #expect(store.lastActivityAt != nil)
@@ -230,10 +223,10 @@ struct AppStoreAutoFollowTests {
         store.selectSession(idle.id)
         store.suppressAutoFollow() // a sidebar rename / command palette owns first responder
         store.autoFollowFire()
-        #expect(store.selectedSessionID == idle.id) // suppressed: the armed jump no-ops, selection stays put
-        store.resumeAutoFollow() // editor/overlay closed
+        #expect(store.selectedSessionID == idle.id)
+        store.resumeAutoFollow()
         store.autoFollowFire()
-        #expect(store.selectedSessionID == blocked.id) // resumed: the next fire follows the waiting block
+        #expect(store.selectedSessionID == blocked.id)
     }
 
     @Test func autoFollowSuppressionNestsAndClampsAtZero() {
@@ -244,13 +237,13 @@ struct AppStoreAutoFollowTests {
         store.selectSession(idle.id)
         store.suppressAutoFollow() // two overlapping suppressors (e.g. a palette opened over a rename)
         store.suppressAutoFollow()
-        store.resumeAutoFollow() // one lifts; the other still holds
+        store.resumeAutoFollow()
         store.autoFollowFire()
-        #expect(store.selectedSessionID == idle.id) // still suppressed while any suppressor holds
-        store.resumeAutoFollow() // both lifted
-        store.resumeAutoFollow() // an extra unbalanced resume clamps at zero (no underflow wedging the gate)
+        #expect(store.selectedSessionID == idle.id)
+        store.resumeAutoFollow()
+        store.resumeAutoFollow() // an extra unbalanced resume must clamp at zero, not underflow the gate
         store.autoFollowFire()
-        #expect(store.selectedSessionID == blocked.id) // fully resumed -> follows the block
+        #expect(store.selectedSessionID == blocked.id)
     }
 
     // MARK: - noteUserActivity + idleMs
@@ -258,7 +251,7 @@ struct AppStoreAutoFollowTests {
     @Test func noteUserActivityStampsLastActivity() {
         let store = makeStore()
         #expect(store.lastActivityAt == nil)
-        #expect(store.idleMs() == nil) // nil before any activity
+        #expect(store.idleMs() == nil)
         store.noteUserActivity()
         #expect(store.lastActivityAt != nil)
         #expect(store.idleMs() != nil)
@@ -281,7 +274,7 @@ struct AppStoreAutoFollowTests {
         store.selectSession(idle.id)
         store.autoFollowTimeout = 100 // long delay so only the manual flush drives the fire
         store.noteUserActivity()
-        store.autoFollowDebouncer.flush() // drive the scheduled fire deterministically
+        store.autoFollowDebouncer.flush()
         #expect(store.selectedSessionID == blocked.id)
     }
 
@@ -292,11 +285,11 @@ struct AppStoreAutoFollowTests {
         _ = addBlocked(store, to: ws.id, cwd: "/b", at: 100)
         store.selectSession(idle.id)
         store.autoFollowTimeout = 100
-        store.noteUserActivity() // schedules a fire
+        store.noteUserActivity()
         store.autoFollowTimeout = nil
-        store.noteUserActivity() // disabled now -> cancels the pending fire
-        store.autoFollowDebouncer.flush() // nothing pending
-        #expect(store.selectedSessionID == idle.id) // no jump when disabled
+        store.noteUserActivity()
+        store.autoFollowDebouncer.flush()
+        #expect(store.selectedSessionID == idle.id)
     }
 
     // MARK: - setAutoFollow lifecycle + status-change arming
@@ -307,11 +300,11 @@ struct AppStoreAutoFollowTests {
         let idle = store.addSession(toWorkspace: ws.id, cwd: "/idle")!
         let blocked = addBlocked(store, to: ws.id, cwd: "/b", at: 100)
         store.selectSession(idle.id)
-        store.setAutoFollow(timeout: 100, stayOnActive: false) // enable arms a fire from the current state
+        store.setAutoFollow(timeout: 100, stayOnActive: false)
         #expect(store.autoFollowTimeout == 100)
         #expect(store.autoFollowStayOnActive == false)
-        store.autoFollowDebouncer.flush() // drive the enable's arm deterministically
-        #expect(store.selectedSessionID == blocked.id) // already-idle user is pulled to the waiting block
+        store.autoFollowDebouncer.flush()
+        #expect(store.selectedSessionID == blocked.id)
     }
 
     @Test func setAutoFollowEnableStoresStayOnActive() {
@@ -324,7 +317,7 @@ struct AppStoreAutoFollowTests {
         store.setAutoFollow(timeout: 100, stayOnActive: true)
         #expect(store.autoFollowStayOnActive == true)
         store.autoFollowDebouncer.flush()
-        #expect(store.selectedSessionID == active.id) // stayOnActive suppresses leaving a running agent
+        #expect(store.selectedSessionID == active.id)
     }
 
     @Test func setAutoFollowDisableCancelsPendingFire() {
@@ -333,11 +326,11 @@ struct AppStoreAutoFollowTests {
         let idle = store.addSession(toWorkspace: ws.id, cwd: "/idle")!
         _ = addBlocked(store, to: ws.id, cwd: "/b", at: 100)
         store.selectSession(idle.id)
-        store.setAutoFollow(timeout: 100, stayOnActive: false) // arms a fire
-        store.setAutoFollow(timeout: nil, stayOnActive: false) // disable cancels it
+        store.setAutoFollow(timeout: 100, stayOnActive: false)
+        store.setAutoFollow(timeout: nil, stayOnActive: false)
         #expect(store.autoFollowTimeout == nil)
-        store.autoFollowDebouncer.flush() // nothing pending after cancel
-        #expect(store.selectedSessionID == idle.id) // no jump once disabled
+        store.autoFollowDebouncer.flush()
+        #expect(store.selectedSessionID == idle.id)
     }
 
     @Test func autoFollowFireSelfTriggerTerminates() {
@@ -348,12 +341,12 @@ struct AppStoreAutoFollowTests {
         store.selectSession(completed.id) // select first, THEN stamp the one-time glyph so it rides selected
         store.setAgentIndicator(AgentIndicator(status: .completed, autoReset: true), forSession: completed.id)
         store.autoFollowFire()
-        #expect(store.selectedSessionID == blocked.id) // jumps to the block
-        // moving away cleared completed's autoReset glyph — the agentIndicator change the observer re-arms
-        // on. that self-trigger must not loop: the next fire is now parked on the block, so it no-ops.
+        #expect(store.selectedSessionID == blocked.id)
+        // moving away cleared completed's autoReset glyph, which is itself an indicator change the observer
+        // re-arms on; that self-trigger must not loop.
         #expect(completed.agentIndicator.status == .idle)
         store.autoFollowFire()
-        #expect(store.selectedSessionID == blocked.id) // stays put -> the cycle terminates, no loop
+        #expect(store.selectedSessionID == blocked.id)
     }
 
     @Test func statusChangeWhileEnabledArmsAutoFollow() async {
@@ -363,20 +356,17 @@ struct AppStoreAutoFollowTests {
         let s = store.addSession(toWorkspace: ws.id, cwd: "/s")! // idle at enable, so the observer tracks it
         store.selectSession(idle.id)
         store.setAutoFollow(timeout: 100, stayOnActive: false)
-        store.autoFollowDebouncer.flush() // consume the enable's arm (no-op: nothing blocked yet)
+        store.autoFollowDebouncer.flush() // consume the enable's arm; nothing is blocked yet
         #expect(store.selectedSessionID == idle.id)
-        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: s.id) // a block LANDS while idle
-        // the block landing re-arms the debouncer through a coalesced, deferred chain (observer onChange ->
-        // scheduleAutoFollowRearm, currently two main-queue hops). drain-then-flush in a bounded loop until the
-        // re-armed fire lands, so a deeper deferral chain can't silently break this (vs a fixed drain count
-        // coupled to the depth). deterministic: each drain is a FIFO marker (no real sleep) and a flush before
-        // the re-arm arms is a harmless no-op.
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: s.id)
+        // the re-arm rides a coalesced, deferred chain (currently two main-queue hops), so drain-then-flush
+        // in a bounded loop rather than a fixed drain count coupled to that depth.
         for _ in 0..<20 {
             await drainMainQueue()
             store.autoFollowDebouncer.flush()
             if store.selectedSessionID == s.id { break }
         }
-        #expect(store.selectedSessionID == s.id) // the status change armed the follow, which then jumped
+        #expect(store.selectedSessionID == s.id)
     }
 
     @Test func setAutoFollowTimeoutChangeWhileEnabledRearms() {
@@ -385,11 +375,10 @@ struct AppStoreAutoFollowTests {
         let idle = store.addSession(toWorkspace: ws.id, cwd: "/idle")!
         let blocked = addBlocked(store, to: ws.id, cwd: "/b", at: 100)
         store.selectSession(idle.id)
-        store.setAutoFollow(timeout: 100, stayOnActive: false) // enable at a long grace
-        store.setAutoFollow(timeout: 30, stayOnActive: false) // change the grace while still enabled -> re-arm
+        store.setAutoFollow(timeout: 100, stayOnActive: false)
+        store.setAutoFollow(timeout: 30, stayOnActive: false)
         #expect(store.autoFollowTimeout == 30)
-        // the changed grace re-armed the debouncer from the current state (previousTimeout != nil, so the
-        // status observer is NOT re-registered — only the debouncer re-arms); the flush drives that fire.
+        // previousTimeout != nil here, so the status observer is not re-registered — only the debouncer re-arms.
         store.autoFollowDebouncer.flush()
         #expect(store.selectedSessionID == blocked.id)
     }
@@ -401,14 +390,14 @@ struct AppStoreAutoFollowTests {
         store.setAgentIndicator(AgentIndicator(status: .active), forSession: active.id)
         let blocked = addBlocked(store, to: ws.id, cwd: "/b", at: 100)
         store.selectSession(active.id)
-        store.setAutoFollow(timeout: 100, stayOnActive: true) // enable: an active current suppresses the block
+        store.setAutoFollow(timeout: 100, stayOnActive: true)
         store.autoFollowDebouncer.flush()
-        #expect(store.selectedSessionID == active.id) // stayOnActive keeps us on the running agent
-        // toggle stayOnActive OFF at the SAME grace: no pending fire remains (the last one no-op'd), so the
-        // config change alone must re-arm and re-decide, else the waiting block is never followed.
+        #expect(store.selectedSessionID == active.id)
+        // the SAME grace leaves no pending fire (the last one no-op'd), so the config change alone has to
+        // re-arm and re-decide.
         store.setAutoFollow(timeout: 100, stayOnActive: false)
         store.autoFollowDebouncer.flush()
-        #expect(store.selectedSessionID == blocked.id) // no longer suppressed -> follows the waiting block
+        #expect(store.selectedSessionID == blocked.id)
     }
 
     @Test func setAutoFollowDisableStopsStatusRearm() async {
@@ -417,17 +406,15 @@ struct AppStoreAutoFollowTests {
         let idle = store.addSession(toWorkspace: ws.id, cwd: "/idle")!
         let s = store.addSession(toWorkspace: ws.id, cwd: "/s")! // idle at enable, so the observer tracks it
         store.selectSession(idle.id)
-        store.setAutoFollow(timeout: 100, stayOnActive: false) // enable + start observing
-        store.autoFollowDebouncer.flush() // consume the enable's arm (nothing blocked yet)
-        store.setAutoFollow(timeout: nil, stayOnActive: false) // DISABLE before any block lands
-        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: s.id) // a block lands AFTER disable
-        // disabled: the surviving observer tracker must self-tear-down WITHOUT re-arming. this is a non-event,
-        // so it can't be polled for — instead drain generously (well past the re-arm's ~2-hop depth) to give
-        // any stray re-arm every chance to fire, then confirm nothing armed: the flush stays a no-op and the
-        // selection never moves. deterministic: each drain is a FIFO marker, no real sleep.
+        store.setAutoFollow(timeout: 100, stayOnActive: false)
+        store.autoFollowDebouncer.flush() // consume the enable's arm; nothing is blocked yet
+        store.setAutoFollow(timeout: nil, stayOnActive: false)
+        store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: s.id)
+        // a missing re-arm is a non-event that can't be polled for, so drain well past the re-arm's ~2-hop
+        // depth to give any stray one every chance to fire before asserting nothing armed.
         for _ in 0..<20 { await drainMainQueue() }
-        store.autoFollowDebouncer.flush() // nothing should be pending
-        #expect(store.selectedSessionID == idle.id) // disabled: the one-shot tracker self-teardown means no re-arm
+        store.autoFollowDebouncer.flush()
+        #expect(store.selectedSessionID == idle.id)
     }
 
     // MARK: - Control tree projection (idleMs live, autoFollowMs config) + the focus-bridge notification
@@ -436,17 +423,14 @@ struct AppStoreAutoFollowTests {
         let store = makeStore()
         let ws = store.addWorkspace(name: "w")
         _ = store.addSession(toWorkspace: ws.id, cwd: "/a")!
-        // before any activity + disabled: both live fields are nil.
         var tree = store.controlTree()
         #expect(tree.idleMs == nil)
         #expect(tree.autoFollowMs == nil)
-        // a configured timeout projects as ms (the * 1000 scaling) and activity makes idleMs live (>= 0).
         store.autoFollowTimeout = 30
         store.lastActivityAt = Date()
         tree = store.controlTree()
         #expect(tree.autoFollowMs == 30_000)
         #expect((tree.idleMs ?? -1) >= 0)
-        // disabling clears autoFollowMs back to nil.
         store.autoFollowTimeout = nil
         #expect(store.controlTree().autoFollowMs == nil)
     }
@@ -463,8 +447,8 @@ struct AppStoreAutoFollowTests {
         )
         store.setAgentIndicator(expectedIndicator, forSession: blocked.id)
         blocked.statusChangedAt = Date(timeIntervalSince1970: 100)
-        // The app-target focus bridge relies on this post carrying both the destination id and the
-        // pre-selection indicator. Observe synchronously and prove the auto-reset clear cannot erase routing.
+        // the app-target focus bridge routes off the posted PRE-selection indicator, so the auto-reset clear
+        // must not erase it.
         let box = NotificationBox()
         let token = NotificationCenter.default.addObserver(forName: .agtermAutoFollowed, object: nil,
                                                            queue: nil) { note in

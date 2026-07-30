@@ -39,10 +39,8 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
         XCTAssertTrue(pollSplitRatio(0.33, timeout: 10), "zoom round-trip must not change the split ratio")
     }
 
-    // A primary surface can exit while terminal zoom owns its host. When a live split exists, that exit
-    // promotes the split surface into the primary slot without changing the zoom target's semantic identity
-    // (`surface:<session>:left`). The zoom host must still replace its torn-down AppKit view and focus the
-    // promoted survivor; otherwise the zoom stays blank until the user exits it.
+    // promotion keeps the zoom target's semantic identity (`surface:<session>:left`), so the zoom host
+    // must replace its torn-down AppKit view itself or the zoom stays blank until the user exits it.
     func testZoomedPrimaryExitRehostsAndFocusesPromotedSurvivor() throws {
         let sessionID = try activeSessionID()
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","args":{"mode":"on"}}"#)["ok"] as? Bool, true,
@@ -84,8 +82,8 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
         XCTAssertTrue(app.buttons["terminal-zoom-exit"].exists,
                       "promotion should keep the semantic primary target zoomed")
 
-        // Type without clicking or leaving zoom. A stale representable still hosts the torn-down primary
-        // and can never write this marker; a remounted survivor receives focus and runs it.
+        // typed without clicking or leaving zoom: a stale representable still hosting the torn-down
+        // primary can never write this marker.
         let afterPromotion = markerDir.appendingPathComponent("zoom-after-promotion")
         var promotedValue: String?
         for _ in 0..<4 where promotedValue == nil {
@@ -106,14 +104,11 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
 
         let scratch = try sendCommand(#"{"cmd":"session.scratch","args":{"mode":"on"}}"#)
         XCTAssertEqual(scratch["ok"] as? Bool, true, "scratch on should succeed while zoomed: \(scratch)")
-        // the deck keeps realizing surfaces behind the zoom layer: the scratch must become readable
-        // (surface realized, shell spawned) without exiting zoom first.
         XCTAssertTrue(pollScratchReadable(timeout: 10),
                       "a control-opened scratch must realize its surface while the session is zoomed")
 
         XCTAssertEqual(try sendCommand(#"{"cmd":"surface.zoom","args":{"mode":"hide"}}"#)["ok"] as? Bool, true,
                        "zoom hide should succeed")
-        // hide is idempotent for explicit targets too: hiding an already-un-zoomed surface is an ok no-op.
         let rehide = try sendCommand(#"{"cmd":"surface.zoom","target":"\#(leftSurface)","args":{"mode":"hide"}}"#)
         XCTAssertEqual(rehide["ok"] as? Bool, true, "explicit-target hide should be idempotent: \(rehide)")
     }
@@ -127,13 +122,12 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
         XCTAssertEqual((zoom["result"] as? [String: Any])?["id"] as? String, "quick",
                        "zooming with the quick terminal visible should target it: \(zoom)")
 
-        // the API must accept the address it just emitted: hide the zoom by its returned id.
         let hide = try sendCommand(#"{"cmd":"surface.zoom","target":"quick","args":{"mode":"hide"}}"#)
         XCTAssertEqual(hide["ok"] as? Bool, true,
                        "the id surface.zoom emitted must be accepted back as a target: \(hide)")
 
-        // zoom the quick terminal again and dismiss it with plain `quick hide`: dismissal must stay
-        // unconditional for scripts — a zoomed quick terminal exits its zoom first, never an error.
+        // `quick hide` must stay unconditional for scripts — a zoomed quick terminal exits its zoom
+        // first, never an error.
         XCTAssertEqual(try sendCommand(#"{"cmd":"surface.zoom","args":{"mode":"show"}}"#)["ok"] as? Bool, true,
                        "re-zooming the quick terminal should succeed")
         let quickHide = try sendCommand(#"{"cmd":"quick","args":{"mode":"hide"}}"#)
@@ -144,11 +138,8 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
     }
 
     func testZoomedSurfaceTreeReadBackAndScopedErrorPaths() throws {
-        // unzoomed: the tree must OMIT zoomedSurface (nil closure result → key absent, not null).
         XCTAssertNil(try treeZoomedSurface(), "zoomedSurface should be absent while nothing is zoomed")
 
-        // zoom the active session's left surface and read the SAME id back from the tree top level —
-        // the record-then-restore leg of the write-only surface.zoom command.
         let leftSurface = try activeSurfaceID(kind: "left")
         let zoom = try sendCommand(#"{"cmd":"surface.zoom","target":"\#(leftSurface)","args":{"mode":"show"}}"#)
         XCTAssertEqual(zoom["ok"] as? Bool, true, "surface zoom show should succeed: \(zoom)")
@@ -159,18 +150,15 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
                        "zoom hide should succeed")
         XCTAssertNil(try treeZoomedSurface(), "zoomedSurface should clear on zoom exit")
 
-        // error paths. a well-formed id whose session exists nowhere → no such surface.
         let ghost = "surface:00000000-0000-0000-0000-000000000000:left"
         let noSuch = try sendCommand(#"{"cmd":"surface.zoom","target":"\#(ghost)","args":{"mode":"show"}}"#)
         XCTAssertEqual(noSuch["ok"] as? Bool, false, "zooming an unknown surface should fail: \(noSuch)")
         XCTAssertEqual(noSuch["error"] as? String, "no such surface: \(ghost)")
 
-        // a malformed target → invalid surface.
         let invalid = try sendCommand(#"{"cmd":"surface.zoom","target":"not-a-surface","args":{"mode":"show"}}"#)
         XCTAssertEqual(invalid["ok"] as? Bool, false, "a malformed target should fail: \(invalid)")
         XCTAssertEqual(invalid["error"] as? String, "invalid surface: not-a-surface")
 
-        // a real surface addressed through a --window that does not own it → no such surface (scoped).
         let created = try sendCommand(#"{"cmd":"window.new","args":{"name":"zoom-err"}}"#)
         XCTAssertEqual(created["ok"] as? Bool, true, "window.new should succeed: \(created)")
         let otherWindow = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String,
@@ -181,7 +169,7 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
                        "zooming a surface through a window that does not own it should fail: \(wrongWindow)")
         XCTAssertEqual(wrongWindow["error"] as? String, "no such surface: \(leftSurface)")
 
-        // a known-but-CLOSED window → window not open (the resolver knows the id; there is no live store).
+        // the resolver still knows the closed window's id; there is just no live store behind it.
         XCTAssertEqual(try sendCommand(#"{"cmd":"window.close","target":"\#(otherWindow)"}"#)["ok"] as? Bool, true,
                        "closing the helper window should succeed")
         let closed = try sendCommand(
@@ -191,26 +179,24 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
     }
 
     func testZoomingBackgroundTargetEndsItsSearch() throws {
-        // open search on session A (session.search selects its target, so A is active with the bar up).
+        // session.search selects its target, so A ends up active with the bar up.
         let sessionA = try activeSessionID()
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.search","target":"\#(sessionA)","args":{"text":"login"}}"#)["ok"] as? Bool,
                        true, "opening search on session A should succeed")
         XCTAssertTrue(app.textFields["search-field"].waitForExistence(timeout: 10),
                       "the search bar should be up on session A")
 
-        // park the selection on a fresh session B, making A a BACKGROUND session with searchActive set.
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         XCTAssertEqual(created["ok"] as? Bool, true, "creating session B should succeed: \(created)")
 
-        // zoom A's surface by explicit id — the addressable path that does NOT select A first — then exit.
+        // by explicit id — the addressable path that does NOT select A first, so A stays background.
         let zoom = try sendCommand(#"{"cmd":"surface.zoom","target":"surface:\#(sessionA):left","args":{"mode":"show"}}"#)
         XCTAssertEqual(zoom["ok"] as? Bool, true, "zooming background session A's surface should succeed: \(zoom)")
         XCTAssertTrue(app.buttons["terminal-zoom-exit"].waitForExistence(timeout: 10), "zoom should be active")
         XCTAssertEqual(try sendCommand(#"{"cmd":"surface.zoom","args":{"mode":"hide"}}"#)["ok"] as? Bool, true,
                        "zoom hide should succeed")
 
-        // zoom-enter must have ENDED A's search: re-selecting A shows no search bar (a surviving
-        // searchActive would re-mount it the moment A becomes the active session).
+        // a surviving searchActive would re-mount the bar the moment A becomes active again.
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.select","target":"\#(sessionA)"}"#)["ok"] as? Bool, true,
                        "re-selecting session A should succeed")
         XCTAssertTrue(app.textFields["search-field"].waitForNonExistence(timeout: 10),
@@ -218,7 +204,6 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
     }
 
     func testBackgroundWindowZoomExitDoesNotStealFrontmostFocus() throws {
-        // zoom window A's left surface, then open window B on top: A becomes a BACKGROUND zoomed window.
         let windows = try XCTUnwrap(
             (try sendCommand(#"{"cmd":"window.list"}"#)["result"] as? [String: Any])?["windows"] as? [[String: Any]],
             "window.list should carry windows")
@@ -231,14 +216,12 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
         XCTAssertEqual(created["ok"] as? Bool, true, "window.new should succeed: \(created)")
         let windowB = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String,
                                     "window.new should return the new window id")
-        // wait for the second window to MATERIALIZE in the AX tree before driving it — a control-created
-        // window can lag its window.list "active" flag (the multi-window suites' count-poll pattern).
+        // a control-created window can lag its window.list "active" flag, so wait for the AX tree.
         let appeared = Date().addingTimeInterval(10)
         while Date() < appeared, app.windows.count < 2 { usleep(200_000) }
         XCTAssertGreaterThanOrEqual(app.windows.count, 2, "the second window should materialize and take key")
         XCTAssertTrue(pollWindowActive(windowB, timeout: 12), "the new window should take key")
 
-        // put the keyboard into window B's search field and prove it owns the keystrokes.
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.search"}"#)["ok"] as? Bool, true,
                        "opening search in the frontmost window should succeed")
         let searchField = app.textFields["search-field"]
@@ -248,9 +231,8 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
         XCTAssertTrue(pollFieldValue(searchField, equals: "ab", timeout: 8),
                       "the search field should own the keyboard before the background unzoom")
 
-        // un-zoom BACKGROUND window A over the socket. Its zoom-exit focus return is scoped to window A,
-        // so window B's field keeps the keyboard — a frontmost-targeted restore would steal it (the
-        // regression this pins). Give a stray restore its full retry window before typing on.
+        // A's zoom-exit focus return is scoped to window A; a frontmost-targeted restore would steal B's
+        // keyboard. The run-loop wait below gives such a stray restore its full retry window.
         XCTAssertEqual(try sendCommand(#"{"cmd":"surface.zoom","args":{"mode":"hide","window":"\#(windowA)"}}"#)["ok"] as? Bool,
                        true, "hiding the background window's zoom should succeed")
         RunLoop.current.run(until: Date().addingTimeInterval(1.0))

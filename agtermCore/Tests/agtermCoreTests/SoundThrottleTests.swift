@@ -25,7 +25,7 @@ struct SoundThrottleTests {
         var throttle = SoundThrottle(window: .milliseconds(200))
         let t0 = ContinuousClock().now
         let first = throttle.allow("Ping", at: t0)
-        let atBoundary = throttle.allow("Ping", at: t0 + .milliseconds(200)) // >= window plays
+        let atBoundary = throttle.allow("Ping", at: t0 + .milliseconds(200))
         let wellPast = throttle.allow("Ping", at: t0 + .milliseconds(450))
         #expect(first)
         #expect(atBoundary)
@@ -36,9 +36,9 @@ struct SoundThrottleTests {
         var throttle = SoundThrottle(window: .milliseconds(200))
         let t0 = ContinuousClock().now
         let ping = throttle.allow("Ping", at: t0)
-        let hero = throttle.allow("Hero", at: t0 + .milliseconds(10))  // different name, not suppressed
-        let pingAgain = throttle.allow("Ping", at: t0 + .milliseconds(20)) // Ping still inside its window
-        let heroAgain = throttle.allow("Hero", at: t0 + .milliseconds(30)) // Hero now inside its window
+        let hero = throttle.allow("Hero", at: t0 + .milliseconds(10))
+        let pingAgain = throttle.allow("Ping", at: t0 + .milliseconds(20))
+        let heroAgain = throttle.allow("Hero", at: t0 + .milliseconds(30))
         #expect(ping)
         #expect(hero)
         #expect(!pingAgain)
@@ -46,13 +46,13 @@ struct SoundThrottleTests {
     }
 
     @Test func suppressedReplayDoesNotAdvanceTheWindow() {
-        // the window is measured from the last ALLOWED play, not the last attempt — a suppressed call
-        // must not re-stamp, else a steady stream just under the window would never play.
+        // measured from the last ALLOWED play, not the last attempt — else a steady stream just under the
+        // window would never play.
         var throttle = SoundThrottle(window: .milliseconds(200))
         let t0 = ContinuousClock().now
         let first = throttle.allow("Ping", at: t0)
-        let suppressed = throttle.allow("Ping", at: t0 + .milliseconds(150)) // must not re-stamp
-        let atBoundary = throttle.allow("Ping", at: t0 + .milliseconds(200)) // 200ms since ALLOWED play → plays
+        let suppressed = throttle.allow("Ping", at: t0 + .milliseconds(150))
+        let atBoundary = throttle.allow("Ping", at: t0 + .milliseconds(200))
         #expect(first)
         #expect(!suppressed)
         #expect(atBoundary)

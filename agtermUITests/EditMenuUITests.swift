@@ -16,8 +16,7 @@ import XCTest
 /// So every clipboard-dependent assertion polls until the app catches up, and each "disabled" expectation is
 /// entered from a known-enabled state so a stale read cannot satisfy it.
 ///
-/// The runner is also SANDBOXED, which bounds what can be seeded at all — see the note above
-/// `testEditMenuLeavesCutAndUndoDisabledForTerminal`.
+/// The runner is also SANDBOXED, which bounds what can be seeded at all — see the file-URL NOTE below.
 @MainActor
 final class EditMenuUITests: ControlAPITestCase {
     /// Open the Edit menu, run `body` against it, then dismiss. Menu validation runs on open, so the
@@ -44,9 +43,7 @@ final class EditMenuUITests: ControlAPITestCase {
         return observed
     }
 
-    // Copy is gated on ghostty_surface_has_selection: disabled on a fresh session, enabled once
-    // session.selectall creates a selection. Select All is gated only on a realized surface, so it is
-    // always enabled while the terminal holds first responder.
+    // Copy is gated on ghostty_surface_has_selection; Select All only on a realized surface.
     func testEditMenuGatesCopyOnSelection() throws {
         let id = try activeSessionID()
 
@@ -62,8 +59,8 @@ final class EditMenuUITests: ControlAPITestCase {
                       "Copy should enable once the buffer is selected")
     }
 
-    // Paste is gated on the clipboard holding something the paste path can insert. Seeded text FIRST, so the
-    // later empty-clipboard expectation starts from a confirmed-enabled state and cannot pass on a stale read.
+    // text is seeded FIRST so the later empty-clipboard expectation starts from a confirmed-enabled state
+    // and cannot pass on a stale read.
     func testEditMenuGatesPasteOnClipboardText() throws {
         seedPasteboard { $0.setString("pasteable", forType: .string) }
         XCTAssertTrue(pollEditMenuItem("Paste", isEnabled: true),
@@ -74,33 +71,29 @@ final class EditMenuUITests: ControlAPITestCase {
                        "Paste should disable once the clipboard is emptied")
     }
 
-    // NOTE: the file-URL Paste case (a Finder copy, which carries no string representation) is NOT covered
-    // here and cannot be. The XCUITest runner is sandboxed (`com.apple.security.app-sandbox`), so a file URL
-    // it writes to `NSPasteboard.general` never becomes visible to the app process — instrumenting
-    // `hasPasteboardText` showed the app reading `types=[]` for the full 8 s of polling while the runner's own
-    // `canReadObject([NSURL])` returned true from its in-process cache. Such a test exercises the sandbox, not
-    // `validateMenuItem`. The invariant it would have pinned lives in the code instead: `hasPasteboardText`
-    // must mirror `pasteboardText`'s branches. See the Control API rule.
+    // NOTE: the file-URL Paste case (a Finder copy carries no string representation) can NOT be covered
+    // here: the runner is sandboxed (`com.apple.security.app-sandbox`), so a file URL it writes to
+    // `NSPasteboard.general` never becomes visible to the app process — the app reads `types=[]` while the
+    // runner's own `canReadObject([NSURL])` returns true from its in-process cache. Such a test exercises
+    // the sandbox, not `validateMenuItem`.
 
-    // Cut is deliberately NOT implemented on the surface, so AppKit leaves it disabled for the terminal.
-    // (It still works in a focused text field, whose field editor implements `cut:`.) It cannot be removed
-    // on its own: it shares SwiftUI's `.pasteboard` group with Copy/Paste/Select All.
+    // Cut is deliberately unimplemented on the surface (it still works in a focused text field, whose field
+    // editor implements `cut:`) and cannot be removed on its own — it shares SwiftUI's `.pasteboard` group
+    // with Copy/Paste/Select All.
     func testEditMenuLeavesCutDisabledForTerminal() throws {
         withEditMenu {
             XCTAssertFalse(app.menuItems["Cut"].isEnabled, "Cut should stay disabled for the terminal")
         }
     }
 
-    // Undo/Redo are removed outright (`CommandGroup(replacing: .undoRedo) {}`): agterm has no undo manager,
-    // and their ⌘Z is already owned by File ▸ Reopen Closed Item. Asserting NON-EXISTENCE rather than
-    // `isEnabled == false` matters — `isEnabled` on a missing element is also false, so a disabled-check
-    // would keep passing if the items ever came back.
+    // Undo/Redo are removed outright (`CommandGroup(replacing: .undoRedo) {}`); their ⌘Z belongs to File ▸
+    // Reopen Closed Item. Assert NON-EXISTENCE, not `isEnabled == false`: `isEnabled` is false for a missing
+    // element too, so a disabled-check would keep passing if the items came back.
     func testEditMenuHasNoUndoOrRedoItems() throws {
         withEditMenu {
             XCTAssertFalse(app.menuItems["Undo"].exists, "Undo should be gone from the Edit menu")
             XCTAssertFalse(app.menuItems["Redo"].exists, "Redo should be gone from the Edit menu")
         }
-        // ⌘Z belongs to File ▸ Reopen Closed Item, and nothing in Edit competes for it any more.
         app.menuBars.menuBarItems["File"].click()
         XCTAssertTrue(app.menuItems["Reopen Closed Item"].waitForExistence(timeout: 5),
                       "File should still own the ⌘Z action")

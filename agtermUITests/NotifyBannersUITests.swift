@@ -1,10 +1,8 @@
 import XCTest
 
-// `notify` with the "Show notification banners" toggle OFF. The command still succeeds and the unseen
-// badge still tracks, but nothing is handed to macOS — so it answers `ok` WITH an advisory note in
-// `result.text` rather than a bare `ok`, which would be indistinguishable from a broken notification
-// path (issue #286: a user read the bare `ok` plus a silent log as "notify never delivers").
-// Launches with `notificationsEnabled: false` pre-seeded, since there is no `settings.*` control command.
+// `notify` with the "Show notification banners" toggle OFF still succeeds, so it answers `ok` WITH an
+// advisory note in `result.text`; a bare `ok` is indistinguishable from a broken notification path
+// (issue #286). Launches with `notificationsEnabled: false` pre-seeded — there is no `settings.*` command.
 final class NotifyBannersOffUITests: ControlAPITestCase {
     override var seededSettings: [String: Any]? { ["notificationsEnabled": false] }
 
@@ -19,14 +17,13 @@ final class NotifyBannersOffUITests: ControlAPITestCase {
                        "badge updated, but \"Show notification banners\" is off, so no banner was posted",
                        "banners-off notify should explain why no banner appeared: \(result)")
 
-        // the badge is independent of the banner toggle, so the unseen count still rises.
         XCTAssertTrue(poll(timeout: 10) { try self.unseen(ofSession: seeded) == 1 },
                       "the unseen badge should still track with banners off")
     }
 }
 
-// The same command with banners ON (stock defaults) — the note must be ABSENT, so a caller can treat
-// its presence as "no banner was posted" rather than boilerplate on every call.
+// with banners ON the note must be ABSENT, so a caller can read its presence as "no banner was posted"
+// rather than boilerplate on every call.
 final class NotifyBannersOnUITests: ControlAPITestCase {
     func testNotifyWithBannersOnReturnsNoNote() throws {
         let seeded = try seededSessionID()

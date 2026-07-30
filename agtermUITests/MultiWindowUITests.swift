@@ -2,37 +2,30 @@ import Darwin
 import XCTest
 
 /// End-to-end tests for the multi-window scene: seed `AGTERM_STATE_DIR` with a `windows.json` index +
-/// two per-window snapshot files, launch the real app, and assert both windows open on screen and
-/// stay recorded open in the index. Closing one window drops the on-screen count and marks that
-/// window closed.
+/// per-window snapshot files, launch the real app, and assert on two oracles — the live window count
+/// (`app.windows`) and the persisted index.
 ///
-/// Assertions use two oracles: the live window count (`app.windows`) and the persisted
-/// `windows.json` index (the launch reopen-all + the quit-time flush keep both windows recorded
-/// open). Per-window sidebar content isn't asserted across BOTH windows — the test-only
-/// force-sidebar fixup reliably expands only the key window's sidebar — so the per-window-store
-/// resolution is proven by at least one seeded workspace rendering plus the two-window count.
+/// Per-window sidebar content isn't asserted across BOTH windows — the test-only force-sidebar fixup
+/// reliably expands only the key window's sidebar — so per-window-store resolution is proven by one
+/// seeded workspace rendering plus the two-window count.
 ///
-/// The seed is written as raw JSON (the UI-test target doesn't link `agtermCore`) matching the
-/// `WindowsIndex` and `Snapshot` Codable shapes.
+/// The seed is raw JSON (the UI-test target doesn't link `agtermCore`) matching the `WindowsIndex` and
+/// `Snapshot` Codable shapes.
 @MainActor
 final class MultiWindowUITests: XCTestCase {
     private var app: XCUIApplication!
     private var stateDir: URL!
-    /// The control socket the app binds, for tests that drive a command (e.g. `quick`). Kept short and
-    /// inside the runner sandbox (NSTemporaryDirectory) so it fits `sun_path`'s ~104-byte limit, like
-    /// `ControlAPIUITests`.
+    /// The control socket the app binds. Kept under NSTemporaryDirectory so it fits `sun_path`'s
+    /// ~104-byte limit, like `ControlAPIUITests`.
     private var socketPath: String!
-    /// A short temp dir the spawned shell writes env-probe marker files into (kept under
-    /// NSTemporaryDirectory so paths stay short, like the socket).
+    /// A temp dir the spawned shell writes env-probe marker files into, short-pathed like the socket.
     private var markerDir: URL!
     private var windowAID = UUID()
     private var windowBID = UUID()
-    /// The selected session id seeded into each window's snapshot, by window id — set by
-    /// `seedTwoWindowsWithSelection`, asserted by the reopen-all test.
+    /// The selected session id seeded per window by `seedTwoWindowsWithSelection`.
     private var selectedByWindow: [UUID: UUID] = [:]
-    /// The single session id seeded into each window's snapshot, by window id — set by
-    /// `seedTwoWindowsWithKnownSessions`, used by the distinct-store test to target each window's
-    /// own session over the control socket.
+    /// The single session id seeded per window by `seedTwoWindowsWithKnownSessions`, used by the
+    /// distinct-store test to target each window's own session over the control socket.
     private var sessionByWindow: [UUID: UUID] = [:]
 
     override func setUp() async throws {
@@ -214,9 +207,8 @@ final class MultiWindowUITests: XCTestCase {
         app.launchForUITest()
     }
 
-    /// Simulate a quit/relaunch cycle: terminate the running app (its `applicationWillTerminate` flushes
-    /// every open store + the index) and relaunch against the SAME state dir + socket, so the persisted
-    /// open-set + per-window selection drive the relaunch reopen.
+    /// Simulate a quit/relaunch cycle: terminate the running app and relaunch against the SAME state dir
+    /// + socket, so the persisted open-set + per-window selection drive the relaunch reopen.
     private func relaunch() {
         app?.terminate()
         launch()
@@ -263,33 +255,23 @@ final class MultiWindowUITests: XCTestCase {
 
     // MARK: - Tests
 
-    // the seeded index reopens both windows on launch; both are on screen and recorded open, and each
-    // window binds its OWN store. The distinct-store proof is the load-bearing assertion: a probe typed
-    // into each window's own seeded session writes that window's $AGTERM_WINDOW_ID, and the two values must
-    // be DIFFERENT (each == its own window's id). Under the reopen-all duplicate-store collision the two
-    // on-screen windows would both bind one store, so the un-rendered window's session never realizes and
-    // its probe never writes — catching the bug definitively (the index open-flags alone would not).
+    // the distinct-store probe is the load-bearing assertion: under a duplicate-store collision both
+    // on-screen windows bind one store, so the un-rendered window's session never realizes and its probe
+    // never writes. The index open-flags alone would not catch that.
     func testReopensTwoSeededWindows() throws {
         try seedTwoWindowsWithKnownSessions()
         launch()
 
-        // both windows resolve a store and render their seeded workspace (the OR is fine here — the
-        // distinct-store assertion below is what proves the two stores are actually distinct).
+        // the OR is fine here — the distinct-store assertion below is what proves the stores differ.
         let alpha = app.staticTexts["alpha-ws"]
         let beta = app.staticTexts["beta-ws"]
         XCTAssertTrue(alpha.waitForExistence(timeout: 30) || beta.waitForExistence(timeout: 30),
                       "a seeded window's workspace should render")
 
-        // two on-screen windows materialize (the launch window claims the frontmost id, the reopen-all
-        // opens the second).
         XCTAssertTrue(pollWindowCount(atLeast: 2, timeout: 10), "two windows should open, got \(app.windows.count)")
         XCTAssertTrue(pollIndexOpenState([windowAID: true, windowBID: true], timeout: 10),
                       "both seeded windows should be marked open in windows.json")
 
-        // the definitive distinct-store oracle: type a probe into EACH window's own seeded session and
-        // read back the $AGTERM_WINDOW_ID its shell saw. Each must equal that window's id, and the two must
-        // differ — impossible if the two windows shared one store (the un-rendered window's session would
-        // never realize, so its probe would never write).
         let aSession = try XCTUnwrap(sessionByWindow[windowAID], "window A's seeded session id")
         let bSession = try XCTUnwrap(sessionByWindow[windowBID], "window B's seeded session id")
         let aValue = try readWindowEnv(windowID: windowAID, sessionID: aSession, fileName: "win-a-env")
@@ -307,8 +289,7 @@ final class MultiWindowUITests: XCTestCase {
     /// value back, lowercased. The window/session scoping routes the inject to the owning store, so a
     /// shared-store collision shows up as the un-rendered window's session never realizing (no write).
     private func readWindowEnv(windowID: UUID, sessionID: UUID, fileName: String) throws -> String {
-        // raise the window so its selected session's surface is the one rendered (surfaces realize when
-        // their detail pane is shown), then inject into that window's session by id.
+        // surfaces realize only when their detail pane is shown, so raise the window before injecting.
         XCTAssertEqual(try sendCommand(#"{"cmd":"window.select","target":"\#(windowID.uuidString)"}"#)["ok"] as? Bool, true,
                        "selecting window \(windowID) should succeed")
         let file = markerDir.appendingPathComponent(fileName)
@@ -318,17 +299,12 @@ final class MultiWindowUITests: XCTestCase {
         return value.lowercased()
     }
 
-    // reopen-all after a simulated quit: seed two open windows each with a known selected session, launch
-    // (the first reopen), then terminate (the quit-time flush) and relaunch. Both windows must come back
-    // open and each window's selected session id must survive the round-trip — the launch reopen-all + the
-    // per-window store flush restore both the open-set and the selection.
     func testReopenAllAfterSimulatedQuitRestoresOpenSetAndSelection() throws {
         try seedTwoWindowsWithSelection()
         let expectedSelection = selectedByWindow
 
         launch()
 
-        // first reopen: both seeded windows open + recorded open, and each window's seeded selection is intact.
         let alpha = app.staticTexts["alpha-ws"]
         let beta = app.staticTexts["beta-ws"]
         XCTAssertTrue(alpha.waitForExistence(timeout: 30) || beta.waitForExistence(timeout: 30),
@@ -341,8 +317,6 @@ final class MultiWindowUITests: XCTestCase {
         XCTAssertEqual(windowSelectedSessionID(windowBID), expectedSelection[windowBID],
                        "window B's seeded selection should be intact after launch")
 
-        // simulate a real quit + relaunch: terminate (flushes every open store + the index), then relaunch
-        // the same state dir. The reopen-all must bring both windows back open with the same selections.
         relaunch()
 
         XCTAssertTrue(app.staticTexts["alpha-ws"].waitForExistence(timeout: 30)
@@ -358,8 +332,6 @@ final class MultiWindowUITests: XCTestCase {
                        "window B's selected session should survive the simulated quit/relaunch")
     }
 
-    // closing one of the two windows marks exactly that window closed in the index, leaving the other
-    // open (proves the per-window close path tears down + records only the closed window).
     /// Clicks a button labelled `label` in a confirmation sheet/dialog (the close-confirm alert),
     /// searching sheets, then dialogs, then any matching button. Returns whether it was clicked.
     private func clickConfirmButton(_ label: String, timeout: TimeInterval) -> Bool {
@@ -376,7 +348,6 @@ final class MultiWindowUITests: XCTestCase {
         try seedTwoWindows()
         launch()
 
-        // wait for a seeded sidebar to render so the window tree is populated, then both open.
         let alpha = app.staticTexts["alpha-ws"]
         let beta = app.staticTexts["beta-ws"]
         XCTAssertTrue(alpha.waitForExistence(timeout: 30) || beta.waitForExistence(timeout: 30),
@@ -384,19 +355,15 @@ final class MultiWindowUITests: XCTestCase {
         XCTAssertTrue(pollIndexOpenState([windowAID: true, windowBID: true], timeout: 10),
                       "both windows should start open")
 
-        // close the seeded window "win-a", targeted by title. Targeting matters: SwiftUI restores an
-        // extra empty stray window from its OWN restoration state (NSUserDefaults, not isolated by
-        // AGTERM_STATE_DIR) under the test's launch — the app's dedup mostly dismisses it, but it can sit
-        // frontmost, so a generic firstMatch / File-menu Close hits THAT empty window, not a seeded
-        // one. The targeted window has a running session, so a confirm sheet appears; Close proceeds.
+        // targeting by title matters: SwiftUI restores an extra empty stray window from its OWN
+        // restoration state (NSUserDefaults, not isolated by AGTERM_STATE_DIR), and it can sit frontmost,
+        // so a generic firstMatch / File-menu Close hits THAT window instead of a seeded one.
         let target = app.windows.matching(NSPredicate(format: "title CONTAINS %@", "win-a")).firstMatch
         XCTAssertTrue(target.waitForExistence(timeout: 10), "seeded window win-a should be on screen")
         target.buttons[XCUIIdentifierCloseWindow].click()
         XCTAssertTrue(clickConfirmButton("Close", timeout: 10), "a close-confirmation sheet should appear; clicking Close proceeds")
 
-        // win-a is now marked closed in the index, win-b stays open. The per-window close path
-        // (performClose → willClose → teardown → closeWindow → index save) can be delayed under load,
-        // so allow a generous settle; the index is the deterministic readiness signal.
+        // the close path can lag under load, so the settle is generous; the index is the readiness signal.
         let deadline = Date().addingTimeInterval(30)
         var settled = false
         while Date() < deadline {
@@ -409,48 +376,35 @@ final class MultiWindowUITests: XCTestCase {
         XCTAssertTrue(settled, "win-a should be marked closed and win-b open, got \(String(describing: indexOpenState()))")
     }
 
-    // the quick terminal is per-window: with two windows open, driving `quick show` over the control
-    // socket toggles only the frontmost window's quick terminal (exactly one `quick-terminal` element
-    // appears), and `quick hide` clears it. Proves each window owns its own controller and the control
-    // arm acts on the frontmost window.
     func testQuickTerminalIsPerWindow() throws {
         try seedTwoWindows()
         launch()
 
-        // both windows are up (a seeded sidebar rendered + two on-screen windows).
         let alpha = app.staticTexts["alpha-ws"]
         let beta = app.staticTexts["beta-ws"]
         XCTAssertTrue(alpha.waitForExistence(timeout: 30) || beta.waitForExistence(timeout: 30),
                       "a seeded window should render")
         XCTAssertTrue(pollWindowCount(atLeast: 2, timeout: 10), "two windows should open, got \(app.windows.count)")
 
-        // no quick terminal is showing in any window yet.
         let quick = app.descendants(matching: .any).matching(identifier: "quick-terminal")
         XCTAssertEqual(quick.count, 0, "no quick terminal should be visible before showing one")
 
-        // show the frontmost window's quick terminal via the control socket.
         let shown = try sendCommand(#"{"cmd":"quick","args":{"mode":"show"}}"#)
         XCTAssertEqual(shown["ok"] as? Bool, true, "quick show should succeed: \(shown)")
         XCTAssertTrue(quick.firstMatch.waitForExistence(timeout: 10), "the frontmost quick terminal should appear")
-        // exactly ONE window's quick terminal showed — not both — so the controller is per-window.
         XCTAssertEqual(quick.count, 1, "only the frontmost window's quick terminal should show, got \(quick.count)")
 
-        // hide it again; it disappears.
         let hidden = try sendCommand(#"{"cmd":"quick","args":{"mode":"hide"}}"#)
         XCTAssertEqual(hidden["ok"] as? Bool, true, "quick hide should succeed: \(hidden)")
         XCTAssertTrue(waitForCount(quick, equals: 0, timeout: 10), "the quick terminal should hide")
     }
 
-    // the spawned shell sees the AGTERM_* env: create a session over the control socket (so its surface
-    // is realized after the socket bound, and AGTERM_SOCKET is populated), then type `echo "$AGTERM_WINDOW_ID"`
-    // / `echo "$AGTERM_SESSION_ID"` into it and read the written files back (the split-test write-to-file
-    // idiom). AGTERM_WINDOW_ID must equal the owning (frontmost) window's id and AGTERM_SESSION_ID the new
-    // session's id — proof the factory injects the right per-surface env.
+    // the session is created over the socket so its surface realizes AFTER the bind, which is what
+    // populates AGTERM_SOCKET in the spawned shell's env.
     func testSpawnedShellSeesWindowAndSessionEnv() throws {
         try seedTwoWindows()
         launch()
 
-        // both windows are up.
         let alpha = app.staticTexts["alpha-ws"]
         let beta = app.staticTexts["beta-ws"]
         XCTAssertTrue(alpha.waitForExistence(timeout: 30) || beta.waitForExistence(timeout: 30),
@@ -458,17 +412,12 @@ final class MultiWindowUITests: XCTestCase {
         XCTAssertTrue(pollWindowCount(atLeast: 2, timeout: 10), "two windows should open, got \(app.windows.count)")
         XCTAssertTrue(pollIndexOpenState([windowAID: true, windowBID: true], timeout: 10), "both windows should be open")
 
-        // create a new session in the frontmost window; it's selected + shown, so its surface realizes
-        // (and was created after the control socket bound, so AGTERM_SOCKET is set).
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
         let newSessionID = try XCTUnwrap(result["id"] as? String, "session.new should return the new id")
 
-        // the owning window is the frontmost one, which the index records.
         let frontmost = try XCTUnwrap(pollIndexFrontmost(timeout: 10), "windows.json should record a frontmost id")
 
-        // echo $AGTERM_WINDOW_ID into a file and read it back: it must equal the frontmost window's id. The
-        // type-and-retry guards the freshly-realized surface's shell-readiness race under full-suite load.
         let windowFile = markerDir.appendingPathComponent("window-id")
         let windowCmd = "echo \"$AGTERM_WINDOW_ID\" > '\(windowFile.path)'\n"
         let readWindowID = try XCTUnwrap(try typeUntilMarker(windowCmd, target: newSessionID, file: windowFile),
@@ -476,7 +425,6 @@ final class MultiWindowUITests: XCTestCase {
         XCTAssertEqual(readWindowID.lowercased(), frontmost.lowercased(),
                        "AGTERM_WINDOW_ID should equal the owning (frontmost) window's id")
 
-        // echo $AGTERM_SESSION_ID into a file and read it back: it must equal the new session's id.
         let sessionFile = markerDir.appendingPathComponent("session-id")
         let sessionCmd = "echo \"$AGTERM_SESSION_ID\" > '\(sessionFile.path)'\n"
         let readSessionID = try XCTUnwrap(try typeUntilMarker(sessionCmd, target: newSessionID, file: sessionFile),
@@ -485,9 +433,6 @@ final class MultiWindowUITests: XCTestCase {
                        "AGTERM_SESSION_ID should equal the spawning session's id")
     }
 
-    // a session created in (and shown in) window B sees AGTERM_WINDOW_ID == window B's id, NOT the
-    // initially-frontmost window A — proof surfaceEnv resolves the owning window per surface, not the
-    // frontmost window at creation time.
     func testSessionEnvBindsToOwningWindowB() throws {
         try seedTwoWindows()
         launch()
@@ -498,18 +443,16 @@ final class MultiWindowUITests: XCTestCase {
         XCTAssertTrue(pollWindowCount(atLeast: 2, timeout: 10), "two windows should open, got \(app.windows.count)")
         XCTAssertTrue(pollIndexOpenState([windowAID: true, windowBID: true], timeout: 10), "both windows should be open")
 
-        // raise window B so its new session is shown (surfaces are lazy — they realize when displayed).
+        // surfaces are lazy — they realize only when displayed, so window B has to be raised first.
         XCTAssertEqual(try sendCommand(#"{"cmd":"window.select","target":"\#(windowBID.uuidString)"}"#)["ok"] as? Bool, true,
                        "selecting window B should succeed")
 
-        // create a session in window B by id and select it so its surface realizes after the socket bound.
         let created = try sendCommand(#"{"cmd":"session.new","args":{"window":"\#(windowBID.uuidString)"}}"#)
         let newSessionID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String,
                                          "session.new --window B should return the new id")
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.select","target":"\#(newSessionID)","args":{"window":"\#(windowBID.uuidString)"}}"#)["ok"] as? Bool,
                        true, "selecting the new B-session should succeed")
 
-        // the B-session's shell must see AGTERM_WINDOW_ID == window B's id.
         let windowFile = markerDir.appendingPathComponent("window-b-id")
         let windowCmd = "echo \"$AGTERM_WINDOW_ID\" > '\(windowFile.path)'\n"
         let readWindowID = try XCTUnwrap(try typeUntilMarker(windowCmd, target: newSessionID, file: windowFile),
@@ -520,8 +463,6 @@ final class MultiWindowUITests: XCTestCase {
 
     // MARK: - File-menu window actions (Task 9)
 
-    // File ▸ New Window opens a second on-screen window and adds an open entry to the index (proving
-    // the menu drives library.newWindow + the scene's openWindow opener).
     func testNewWindowMenuOpensSecondWindow() throws {
         try seedOneWindow()
         launch()
@@ -539,7 +480,6 @@ final class MultiWindowUITests: XCTestCase {
                       "the index should record two open windows, got \(String(describing: indexWindows()))")
     }
 
-    // File ▸ Delete Window is disabled when only one window remains (keep-at-least-one).
     func testDeleteWindowMenuDisabledForLastWindow() throws {
         try seedOneWindow()
         launch()
@@ -552,8 +492,6 @@ final class MultiWindowUITests: XCTestCase {
         XCTAssertFalse(item.isEnabled, "Delete Window should be disabled with only one window")
     }
 
-    // File ▸ New Window then File ▸ Delete Window removes the extra window: the confirm alert fires
-    // (the new window has a session), clicking Delete drops it back to one window in the index.
     func testDeleteWindowMenuRemovesExtraWindow() throws {
         try seedOneWindow()
         launch()
@@ -561,19 +499,17 @@ final class MultiWindowUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["alpha-ws"].waitForExistence(timeout: 30), "the seeded window should render")
         XCTAssertTrue(pollIndexWindows(timeout: 10) { $0.count == 1 }, "one window to start")
 
-        // create a second window via the menu; it becomes frontmost (the delete target).
         app.menuBars.menuBarItems["File"].click()
         app.menuItems["New Window"].click()
         XCTAssertTrue(pollIndexWindows(timeout: 10) { $0.count == 2 }, "two windows after New Window")
 
-        // delete the frontmost (the just-created) window; it has a session, so confirm fires.
+        // the just-created window is frontmost and has a session, so the delete confirm fires.
         app.menuBars.menuBarItems["File"].click()
         let delete = app.menuItems["Delete Window"]
         XCTAssertTrue(delete.waitForExistence(timeout: 5), "File menu should offer Delete Window")
         XCTAssertTrue(delete.isEnabled, "Delete Window should be enabled with two windows")
         delete.click()
 
-        // the confirm alert's Delete button — accept it.
         let confirm = app.dialogs.buttons["Delete"].firstMatch
         if confirm.waitForExistence(timeout: 5) {
             confirm.click()
@@ -583,13 +519,11 @@ final class MultiWindowUITests: XCTestCase {
             fallback.click()
         }
 
-        // back to exactly one window in the index.
         XCTAssertTrue(pollIndexWindows(timeout: 10) { $0.count == 1 },
                       "deleting the extra window should leave one, got \(String(describing: indexWindows()))")
     }
 
-    // Rename is verified on the control path (the File-menu alert is system UI not driven in XCUI):
-    // window.rename updates the index entry's name.
+    // the File-menu rename alert is system UI XCUITest can't drive, so this verifies the control path.
     func testRenameWindowViaControlUpdatesIndex() throws {
         try seedOneWindow()
         launch()
@@ -642,20 +576,17 @@ final class MultiWindowUITests: XCTestCase {
         return nil
     }
 
-    /// Type a `session.type` command at `file` and wait for the shell to write it back, retrying the inject
-    /// if the marker hasn't appeared yet. A freshly-realized surface's shell/pty may not be ready to read
-    /// when the first keystrokes land (especially under full-suite CPU load), so a single injection can be
-    /// dropped — re-injecting once the shell has had time to spawn is the deterministic readiness wait. The
-    /// marker file is the readiness signal: when it's non-empty the command actually ran. Returns the marker
-    /// contents, or nil if it never appeared across all attempts. Asserts each type request returns ok.
+    /// Type a `session.type` command at `file` and wait for the shell to write it back, retrying the
+    /// inject if the marker hasn't appeared yet. A freshly-realized surface's shell/pty may not be ready
+    /// to read when the first keystrokes land (especially under full-suite CPU load), so a single
+    /// injection can be dropped; the non-empty marker file is the readiness signal. Returns the marker
+    /// contents, or nil if it never appeared across all attempts.
     private func typeUntilMarker(_ command: String, target: String, file: URL, window: String? = nil,
                                  attempts: Int = 4, perAttempt: TimeInterval = 4) throws -> String? {
         for attempt in 0..<attempts {
-            // clear any marker a prior attempt's late injection may have written, so a stale value
-            // can't be read as this attempt's success.
+            // a prior attempt's late injection must not be read as this attempt's success.
             try? FileManager.default.removeItem(at: file)
-            // first attempt realizes a never-shown surface (select:true); retries re-inject once it's
-            // realized — a window-scoped target stays in its own store across attempts.
+            // select:true so the first attempt realizes a never-shown surface.
             let typed = try sendCommand(typeRequest(text: command, target: target, select: true, window: window))
             XCTAssertEqual(typed["ok"] as? Bool, true, "typing the probe (attempt \(attempt)) should succeed: \(typed)")
             if let value = pollMarker(file, timeout: perAttempt) { return value }

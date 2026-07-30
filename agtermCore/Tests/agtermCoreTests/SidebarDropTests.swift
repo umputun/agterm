@@ -44,9 +44,8 @@ struct SidebarDropTests {
     }
 
     @Test func sessionSameWorkspaceDownPastMiddleRowAppliesMinusOne() {
-        // [a(0), b(1), c(2), d(3)]; drag a DOWN onto c's row (NOT the last) → insert after c.
-        // childIndex onItem → c's idx + 1 = 3; same-workspace downward (0 < 3) subtracts 1 → destination 2.
-        // This is the discriminating case: without the -1 the element would land at 3, not 2.
+        // [a(0), b(1), c(2), d(3)]; drag a DOWN onto c's row → insert after c at 3, then same-workspace
+        // downward subtracts 1 → 2. Discriminating case: without the -1 the element lands at 3.
         let move = SidebarDrop.resolveSession(
             sourceWorkspace: Self.wsA, sourceIndex: 0,
             target: .sessionRow(workspace: Self.wsA, sessionIndex: 2, sessionCount: 4), childIndex: Self.onItem)
@@ -54,8 +53,7 @@ struct SidebarDropTests {
     }
 
     @Test func sessionSameWorkspaceDownBetweenRowsAppliesMinusOne() {
-        // [a(0), b(1), c(2), d(3)]; drag a into the slot before d (between-rows childIndex 3).
-        // same-workspace downward (0 < 3) subtracts 1 → destination 2.
+        // [a(0), b(1), c(2), d(3)]; drag a into the slot before d (childIndex 3); downward subtracts 1 → 2.
         let move = SidebarDrop.resolveSession(
             sourceWorkspace: Self.wsA, sourceIndex: 0,
             target: .workspaceRow(id: Self.wsA, sessionCount: 4), childIndex: 3)
@@ -63,8 +61,7 @@ struct SidebarDropTests {
     }
 
     @Test func sessionSameWorkspaceUpBetweenRowsNoAdjustment() {
-        // [a(0), b(1), c(2)]; drag c into the slot before b (between-rows childIndex 1). Upward (2 > 1),
-        // so no -1; destination stays 1.
+        // [a(0), b(1), c(2)]; drag c into the slot before b (childIndex 1). Upward (2 > 1), so no -1.
         let move = SidebarDrop.resolveSession(
             sourceWorkspace: Self.wsA, sourceIndex: 2,
             target: .workspaceRow(id: Self.wsA, sessionCount: 3), childIndex: 1)
@@ -72,8 +69,7 @@ struct SidebarDropTests {
     }
 
     @Test func sessionSameWorkspaceNoOpWhenDroppedIntoOwnSlot() {
-        // [a(0), b(1), c(2)]; drag b into the slot before c (between-rows childIndex 2). Downward (1 < 2)
-        // subtracts 1 → destination 1 == sourceIndex → no-op.
+        // [a(0), b(1), c(2)]; drag b into the slot before c (childIndex 2); downward -1 → 1 == sourceIndex.
         let move = SidebarDrop.resolveSession(
             sourceWorkspace: Self.wsA, sourceIndex: 1,
             target: .workspaceRow(id: Self.wsA, sessionCount: 3), childIndex: 2)
@@ -81,9 +77,8 @@ struct SidebarDropTests {
     }
 
     @Test func sessionSameWorkspaceAppendAlreadyLastIsNoOp() {
-        // [a(0), b(1), c(2)]; drop c ON its OWN workspace header (childIndex onItem → append at count 3).
-        // moveSession removes c then clamps 3 to 2 → lands at 2 == sourceIndex → no-op (the bug fix: the
-        // unclamped sourceIndex == destination check, 2 != 3, missed this).
+        // [a(0), b(1), c(2)]; drop c ON its OWN workspace header (append at count 3). moveSession removes c
+        // then clamps 3 to 2 == sourceIndex; an unclamped sourceIndex == destination check (2 != 3) misses it.
         let move = SidebarDrop.resolveSession(
             sourceWorkspace: Self.wsA, sourceIndex: 2,
             target: .workspaceRow(id: Self.wsA, sessionCount: 3), childIndex: Self.onItem)
@@ -91,8 +86,7 @@ struct SidebarDropTests {
     }
 
     @Test func sessionSameWorkspaceAppendFromMiddleMovesToEnd() {
-        // [a(0), b(1), c(2)]; drop a ON its OWN workspace header (append at count 3). a is not last, so it
-        // really moves to the end → not a no-op; destination 3 (moveSession clamps to land it last).
+        // [a(0), b(1), c(2)]; drop a ON its OWN header (append at 3). a is not last, so this really moves.
         let move = SidebarDrop.resolveSession(
             sourceWorkspace: Self.wsA, sourceIndex: 0,
             target: .workspaceRow(id: Self.wsA, sessionCount: 3), childIndex: Self.onItem)
@@ -102,8 +96,7 @@ struct SidebarDropTests {
     // MARK: - Session, cross workspace (no -1, no same-slot no-op)
 
     @Test func sessionCrossWorkspaceInsertAtMiddleSlot() {
-        // target wsB = [x(0), y(1), z(2)]; drag a session from wsA into the slot before z (childIndex 2).
-        // different workspace → no -1, destination 2 (precise placement, not append).
+        // wsB = [x(0), y(1), z(2)]; a wsA session into the slot before z; cross-workspace, so no -1.
         let move = SidebarDrop.resolveSession(
             sourceWorkspace: Self.wsA, sourceIndex: 0,
             target: .workspaceRow(id: Self.wsB, sessionCount: 3), childIndex: 2)
@@ -200,8 +193,8 @@ struct SidebarDropTests {
     }
 
     @Test func relativeSameWorkspaceAfterAnchorDownwardAppliesMinusOne() {
-        // [a(0), b(1), c(2), d(3)]; place a (source 0) AFTER c (anchor idx 2). after → dropChildIndex 3;
-        // same-workspace downward (0 < 3) subtracts 1 → destination 2 (the discriminating off-by-one).
+        // [a(0), b(1), c(2), d(3)]; place a (source 0) AFTER c (anchor idx 2) → dropChildIndex 3, then
+        // same-workspace downward subtracts 1 → 2 (the discriminating off-by-one).
         let move = SidebarDrop.resolveRelative(
             source: (Self.wsA, 0), anchor: (Self.wsA, 2, 4), placeAfter: true)
         #expect(move == SidebarDrop.SessionResolution(workspace: Self.wsA, dropChildIndex: 3, destination: 2))
@@ -229,14 +222,14 @@ struct SidebarDropTests {
     }
 
     @Test func relativeAnchorIsSourceBeforeIsNoOp() {
-        // [a(0), b(1), c(2)]; place b (source 1) BEFORE itself → lands in its own slot → no-op.
+        // [a(0), b(1), c(2)]; place b (source 1) BEFORE itself → lands in its own slot.
         let move = SidebarDrop.resolveRelative(
             source: (Self.wsA, 1), anchor: (Self.wsA, 1, 3), placeAfter: false)
         #expect(move == nil)
     }
 
     @Test func relativeAnchorIsSourceAfterIsNoOp() {
-        // [a(0), b(1), c(2)]; place b (source 1) AFTER itself → after the -1 lands in its own slot → no-op.
+        // [a(0), b(1), c(2)]; place b (source 1) AFTER itself → after the -1 it lands in its own slot.
         let move = SidebarDrop.resolveRelative(
             source: (Self.wsA, 1), anchor: (Self.wsA, 1, 3), placeAfter: true)
         #expect(move == nil)
@@ -245,15 +238,13 @@ struct SidebarDropTests {
     // MARK: - Workspace reorder
 
     @Test func workspaceMoveUp() {
-        // 3 workspaces; drag the one at index 2 into the slot before index 1 (between-rows childIndex 1).
-        // upward (2 > 1) → no -1, destination 1.
+        // 3 workspaces; drag index 2 into the slot before index 1 (childIndex 1). Upward, so no -1.
         let move = SidebarDrop.resolveWorkspace(sourceIndex: 2, count: 3, childIndex: 1)
         #expect(move == SidebarDrop.WorkspaceResolution(dropChildIndex: 1, destination: 1))
     }
 
     @Test func workspaceMoveDownAppliesMinusOne() {
-        // drag the workspace at index 0 into the slot before index 2 (between-rows childIndex 2).
-        // downward (0 < 2) subtracts 1 → destination 1.
+        // drag index 0 into the slot before index 2 (childIndex 2); downward subtracts 1 → 1.
         let move = SidebarDrop.resolveWorkspace(sourceIndex: 0, count: 3, childIndex: 2)
         #expect(move == SidebarDrop.WorkspaceResolution(dropChildIndex: 2, destination: 1))
     }
@@ -265,22 +256,19 @@ struct SidebarDropTests {
     }
 
     @Test func workspaceMoveNoOpIntoOwnSlot() {
-        // drag the workspace at index 1 into the slot before index 2 (childIndex 2). downward (1 < 2)
-        // subtracts 1 → destination 1 == sourceIndex → no-op.
+        // drag index 1 into the slot before index 2 (childIndex 2); downward -1 → 1 == sourceIndex.
         #expect(SidebarDrop.resolveWorkspace(sourceIndex: 1, count: 3, childIndex: 2) == nil)
     }
 
     @Test func workspaceMoveNoOpAppendAlreadyLast() {
-        // workspace already last (index 2 of 3) dropped at the end (childIndex onItem → 3). 2 < 3
-        // subtracts 1 → destination 2 == sourceIndex → no-op.
+        // index 2 of 3 (already last) dropped at the end (onItem → 3); -1 → 2 == sourceIndex.
         #expect(SidebarDrop.resolveWorkspace(sourceIndex: 2, count: 3, childIndex: Self.onItem) == nil)
     }
 
     // MARK: - Workspace reorder against a FILTERED tree
 
     @Test func workspaceInsertIndexPassesTheSlotThroughOnAnUnfilteredTree() {
-        // every workspace rendered: the visible slot IS the full-array index, so the pre-filter behavior
-        // (including the append slot past the last row) is unchanged.
+        // every workspace rendered: the visible slot IS the full-array index, append slot included.
         let all = Array(0..<4)
         #expect((0...4).allSatisfy { SidebarDrop.workspaceInsertIndex(visibleIndices: all, slot: $0) == $0 })
     }
@@ -308,9 +296,8 @@ struct SidebarDropTests {
     }
 
     @Test func filteredWorkspaceDropBeforeTheFirstVisibleRowKeepsTheHiddenWorkspaceAhead() {
-        // A B C D with {B, D} marked: drag D above B. The mapped index 1 moves D to full-array slot 1,
-        // leaving hidden A first — the visible result is D before B either way, but the raw slot 0 would
-        // also have jumped D ahead of A, a reorder the user never saw and could not have aimed at.
+        // A B C D with {B, D} marked: drag D above B. The mapped index 1 leaves hidden A first; the raw
+        // slot 0 would have jumped D ahead of A too — a reorder the user never saw and could not aim at.
         let insert = SidebarDrop.workspaceInsertIndex(visibleIndices: [1, 3], slot: 0)
         let move = SidebarDrop.resolveWorkspace(sourceIndex: 3, count: 4, childIndex: insert)
         #expect(move == SidebarDrop.WorkspaceResolution(dropChildIndex: 1, destination: 1))

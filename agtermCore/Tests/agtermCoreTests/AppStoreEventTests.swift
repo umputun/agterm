@@ -121,12 +121,10 @@ final class AppStoreEventTests {
         store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: session.id)
         let anchor = try eventBatch(library.readEvents(ControlEventReadOptions(cursor: nil, kinds: nil, limit: 100)))
 
-        // only the shape differs, so the `previous != indicator` guard passes and an event fires — a
-        // consumer must be able to explain it, which is what the payload field is for
+        // only the shape differs, so the `previous != indicator` guard still admits it and an event fires
         store.setAgentIndicator(AgentIndicator(status: .blocked, shape: .star), forSession: session.id)
-        // the negative leg of the same guard: re-asserting the IDENTICAL shaped indicator is not a change,
-        // so a repeated hook call must stay silent — this is what breaks if `shape` ever stops
-        // participating in `AgentIndicator` equality
+        // the negative leg: an identical re-assert must stay silent, which breaks the moment `shape`
+        // stops participating in `AgentIndicator` equality
         store.setAgentIndicator(AgentIndicator(status: .blocked, shape: .star), forSession: session.id)
 
         let batch = try eventBatch(library.readEvents(ControlEventReadOptions(

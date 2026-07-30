@@ -2,19 +2,15 @@ import XCTest
 
 /// End-to-end tests for the title-bar recent-sessions button — the mouse equivalent of the Ctrl-Tab
 /// switcher. It opens a popover of the window's most-recently-used sessions; clicking a row commits the
-/// switch. The button is disabled until there are at least two sessions to switch between. Subclasses the
-/// shared control harness for the isolated launch + socket (`session.new`/`session.rename`) and the
-/// `selectedSessionID` snapshot oracle.
+/// switch. The button is disabled until there are at least two sessions to switch between.
 ///
 /// SCOPE NOTE: the row CLICK → session switch cannot be driven from XCUITest — a synthesized click (element
 /// OR coordinate) on a SwiftUI `Button` inside an `NSPopover` does not fire the button's action (confirmed
-/// by instrumenting the row action: the marker never wrote). A real mouse click works because it makes the
-/// popover key. So these tests cover the button's enable/disable and that the popover OPENS and LISTS the
-/// correct previous session; the click → `selectSession` glue (already unit-tested in agtermCore) is verified
-/// by hand in the app, like other non-AX-observable behaviors (see ui-tests.md).
+/// by instrumenting the row action: the marker never wrote), while a real mouse click does, because it makes
+/// the popover key. So these tests cover the enable/disable state and that the popover OPENS and LISTS the
+/// correct previous session; the click → `selectSession` glue is verified by hand (see ui-tests.md).
 @MainActor
 final class RecentSessionsButtonUITests: ControlAPITestCase {
-    // one session at launch → the button is present but disabled; adding a second session enables it live.
     func testRecentButtonEnablesWithSecondSession() throws {
         let button = app.buttons["recent-sessions-button"]
         XCTAssertTrue(button.waitForExistence(timeout: 10), "the recent-sessions button should render in the title bar")
@@ -24,8 +20,7 @@ final class RecentSessionsButtonUITests: ControlAPITestCase {
         XCTAssertTrue(pollEnabled(button, true, timeout: 8), "a second session should enable the recent-sessions button")
     }
 
-    // with two sessions, clicking the button opens the popover; it lists the previously-selected session as
-    // the clickable jump row (identified by a unique rename). The current session is omitted (not a jump target).
+    // the previous session gets a unique rename so its jump row can be told apart by label.
     func testRecentButtonPopoverListsPreviousSession() throws {
         let seeded = try activeSessionID()
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.rename","target":"\#(seeded)","args":{"name":"prevsession"}}"#)["ok"] as? Bool,
@@ -42,7 +37,6 @@ final class RecentSessionsButtonUITests: ControlAPITestCase {
         XCTAssertTrue(jumpRow.exists, "clicking the button should open the popover with the previous session as a jump row")
         XCTAssertTrue(jumpRow.label.contains("prevsession"),
                       "the jump row should be the previously-selected (renamed) session, got label: \(jumpRow.label)")
-        // the current (new) session is NOT listed — it isn't a jump target, so the only row is the previous one.
         XCTAssertEqual(app.buttons.matching(identifier: "recent-session-row").count, 1,
                        "the popover should list only the single other session, not the current one")
     }

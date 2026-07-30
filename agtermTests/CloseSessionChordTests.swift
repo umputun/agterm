@@ -55,8 +55,6 @@ final class CloseSessionChordTests: XCTestCase {
         assertNoChord(menu.stock, "the stock Close must not compete for ⌘W")
     }
 
-    // the reported state: SwiftUI resolved the collision by unbinding its own item, so Close Session
-    // carries NOTHING while the stock Close holds ⌘W. Reconcile has to undo exactly that.
     func testRecoversFromSwiftUIUnbindingOurItem() {
         let menu = makeFileMenu(oursKey: "", stockKey: "w")
         AppDelegate.applyCloseSessionChord(keymap(), in: menu.menu)
@@ -72,8 +70,7 @@ final class CloseSessionChordTests: XCTestCase {
         assertOwnsCommandW(menu.stock, "nothing of agterm's wants ⌘W, so the stock Close keeps it")
     }
 
-    // a previous reconcile cleared the stock Close while close_session held ⌘W; rebinding away must hand
-    // the chord back rather than leaving ⌘W dead.
+    // the empty stock key is what a previous reconcile leaves behind while close_session held ⌘W.
     func testRebindingAwayRestoresAClearedStockChord() {
         let menu = makeFileMenu(oursKey: "e", stockKey: "")
         AppDelegate.applyCloseSessionChord(keymap([.closeSession: Chord(mods: [.command], key: "e")]), in: menu.menu)
@@ -82,8 +79,7 @@ final class CloseSessionChordTests: XCTestCase {
     }
 
     // SwiftUI defers its rebuild to the next activation, so straight after a reload that rebound
-    // close_session away our item still advertises ⌘W. Arming the stock item without clearing that stale
-    // one would leave the File menu showing ⌘W twice, one of them on the close-the-whole-window item.
+    // close_session away our item still advertises ⌘W — leaving it would show ⌘W twice in the File menu.
     func testStaleOurChordIsClearedWhenTheStockCloseTakesCommandW() {
         let menu = makeFileMenu(oursKey: "w", stockKey: "")
         AppDelegate.applyCloseSessionChord(keymap([.closeSession: Chord(mods: [.command], key: "e")]), in: menu.menu)
@@ -93,8 +89,7 @@ final class CloseSessionChordTests: XCTestCase {
     }
 
     // `parseKeymap` rejects a chord only when two DISTINCT actions resolve to it, so moving close_session
-    // off ⌘W frees the chord for any other built-in. Deciding stock ownership from close_session alone
-    // would arm the stock item against a live built-in binding and re-create the reported failure.
+    // off ⌘W frees the chord for any other built-in — stock ownership cannot be decided from it alone.
     func testAnotherBuiltinOwningCommandWKeepsTheStockCloseBare() {
         let menu = makeFileMenu(oursKey: "e", stockKey: "w")
         let overrides: [BuiltinAction: Chord] = [
@@ -117,8 +112,8 @@ final class CloseSessionChordTests: XCTestCase {
         assertNoChord(menu.ours, "an item whose action does not own ⌘W must not be given the chord")
     }
 
-    // repeated flips are the reported workflow (rebind away, rebind back, both via `keymap reload`), so
-    // the reconcile has to be stable across them rather than correct only on the first transition.
+    // repeated `keymap reload` flips are the reported workflow, so being correct on the first transition
+    // alone is not enough.
     func testRepeatedFlipsKeepOwnershipConsistent() {
         let menu = makeFileMenu(oursKey: "w")
         let away = keymap([.closeSession: Chord(mods: [.command], key: "e")])
@@ -133,8 +128,7 @@ final class CloseSessionChordTests: XCTestCase {
         }
     }
 
-    // a menu missing either half (no `performClose:`, or no Close Session) must be left untouched rather
-    // than half-reconciled — the Edit/View menus go through the same walk.
+    // the Edit/View menus go through the same walk, so a menu missing either half must be left alone.
     func testMenuWithoutBothItemsIsLeftAlone() {
         let lone = NSMenuItem(title: "Something Else", action: nil, keyEquivalent: "w")
         lone.keyEquivalentModifierMask = .command

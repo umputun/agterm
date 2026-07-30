@@ -33,15 +33,12 @@ final class SplitUITests: XCTestCase {
     func testSplitFocusKeyboardNavAndCollapse() throws {
         let row = app.staticTexts["session-row"]
         XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
-        // ensure the primary terminal holds focus before typing.
         row.click()
         usleep(800_000)
 
-        // 1. record the primary shell's tty.
         let primaryTTY = ttyAfterCommand(named: "primary")
         XCTAssertNotNil(primaryTTY, "primary shell should write its tty (terminal must be focused)")
 
-        // 2. open the split — focus MOVES to the new (right) pane, a separate shell.
         let splitButton = app.buttons["split-toggle"]
         XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
         splitButton.click()
@@ -50,28 +47,22 @@ final class SplitUITests: XCTestCase {
         XCTAssertNotNil(rightTTY, "right shell should write its tty")
         XCTAssertNotEqual(rightTTY, primaryTTY, "opening the split moves focus to the new (right) pane")
 
-        // 3. Cmd+Opt+Left focuses the primary pane again.
         app.typeKey(.leftArrow, modifierFlags: [.command, .option])
         usleep(500_000)
         let leftTTY = ttyAfterCommand(named: "left")
         XCTAssertEqual(leftTTY, primaryTTY, "Cmd+Opt+Left focuses the primary shell")
 
-        // 4. Cmd+Opt+Right focuses the right pane (the same separate shell) again.
         app.typeKey(.rightArrow, modifierFlags: [.command, .option])
         usleep(500_000)
         let rightAgainTTY = ttyAfterCommand(named: "right")
         XCTAssertEqual(rightAgainTTY, rightTTY, "Cmd+Opt+Right focuses the separate right shell")
 
-        // 5. with focus on the right pane, close the split — the focused (right) pane is kept
-        // maximized, its shell alive, not the primary.
         splitButton.click()
         usleep(800_000)
         let collapsedTTY = ttyAfterCommand(named: "collapsed")
         XCTAssertEqual(collapsedTTY, rightTTY, "closing the split keeps the focused (right) pane, not the primary")
     }
 
-    // Ctrl-1 / Ctrl-2 focus the primary / split pane directly (a faster alias for ⌘⌥←/→). Verified
-    // with the same tty oracle: the command lands in whichever pane the shortcut focused.
     func testCtrlNumberFocusesPaneDirectly() throws {
         let row = app.staticTexts["session-row"]
         XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
@@ -81,7 +72,6 @@ final class SplitUITests: XCTestCase {
         let primaryTTY = ttyAfterCommand(named: "primary")
         XCTAssertNotNil(primaryTTY, "primary shell should write its tty")
 
-        // open the split — focus moves to the new (right) pane.
         let splitButton = app.buttons["split-toggle"]
         XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
         splitButton.click()
@@ -90,21 +80,17 @@ final class SplitUITests: XCTestCase {
         XCTAssertNotNil(rightTTY, "right shell should write its tty")
         XCTAssertNotEqual(rightTTY, primaryTTY, "opening the split moves focus to the new (right) pane")
 
-        // Ctrl-1 focuses the primary pane.
         app.typeKey("1", modifierFlags: .control)
         usleep(500_000)
         XCTAssertEqual(ttyAfterCommand(named: "ctrl1"), primaryTTY, "Ctrl-1 focuses the primary pane")
 
-        // Ctrl-2 focuses the split (right) pane.
         app.typeKey("2", modifierFlags: .control)
         usleep(500_000)
         XCTAssertEqual(ttyAfterCommand(named: "ctrl2"), rightTTY, "Ctrl-2 focuses the split pane")
     }
 
-    // Ctrl-1 / Ctrl-2 are reserved app shortcuts: in a non-split session they must be consumed (no-op),
-    // never leaking a literal "1"/"2" into the shell. Verified by typing them, then running the tty
-    // oracle on the SAME line — a leaked "1"/"2" would prefix the command ("12tty …"), so the command
-    // fails and the marker file stays empty (ttyAfterCommand returns nil).
+    // a leaked "1"/"2" would prefix the tty command on the SAME line ("12tty …"), so it fails and the
+    // marker file stays empty — which is why a non-nil read proves nothing leaked.
     func testCtrlNumberDoesNotLeakIntoNonSplitTerminal() throws {
         let row = app.staticTexts["session-row"]
         XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
@@ -118,10 +104,8 @@ final class SplitUITests: XCTestCase {
                         "Ctrl-1/Ctrl-2 must not leak characters into a non-split shell")
     }
 
-    // hiding the split (the toolbar toggle / ⌘D) keeps both shells alive, so re-showing must restore
-    // the SAME panes — the re-parent that swaps the surface between the HSplitView and a standalone host
-    // must never tear a surface down. Verified by tty identity across a full hide → show cycle: a
-    // destroyed-and-recreated pane would report a different tty.
+    // the re-parent between the HSplitView and a standalone host must never tear a surface down; a
+    // destroyed-and-recreated pane would report a different tty across the hide → show cycle.
     func testSplitSurvivesHideShow() throws {
         let row = app.staticTexts["session-row"]
         XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
@@ -131,7 +115,6 @@ final class SplitUITests: XCTestCase {
         let splitButton = app.buttons["split-toggle"]
         XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
 
-        // open the split and record the right pane's shell tty.
         splitButton.click()
         usleep(800_000)
         app.typeKey(.rightArrow, modifierFlags: [.command, .option])
@@ -139,23 +122,19 @@ final class SplitUITests: XCTestCase {
         let rightTTY = ttyAfterCommand(named: "right-before")
         XCTAssertNotNil(rightTTY, "right shell should write its tty")
 
-        // hide the split (keep-alive), then show it again.
         splitButton.click() // hide
         usleep(800_000)
         splitButton.click() // show
         usleep(800_000)
 
-        // focus the right pane and re-record its tty — the same shell must have survived the cycle.
         app.typeKey(.rightArrow, modifierFlags: [.command, .option])
         usleep(500_000)
         let rightTTYAfter = ttyAfterCommand(named: "right-after")
         XCTAssertEqual(rightTTYAfter, rightTTY, "hiding then showing the split keeps the same right shell alive")
     }
 
-    // pane navigation must keep working when the split is HIDDEN (maximized): with one pane shown,
-    // ⌃1/⌃2 (and ⌘⌥←/→) swap WHICH pane is shown maximized — gated on hasSplit, not isSplit. Before
-    // the fix these no-op'd while hidden. Verified with the tty oracle: after hiding, the focus
-    // shortcut swaps which shell receives the keystrokes.
+    // pane nav is gated on hasSplit, not isSplit: while the split is hidden, ⌃1/⌃2 (and ⌘⌥←/→) swap
+    // WHICH pane is shown maximized.
     func testHiddenSplitPaneNavigationSwapsShownPane() throws {
         let row = app.staticTexts["session-row"]
         XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
@@ -165,7 +144,6 @@ final class SplitUITests: XCTestCase {
         let primaryTTY = ttyAfterCommand(named: "primary")
         XCTAssertNotNil(primaryTTY, "primary shell should write its tty")
 
-        // open the split — focus moves to the new (right) pane.
         let splitButton = app.buttons["split-toggle"]
         XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
         splitButton.click()
@@ -174,30 +152,24 @@ final class SplitUITests: XCTestCase {
         XCTAssertNotNil(rightTTY, "right shell should write its tty")
         XCTAssertNotEqual(rightTTY, primaryTTY, "opening the split moves focus to the new (right) pane")
 
-        // hide the split — the focused (right) pane stays shown maximized, both shells alive.
         splitButton.click()
         usleep(800_000)
         XCTAssertEqual(ttyAfterCommand(named: "hidden-right"), rightTTY, "the hidden split shows the focused (right) pane")
 
-        // Ctrl-1 while hidden swaps the shown pane to the primary (the bug: it used to no-op when hidden).
         app.typeKey("1", modifierFlags: .control)
         usleep(800_000)
         XCTAssertEqual(ttyAfterCommand(named: "hidden-ctrl1"), primaryTTY,
                        "Ctrl-1 swaps the hidden split to the primary pane")
 
-        // Ctrl-2 while hidden swaps the shown pane back to the right pane.
         app.typeKey("2", modifierFlags: .control)
         usleep(800_000)
         XCTAssertEqual(ttyAfterCommand(named: "hidden-ctrl2"), rightTTY,
                        "Ctrl-2 swaps the hidden split back to the right pane")
     }
 
-    // the split toolbar glyph encodes the split state via its accessibilityValue (the symbol name is not
-    // observable): none for a non-split session, both while shown side-by-side, and left/right when
-    // collapsed to a single pane — whichever pane is currently shown. Also pins the design choice that a
-    // SHOWN split stays "both" regardless of which pane holds focus (only a collapsed split distinguishes
-    // left vs right). Ctrl-1's effect is proven by the later "left" assertion: had it not registered,
-    // focus would still be on the right pane and the hide would collapse to "right", failing that check.
+    // the glyph's symbol name is not observable, so the state rides its accessibilityValue
+    // (none/both/left/right). Ctrl-1's effect is proven by the later "left" assertion: had it not
+    // registered, focus would still be on the right pane and the hide would collapse to "right".
     func testSplitButtonGlyphReflectsState() throws {
         let row = app.staticTexts["session-row"]
         XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
@@ -207,41 +179,31 @@ final class SplitUITests: XCTestCase {
         let splitButton = app.buttons["split-toggle"]
         XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
 
-        // non-split session → outline glyph.
         XCTAssertTrue(waitSplitValue(splitButton, "none"), "a non-split session shows the outline glyph")
 
-        // open the split (both panes shown) → both halves filled.
         splitButton.click()
         XCTAssertTrue(waitSplitValue(splitButton, "both"), "a shown split fills both panes")
 
-        // a shown split stays "both" regardless of focus: focusing the primary must NOT flip the glyph.
         app.typeKey("1", modifierFlags: .control)
         usleep(500_000)
         XCTAssertTrue(waitSplitValue(splitButton, "both"), "a shown split ignores which pane is focused")
 
-        // hide the split while the primary (left) pane is focused → collapsed to the left pane.
         splitButton.click()
         XCTAssertTrue(waitSplitValue(splitButton, "left"), "collapsed to the primary pane fills the left half")
 
-        // Ctrl-2 swaps the shown pane to the right → right half filled.
         app.typeKey("2", modifierFlags: .control)
         XCTAssertTrue(waitSplitValue(splitButton, "right"), "collapsed to the split pane fills the right half")
 
-        // re-showing the collapsed split fills both panes again (isSplit true).
         splitButton.click()
         XCTAssertTrue(waitSplitValue(splitButton, "both"), "re-showing a collapsed split fills both panes again")
 
-        // closing the split (exit the right pane's shell) collapses to a single non-split session → outline.
-        app.typeKey(.rightArrow, modifierFlags: [.command, .option]) // put terminal focus on the right pane
+        app.typeKey(.rightArrow, modifierFlags: [.command, .option])
         usleep(500_000)
         app.typeText("exit")
         app.typeKey(.return, modifierFlags: [])
         XCTAssertTrue(waitSplitValue(splitButton, "none"), "closing the split returns the glyph to the no-split outline")
     }
 
-    // exiting one pane of a split must keep the session alive (collapsed to the survivor) AND focus
-    // the surviving pane, so typing reaches it without a click. Verified by exiting the primary, then
-    // typing WITHOUT focusing and checking the command landed in the surviving right shell.
     func testExitPrimaryPaneKeepsSessionAndFocusesSurvivor() throws {
         let row = app.staticTexts["session-row"]
         XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
@@ -251,7 +213,6 @@ final class SplitUITests: XCTestCase {
         let splitButton = app.buttons["split-toggle"]
         XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
 
-        // open the split, focus the right pane, record its tty (the survivor when the primary exits).
         splitButton.click()
         usleep(800_000)
         app.typeKey(.rightArrow, modifierFlags: [.command, .option])
@@ -259,25 +220,22 @@ final class SplitUITests: XCTestCase {
         let rightTTY = ttyAfterCommand(named: "right")
         XCTAssertNotNil(rightTTY, "right shell should write its tty")
 
-        // focus the primary (left) pane and exit its shell.
         app.typeKey(.leftArrow, modifierFlags: [.command, .option])
         usleep(500_000)
         app.typeText("exit")
         app.typeKey(.return, modifierFlags: [])
         usleep(1_500_000) // shell exit + collapse + auto-focus retry
 
-        // the session survives (collapsed to the surviving right pane).
         XCTAssertTrue(row.waitForExistence(timeout: 5), "exiting the primary pane must keep the session")
 
-        // type WITHOUT focusing — the survivor must already hold focus, so the command reaches its shell.
+        // typed WITHOUT focusing, so this only lands if the survivor already holds focus.
         let survivorTTY = ttyAfterCommand(named: "survivor")
         XCTAssertEqual(survivorTTY, rightTTY, "after exiting the primary, the surviving right pane is focused")
     }
 
-    // Regression for #303: when the split is hidden with the PRIMARY shown, exiting that primary promotes
-    // the live right pane into the primary slot without changing the surrounding SwiftUI branch. The
-    // terminal host must therefore remount for the promoted surface, or the visible pane remains the dead
-    // primary while the live survivor is stranded off-screen. Verify by typing WITHOUT focusing after exit.
+    // Regression for #303: promotion into the primary slot does not change the surrounding SwiftUI
+    // branch, so the terminal host must remount for the promoted surface or the visible pane stays the
+    // dead primary while the live survivor is stranded off-screen.
     func testExitPrimaryPaneWhileSplitHiddenHostsAndFocusesSurvivor() throws {
         let row = app.staticTexts["session-row"]
         XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
@@ -287,37 +245,29 @@ final class SplitUITests: XCTestCase {
         let splitButton = app.buttons["split-toggle"]
         XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
 
-        // Open the split and record the right pane's tty — this is the survivor that will be promoted.
         splitButton.click()
         usleep(800_000)
         let rightTTY = ttyAfterCommand(named: "hidden-survivor")
         XCTAssertNotNil(rightTTY, "right shell should write its tty")
 
-        // Show only the primary pane while keeping the right shell alive off-screen.
         app.typeKey("1", modifierFlags: .control)
         usleep(500_000)
         splitButton.click()
         XCTAssertTrue(waitSplitValue(splitButton, "left"), "the hidden split should show the primary pane")
 
-        // Exit the shown primary. The hidden right pane must promote into the visible host and take focus.
         app.typeText("exit")
         app.typeKey(.return, modifierFlags: [])
         XCTAssertTrue(waitSplitValue(splitButton, "none"), "promotion should leave a regular non-split session")
         XCTAssertTrue(row.waitForExistence(timeout: 5), "exiting the hidden primary must keep the session")
 
-        // Type WITHOUT focusing — this fails if SwiftUI kept hosting the torn-down primary surface.
+        // typed WITHOUT focusing — this fails if SwiftUI kept hosting the torn-down primary surface.
         XCTAssertEqual(ttyAfterCommand(named: "after-hidden-promotion"), rightTTY,
                        "the promoted hidden survivor should be visible and focused")
     }
 
-    // promote → re-split → exit-main: the round-1 zombie scenario, driven through the REAL pane-exit
-    // routing (typing `exit`, not calling closePrimaryPane directly like the host-free test). After the
-    // primary exits, the right pane promotes into the sole/main slot; a fresh split then opens a new right
-    // pane; exiting the promoted MAIN pane must route through closePrimaryPane (dispatched on the surface's
-    // LIVE role, now primary) and collapse onto the FRESH right pane — not through the survivor's stale
-    // split onExit, which would tear the fresh right down and strand the dead main. The tell: the final
-    // command reaches the fresh right shell. This is the only test that guards the role-aware dispatch;
-    // reverting it strands the session, failing the last assertion.
+    // exiting the promoted main pane must dispatch on the surface's LIVE role (primary after promotion)
+    // and collapse onto the FRESH right pane; the survivor's stale split onExit would tear that pane
+    // down and strand the dead main. The only test guarding the role-aware dispatch.
     func testPromoteThenResplitThenExitMainCollapsesToFreshSplit() throws {
         let row = app.staticTexts["session-row"]
         XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
@@ -327,7 +277,6 @@ final class SplitUITests: XCTestCase {
         let splitButton = app.buttons["split-toggle"]
         XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
 
-        // open the split, focus the right pane, record its tty — this is the survivor that promotes.
         splitButton.click()
         usleep(800_000)
         app.typeKey(.rightArrow, modifierFlags: [.command, .option])
@@ -335,7 +284,6 @@ final class SplitUITests: XCTestCase {
         let promotedTTY = ttyAfterCommand(named: "promoted")
         XCTAssertNotNil(promotedTTY, "right shell should write its tty")
 
-        // exit the primary (left) shell → the right pane promotes into the sole/main pane and holds focus.
         app.typeKey(.leftArrow, modifierFlags: [.command, .option])
         usleep(500_000)
         app.typeText("exit")
@@ -345,16 +293,12 @@ final class SplitUITests: XCTestCase {
         XCTAssertEqual(ttyAfterCommand(named: "after-promote"), promotedTTY,
                        "the promoted survivor is the session's sole pane and holds focus")
 
-        // split AGAIN → a fresh right pane opens and takes focus (a separate shell from the promoted main).
         splitButton.click()
         usleep(800_000)
         let freshRightTTY = ttyAfterCommand(named: "fresh-right")
         XCTAssertNotNil(freshRightTTY, "the re-split's fresh right shell should write its tty")
         XCTAssertNotEqual(freshRightTTY, promotedTTY, "re-split opens a fresh right pane, distinct from the promoted main")
 
-        // focus the promoted MAIN (left) pane and exit its shell. Its exit must route through
-        // closePrimaryPane (live role = primary after promotion) and collapse onto the FRESH right pane —
-        // NOT closeSplitPane, which would tear the fresh right down and strand the dead main (round-1 bug).
         app.typeKey(.leftArrow, modifierFlags: [.command, .option])
         usleep(500_000)
         app.typeText("exit")
@@ -362,14 +306,11 @@ final class SplitUITests: XCTestCase {
         usleep(1_500_000)
 
         XCTAssertTrue(row.waitForExistence(timeout: 5), "exiting the promoted main pane must keep the session")
-        // type WITHOUT focusing — the fresh right pane must be the survivor and hold focus, so the command
-        // reaches its shell (a torn-down fresh right / stranded dead main would fail this).
+        // typed WITHOUT focusing — a torn-down fresh right or a stranded dead main fails here.
         XCTAssertEqual(ttyAfterCommand(named: "final"), freshRightTTY,
                        "exiting the promoted main collapses onto the fresh right pane, not tears it down")
     }
 
-    // mirror of the above for exiting the split (right) pane: the session survives, collapsed to the
-    // primary, and the primary holds focus.
     func testExitSplitPaneKeepsSessionAndFocusesSurvivor() throws {
         let row = app.staticTexts["session-row"]
         XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
@@ -379,11 +320,9 @@ final class SplitUITests: XCTestCase {
         let splitButton = app.buttons["split-toggle"]
         XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
 
-        // record the primary tty (the survivor when the split exits).
         let primaryTTY = ttyAfterCommand(named: "primary")
         XCTAssertNotNil(primaryTTY, "primary shell should write its tty")
 
-        // open the split, focus the right pane, exit its shell.
         splitButton.click()
         usleep(800_000)
         app.typeKey(.rightArrow, modifierFlags: [.command, .option])
@@ -398,7 +337,6 @@ final class SplitUITests: XCTestCase {
         XCTAssertEqual(survivorTTY, primaryTTY, "after exiting the split, the surviving primary pane is focused")
     }
 
-    // exiting a non-split session closes it: the only session disappears from the sidebar.
     func testExitNonSplitSessionClosesIt() throws {
         let row = app.staticTexts["session-row"]
         XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")

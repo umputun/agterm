@@ -43,22 +43,18 @@ struct SessionTests {
     }
 
     @Test func whitespaceOnlyCustomNameFallsBackToAuto() {
-        // a whitespace-only customName can only reach displayName via a hand-edited
-        // snapshot (renameSession clears blanks to nil); it's trimmed and falls back
-        // to the basename, matching renameSession's behavior.
+        // a whitespace-only customName can only arrive via a hand-edited snapshot — renameSession clears
+        // blanks to nil.
         let session = Session(initialCwd: "/Users/user/dev/foo", customName: "   \t")
         #expect(session.displayName == "foo")
     }
 
     @Test func paddedCustomNameDisplaysTrimmed() {
-        // a padded customName (e.g. from a hand-edited snapshot) displays trimmed,
-        // matching the "trimmed before use" contract.
         let session = Session(initialCwd: "/Users/user/dev/foo", customName: "  build  ")
         #expect(session.displayName == "build")
     }
 
     @Test func oscTitleOverridesCwd() {
-        // no manual rename: the terminal title (e.g. a remote host over SSH) wins over the cwd basename.
         let session = Session(initialCwd: "/Users/user/dev/foo")
         #expect(session.displayName == "foo")
         session.oscTitle = "user@web1: ~/srv"
@@ -66,14 +62,12 @@ struct SessionTests {
     }
 
     @Test func customNameOverridesOscTitle() {
-        // a manual rename outranks the terminal title.
         let session = Session(initialCwd: "/Users/user/dev/foo", customName: "build")
         session.oscTitle = "user@web1: ~/srv"
         #expect(session.displayName == "build")
     }
 
     @Test func blankOscTitleFallsBackToCwd() {
-        // a whitespace-only or empty title is trimmed and falls through to the cwd basename.
         let session = Session(initialCwd: "/Users/user/dev/foo")
         session.oscTitle = "   \t"
         #expect(session.displayName == "foo")
@@ -88,8 +82,7 @@ struct SessionTests {
     }
 
     @Test func subtitleDetailPrefersTitleForNamedSession() {
-        // named remote (SSH) session: the OSC title carries host/path the stale local cwd can't, and the
-        // name occupies line 1, so the second line shows the title instead of the misleading local path.
+        // on an SSH session the local cwd is stale, so the second line shows the title, not the path.
         let session = Session(initialCwd: "/Users/user", customName: "web1")
         session.currentCwd = "/Users/user"
         session.oscTitle = "user@web1: ~"
@@ -97,19 +90,17 @@ struct SessionTests {
     }
 
     @Test func promotedSurvivorTitleNotMaskedByStaleSplitFocused() {
-        // regression: a promoted survivor can momentarily carry `splitFocused == true` while it is the
-        // session's SOLE pane (`splitSurface == nil`, split fields cleared) — the split factory's focus
-        // callback keeps firing on it. The focus-aware readers must ignore that stale flag and surface the
-        // MIGRATED main-pane title/cwd, not the nil'd split fields (which would drop the SSH title).
+        // a promoted survivor can momentarily carry `splitFocused == true` while it is the session's SOLE
+        // pane — the split factory's focus callback keeps firing on it.
         let session = Session(initialCwd: "/Users/user", customName: "web1")
         session.currentCwd = "/Users/user"
-        session.oscTitle = "user@web1: ~" // migrated up from the split on promotion
-        session.splitFocused = true        // stale — no split exists
+        session.oscTitle = "user@web1: ~"
+        session.splitFocused = true
         session.splitSurface = nil
         session.splitTitle = nil
         session.splitCwd = nil
-        #expect(session.subtitleDetail == "user@web1: ~") // the migrated title, not the cwd
-        #expect(session.focusedCwd == "/Users/user")       // the main cwd, not an initialCwd fallback
+        #expect(session.subtitleDetail == "user@web1: ~")
+        #expect(session.focusedCwd == "/Users/user")
     }
 
     @Test func primarySurfaceHostRevisionChangesOnlyForLiveReplacement() {
@@ -127,14 +118,12 @@ struct SessionTests {
     }
 
     @Test func subtitleDetailUsesCwdForNamedSessionWithoutTitle() {
-        // named local session: local auto-title is suppressed so oscTitle is nil; the second line is the cwd.
+        // a local session's auto-title is suppressed, so oscTitle is nil here.
         let session = Session(initialCwd: "/Users/user/dev/foo", customName: "build")
         #expect(session.subtitleDetail == "/Users/user/dev/foo")
     }
 
     @Test func subtitleDetailUsesCwdWhenTitleIsAlreadyDisplayName() {
-        // unnamed session: the OSC title is already line 1 (displayName), so the second line falls
-        // through to the cwd rather than repeating it.
         let session = Session(initialCwd: "/Users/user")
         session.currentCwd = "/Users/user"
         session.oscTitle = "user@web1: ~"
@@ -148,15 +137,13 @@ struct SessionTests {
     }
 
     @Test func subtitleDetailBlankTitleFallsBackToCwd() {
-        // a whitespace-only title is trimmed away, so a named session with no real title shows the cwd.
         let session = Session(initialCwd: "/Users/user/dev/foo", customName: "build")
         session.oscTitle = "  \t"
         #expect(session.subtitleDetail == "/Users/user/dev/foo")
     }
 
     @Test func subtitleDetailTitleEqualToCustomNameFallsBackToCwd() {
-        // edge: the remote titles the tab exactly what the user named the session, so the title would
-        // just repeat line 1 — the second line falls through to the cwd.
+        // the remote titles the tab exactly what the user named the session, so the title repeats line 1.
         let session = Session(initialCwd: "/Users/user", customName: "web1")
         session.currentCwd = "/Users/user"
         session.oscTitle = "web1"
@@ -164,8 +151,6 @@ struct SessionTests {
     }
 
     @Test func subtitleDetailFollowsFocusedPane() {
-        // focus-aware like displayName/focusedCwd: a named session's second line uses the focused pane's
-        // title (the split pane's while it has focus, else the primary's).
         let session = Session(initialCwd: "/repo", customName: "build")
         session.isSplit = true
         session.splitSurface = FakeSurface() // a focused split always has a live split surface
@@ -177,8 +162,8 @@ struct SessionTests {
     }
 
     @Test func effectiveCwdFallsBackToInitialUntilPwdReport() {
-        // a restored session has no currentCwd until OSC 7 arrives; effectiveCwd is
-        // initialCwd so git status refreshes immediately on launch/select.
+        // a restored session has no currentCwd until OSC 7 arrives, and the fallback is what lets git
+        // status refresh at launch.
         let session = Session(initialCwd: "/repo")
         #expect(session.effectiveCwd == "/repo")
     }
@@ -195,11 +180,9 @@ struct SessionTests {
         session.isSplit = true
         session.splitSurface = FakeSurface() // a focused split always has a live split surface
         session.splitCwd = "/var/log"
-        // split not focused: the primary pane drives name + cwd.
         #expect(session.displayName == "foo")
         #expect(session.focusedCwd == "/Users/user/dev/foo")
         session.splitFocused = true
-        // split focused: the split pane drives name + cwd.
         #expect(session.displayName == "log")
         #expect(session.focusedCwd == "/var/log")
     }
@@ -225,9 +208,8 @@ struct SessionTests {
     }
 
     @Test func hiddenSplitStillShowsFocusedSplitPane() {
-        // split hidden (isSplit false) but the right pane is the one shown maximized + focused: the
-        // title/sidebar follow the split pane, NOT the hidden primary. (guarded on splitFocused, not
-        // isSplit — closeSplit resets the flag, so splitFocused is true only while the pane exists.)
+        // split hidden but the right pane is shown maximized + focused. The guard is splitFocused, not
+        // isSplit — closeSplit resets the flag, so it is true only while the pane exists.
         let session = Session(initialCwd: "/repo")
         session.currentCwd = "/repo/sub"
         session.splitSurface = FakeSurface()
@@ -238,9 +220,8 @@ struct SessionTests {
     }
 
     @Test func focusedCwdFallsBackUntilSplitReports() {
-        // split focused and ALIVE, but the split pane hasn't reported a cwd yet: fall back to the primary's.
-        // splitSurface must be set (else the split-existence guard alone short-circuits) so this exercises
-        // the `let cwd = splitCwd` nil-fallback branch, not the missing-surface one.
+        // splitSurface must be set, else the split-existence guard short-circuits and this exercises the
+        // missing-surface branch instead of the `let cwd = splitCwd` nil fallback.
         let session = Session(initialCwd: "/repo")
         session.currentCwd = "/repo/primary"
         session.isSplit = true
@@ -261,7 +242,6 @@ struct SessionTests {
     }
 
     @Test func agentIndicatorDefaultsToIdle() {
-        // a fresh session shows no agent status (.idle, no blink) until the control channel sets one.
         let session = Session(initialCwd: "/repo")
         #expect(session.agentIndicator == AgentIndicator())
         #expect(session.agentIndicator.status == .idle)
@@ -284,7 +264,6 @@ struct SessionTests {
     }
 
     @Test func searchDisplayTextIsEmptyBeforeAnyQuery() {
-        // searchTotal nil (no query run yet): empty string, so the bar shows no counter.
         let session = Session(initialCwd: "/repo")
         #expect(session.searchDisplayText == "")
     }
@@ -312,8 +291,7 @@ struct SessionTests {
     }
 
     @Test func searchDisplayTextClampsStaleSelectedToTotal() {
-        // the count can shrink under a stale selected index before the next SEARCH_SELECTED lands;
-        // selected is clamped to total so it never reads "3 of 2".
+        // the count can shrink before the next SEARCH_SELECTED lands, so selected is clamped to total.
         let session = Session(initialCwd: "/repo")
         session.searchTotal = 2
         session.searchSelected = 3
@@ -321,8 +299,6 @@ struct SessionTests {
     }
 
     @Test func searchFieldsAreNotPersistedAcrossSnapshot() {
-        // the search state is ephemeral like overlay/scratch: a snapshot round-trip leaves it at
-        // defaults on the restored session.
         let store = AppStore(persistence: PersistenceStore(
             directory: FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")))
         let ws = store.addWorkspace(name: "work")
@@ -342,9 +318,7 @@ struct SessionTests {
     }
 
     @Test func searchSurfacePinsTheOwnerAndIsWeak() {
-        // the pinned search owner is what the bar's needle/navigate/close drive, surviving a split focus
-        // move (it is NOT re-resolved from `activeSurface`). it is weak: the session strongly owns its
-        // panes, so it must not retain a surface.
+        // weak on purpose: the session strongly owns its panes, so the pin must not retain a surface.
         let session = Session(initialCwd: "/repo")
         var owner: FakeSurface? = FakeSurface()
         session.searchSurface = owner
@@ -375,59 +349,45 @@ struct SessionTests {
         session.surface = primary
         session.scratchSurface = scratch
         session.overlaySurface = overlay
-        // no cover active: the active pane.
         #expect(session.topmostSurface === primary)
-        // scratch shown: scratch is on top.
         session.scratchActive = true
         #expect(session.topmostSurface === scratch)
-        // overlay over the scratch: the overlay wins (it renders above the scratch).
         session.overlayActive = true
         #expect(session.topmostSurface === overlay)
-        // overlay closed, scratch still up: back to the scratch.
         session.overlayActive = false
         #expect(session.topmostSurface === scratch)
-        // scratch hidden too: the active pane again.
         session.scratchActive = false
         #expect(session.topmostSurface === primary)
     }
 
     @Test func onScreenSurfaceIsCoveringScratchElseFocusedPane() {
-        // the "what's visible" surface for session.text (no --pane) / session.search: the scratch when it
-        // covers the panes (and no overlay is up), else the FOCUSED pane. An overlay falls back to the pane
-        // (search/text don't target the ephemeral overlay), matching AppActions.searchTarget.
+        // an overlay falls back to the pane — search/text don't target the ephemeral overlay, matching
+        // AppActions.searchTarget.
         let session = Session(initialCwd: "/repo")
         let primary = FakeSurface(), split = FakeSurface(), scratch = FakeSurface(), overlay = FakeSurface()
         session.surface = primary
         session.splitSurface = split
         session.scratchSurface = scratch
         session.overlaySurface = overlay
-        // no cover, no split focus: the primary pane.
         #expect(session.onScreenSurface === primary)
-        // split focused: the focused split pane, not the primary.
         session.splitFocused = true
         #expect(session.onScreenSurface === split)
         session.splitFocused = false
-        // scratch shown (no overlay): the scratch is what's on screen.
         session.scratchActive = true
         #expect(session.onScreenSurface === scratch)
-        // an overlay over the scratch falls back to the pane beneath, not the scratch or the overlay.
         session.overlayActive = true
         #expect(session.onScreenSurface === primary)
     }
 
     @Test func fullOverlayActiveOnlyForFullCoverageOverlay() {
-        // the full-coverage overlay (no size) hides the session content beneath it — panes AND scratch —
-        // so its translucent background reveals the window backing, never the covered surfaces.
+        // only the full-coverage overlay hides the panes AND scratch, so its translucent background
+        // reveals the window backing rather than the covered surfaces.
         let session = Session(initialCwd: "/repo")
-        // no overlay: nothing to hide behind.
         #expect(session.fullOverlayActive == false)
-        // full-coverage overlay (no size percent): active.
         session.overlayActive = true
         #expect(session.fullOverlayActive == true)
-        // floating (sized) overlay: draws an opaque panel over visible content, not a full cover.
         session.overlaySizePercent = 80
         #expect(session.fullOverlayActive == false)
-        // overlay closed with a stale size percent lingering: still not a cover.
         session.overlayActive = false
         #expect(session.fullOverlayActive == false)
     }
@@ -441,16 +401,14 @@ struct SessionTests {
         #expect(session.paneRole(forToken: "main-tok") == .left)
         #expect(session.paneRole(forToken: "split-tok") == .right)
         #expect(session.paneRole(forToken: "scratch-tok") == .scratch)
-        // an empty or unknown token never matches — the caller falls back to the baked --pane role.
+        // no match — the caller then falls back to the baked --pane role.
         #expect(session.paneRole(forToken: "") == nil)
         #expect(session.paneRole(forToken: "no-such-tok") == nil)
     }
 
     @Test func paneRoleFollowsAPromotedSurvivorAndReSplit() {
-        // #199: a split survivor (baked `right`, token `agent-tok`) is promoted into the MAIN slot, then a
-        // fresh helper (also baked `right`, token `helper-tok`) opens as the new split. Both shells were
-        // baked with the SAME stale `right` role, so only the stable token disambiguates them: the survivor
-        // now resolves to the main slot (.left), the helper to the split slot (.right).
+        // #199: a promoted survivor and the fresh helper that re-splits it were both baked with the SAME
+        // stale `right` role, so only the stable token disambiguates them.
         let session = Session(initialCwd: "/repo")
         let survivor = FakeSurface(paneToken: "agent-tok")
         session.surface = survivor
@@ -465,11 +423,9 @@ struct SessionTests {
         session.pendingRestoreCommand = "claude --resume main"
         session.pendingSplitRestoreCommand = "tail -f /var/log/x"
 
-        // each pane hands back its own payload, independently...
         #expect(session.takePendingRestoreOverride(pane: .left) == "claude --resume main")
-        #expect(session.pendingSplitRestoreCommand == "tail -f /var/log/x") // taking left leaves right alone
+        #expect(session.pendingSplitRestoreCommand == "tail -f /var/log/x")
         #expect(session.takePendingRestoreOverride(pane: .right) == "tail -f /var/log/x")
-        // ...and only once: a second surface for the same pane this launch gets a plain shell.
         #expect(session.takePendingRestoreOverride(pane: .left) == nil)
         #expect(session.takePendingRestoreOverride(pane: .right) == nil)
     }
@@ -481,8 +437,8 @@ struct SessionTests {
     }
 
     @Test func takePendingRestoreOverrideReturnsEmptyStringAsAValue() {
-        // "" is "pinned to nothing" — a real tri-state value, not an absent override, so the first take
-        // must return it (the caller maps it to a plain shell) rather than collapsing it to nil.
+        // "" is "pinned to nothing" — a real tri-state value the caller maps to a plain shell, so the
+        // first take must return it rather than collapsing it to nil.
         let session = Session(initialCwd: "/repo")
         session.pendingRestoreCommand = ""
         session.pendingSplitRestoreCommand = ""
@@ -497,13 +453,12 @@ struct SessionTests {
         let session = Session(initialCwd: "/repo")
         session.pendingRestoreCommand = "claude --resume main"
         #expect(session.takePendingRestoreOverride(pane: .scratch) == nil)
-        // and the take must not have drained another pane's payload.
         #expect(session.takePendingRestoreOverride(pane: .left) == "claude --resume main")
     }
 
     @Test func clearPendingRestoreOverridesDropsBothPayloadsAndKeepsThePins() {
-        // the soft-close teardown: the same object comes back on undo, so an unconsumed payload must not
-        // survive the round trip — while the persisted pins stay, to fire on the next launch.
+        // the same object comes back on undo, so an unconsumed payload must not survive the round trip —
+        // while the persisted pins stay, to fire on the next launch.
         let session = Session(initialCwd: "/repo")
         session.restoreCommand = "claude --resume main"
         session.splitRestoreCommand = "tail -f /var/log/x"
@@ -518,8 +473,8 @@ struct SessionTests {
     }
 
     @Test func takePendingRestoreOverrideLeavesThePersistedValueIntact() {
-        // the override is STICKY: consuming this launch's payload must not clear the persisted field, or
-        // it would fire once and never again (the capture's consume-on-read semantics, wrongly mirrored).
+        // STICKY: consuming this launch's payload must not clear the persisted field, or it would fire
+        // once and never again.
         let session = Session(initialCwd: "/repo")
         session.restoreCommand = "claude --resume main"
         session.splitRestoreCommand = "tail -f /var/log/x"
@@ -533,8 +488,8 @@ struct SessionTests {
     }
 
     @Test func takePendingRestoreOverrideNeverReadsThePersistedValue() {
-        // the factory path can only reach the transient payload: a persisted override with nothing armed
-        // (a mid-process window reload, a socket write during this run) must not fire.
+        // a persisted override with nothing armed (a mid-process window reload, a socket write during this
+        // run) must not fire — the factory path can only reach the transient payload.
         let session = Session(initialCwd: "/repo")
         session.restoreCommand = "claude --resume main"
         session.splitRestoreCommand = "tail -f /var/log/x"

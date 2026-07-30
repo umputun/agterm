@@ -88,7 +88,6 @@ struct SurfaceEnvironmentTests {
         )
 
         #expect(env["AGTERM_PANE"] == expected)
-        // pane injection must not disturb the existing identifiers
         #expect(env["AGTERM_ENABLED"] == "1")
         #expect(env["AGTERM_SESSION_ID"] == "11111111-1111-1111-1111-111111111111")
         #expect(env["AGTERM_SOCKET"] == "/tmp/agterm.sock")
@@ -109,7 +108,6 @@ struct SurfaceEnvironmentTests {
         )
 
         #expect(env["AGTERM_PANE"] == nil)
-        // the full identifier set is unchanged when no pane is given
         #expect(env == [
             "AGTERM_ENABLED": "1",
             "AGTERM_SESSION_ID": "11111111-1111-1111-1111-111111111111",
@@ -135,7 +133,6 @@ struct SurfaceEnvironmentTests {
         )
 
         #expect(env["AGTERM_PANE_ID"] == "surface-token-abc")
-        // the token rides alongside the role, not instead of it
         #expect(env["AGTERM_PANE"] == "right")
     }
 

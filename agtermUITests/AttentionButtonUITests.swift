@@ -1,12 +1,10 @@
 import Darwin
 import XCTest
 
-/// End-to-end tests for the opt-in title-bar attention bell (Task 11). The bell exists only when the
-/// `attentionButtonEnabled` setting is on (seeded into the isolated `settings.json` before launch), and
-/// its three states (dimmed/disabled, plain enabled, filled-blocked) are derived from the window's
-/// `attentionSessions`. The bell↔bell.fill highlight isn't observable, so the test reads the
-/// `accessibilityValue` (none|attention|blocked) the button exposes (mirroring `StatusIconView`). Status
-/// is driven over the control socket (spoken directly, like `ControlAPIUITests`) via `session.status`.
+/// End-to-end tests for the opt-in title-bar attention bell. The bell exists only when the
+/// `attentionButtonEnabled` setting is on, seeded into the isolated `settings.json` before launch. The
+/// bell↔bell.fill highlight isn't observable, so the tests read the `accessibilityValue`
+/// (none|attention|blocked) the button exposes, and drive status over the control socket.
 @MainActor
 final class AttentionButtonUITests: XCTestCase {
     private var app: XCUIApplication!
@@ -30,16 +28,12 @@ final class AttentionButtonUITests: XCTestCase {
         if let socketPath { try? FileManager.default.removeItem(atPath: socketPath) }
     }
 
-    // with the toggle on, the bell tracks the window's attention state: idle → disabled "none", a
-    // non-blocked status → enabled "attention", a blocked status → enabled "blocked", back to idle →
-    // disabled "none". The accessibilityValue is the oracle for the otherwise-unobservable highlight.
     func testAttentionButtonStatesTrackSessionStatus() throws {
         launch(attentionEnabled: true)
         let seeded = try seededSessionID()
 
         let bell = app.buttons["attention-button"]
         XCTAssertTrue(bell.waitForExistence(timeout: 10), "the attention bell should exist with the toggle on")
-        // all sessions idle at launch: the bell is dimmed/disabled and reports "none".
         XCTAssertTrue(pollButton(bell, value: "none", enabled: false), "an all-idle window should disable the bell as none")
 
         try setStatus("active", target: seeded)
@@ -59,17 +53,14 @@ final class AttentionButtonUITests: XCTestCase {
                       "clearing the last attention session should disable the bell back to none")
     }
 
-    // clicking the bell opens the attention POPOVER (the mouse form; ⌃⇧I keeps the searchable palette),
-    // listing the blocked session as a row. The row click→select can't be driven from XCUITest (a synthesized
-    // click inside an NSPopover doesn't fire a SwiftUI button — see RecentSessionsButtonUITests), so this
-    // asserts the popover opens and lists exactly the attention session; the select is verified by hand and
-    // covered host-free by the selection APIs.
+    // a synthesized click inside an NSPopover doesn't fire a SwiftUI button (see
+    // RecentSessionsButtonUITests), so the row click→select is unreachable here: this asserts only that
+    // the popover opens and lists exactly the attention session.
     func testAttentionButtonOpensPopoverListingAttention() throws {
         launch(attentionEnabled: true)
         let seeded = try seededSessionID()
 
-        // block the seeded session, then add a SECOND (idle) session — `session.new` selects the new one, so
-        // only the seeded session needs attention. The bell lists it window-wide; the new one is not listed.
+        // `session.new` selects the new session, so only the seeded one needs attention.
         try setStatus("blocked", target: seeded)
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let createdResult = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
@@ -93,7 +84,6 @@ final class AttentionButtonUITests: XCTestCase {
                        "only the blocked session needs attention, so the popover lists exactly one row")
     }
 
-    // with the toggle off (the default — no seeded setting), the bell is absent from the title bar.
     func testAttentionButtonAbsentWhenToggleOff() throws {
         launch(attentionEnabled: false)
         // the sidebar toggle proves the custom title bar rendered, so the bell's absence is real, not a
@@ -102,10 +92,7 @@ final class AttentionButtonUITests: XCTestCase {
         XCTAssertFalse(app.buttons["attention-button"].exists, "the bell should be absent with the toggle off")
     }
 
-    // flipping the Settings toggle at runtime shows/hides the bell live (the .agtermAppearanceChanged
-    // refresh path) without a relaunch — every other test seeds settings.json before launch. launch
-    // WITHOUT the toggle (bell absent), open Settings (Cmd+,), flip the toggle on (bell appears), flip it
-    // back off (bell hides).
+    // the live .agtermAppearanceChanged refresh path — every other test seeds settings.json before launch.
     func testAttentionButtonTogglesLiveFromSettings() throws {
         launch(attentionEnabled: false)
         XCTAssertTrue(app.buttons["sidebar-toggle-button"].waitForExistence(timeout: 10), "the title bar should render")
@@ -113,10 +100,10 @@ final class AttentionButtonUITests: XCTestCase {
         XCTAssertFalse(bell.exists, "the bell should be absent before the toggle is flipped on")
 
         let toggle = settingsControl(tab: "Notifications", control: "settings-attention-button")
-        toggle.click() // turn it on (default off)
+        toggle.click() // default off
         XCTAssertTrue(bell.waitForExistence(timeout: 10), "flipping the toggle on should show the bell live")
 
-        toggle.click() // turn it back off
+        toggle.click()
         XCTAssertTrue(pollAbsent(bell), "flipping the toggle back off should hide the bell live")
     }
 
@@ -183,7 +170,7 @@ final class AttentionButtonUITests: XCTestCase {
             if tabButton.exists, tabButton.isHittable {
                 tabButton.click()
             } else {
-                app.typeKey(",", modifierFlags: .command) // settings not open yet (or lost) — (re)open
+                app.typeKey(",", modifierFlags: .command)
             }
             RunLoop.current.run(until: Date().addingTimeInterval(0.25))
         }

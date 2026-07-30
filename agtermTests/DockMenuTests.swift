@@ -62,11 +62,9 @@ final class DockMenuTests: XCTestCase {
         try await super.tearDown()
     }
 
-    // Covers the two legs that keep a hosted run off the user's real environment: the state dir and the
-    // control-socket path Xcode expands into the launch environment. It deliberately does NOT claim to
-    // cover the shell-free scene — nothing here observes the `isHostedUnitTest` branch being CONSUMED, and
-    // the only obvious probe (`AppDelegate.controlServer == nil`) rides the scene's async `.task`, so it
-    // would pass even with the branch deleted. Renaming rather than adding a assertion that cannot fail.
+    // deliberately does NOT cover the shell-free scene: the only obvious probe
+    // (`AppDelegate.controlServer == nil`) rides the scene's async `.task`, so it would pass even with
+    // the `isHostedUnitTest` branch deleted.
     func testHostProcessStartsWithIsolatedStateAndSocket() throws {
         let environment = ProcessInfo.processInfo.environment
         let statePath = try XCTUnwrap(environment["AGTERM_STATE_DIR"])
@@ -130,17 +128,14 @@ final class DockMenuTests: XCTestCase {
         XCTAssertTrue(try item("Dashboard", in: menu).isEnabled,
                       "an open dashboard remains enabled so the Dock action can close it")
 
-        // and the enabled item must actually CLOSE it. This is the `dashboardWasOpen == true` half of the
-        // staleness guard (`dashboard.isOpen == dashboardWasOpen`), which nothing else invokes: every other
-        // dashboard case builds the menu while it is closed. Tightening that guard to `!dashboard.isOpen`
-        // would make the item inert here with the rest of the suite still green.
+        // the `dashboardWasOpen == true` half of the staleness guard, which nothing else invokes — every
+        // other dashboard case builds the menu while it is closed.
         try invokeWithNilSender(try item("Dashboard", in: menu))
         XCTAssertFalse(dashboard.isOpen, "a Dashboard item built while the dashboard was open should close it")
     }
 
-    // New Window is the one app-level item: it captures no window, so unlike its neighbours it must stay
-    // enabled and live through every modal state that makes them inert, and it must open a window the
-    // library actually counts. Discussion #313.
+    // New Window captures no window, so unlike its neighbours it must stay live through every modal
+    // state that makes them inert. Discussion #313.
     func testNewWindowStaysEnabledUnderModalsAndOpensAWindow() throws {
         let windowID = try activeWindowID()
         let quick = QuickTerminalController()
@@ -162,8 +157,7 @@ final class DockMenuTests: XCTestCase {
         XCTAssertTrue(try item("New Window", in: menu).isEnabled,
                       "an open dashboard in the last-active window must not disable it either")
 
-        // the opener is the scene's, nil outside a mounted scene, so stand in for it and assert the
-        // action both creates the library entry and hands that id over to be opened.
+        // the opener is the scene's and nil outside a mounted scene, so stand in for it.
         var openedIDs: [UUID] = []
         actions.openWindow = { openedIDs.append($0) }
         let windowsBefore = library.windows.count
@@ -176,9 +170,8 @@ final class DockMenuTests: XCTestCase {
         XCTAssertEqual(openedIDs.first, created.id)
     }
 
-    // `actions` is wired in the scene `.task`, so during the launch window it is nil while every other item
-    // is already disabled by the nil library — leaving New Window the only enabled item in the menu, one
-    // that would activate the app and then do nothing. It reads as unavailable instead.
+    // `actions` is wired in the scene `.task`, so during the launch window it is nil while the nil library
+    // already disables every other item — New Window would be the only enabled one.
     func testNewWindowIsDisabledUntilTheActionHubIsWired() throws {
         delegate.actions = nil
 
@@ -187,16 +180,14 @@ final class DockMenuTests: XCTestCase {
         XCTAssertFalse(newWindow.isEnabled, "with no action hub there is nothing for the item to drive")
         try invokeWithNilSender(newWindow)
 
-        // and once wired it is enabled again even with no library on the delegate, since creating a window
-        // needs neither a captured window nor that reference.
+        // creating a window needs neither a captured window nor the library reference.
         delegate.actions = actions
         delegate.library = nil
         XCTAssertTrue(try item("New Window", in: try dockMenu()).isEnabled)
     }
 
-    // The counterpart to the guard in `AppActions.newWindow`: with no opener wired there is nowhere to put
-    // a window, and creating one anyway would leave the library counting an open window with no NSWindow
-    // behind it — which `applicationShouldTerminateAfterLastWindowClosed` reads to decide whether to quit.
+    // an orphaned entry would leave the library counting an open window with no NSWindow behind it, which
+    // `applicationShouldTerminateAfterLastWindowClosed` reads to decide whether to quit.
     func testNewWindowWithoutAnOpenerCreatesNothing() throws {
         let menu = try dockMenu()
         let windowsBefore = library.windows.count

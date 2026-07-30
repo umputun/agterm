@@ -7,15 +7,10 @@ import agtermCore
 /// monitor. It lives here rather than in `agtermCoreTests` because the mapping reads `NSEvent` accessors
 /// an AppKit-free target cannot construct.
 ///
-/// Only the ASCII-capable-layout branch is reachable here. Which branch runs is decided by the LIVE
-/// input source (`KeyboardLayout.isASCIICapable`), which a test cannot set without changing the
-/// machine's keyboard, so these run on whatever the tester has — a Latin layout on any development
-/// machine and in CI. The non-Latin branch is covered deterministically in `KeybindTests`, where
-/// `chordKey(forKeyCode:produced:layoutIsASCIICapable:)` takes the layout as a parameter; keyCode 6 with
-/// a Cyrillic `я` and `layoutIsASCIICapable: false` resolves to `z`, which is this monitor's ⌘Z.
-///
-/// What is left here is still worth pinning: that the monitor feeds `chordKey` the right key code and
-/// the right character accessor, and that named keys win before it is consulted.
+/// Only the ASCII-capable-layout branch is reachable: the branch is chosen by the LIVE input source
+/// (`KeyboardLayout.isASCIICapable`), which a test cannot set without changing the machine's keyboard.
+/// The non-Latin branch is covered deterministically in `KeybindTests`, which takes the layout as a
+/// parameter.
 @MainActor
 final class UndoCloseShortcutTests: XCTestCase {
     private var stateDir: URL!
@@ -65,17 +60,15 @@ final class UndoCloseShortcutTests: XCTestCase {
         XCTAssertEqual(shortcut.chord(from: event), BuiltinAction.undoClose.defaultChord)
     }
 
-    // an alternative LATIN layout keeps its own letter positions: on Dvorak the physical Z position types
-    // ";", so ⌘Z follows the Z the user actually types rather than the ANSI Z position.
+    // on Dvorak the physical Z position (keyCode 6) types ";", so ⌘Z follows the Z the user actually types.
     func testAlternativeLatinLayoutKeepsItsOwnLetterPositions() throws {
         try skipUnlessLayoutIsASCIICapable()
         let event = try keyDown(";", keyCode: 6, flags: .command)
         XCTAssertEqual(shortcut.chord(from: event), Chord(mods: [.command], key: ";"))
     }
 
-    // the character accessor, not the key code, is what an ASCII-capable layout binds — pinning which of
-    // the two the monitor passes through. A remapped Latin layout typing a non-ASCII character keeps it
-    // and simply matches no chord, rather than being pulled onto the ANSI position.
+    // a remapped Latin layout typing a non-ASCII character keeps it and matches no chord, rather than
+    // being pulled onto the ANSI position of keyCode 6.
     func testASCIICapableLayoutBindsTheProducedCharacterNotThePosition() throws {
         try skipUnlessLayoutIsASCIICapable()
         let event = try keyDown("я", keyCode: 6, flags: .command)

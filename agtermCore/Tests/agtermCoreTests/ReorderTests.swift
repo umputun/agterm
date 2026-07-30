@@ -3,12 +3,11 @@ import Testing
 
 struct ReorderTests {
     @Test func middleIndexUp() {
-        // list of 5, current 2 → up moves to 1.
         #expect(ReorderDirection.up.destinationIndex(from: 2, count: 5) == 1)
     }
 
     @Test func middleIndexDown() {
-        // current 2 → down moves to 3 (post-removal index lands the element after its old neighbor).
+        // the post-removal index lands the element after its old neighbor, so down from 2 is 3.
         #expect(ReorderDirection.down.destinationIndex(from: 2, count: 5) == 3)
     }
 
@@ -45,7 +44,6 @@ struct ReorderTests {
     }
 
     @Test func twoElementListFromFirst() {
-        // only down/bottom move; up/top are no-ops.
         #expect(ReorderDirection.up.destinationIndex(from: 0, count: 2) == nil)
         #expect(ReorderDirection.top.destinationIndex(from: 0, count: 2) == nil)
         #expect(ReorderDirection.down.destinationIndex(from: 0, count: 2) == 1)
@@ -53,7 +51,6 @@ struct ReorderTests {
     }
 
     @Test func twoElementListFromLast() {
-        // only up/top move; down/bottom are no-ops.
         #expect(ReorderDirection.down.destinationIndex(from: 1, count: 2) == nil)
         #expect(ReorderDirection.bottom.destinationIndex(from: 1, count: 2) == nil)
         #expect(ReorderDirection.up.destinationIndex(from: 1, count: 2) == 0)

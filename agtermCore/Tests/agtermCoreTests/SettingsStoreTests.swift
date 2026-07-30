@@ -28,7 +28,6 @@ final class SettingsStoreTests {
 
     @Test func missingFileSeedsDefaultTheme() {
         #expect(!FileManager.default.fileExists(atPath: fileURL.path))
-        // a fresh install opens on the app's default theme, not ghostty's built-in.
         #expect(store.load() == AppSettings(theme: AppSettings.defaultTheme))
         #expect(store.load().theme == "agterm")
     }
@@ -40,8 +39,8 @@ final class SettingsStoreTests {
     }
 
     @Test func existingFileWithoutThemeKeyStaysGhosttyDefault() throws {
-        // an existing settings.json with no `theme` key decodes to nil (ghostty built-in) — an
-        // existing user is never silently re-themed to the new app default.
+        // an existing user is never silently re-themed: a missing `theme` key decodes to nil, ghostty's
+        // built-in, not the app default.
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try Data(#"{"fontSize":14}"#.utf8).write(to: fileURL)
         #expect(store.load().theme == nil)

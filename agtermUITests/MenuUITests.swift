@@ -68,10 +68,8 @@ final class MenuUITests: XCTestCase {
         app.typeKey(.escape, modifierFlags: [])
     }
 
-    // agterm ships its OWN rebindable "Toggle Full Screen" (⌃⌘F) View item so full screen is drivable from
-    // the keymap / palette / control channel. AppKit would otherwise ALSO auto-add its native "Enter Full
-    // Screen" (Globe+F) item — a duplicate. AppDelegate strips the native one, so the View menu must show
-    // agterm's item and NOT the native "Enter Full Screen".
+    // AppKit auto-adds its own native "Enter Full Screen" item next to agterm's rebindable one, so
+    // AppDelegate strips it — the menu must carry agterm's item alone.
     func testViewMenuHasSingleFullScreenItem() throws {
         XCTAssertTrue(app.staticTexts["session-row"].firstMatch.waitForExistence(timeout: 20), "seeded session should exist")
         app.menuBars.menuBarItems["View"].click()

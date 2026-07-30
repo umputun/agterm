@@ -74,9 +74,8 @@ struct OSCBackgroundPolicyTests {
     }
 
     @Test func resetOnAColoredSurfaceRoutesToResetNotApply() {
-        // the regression this pairs with: a `.color` session runs OSC 11, then the program resets. The
-        // reset reports the THEME (the OSC overlay dropped the watermark's background key), so a baseline
-        // still claiming the watermark color would return .apply and never release the overlay.
+        // the reset reports the THEME (the OSC overlay dropped the watermark's background key), so a
+        // baseline still claiming the watermark color would return .apply and never release the overlay.
         let baseline = OSCBackgroundPolicy.baseline(oscOverlayActive: true, surfaceBackground: "#aa0000",
                                                     themeBackground: "#1d1f21")
         #expect(OSCBackgroundPolicy.decide(incoming: "#1d1f21", themeBackground: baseline,

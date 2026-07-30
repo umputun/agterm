@@ -5,9 +5,8 @@ import Testing
 struct LinkPolicyTests {
     // MARK: disposition (open / reveal / ignore)
 
-    /// A URL followed by garbage (what the pre-fix `String(cString:)` over-read past `len` could produce)
-    /// does not silently become an openable web link: the trailing space + junk make it unparseable or
-    /// non-web, so the disposition is never `.open`.
+    /// The garbage suffixes model a `String(cString:)` over-read past `len`: the trailing space + junk
+    /// leave the URL unparseable or non-web, so it can never come back `.open`.
     @Test func trailingGarbageDoesNotYieldAWebURL() {
         #expect(LinkPolicy.disposition(for: "https://example.com\u{00}/etc/other", localHosts: Self.localHosts) == .ignore)
         #expect(LinkPolicy.disposition(for: "https://example.com extra junk", localHosts: Self.localHosts) == .ignore)
@@ -81,12 +80,11 @@ struct LinkPolicyTests {
         guard case let .reveal(url) = LinkPolicy.disposition(for: raw, localHosts: Self.localHosts) else {
             Issue.record("expected .reveal for \(raw)"); return
         }
-        #expect(url.absoluteString == expected)   // and the revealed path is the exact one, not a mis-normalized neighbor
+        #expect(url.absoluteString == expected)
     }
 
     /// The classifier never resolves symlinks: revealing a link INSIDE a symlinked directory keeps the LINK
-    /// path, not the resolved target — so a `link -> /net` can never be followed into an automount root. This
-    /// is a value-result assertion (the reveal URL string), the invariant the lexical normalizer guarantees.
+    /// path, not the resolved target — so a `link -> /net` can never be followed into an automount root.
     @Test func revealDoesNotResolveSymlinks() throws {
         let base = FileManager.default.temporaryDirectory.appendingPathComponent("agt-linkpolicy-symlink-test", isDirectory: true)
         try? FileManager.default.removeItem(at: base)

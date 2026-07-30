@@ -8,18 +8,13 @@ import XCTest
 /// statuses are then driven over the socket — `session.new`/`session.status`/`session.select` do NOT count
 /// as user activity, so the setup never resets the per-window idle timer that fires the follow. The live
 /// `tree` node's `active` flag (= the window's selected session) is the selection oracle: it reflects
-/// `selectedSessionID` at query time, so it is immediate and has no snapshot-save debounce. Subclass of
-/// `ControlAPITestCase` for the socket harness. No keystrokes are typed, so the idle window elapses; the
-/// waits are generous per the ui-tests occlusion-timeout guidance.
+/// `selectedSessionID` at query time, so it has no snapshot-save debounce.
 @MainActor
 final class AutoFollowUITests: ControlAPITestCase {
-    // parked on a NON-blocked session with auto-follow armed at 5 s, a block landing on another session
-    // pulls the window's selection to it once the idle window elapses (no keystrokes reset the timer).
     func testAutoFollowJumpsToBlockedAfterIdle() throws {
         try relaunch(withSettings: #"{"autoFollowAttention":"s5"}"#)
 
-        // A = the restored seeded session; add B, then park the selection back on A (a non-blocked session,
-        // since session.new leaves the new session B selected).
+        // session.new leaves the new session B selected, so park the selection back on the non-blocked A.
         let sessionA = try activeSessionID()
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let sessionB = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return an id")
@@ -28,16 +23,12 @@ final class AutoFollowUITests: ControlAPITestCase {
                        "selecting A should succeed")
         XCTAssertTrue(pollActiveNode(equals: sessionA, timeout: 10), "A should be the parked (non-blocked) selection")
 
-        // block B over the socket (does not note activity, so the idle timer keeps running); after the 5 s
-        // idle window the window auto-follows to the oldest blocked session, which is B.
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.status","target":"\#(sessionB)","args":{"status":"blocked"}}"#)["ok"] as? Bool,
                        true, "blocking B should succeed")
         XCTAssertTrue(pollActiveNode(equals: sessionB, timeout: 15),
                       "after the idle window the selection should auto-follow to the blocked session B")
     }
 
-    // parking the selection ON a blocked session suppresses the follow: even with an OLDER blocked session
-    // waiting elsewhere, the idle fire does not move away from the blocked session you are already on.
     func testAutoFollowSuppressedWhenParkedOnBlocked() throws {
         try relaunch(withSettings: #"{"autoFollowAttention":"s5"}"#)
 
@@ -46,8 +37,7 @@ final class AutoFollowUITests: ControlAPITestCase {
         let sessionB = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return an id")
         XCTAssertTrue(pollSessionCount(2, timeout: 10), "the new session should land")
 
-        // block B FIRST so B is the OLDER blocked (a broken suppress would jump to it), then block A and park
-        // the selection on A — now A is both the selected AND a blocked session.
+        // block B FIRST so it is the OLDER blocked — a broken suppress would jump to it.
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.status","target":"\#(sessionB)","args":{"status":"blocked"}}"#)["ok"] as? Bool,
                        true, "blocking B should succeed")
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.status","target":"\#(sessionA)","args":{"status":"blocked"}}"#)["ok"] as? Bool,
@@ -56,7 +46,6 @@ final class AutoFollowUITests: ControlAPITestCase {
                        "selecting A should succeed")
         XCTAssertTrue(pollActiveNode(equals: sessionA, timeout: 10), "A should be the parked (blocked) selection")
 
-        // across the whole idle window the selection must stay on A and never jump to the older blocked B.
         assertActiveNodeStays(sessionA, never: sessionB, during: 12)
     }
 

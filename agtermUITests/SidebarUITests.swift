@@ -17,8 +17,7 @@ final class SidebarUITests: XCTestCase {
 
     override func setUp() async throws {
         continueAfterFailure = false
-        // hermetic state: a fresh temp dir per test so the app seeds exactly one
-        // "workspace 1" + one session, and we never touch the real workspaces.json.
+        // a fresh temp dir per test seeds exactly one "workspace 1" + one session.
         stateDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("agterm-uitest-\(UUID().uuidString)", isDirectory: true)
         markerDir = FileManager.default.temporaryDirectory
@@ -102,8 +101,7 @@ final class SidebarUITests: XCTestCase {
         let rename = app.menuItems["Rename"]
         XCTAssertTrue(rename.waitForExistence(timeout: 5), "Rename menu item should appear")
         rename.click()
-        // the field appears keyboard-focused (the rename fix); type into it. it
-        // surfaces as a TextField (session rows) or StaticText (workspace headers),
+        // the field surfaces as a TextField (session rows) or StaticText (workspace headers),
         // so match by identifier across element types.
         let field = app.descendants(matching: .any).matching(identifier: "edit-field").firstMatch
         XCTAssertTrue(field.waitForExistence(timeout: 5), "rename did not enter edit mode (field never appeared)")
@@ -111,7 +109,6 @@ final class SidebarUITests: XCTestCase {
         app.typeText("\(newName)\r")
     }
 
-    // The reported bug: renaming a session did nothing.
     func testRenameSession() throws {
         let row = sessionRow()
         rename(row, to: "renamed-session")
@@ -126,8 +123,7 @@ final class SidebarUITests: XCTestCase {
                       "workspace header should show the new name after rename")
     }
 
-    // clicking anywhere on a workspace row (not just the disclosure triangle) toggles its expansion.
-    // the toggle is deferred by the double-click interval so a rename double-click can cancel it, so the
+    // the toggle is deferred by the double-click interval (so a rename double-click can cancel it), so the
     // child session hides/returns a beat after the click rather than instantly.
     func testClickWorkspaceRowTogglesExpansion() throws {
         let ws = app.staticTexts["workspace 1"]
@@ -135,24 +131,20 @@ final class SidebarUITests: XCTestCase {
         let session = sessionRow()
         XCTAssertTrue(session.waitForExistence(timeout: 20), "seeded session row should be visible while expanded")
 
-        // click the row body → collapse → the child session row disappears.
         ws.click()
         XCTAssertTrue(session.waitForNonExistence(timeout: 5), "collapsing the workspace should hide its session row")
 
-        // click again → expand → the session row comes back.
         ws.click()
         XCTAssertTrue(session.waitForExistence(timeout: 5), "expanding the workspace should show its session row again")
     }
 
-    /// A workspace's collapsed state persists per window and restores on relaunch. Collapse a workspace
-    /// whose session is NOT the selected one (so the launch-time reveal of the active session can't
-    /// re-expand it), confirm the snapshot records it, then relaunch and confirm it comes back collapsed.
+    // collapses a workspace whose session is NOT the selected one, so the launch-time reveal of the
+    // active session cannot re-expand it.
     func testWorkspaceCollapsePersistsAcrossRelaunch() throws {
         XCTAssertTrue(app.staticTexts["workspace 1"].waitForExistence(timeout: 20), "seeded workspace should exist")
         XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "seeded session A should be visible")
 
-        // add a second workspace and give it its own session B (created via the workspace-row menu so it
-        // lands in workspace 2); B becomes the selected/active session.
+        // session B goes in via the workspace-row menu so it lands in workspace 2 and becomes active.
         app.buttons["New Workspace"].click()
         let ws2 = app.staticTexts["workspace 2"]
         XCTAssertTrue(ws2.waitForExistence(timeout: 5), "second workspace should appear")
@@ -160,7 +152,6 @@ final class SidebarUITests: XCTestCase {
         presentedMenuItem("New Session").click()
         XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "workspace 2 should now show its own session B")
 
-        // collapse workspace 1 (NOT the active workspace) → its session A hides, leaving only B.
         app.staticTexts["workspace 1"].click()
         XCTAssertTrue(pollSessionRowCount(1, timeout: 8), "collapsing workspace 1 should hide session A")
         XCTAssertTrue(stateDir.pollSnapshot(equals: true, timeout: 8) { snapshot in
@@ -168,9 +159,8 @@ final class SidebarUITests: XCTestCase {
                 .first(where: { $0["name"] as? String == "workspace 1" })?["collapsed"] as? Bool
         }, "collapsing workspace 1 should persist collapsed=true")
 
-        // relaunch with the same state dir: workspace 1 must restore COLLAPSED. The active session B's
-        // workspace (2) is revealed on launch, so exactly one session row (B) shows; A stays hidden under
-        // the restored-collapsed workspace 1.
+        // the active session B's workspace is revealed on launch, so exactly one row (B) shows; A stays
+        // hidden under the restored-collapsed workspace 1.
         app.terminate()
         app = XCUIApplication()
         app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
@@ -179,27 +169,22 @@ final class SidebarUITests: XCTestCase {
         XCTAssertTrue(pollSessionRowCount(1, timeout: 10),
                       "workspace 1 should restore collapsed (session A hidden); only the active session B shows")
 
-        // expanding workspace 1 again brings A back and clears the persisted collapse.
         app.staticTexts["workspace 1"].click()
         XCTAssertTrue(pollSessionRowCount(2, timeout: 8), "expanding workspace 1 should reveal session A again")
     }
 
-    /// Collapsing the workspace that OWNS the active session must persist that collapse even though the
-    /// active session is force-revealed on relaunch: the reveal shows the session but is a view action, so
-    /// it must NOT re-persist the workspace as expanded. Guards the reveal-must-not-burn-collapse fix.
+    // the relaunch force-reveal of the active session is a view action, so it must not re-persist that
+    // session's workspace as expanded.
     func testActiveWorkspaceCollapsePersistsDespiteReveal() throws {
         XCTAssertTrue(app.staticTexts["workspace 1"].waitForExistence(timeout: 20), "seeded workspace should exist")
         XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "seeded active session should be visible")
 
-        // collapse the active session's own workspace → its row hides, snapshot records collapsed=true.
         app.staticTexts["workspace 1"].click()
         XCTAssertTrue(pollSessionRowCount(0, timeout: 8), "collapsing the active workspace should hide its session row")
         XCTAssertTrue(stateDir.pollSnapshot(equals: true, timeout: 8) { snapshot in
             (snapshot["workspaces"] as? [[String: Any]])?.first?["collapsed"] as? Bool
         }, "collapsing the active workspace should persist collapsed=true")
 
-        // relaunch: the active session is revealed (its row shows again), but the persisted collapse must
-        // survive — the reveal must not have flipped the snapshot back to expanded.
         app.terminate()
         app = XCUIApplication()
         app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
@@ -210,12 +195,11 @@ final class SidebarUITests: XCTestCase {
         }, "the launch reveal must not re-persist the workspace as expanded (still collapsed=true)")
     }
 
-    /// Collapse Workspaces while a workspace is FOCUSED must still collapse the focus-hidden workspaces,
-    /// not just the one visible row. Guards the focused-mode collapseOthers fix (it reduces the tracked set
-    /// to the active workspace across ALL workspaces, so hidden ones are persisted collapsed too).
+    // the focus filter hides workspace 1, so this only passes if Collapse Workspaces reaches past the
+    // visible rows.
     func testCollapseWorkspacesWhileFocusedCollapsesHiddenWorkspaces() throws {
         XCTAssertTrue(app.staticTexts["workspace 1"].waitForExistence(timeout: 20), "seeded workspace should exist")
-        // give workspace 2 its own session B (via its row menu) so it becomes the active workspace.
+        // session B goes in via the workspace-row menu so workspace 2 becomes the active one.
         app.buttons["New Workspace"].click()
         let ws2 = app.staticTexts["workspace 2"]
         XCTAssertTrue(ws2.waitForExistence(timeout: 5), "second workspace should appear")
@@ -223,12 +207,10 @@ final class SidebarUITests: XCTestCase {
         presentedMenuItem("New Session").click()
         XCTAssertTrue(pollSessionRowCount(2, timeout: 10), "workspace 2 should show its own active session B")
 
-        // focus workspace 2 → workspace 1 (holding the non-active session A) is now hidden from the tree.
         ws2.rightClick()
         presentedMenuItem("Focus").click()
         XCTAssertTrue(pollSessionRowCount(1, timeout: 8), "focusing workspace 2 should hide workspace 1's session")
 
-        // Collapse Workspaces (View menu) must collapse workspace 1 even though it is hidden by the focus.
         app.menuBars.menuBarItems["View"].click()
         let collapse = app.menuItems["Collapse Workspaces"]
         XCTAssertTrue(collapse.waitForExistence(timeout: 5), "Collapse Workspaces menu item should appear")
@@ -239,17 +221,14 @@ final class SidebarUITests: XCTestCase {
         }, "Collapse Workspaces must persist the focus-hidden workspace 1 as collapsed")
     }
 
-    /// Moving the active session into a freshly created workspace must keep it visible: a runtime-added
-    /// workspace defaults expanded, so its rows show without a manual expand. The move does not change the
-    /// selection, so nothing reveals the workspace — only the model-expanded-default (picked up by the
-    /// rebuild's formUnion) renders it open. Guards that fix.
+    // the move does not change the selection, so nothing reveals workspace 2 — it renders open only from
+    // the model's expanded-by-default state.
     func testMovingActiveSessionIntoNewWorkspaceKeepsItVisible() throws {
         let row = sessionRow()
         XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded active session should exist")
         app.buttons["New Workspace"].click()
         XCTAssertTrue(app.staticTexts["workspace 2"].waitForExistence(timeout: 5), "second workspace should appear")
 
-        // move the active session into the new (never-revealed) workspace 2 via its context menu.
         row.rightClick()
         let moveTo = app.menuItems["Move to"]
         XCTAssertTrue(moveTo.waitForExistence(timeout: 5), "Move to submenu should appear")
@@ -258,8 +237,6 @@ final class SidebarUITests: XCTestCase {
         XCTAssertTrue(target.waitForExistence(timeout: 5), "target workspace in submenu should appear")
         target.click()
 
-        // the moved session stays selected (no reveal fires), so it only shows if workspace 2 renders
-        // expanded from its isExpanded=true default; without that it would be hidden under a collapsed row.
         XCTAssertTrue(pollSessionRowCount(1, timeout: 8),
                       "the active session should stay visible in the new workspace (rendered expanded by default)")
     }
@@ -278,17 +255,14 @@ final class SidebarUITests: XCTestCase {
         app.typeKey("a", modifierFlags: .command)
         app.typeText("should-be-discarded")
         app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
-        // edit mode closes: on restore the field's identifier reverts from edit-field to session-row.
+        // on restore the field's identifier reverts from edit-field to session-row.
         XCTAssertTrue(field.waitForNonExistence(timeout: 5), "Esc should close rename edit mode")
-        // and the name is unchanged: the rename was discarded, not committed.
         XCTAssertEqual(sessionRow().value as? String, original, "Esc should discard the rename")
-        // focus returns to the terminal: the sidebar must not keep focus after the rename ends.
         usleep(800_000)
         XCTAssertTrue(terminalReceivedTyping(named: "after-esc"),
                       "Esc should return focus to the session terminal, not keep it on the sidebar")
     }
 
-    // ending a rename with Return must also hand focus back to the terminal (not keep it on the sidebar).
     func testRenameSessionCommitReturnsFocus() throws {
         let row = sessionRow()
         rename(row, to: "renamed-focus")
@@ -344,13 +318,12 @@ final class SidebarUITests: XCTestCase {
         app.typeKey("n", modifierFlags: [.command, .shift])
         XCTAssertTrue(app.staticTexts["workspace 2"].waitForExistence(timeout: 5), "New Workspace should add workspace 2")
 
-        // delete workspace 1 — it still holds the seeded session, so a confirm alert appears.
         app.staticTexts["workspace 1"].rightClick()
         let delete = presentedMenuItem("Delete Workspace")
         XCTAssertTrue(delete.waitForExistence(timeout: 5), "Delete Workspace menu item should appear")
         delete.click()
-        // the confirm alert is an app-modal dialog; scope the Delete button to it (menu-bar items
-        // also surface in the app-wide button query).
+        // scope the Delete button to the modal dialog — menu-bar items also surface in the app-wide
+        // button query.
         let alert = app.dialogs.firstMatch
         XCTAssertTrue(alert.waitForExistence(timeout: 5), "a non-empty workspace should prompt to confirm")
         alert.buttons["Delete"].firstMatch.click()
@@ -361,8 +334,7 @@ final class SidebarUITests: XCTestCase {
 
     func testRowsShowKindIcons() throws {
         XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
-        // the leading row icons (folder for a workspace, terminal for a session) carry stable
-        // identifiers on their image views; match across element types like the other rows do.
+        // the row icons carry their identifiers on image views, so match across element types.
         let workspaceIcon = app.descendants(matching: .any).matching(identifier: "workspace-icon").firstMatch
         XCTAssertTrue(workspaceIcon.waitForExistence(timeout: 5), "workspace row should show its folder icon")
         let sessionIcon = app.descendants(matching: .any).matching(identifier: "session-icon").firstMatch
@@ -371,8 +343,7 @@ final class SidebarUITests: XCTestCase {
 
     func testNewSessionButton() throws {
         XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
-        // bottom-bar add-session menu (a SwiftUI Menu may surface as a popup, not a
-        // plain button), matched by identifier across element types.
+        // a SwiftUI Menu may surface as a popup rather than a plain button, so match across element types.
         let add = app.descendants(matching: .any).matching(identifier: "add-session").firstMatch
         XCTAssertTrue(add.waitForExistence(timeout: 5), "bottom-bar add-session menu should exist")
         add.click()
@@ -383,16 +354,14 @@ final class SidebarUITests: XCTestCase {
                       "workspace 1 should have 2 sessions after add-session -> New Session")
     }
 
-    /// The inline "+" button on a workspace row adds a session to that workspace —
-    /// the same action as right-click "New Session" on the row. The button is hover-revealed
-    /// (hidden at zero width on an idle row), so the row must be hovered before it is hittable.
+    // the "+" is hover-revealed (zero width on an idle row), so the row must be hovered to make it hittable.
     func testInlineAddSessionButtonCreatesSession() throws {
         XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
         let ws = app.staticTexts["workspace 1"]
         XCTAssertTrue(ws.waitForExistence(timeout: 5), "seeded workspace should exist")
         let addBtn = app.descendants(matching: .any).matching(identifier: "workspace-add-session").firstMatch
-        // hover the row to reveal the button; retry — the first synthesized move can land before
-        // the window is key, and .activeInKeyWindow tracking swallows it.
+        // retry the hover: the first synthesized move can land before the window is key, and
+        // .activeInKeyWindow tracking swallows it.
         let deadline = Date().addingTimeInterval(8)
         while !addBtn.isHittable, Date() < deadline {
             ws.hover()
@@ -404,9 +373,8 @@ final class SidebarUITests: XCTestCase {
                       "workspace 1 should have 2 sessions after clicking the inline '+' button")
     }
 
-    // Verifies the "Open Directory…" wiring: the menu item presents the native
-    // folder picker. (The picker is system UI; choosing a directory and the
-    // resulting addSession(cwd:) are covered at the model level by AppStoreTests.)
+    // the picker is system UI, so only its presentation is checked here; the resulting addSession(cwd:)
+    // is covered at the model level by AppStoreTests.
     func testOpenDirectoryShowsPicker() throws {
         let add = app.descendants(matching: .any).matching(identifier: "add-session").firstMatch
         XCTAssertTrue(add.waitForExistence(timeout: 20), "bottom-bar add-session menu should exist")
@@ -414,8 +382,7 @@ final class SidebarUITests: XCTestCase {
         let open = presentedMenuItem("Open Directory…")
         XCTAssertTrue(open.waitForExistence(timeout: 5), "Open Directory… menu item should appear")
         open.click()
-        // the native folder picker appears (app-modal); confirm via its Cancel button, then
-        // dismiss with Escape (there can be more than one "Cancel" in the tree, so don't click by label).
+        // more than one "Cancel" can exist in the tree, so dismiss with Escape rather than by label.
         XCTAssertTrue(app.buttons["Cancel"].firstMatch.waitForExistence(timeout: 5),
                       "Open Directory… should present a folder picker")
         app.typeKey(XCUIKeyboardKey.escape, modifierFlags: [])
@@ -454,23 +421,19 @@ final class SidebarUITests: XCTestCase {
         return false
     }
 
-    /// Sidebar visibility persists per-window: hiding it records `sidebarVisible=false` in the snapshot,
-    /// it survives a relaunch (the sidebar restores hidden, so no `session-row`s show), and showing it
-    /// again records `true` and reveals the restored session. Width and split ratio are geometric (no AX
-    /// value, the divider has no queryable element), so those stay on the host-free `AppStore` round-trip
-    /// tests; visibility is observable here in both the snapshot file and the rows' presence.
+    // width and split ratio have no AX value (the divider has no queryable element), so they stay on the
+    // host-free AppStore round-trip tests; only visibility is observable here.
     func testSidebarVisibilityPersistsAcrossRelaunch() throws {
         XCTAssertTrue(sessionRow().firstMatch.waitForExistence(timeout: 20), "seeded session should exist")
 
-        // hide via the title-bar toggle; the toggle's save() must record sidebarVisible=false.
         let toggle = app.buttons["sidebar-toggle-button"]
         XCTAssertTrue(toggle.waitForHittable(timeout: 8), "sidebar toggle should be hittable")
         toggle.click()
         XCTAssertTrue(stateDir.pollSnapshot(equals: false, timeout: 8) { $0["sidebarVisible"] as? Bool },
                       "hiding should persist sidebarVisible=false")
 
-        // relaunch with the same state dir; the sidebar must restore HIDDEN. The toggle is present either
-        // way (proves the window rendered); the rows stay absent because the sidebar is hidden.
+        // the toggle is present either way, so it only proves the window rendered; the absent rows are
+        // the real signal.
         app.terminate()
         app = XCUIApplication()
         app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
@@ -480,7 +443,6 @@ final class SidebarUITests: XCTestCase {
         XCTAssertFalse(sessionRow().firstMatch.waitForExistence(timeout: 3),
                        "the sidebar should restore hidden (no session rows)")
 
-        // showing it again reveals the restored session and persists sidebarVisible=true.
         toggleAfter.click()
         XCTAssertTrue(sessionRow().firstMatch.waitForExistence(timeout: 8),
                       "the restored session appears when the sidebar is shown again")

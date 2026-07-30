@@ -25,8 +25,7 @@ final class FocusWorkspaceUITests: XCTestCase {
 
     override func setUp() async throws {
         continueAfterFailure = false
-        // hermetic state: a fresh temp dir per test so the app seeds exactly one "workspace 1" + one
-        // session, and we never touch the real workspaces.json.
+        // hermetic state: a fresh temp dir per test, never the real workspaces.json.
         stateDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("agterm-uitest-\(UUID().uuidString)", isDirectory: true)
         app = XCUIApplication()
@@ -39,18 +38,10 @@ final class FocusWorkspaceUITests: XCTestCase {
         if let stateDir { try? FileManager.default.removeItem(at: stateDir) }
     }
 
-    /// End-to-end single-workspace focus (the set-of-one case every pre-set script and muscle memory
-    /// relies on): seed two workspaces (workspace 1 holding the visible session, workspace 2 empty), Focus
-    /// workspace 2 from its row's context menu — the OTHER workspace's row AND its session row leave the AX
-    /// tree while the toggle flips to `on` — then invoke the same item, which now reads "Unfocus", and
-    /// confirm the hidden workspace and its session row return with the toggle back to `off` AND disabled
-    /// (Unfocus clears the set, it does not merely suspend the filter).
-    ///
-    /// Focusing the (empty) other workspace is what makes a *visible* session row (workspace 1's, which is
-    /// expanded because it holds the selection) leave the AX tree — a non-focused workspace's own sessions
-    /// are collapsed, so only the focused-away workspace's rows are reliably observable as disappearing.
+    /// Focusing the (empty) OTHER workspace is what makes a *visible* session row (workspace 1's, which
+    /// is expanded because it holds the selection) leave the AX tree — a non-focused workspace's own
+    /// sessions are collapsed, so only the focused-away workspace's rows observably disappear.
     func testFocusWorkspaceHidesOthersAndUnfocusRestores() throws {
-        // workspace 1: [visible] (seeded, selected, expanded); workspace 2: empty.
         XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
         let defaultName = (sessionRow().value as? String) ?? ""
         XCTAssertFalse(defaultName.isEmpty, "seeded session should expose a default name")
@@ -58,15 +49,11 @@ final class FocusWorkspaceUITests: XCTestCase {
         addWorkspace()
         XCTAssertTrue(workspaceRow(named: "workspace 2").waitForExistence(timeout: 5), "second workspace should appear")
 
-        // unfiltered: the visible session row and both workspace rows are present, and the toggle reads
-        // off + disabled because nothing is marked yet.
         XCTAssertTrue(sessionRow(named: "visible").waitForExistence(timeout: 8), "visible row should exist unfiltered")
         XCTAssertTrue(workspaceRow(named: "workspace 1").waitForExistence(timeout: 5), "workspace 1 row should exist")
         XCTAssertTrue(pollFilterToggle(value: "off", enabled: false, timeout: 8),
                       "with nothing marked the filter toggle should read off and be disabled")
 
-        // Focus workspace 2 via its row's context menu: workspace 1 (row + its visible session row) leaves
-        // the AX tree and the filter reports on.
         invokeWorkspaceMenuItem("Focus", onWorkspace: "workspace 2")
         XCTAssertTrue(sessionRow(named: "visible").waitForNonExistence(timeout: 8),
                       "the other workspace's session row should leave the AX tree while filtered")
@@ -77,8 +64,6 @@ final class FocusWorkspaceUITests: XCTestCase {
         XCTAssertTrue(pollFilterToggle(value: "on", enabled: true, timeout: 8),
                       "focusing a workspace should turn the filter on and enable the toggle")
 
-        // the item's label has flipped to "Unfocus" (the set is exactly this workspace AND the filter is
-        // on); invoking it clears the set, so the hidden workspace + its session row return.
         invokeWorkspaceMenuItem("Unfocus", onWorkspace: "workspace 2")
         XCTAssertTrue(sessionRow(named: "visible").waitForExistence(timeout: 8),
                       "Unfocus should restore the other workspace's session row")
@@ -88,10 +73,8 @@ final class FocusWorkspaceUITests: XCTestCase {
                       "Unfocus CLEARS the set (not just the flag), so the toggle goes back to off AND disabled")
     }
 
-    /// The multi-workspace working set: mark two of three workspaces via the row menu's "Add to Focus" and
-    /// confirm the tree renders exactly those two while the third stays out. This is what the set
-    /// generalization buys over the old one-or-all filter, and it is the only assertion that would catch
-    /// "Add to Focus" being wired to the replace-toggle by mistake (which would leave ONE row visible).
+    /// The only assertion that would catch "Add to Focus" being wired to the replace-toggle by mistake,
+    /// which would leave ONE row visible.
     func testAddToFocusKeepsBothMarkedWorkspacesVisible() throws {
         markFirstTwoOfThreeWorkspaces()
 
@@ -104,15 +87,10 @@ final class FocusWorkspaceUITests: XCTestCase {
         XCTAssertTrue(pollWorkspaceRowCount(2, timeout: 8), "exactly the two marked workspaces should render")
     }
 
-    /// The bottom-bar toggle SUSPENDS the filter without destroying the set: with two workspaces marked,
-    /// one click brings the whole tree back (and the toggle stays ENABLED, since the set is still there),
-    /// and a second click restores exactly the same two rows with nothing re-marked. That survival is the
-    /// point of splitting membership from the on/off flag — the old pill could only clear.
     func testFilterToggleSuspendsAndRestoresTheMarkedSet() throws {
         markFirstTwoOfThreeWorkspaces()
         XCTAssertTrue(pollWorkspaceRowCount(2, timeout: 8), "the filtered tree should start at the two marked workspaces")
 
-        // suspend: the whole tree returns, the toggle reads off but stays ENABLED — the set survives.
         filterToggle().click()
         XCTAssertTrue(pollFilterToggle(value: "off", enabled: true, timeout: 8),
                       "suspending should read off yet stay enabled — the marked set is untouched")
@@ -120,7 +98,6 @@ final class FocusWorkspaceUITests: XCTestCase {
         XCTAssertTrue(workspaceRow(named: "workspace 3").waitForExistence(timeout: 8),
                       "the unmarked workspace should be visible while the filter is suspended")
 
-        // re-enable: the SAME two rows come back with nothing re-marked, proving the set survived.
         filterToggle().click()
         XCTAssertTrue(pollFilterToggle(value: "on", enabled: true, timeout: 8), "re-enabling should read on")
         XCTAssertTrue(pollWorkspaceRowCount(2, timeout: 8), "re-enabling should filter back down to the marked set")
@@ -130,16 +107,8 @@ final class FocusWorkspaceUITests: XCTestCase {
                       "the unmarked workspace should be filtered out again")
     }
 
-    /// The toggle is DISABLED while nothing is marked and enabled once a workspace joins the set — the GUI
-    /// half of the "enabled + empty set is unrepresentable" invariant (the store refuses to enable an empty
-    /// set, so an enabled-but-inert button would misrepresent what a click does). Removing the last member
-    /// puts it back. `isEnabled` and `value` are both accessibility-observable, so this belongs in an e2e
-    /// rather than in the manual checks.
-    ///
-    /// It is also the direct read of the mark-only contract on the two accessibility-observable fields:
     /// "Add to Focus" moves `isEnabled` false → true while `value` stays `off`, so the two must be
-    /// asserted together — a marking add that also flipped `value` to `on` would pass an `isEnabled`-only
-    /// check.
+    /// asserted together — an add that also flipped `value` to `on` would pass an `isEnabled`-only check.
     func testFilterToggleIsDisabledUntilAWorkspaceIsMarked() throws {
         XCTAssertTrue(sessionRow().waitForExistence(timeout: 20), "seeded session should exist")
         let toggle = filterToggle()
@@ -152,8 +121,6 @@ final class FocusWorkspaceUITests: XCTestCase {
         XCTAssertTrue(pollFilterToggle(value: "off", enabled: true, timeout: 8),
                       "marking a workspace should enable the toggle WITHOUT turning the filter on")
 
-        // the item now reads "Remove from Focus"; taking the last member out empties the set, so the
-        // toggle must go back to disabled rather than sit enabled over an empty filter.
         invokeWorkspaceMenuItem("Remove from Focus", onWorkspace: "workspace 1")
         XCTAssertTrue(pollFilterToggle(value: "off", enabled: false, timeout: 8),
                       "removing the last member should empty the set and disable the toggle again")

@@ -3,19 +3,15 @@ import XCTest
 @testable import agterm
 import agtermCore
 
-/// Hosted coverage for the workspace-focus entry points on `AppActions`
-/// (`AppActions+WorkspaceFocus.swift`) — the keyless ones the View menu, the ⌃⇧P palette and the
-/// `focus_workspace` keybind drive, which have no clicked sidebar row and so target the frontmost window's
-/// `AppStore.currentWorkspaceID`, plus the store-scoped workspace-row menu actions — Focus, Add to Focus,
-/// and Delete Workspace (the last from `AppActions.swift`), which must act on the window the clicked row
-/// belongs to. They live in the app-hosted target rather than `agtermUITests`
-/// because they reach `AppActions` directly through `@testable import agterm`, their whole outcome is
-/// MODEL state (the marked set plus the filter flag), and — unlike the XCUITest suite, which CI does not
-/// run — they run on every push via `scripts/test-app.sh`.
+/// Hosted coverage for the workspace-focus entry points on `AppActions` — the keyless View-menu / ⌃⇧P /
+/// `focus_workspace` ones, which have no clicked sidebar row and so target the frontmost window's
+/// `AppStore.currentWorkspaceID`, plus the store-scoped workspace-row menu actions, which must act on the
+/// window the clicked row belongs to. App-hosted rather than `agtermUITests` because the whole outcome is
+/// MODEL state and — unlike the XCUITest suite, which CI does not run — these run on every push via
+/// `scripts/test-app.sh`.
 ///
-/// The store-side semantics (replace-toggle, mark-only, the empty-set refusal) are pinned host-free in
-/// `AppStoreFocusTests`; what is proved HERE is the wiring: which store call each menu entry point makes,
-/// and its guard.
+/// The store-side semantics are pinned host-free in `AppStoreFocusTests`; what is proved HERE is the
+/// wiring: which store call each menu entry point makes, and its guard.
 @MainActor
 final class WorkspaceFocusActionsTests: XCTestCase {
     private var stateDir: URL!
@@ -42,10 +38,8 @@ final class WorkspaceFocusActionsTests: XCTestCase {
         try await super.tearDown()
     }
 
-    // View ▸ Focus Workspace (and the `focus_workspace` keybind / palette entry) zooms to the CURRENT
-    // workspace, and a second invocation — where the item reads "Unfocus Workspace" — clears the set. The
-    // menu's label is driven by `isCurrentWorkspaceSoleFocus`, so it is asserted alongside the state it
-    // describes: a label that disagreed with what the item does is exactly what this pins.
+    // the menu label is driven by `isCurrentWorkspaceSoleFocus`, so it is asserted alongside the state it
+    // describes — a label that disagrees with what the item does is what this pins.
     func testFocusActiveWorkspaceZoomsThenUnfocuses() throws {
         let store = try XCTUnwrap(library.activeStore)
         let current = try XCTUnwrap(store.currentWorkspaceID)
@@ -63,10 +57,8 @@ final class WorkspaceFocusActionsTests: XCTestCase {
         XCTAssertFalse(store.focusEnabled)
     }
 
-    // View ▸ Add Workspace to Focus MARKS the current workspace without applying the filter — the
-    // additive sibling of Focus Workspace, and the entry point that makes a working set buildable from the
-    // menu (a mark that applied would hide the rows still to be marked). Once marked, the item is disabled
-    // (`isCurrentWorkspaceFocusMember`), because a repeat would be a silent no-op.
+    // a mark that applied the filter would hide the rows still to be marked. Once marked the item is
+    // disabled (`isCurrentWorkspaceFocusMember`), because a repeat would be a silent no-op.
     func testAddActiveWorkspaceToFocusMarksWithoutApplyingTheFilter() throws {
         let store = try XCTUnwrap(library.activeStore)
         let first = try XCTUnwrap(store.currentWorkspaceID)
@@ -80,7 +72,6 @@ final class WorkspaceFocusActionsTests: XCTestCase {
         XCTAssertFalse(store.focusEnabled, "marking must never turn the filter on")
         XCTAssertTrue(store.isCurrentWorkspaceFocusMember, "the menu item should now be disabled")
 
-        // move the selection to the first workspace and mark it too: the set WIDENS, it is not replaced.
         let firstSession = try XCTUnwrap(store.workspaces.first { $0.id == first }?.sessions.first)
         store.selectSession(firstSession.id)
         actions.addActiveWorkspaceToFocus()
@@ -90,9 +81,7 @@ final class WorkspaceFocusActionsTests: XCTestCase {
         XCTAssertEqual(session.id, store.workspaces.first { $0.id == second.id }?.sessions.first?.id)
     }
 
-    // View ▸ Clear Focus empties the WHOLE marked set (and with it the filter) — distinct from Toggle
-    // Workspace Filter, which keeps the set and only stops applying it. The menu/palette item is the only
-    // driver of `clearFocus()`, so it has no accessibility-observable e2e.
+    // the menu/palette item is the only driver of `clearFocus()`, so it has no accessibility-observable e2e.
     func testClearFocusEmptiesTheWholeSet() throws {
         let store = try XCTUnwrap(library.activeStore)
         let first = try XCTUnwrap(store.currentWorkspaceID)
@@ -108,8 +97,7 @@ final class WorkspaceFocusActionsTests: XCTestCase {
         XCTAssertEqual(store.visibleWorkspaces.count, store.workspaces.count, "the whole tree should be back")
     }
 
-    // Toggle Workspace Filter suspends and re-applies WITHOUT touching the set — the menu twin of the
-    // bottom-bar grid button, and the reason Clear Focus is a separate item.
+    // the menu twin of the bottom-bar grid button — and the reason Clear Focus is a separate item.
     func testToggleFocusFilterKeepsTheMarkedSet() throws {
         let store = try XCTUnwrap(library.activeStore)
         let current = try XCTUnwrap(store.currentWorkspaceID)
@@ -125,8 +113,7 @@ final class WorkspaceFocusActionsTests: XCTestCase {
         XCTAssertEqual(store.focusedWorkspaceIDs, [current])
     }
 
-    // The empty-set state the store refuses to enable: the toggle is a no-op there (which is why the
-    // bottom-bar button renders disabled), and Clear Focus has nothing to clear.
+    // the store refuses to enable an empty set — which is why the bottom-bar button renders disabled.
     func testFilterEntryPointsAreNoOpsWithNothingMarked() throws {
         let store = try XCTUnwrap(library.activeStore)
 
@@ -136,9 +123,8 @@ final class WorkspaceFocusActionsTests: XCTestCase {
         XCTAssertTrue(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled)
     }
 
-    // The sidebar row menu's "Focus"/"Unfocus" is STORE-SCOPED: the clicked row belongs to one window, and
-    // a right-click opens the menu WITHOUT raising a background window, so routing through the frontmost
-    // store would read the row's own store (which built the label) and write another window's marked set.
+    // a right-click opens the row menu WITHOUT raising a background window, so routing through the
+    // frontmost store would read the row's own store and write another window's marked set.
     func testRowFocusTargetsItsOwnStoreNotTheFrontmostOne() throws {
         let (frontStore, otherStore) = try twoWindows()
         let clicked = try XCTUnwrap(otherStore.currentWorkspaceID)
@@ -156,10 +142,8 @@ final class WorkspaceFocusActionsTests: XCTestCase {
         XCTAssertFalse(otherStore.focusEnabled)
     }
 
-    // "Delete Workspace" carries the same routing requirement as the two focus items above: the row's
-    // enabled state comes from its own store's `canRemoveWorkspace`, so a background window's row must
-    // delete the workspace it was opened over. Routed through the frontmost store the id is absent, the
-    // lookup returns nil, and the item silently does nothing — no deletion, no error, no feedback.
+    // same routing requirement: routed through the frontmost store the id is absent, the lookup returns
+    // nil, and the item silently does nothing — no deletion, no error, no feedback.
     func testRowDeleteWorkspaceTargetsItsOwnStoreNotTheFrontmostOne() throws {
         let (frontStore, otherStore) = try twoWindows()
         let frontWorkspaces = frontStore.workspaces.map(\.id)
@@ -173,9 +157,8 @@ final class WorkspaceFocusActionsTests: XCTestCase {
         XCTAssertEqual(frontStore.workspaces.map(\.id), frontWorkspaces, "the frontmost window must not be mutated")
     }
 
-    // "Add to Focus"/"Remove from Focus" carries the same routing requirement, and additionally computes
-    // its own direction from the row's store — read and write must land on the SAME window, or the menu
-    // flips a membership it never read.
+    // this one also computes its own direction from the row's store — read and write must land on the
+    // SAME window, or the menu flips a membership it never read.
     func testRowMembershipTargetsItsOwnStoreNotTheFrontmostOne() throws {
         let (frontStore, otherStore) = try twoWindows()
         let clicked = try XCTUnwrap(otherStore.currentWorkspaceID)

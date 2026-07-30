@@ -56,7 +56,6 @@ final class PaletteUITests: XCTestCase {
         XCTAssertTrue(poll { self.firstSessionName() == "zeta" })
         let first = try XCTUnwrap(firstSessionID())
 
-        // add a second session; it becomes selected.
         app.menuBars.menuBarItems["File"].click()
         app.menuItems["New Session"].click()
         XCTAssertTrue(poll { self.sessionCount() == 2 }, "a second session should be added")
@@ -69,16 +68,13 @@ final class PaletteUITests: XCTestCase {
     }
 
     func testThemePickerCommitsOnEnterAndRevertsOnEsc() throws {
-        // commit: open the picker, filter to a non-default theme, Enter persists it to settings.json
-        // (the live color change is a Metal-surface visual, verified manually; the persistence is the
-        // observable contract here). "Dracula" differs from the seeded agterm default, so it proves a change.
+        // the live recolor is a Metal-surface visual, so settings.json is the oracle; "Dracula" differs
+        // from the seeded agterm default, so persisting it proves a change.
         openThemePicker()
         typeIntoPalette("Dracula")
         app.typeKey(.return, modifierFlags: [])
         XCTAssertTrue(poll { self.settingsTheme() == "Dracula" }, "Enter on a theme should persist it to settings.json")
 
-        // revert: open again, filter to a different theme (which previews it live), Esc. The preview is
-        // never persisted, so settings.json keeps the previously committed theme.
         openThemePicker()
         typeIntoPalette("Nord")
         app.typeKey(.escape, modifierFlags: [])
@@ -87,16 +83,14 @@ final class PaletteUITests: XCTestCase {
     }
 
     func testThemePickerAutoFocusesFieldFromActionPaletteLauncher() throws {
-        // open the picker the way a keyboard user does: the action palette → "Select Theme…" → Enter.
-        // that path closes the action palette (whose close-restore re-grabs terminal focus) and opens the
-        // .themes picker a tick later; the picker must AUTO-FOCUS its field so typing filters it.
+        // the action-palette launcher closes that palette (whose close-restore re-grabs terminal focus)
+        // and opens the picker a tick later, so the picker has to auto-focus its own field.
         openPalette("Command Palette")
         typeIntoPalette("Select Theme") // clicking the ACTION-palette field is fine — not the focus under test
         app.typeKey(.return, modifierFlags: [])
 
-        // the picker is open; type WITHOUT clicking its field. If focus stayed on the terminal behind it
-        // (the bug), this text would reach the shell, the selection would stay on the current theme, and
-        // Enter would commit the wrong one — so the commit assertion is the focus oracle.
+        // typing WITHOUT clicking the field is the point: had focus stayed on the terminal behind it, the
+        // text would reach the shell and Enter would commit the unfiltered theme, so the commit is the oracle.
         XCTAssertTrue(app.textFields.firstMatch.waitForExistence(timeout: 5), "the theme picker field should appear")
         app.typeText("agterm")
         app.typeKey(.return, modifierFlags: [])
@@ -105,17 +99,15 @@ final class PaletteUITests: XCTestCase {
     }
 
     func testFreshLaunchAppliesAgtermDefaultThemeWithoutAnyChange() throws {
-        // a fresh install must apply the seeded agterm default at LAUNCH, not only after a settings change
-        // triggers a config rewrite. SettingsModel.init writes the ghostty config before GhosttyApp boots,
-        // so <stateDir>/ghostty-settings.conf carries the theme with NO interaction.
+        // SettingsModel.init writes the ghostty config before GhosttyApp boots, so the theme must be in
+        // <stateDir>/ghostty-settings.conf with NO interaction at all.
         XCTAssertTrue(poll { self.appliedGhosttyTheme()?.contains("agterm") == true },
                       "a fresh launch should write the agterm default into the live ghostty config")
     }
 
     func testThemePickerPreviewsTopMatchOnFilterWithoutNavigating() throws {
-        // typing to filter must preview the new top match live — even with no arrow navigation. The live
-        // preview writes the applied theme into <stateDir>/ghostty-settings.conf, so that file is the
-        // oracle (the Metal recolor itself isn't observable). No Enter, no arrows.
+        // the Metal recolor isn't observable, so the applied theme in <stateDir>/ghostty-settings.conf is
+        // the oracle. No Enter, no arrows.
         openThemePicker()
         typeIntoPalette("Hot Dog") // top match: the vivid "Hot Dog Stand" theme
         XCTAssertTrue(poll { self.appliedGhosttyTheme()?.contains("Hot Dog Stand") == true },

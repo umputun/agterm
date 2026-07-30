@@ -55,15 +55,15 @@ final class AppStoreRestoreTests {
 
         store.setRestoreCommand(nil, pane: .left, forSession: session.id)
         #expect(session.restoreCommand == nil)
-        #expect(session.splitRestoreCommand == "tail -f /var/log/x") // clearing one pane leaves the other
+        #expect(session.splitRestoreCommand == "tail -f /var/log/x")
 
         store.setRestoreCommand(nil, pane: .right, forSession: session.id)
         #expect(session.splitRestoreCommand == nil)
     }
 
     @Test func setRestoreCommandStoresTheEmptyPinnedToNothingValue() {
-        // "" is a real override (a plain shell, suppressing the capture and initialCommand) and must not
-        // collapse to nil, which would mean "no override" and let the auto-capture restore instead.
+        // "" is a real override (a plain shell); collapsing it to nil would mean "no override" and let the
+        // auto-capture restore instead.
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
@@ -75,8 +75,8 @@ final class AppStoreRestoreTests {
     }
 
     @Test func setRestoreCommandNeverPopulatesThePendingSlots() {
-        // the whole safety property: a write during this run must not execute during this run. Only an
-        // app-bootstrap restore arms the pending slots the surface factories consume.
+        // a write during this run must not execute during this run — only an app-bootstrap restore arms
+        // the pending slots the surface factories consume.
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
@@ -86,14 +86,11 @@ final class AppStoreRestoreTests {
 
         #expect(session.pendingRestoreCommand == nil)
         #expect(session.pendingSplitRestoreCommand == nil)
-        // and the factory-facing read stays empty, so nothing can fire this launch
         #expect(session.takePendingRestoreOverride(pane: .left) == nil)
         #expect(session.takePendingRestoreOverride(pane: .right) == nil)
     }
 
     @Test func setRestoreCommandDoesNotDisarmAnAlreadyArmedPayload() {
-        // a rewrite mid-launch (a hook firing on every session start) must not cancel the override the
-        // bootstrap already armed, nor swap in the new value — the pending payload is frozen at bootstrap.
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
@@ -116,8 +113,7 @@ final class AppStoreRestoreTests {
     }
 
     @Test func setRestoreCommandPersistsImmediately() throws {
-        // the eager save is a stated requirement: a hook's write has to survive a SIGKILL, which never
-        // runs the quit-time flush. The reported outcome is the write, not the memory mutation.
+        // a hook's write has to survive a SIGKILL, which never runs the quit-time flush — hence the eager save.
         let store = makePersistedStore()
         let ws = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
@@ -129,9 +125,8 @@ final class AppStoreRestoreTests {
     }
 
     @Test func setRestoreCommandRollsBackAndReportsAFailedWrite() throws {
-        // clearing is the dangerous case: acking a clear whose write never landed would leave the OLD
-        // shell line re-typed on every launch while the user believes it is gone. So the failure is
-        // reported AND the in-memory value goes back to what is still on disk.
+        // acking a clear whose write never landed would re-type the OLD shell line on every launch, so the
+        // failure is reported AND the in-memory value goes back to what is still on disk.
         let store = makeUnwritableStore()
         let ws = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
@@ -140,15 +135,12 @@ final class AppStoreRestoreTests {
         #expect(!store.setRestoreCommand(nil, pane: .left, forSession: session.id))
         #expect(session.restoreCommand == "claude --resume abc")
 
-        // a replacement that fails leaves the old command armed too, not the half-applied new one
         #expect(!store.setRestoreCommand("claude --resume def", pane: .left, forSession: session.id))
         #expect(session.restoreCommand == "claude --resume abc")
     }
 
     @Test func setRestoreCommandRetriesTheSameRequestAfterAFailedWrite() throws {
-        // the rollback is what keeps the retry possible: without it memory would already hold the
-        // requested value and the unchanged-value guard would swallow the repeat as a no-op success.
-        // A blocking FILE rather than the /dev/null idiom above, because this case needs the disk to
+        // a blocking FILE rather than the /dev/null idiom above, because this case needs the disk to
         // RECOVER between the two calls — deleting the blocker makes the same path writable.
         let blocker = directory.appendingPathComponent("blocker")
         try Data().write(to: blocker)
@@ -159,7 +151,7 @@ final class AppStoreRestoreTests {
         session.restoreCommand = "claude --resume abc"
         #expect(!store.setRestoreCommand(nil, pane: .left, forSession: session.id))
 
-        try FileManager.default.removeItem(at: blocker) // the disk recovers
+        try FileManager.default.removeItem(at: blocker)
 
         #expect(store.setRestoreCommand(nil, pane: .left, forSession: session.id))
         #expect(session.restoreCommand == nil)
@@ -169,8 +161,7 @@ final class AppStoreRestoreTests {
     }
 
     @Test func setRestoreCommandSkipsTheSaveWhenUnchanged() throws {
-        // idempotent like setFlag: re-pinning the same value writes nothing. Proven by deleting the
-        // persisted file and asserting the repeat call does not recreate it.
+        // deleting the persisted file is the oracle: a skipped save never recreates it.
         let store = makePersistedStore()
         let ws = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
@@ -179,10 +170,10 @@ final class AppStoreRestoreTests {
         try FileManager.default.removeItem(at: fileURL)
 
         store.setRestoreCommand("claude --resume abc", pane: .left, forSession: session.id)
-        #expect(!FileManager.default.fileExists(atPath: fileURL.path)) // unchanged → no save
+        #expect(!FileManager.default.fileExists(atPath: fileURL.path))
 
         store.setRestoreCommand("claude --resume def", pane: .left, forSession: session.id)
-        #expect(FileManager.default.fileExists(atPath: fileURL.path)) // a real change saves again
+        #expect(FileManager.default.fileExists(atPath: fileURL.path))
     }
 
     @Test func setRestoreCommandSkipsTheSaveWhenClearingAnAlreadyClearPane() throws {
@@ -192,13 +183,13 @@ final class AppStoreRestoreTests {
         store.setRestoreCommand("claude --resume abc", pane: .left, forSession: session.id)
         try FileManager.default.removeItem(at: fileURL)
 
-        store.setRestoreCommand(nil, pane: .right, forSession: session.id) // never pinned
+        store.setRestoreCommand(nil, pane: .right, forSession: session.id)
         #expect(!FileManager.default.fileExists(atPath: fileURL.path))
         #expect(session.splitRestoreCommand == nil)
     }
 
     @Test func setRestoreCommandIgnoresTheScratchPane() {
-        // the scratch terminal is never restored; the command layer rejects it, and the store is a no-op.
+        // the scratch terminal is never restored, so there is no slot to pin.
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
@@ -209,8 +200,8 @@ final class AppStoreRestoreTests {
     }
 
     @Test func softClosedSessionUndoneWithinGraceHasNothingPending() throws {
-        // undo reinserts the SAME object, so a payload armed at bootstrap and never consumed would
-        // otherwise survive the round trip and fire when the restored session's surface is built.
+        // undo reinserts the SAME object, so an unconsumed payload would otherwise survive the round trip
+        // and fire when the restored session's surface is built.
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
@@ -224,10 +215,9 @@ final class AppStoreRestoreTests {
         #expect(store.undoPendingClose(closeID))
 
         let restored = try #require(store.session(withID: session.id))
-        #expect(restored === session) // the same live object came back
+        #expect(restored === session)
         #expect(restored.pendingRestoreCommand == nil)
         #expect(restored.pendingSplitRestoreCommand == nil)
-        // the persisted pin is untouched, so the next launch still fires it
         #expect(restored.restoreCommand == "claude --resume abc")
         #expect(restored.splitRestoreCommand == "tail -f /var/log/x")
     }

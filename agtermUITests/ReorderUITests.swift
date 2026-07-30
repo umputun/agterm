@@ -11,8 +11,8 @@ final class ReorderUITests: XCTestCase {
 
     override func setUp() async throws {
         continueAfterFailure = false
-        // hermetic state: a fresh temp dir per test so the app seeds exactly one
-        // "workspace 1" + one session, and we never touch the real workspaces.json.
+        // a fresh temp dir per test seeds exactly one "workspace 1" + one session and keeps the real
+        // workspaces.json untouched.
         stateDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("agterm-uitest-\(UUID().uuidString)", isDirectory: true)
         app = XCUIApplication()
@@ -25,10 +25,8 @@ final class ReorderUITests: XCTestCase {
         if let stateDir { try? FileManager.default.removeItem(at: stateDir) }
     }
 
-    // Drag a session UP onto a higher sibling and confirm the persisted order changed through the
-    // full sidebar drop path (validateDrop → acceptDrop → moveSessions). Three sessions are seeded with
-    // aaa/bbb/ccc custom names so the persisted order is an unambiguous oracle. Dropping ccc ON
-    // aaa's row inserts ccc just after aaa: [aaa, bbb, ccc] → [aaa, ccc, bbb].
+    // the aaa/bbb/ccc custom names make the persisted order an unambiguous oracle; dropping ON a row
+    // inserts just AFTER it, so ccc onto aaa gives [aaa, ccc, bbb].
     func testReorderSessionUp() throws {
         try relaunchWithSessions(["aaa", "bbb", "ccc"])
         dragRow(named: "ccc", onto: "aaa")
@@ -36,10 +34,8 @@ final class ReorderUITests: XCTestCase {
                       "dragging ccc up onto aaa should reorder to [aaa, ccc, bbb]")
     }
 
-    // Drag a session DOWN onto a lower sibling. Dropping bbb ON ccc's row inserts bbb just after
-    // ccc: [aaa, bbb, ccc] → [aaa, ccc, bbb]. The downward path exercises the same-workspace
-    // `childIndex - 1` post-removal adjustment in `acceptDrop` (sourceIndex 1 < dropChildIndex 3)
-    // that the up-move does not.
+    // the downward path exercises the same-workspace `childIndex - 1` post-removal adjustment in
+    // `acceptDrop` (sourceIndex 1 < dropChildIndex 3) that the up-move does not.
     func testReorderSessionDown() throws {
         try relaunchWithSessions(["aaa", "bbb", "ccc"])
         dragRow(named: "bbb", onto: "ccc")
@@ -47,11 +43,8 @@ final class ReorderUITests: XCTestCase {
                       "dragging bbb down onto ccc should reorder to [aaa, ccc, bbb]")
     }
 
-    // Drag a session DOWN onto a MIDDLE row (not the last). With four sessions [aaa, bbb, ccc, ddd],
-    // dragging aaa onto ccc's row inserts aaa just after ccc → [bbb, ccc, aaa, ddd]. This discriminates
-    // the same-workspace downward `childIndex - 1` post-removal adjustment: WITH it the session lands at
-    // index 2 ([bbb, ccc, aaa, ddd]); WITHOUT it the append-clamp would push it to the END
-    // ([bbb, ccc, ddd, aaa]) — the two outcomes differ only because the drop is NOT onto the last row.
+    // the drop must NOT be onto the last row, or the two outcomes coincide: with the `childIndex - 1`
+    // post-removal adjustment aaa lands at index 2, without it the append-clamp pushes it to the END.
     func testReorderSessionDownPastMiddle() throws {
         try relaunchWithSessions(["aaa", "bbb", "ccc", "ddd"])
         dragRow(named: "aaa", onto: "ccc")
@@ -59,10 +52,8 @@ final class ReorderUITests: XCTestCase {
                       "dragging aaa down onto the middle row ccc should land it between ccc and ddd")
     }
 
-    // Shift-click creates a range, Command-click toggles one row out, and right-clicking inside the
-    // remaining multi-selection must keep it for batch context-menu actions. Right-clicking outside the
-    // selection should narrow to that clicked row. The oracle is the persisted flag state because AppKit's
-    // transient outline multi-selection is not serialized.
+    // the oracle is the persisted flag state because AppKit's transient outline multi-selection is not
+    // serialized.
     func testMultiSelectContextMenuKeepsAndNarrowsSelection() throws {
         try relaunchWithSessions(["aaa", "bbb", "ccc", "ddd"])
 
@@ -85,9 +76,7 @@ final class ReorderUITests: XCTestCase {
                       "outside right-click should flag only the clicked row")
     }
 
-    // Dragging from any selected row should move the whole selected block, not just the row under the
-    // pointer. Dropping bbb/ccc onto ddd inserts the block after ddd:
-    // [aaa, bbb, ccc, ddd, eee] -> [aaa, ddd, bbb, ccc, eee].
+    // the block inserts after ddd, so [aaa, bbb, ccc, ddd, eee] -> [aaa, ddd, bbb, ccc, eee].
     func testDragSelectedSessionsMovesBlock() throws {
         try relaunchWithSessions(["aaa", "bbb", "ccc", "ddd", "eee"])
         sessionRow(named: "bbb").click()
@@ -98,8 +87,6 @@ final class ReorderUITests: XCTestCase {
                       "dragging a selected block onto ddd should move bbb+ccc together after ddd")
     }
 
-    // The primary batch-drag workflow is cross-workspace: the AppKit pasteboard must carry every selected
-    // id, resolve the destination row's owning workspace, and persist the ordered block there.
     func testDragSelectedSessionsAcrossWorkspacesMovesBlock() throws {
         try relaunchWithWorkspaces([
             (name: "one", sessions: ["aaa", "bbb"]),
@@ -120,8 +107,7 @@ final class ReorderUITests: XCTestCase {
         ], timeout: 10), "the selected block should move after ccc in workspace two")
     }
 
-    // Confirmation is normally bypassed in XCUITests. This test opts in narrowly and verifies the exact
-    // batch-close regression: one alert names the selected count, and Cancel leaves every session intact.
+    // XCUITest launches suppress the close modal; `confirmClose: true` opts this one test back into it.
     func testMultiSessionCloseRequiresOneConfirmation() throws {
         try relaunchWithWorkspaces([
             (name: "workspace 1", sessions: ["aaa", "bbb", "ccc"]),
@@ -143,10 +129,6 @@ final class ReorderUITests: XCTestCase {
                       "cancelling the batch confirmation must leave every session open")
     }
 
-    // Drag a workspace UP above a higher sibling and confirm the persisted order changed through the
-    // full sidebar drop path (validateDrop → acceptDrop → moveWorkspace). Three workspaces are created
-    // (workspace 1/2/3). Dropping "workspace 3" near the TOP edge of "workspace 1" lands a top-level
-    // between-rows drop above it: [workspace 1, workspace 2, workspace 3] → [workspace 3, workspace 1, workspace 2].
     func testReorderWorkspace() throws {
         seedThreeWorkspaces()
         dragWorkspaceRow(named: "workspace 3", toTopOf: "workspace 1")
@@ -154,14 +136,10 @@ final class ReorderUITests: XCTestCase {
                       "dragging workspace 3 above workspace 1 should reorder to [workspace 3, workspace 1, workspace 2]")
     }
 
-    // Drop a workspace onto a SESSION row that belongs to another workspace — the realistic case the
-    // edge-sliver test misses. With workspaces expanded (each holding sessions, like the real app), the
-    // space between workspace rows is filled with session rows, so a dragged workspace lands ON a session
-    // (or workspace) row, which AppKit proposes as `item != nil`. The original `guard item == nil` rejected
-    // every such drop (the reported "can't drag workspaces" bug). Dropping workspace 3 onto workspace 1's
-    // session row reorders it just after its owning workspace: [w1, w2, w3] → [w1, w3, w2].
+    // with workspaces expanded their session rows fill the space between workspace rows, so a dragged
+    // workspace lands ON a row, which AppKit proposes as `item != nil` rather than a root between-rows slot.
     func testReorderWorkspaceOntoSessionRow() throws {
-        seedThreeWorkspaces() // workspace 1 keeps the seeded session; 2 and 3 are empty
+        seedThreeWorkspaces()
         dragWorkspaceOntoSessionRow(named: "workspace 3")
         XCTAssertTrue(pollWorkspaceNames(["workspace 1", "workspace 3", "workspace 2"], timeout: 10),
                       "dropping workspace 3 onto workspace 1's session row should land it after workspace 1 → [w1, w3, w2]")
@@ -258,7 +236,6 @@ final class ReorderUITests: XCTestCase {
         from.click()
         RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         let start = from.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
-        // the top sliver of the target → NSOutlineView proposes a drop above it at the top level.
         let end = to.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.05))
         start.click(forDuration: 0.7, thenDragTo: end, withVelocity: 180, thenHoldForDuration: 0.25)
     }
@@ -295,8 +272,7 @@ final class ReorderUITests: XCTestCase {
         let to = sessionRow(named: target)
         XCTAssertTrue(from.waitForHittable(timeout: 10), "\(source) row should be hittable to drag")
         XCTAssertTrue(to.waitForHittable(timeout: 10), "\(target) row should be hittable as a drop target")
-        // select the source row first: the outline only begins a drag from the selected row, so an
-        // unselected source (e.g. a middle row that wasn't the last one touched) never starts a drag.
+        // the outline only begins a drag from the SELECTED row, so an unselected source never starts one.
         from.click()
         RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         let start = from.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))

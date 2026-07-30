@@ -60,10 +60,9 @@ private enum OpenCodeStatusHookSupport {
     }
 }
 
-// Exercises the OpenCode plugin shipped by the Help-menu installer. Event-to-status mapping and
-// wrapper spawning belong to this installed plugin, not to agterm's runtime status engine.
-// Drives the plugin through Node (same host OpenCode uses) with AGTERM_STATUS_WRAPPER recording argv.
-// Skipped when node is absent or below the module-syntax floor — the app does not need Node at runtime.
+// Exercises the OpenCode plugin shipped by the Help-menu installer: event-to-status mapping and wrapper
+// spawning belong to the installed plugin, not to agterm's runtime status engine. Drives it through Node
+// (the host OpenCode uses) with AGTERM_STATUS_WRAPPER recording argv; skipped when Node is absent.
 @Suite(.enabled(if: OpenCodeStatusHookSupport.node != nil,
                 "Node.js 22.7+ (or 20.19+ on the 20.x line) is required to exercise the OpenCode status plugin"))
 struct OpenCodeStatusHookTests {
@@ -300,10 +299,9 @@ struct OpenCodeStatusHookTests {
     }
 
     @Test func subagentIdleDoesNotCompleteWhileParentIsActive() throws {
-        // Task tool creates a child session with its own busy/idle; parent stays busy until the tool
-        // returns. COMPLETED must wait until the active set is empty (set-wide gate). The permission
-        // between the two idles is the oracle: a gate that completed on the child's idle would place
-        // completed BEFORE blocked instead of after it.
+        // Task tool creates a child session with its own busy/idle while the parent stays busy. The
+        // permission between the two idles is the oracle: a gate that completed on the child's idle
+        // would place completed BEFORE blocked instead of after it.
         let calls = try runEvents([
             status("busy", sessionID: "ses_parent"),
             status("busy", sessionID: "ses_child"),
@@ -320,8 +318,6 @@ struct OpenCodeStatusHookTests {
     }
 
     @Test func interleavedTopLevelSessionsCompleteOnlyWhenAllIdle() throws {
-        // Different interleaving: ses_a idles, then goes busy again while ses_b is still running, so
-        // the set empties only on the very last idle.
         let calls = try runEvents([
             status("busy", sessionID: "ses_a"),
             status("busy", sessionID: "ses_b"),
@@ -339,9 +335,8 @@ struct OpenCodeStatusHookTests {
     }
 
     @Test func siblingIdleDoesNotCompleteOverAnotherSessionsError() throws {
-        // halt() publishes session.error and then that session's own idle, while a sibling is still
-        // running. The error latch must outlive the swallowed idle, or the sibling's idle finds an
-        // empty active set and paints completed over the blocked.
+        // halt() publishes session.error then that session's own idle while a sibling still runs: the
+        // latch must outlive the swallowed idle, or the sibling's idle paints completed over blocked.
         let calls = try runEvents([
             status("busy", sessionID: "ses_a"),
             status("busy", sessionID: "ses_b"),

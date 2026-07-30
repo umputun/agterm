@@ -30,8 +30,8 @@ import Testing
         #expect(close.overridden == true)
     }
 
-    // a keyless action must still appear, so the listing is the whole action set rather than only the
-    // bound subset — a caller checking "what is free" needs the gaps.
+    // the listing is the whole action set, not the bound subset — a caller checking "what is free"
+    // needs the gaps.
     @Test func keylessActionsAppearWithNoChord() throws {
         let payload = ControlKeymap.project(keymap: Keymap(builtinOverrides: [:], commands: []),
                                             diagnostics: [], path: "/tmp/keymap.conf")
@@ -44,9 +44,7 @@ import Testing
         }
     }
 
-    // a redundant `map cmd+w close_session` parses fine and leaves the action on its shipped default.
-    // `overridden` compares CHORDS, not "is there a map line", so it does not claim a difference the
-    // caller cannot see anywhere else.
+    // `overridden` compares CHORDS, not "is there a map line".
     @Test func mappingAnActionToItsOwnDefaultIsNotAnOverride() throws {
         let parsed = parseKeymap("map cmd+w close_session\n")
         try #require(parsed.diagnostics.isEmpty, "an identity map is a clean line")
@@ -58,8 +56,6 @@ import Testing
         #expect(close.overridden == nil, "the action is still on its default, so nothing was overridden")
     }
 
-    // the mirror: mapping a keyless action gives it a chord it never had, which IS a difference from its
-    // (absent) default and must be marked.
     @Test func mappingAKeylessActionCountsAsAnOverride() throws {
         let keyless = try #require(BuiltinAction.allCases.first { $0.defaultChord == nil })
         let keymap = Keymap(builtinOverrides: [keyless: Chord(mods: [.command], key: "y")], commands: [])
@@ -101,8 +97,8 @@ import Testing
         #expect(payload.menu == nil)
     }
 
-    // the whole point of the command: the model can say cmd+w while the menu carries it elsewhere, and
-    // both halves have to survive the wire for a caller to see that.
+    // the model can say cmd+w while the menu carries it elsewhere; both halves must survive the wire
+    // for a caller to see that.
     @Test func roundTripsWithDivergingModelAndMenuChords() throws {
         let keymap = Keymap(builtinOverrides: [.closeSession: Chord(mods: [.command], key: "e")], commands: [])
         let menu = [ControlKeymapMenuItem(menu: "File", title: "Close", chord: "cmd+w", selector: "performClose:")]

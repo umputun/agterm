@@ -22,7 +22,7 @@ struct WatermarkConfigTests {
         #expect(text.contains("background-image-fit = contain\n"))
         #expect(text.contains("background-image-position = center\n"))
         #expect(text.contains("background-image-repeat = false\n"))
-        // no opacity line when unset (ghostty's 1.0 default applies).
+        // unset means no line at all — ghostty's own 1.0 default applies.
         #expect(!text.contains("background-image-opacity"))
     }
 
@@ -43,7 +43,7 @@ struct WatermarkConfigTests {
     }
 
     @Test func missingResolvedPathDropsImageKeysButKeepsZoom() {
-        // a `.text` watermark whose PNG failed to render: no image keys, but zoom is preserved.
+        // a nil resolved path is a `.text` watermark whose PNG failed to render.
         let watermark = BackgroundWatermark(kind: .text, text: "x")
         let text = WatermarkConfig.overlayText(watermark: watermark, resolvedImagePath: nil, fontSize: 14)
         #expect(!text.contains("background-image"))
@@ -51,10 +51,8 @@ struct WatermarkConfigTests {
     }
 
     @Test func overlayDropsImageForControlCharPath() {
-        // defense-in-depth on the restore path: a persisted spec whose path carries a control char (only
-        // reachable by hand-editing workspaces.json) must NOT inject a ghostty key. The image lines are
-        // dropped entirely; the font-size line still emits. fit/position are enums now, so only the path
-        // is free text and needs this guard.
+        // defense-in-depth on the restore path: a control char in the path is only reachable by hand-editing
+        // workspaces.json, and fit/position are enums, so the path is the one free-text field to guard.
         let poisoned = "/tmp/x.png\nclipboard-read = allow"
         let watermark = BackgroundWatermark(kind: .image, imagePath: poisoned)
         let text = WatermarkConfig.overlayText(watermark: watermark, resolvedImagePath: poisoned, fontSize: 14)
@@ -67,13 +65,13 @@ struct WatermarkConfigTests {
         let watermark = BackgroundWatermark(kind: .color, colorHex: "#ff0000")
         let text = WatermarkConfig.overlayText(watermark: watermark, resolvedImagePath: nil, fontSize: nil)
         #expect(text.contains("background = #ff0000\n"))
-        #expect(text.contains("background-opacity = 1\n"))   // default windowOpacity = solid
-        #expect(!text.contains("background-image"))          // a solid color emits no image keys
+        #expect(text.contains("background-opacity = 1\n"))   // the default windowOpacity is solid
+        #expect(!text.contains("background-image"))
     }
 
     @Test func colorOverlayHonorsWindowTranslucency() {
-        // a solid color is drawn at the window translucency (Settings), not a per-call opacity, so the
-        // window blur shows through when translucency is on. font zoom is preserved alongside.
+        // a solid color is drawn at the Settings window translucency, not a per-call opacity, so the window
+        // blur shows through.
         let watermark = BackgroundWatermark(kind: .color, colorHex: "#00ff88")
         let text = WatermarkConfig.overlayText(watermark: watermark, resolvedImagePath: nil, fontSize: 15, windowOpacity: 0.8)
         #expect(text.contains("background = #00ff88\n"))
@@ -82,8 +80,8 @@ struct WatermarkConfigTests {
     }
 
     @Test func colorOverlayClampsWindowOpacity() {
-        // windowOpacity traces back to a persisted, hand-editable AppSettings value, so a bad one must not
-        // emit nan/inf or an out-of-range opacity into the config: >1 clamps to 1, <0 to 0, non-finite to 1.
+        // windowOpacity traces back to a persisted, hand-editable AppSettings value, so nan/inf and
+        // out-of-range values reach this call.
         let watermark = BackgroundWatermark(kind: .color, colorHex: "#ff0000")
         func overlay(_ windowOpacity: Double) -> String {
             WatermarkConfig.overlayText(watermark: watermark, resolvedImagePath: nil, fontSize: nil, windowOpacity: windowOpacity)
@@ -95,8 +93,7 @@ struct WatermarkConfigTests {
     }
 
     @Test func colorOverlayDropsMalformedHex() {
-        // defense-in-depth on the restore path: a persisted `.color` spec with a malformed hex (only
-        // reachable by hand-editing workspaces.json) must NOT emit a `background` line; font-size still emits.
+        // a malformed persisted hex is only reachable by hand-editing workspaces.json.
         let watermark = BackgroundWatermark(kind: .color, colorHex: "not-a-color")
         let text = WatermarkConfig.overlayText(watermark: watermark, resolvedImagePath: nil, fontSize: 14)
         #expect(!text.contains("background ="))
@@ -146,28 +143,26 @@ struct WatermarkConfigTests {
     }
 
     @Test func legacySnapshotWithoutWatermarkDecodes() throws {
-        // a snapshot written before the field existed (no `backgroundWatermark` key) decodes as nil.
         let raw = #"{"id":"\#(UUID().uuidString)","cwd":"/tmp"}"#
         let decoded = try JSONDecoder().decode(SessionSnapshot.self, from: Data(raw.utf8))
         #expect(decoded.backgroundWatermark == nil)
     }
 
     @Test(arguments: [
-        #"{"kind":"text","text":"X","fit":"bogus"}"#,      // unknown fit (e.g. a downgrade / hand-edit typo)
-        #"{"kind":"text","text":"X","position":"middle"}"#, // unknown position
-        #"{"kind":"hologram","text":"X"}"#,                 // unknown kind
+        #"{"kind":"text","text":"X","fit":"bogus"}"#,
+        #"{"kind":"text","text":"X","position":"middle"}"#,
+        #"{"kind":"hologram","text":"X"}"#,
     ])
     func invalidWatermarkDecodesLossilyWithoutWipingTheSession(_ badWatermark: String) throws {
-        // a present-but-invalid watermark must NOT throw DataCorrupted and fail the whole SessionSnapshot
-        // (which would make PersistenceStore.load start fresh and wipe every workspace/session). It drops
-        // to nil while the rest of the session decodes intact.
+        // a DataCorrupted throw would fail the whole SessionSnapshot, making PersistenceStore.load start
+        // fresh and wipe every workspace/session.
         let id = UUID()
         let raw = #"{"id":"\#(id.uuidString)","cwd":"/tmp","customName":"keep","backgroundWatermark":\#(badWatermark)}"#
         let decoded = try JSONDecoder().decode(SessionSnapshot.self, from: Data(raw.utf8))
-        #expect(decoded.id == id)                    // the session survives the bad watermark
+        #expect(decoded.id == id)
         #expect(decoded.cwd == "/tmp")
         #expect(decoded.customName == "keep")
-        #expect(decoded.backgroundWatermark == nil)  // the invalid spec dropped to nil, not a throw
+        #expect(decoded.backgroundWatermark == nil)
     }
 
     @Test(arguments: [0.0, 0.15, 0.5, 1.0])
@@ -194,8 +189,8 @@ struct WatermarkConfigTests {
 
     @Test(arguments: ["/tmp/bg.png", "/Users/me/My Pictures/x.png", "relative/path.png", "/tmp/日本語.png", ""])
     func imagePathWithoutControlCharsAccepted(_ path: String) {
-        // spaces + unicode are fine (the path rides a raw, whole-line-remainder config value); emptiness is
-        // a separate boundary check, so "" passes the control-char gate.
+        // the path rides a raw whole-line-remainder config value, so spaces and unicode are fine; emptiness
+        // is a separate boundary check, so "" passes this gate.
         #expect(WatermarkConfig.isValidImagePath(path))
     }
 

@@ -2,10 +2,8 @@ import Foundation
 import Testing
 
 // Tests the shipped hook wrapper `agterm/Resources/agent-status/agterm-agent-status.sh` by running it
-// with a stub `agtermctl` that records its argv. The two bugs that shipped and broke the live hooks —
-// `--socket` placed BEFORE the subcommand (agtermctl rejected every call) and stdout leaking into the
-// prompt (UserPromptSubmit injects a hook's stdout) — had no test. This is that test. It reaches the
-// app target's resource on purpose: the wrapper is the shell half of the agtermCore agent-status model.
+// with a stub `agtermctl` that records its argv. It reaches the app target's resource on purpose: the
+// wrapper is the shell half of the agtermCore agent-status model.
 struct AgentStatusWrapperTests {
     // the shipped wrapper, located relative to this test source file (fixed repo layout).
     private static var wrapper: String {
@@ -77,59 +75,53 @@ struct AgentStatusWrapperTests {
     }
 
     @Test func noOpOutsideAgterm() throws {
-        // no AGTERM_SESSION_ID: must exit 0 and never call agtermctl (no recorded argv)
         let r = try runWrapper(["active"], env: [:])
         #expect(r.argv.isEmpty)
         #expect(r.exit == 0)
     }
 
     @Test func suppressesStdoutSoItCannotPolluteThePrompt() throws {
-        // agtermctl prints "ok"; the wrapper must swallow it (UserPromptSubmit injects hook stdout)
+        // UserPromptSubmit injects a hook's stdout, so the wrapper must swallow agtermctl's "ok"
         let r = try runWrapper(["active"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_SOCKET": "/tmp/s.sock"], stubStdout: "ok")
         #expect(r.stdout.isEmpty)
     }
 
     @Test func alwaysExitsZeroEvenWhenAgtermctlFails() throws {
-        // a status hook must never block the turn, so a non-zero agtermctl still yields wrapper exit 0
         let r = try runWrapper(["active"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_SOCKET": "/tmp/s.sock"], stubExit: 64)
         #expect(r.exit == 0)
     }
 
     @Test func paneForwardedWhenAgtermPaneSet() throws {
-        // the app injects AGTERM_PANE per surface; the wrapper splices `--pane <value>` before "$@"
+        // the app injects AGTERM_PANE per surface
         let r = try runWrapper(["blocked"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_SOCKET": "/tmp/s.sock", "AGTERM_PANE": "right"])
         #expect(r.argv == ["session", "status", "blocked", "--target", "sid", "--socket", "/tmp/s.sock", "--pane", "right"])
         #expect(r.exit == 0)
     }
 
     @Test func paneForwardedWithoutSocket() throws {
-        // no socket branch also carries the pane, right after --target
         let r = try runWrapper(["blocked"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_PANE": "scratch"])
         #expect(r.argv == ["session", "status", "blocked", "--target", "sid", "--pane", "scratch"])
     }
 
     @Test func paneSplicedBeforeExtraArgs() throws {
-        // --pane comes before the forwarded "$@" (e.g. --blink), never after
         let r = try runWrapper(["blocked", "--blink"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_SOCKET": "/tmp/s.sock", "AGTERM_PANE": "right"])
         #expect(r.argv == ["session", "status", "blocked", "--target", "sid", "--socket", "/tmp/s.sock", "--pane", "right", "--blink"])
     }
 
     @Test func paneOmittedWhenAgtermPaneUnset() throws {
-        // no AGTERM_PANE: no --pane flag at all
         let r = try runWrapper(["active"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_SOCKET": "/tmp/s.sock"])
         #expect(!r.argv.contains("--pane"))
     }
 
     @Test func paneNoOpWithoutSessionID() throws {
-        // AGTERM_PANE set but no AGTERM_SESSION_ID: still a no-op, exit 0, no call
         let r = try runWrapper(["active"], env: ["AGTERM_PANE": "right"])
         #expect(r.argv.isEmpty)
         #expect(r.exit == 0)
     }
 
     @Test func paneIDForwardedWithRole() throws {
-        // the app injects AGTERM_PANE_ID (stable surface token) alongside AGTERM_PANE (role); the wrapper
-        // forwards both, --pane then --pane-id, so the app can resolve the live slot from the token (#199).
+        // AGTERM_PANE_ID is a stable per-surface token beside AGTERM_PANE's role, so the app can
+        // resolve the live slot even when the baked role went stale (#199).
         let r = try runWrapper(["blocked"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_SOCKET": "/tmp/s.sock",
                                                   "AGTERM_PANE": "right", "AGTERM_PANE_ID": "agent-tok"])
         #expect(r.argv == ["session", "status", "blocked", "--target", "sid", "--socket", "/tmp/s.sock",
@@ -137,7 +129,6 @@ struct AgentStatusWrapperTests {
     }
 
     @Test func paneIDSplicedBeforeExtraArgs() throws {
-        // both discriminators come before the forwarded "$@" (e.g. --blink), never after
         let r = try runWrapper(["blocked", "--blink"], env: ["AGTERM_SESSION_ID": "sid",
                                                              "AGTERM_PANE": "right", "AGTERM_PANE_ID": "agent-tok"])
         #expect(r.argv == ["session", "status", "blocked", "--target", "sid",
@@ -145,13 +136,11 @@ struct AgentStatusWrapperTests {
     }
 
     @Test func paneIDForwardedWithoutRole() throws {
-        // defensively, a token with no role still forwards --pane-id alone (no --pane)
         let r = try runWrapper(["blocked"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_PANE_ID": "agent-tok"])
         #expect(r.argv == ["session", "status", "blocked", "--target", "sid", "--pane-id", "agent-tok"])
     }
 
     @Test func paneIDOmittedWhenUnset() throws {
-        // AGTERM_PANE set but no AGTERM_PANE_ID: no --pane-id flag
         let r = try runWrapper(["active"], env: ["AGTERM_SESSION_ID": "sid", "AGTERM_PANE": "right"])
         #expect(!r.argv.contains("--pane-id"))
     }

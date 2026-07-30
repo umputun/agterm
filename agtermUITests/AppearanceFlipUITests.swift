@@ -22,8 +22,8 @@ final class AppearanceFlipUITests: ControlAPITestCase {
         XCTAssertEqual(start["ok"] as? Bool, true, "debug.appearance should be accepted under a UI-test launch: \(start)")
         XCTAssertEqual((start["result"] as? [String: Any])?["text"] as? String, "light")
 
-        // follow the system appearance with both slots set — the flip precondition. This settings
-        // apply() reloads and records the light side as the last-applied one.
+        // both slots set plus syncing on is the flip precondition; this apply() records light as the
+        // last-applied side.
         let synced = try sendCommand(#"{"cmd":"theme.set","args":{"light":"Builtin Light","dark":"Builtin Dark"}}"#)
         XCTAssertEqual(synced["ok"] as? Bool, true, "theme.set --light --dark should succeed: \(synced)")
 
@@ -35,9 +35,8 @@ final class AppearanceFlipUITests: ControlAPITestCase {
         }
         var zoomed = try XCTUnwrap(pollFirstSessionFontSize(timeout: 8),
                                    "zooming should persist a per-session fontSize override")
-        // the per-session save is debounced (~0.3s), so under load the three increments can persist in
-        // steps; wait until two reads 0.5s apart agree so `zoomed` is the SETTLED override, not an
-        // intermediate one (which would make the steady-state assertion below fail spuriously).
+        // the per-session save is debounced (~0.3s), so the three increments can persist in steps; wait
+        // until two reads 0.5s apart agree, else the steady-state assertion below fails spuriously.
         let settleDeadline = Date().addingTimeInterval(8)
         while Date() < settleDeadline {
             usleep(500_000)
@@ -46,19 +45,13 @@ final class AppearanceFlipUITests: ControlAPITestCase {
             if let current { zoomed = current }
         }
 
-        // flip to dark: the response echoing the applied side proves the appearance change reached the
-        // app — which drives the debounced flip reload (the seam posts .agtermSystemAppearanceChanged,
-        // the same notification the production KVO observer posts).
         let flipped = try sendCommand(#"{"cmd":"debug.appearance","args":{"name":"dark"}}"#)
         XCTAssertEqual(flipped["ok"] as? Bool, true, "the flip should be accepted: \(flipped)")
         XCTAssertEqual((flipped["result"] as? [String: Any])?["text"] as? String, "dark")
 
-        // the persisted override must hold STEADY through the flip reload (debounced ~0.05s). The old
-        // behavior routed the flip through the zoom-CLEARING reload, which nils the persisted override
-        // — the surface's own size report then re-persists it ~0.4s later (update_config does not reset
-        // the runtime zoom on the current libghostty pin), so a single settled read would miss the
-        // wipe. Sampling continuously catches that nil blip: it IS the regression (a quit inside the
-        // window loses the zoom, and closed windows' snapshots are stripped for good).
+        // the zoom-CLEARING reload nils the persisted override and the surface's own size report
+        // re-persists it ~0.4s later (update_config does not reset the runtime zoom on the current
+        // libghostty pin), so a single settled read would miss the wipe — sampling catches the nil blip.
         let sampleDeadline = Date().addingTimeInterval(2.5)
         while Date() < sampleDeadline {
             let sampled = try XCTUnwrap(firstSessionFontSize(),
@@ -82,29 +75,19 @@ final class AppearanceFlipUITests: ControlAPITestCase {
         XCTAssertEqual(applied, "dark", "the flip must drive the config reload (last-applied side)")
     }
 
-    /// Regression: committing after a mid-preview appearance flip must NOT persist a value that was only
-    /// ever browsed into the off-screen slot. Open the picker in light while following, preview a theme
-    /// (writes the light slot), flip to dark, preview a DIFFERENT theme (writes the dark slot), Enter. Only
-    /// the dark slot — active at Enter-time — may commit; the light slot must revert to its pre-preview
-    /// value. The commit-side twin of the Esc-revert flip-safety the pair snapshot already covers.
     func testCommitAfterMidPreviewFlipDoesNotLeakUnconfirmedSlot() throws {
-        // pin a known starting side + a following pair with known slots.
         XCTAssertEqual(try sendCommand(#"{"cmd":"debug.appearance","args":{"name":"light"}}"#)["ok"] as? Bool, true)
         let synced = try sendCommand(#"{"cmd":"theme.set","args":{"light":"Builtin Light","dark":"Builtin Dark"}}"#)
         XCTAssertEqual(synced["ok"] as? Bool, true, "theme.set --light --dark should succeed: \(synced)")
 
-        // browse a theme in LIGHT mode: previews it into the light slot without committing.
         openThemePicker()
         previewInPalette("Dracula")
 
-        // flip to dark mid-preview (socket-driven, the picker stays open), then browse a DIFFERENT theme,
-        // which previews into the dark slot. Enter commits.
+        // the flip is socket-driven, so the picker stays open.
         XCTAssertEqual(try sendCommand(#"{"cmd":"debug.appearance","args":{"name":"dark"}}"#)["ok"] as? Bool, true)
         previewInPalette("Hot Dog", clearFirst: true) // top match: "Hot Dog Stand"
         app.typeKey(.return, modifierFlags: [])
 
-        // the dark slot (active at Enter) commits its preview; the light slot must be the pre-preview
-        // original, NOT the browsed-but-unconfirmed "Dracula". Poll until the commit lands.
         var light: String?
         var dark: String?
         let deadline = Date().addingTimeInterval(8)

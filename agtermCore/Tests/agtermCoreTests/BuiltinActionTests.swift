@@ -10,7 +10,6 @@ struct BuiltinActionTests {
     }
 
     @Test func rawNamesAreTheKittyStyleNames() {
-        // spot-check the documented raw names so a rename can't drift silently.
         #expect(BuiltinAction.newWindow.rawValue == "new_window")
         #expect(BuiltinAction.toggleSplit.rawValue == "toggle_split")
         #expect(BuiltinAction.toggleTerminalZoom.rawValue == "toggle_terminal_zoom")
@@ -56,9 +55,8 @@ struct BuiltinActionTests {
     }
 
     @Test func everyShippedDefaultRoundTripsExceptTheDocumentedPlusKey() {
-        // a default that can't round-trip renders as "(not expressible)" in the starter file and can't be
-        // re-typed by the user. increase_font_size's ⌘+ is the ONE documented exception (`+` is the chord
-        // joiner); anything else appearing here is a bug in the new default, not a new exception.
+        // a default that can't round-trip renders as "(not expressible)" in the starter file. ⌘+ is the
+        // ONE documented exception (`+` is the chord joiner); anything else here is a bug in that default.
         let notExpressible = BuiltinAction.allCases.filter { action in
             guard let chord = action.defaultChord else { return false }
             return parseKeybind(chord.displayString) != [chord]
@@ -84,7 +82,7 @@ struct BuiltinActionTests {
             .newSession: Chord(mods: [.command], key: "n"),
             .openDirectory: Chord(mods: [.command], key: "o"),
             .renameSession: nil,
-            .duplicateSession: nil,  // keyless — gains a key only when the user maps one
+            .duplicateSession: nil,
             .closeSession: Chord(mods: [.command], key: "w"),
             .reopenRecent: Chord(mods: [.command, .shift], key: "t"),
             .undoClose: Chord(mods: [.command], key: "z"),
@@ -98,11 +96,11 @@ struct BuiltinActionTests {
             .toggleSearch: Chord(mods: [.command], key: "f"),
             .toggleSidebar: Chord(mods: [.command, .control], key: "s"),
             .toggleFullscreen: Chord(mods: [.command, .control], key: "f"),
-            .selectTheme: nil,      // keyless — gains a key only when the user maps one
-            .toggleFlaggedView: nil, // keyless — gains a key only when the user maps one
-            .toggleWorkspaceFilter: nil, // keyless — gains a key only when the user maps one
+            .selectTheme: nil,
+            .toggleFlaggedView: nil,
+            .toggleWorkspaceFilter: nil,
             .toggleFlag: Chord(mods: [.command, .shift], key: "f"),
-            .focusWorkspace: nil,   // keyless — gains a key only when the user maps one
+            .focusWorkspace: nil,
             .focusLeftPane: Chord(mods: [.command, .option], key: "left"),
             .focusRightPane: Chord(mods: [.command, .option], key: "right"),
             .previousSession: Chord(mods: [.command, .option], key: "up"),
@@ -118,7 +116,6 @@ struct BuiltinActionTests {
             .showAttention: Chord(mods: [.control, .shift], key: "i"),
             .dashboard: Chord(mods: [.command, .shift], key: "d"),
         ]
-        // the table must cover every case so a new action can't be added without a documented default.
         #expect(expected.count == BuiltinAction.allCases.count)
         for action in BuiltinAction.allCases {
             #expect(expected[action] == action.defaultChord, "default chord mismatch for \(action.rawValue)")
@@ -128,8 +125,6 @@ struct BuiltinActionTests {
     @Test func toggleSearchDefaultIsCmdFAndRoundTrips() {
         let chord = Chord(mods: [.command], key: "f")
         #expect(BuiltinAction.toggleSearch.defaultChord == chord)
-        // the chord must round-trip through the keymap grammar so the starter renders it as `cmd+f`,
-        // not `(not expressible)` (the same check chordSyntax runs app-side).
         #expect(chord.displayString == "cmd+f")
         #expect(parseKeybind(chord.displayString) == [chord])
     }
@@ -137,21 +132,18 @@ struct BuiltinActionTests {
     @Test func toggleSidebarDefaultIsCmdCtrlSAndRoundTrips() {
         let chord = Chord(mods: [.command, .control], key: "s")
         #expect(BuiltinAction.toggleSidebar.defaultChord == chord)
-        // must round-trip through the keymap grammar (so the starter renders it, not "(not expressible)").
         #expect(parseKeybind(chord.displayString) == [chord])
     }
 
     @Test func toggleFullscreenDefaultIsCmdCtrlFAndRoundTrips() {
         let chord = Chord(mods: [.command, .control], key: "f")
         #expect(BuiltinAction.toggleFullscreen.defaultChord == chord)
-        // must round-trip through the keymap grammar (so the starter renders it, not "(not expressible)").
         #expect(parseKeybind(chord.displayString) == [chord])
     }
 
     @Test func customCommandPaletteDefaultIsCtrlShiftOAndRoundTrips() {
         let chord = Chord(mods: [.control, .shift], key: "o")
         #expect(BuiltinAction.customCommandPalette.defaultChord == chord)
-        // must round-trip through the keymap grammar (so the starter renders it, not "(not expressible)").
         #expect(chord.displayString == "ctrl+shift+o")
         #expect(parseKeybind(chord.displayString) == [chord])
     }
@@ -159,7 +151,6 @@ struct BuiltinActionTests {
     @Test func toggleFlagDefaultIsCmdShiftFAndRoundTrips() {
         let chord = Chord(mods: [.command, .shift], key: "f")
         #expect(BuiltinAction.toggleFlag.defaultChord == chord)
-        // must round-trip through the keymap grammar (so the starter renders it, not "(not expressible)").
         #expect(chord.displayString == "cmd+shift+f")
         #expect(parseKeybind(chord.displayString) == [chord])
     }
@@ -173,7 +164,6 @@ struct BuiltinActionTests {
         let override = Chord(mods: [.command, .shift], key: "g")
         #expect(keymap.builtinOverrides == [.toggleWorkspaceFilter: override])
         #expect(keymap.equivalent(for: .toggleWorkspaceFilter) == override)
-        // unmapped it shows no shortcut anywhere (menu, palette hint, tooltip).
         #expect(Keymap(builtinOverrides: [:], commands: []).glyphHint(for: .toggleWorkspaceFilter) == nil)
     }
 
@@ -186,7 +176,6 @@ struct BuiltinActionTests {
         for action in keyless {
             #expect(action.defaultChord == nil, "expected nil default for \(action.rawValue)")
         }
-        // nothing else is keyless — every remaining action ships a chord.
         #expect(BuiltinAction.allCases.filter { $0.defaultChord == nil } == BuiltinAction.allCases.filter { keyless.contains($0) })
     }
 }

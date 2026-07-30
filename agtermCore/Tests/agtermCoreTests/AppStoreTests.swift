@@ -18,7 +18,7 @@ struct AppStoreTests {
         #expect(!store.sidebarVisible)
         store.setSidebarVisible(true)
         #expect(store.sidebarVisible)
-        store.setSidebarVisible(true) // unchanged: clean no-op
+        store.setSidebarVisible(true)
         #expect(store.sidebarVisible)
     }
 
@@ -34,13 +34,10 @@ struct AppStoreTests {
         #expect(store.currentWorkspaceID == nil)
         let work = store.addWorkspace(name: "work")
         let personal = store.addWorkspace(name: "personal")
-        // no selection -> last workspace.
         #expect(store.currentWorkspaceID == personal.id)
-        // a selected session pins its owning workspace.
         let session = try! #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
         store.selectSession(session.id)
         #expect(store.currentWorkspaceID == work.id)
-        // deselecting falls back to the last workspace again.
         store.selectSession(nil)
         #expect(store.currentWorkspaceID == personal.id)
     }
@@ -69,8 +66,7 @@ struct AppStoreTests {
         let ws = store.addWorkspace(name: "work")
         let first = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
         #expect(store.selectedSessionID == first.id)
-        // a background add (control `session.new --no-select`) appends the session but keeps the current
-        // selection and recency, so `active` still points at the first session.
+        // the control `session.new --no-select` path: appended, but selection and recency untouched
         let background = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/b", select: false))
         #expect(store.workspaces[0].sessions.map(\.id) == [first.id, background.id])
         #expect(store.selectedSessionID == first.id)
@@ -83,7 +79,6 @@ struct AppStoreTests {
         let ws = store.addWorkspace(name: "work")
         let withCmd = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/tmp", command: "ssh host"))
         #expect(withCmd.initialCommand == "ssh host")
-        // default is nil — a plain session runs the login shell.
         let plain = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/tmp"))
         #expect(plain.initialCommand == nil)
     }
@@ -107,7 +102,6 @@ struct AppStoreTests {
         // blank/whitespace name clears to nil, leaving the auto basename (matches renameSession).
         let blank = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/tmp", name: "  "))
         #expect(blank.customName == nil)
-        // default is nil — no custom name.
         let plain = try! #require(store.addSession(toWorkspace: ws.id, cwd: "/tmp"))
         #expect(plain.customName == nil)
     }
@@ -133,17 +127,13 @@ struct AppStoreTests {
         let store = makeStore()
         let existing = store.addWorkspace(name: "servers")
         let before = store.workspaces.count
-        // reuse: the same name returns the existing workspace, no new one appended.
         #expect(store.ensureWorkspace(named: "servers")?.id == existing.id)
         #expect(store.workspaces.count == before)
-        // create: a new name appends exactly one workspace, trimmed.
         let created = try! #require(store.ensureWorkspace(named: "  fresh  "))
         #expect(created.name == "fresh")
         #expect(store.workspaces.count == before + 1)
-        // idempotent: ensuring the just-created name again reuses it.
         #expect(store.ensureWorkspace(named: "fresh")?.id == created.id)
         #expect(store.workspaces.count == before + 1)
-        // a blank name creates nothing.
         #expect(store.ensureWorkspace(named: "   ") == nil)
         #expect(store.workspaces.count == before + 1)
     }
@@ -175,8 +165,8 @@ struct AppStoreTests {
         a.unseenCount = 3
         b.unseenCount = 2
         store.selectSession(a.id)
-        #expect(a.unseenCount == 0) // selecting a session clears its own badge
-        #expect(b.unseenCount == 2) // other sessions are untouched
+        #expect(a.unseenCount == 0)
+        #expect(b.unseenCount == 2)
     }
 
     @Test func clearUnseenResetsCountAndIgnoresUnknownID() {
@@ -190,8 +180,7 @@ struct AppStoreTests {
     }
 
     @Test func clearUnseenDoesNotChangeSelection() {
-        // the focus-free invariant behind session.seen: clearing a NON-selected session's badge must
-        // leave the selection put (markSessionSeen calls clearUnseen and nothing else).
+        // the focus-free invariant behind session.seen: markSessionSeen calls clearUnseen and nothing else
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
@@ -199,8 +188,8 @@ struct AppStoreTests {
         a.unseenCount = 3
         store.selectSession(b.id)
         store.clearUnseen(a.id)
-        #expect(store.selectedSessionID == b.id) // focus-free: selecting is untouched
-        #expect(a.unseenCount == 0)              // the target's badge is cleared
+        #expect(store.selectedSessionID == b.id)
+        #expect(a.unseenCount == 0)
     }
 
     @Test func setAgentIndicatorSetsFieldOnRightSession() {
@@ -210,7 +199,7 @@ struct AppStoreTests {
         let b = store.addSession(toWorkspace: ws.id, cwd: "/b")!
         store.setAgentIndicator(AgentIndicator(status: .active, blink: true), forSession: a.id)
         #expect(a.agentIndicator == AgentIndicator(status: .active, blink: true))
-        #expect(b.agentIndicator == AgentIndicator()) // other sessions are untouched
+        #expect(b.agentIndicator == AgentIndicator())
     }
 
     @Test func setAgentIndicatorUnknownSessionIsNoop() {
@@ -218,17 +207,17 @@ struct AppStoreTests {
         let ws = store.addWorkspace(name: "work")
         let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: UUID()) // unknown id: no crash
-        #expect(a.agentIndicator == AgentIndicator()) // existing session untouched
+        #expect(a.agentIndicator == AgentIndicator())
     }
 
     @Test func setAgentIndicatorStampsStatusChangedAtOnNonIdle() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
-        #expect(a.statusChangedAt == nil) // a fresh session has no stamp
+        #expect(a.statusChangedAt == nil)
         let before = Date()
         store.setAgentIndicator(AgentIndicator(status: .active), forSession: a.id)
-        let stamp = try! #require(a.statusChangedAt) // a non-idle status stamps the change time
+        let stamp = try! #require(a.statusChangedAt)
         #expect(stamp >= before)
     }
 
@@ -238,7 +227,7 @@ struct AppStoreTests {
         let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: a.id)
         #expect(a.statusChangedAt != nil)
-        store.setAgentIndicator(AgentIndicator(), forSession: a.id) // back to idle clears the stamp
+        store.setAgentIndicator(AgentIndicator(), forSession: a.id)
         #expect(a.statusChangedAt == nil)
     }
 
@@ -261,7 +250,6 @@ struct AppStoreTests {
         #expect(session.statusChangedAt != nil)
         let restored = makeStore()
         restored.restore(from: store.snapshot())
-        // the stamp is ephemeral like the indicator: a restored session falls back to nil.
         #expect(restored.workspaces[0].sessions[0].statusChangedAt == nil)
     }
 
@@ -272,7 +260,6 @@ struct AppStoreTests {
         store.setAgentIndicator(AgentIndicator(status: .completed, blink: true), forSession: session.id)
         let restored = makeStore()
         restored.restore(from: store.snapshot())
-        // the indicator is ephemeral: a restored session falls back to the default idle state.
         #expect(restored.workspaces[0].sessions[0].agentIndicator == AgentIndicator())
     }
 
@@ -282,10 +269,10 @@ struct AppStoreTests {
         let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         let b = store.addSession(toWorkspace: ws.id, cwd: "/b")!
         store.setAgentIndicator(AgentIndicator(status: .active), forSession: a.id) // autoReset defaults false
-        store.selectSession(a.id) // a non-auto-reset indicator survives a visit (keep-state)
+        store.selectSession(a.id)
         #expect(a.agentIndicator == AgentIndicator(status: .active))
         store.selectSession(b.id)
-        #expect(a.agentIndicator == AgentIndicator(status: .active)) // still set after switching away
+        #expect(a.agentIndicator == AgentIndicator(status: .active))
     }
 
     @Test func selectSessionResetsAutoResetIndicator() {
@@ -306,7 +293,7 @@ struct AppStoreTests {
         let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         let b = store.addSession(toWorkspace: ws.id, cwd: "/b")!
         store.setAgentIndicator(AgentIndicator(status: .completed, autoReset: true), forSession: a.id)
-        store.selectSession(b.id) // selecting a different session leaves a background indicator alone
+        store.selectSession(b.id)
         #expect(a.agentIndicator == AgentIndicator(status: .completed, autoReset: true))
     }
 
@@ -319,10 +306,9 @@ struct AppStoreTests {
         // the agent finishes WHILE a is the selected session, so no visit fires and its completed flash lingers
         store.setAgentIndicator(AgentIndicator(status: .completed, autoReset: true), forSession: a.id)
         #expect(a.agentIndicator == AgentIndicator(status: .completed, autoReset: true))
-        // switching away from a clears its one-time completed flash (it must not persist on the row you left)
         store.selectSession(b.id)
         #expect(a.agentIndicator == AgentIndicator())
-        #expect(b.agentIndicator == AgentIndicator()) // and b (the one moved to) carries nothing
+        #expect(b.agentIndicator == AgentIndicator())
     }
 
     @Test func workspaceForSessionDerivesOwner() {
@@ -500,8 +486,7 @@ struct AppStoreTests {
 
     @Test func softCloseSessionsAdjustsReselectionForEarlierBatchRemovals() throws {
         // the index adjustment feeds the POSITIONAL fallback, which only runs when the scoped recency is
-        // empty, so drive it through a restore: nothing has been activated but the restored selection, and
-        // once that is the session being closed the fallback is the only thing left to pick with.
+        // empty — hence the restore: nothing is activated but the selection that is then closed.
         let store = makeStore()
         let wsID = UUID()
         let ids = [UUID(), UUID(), UUID(), UUID()]
@@ -609,11 +594,9 @@ struct AppStoreTests {
         session.surface = surface
 
         #expect(store.softCloseSession(session.id, grace: 0.01))
-        // poll for the scheduled finalize rather than racing one fixed sleep. the suites run in parallel, so
-        // the 10 ms grace timer can land well past a flat 30 ms window under load (reproduced: ~1 run in 6).
-        // poll the TEARDOWN, not `session(withID:)`: softCloseSession removes the session from its workspace
-        // synchronously and only defers the teardown to the timer, so a session-lookup poll exits immediately
-        // and proves nothing. bounded at ~1 s, so a finalize that never fires fails the expectations below.
+        // the suites run in parallel, so the 10 ms grace timer can land well past a flat 30 ms sleep
+        // (reproduced: ~1 run in 6). poll the TEARDOWN, not `session(withID:)`: the session is removed
+        // synchronously and only the teardown deferred, so a lookup poll exits at once and proves nothing.
         for _ in 0..<200 {
             if surface.teardownCount == 1 { break }
             try await Task.sleep(nanoseconds: 5_000_000)
@@ -716,7 +699,6 @@ struct AppStoreTests {
         let workspaceClose = try #require(store.pendingCloseSummary?.id)
 
         #expect(store.undoPendingClose(sessionClose))
-        // the shell is seeded from the still-pending workspace record, not the stale session record
         let shell = try #require(store.workspaces.first { $0.id == doomed.id })
         #expect(shell.name == "renamed")
         #expect(shell.isExpanded == false)
@@ -740,7 +722,6 @@ struct AppStoreTests {
         let workspaceClose = try #require(store.pendingCloseSummary?.id)
 
         #expect(store.undoPendingClose(sessionClose))
-        // edits to the rebuilt shell are newer than the pending record and must survive the merge
         store.renameWorkspace(doomed.id, to: "new")
         store.setWorkspaceExpanded(doomed.id, expanded: false)
         #expect(store.undoPendingClose(workspaceClose))
@@ -778,8 +759,7 @@ struct AppStoreTests {
         #expect(Set(restored.sessions.map(\.id)) == Set([first.id, second.id]))
         #expect(restored.sessions.count == 2)
         #expect(store.selectedSessionID == second.id)
-        // the reopened session is rebuilt from its snapshot, so it is a fresh object; the merged-in
-        // one is the live object the pending record held
+        // the reopened session is a fresh object rebuilt from its snapshot; the merged-in one is live
         #expect(restored.sessions.contains { $0 === second })
         #expect(restored.sessions.allSatisfy { $0 !== first })
     }
@@ -819,13 +799,11 @@ struct AppStoreTests {
         // rebuilds. a disjoint snapshot would merge cleanly even without the live-session filter.
         let workspaceSnapshot = store.workspaceSnapshot(try #require(store.workspaces.first { $0.id == doomed.id }))
 
-        // both closes finalize, so only the recent snapshots remain
         #expect(store.softCloseSession(first.id, grace: 60))
         store.finalizePendingClose(try #require(store.pendingCloseSummary?.id))
         #expect(store.softRemoveWorkspace(doomed.id, grace: 60))
         store.finalizePendingClose(try #require(store.pendingCloseSummary?.id))
 
-        // reopening the session rebuilds the workspace as a shell holding only that session
         let recentSession = RecentClosedItem(
             kind: .session, title: "a", subtitle: "doomed",
             session: RecentClosedSession(workspaceID: doomed.id, workspaceName: "doomed",
@@ -833,7 +811,6 @@ struct AppStoreTests {
         )
         #expect(store.restoreRecentClosed(recentSession))
 
-        // reopening the workspace must bring back the session the shell doesn't hold
         let recentWorkspace = RecentClosedItem(
             kind: .workspace, title: "doomed", subtitle: "2 sessions",
             workspace: RecentClosedWorkspace(snapshot: workspaceSnapshot, selectedSessionID: second.id)
@@ -874,8 +851,7 @@ struct AppStoreTests {
         let rebuiltFirst = try #require(store.workspaces.first { $0.id == doomed.id }?.sessions.first)
         #expect(store.softCloseSession(rebuiltFirst.id, grace: 60))
 
-        // the pending session close matches the workspace's recent entry, but undoing it restores only
-        // `first`. the workspace restore must still rebuild `second`, which nothing else holds.
+        // the pending close would restore only `first`; the workspace restore must still rebuild `second`
         let recentWorkspace = RecentClosedItem(
             kind: .workspace, title: "doomed", subtitle: "2 sessions",
             workspace: RecentClosedWorkspace(snapshot: workspaceSnapshot, selectedSessionID: second.id)
@@ -898,8 +874,7 @@ struct AppStoreTests {
         first.surface = firstSurface
         let workspaceSnapshot = store.workspaceSnapshot(try #require(store.workspaces.first { $0.id == doomed.id }))
 
-        // both sessions are held by their own pending close, so neither is live when the workspace's
-        // recent entry is reopened
+        // both sessions are held by their own pending close, so neither is live at the reopen
         #expect(store.softCloseSession(first.id, grace: 60))
         let firstClose = try #require(store.pendingCloseSummary?.id)
         #expect(store.softCloseSession(second.id, grace: 60))
@@ -930,9 +905,8 @@ struct AppStoreTests {
         let first = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/a"))
         let second = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/b"))
 
-        // close `first`, then the workspace holding `second`, then undo `first` so it lands in a rebuilt
-        // shell. closing that shell must not leave a second pending record sharing the workspace id:
-        // both would key one Open Recent entry, and the newer snapshot evicts the older one's sessions.
+        // two pending records must never share a workspace id: both would key one Open Recent entry, and
+        // the newer snapshot evicts the older one's sessions.
         #expect(store.softCloseSession(first.id, grace: 60))
         let sessionClose = try #require(store.pendingCloseSummary?.id)
         #expect(store.softRemoveWorkspace(doomed.id, grace: 60))
@@ -994,7 +968,6 @@ struct AppStoreTests {
                                        workspace: RecentClosedWorkspace(snapshot: staleSnapshot, selectedSessionID: moved.id))
         _ = store.restoreRecentClosed(recentW)
 
-        // reopening W must not resurrect V, and must not rebuild `moved` beside the original V still holds
         #expect(store.workspaces.contains { $0.id == wsV.id } == false)
         #expect(store.pendingCloseRecords.count == 1)
         #expect(store.workspaces.flatMap(\.sessions).count { $0.id == moved.id } == 0)
@@ -1021,7 +994,6 @@ struct AppStoreTests {
         _ = store.restoreRecentClosed(recentW)
         #expect(store.pendingCloseRecords[vClose] != nil)
 
-        // undoing V returns the original `moved`; the rebuilt W must not have made a second one
         #expect(store.undoPendingClose(vClose))
         #expect(store.workspaces.flatMap(\.sessions).count { $0.id == moved.id } == 1)
         #expect(store.workspaces.flatMap(\.sessions).contains { $0 === moved })
@@ -1155,7 +1127,7 @@ struct AppStoreTests {
         let b = store.addSession(toWorkspace: ws.id, cwd: "/b")!
         #expect(store.sessionRecency.items == [b.id, a.id]) // b selected last
         store.selectSession(a.id)
-        #expect(store.sessionRecency.items == [a.id, b.id]) // a now front, b is the previous
+        #expect(store.sessionRecency.items == [a.id, b.id])
         #expect(store.sessionRecency.items[1] == b.id)
     }
 
@@ -1179,8 +1151,8 @@ struct AppStoreTests {
         store.selectSession(a.id)
         store.selectSession(c.id)
         store.selectSession(b.id)
-        #expect(store.recentSessions(limit: 9) == [b.id, c.id, a.id]) // fewer than the limit → all, mru first
-        #expect(store.recentSessions(limit: 2) == [b.id, c.id]) // limit clamps the count
+        #expect(store.recentSessions(limit: 9) == [b.id, c.id, a.id])
+        #expect(store.recentSessions(limit: 2) == [b.id, c.id])
     }
 
     @Test func recentSessionsSpansWorkspacesAndSkipsClosed() {
@@ -1191,7 +1163,7 @@ struct AppStoreTests {
         let b = store.addSession(toWorkspace: personal.id, cwd: "/b")!
         store.selectSession(a.id)
         store.selectSession(b.id)
-        #expect(store.recentSessions(limit: 9) == [b.id, a.id]) // recency spans every workspace
+        #expect(store.recentSessions(limit: 9) == [b.id, a.id])
         store.closeSession(b.id) // closed sessions are pruned from recency, so they drop out
         #expect(store.recentSessions(limit: 9) == [a.id])
     }
@@ -1223,7 +1195,7 @@ struct AppStoreTests {
         #expect(session.fontSize == nil)
         store.setFontSize(session.id, 16)
         #expect(session.fontSize == 16)
-        store.setFontSize(session.id, 16) // unchanged: no-op, value unchanged
+        store.setFontSize(session.id, 16)
         #expect(session.fontSize == 16)
         store.setFontSize(session.id, 13)
         #expect(session.fontSize == 13)
@@ -1258,7 +1230,7 @@ struct AppStoreTests {
         _ = store.addSession(toWorkspace: ws.id, cwd: "/b")!
         store.selectSession(a.id)
         store.save() // selection saves are debounced; save() flushes the write
-        #expect(persistence.load().selectedSessionID == a.id) // persisted to disk, not just in-memory
+        #expect(persistence.load().selectedSessionID == a.id)
     }
 
     @Test func rapidSelectionAndFontThenSavePersistsLatestSnapshot() {
@@ -1269,21 +1241,18 @@ struct AppStoreTests {
         let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         _ = store.addSession(toWorkspace: ws.id, cwd: "/b")!
         let c = store.addSession(toWorkspace: ws.id, cwd: "/c")!
-        // a burst of debounced selection/font changes; save() writes the latest state once
         store.selectSession(a.id)
         store.selectSession(c.id)
         store.setFontSize(c.id, 18)
         store.save()
         let loaded = persistence.load()
-        #expect(loaded.selectedSessionID == c.id)               // the latest selection won
-        #expect(loaded.workspaces[0].sessions[2].fontSize == 18) // and the latest font change landed
+        #expect(loaded.selectedSessionID == c.id)
+        #expect(loaded.workspaces[0].sessions[2].fontSize == 18)
     }
 
     @Test func selectSessionDefersWriteUntilSaveFlushes() {
-        // guards the DEBOUNCE itself: selectSession must NOT write synchronously. addSession saves
-        // immediately (structural), so disk shows the last-added session selected; a debounced
-        // selectSession leaves the disk unchanged until save() flushes. A revert to a synchronous
-        // save() in selectSession fails the middle assertion.
+        // addSession saves immediately (structural), so disk shows the last-added session selected; a
+        // revert to a synchronous save() in selectSession fails the middle assertion.
         let dir = FileManager.default.temporaryDirectory.appendingPathComponent("agterm-tests-\(UUID().uuidString)")
         let persistence = PersistenceStore(directory: dir)
         let store = AppStore(persistence: persistence)
@@ -1291,10 +1260,10 @@ struct AppStoreTests {
         let a = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         let b = store.addSession(toWorkspace: ws.id, cwd: "/b")! // structural save: disk now selects b
         #expect(persistence.load().selectedSessionID == b.id)
-        store.selectSession(a.id)                                // debounced — must not hit disk yet
-        #expect(persistence.load().selectedSessionID == b.id)    // still b: the write was deferred
-        store.save()                                             // flush
-        #expect(persistence.load().selectedSessionID == a.id)    // now a is persisted
+        store.selectSession(a.id) // debounced — must not hit disk yet
+        #expect(persistence.load().selectedSessionID == b.id)
+        store.save()
+        #expect(persistence.load().selectedSessionID == a.id)
     }
 
     @Test func setFontSizeDefersWriteUntilSaveFlushes() {
@@ -1305,9 +1274,9 @@ struct AppStoreTests {
         let ws = store.addWorkspace(name: "work")
         let a = store.addSession(toWorkspace: ws.id, cwd: "/a")! // structural save: fontSize nil on disk
         #expect(persistence.load().workspaces[0].sessions[0].fontSize == nil)
-        store.setFontSize(a.id, 18)                              // debounced — must not hit disk yet
-        #expect(persistence.load().workspaces[0].sessions[0].fontSize == nil) // still nil: deferred
-        store.save()                                             // flush
+        store.setFontSize(a.id, 18) // debounced — must not hit disk yet
+        #expect(persistence.load().workspaces[0].sessions[0].fontSize == nil)
+        store.save()
         #expect(persistence.load().workspaces[0].sessions[0].fontSize == 18)
     }
 
@@ -1333,7 +1302,6 @@ struct AppStoreTests {
         let unwritable = URL(fileURLWithPath: "/dev/null/agterm-cannot-write")
         let store = AppStore(persistence: PersistenceStore(directory: unwritable))
         let ws = store.addWorkspace(name: "work")
-        // save() to an unwritable directory is swallowed; the in-memory mutation stands.
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")
         #expect(session != nil)
         #expect(store.workspaces[0].sessions.count == 1)
@@ -1388,11 +1356,11 @@ struct AppStoreTests {
         let session = store.addSession(toWorkspace: ws.id, cwd: "/tmp")!
         let mark = BackgroundWatermark(kind: .text, text: "PROD")
 
-        #expect(store.setBackgroundWatermark(mark, forSession: session.id))       // first set changes
-        #expect(!store.setBackgroundWatermark(mark, forSession: session.id))      // identical re-set: no change
-        #expect(store.setBackgroundWatermark(nil, forSession: session.id))        // clear changes
-        #expect(!store.setBackgroundWatermark(nil, forSession: session.id))       // clear again: no change
-        #expect(!store.setBackgroundWatermark(mark, forSession: UUID()))          // unknown id: no change
+        #expect(store.setBackgroundWatermark(mark, forSession: session.id))
+        #expect(!store.setBackgroundWatermark(mark, forSession: session.id))
+        #expect(store.setBackgroundWatermark(nil, forSession: session.id))
+        #expect(!store.setBackgroundWatermark(nil, forSession: session.id))
+        #expect(!store.setBackgroundWatermark(mark, forSession: UUID()))
     }
 
     @Test func controlTreeProjectsWorkspaceAndSessionShape() throws {
@@ -1448,7 +1416,7 @@ struct AppStoreTests {
 
     @Test func controlTreeReportsSidebarVisibility() {
         let store = makeStore()
-        #expect(store.controlTree().sidebarVisible == true) // default: sidebar shown
+        #expect(store.controlTree().sidebarVisible == true)
         store.setSidebarVisible(false)
         #expect(store.controlTree().sidebarVisible == false)
         store.setSidebarVisible(true)
@@ -1458,14 +1426,11 @@ struct AppStoreTests {
     @Test func controlTreeReportsCollapsedWorkspace() {
         let store = makeStore()
         let ws2 = store.addWorkspace(name: "second")
-        // all workspaces expanded by default: no node reports collapsed.
         #expect(store.controlTree().workspaces.allSatisfy { $0.collapsed == nil })
-        // collapse the second workspace: ONLY its node reports collapsed == true.
         store.setWorkspaceExpanded(ws2.id, expanded: false)
         let nodes = store.controlTree().workspaces
         #expect(nodes.first { $0.id == ws2.id.uuidString }?.collapsed == true)
         #expect(nodes.filter { $0.collapsed == true }.count == 1)
-        // re-expanding it omits the field again.
         store.setWorkspaceExpanded(ws2.id, expanded: true)
         #expect(store.controlTree().workspaces.allSatisfy { $0.collapsed == nil })
     }
@@ -1473,7 +1438,6 @@ struct AppStoreTests {
     @Test func controlTreeCollapsedIsIdempotentAndFocusIndependent() {
         let store = makeStore()
         let ws2 = store.addWorkspace(name: "second")
-        // idempotent: collapsing twice leaves exactly one collapsed node reporting true (delta-guarded).
         store.setWorkspaceExpanded(ws2.id, expanded: false)
         store.setWorkspaceExpanded(ws2.id, expanded: false)
         let afterTwice = store.controlTree().workspaces
@@ -1489,7 +1453,7 @@ struct AppStoreTests {
 
     @Test func controlTreeReportsSidebarMode() {
         let store = makeStore()
-        #expect(store.controlTree().sidebarMode == "tree") // default: the workspace tree
+        #expect(store.controlTree().sidebarMode == "tree")
         store.setSidebarMode(.flagged)
         #expect(store.controlTree().sidebarMode == "flagged")
         store.setSidebarMode(.tree)
@@ -1498,7 +1462,6 @@ struct AppStoreTests {
 
     @Test func controlTreeReportsQuickVisibleFromClosure() {
         let store = makeStore()
-        // no closure (host-free / default): omitted (nil).
         #expect(store.controlTree().quickVisible == nil)
         // the app supplies the live QuickTerminalController.isVisible via the closure.
         #expect(store.controlTree(quickVisible: { true }).quickVisible == true)
@@ -1507,7 +1470,6 @@ struct AppStoreTests {
 
     @Test func controlTreeReportsZoomedSurfaceFromClosure() {
         let store = makeStore()
-        // no closure (host-free / default) or nothing zoomed: omitted (nil).
         #expect(store.controlTree().zoomedSurface == nil)
         #expect(store.controlTree(zoomedSurface: { nil }).zoomedSurface == nil)
         // the app supplies the live TerminalZoomController.target?.controlID via the closure.
@@ -1529,14 +1491,12 @@ struct AppStoreTests {
 
     @Test func controlTreeReportsDashboardFieldsFromClosures() {
         let store = makeStore()
-        // no closures (host-free / default) or nothing open: all four omitted (nil).
         let bare = store.controlTree()
         #expect(bare.dashboardMembers == nil)
         #expect(bare.dashboardHighlighted == nil)
         #expect(bare.dashboardFontSize == nil)
         #expect(bare.dashboardFontMode == nil)
-        // the app supplies the live DashboardController state via the closures. Members are pane refs now
-        // (`<uuid>:left`/`:right`): a split session shows as both its `:left` and `:right` cells.
+        // members are pane refs (`<uuid>:left`/`:right`), so a split session shows as two cells
         let members = ["9f3c:left", "9f3c:right", "abcd:left"]
         let tree = store.controlTree(dashboardMembers: { members }, dashboardHighlighted: { "9f3c:right" },
                                      dashboardFontSize: { 12 }, dashboardFontMode: { "auto" })
@@ -1547,9 +1507,8 @@ struct AppStoreTests {
     }
 
     @Test func controlTreeDashboardMembersClosurePassesThroughVerbatim() {
-        // the closure value is threaded verbatim: an EMPTY array is distinct from nil (omitted). The app
-        // side never emits [] (its closure returns nil while the dashboard is closed, and a non-empty member
-        // set otherwise), so this pins the boundary — [] passes through as [], nil omits.
+        // an EMPTY array is distinct from nil (omitted). The app side never emits [], so this pins a
+        // boundary nothing else reaches.
         let store = makeStore()
         #expect(store.controlTree(dashboardMembers: { [] }).dashboardMembers == [])
         #expect(store.controlTree(dashboardMembers: { nil }).dashboardMembers == nil)
@@ -1564,13 +1523,13 @@ struct AppStoreTests {
         let token = NotificationCenter.default.addObserver(forName: .agtermSidebarVisibilityChanged, object: nil,
                                                            queue: nil) { _ in counter.n += 1 }
         defer { NotificationCenter.default.removeObserver(token) }
-        store.setSidebarVisible(true)   // unchanged from default -> no post
+        store.setSidebarVisible(true)
         #expect(counter.n == 0)
-        store.setSidebarVisible(false)  // change -> post
+        store.setSidebarVisible(false)
         #expect(counter.n == 1)
-        store.setSidebarVisible(false)  // unchanged -> no post
+        store.setSidebarVisible(false)
         #expect(counter.n == 1)
-        store.setSidebarVisible(true)   // change -> post
+        store.setSidebarVisible(true)
         #expect(counter.n == 2)
     }
 
@@ -1614,8 +1573,6 @@ struct AppStoreTests {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
-        // an idle indicator carrying a pane must project BOTH status and statusPane as nil, never a
-        // self-contradictory (status == nil while statusPane == "right") node
         store.setAgentIndicator(AgentIndicator(status: .idle, statusPane: .right), forSession: session.id)
 
         let node = try #require(store.controlTree().workspaces[0].sessions.first)
@@ -1628,7 +1585,6 @@ struct AppStoreTests {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
-        // non-idle status with no pane recorded: status present, statusPane stays nil
         store.setAgentIndicator(AgentIndicator(status: .completed), forSession: session.id)
 
         let node = try #require(store.controlTree().workspaces[0].sessions.first)
@@ -1655,15 +1611,14 @@ struct AppStoreTests {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/repo"))
-        // the per-call shape is ephemeral: each session.status builds a whole new indicator, so a following
-        // set that names no shape replaces it rather than inheriting it — the discard contract itself
+        // each session.status builds a whole new indicator, so a following set with no shape replaces it
         store.setAgentIndicator(AgentIndicator(status: .blocked, shape: .triangle), forSession: session.id)
         #expect(store.controlTree().workspaces[0].sessions[0].statusShape == "triangle")
 
         store.setAgentIndicator(AgentIndicator(status: .blocked), forSession: session.id)
 
         #expect(store.controlTree().workspaces[0].sessions[0].statusShape == nil)
-        #expect(store.controlTree().workspaces[0].sessions[0].status == "blocked") // only the shape reverted
+        #expect(store.controlTree().workspaces[0].sessions[0].status == "blocked")
     }
 
     @Test func controlTreeNilsStatusShapeWhenIdleEvenWithShape() throws {
@@ -1785,9 +1740,8 @@ extension AppStoreTests {
         #expect(store.sidebarSelectionTargets(forContextSession: a.id) == [a.id])
     }
 
-    // The prune-guard tests below all share one shape: hide selected rows (assert), then RE-SHOW them
-    // and assert a second time. `sidebarSelectionIDs` filters on read, so the first assert passes
-    // whether or not the raw list was pruned — only the second step catches a missing prune.
+    // the prune-guard tests below hide selected rows, then RE-SHOW them and assert again:
+    // `sidebarSelectionIDs` filters on read, so only the second step catches a missing prune.
     @Test func modeChangePrunesRowsHiddenInFlaggedMode() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

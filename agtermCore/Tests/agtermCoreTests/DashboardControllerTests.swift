@@ -33,8 +33,6 @@ struct DashboardControllerTests {
     }
 
     @Test func splitSessionExpandsToTwoPaneCells() {
-        // a split session contributes two cells — its primary AND its split pane — and the highlight/move
-        // treat them as distinct grid positions of the same session.
         let controller = DashboardController()
         let a = UUID()
         controller.open(members: [primary(a), split(a)])
@@ -49,15 +47,12 @@ struct DashboardControllerTests {
         let a = UUID(), b = UUID(), c = UUID()
         let members = [primary(a), primary(b), primary(c)]
 
-        // no supplied highlight → first member.
         controller.open(members: members)
         #expect(controller.highlighted == primary(a))
 
-        // supplied member in the set → that member.
         controller.open(members: members, highlighted: primary(c))
         #expect(controller.highlighted == primary(c))
 
-        // supplied member not in the set → falls back to the first member.
         controller.open(members: members, highlighted: primary(UUID()))
         #expect(controller.highlighted == primary(a))
     }
@@ -75,7 +70,6 @@ struct DashboardControllerTests {
         #expect(controller.highlighted == ids[2])
         controller.move(.up)
         #expect(controller.highlighted == ids[0])
-        // clamp: up/left at the top-left corner stays put.
         controller.move(.up)
         #expect(controller.highlighted == ids[0])
         controller.move(.left)
@@ -86,10 +80,9 @@ struct DashboardControllerTests {
         let controller = DashboardController()
         let ids = (0..<5).map { _ in primary(UUID()) } // cols=3: 0 1 2 / 3 4
         controller.open(members: ids, highlighted: ids[4])
-        // no cell right of the last member in a ragged row.
         controller.move(.right)
         #expect(controller.highlighted == ids[4])
-        // no cell below index 4 (would be index 7, out of range).
+        // below index 4 would be index 7, out of range.
         controller.move(.down)
         #expect(controller.highlighted == ids[4])
         controller.move(.up)
@@ -102,11 +95,9 @@ struct DashboardControllerTests {
         controller.open(members: [primary(a), primary(b), primary(c)])
         #expect(controller.highlighted == primary(a))
 
-        // a click flashes the highlight onto that member.
         controller.highlight(primary(c))
         #expect(controller.highlighted == primary(c))
 
-        // a non-member leaves the highlight where it was.
         controller.highlight(primary(UUID()))
         #expect(controller.highlighted == primary(c))
     }
@@ -147,8 +138,7 @@ struct DashboardControllerTests {
     }
 
     @Test func reopenOverSameMembersUpdatesFontMode() {
-        // a same-members re-open with a new font mode must update the mode (the app-side wiring keys its
-        // font re-apply off members+fontMode, so this is what a `dashboard A B --font-size 20` re-open sees).
+        // the app-side wiring keys its font re-apply off members+fontMode.
         let controller = DashboardController()
         let a = UUID(), b = UUID()
         let members = [primary(a), primary(b)]
@@ -167,19 +157,15 @@ struct DashboardControllerTests {
         let a = UUID(), b = UUID(), c = UUID()
         controller.open(members: [primary(a), primary(b), primary(c)], highlighted: primary(b))
 
-        // b closed while open: it is pruned, order preserved, and the highlight moves to the first survivor.
         controller.reconcile(existing: [primary(a), primary(c)])
         #expect(controller.members == [primary(a), primary(c)])
         #expect(controller.highlighted == primary(a))
 
-        // a survivor highlight is left in place.
         controller.reconcile(existing: [primary(a), primary(c)])
         #expect(controller.highlighted == primary(a), "a no-op reconcile leaves state unchanged")
     }
 
     @Test func reconcileDropsSplitPaneWhenSplitClosesButKeepsPrimary() {
-        // a split session opens as two cells; closing just its split pane (primary stays valid) prunes ONLY
-        // the split cell and moves the highlight off it, leaving the primary cell in place.
         let controller = DashboardController()
         let a = UUID(), b = UUID()
         controller.open(members: [primary(a), split(a), primary(b)], highlighted: split(a))
@@ -210,11 +196,10 @@ struct DashboardControllerTests {
     }
 
     @Test func appliedFontSizeResolvesPerMode() {
-        // .untouched → nil regardless of grid; .fixed → its exact value; .auto → the grid-derived size.
         #expect(DashboardFontMode.untouched.appliedFontSize(memberCount: 4, base: 13) == nil)
         #expect(DashboardFontMode.fixed(20).appliedFontSize(memberCount: 9, base: 13) == 20)
 
-        // .auto matches DashboardLayout.dashboardFontSize for the count's grid (4 → 2×2, 9 → 3×3).
+        // the counts resolve to 4 → 2×2 and 9 → 3×3.
         let (c4, r4) = DashboardLayout.grid(count: 4)
         #expect(DashboardFontMode.auto.appliedFontSize(memberCount: 4, base: 16)
             == DashboardLayout.dashboardFontSize(cols: c4, rows: r4, base: 16))

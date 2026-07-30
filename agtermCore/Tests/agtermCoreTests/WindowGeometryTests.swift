@@ -45,8 +45,8 @@ struct WindowGeometryTests {
     }
 
     @Test func clampSizeWithMinGreaterThanMaxReturnsMax() {
-        // degenerate range (a window minSize larger than the visible frame): the documented `lo > hi`
-        // branch makes the upper bound (max) win in each dimension.
+        // degenerate range (a window minSize larger than the visible frame): the `lo > hi` branch makes
+        // the upper bound win in each dimension.
         let result = WindowGeometry.clampSize(WindowGeometry.Size(width: 2000, height: 1500),
                                               min: WindowGeometry.Size(width: 1200, height: 900),
                                               max: WindowGeometry.Size(width: 800, height: 600))
@@ -64,7 +64,6 @@ struct WindowGeometryTests {
         let result = WindowGeometry.clampOrigin(WindowGeometry.Point(x: 5000, y: 100),
                                                 windowSize: WindowGeometry.Size(width: 800, height: 600),
                                                 displayFrame: display())
-        // maxX = 1920 - margin; y stays in range and is unchanged.
         expectPoint(result, 1920 - WindowGeometry.visibleMargin, 100)
     }
 
@@ -73,7 +72,6 @@ struct WindowGeometryTests {
         let result = WindowGeometry.clampOrigin(WindowGeometry.Point(x: -5000, y: -5000),
                                                 windowSize: WindowGeometry.Size(width: 800, height: 600),
                                                 displayFrame: display())
-        // minX = margin - width; minY = margin - height.
         expectPoint(result, WindowGeometry.visibleMargin - 800, WindowGeometry.visibleMargin - 600)
     }
 
@@ -82,7 +80,6 @@ struct WindowGeometryTests {
         let result = WindowGeometry.clampOrigin(WindowGeometry.Point(x: 100, y: 5000),
                                                 windowSize: WindowGeometry.Size(width: 800, height: 600),
                                                 displayFrame: display())
-        // maxY = 1080 - margin; x stays in range and is unchanged.
         expectPoint(result, 100, 1080 - WindowGeometry.visibleMargin)
     }
 

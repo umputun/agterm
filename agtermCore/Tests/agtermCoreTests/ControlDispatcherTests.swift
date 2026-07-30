@@ -193,8 +193,7 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.sessionDuplicate(target: "abc", window: "win")])
     }
 
-    /// `session.duplicate` takes no options at all — the target names its own workspace and cwd — so a bare
-    /// request must still route (the host defaults the target to `active`).
+    // `session.duplicate` takes no options — the target names its own workspace and cwd.
     @Test func sessionDuplicateRoutesWithoutArgs() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -645,7 +644,6 @@ struct ControlDispatcherTests {
         #expect(status == ControlResponse(ok: true))
         #expect(bad == ControlResponse(ok: false, error: "invalid status"))
         #expect(badColor == ControlResponse(ok: false, error: "invalid color (expected #rrggbb)"))
-        // the bad-color request errors before reaching the actions, so only the good one is recorded.
         #expect(actions.calls == [
             .sessionStatus(target: "session", window: "win",
                            ControlSessionStatusUpdate(status: .blocked, blink: true,
@@ -657,9 +655,8 @@ struct ControlDispatcherTests {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
 
-        // set a per-call color, then set again with NO color: the second update must carry color nil,
-        // proving the "next call without --color discards it" contract at the dispatch/update layer (the
-        // app arm builds a fresh AgentIndicator from update.color, so a nil update.color clears the tint).
+        // the second update must carry color nil: the app arm builds a fresh AgentIndicator from
+        // update.color, so a call without --color clears the tint.
         _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionStatus, target: "session",
                                                      args: ControlArgs(status: "blocked", color: "#ff0000")))
         _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionStatus, target: "session",
@@ -694,7 +691,6 @@ struct ControlDispatcherTests {
 
         #expect(tagged == ControlResponse(ok: true))
         #expect(badPane == ControlResponse(ok: false, error: "--pane must be left, right, or scratch"))
-        // the invalid pane never reaches actions (status unchanged), only the valid one is recorded.
         #expect(actions.calls == [
             .sessionStatus(target: "session", window: nil,
                            ControlSessionStatusUpdate(status: .blocked, blink: nil, autoReset: nil,
@@ -725,9 +721,8 @@ struct ControlDispatcherTests {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
 
-        // the dispatcher carries the arg through verbatim: present → the parsed shape, absent → nil. The
-        // user-facing "next call without --shape discards it" contract is the STORE replacing the whole
-        // ephemeral indicator (AppStoreTests.controlTreeDropsStatusShapeOnTheNextSetWithoutOne).
+        // present → the parsed shape, absent → nil. The user-facing "next call without --shape discards
+        // it" contract is the store's (AppStoreTests.controlTreeDropsStatusShapeOnTheNextSetWithoutOne).
         _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionStatus, target: "session",
                                                      args: ControlArgs(status: "blocked", shape: "triangle")))
         _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionStatus, target: "session",
@@ -782,7 +777,6 @@ struct ControlDispatcherTests {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
 
-        // both --color and --pane are invalid; color is validated first, so the color error wins.
         let response = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionStatus,
             target: "session",
@@ -798,8 +792,8 @@ struct ControlDispatcherTests {
         let dispatcher = ControlDispatcher(actions: actions)
         let accepted = StatusShape.allCases.map(\.rawValue).joined(separator: "|")
 
-        // the shape check was inserted BETWEEN the existing color and pane checks; pin both boundaries so
-        // reordering the three guards can't change which error a caller sees without failing here.
+        // pin both boundaries, so reordering the three guards cannot change which error a caller sees
+        // without failing here.
         let colorOverShape = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionStatus, target: "session",
             args: ControlArgs(status: "blocked", color: "nope", shape: "hexagon")
@@ -841,8 +835,6 @@ struct ControlDispatcherTests {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
 
-        // the opaque --pane-id rides through untouched (the app-side arm resolves it against the live
-        // surfaces); the role --pane is parsed to StatusPane here.
         let response = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionRestore, target: "session",
             args: ControlArgs(mode: "set", command: "htop", pane: "right", paneID: "pane-tok")
@@ -890,9 +882,8 @@ struct ControlDispatcherTests {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
 
-        // an empty command is a present-but-empty pin, which IS the tri-state's "pinned to nothing" value
-        // — the same state `none` writes. It reaches the host as `.pin("")` rather than being rejected, so
-        // `agtermctl session restore ""` and `--none` agree instead of one erroring.
+        // an empty command is the tri-state's "pinned to nothing" — the same state `none` writes — so it
+        // reaches the host as `.pin("")` and `agtermctl session restore ""` agrees with `--none`.
         _ = await dispatcher.dispatch(ControlRequest(cmd: .sessionRestore, target: "session",
                                                      args: ControlArgs(mode: "set", command: "")))
 
@@ -918,8 +909,7 @@ struct ControlDispatcherTests {
             args: ControlArgs(mode: "set", command: "htop", pane: "middle")
         ))
 
-        // the rejection covers every control scalar, tab included — the message names the class rather
-        // than only the newline case, so a tab rejection is not described as a multi-line one.
+        // the message names the whole control-character class, so a tab rejection is not called multi-line.
         #expect(newline == ControlResponse(ok: false, error: "command must not contain control characters"))
         #expect(tab == ControlResponse(ok: false, error: "command must not contain control characters"))
         #expect(badPane == ControlResponse(ok: false, error: "--pane must be left, right, or scratch"))
@@ -947,8 +937,8 @@ struct ControlDispatcherTests {
 
         let exact = String(repeating: "a", count: cap)
         let over = String(repeating: "a", count: cap + 1)
-        // 400 four-byte scalars = 1600 UTF-8 bytes but only 400 characters: well under the cap by
-        // grapheme count, over it by BYTES — the cap is a storage bound, so this must be rejected.
+        // 400 four-byte scalars = 1600 UTF-8 bytes but only 400 characters: under the cap by grapheme
+        // count, over it by BYTES — the cap is a storage bound, so this must be rejected.
         let multiByte = String(repeating: "🌍", count: 400)
 
         let exactResponse = await dispatcher.dispatch(ControlRequest(
@@ -963,7 +953,6 @@ struct ControlDispatcherTests {
         #expect(exactResponse == ControlResponse(ok: true))
         #expect(overResponse == ControlResponse(ok: false, error: "command too long (max \(cap) bytes)"))
         #expect(multiByteResponse == ControlResponse(ok: false, error: "command too long (max \(cap) bytes)"))
-        // only the exactly-at-cap command reached the host.
         #expect(actions.calls == [
             .sessionRestore(target: "session", window: nil, ControlSessionRestoreUpdate(pin: .pin(exact)))
         ])
@@ -1098,8 +1087,7 @@ struct ControlDispatcherTests {
         #expect(actions.calls == [.keymapList])
     }
 
-    // keymap.list takes no target and no args, so anything a caller attaches must be ignored rather than
-    // rejected or forwarded — it is a pure read.
+    // keymap.list is a pure read: a target or args a caller attaches are ignored, not rejected.
     @Test func keymapListIgnoresTargetAndArgs() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
@@ -1738,9 +1726,8 @@ struct ControlDispatcherTests {
     }
 
     @Test func dashboardForwardsAllTargetsWithoutCapping() async {
-        // the 9-cell cap now counts PANES and lives app-side (a split session expands to two cells), so the
-        // dispatcher forwards ALL raw ids untouched and appends no drop text — the drop is computed and
-        // reported in `ControlServer.setDashboard`, which owns the pane expansion.
+        // the 9-cell cap counts PANES and lives app-side (a split session expands to two cells), so the
+        // dispatcher forwards all raw ids untouched and appends no drop text.
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
         let ids = (1...11).map { "s\($0)" }
@@ -1752,8 +1739,7 @@ struct ControlDispatcherTests {
             .dashboard(targets: ids, window: nil, close: false, fontMode: .untouched, mru: false)
         ])
 
-        // whatever the app-side response is (unresolved / dropped-pane text), the dispatcher passes it through
-        // verbatim — it no longer post-processes the message.
+        // the dispatcher post-processes nothing: the app-side text rides through verbatim.
         actions.nextDashboardResponse = ControlResponse(ok: true, result: ControlResult(text: "unresolved: s3"))
         let passed = await dispatcher.dispatch(ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ids)))
         #expect(passed?.result?.text == "unresolved: s3")

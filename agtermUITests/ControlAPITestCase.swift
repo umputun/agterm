@@ -38,20 +38,15 @@ class ControlAPITestCase: XCTestCase {
         markerDir = FileManager.default.temporaryDirectory
             .appendingPathComponent("agterm-ctlmarker-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: markerDir, withIntermediateDirectories: true)
-        // socket path constraints: it must be (a) under the unix-socket sun_path ~104-byte limit and
-        // (b) inside the runner's sandbox grant. The per-test AGTERM_STATE_DIR subdir pushes the path to
-        // ~135 bytes (too long), and /tmp is outside the runner sandbox (connect → EPERM). The runner's
-        // own temp dir (NSTemporaryDirectory(), ~81 bytes) with a short filename satisfies both.
+        // the runner's own temp dir keeps the socket path under the sun_path ~104-byte limit AND inside
+        // the sandbox grant (the per-test AGTERM_STATE_DIR subdir is ~135 bytes; /tmp gives EPERM).
         socketPath = (NSTemporaryDirectory() as NSString)
             .appendingPathComponent("agtermc-\(UUID().uuidString.prefix(8)).sock")
         app = XCUIApplication()
         app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
         app.launchEnvironment["AGTERM_CONTROL_SOCKET"] = socketPath
-        // Pin the title-bar double-click action so the header gesture tests are hermetic regardless of
-        // the host's Desktop & Dock setting (the app honors this env override in
-        // performTitlebarDoubleClickAction; launch args can't carry it — FB11763863). Most tests never
-        // double-click, so the value is irrelevant to them; the no-op-case test opts into "None".
-        // (that test, testDoubleClickHeaderHonorsNoneSetting, now lives in ControlWindowUITests.)
+        // pin the title-bar double-click action so the header gesture tests are hermetic regardless of
+        // the host's Desktop & Dock setting; launch args can't carry it — FB11763863.
         app.launchEnvironment["AGTERM_UITEST_DOUBLECLICK_ACTION"] =
             name.contains("testDoubleClickHeaderHonorsNoneSetting") ? "None" : "Maximize"
         try seedSettingsIfNeeded()

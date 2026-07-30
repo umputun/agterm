@@ -14,7 +14,6 @@ struct InterruptKeystrokeTests {
     }
 
     @Test func bareControlCInterrupts() {
-        // latin layout: base letter is "c"
         #expect(InterruptKeystroke.isInterrupt(keyCode: Self.cKey, character: "c", modifiers: [.control]))
         // dvorak: the C letter is a different physical key, caught by the character check
         #expect(InterruptKeystroke.isInterrupt(keyCode: Self.dvorakCKey, character: "c", modifiers: [.control]))
@@ -25,18 +24,15 @@ struct InterruptKeystrokeTests {
     }
 
     @Test func dvorakControlJDoesNotInterrupt() {
-        // dvorak: the physical C key (keyCode 8) produces "j"; the keyCode fallback must NOT fire for a
-        // latin letter other than "c", so ctrl-j is not a false interrupt
+        // dvorak: the physical C key produces "j", and the keyCode fallback must not fire for another
+        // latin letter
         #expect(!InterruptKeystroke.isInterrupt(keyCode: Self.cKey, character: "j", modifiers: [.control]))
     }
 
     @Test func nonInterruptKeystrokesDoNotClear() {
-        // ordinary typing, no control
         #expect(!InterruptKeystroke.isInterrupt(keyCode: Self.cKey, character: "c", modifiers: []))
         #expect(!InterruptKeystroke.isInterrupt(keyCode: 0, character: "a", modifiers: []))
-        // control chords that are not an interrupt
         #expect(!InterruptKeystroke.isInterrupt(keyCode: 2, character: "d", modifiers: [.control]))   // ctrl-d
-        // c with the wrong modifiers: cmd-c / opt-c / ctrl-cmd-c must not clear
         #expect(!InterruptKeystroke.isInterrupt(keyCode: Self.cKey, character: "c", modifiers: [.command]))
         #expect(!InterruptKeystroke.isInterrupt(keyCode: Self.cKey, character: "c", modifiers: [.option]))
         #expect(!InterruptKeystroke.isInterrupt(keyCode: Self.cKey, character: "c", modifiers: [.control, .command]))

@@ -20,8 +20,7 @@ struct ShellEscapeTests {
     }
 
     @Test func escapesNewlinesSoADroppedNameCannotInjectACommand() {
-        // a filename may contain a newline; unescaped it would submit the rest as a shell command via
-        // inject(text:). Backslash-escaped, the line terminator can't terminate a command.
+        // unescaped, the rest of the name would submit as a shell command via inject(text:).
         #expect(ShellEscape.path("report.txt\ndate") == "report.txt\\\ndate")
         #expect(ShellEscape.path("a\rb") == "a\\\rb")
         #expect(ShellEscape.path("a\r\nb") == "a\\\r\\\nb")

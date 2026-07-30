@@ -28,35 +28,30 @@ struct AppSettingsTests {
     }
 
     @Test func emptySettingsEmitOnlyAlwaysOnDefaults() {
-        // every other field is unset (omitted); only the two always-on keys emit — mouse-scroll-multiplier
-        // at its default of 3 and right-click-action at its default of paste.
         #expect(AppSettings().ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func configLinesCoverSetFieldsRawNoQuoting() {
         let settings = AppSettings(fontFamily: "SF Mono", fontSize: 14, theme: "3024 Night")
         let lines = settings.ghosttyConfigLines()
-        // raw values — names with spaces are NOT quoted (ghostty takes the line remainder).
+        // names with spaces are NOT quoted — ghostty takes the line remainder.
         #expect(lines.contains("font-family = SF Mono"))
         #expect(lines.contains("theme = 3024 Night"))
-        #expect(lines.contains("font-size = 14")) // integer renders without ".0"
+        #expect(lines.contains("font-size = 14"))
     }
 
     @Test func configLinesOmitUnsetFields() {
         let lines = AppSettings(theme: "Alabaster").ghosttyConfigLines()
-        // theme is set; font lines omitted; the always-on defaults (scroll + right-click) trail.
         #expect(lines == ["theme = Alabaster", "mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func followingEmitsRawDual() {
-        // following the appearance emits ghostty's dual conditional RAW (written unquoted); libghostty
-        // resolves the active side itself on a color-scheme change, so agterm never picks a side.
+        // libghostty resolves the active side of the dual conditional itself, so agterm never picks one.
         let settings = AppSettings(theme: "Builtin Light", darkTheme: "Nord", followSystemAppearance: true)
         #expect(settings.ghosttyConfigLines().contains("theme = light:Builtin Light,dark:Nord"))
     }
 
     @Test func notFollowingEmitsSingleTheme() {
-        // a plain theme, or a set dark slot with following OFF, emits one theme (no dual).
         #expect(AppSettings(theme: "Alabaster").ghosttyConfigLines().contains("theme = Alabaster"))
         let darkKept = AppSettings(theme: "Alabaster", darkTheme: "Nord", followSystemAppearance: false)
         #expect(darkKept.ghosttyConfigLines().contains("theme = Alabaster"))
@@ -64,8 +59,7 @@ struct AppSettingsTests {
     }
 
     @Test func activeThemeTracksAppearanceWhenFollowing() {
-        // the palette badge/selection resolver: the dark slot in dark mode (else `theme`), `theme` in
-        // light mode. Not following → the appearance is ignored.
+        // the palette badge/selection resolver.
         let synced = AppSettings(theme: "Builtin Light", darkTheme: "Nord", followSystemAppearance: true)
         #expect(synced.activeTheme(isDark: true) == "Nord")
         #expect(synced.activeTheme(isDark: false) == "Builtin Light")
@@ -76,8 +70,8 @@ struct AppSettingsTests {
     }
 
     @Test func followingWithoutDarkSlotEmitsSingle() {
-        // following on but the dark slot unset (an inconsistent hand-edit): fall back to the single
-        // theme rather than an ill-formed `light:X,dark:`.
+        // an inconsistent hand-edit: fall back to the single theme rather than an ill-formed
+        // `light:X,dark:`.
         let settings = AppSettings(theme: "Alabaster", darkTheme: nil, followSystemAppearance: true)
         #expect(settings.ghosttyConfigLines().contains("theme = Alabaster"))
         #expect(!settings.ghosttyConfigLines().contains { $0.hasPrefix("theme = light:") })
@@ -109,9 +103,7 @@ struct AppSettingsTests {
     }
 
     @Test func opaqueOrUnsetOpacityEmitsNoBackgroundPins() {
-        // full opacity, unset opacity, and a blur with no translucency all render normally: ghostty
-        // paints its own background (blur needs opacity < 1 to be visible). none emit the background
-        // pins (the always-present scroll default means the line set is not empty).
+        // blur needs opacity < 1 to be visible, so a blur with no translucency emits no pins either.
         for settings in [AppSettings(backgroundOpacity: 1), AppSettings(), AppSettings(backgroundBlur: 40)] {
             let lines = settings.ghosttyConfigLines()
             #expect(!lines.contains("background-opacity = 0"))
@@ -120,13 +112,11 @@ struct AppSettingsTests {
     }
 
     @Test func mouseScrollMultiplierAlwaysEmittedAtDefaultThree() {
-        // unset → the default 3 is emitted (NOT omitted), so the default speed is effective.
         #expect(AppSettings().ghosttyConfigLines().contains("mouse-scroll-multiplier = 3"))
     }
 
     @Test func mouseScrollMultiplierEmitsSetValue() {
         #expect(AppSettings(mouseScrollMultiplier: 5).ghosttyConfigLines().contains("mouse-scroll-multiplier = 5"))
-        // fractional keeps the decimal via the shared format helper
         #expect(AppSettings(mouseScrollMultiplier: 1.5).ghosttyConfigLines().contains("mouse-scroll-multiplier = 1.5"))
     }
 
@@ -140,8 +130,6 @@ struct AppSettingsTests {
                                    completedStatusColorHex: "#778899")
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
         #expect(decoded == original)
-        // the glyph colors are applied at the AppKit level, never as ghostty config keys — so the only
-        // lines are the always-on defaults (scroll + right-click).
         #expect(decoded.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
@@ -153,8 +141,6 @@ struct AppSettingsTests {
         #expect(decoded.effectiveStatusShape(for: .active) == .square)
         #expect(decoded.effectiveStatusShape(for: .blocked) == .triangle)
         #expect(decoded.effectiveStatusShape(for: .completed) == .star)
-        // the glyph shapes are applied at the AppKit level, never as ghostty config keys — so the only
-        // lines are the always-on defaults (scroll + right-click).
         #expect(decoded.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
@@ -168,7 +154,7 @@ struct AppSettingsTests {
     }
 
     @Test func statusShapesDefaultNilAndOmitFromJSON() throws {
-        // unset means the default plain circle, and nothing serializes, keeping settings.json minimal.
+        // unset means the default plain circle.
         let settings = AppSettings()
         #expect(settings.activeStatusShape == nil)
         #expect(settings.effectiveStatusShape(for: .active) == nil)
@@ -176,7 +162,6 @@ struct AppSettingsTests {
         #expect(settings.effectiveStatusShape(for: .completed) == nil)
         let json = String(decoding: try JSONEncoder().encode(settings), as: UTF8.self)
         #expect(!json.contains("StatusShape"))
-        // a settings.json written before the fields existed decodes them to nil.
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
         #expect(legacy.activeStatusShape == nil)
         #expect(legacy.blockedStatusShape == nil)
@@ -185,19 +170,18 @@ struct AppSettingsTests {
     }
 
     @Test func unknownStatusShapeResolvesToNilAndPreservesOtherSettings() throws {
-        // a future-written or hand-edited shape must decode tolerantly (the forward-compat rule): the raw
-        // string is kept, resolves to nil (the built-in glyph), and the rest of the file survives.
+        // forward-compat rule: an unknown shape keeps its raw string, resolves to nil (the built-in
+        // glyph), and must not fail the whole decode.
         let decoded = try JSONDecoder().decode(
             AppSettings.self, from: Data(#"{ "blockedStatusShape": "trapezoid", "fontSize": 16 }"#.utf8))
         #expect(decoded.fontSize == 16)
         #expect(decoded.blockedStatusShape == "trapezoid")
         #expect(decoded.effectiveStatusShape(for: .blocked) == nil)
-        // an empty string is likewise unknown, not a shape.
         #expect(AppSettings(activeStatusShape: "").effectiveStatusShape(for: .active) == nil)
     }
 
     @Test func effectiveStatusShapeIsNilForIdle() {
-        // idle renders no glyph, so it resolves to no shape even with every field set.
+        // idle renders no glyph at all.
         let settings = AppSettings(activeStatusShape: "circle", blockedStatusShape: "square",
                                    completedStatusShape: "star")
         #expect(settings.effectiveStatusShape(for: .idle) == nil)
@@ -206,17 +190,14 @@ struct AppSettingsTests {
     @Test func notificationsEnabledRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(notificationsEnabled: false)))
         #expect(decoded.notificationsEnabled == false)
-        // it's an app-level toggle, never a ghostty config key — only the always-on defaults (scroll + right-click) are emitted.
         #expect(AppSettings(notificationsEnabled: false).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func restoreRunningCommandRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(restoreRunningCommand: true)))
         #expect(decoded.restoreRunningCommand == true)
-        // absent in a legacy file decodes to nil (off).
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
         #expect(legacy.restoreRunningCommand == nil)
-        // an app-level behavior flag, never a ghostty config key — only the always-on defaults (scroll + right-click) are emitted.
         #expect(AppSettings(restoreRunningCommand: true).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
@@ -225,10 +206,8 @@ struct AppSettingsTests {
         let decoded = try JSONDecoder().decode(
             AppSettings.self, from: JSONEncoder().encode(AppSettings(autoHideSidebarInactiveWindows: true)))
         #expect(decoded.autoHideSidebarInactiveWindows == true)
-        // absent in a legacy file decodes to nil (off).
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
         #expect(legacy.autoHideSidebarInactiveWindows == nil)
-        // a behavior flag, never a ghostty config key — only the always-on defaults (scroll + right-click) are emitted.
         #expect(AppSettings(autoHideSidebarInactiveWindows: true).ghosttyConfigLines()
             == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
@@ -236,30 +215,24 @@ struct AppSettingsTests {
     @Test func confirmCloseSessionRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(confirmCloseSession: true)))
         #expect(decoded.confirmCloseSession == true)
-        // absent in a legacy file decodes to nil (off — today's silent close).
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
         #expect(legacy.confirmCloseSession == nil)
-        // an app-level behavior flag, never a ghostty config key — only the always-on defaults (scroll + right-click) are emitted.
         #expect(AppSettings(confirmCloseSession: true).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func notificationSoundNameRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(notificationSoundName: "Glass")))
         #expect(decoded.notificationSoundName == "Glass")
-        // absent in a legacy file decodes to nil (no sound).
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
         #expect(legacy.notificationSoundName == nil)
-        // an app-level value, never a ghostty config key — only the always-on defaults (scroll + right-click) are emitted.
         #expect(AppSettings(notificationSoundName: "Glass").ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func blockedStatusSoundNameRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(blockedStatusSoundName: "Glass")))
         #expect(decoded.blockedStatusSoundName == "Glass")
-        // absent in a legacy file decodes to nil (no sound).
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
         #expect(legacy.blockedStatusSoundName == nil)
-        // an app-level value, never a ghostty config key — only the always-on defaults (scroll + right-click) are emitted.
         #expect(AppSettings(blockedStatusSoundName: "Glass").ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
@@ -269,19 +242,15 @@ struct AppSettingsTests {
             #expect(decoded.toolbarMode == mode.rawValue)
             #expect(decoded.effectiveToolbarMode == mode)
         }
-        // window-chrome mode applied at the AppKit level, never a ghostty config key — only the always-on
-        // defaults (scroll + right-click) are emitted.
         #expect(AppSettings(toolbarMode: ToolbarMode.hidden.rawValue).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func toolbarModeOmittedWhenNil() throws {
-        // nil (default) never serializes, keeping settings.json minimal; the legacy shim is likewise absent.
         #expect(AppSettings().toolbarMode == nil)
         let json = String(decoding: try JSONEncoder().encode(AppSettings()), as: UTF8.self)
         #expect(!json.contains("toolbarMode"))
         #expect(!json.contains("compactToolbar"))
-        // a set mode serializes its raw value while the (nil) legacy shim stays absent — the write path
-        // that lets the legacy key evaporate on the next save.
+        // the write path that lets the legacy key evaporate on the next save.
         let withMode = String(decoding: try JSONEncoder().encode(AppSettings(toolbarMode: ToolbarMode.hidden.rawValue)), as: UTF8.self)
         #expect(withMode.contains("toolbarMode"))
         #expect(withMode.contains("hidden"))
@@ -289,20 +258,17 @@ struct AppSettingsTests {
     }
 
     @Test func effectiveToolbarModeDefaultsCompact() {
-        // nil toolbarMode + nil legacy shim resolves to compact (the app default).
         #expect(AppSettings().effectiveToolbarMode == .compact)
     }
 
     @Test func effectiveToolbarModeResolvesExplicitModes() {
-        // an explicit mode with no legacy shim resolves to itself, including the compact default.
         #expect(AppSettings(toolbarMode: ToolbarMode.compact.rawValue).effectiveToolbarMode == .compact)
         #expect(AppSettings(toolbarMode: ToolbarMode.normal.rawValue).effectiveToolbarMode == .normal)
         #expect(AppSettings(toolbarMode: ToolbarMode.hidden.rawValue).effectiveToolbarMode == .hidden)
     }
 
     @Test func unknownToolbarModePreservesOtherSettings() throws {
-        // a future-written mode must decode tolerantly (the forward-compat rule): it may NOT fail the whole
-        // decode and discard every other field. the unknown raw value falls through to the default.
+        // forward-compat rule: an unknown mode must not fail the decode and discard every other field.
         let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "toolbarMode": "floating", "fontSize": 16 }"#.utf8))
         #expect(decoded.fontSize == 16)
         #expect(decoded.toolbarMode == "floating")
@@ -310,14 +276,12 @@ struct AppSettingsTests {
     }
 
     @Test func toolbarModeWinsOverLegacyCompactToolbar() {
-        // when both are present, the explicit toolbarMode wins over the legacy shim.
         #expect(AppSettings(toolbarMode: ToolbarMode.hidden.rawValue, compactToolbar: false).effectiveToolbarMode == .hidden)
         #expect(AppSettings(toolbarMode: ToolbarMode.normal.rawValue, compactToolbar: true).effectiveToolbarMode == .normal)
     }
 
     @Test func legacyCompactToolbarMigratesToMode() throws {
-        // a settings.json written before toolbarMode existed resolves via the compactToolbar shim:
-        // false → normal, true/nil → compact.
+        // the legacy shim maps false → normal, true/nil → compact.
         let normal = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "compactToolbar": false }"#.utf8))
         #expect(normal.toolbarMode == nil)
         #expect(normal.effectiveToolbarMode == .normal)
@@ -334,7 +298,6 @@ struct AppSettingsTests {
     @Test func notificationBadgeEnabledRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(notificationBadgeEnabled: false)))
         #expect(decoded.notificationBadgeEnabled == false)
-        // app-level sidebar render toggle, never a ghostty config key — only the always-on defaults (scroll + right-click) are emitted.
         #expect(AppSettings(notificationBadgeEnabled: false).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
@@ -342,12 +305,10 @@ struct AppSettingsTests {
         let original = AppSettings(configDirectory: "/tmp/agterm-config")
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
         #expect(decoded.configDirectory == "/tmp/agterm-config")
-        // app-level path, never a ghostty config key — only the always-on defaults (scroll + right-click) appear.
         #expect(decoded.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func configDirectoryDecodesNilWhenAbsent() throws {
-        // a settings.json written before `configDirectory` existed still decodes.
         let json = #"{ "fontSize": 16 }"#
         let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(json.utf8))
         #expect(decoded.configDirectory == nil)
@@ -356,7 +317,6 @@ struct AppSettingsTests {
     @Test func inactivePaneMuteStrengthRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(inactivePaneMuteStrength: 7)))
         #expect(decoded.inactivePaneMuteStrength == 7)
-        // SwiftUI overlay opacity applied in the app target, never a ghostty config key.
         #expect(AppSettings(inactivePaneMuteStrength: 7).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
@@ -369,7 +329,6 @@ struct AppSettingsTests {
         #expect(AppSettings.muteOpacity(strength: 0) == 0)
         #expect(AppSettings.muteOpacity(strength: 5) == 0.4)
         #expect(AppSettings.muteOpacity(strength: 10) == 0.8)
-        // out-of-range strengths clamp to the 0...10 ends rather than over/undershooting.
         #expect(AppSettings.muteOpacity(strength: -3) == 0)
         #expect(AppSettings.muteOpacity(strength: 99) == 0.8)
         #expect(AppSettings.defaultInactivePaneMuteStrength == 5)
@@ -378,7 +337,6 @@ struct AppSettingsTests {
     @Test func sidebarBackgroundShiftRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(sidebarBackgroundShift: 8)))
         #expect(decoded.sidebarBackgroundShift == 8)
-        // AppKit-level sidebar tint applied in the app target, never a ghostty config key.
         #expect(AppSettings(sidebarBackgroundShift: 8).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
@@ -393,7 +351,6 @@ struct AppSettingsTests {
         #expect(abs(AppSettings.sidebarShiftAmount(strength: 10) - 0.30) < 1e-9)   // full darken
         #expect(AppSettings.sidebarShiftAmount(strength: 7) > 0)                   // above center darkens
         #expect(AppSettings.sidebarShiftAmount(strength: 3) < 0)                   // below center lightens
-        // out-of-range strengths clamp to the 0...10 ends.
         #expect(AppSettings.sidebarShiftAmount(strength: -4) == AppSettings.sidebarShiftAmount(strength: 0))
         #expect(AppSettings.sidebarShiftAmount(strength: 99) == AppSettings.sidebarShiftAmount(strength: 10))
         #expect(AppSettings.defaultSidebarBackgroundShift == 5)
@@ -402,7 +359,6 @@ struct AppSettingsTests {
     @Test func sidebarFontSizeRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(sidebarFontSize: 16)))
         #expect(decoded.sidebarFontSize == 16)
-        // AppKit-level sidebar font applied in the app target, never a ghostty config key.
         #expect(AppSettings(sidebarFontSize: 16).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
@@ -440,10 +396,8 @@ struct AppSettingsTests {
     }
 
     @Test func inheritGlobalGhosttyConfigDefaultsOffAndIsNotAGhosttyKey() throws {
-        // default (nil) = off; an app-level flag, so it adds NO ghostty config line.
         #expect(AppSettings().inheritGlobalGhosttyConfig == nil)
         #expect(AppSettings(inheritGlobalGhosttyConfig: true).ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
-        // round-trips each state; a legacy settings.json without the key decodes to nil (off).
         for value: Bool? in [nil, true, false] {
             let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(inheritGlobalGhosttyConfig: value)))
             #expect(decoded.inheritGlobalGhosttyConfig == value)
@@ -453,10 +407,8 @@ struct AppSettingsTests {
     }
 
     @Test func attentionButtonEnabledDefaultsOffAndIsNotAGhosttyKey() throws {
-        // default (nil) = off; an app-level chrome flag, so it adds NO ghostty config line.
         #expect(AppSettings().attentionButtonEnabled == nil)
         #expect(AppSettings(attentionButtonEnabled: true).ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
-        // round-trips each state; a legacy settings.json without the key decodes to nil (off).
         for value: Bool? in [nil, true, false] {
             let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(attentionButtonEnabled: value)))
             #expect(decoded.attentionButtonEnabled == value)
@@ -466,16 +418,14 @@ struct AppSettingsTests {
     }
 
     @Test func dockBounceDefaultsToOffResolvesTolerantlyAndIsNotAGhosttyKey() throws {
-        // default (nil) resolves to off; an app-level attention setting, so it adds NO ghostty line.
         #expect(AppSettings().effectiveDockBounce == .off)
         #expect(AppSettings(dockBounce: "once").ghosttyConfigLines() == AppSettings().ghosttyConfigLines())
-        // each known raw value round-trips and resolves to its case.
         for mode in DockBounce.allCases {
             let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(dockBounce: mode.rawValue)))
             #expect(decoded.dockBounce == mode.rawValue)
             #expect(decoded.effectiveDockBounce == mode)
         }
-        // an unknown/future raw value degrades to off instead of failing the decode; a legacy file omits it.
+        // an unknown/future raw value degrades to off instead of failing the decode.
         #expect(AppSettings(dockBounce: "supernova").effectiveDockBounce == .off)
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
         #expect(legacy.dockBounce == nil)
@@ -483,13 +433,11 @@ struct AppSettingsTests {
     }
 
     @Test func rightClickPasteDefaultsOnAndIsAGhosttyKey() throws {
-        // default (nil) = on → emits `right-click-action = paste`; off → `ignore`. UNLIKE the app-level
-        // flags this IS a ghostty key (the toggle owns it, always emitted).
+        // UNLIKE the app-level flags this IS a ghostty key — the toggle owns it, always emitted.
         #expect(AppSettings().rightClickPaste == nil)
         #expect(AppSettings().ghosttyConfigLines().contains("right-click-action = paste"))
         #expect(AppSettings(rightClickPaste: true).ghosttyConfigLines().contains("right-click-action = paste"))
         #expect(AppSettings(rightClickPaste: false).ghosttyConfigLines().contains("right-click-action = ignore"))
-        // round-trips each state; a legacy settings.json without the key decodes to nil (on).
         for value: Bool? in [nil, true, false] {
             let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(rightClickPaste: value)))
             #expect(decoded.rightClickPaste == value)
@@ -502,26 +450,22 @@ struct AppSettingsTests {
         let original = AppSettings(newSessionDirectory: "custom", newSessionCustomDirectory: "/tmp/work")
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(original))
         #expect(decoded == original)
-        // absent in a legacy file decodes to nil (the home default).
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{ "fontSize": 16 }"#.utf8))
         #expect(legacy.newSessionDirectory == nil)
         #expect(legacy.newSessionCustomDirectory == nil)
-        // an app-level behavior value, never a ghostty config key — only the always-on defaults are emitted.
         #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func resolveNewSessionCwdHomeIsDefault() {
-        // nil mode (default) and an explicit "home" both resolve to home, ignoring the session cwd.
         #expect(AppSettings().resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
         #expect(AppSettings(newSessionDirectory: "home").resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
-        // an unknown future mode falls back to home rather than crashing.
+        // an unknown future mode falls back to home.
         #expect(AppSettings(newSessionDirectory: "future").resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
     }
 
     @Test func resolveNewSessionCwdCurrentSessionInheritsOrFallsBack() {
         let settings = AppSettings(newSessionDirectory: "currentSession")
         #expect(settings.resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/proj")
-        // no active session (nil cwd) or a blank cwd falls back to home.
         #expect(settings.resolveNewSessionCwd(currentSessionCwd: nil, home: "/home") == "/home")
         #expect(settings.resolveNewSessionCwd(currentSessionCwd: "", home: "/home") == "/home")
     }
@@ -529,7 +473,6 @@ struct AppSettingsTests {
     @Test func resolveNewSessionCwdCustomUsesPathElseHome() {
         #expect(AppSettings(newSessionDirectory: "custom", newSessionCustomDirectory: "/fixed")
             .resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/fixed")
-        // custom mode with an unset or blank path falls back to home.
         #expect(AppSettings(newSessionDirectory: "custom")
             .resolveNewSessionCwd(currentSessionCwd: "/proj", home: "/home") == "/home")
         #expect(AppSettings(newSessionDirectory: "custom", newSessionCustomDirectory: "")
@@ -537,15 +480,12 @@ struct AppSettingsTests {
     }
 
     @Test func autoFollowAttentionUnknownDecodesToOff() {
-        // an unknown future raw value decodes tolerantly to off (the forward-compat rule), not a crash.
         #expect(AppSettings.AutoFollowAttention(rawValue: "s5") == .s5)
         #expect(AppSettings.AutoFollowAttention(rawValue: "future") == nil)
-        // a nil/unknown stored string maps to the disabled default via the ?? off fallback.
         #expect((AppSettings.AutoFollowAttention(rawValue: "future") ?? .off) == .off)
     }
 
     @Test func autoFollowAttentionTolerantInit() {
-        // the shared tolerant lookup: a known raw resolves, nil and an unknown string both fall back to off.
         #expect(AppSettings.AutoFollowAttention(tolerant: "s30") == .s30)
         #expect(AppSettings.AutoFollowAttention(tolerant: nil) == .off)
         #expect(AppSettings.AutoFollowAttention(tolerant: "") == .off)
@@ -558,14 +498,11 @@ struct AppSettingsTests {
         #expect(AppSettings.AutoFollowAttention.s10.timeout == 10)
         #expect(AppSettings.AutoFollowAttention.s30.timeout == 30)
         #expect(AppSettings.AutoFollowAttention.s60.timeout == 60)
-        // m5 is the largest boundary (5 minutes = 300s); s5 the smallest non-off.
         #expect(AppSettings.AutoFollowAttention.m5.timeout == 300)
-        // every case is enumerable and only off has a nil timeout.
         #expect(AppSettings.AutoFollowAttention.allCases.filter { $0.timeout == nil } == [.off])
     }
 
     @Test func autoFollowFieldsDefaultNilAndOmitFromJSON() throws {
-        // both default nil (feature off) and neither serializes when unset, keeping settings.json minimal.
         #expect(AppSettings().autoFollowAttention == nil)
         #expect(AppSettings().autoFollowStayOnActive == nil)
         let json = String(decoding: try JSONEncoder().encode(AppSettings()), as: UTF8.self)
@@ -579,11 +516,9 @@ struct AppSettingsTests {
         #expect(decoded == original)
         #expect(decoded.autoFollowAttention == "s30")
         #expect(decoded.autoFollowStayOnActive == true)
-        // absent in a legacy file decodes to nil (off).
         let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
         #expect(legacy.autoFollowAttention == nil)
         #expect(legacy.autoFollowStayOnActive == nil)
-        // app-level per-window behavior values, never ghostty config keys — only the always-on defaults emit.
         #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
@@ -603,32 +538,30 @@ struct AppSettingsTests {
         #expect(decoded.isInterfaceElementHidden(.scratch))
         #expect(decoded.isInterfaceElementHidden(.flaggedView))
         #expect(!decoded.isInterfaceElementHidden(.split))
-        // a GUI-only chrome value, never a ghostty config key — only the always-on defaults emit.
         #expect(original.ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
     @Test func workspaceAddSessionIsADistinctSidebarInterfaceElement() {
-        // the workspace-row hover "+" is a separate, sidebar-section toggle from the footer newSession button.
+        // the workspace-row hover "+", a separate toggle from the footer newSession button.
         #expect(InterfaceElement.workspaceAddSession.section == .sidebar)
         #expect(InterfaceElement.workspaceAddSession.displayName == "Workspace add-session")
         let hidden = AppSettings(hiddenInterfaceElements: ["workspaceAddSession"])
         #expect(hidden.isInterfaceElementHidden(.workspaceAddSession))
-        #expect(!hidden.isInterfaceElementHidden(.newSession)) // hiding one does not hide the other
+        #expect(!hidden.isInterfaceElementHidden(.newSession))
     }
 
     @Test func focusFilterIsASidebarInterfaceElement() {
-        // the bottom-bar workspace-filter toggle is its own sidebar-section element, hidden independently
-        // of the flagged-view toggle beside it.
+        // the bottom-bar workspace-filter toggle, hidden independently of the flagged-view toggle beside it.
         #expect(InterfaceElement.focusFilter.section == .sidebar)
         #expect(InterfaceElement.focusFilter.displayName == "Workspace filter")
         let hidden = AppSettings(hiddenInterfaceElements: ["focusFilter"])
         #expect(hidden.isInterfaceElementHidden(.focusFilter))
-        #expect(!hidden.isInterfaceElementHidden(.flaggedView)) // hiding one does not hide the other
+        #expect(!hidden.isInterfaceElementHidden(.flaggedView))
     }
 
     @Test func unknownInterfaceElementDecodesTolerantly() throws {
-        // a future-written element name must decode tolerantly (the forward-compat rule): the unknown name
-        // is dropped from the resolved set, and it must NOT fail the whole decode and discard other fields.
+        // forward-compat rule: an unknown name is dropped from the resolved set and must not fail the
+        // whole decode.
         let decoded = try JSONDecoder().decode(
             AppSettings.self,
             from: Data(#"{ "hiddenInterfaceElements": ["scratch", "teleporter"], "fontSize": 16 }"#.utf8))
@@ -638,8 +571,7 @@ struct AppSettingsTests {
     }
 
     @Test func interfaceElementSectionsPartitionAllCases() {
-        // every case belongs to exactly one section, and both sections are non-empty — the Settings tab
-        // relies on this to group the toggles.
+        // the Settings tab relies on this partition to group the toggles.
         let titleBar = InterfaceElement.allCases.filter { $0.section == .titleBar }
         let sidebar = InterfaceElement.allCases.filter { $0.section == .sidebar }
         #expect(titleBar.count + sidebar.count == InterfaceElement.allCases.count)

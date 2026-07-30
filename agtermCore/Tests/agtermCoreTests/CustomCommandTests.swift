@@ -21,14 +21,12 @@ struct CustomCommandTests {
     }
 
     @Test func expandEmptyTokenValueBecomesEmptyString() {
-        // a recognized token whose context value is empty (missing) substitutes to "".
         let ctx = CommandContext(sessionPWD: "/tmp")
         #expect(ctx.expand("[{AGT_SELECTION}]") == "[]")
         #expect(ctx.expand("cd {AGT_SESSION_PWD}") == "cd /tmp")
     }
 
     @Test func expandLeavesUnknownBracesUntouched() {
-        // not one of the AGT_X tokens — left as-is so unrelated shell braces survive.
         let ctx = sampleContext()
         #expect(ctx.expand("echo {FOO} ${BAR}") == "echo {FOO} ${BAR}")
     }
@@ -40,8 +38,7 @@ struct CustomCommandTests {
     }
 
     @Test func expandDoesNotReSubstituteTokenInsideAValue() {
-        // a token's value that contains another token's literal text must survive verbatim — the
-        // single-pass scan never re-substitutes already-replaced text (no injection via a value).
+        // the single-pass scan never re-substitutes replaced text, so a value cannot inject a token.
         let ctx = CommandContext(selection: "{AGT_SOCKET}", socket: "/tmp/agt.sock")
         #expect(ctx.expand("echo {AGT_SELECTION}") == "echo {AGT_SOCKET}")
         #expect(ctx.expand("{AGT_SELECTION} {AGT_SOCKET}") == "{AGT_SOCKET} /tmp/agt.sock")
@@ -68,9 +65,8 @@ struct CustomCommandTests {
     }
 
     @Test func paneDefaultsToLeft() {
-        // an unspecified pane is the main pane — always a valid `session.type --pane` argument, so a
-        // split-less session's context still round-trips into a pane-addressed control call. The typed
-        // `Pane` enum guarantees the value is left/right/scratch by construction; its rawValue feeds the token.
+        // the default must stay a valid `session.type --pane` value, so a split-less session's context
+        // still round-trips into a pane-addressed control call.
         #expect(CommandContext().pane == .left)
         #expect(CommandContext().environment()["AGT_PANE"] == "left")
         #expect(CommandContext().expand("{AGT_PANE}") == "left")
@@ -78,8 +74,6 @@ struct CustomCommandTests {
     }
 
     @Test func paneScratchExpandsToScratch() {
-        // the scratch is a pane too — a chord fired from the session's scratch terminal reports
-        // `scratch`, which round-trips straight back through `session type --pane scratch`.
         let ctx = CommandContext(pane: .scratch)
         #expect(ctx.pane == .scratch)
         #expect(ctx.environment()["AGT_PANE"] == "scratch")
@@ -87,26 +81,22 @@ struct CustomCommandTests {
     }
 
     @Test func referencesSessionScopedContextDetectsSessionTokensButNotLaunchers() {
-        // session/workspace/selection tokens (in {AGT_X}, $AGT_X, or ${AGT_X} form) -> true.
         #expect(CommandContext.referencesSessionScopedContext("echo {AGT_SESSION_PWD}"))
         #expect(CommandContext.referencesSessionScopedContext(#"rm -rf "$AGT_SESSION_PWD"/*"#))
         #expect(CommandContext.referencesSessionScopedContext("echo ${AGT_WORKSPACE_NAME}"))
         #expect(CommandContext.referencesSessionScopedContext("printf %s {AGT_SELECTION}"))
-        // launcher tokens (socket/window/pane) and no tokens -> false, so a launcher stays firable.
+        // launcher tokens (socket/window/pane) must not count, so a launcher stays firable.
         #expect(!CommandContext.referencesSessionScopedContext(#"agtermctl session new --command "ssh work""#))
         #expect(!CommandContext.referencesSessionScopedContext("agtermctl --socket {AGT_SOCKET} session new"))
         #expect(!CommandContext.referencesSessionScopedContext("open -a Safari {AGT_WINDOW_ID} {AGT_PANE}"))
     }
 
     @Test func environmentKeySetMatchesTheTokensExpandSubstitutes() {
-        // the symmetric guarantee: every env key is a token expand replaces, and vice versa.
         let ctx = sampleContext()
         let envKeys = Set(ctx.environment().keys)
         for key in envKeys {
-            // the key, wrapped as a token, must be substituted out by expand.
             #expect(!ctx.expand("{\(key)}").contains("{"))
         }
-        // and there is no extra token expand handles that environment omits.
         let expected: Set<String> = ["AGT_SESSION_ID", "AGT_SESSION_NAME", "AGT_SESSION_PWD",
                                      "AGT_WORKSPACE_ID", "AGT_WORKSPACE_NAME", "AGT_WINDOW_ID",
                                      "AGT_WINDOW_NAME", "AGT_PANE", "AGT_SELECTION", "AGT_SOCKET"]
@@ -114,11 +104,9 @@ struct CustomCommandTests {
     }
 
     @Test func tokenNamesMatchTheExpansionTokenSet() {
-        // the public token-name list (used by the Settings token reference) must stay equal to the
-        // set of tokens expand/environment handle, so the UI can't list a stale or missing token.
+        // the list feeds the Settings token reference, so a stale or missing name would show up there.
         let names = CommandContext.tokenNames
         #expect(Set(names) == Set(sampleContext().environment().keys))
-        // every advertised name must actually substitute out via expand.
         let ctx = sampleContext()
         for name in names {
             #expect(!ctx.expand("{\(name)}").contains("{"))

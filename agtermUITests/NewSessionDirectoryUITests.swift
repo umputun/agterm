@@ -1,12 +1,9 @@
 import Foundation
 import XCTest
 
-// e2e for the "New sessions open in" setting. Split out of ControlAPIUITests so that file stays under
-// the swiftlint file_length limit; this is an extension over the SAME test class, reusing its socket
-// harness (sendCommand / activeSessionID / typeRequest / app), so no scaffolding is duplicated.
+// e2e for the "New sessions open in" setting. An extension over the SAME class as ControlAPIUITests
+// (reusing its socket harness) so that file stays under the swiftlint file_length limit.
 extension ControlAPIUITests {
-    // with "Current session's directory" chosen, File ▸ New Session opens the new session in the ACTIVE
-    // session's cwd, not home.
     func testNewSessionInheritsCurrentSessionDirectory() throws {
         let (seededID, marker, markerName) = try armCurrentSessionMode()
         defer { try? FileManager.default.removeItem(at: marker) }
@@ -19,9 +16,8 @@ extension ControlAPIUITests {
         assertNewSessionInherited(seededID: seededID, markerName: markerName)
     }
 
-    // the workspace-row right-click "New Session" is a SEPARATE entry point (WorkspaceSidebar.menuNewSession,
-    // not AppActions.newSession) — it must honor the setting too. Regression guard: without the shared
-    // resolvedNewSessionCwd() it hardcoded home and ignored the picker.
+    // the workspace-row right-click "New Session" is a SEPARATE entry point
+    // (WorkspaceSidebar.menuNewSession, not AppActions.newSession).
     func testWorkspaceRowNewSessionInheritsCurrentSessionDirectory() throws {
         let (seededID, marker, markerName) = try armCurrentSessionMode()
         defer { try? FileManager.default.removeItem(at: marker) }
@@ -48,8 +44,7 @@ extension ControlAPIUITests {
 
         chooseCurrentSessionDirectoryMode()
 
-        // cd the seeded session into the marker dir (over the socket, no GUI focus needed), then wait for
-        // the tree to report the new cwd (OSC 7 fires on the next prompt after cd).
+        // the tree's cwd only catches up on the next prompt after the cd (OSC 7).
         let seededID = try activeSessionID()
         _ = try sendCommand(typeRequest(text: "cd \(marker.path)\n", target: seededID, select: true))
         XCTAssertTrue(poll(timeout: 15) {

@@ -1,22 +1,18 @@
 import Foundation
 import XCTest
 
-// session.text UI e2e. A `ControlAPITestCase` subclass (was an extension over `ControlAPIUITests`), so
-// it reuses the shared harness helpers (sendCommand / typeRequest / app / pollActiveSessionSplit /
-// activeSessionID) without duplicating scaffolding.
+// session.text UI e2e; the `ControlAPITestCase` base supplies the socket/app harness helpers.
 @MainActor
 final class SessionTextUITests: ControlAPITestCase {
-    // session.text returns the session's terminal buffer in result.text. Type a command whose OUTPUT (not
-    // the echoed command line) is a unique marker — `echo <tag>-$((6*7))` prints `<tag>-42`, a string the
-    // typed line itself does NOT contain (it has `$((6*7))`) — so a match proves command output was
-    // captured, not merely the typed input echoed back. Poll until the rendered output lands (async).
+    // the marker is the OUTPUT, not the typed line: `echo <tag>-$((6*7))` prints `<tag>-42`, a string the
+    // typed line does NOT contain, so a match cannot be the echoed input.
     func testSessionTextReturnsBuffer() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
         let newID = try XCTUnwrap(result["id"] as? String, "session.new should return the new id")
 
         let tag = "AGTERM-TEXT-\(UUID().uuidString.prefix(8))"
-        let output = "\(tag)-42" // the shell evaluates $((6*7)); this string is absent from the typed line
+        let output = "\(tag)-42"
         let typed = try sendCommand(typeRequest(text: "echo \(tag)-$((6*7))\n", target: newID, select: true))
         XCTAssertEqual(typed["ok"] as? Bool, true, "session.type should succeed: \(typed)")
 
@@ -33,10 +29,6 @@ final class SessionTextUITests: ControlAPITestCase {
         XCTAssertNotNil(text, "session.text should return a buffer containing the command OUTPUT \(output)")
     }
 
-    // session.text --lines N keeps only the LAST N lines of the full buffer (the GhosttySurfaceView trim:
-    // strip one trailing newline, split on \n, suffix(N)). Print 50 distinctly-tagged numbered lines, then
-    // read --lines 5: assert exactly 5 lines come back, the LAST printed line (tag-50) is present, and an
-    // EARLY line (tag-1) is NOT — proving the suffix trim, which no other test exercises.
     func testSessionTextLinesReturnsLastN() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
@@ -63,10 +55,6 @@ final class SessionTextUITests: ControlAPITestCase {
         XCTAssertFalse(t.contains("\(tag)-1-X"), "an early line must be trimmed away by --lines 5: \(t)")
     }
 
-    // session.text --all reads the whole SCREEN (visible + scrollback); the default read is the VIEWPORT
-    // only. Print far more lines than fit on screen, then assert --all returns an EARLY line that scrolled
-    // out of the viewport while the default read does NOT — a swapped VIEWPORT/SCREEN region would fail this
-    // (the default read is never otherwise distinguished from --all over the socket).
     func testSessionTextAllIncludesScrollback() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
@@ -77,7 +65,6 @@ final class SessionTextUITests: ControlAPITestCase {
         let typed = try sendCommand(typeRequest(text: "printf '\(tag)-%s-X\\n' $(seq 1 400)\n", target: newID, select: true))
         XCTAssertEqual(typed["ok"] as? Bool, true, "session.type should succeed: \(typed)")
 
-        // poll --all until the last printed line lands (proves the output fully rendered to scrollback).
         var allText: String?
         for _ in 0..<60 {
             let response = try sendCommand(#"{"cmd":"session.text","target":"\#(newID)","args":{"all":true}}"#)
@@ -98,27 +85,20 @@ final class SessionTextUITests: ControlAPITestCase {
         XCTAssertTrue(viewport.contains("\(tag)-400-X"), "the default (VIEWPORT) read should still show the most recent line")
     }
 
-    // session.text --pane left|right reads the matching pane of a split. The LEFT marker goes in over the
-    // socket (a no-pane session.type injects into the main pane); the RIGHT pane is fed via the real
-    // keyboard after focusing it — deliberately NOT via `session.type --pane right` (that route has its own
-    // e2e in SessionTypePaneUITests), so this test also proves the focus→keyboard first-responder routing.
-    // Assert each pane read returns its OWN marker and NOT the other's — the --pane success mappings
-    // (left→surface, right→splitSurface) are otherwise only hit on the error path.
+    // the right pane is fed via the real keyboard, deliberately NOT `session.type --pane right` (covered by
+    // SessionTypePaneUITests), so this also proves the focus→keyboard first-responder routing.
     func testSessionTextPaneSelectsCorrectPane() throws {
         let split = try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"on"}}"#)
         XCTAssertEqual(split["ok"] as? Bool, true, "split on should succeed: \(split)")
         XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the active session should report split:true")
         let activeID = try activeSessionID()
 
-        // LEFT (main) pane: a no-pane session.type injects into session.surface (the main pane), so this
-        // marker lands in the left pane regardless of which pane holds focus.
+        // a no-pane session.type always injects into the main pane, whichever pane holds focus.
         let leftMarker = "LEFT-\(UUID().uuidString.prefix(8))"
         XCTAssertNotNil(try pollPaneText(target: activeID, pane: "left", contains: leftMarker, retype: {
             _ = try self.sendCommand(self.typeRequest(text: "echo \(leftMarker)\n", target: activeID, select: false))
         }), "--pane left should read the marker typed into the main pane")
 
-        // RIGHT (split) pane: focus it and type via the real keyboard, which routes to the focused pane's
-        // first responder.
         let rightMarker = "RIGHT-\(UUID().uuidString.prefix(8))"
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(activeID)","args":{"pane":"right"}}"#)["ok"] as? Bool,
                        true, "focus right should succeed")
@@ -128,7 +108,6 @@ final class SessionTextUITests: ControlAPITestCase {
             self.app.typeKey(.return, modifierFlags: [])
         }), "--pane right should read the marker typed into the split pane")
 
-        // cross-check: each pane read carries ONLY its own marker (the two reads hit different surfaces).
         let leftText = try XCTUnwrap((try sendCommand(#"{"cmd":"session.text","target":"\#(activeID)","args":{"pane":"left"}}"#)["result"] as? [String: Any])?["text"] as? String)
         let rightText = try XCTUnwrap((try sendCommand(#"{"cmd":"session.text","target":"\#(activeID)","args":{"pane":"right"}}"#)["result"] as? [String: Any])?["text"] as? String)
         XCTAssertTrue(leftText.contains(leftMarker), "--pane left should contain the left marker: \(leftText)")
@@ -137,8 +116,7 @@ final class SessionTextUITests: ControlAPITestCase {
         XCTAssertFalse(rightText.contains(leftMarker), "--pane right must NOT contain the left pane's marker: \(rightText)")
     }
 
-    // session.text --pane right on a non-split session errors. `right` is a valid pane value so it passes
-    // the CLI validate() and the request reaches the server, which rejects it (no split pane to read).
+    // `right` is a valid pane value, so the CLI validate() passes and the SERVER is what rejects it.
     func testSessionTextSplitPaneWithoutSplitErrors() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
@@ -149,10 +127,7 @@ final class SessionTextUITests: ControlAPITestCase {
         XCTAssertEqual(response["error"] as? String, "session has no split pane", "should report no split pane: \(response)")
     }
 
-    // session.text arg validation is enforced SERVER-SIDE, not only in the CLI `validate()`: a raw socket
-    // client bypasses the CLI, so `lines <= 0` and `all` + `lines` together must error here too (an unchecked
-    // `lines: 0` would otherwise fall through to the full buffer). sendCommand speaks raw JSON, so it is the
-    // bypassing client.
+    // sendCommand speaks raw JSON, so it IS the CLI-bypassing client this server-side validation guards.
     func testSessionTextRejectsInvalidArgsServerSide() throws {
         let zero = try sendCommand(#"{"cmd":"session.text","target":"active","args":{"lines":0}}"#)
         XCTAssertEqual(zero["ok"] as? Bool, false, "session.text lines:0 should fail server-side: \(zero)")
@@ -166,14 +141,13 @@ final class SessionTextUITests: ControlAPITestCase {
         XCTAssertEqual(both["error"] as? String, "use either --all or --lines, not both", "should report mutual exclusion: \(both)")
     }
 
-    // A genuinely BLANK screen reads ok with an EMPTY string, not an error (readScreenText returns "" for an
-    // empty read, nil only for a failed one). `session new --command "sleep 300"` execs sleep directly — no
-    // shell, so no prompt and no output — leaving the viewport blank; session.text returns ok + "".
+    // `--command "sleep 300"` execs sleep directly — no shell, no prompt, no output — so the viewport is
+    // genuinely blank.
     func testSessionTextBlankScreenReturnsOkEmpty() throws {
         let created = try sendCommand(#"{"cmd":"session.new","args":{"command":"sleep 300"}}"#)
         let newID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return the new id")
 
-        // poll for the surface to realize (a never-shown session realizes a beat after create).
+        // a never-shown session realizes a beat after create, hence the poll.
         var response: [String: Any] = [:]
         for _ in 0..<40 {
             response = try sendCommand(#"{"cmd":"session.text","target":"\#(newID)"}"#)
@@ -185,10 +159,7 @@ final class SessionTextUITests: ControlAPITestCase {
         XCTAssertTrue(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, "a blank screen should read as empty, got: \(text)")
     }
 
-    // `--pane scratch` reads (and `session.type --pane scratch` writes) the scratch terminal whether or not
-    // it is on screen, since its surface is kept alive when hidden. Open the scratch, echo a marker into it,
-    // read it back, then HIDE it and prove the buffer is still readable AND still writable via --pane scratch.
-    // The arithmetic ($((6*7)) -> 42) proves the scratch's own shell RAN the line, not merely echoed it.
+    // the arithmetic ($((6*7)) → 42) proves the scratch's own shell RAN the line rather than echoing it.
     func testSessionScratchPaneReadsAndWritesEvenWhenHidden() throws {
         let activeID = try activeSessionID()
 
@@ -202,13 +173,11 @@ final class SessionTextUITests: ControlAPITestCase {
         })
         XCTAssertNotNil(shown, "session.text --pane scratch should read the scratch's own buffer while it is shown")
 
-        // hide the scratch (keep-alive) and confirm its buffer is STILL readable via --pane scratch.
         let off = try sendCommand(#"{"cmd":"session.scratch","target":"\#(activeID)","args":{"mode":"off"}}"#)
         XCTAssertEqual(off["ok"] as? Bool, true, "session.scratch off should succeed: \(off)")
         let hidden = try XCTUnwrap((try sendCommand(#"{"cmd":"session.text","target":"\#(activeID)","args":{"pane":"scratch","all":true}}"#)["result"] as? [String: Any])?["text"] as? String)
         XCTAssertTrue(hidden.contains("\(tag)-42"), "a hidden scratch's buffer must still be readable via --pane scratch, got: \(hidden)")
 
-        // and it must still be WRITABLE while hidden: type a fresh marker via --pane scratch and read it back.
         let tag2 = "HIDDEN-\(UUID().uuidString.prefix(8))"
         let afterHiddenWrite = try pollPaneText(target: activeID, pane: "scratch", contains: "\(tag2)-42", retype: {
             _ = try self.sendCommand(self.typeRequest(text: "echo \(tag2)-$((6*7))\n", target: activeID,
@@ -217,7 +186,6 @@ final class SessionTextUITests: ControlAPITestCase {
         XCTAssertNotNil(afterHiddenWrite, "session.type --pane scratch must reach the scratch even while it is hidden")
     }
 
-    // --pane scratch on a session that never opened a scratch errors on both read and write, server-side.
     func testSessionScratchPaneWithoutScratchErrors() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let newID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return the new id")

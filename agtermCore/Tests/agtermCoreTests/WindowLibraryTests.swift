@@ -52,13 +52,13 @@ final class WindowLibraryTests {
         #expect(library.windowName(for: library.windows[0].id) == "window 1")
         let work = library.newWindow(name: "work")
         #expect(library.windowName(for: work.id) == "work")
-        #expect(library.windowName(for: nil) == "")       // nil id -> empty (the command-context default)
-        #expect(library.windowName(for: UUID()) == "")    // unknown id -> empty
+        #expect(library.windowName(for: nil) == "")
+        #expect(library.windowName(for: UUID()) == "")
     }
 
     @Test func allOpenSessionsFlattensEverySessionAcrossWindows() {
         let library = WindowLibrary(directory: directory)
-        #expect(library.allOpenSessions().count == 1) // the seeded window's one session
+        #expect(library.allOpenSessions().count == 1)
         let second = library.newWindow(name: "work")
         let store = try! #require(library.store(for: second.id))
         _ = store.addSession(toWorkspace: store.workspaces[0].id, cwd: "/tmp")
@@ -68,7 +68,7 @@ final class WindowLibraryTests {
 
     @Test func totalUnseenCountSumsEverySessionAcrossWindows() {
         let library = WindowLibrary(directory: directory)
-        #expect(library.totalUnseenCount == 0) // a fresh tree has nothing unseen
+        #expect(library.totalUnseenCount == 0)
         let firstStore = try! #require(library.store(for: library.windows[0].id))
         firstStore.workspaces[0].sessions[0].unseenCount = 2
         let second = library.newWindow(name: "work")
@@ -78,7 +78,6 @@ final class WindowLibraryTests {
         extra.unseenCount = 5
         // 2 (window 1) + 3 + 5 (work) = 10 across both open windows.
         #expect(library.totalUnseenCount == 10)
-        // closing a window drops its sessions from the roll-up.
         library.closeWindow(second.id)
         #expect(library.totalUnseenCount == 2)
     }
@@ -263,11 +262,10 @@ final class WindowLibraryTests {
     }
 
     @Test func windowInfoDistinguishesAutoFromCustomNames() {
-        // auto-assigned "window N" → not custom (omitted from the title bar)
+        // auto "window N" names are omitted from the title bar
         #expect(WindowInfo(name: "window 1").hasCustomName == false)
         #expect(WindowInfo(name: "window 12").hasCustomName == false)
         #expect(WindowInfo.isAutoName("window 1"))
-        // user-set names → custom
         #expect(WindowInfo(name: "work").hasCustomName)
         #expect(WindowInfo(name: "window").hasCustomName)        // no number
         #expect(WindowInfo(name: "window 0").hasCustomName)      // number must be >= 1
@@ -309,7 +307,6 @@ final class WindowLibraryTests {
         #expect(library.store(for: second)?.sidebarVisible == false)
         #expect(library.store(for: third)?.sidebarVisible == true)
 
-        // re-focus the first window and re-apply — only the new frontmost keeps its sidebar.
         library.frontmostWindowID = first
         library.applyInactiveWindowSidebarHiding()
         #expect(library.store(for: first)?.sidebarVisible == true)
@@ -327,11 +324,10 @@ final class WindowLibraryTests {
 
     @Test func applyInactiveWindowSidebarHidingReshowsManuallyHiddenFrontmost() {
         let library = WindowLibrary(directory: directory)
-        _ = library.newWindow(name: "work") // second window, now frontmost
+        _ = library.newWindow(name: "work")
         let front = library.activeWindowID
-        library.store(for: front)?.setSidebarVisible(false) // user hid the active window's sidebar
+        library.store(for: front)?.setSidebarVisible(false)
         library.applyInactiveWindowSidebarHiding()
-        // absolute rule: the frontmost window always shows its sidebar, overriding the manual hide.
         #expect(library.store(for: front)?.sidebarVisible == true)
     }
 
@@ -340,8 +336,6 @@ final class WindowLibraryTests {
         let first = library.windows[0]
         let second = library.newWindow(name: "work")
 
-        // the second window has auto-follow enabled (30s) and its sidebar hidden; the first leaves
-        // auto-follow off (nil autoFollowMs) with the sidebar visible (the default).
         library.store(for: second.id)?.autoFollowTimeout = 30
         library.store(for: second.id)?.setSidebarVisible(false)
 
@@ -361,8 +355,8 @@ final class WindowLibraryTests {
         let frame = ControlWindowFrame(x: 10, y: 20, width: 800, height: 600, display: 0)
         let nodes = library.controlWindowNodes(geometry: { $0 == second.id ? frame : nil })
         #expect(nodes[0].id == first.id.uuidString)
-        #expect(nodes[0].geometry == nil)   // no frame supplied for the first window
-        #expect(nodes[1].geometry == frame) // the closure's frame rides the second node
+        #expect(nodes[0].geometry == nil)
+        #expect(nodes[1].geometry == frame)
         // the default (no closure) omits geometry entirely — the host-free / non-AppKit path.
         #expect(library.controlWindowNodes().allSatisfy { $0.geometry == nil })
     }
@@ -371,18 +365,16 @@ final class WindowLibraryTests {
         let library = WindowLibrary(directory: directory)
         let first = library.windows[0]
         let second = library.newWindow(name: "work")
-        // the app-side flags closure supplies each window's live fullscreen/zoom/minimized state.
         let nodes = library.controlWindowNodes(flags: {
             $0 == second.id ? (fullscreen: true, zoomed: false, minimized: true) : nil
         })
         #expect(nodes[0].id == first.id.uuidString)
-        #expect(nodes[0].fullscreen == nil) // no flags supplied for the first window
+        #expect(nodes[0].fullscreen == nil)
         #expect(nodes[0].zoomed == nil)
         #expect(nodes[0].minimized == nil)
-        #expect(nodes[1].fullscreen == true) // the closure's flags ride the second node
+        #expect(nodes[1].fullscreen == true)
         #expect(nodes[1].zoomed == false)
         #expect(nodes[1].minimized == true)
-        // the default (no closure) omits all three — the host-free / non-AppKit path.
         #expect(library.controlWindowNodes().allSatisfy {
             $0.fullscreen == nil && $0.zoomed == nil && $0.minimized == nil
         })
@@ -499,12 +491,9 @@ final class WindowLibraryTests {
     }
 
     @Test func removeWindowCancelsPendingSaveSoFileStaysDeleted() throws {
-        // a debounced save scheduled just before delete must NOT re-create the per-window file after
-        // removeWindow deletes it. removeWindow cancels the store's pending save first, so even holding
-        // the store reference (keeping it alive past the drop, as the real-world willClose closure does)
-        // leaves no scheduled write to resurrect windows/<id>.json. The async timer can't fire in
-        // synchronous test code, so the assertion is the deterministic observable contract: the file is
-        // gone and stays gone.
+        // a debounced save scheduled just before delete must NOT re-create the per-window file;
+        // removeWindow cancels the store's pending save first. The async timer can't fire in
+        // synchronous test code, so the assertion is the file being gone and staying gone.
         let library = WindowLibrary(directory: directory)
         let extra = library.newWindow(name: "extra")
         let store = try #require(library.store(for: extra.id)) // hold a strong ref past the store drop
@@ -519,9 +508,8 @@ final class WindowLibraryTests {
 
     @Test func removeWindowSweepsRenderedTextPNGsOfAClosedWindow() throws {
         // deleting a CLOSED window (no live store) must still sweep its sessions' rendered `.text`
-        // watermark PNGs — `removeWindow` reads the session ids from the persisted snapshot, not the
-        // (absent) store. The state-dir root is the test `directory` (WindowLibrary + WatermarkStorage
-        // resolve against the same root), so the PNGs land where the sweep looks, no env mutation.
+        // watermark PNGs — `removeWindow` reads the session ids from the persisted snapshot. The
+        // state-dir root is the test `directory`, so the PNGs land where the sweep looks.
         let closed = UUID(), kept = UUID()
         let doomedSession = UUID(), keptSession = UUID()
         try writeWindowFile(closed, Snapshot(workspaces: [WorkspaceSnapshot(
@@ -544,13 +532,13 @@ final class WindowLibraryTests {
         #expect(!library.isOpen(closed)) // precondition: the target window is closed (no store to sweep from)
         library.removeWindow(closed)
 
-        #expect(!FileManager.default.fileExists(atPath: doomedPNG.path)) // deleted window's PNG swept
-        #expect(FileManager.default.fileExists(atPath: keptPNG.path))    // surviving window's PNG untouched
+        #expect(!FileManager.default.fileExists(atPath: doomedPNG.path))
+        #expect(FileManager.default.fileExists(atPath: keptPNG.path))
     }
 
     @Test func removeWindowSweepsRenderedTextPNGsOfAnOpenWindow() throws {
         // the OPEN-window path reads session ids from the live store; it must sweep into the same
-        // state-dir root (the test `directory`) so a deleted open window's PNGs go too.
+        // state-dir root (the test `directory`).
         let library = WindowLibrary(directory: directory)
         let extra = library.newWindow(name: "extra")
         let store = try #require(library.store(for: extra.id))
@@ -658,12 +646,9 @@ final class WindowLibraryTests {
         let extra = library.newWindow(name: "extra")
         let store = try #require(library.store(for: extra.id))
         let session = try #require(store.workspaces.first?.sessions.first)
-        // a session in an open window is found.
         #expect(library.store(forSession: session.id) === store)
-        // an unknown id misses.
         #expect(library.store(forSession: UUID()) == nil)
         #expect(library.windowID(forSession: UUID()) == nil)
-        // once the window closes, its sessions are no longer searchable.
         library.closeWindow(extra.id)
         #expect(library.store(forSession: session.id) == nil)
         #expect(library.windowID(forSession: session.id) == nil)
@@ -679,9 +664,7 @@ final class WindowLibraryTests {
         // two open windows → SwiftUI auto-opens one, so one extra openWindow() call is needed.
         #expect(library.consumeReopen() == 1)
         #expect(library.hasReopened)
-        // a second call (another window's .task) is a no-op.
         #expect(library.consumeReopen() == 0)
-        // the claim queue is launch window (frontmost a) first, then b.
         #expect(library.claimNextWindowID() == a)
         #expect(library.claimNextWindowID() == b)
         // drained → nil (an extra restored window dismisses itself).
@@ -704,10 +687,7 @@ final class WindowLibraryTests {
         let a = library.windows[0].id
         let b = library.newWindow(name: "b").id
         library.frontmostWindowID = a
-        // launch window's .onAppear runs first: queue empty + not reopened → adopt the launch id (a).
         #expect(library.adoptLaunchWindowID() == a)
-        // now the scene .task runs: still one extra openWindow() needed (N-1 = 1), but the queue must
-        // NOT re-offer a — only b remains for the reopened window.
         #expect(library.consumeReopen() == 1)
         #expect(library.claimNextWindowID() == b)
         #expect(library.claimNextWindowID() == nil)
@@ -725,9 +705,7 @@ final class WindowLibraryTests {
 
     // the persisted frontmost may point at a CLOSED window (quit with a closed window frontmost, two
     // others open). `launchWindowID` must fall through to an OPEN id, so `consumeReopen` seeds the
-    // whole open set and returns open.count - 1 — every open window gets claimed, none binds the
-    // closed store. Pre-fix `launchWindowID` returned the closed frontmost unconditionally, seeding a
-    // 3-entry queue but returning 1, so the last open window never reopened (off-by-two).
+    // whole open set and returns open.count - 1 — none binds the closed store.
     @Test func consumeReopenSeedsAllOpenWhenFrontmostIsClosed() throws {
         let x = UUID()
         let y = UUID()
@@ -735,7 +713,6 @@ final class WindowLibraryTests {
         try writeWindowFile(x, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "x", sessions: [])]))
         try writeWindowFile(y, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "y", sessions: [])]))
         try writeWindowFile(z, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "z", sessions: [])]))
-        // frontmost z is CLOSED; x and y are open.
         try writeIndex(WindowsIndex(frontmost: z, windows: [
             WindowEntry(id: x, name: "x", isOpen: true),
             WindowEntry(id: y, name: "y", isOpen: true),
@@ -744,15 +721,12 @@ final class WindowLibraryTests {
         let library = WindowLibrary(directory: directory)
         #expect(Set(library.openIDs()) == Set([x, y]))
         #expect(library.frontmostWindowID == z)
-        // two open windows → SwiftUI auto-opens one, one extra openWindow() for the other.
         #expect(library.consumeReopen() == 1)
-        // the launch window claims an OPEN id (not the closed frontmost z), the reopened window the other.
         let launchID = try #require(library.claimNextWindowID())
         let reopenedID = try #require(library.claimNextWindowID())
         #expect(launchID != z)
         #expect(reopenedID != z)
         #expect(Set([launchID, reopenedID]) == Set([x, y]))
-        // queue exactly covers the open set — no stray, no undercount.
         #expect(library.claimNextWindowID() == nil)
     }
 
@@ -779,13 +753,11 @@ final class WindowLibraryTests {
         library.closeWindow(extra)
         _ = library.consumeReopen()
         _ = library.claimNextWindowID() // drain the launch id so the queue starts empty.
-        // three rapid opens of the same closed window before any claim is consumed enqueue it once.
         library.enqueueClaim(extra)
         library.enqueueClaim(extra)
         library.enqueueClaim(extra)
         #expect(library.claimNextWindowID() == extra)
         #expect(library.claimNextWindowID() == nil)
-        // once the first claim is consumed, a fresh enqueue of the same id is queued again.
         library.enqueueClaim(extra)
         #expect(library.claimNextWindowID() == extra)
         #expect(library.claimNextWindowID() == nil)
@@ -800,7 +772,7 @@ final class WindowLibraryTests {
         _ = library.consumeReopen()
         _ = library.claimNextWindowID() // drain the launch id so the queue starts empty.
         let info = library.newWindow(name: "fresh") // pre-loads stores[info.id].
-        #expect(library.isOpen(info.id)) // store is loaded, as the app does before enqueueing.
+        #expect(library.isOpen(info.id))
         library.enqueueClaim(info.id)
         #expect(library.claimNextWindowID() == info.id)
         #expect(library.claimNextWindowID() == nil)
@@ -813,7 +785,6 @@ final class WindowLibraryTests {
         let library = WindowLibrary(directory: directory)
         let only = library.windows[0].id
         #expect(library.adoptLaunchWindowID() == only)
-        // a second caller before consumeReopen gets nil (not the same id again).
         #expect(library.adoptLaunchWindowID() == nil)
     }
 
@@ -836,7 +807,6 @@ final class WindowLibraryTests {
         let first = try #require(library.store(for: library.windows[0].id))
         library.newWindow(name: "extra")
         library.frontmostWindowID = nil
-        // with no frontmost set, the first open window's store is used.
         #expect(library.activeStore === first)
     }
 
@@ -845,7 +815,6 @@ final class WindowLibraryTests {
         let a = library.windows[0]
         let b = library.newWindow(name: "b")
         let storeA = try #require(library.store(for: a.id))
-        // frontmost points at b, then b closes → fall back to the first open store (a).
         library.frontmostWindowID = b.id
         library.closeWindow(b.id)
         #expect(library.activeStore === storeA)
@@ -857,10 +826,8 @@ final class WindowLibraryTests {
         let b = library.newWindow(name: "b")
         library.frontmostWindowID = b.id
         #expect(library.activeWindowID == b.id)
-        // closing the frontmost falls back to the first open window.
         library.closeWindow(b.id)
         #expect(library.activeWindowID == a.id)
-        // an unset frontmost also falls back to the first open window.
         library.frontmostWindowID = nil
         #expect(library.activeWindowID == a.id)
     }
@@ -877,7 +844,6 @@ final class WindowLibraryTests {
         #expect(reloaded.windows.map(\.name) == ["window 1", "personal"])
         #expect(reloaded.windows.map(\.id) == [library.windows[0].id, extra.id])
         #expect(reloaded.frontmostWindowID == extra.id)
-        // both were open at save → both reopen.
         #expect(Set(reloaded.openIDs()) == Set([library.windows[0].id, extra.id]))
     }
 
@@ -936,7 +902,6 @@ final class WindowLibraryTests {
         try writeWindowFile(a, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "ws", sessions: [])]))
         try writeIndex(WindowsIndex(frontmost: stale, windows: [WindowEntry(id: a, name: "a", isOpen: false)]))
         let library = WindowLibrary(directory: directory)
-        // never windowless: the stale frontmost is ignored, the first (only) window opens.
         #expect(library.openIDs() == [a])
     }
 
@@ -959,7 +924,6 @@ final class WindowLibraryTests {
         let store = try #require(library.store(for: library.windows[0].id))
         #expect(store.workspaces.map(\.name) == ["legacy"])
         #expect(store.workspaces[0].sessions[0].displayName == "build")
-        // migration wrote a per-window file and the index.
         #expect(FileManager.default.fileExists(atPath: windowFileURL(library.windows[0].id).path))
         #expect(FileManager.default.fileExists(atPath: indexURL.path))
         // the legacy file is left in place.
@@ -999,7 +963,6 @@ final class WindowLibraryTests {
     @Test func emptyLegacyFileSeedsInsteadOfMigrating() throws {
         try PersistenceStore(directory: directory).save(Snapshot())
         let library = WindowLibrary(directory: directory)
-        // empty legacy tree → seed a fresh default window, not an empty migrated one.
         #expect(library.windows.count == 1)
         let store = try #require(library.store(for: library.windows[0].id))
         #expect(store.workspaces[0].name == "workspace 1")
@@ -1007,7 +970,6 @@ final class WindowLibraryTests {
     }
 
     @Test func existingIndexIgnoresLegacy() throws {
-        // legacy present AND a valid index → the index wins, legacy ignored.
         try PersistenceStore(directory: directory).save(Snapshot(workspaces: [
             WorkspaceSnapshot(id: UUID(), name: "legacy", sessions: []),
         ]))
@@ -1026,7 +988,6 @@ final class WindowLibraryTests {
     @Test func corruptIndexFallsBackToSeed() throws {
         try Data("{ not valid json ]".utf8).write(to: indexURL)
         let library = WindowLibrary(directory: directory)
-        // no legacy → seed one default window.
         #expect(library.windows.count == 1)
         #expect(library.windows[0].name == "window 1")
         let store = try #require(library.store(for: library.windows[0].id))
@@ -1039,7 +1000,6 @@ final class WindowLibraryTests {
             WorkspaceSnapshot(id: UUID(), name: "legacy", sessions: []),
         ]))
         let library = WindowLibrary(directory: directory)
-        // corrupt index treated as absent → migrate from legacy.
         let store = try #require(library.store(for: library.windows[0].id))
         #expect(store.workspaces.map(\.name) == ["legacy"])
     }
@@ -1049,7 +1009,6 @@ final class WindowLibraryTests {
         future.version = WindowsIndex.currentVersion + 1
         try writeIndex(future)
         let library = WindowLibrary(directory: directory)
-        // mismatched version → seeded default, not the future entry.
         #expect(library.windows.map(\.name) == ["window 1"])
     }
 
@@ -1066,7 +1025,6 @@ final class WindowLibraryTests {
         let library = WindowLibrary(directory: directory)
         #expect(library.windows.map(\.name) == ["orphan"])
         let store = try #require(library.store(for: id))
-        // a missing per-window file opens an empty tree (no crash, no abort).
         #expect(store.workspaces.isEmpty)
         #expect(library.isOpen(id))
     }
@@ -1103,12 +1061,10 @@ final class WindowLibraryTests {
         try Data("{ not valid json ]".utf8).write(to: indexURL)
 
         let library = WindowLibrary(directory: directory)
-        // both windows recovered and open, with auto-assigned default names.
         #expect(library.windows.count == 2)
         #expect(Set(library.windows.map(\.id)) == Set([aID, bID]))
         #expect(Set(library.openIDs()) == Set([aID, bID]))
         #expect(library.windows.allSatisfy { WindowInfo.isAutoName($0.name) })
-        // sessions from the per-window snapshots survived intact.
         let storeA = try #require(library.store(for: aID))
         let storeB = try #require(library.store(for: bID))
         #expect(storeA.workspaces.map(\.name) == ["alpha"])
@@ -1122,7 +1078,6 @@ final class WindowLibraryTests {
         #expect(Set(reloaded.windows.map(\.id)) == Set([aID, bID]))
     }
 
-    // a version-mismatched index is treated as absent too — the surviving per-window files recover.
     @Test func versionMismatchIndexRecoversOrphanedPerWindowFiles() throws {
         let id = UUID()
         let sessionID = UUID()
@@ -1136,7 +1091,6 @@ final class WindowLibraryTests {
         try writeIndex(future)
 
         let library = WindowLibrary(directory: directory)
-        // the mismatched index is ignored; the orphan file recovers (not the "future" entry, not a seed).
         #expect(library.windows.map(\.id) == [id])
         #expect(library.windows[0].name == "window 1")
         let store = try #require(library.store(for: id))
@@ -1148,7 +1102,6 @@ final class WindowLibraryTests {
     // legacy file, bootstrap still falls through to legacy migration (one "window 1").
     @Test func noOrphanFilesFallsThroughToLegacyMigration() throws {
         try Data("garbage".utf8).write(to: indexURL)
-        // a stray non-UUID file in the windows dir must NOT be mistaken for a recoverable window.
         try FileManager.default.createDirectory(at: directory.appendingPathComponent("windows"),
                                                 withIntermediateDirectories: true)
         try Data("noise".utf8).write(to: directory.appendingPathComponent("windows").appendingPathComponent("notes.json"))
@@ -1157,7 +1110,6 @@ final class WindowLibraryTests {
         ]))
 
         let library = WindowLibrary(directory: directory)
-        // no recoverable per-window files → legacy migration, one default-named window.
         #expect(library.windows.count == 1)
         #expect(library.windows[0].name == "window 1")
         let store = try #require(library.store(for: library.windows[0].id))
@@ -1180,7 +1132,6 @@ final class WindowLibraryTests {
     // overrides must be cleared in CLOSED windows too — else a closed window reopens later overriding
     // the new default. The open window clears live; the closed one's snapshot file is rewritten.
     @Test func resetSessionFontSizesAllWindowsClearsClosedAndOpen() throws {
-        // a closed window whose persisted session carries a font-size override.
         let closedID = UUID()
         let closedSession = UUID()
         try writeWindowFile(closedID, Snapshot(workspaces: [
@@ -1188,7 +1139,6 @@ final class WindowLibraryTests {
                 SessionSnapshot(id: closedSession, customName: nil, cwd: "/tmp", fontSize: 18),
             ]),
         ]))
-        // an open window whose live session also carries an override.
         let openID = UUID()
         try writeWindowFile(openID, Snapshot(workspaces: [WorkspaceSnapshot(id: UUID(), name: "ws", sessions: [])]))
         try writeIndex(WindowsIndex(frontmost: openID, windows: [
@@ -1205,9 +1155,7 @@ final class WindowLibraryTests {
 
         library.resetSessionFontSizesAllWindows()
 
-        // open window: live override cleared.
         #expect(openStore.session(withID: openSession.id)?.fontSize == nil)
-        // closed window: its snapshot file rewritten with the override stripped.
         let reloaded = PersistenceStore(directory: directory.appendingPathComponent("windows"),
                                         fileName: "\(closedID.uuidString).json").load()
         #expect(reloaded.workspaces.first?.sessions.first?.fontSize == nil)
@@ -1219,11 +1167,10 @@ final class WindowLibraryTests {
 
     @Test func openCountsSumsOpenWindowsAndSessions() throws {
         let library = WindowLibrary(directory: directory)
-        // the seeded window already has one workspace + one session; add a second session to it.
+        // the seeded window already has one workspace + one session.
         let firstStore = try #require(library.store(for: library.windows[0].id))
         let firstWs = try #require(firstStore.workspaces.first)
         _ = try #require(firstStore.addSession(toWorkspace: firstWs.id, cwd: "/tmp"))
-        // a second open window seeds one more session.
         _ = library.newWindow(name: "work")
         let counts = library.openCounts()
         #expect(counts.windows == 2)
@@ -1249,11 +1196,9 @@ final class WindowLibraryTests {
         let session = try #require(store.workspaces.first?.sessions.first)
         // simulate a live cwd change that AppStore doesn't auto-persist.
         session.currentCwd = "/changed"
-        // add another open window too.
         library.newWindow(name: "extra")
         library.saveAllOpen()
 
-        // the cwd change is now on disk for the first window.
         let reloaded = WindowLibrary(directory: directory)
         let reloadedStore = try #require(reloaded.store(for: reloaded.windows[0].id))
         let reloadedSession = try #require(reloadedStore.session(withID: session.id))

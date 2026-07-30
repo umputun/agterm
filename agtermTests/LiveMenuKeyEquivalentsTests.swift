@@ -28,9 +28,7 @@ final class LiveMenuKeyEquivalentsTests: XCTestCase {
         return menu
     }
 
-    // the reason the recursion exists: AppKit's performKeyEquivalent recurses, so a chord one level down
-    // is live and can shadow an agterm binding. Reporting only the top level would let a caller compare
-    // the two lists and conclude nothing holds a chord when something does.
+    // AppKit's performKeyEquivalent recurses, so a chord one level down is live and can shadow a binding.
     func testCollectsKeyEquivalentsFromNestedSubmenus() {
         let nested = menu("Services", [item("Nested Service", key: "j", mods: [.command, .shift])])
         let parent = item("Services", key: "", action: nil)
@@ -67,8 +65,7 @@ final class LiveMenuKeyEquivalentsTests: XCTestCase {
         XCTAssertEqual(found.map(\.title), ["Has Chord"])
     }
 
-    // a disabled item's chord is INERT — AppKit consumes the key equivalent and fires nothing, so a
-    // caller comparing the two lists must be able to tell it apart from a live binding.
+    // a disabled item's chord is INERT: AppKit consumes the key equivalent and fires nothing.
     func testDisabledItemsAreMarkedAndEnabledOnesAreNot() throws {
         let file = menu("File", [item("Live", key: "n"), item("Inert", key: "d", enabled: false)])
 
@@ -89,8 +86,7 @@ final class LiveMenuKeyEquivalentsTests: XCTestCase {
         XCTAssertEqual(found.chord, "cmd+opt+shift+v")
     }
 
-    // arrows and return arrive as function-key / control characters; rendering them raw would leave the
-    // key missing and stop the chord comparing against the action list.
+    // arrows and return arrive as function-key / control characters, not under their keymap names.
     func testNamedKeysRenderInKeymapVocabulary() {
         let file = menu("Navigate", [
             item("Previous Session", key: "\u{F700}", mods: [.command, .option]),

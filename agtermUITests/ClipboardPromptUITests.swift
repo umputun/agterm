@@ -13,8 +13,8 @@ final class ClipboardPromptUITests: ControlAPITestCase {
     private var savedClipboard: String?
 
     override func setUp() async throws {
-        // best-effort save/restore of the developer's clipboard STRING around these tests (which read and
-        // write it). Non-string clipboard content (images, rich text) is not preserved.
+        // best-effort save/restore of the developer's clipboard STRING; non-string content (images, rich
+        // text) is not preserved.
         savedClipboard = NSPasteboard.general.string(forType: .string)
         try await super.setUp()
     }
@@ -94,7 +94,6 @@ final class ClipboardPromptUITests: ControlAPITestCase {
         setSystemClipboard(secret)
         let allow = try emitOSC52(printfBody: "\\033]52;c;?\\007", sheetButton: "Allow", target: id)
         allow.click()
-        // allow delivers the clipboard, so the shell echoes the OSC 52 response carrying its base64.
         let buffer = pollSessionText(target: id, timeout: 6) { $0.contains(self.base64(secret)) }
         XCTAssertNotNil(buffer, "an allowed read must deliver the clipboard base64 (\(base64(secret)))")
     }
@@ -116,7 +115,7 @@ final class ClipboardPromptUITests: ControlAPITestCase {
         setSystemClipboard("KEEP-THIS-VALUE")
         let deny = try emitOSC52(printfBody: "\\033]52;c;\(base64("SHOULD-NOT-STICK"))\\007", sheetButton: "Deny", target: id)
         deny.click()
-        // give the denied write a beat to (not) run, then confirm the clipboard is unchanged.
+        // a denial raises no event to poll for, so give the write a beat to (not) happen.
         usleep(500_000)
         XCTAssertEqual(NSPasteboard.general.string(forType: .string), "KEEP-THIS-VALUE", "a denied write must not change the clipboard")
     }

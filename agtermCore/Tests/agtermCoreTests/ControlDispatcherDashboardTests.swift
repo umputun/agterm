@@ -2,10 +2,8 @@ import Foundation
 import Testing
 @testable import agtermCore
 
-// dispatcher tests for the `dashboard --mru` open path. They live here rather than in
-// `ControlDispatcherTests.swift` only because that file is already at the 2000-line test-file cap; they
-// share its `MockControlActions` (made internal for that reason). The other dashboard dispatcher cases
-// (explicit ids, font modes, close, cap-to-9) stay in `ControlDispatcherTests`.
+// the `dashboard --mru` dispatcher cases live here because `ControlDispatcherTests.swift` is already
+// at the 2000-line test-file cap; they share its `MockControlActions` (internal for that reason).
 @MainActor
 struct ControlDispatcherDashboardTests {
     @Test func dashboardMruRoutesWithMruTrueAndNoTargets() async {

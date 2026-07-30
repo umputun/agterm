@@ -18,7 +18,6 @@ struct KeymapTests {
     }
 
     @Test func keylessActionWithOverrideReturnsOverride() {
-        // firstSession has no default chord; an override gives it one.
         #expect(BuiltinAction.firstSession.defaultChord == nil)
         let override = Chord(mods: [.command], key: "1")
         let keymap = Keymap(builtinOverrides: [.firstSession: override], commands: [])
@@ -28,7 +27,6 @@ struct KeymapTests {
     @Test func keylessActionWithoutOverrideReturnsNil() {
         let keymap = Keymap(builtinOverrides: [:], commands: [])
         #expect(keymap.equivalent(for: .firstSession) == nil)
-        // an arrow-bound action resolves to its shipped default, like any other keyed action.
         #expect(keymap.equivalent(for: .focusLeftPane) == Chord(mods: [.command, .option], key: "left"))
     }
 
@@ -54,30 +52,25 @@ struct KeymapTests {
     }
 
     @Test func glyphHintRendersArrowDefaultsAsGlyphs() {
-        // the arrow-bound actions resolve through defaultChord like any other keyed action.
         let keymap = Keymap(builtinOverrides: [:], commands: [])
         #expect(keymap.glyphHint(for: .previousSession) == "⌥⌘↑")
         #expect(keymap.glyphHint(for: .focusLeftPane) == "⌥⌘←")
     }
 
     @Test func glyphHintOverrideWinsOverArrowDefault() {
-        // a user-mapped chord beats the shipped arrow default.
         let keymap = Keymap(builtinOverrides: [.previousSession: Chord(mods: [.command], key: "p")], commands: [])
         #expect(keymap.glyphHint(for: .previousSession) == "⌘P")
     }
 
     @Test func glyphHintIsNilForUnconfiguredAction() {
-        // a keyless, non-arrow action shows nothing until the user maps a chord — the "if not
-        // configured, don't add" rule that keeps tooltips clean.
+        // the "if not configured, don't add" rule that keeps tooltips clean.
         let keymap = Keymap(builtinOverrides: [:], commands: [])
         #expect(keymap.glyphHint(for: .toggleFlaggedView) == nil)
         #expect(keymap.glyphHint(for: .firstSession) == nil)
     }
 
     @Test func rebindToggleSearchResolvesThroughGenericPath() {
-        // toggle_search rebinds like any other built-in: the generic parse/resolve path (no per-action
-        // special-casing) parses the chord, maps the raw name to .toggleSearch, and equivalent(for:)
-        // returns the override instead of the cmd+f default.
+        // toggle_search resolves through the generic path, with no per-action special-casing.
         let (keymap, diagnostics) = parseKeymap("map cmd+shift+l toggle_search")
         #expect(diagnostics.isEmpty)
         let override = Chord(mods: [.command, .shift], key: "l")
@@ -119,9 +112,7 @@ struct KeymapTests {
     }
 
     @Test func parseCommandBareKeyRejectedAsShortcut() {
-        // a modifier-less first token (a bare key) is NOT consumed as a shortcut: it would shadow that
-        // key in the terminal, so the line stays palette-only with the token kept in the shell line and
-        // a diagnostic is emitted.
+        // a bare key would shadow that key in the terminal, so it is never consumed as a shortcut.
         let (keymap, diagnostics) = parseKeymap("command \"X\" a echo hi")
         #expect(keymap.commands.count == 1)
         #expect(keymap.commands[0].shortcut.isEmpty)
@@ -131,7 +122,6 @@ struct KeymapTests {
     }
 
     @Test func parseCommandModifierShortcutAccepted() {
-        // a single chord WITH a modifier is a valid custom shortcut.
         let (keymap, diagnostics) = parseKeymap("command \"X\" cmd+e echo hi")
         #expect(diagnostics.isEmpty)
         #expect(keymap.commands.count == 1)
@@ -140,8 +130,8 @@ struct KeymapTests {
     }
 
     @Test func parseCommandPaletteOnlyShellTokenNotSwallowed() {
-        // the trap: a palette-only command whose shell line starts with a single-char token (`[`, `:`,
-        // a one-letter alias) must NOT have that token silently bound as a shortcut.
+        // the trap: a shell line starting with a single-char token (`[`, `:`, a one-letter alias) must
+        // not have that token silently bound as a shortcut.
         let (keymap, diagnostics) = parseKeymap("command \"Check\" [ -f /tmp ] && echo ok")
         #expect(keymap.commands.count == 1)
         #expect(keymap.commands[0].shortcut.isEmpty)
@@ -179,7 +169,6 @@ struct KeymapTests {
     }
 
     @Test func hashInsideSingleQuotedShellArgIsKept() {
-        // a `#` in a single-quoted arg (a commit message) must survive — it is not an inline comment.
         let (keymap, diagnostics) = parseKeymap("command \"Commit\" cmd+shift+c git commit -m 'fix #42'")
         #expect(diagnostics.isEmpty)
         #expect(keymap.commands.count == 1)
@@ -187,7 +176,6 @@ struct KeymapTests {
     }
 
     @Test func trailingCommentAfterSingleQuotedArgIsStripped() {
-        // once the single quote closes, a whitespace-preceded `#` is still a real inline comment.
         let (keymap, diagnostics) = parseKeymap("command \"X\" cmd+shift+x echo 'hi' # real comment")
         #expect(diagnostics.isEmpty)
         #expect(keymap.commands.count == 1)
@@ -246,18 +234,16 @@ struct KeymapTests {
     }
 
     @Test func parseBareArrowMapIsRejected() {
-        // a modifier-less arrow would install an always-on menu key-equivalent swallowing the key in the
+        // a bare arrow would install an always-on menu key-equivalent, swallowing the key in the
         // terminal, the palettes, the dashboard grid, and every text field.
         let (keymap, diagnostics) = parseKeymap("map left previous_session")
         #expect(keymap.builtinOverrides.isEmpty)
-        // the action keeps its shipped default.
         #expect(keymap.equivalent(for: .previousSession) == Chord(mods: [.command, .option], key: "up"))
         #expect(diagnostics.count == 1)
         #expect(diagnostics[0].message.contains("needs a modifier"))
     }
 
     @Test func parseModifiedArrowMapIsAcceptedForEveryArrow() {
-        // only the BARE form is rejected — any modifier makes an arrow bindable.
         for key in ["left", "right", "up", "down"] {
             let (keymap, diagnostics) = parseKeymap("map cmd+shift+\(key) new_session")
             #expect(diagnostics.isEmpty, "unexpected diagnostics for cmd+shift+\(key)")
@@ -266,8 +252,8 @@ struct KeymapTests {
     }
 
     @Test func mapOntoAnArrowActionsUnmovedDefaultIsRejected() {
-        // the six arrow defaults are now visible to the conflict checker: cmd+opt+up is previous_session's
-        // UNMOVED default, so claiming it for another action must be diagnosed, not silently double-bound.
+        // cmd+opt+up is previous_session's UNMOVED default, so claiming it for another action must be
+        // diagnosed, not silently double-bound.
         let (keymap, diagnostics) = parseKeymap("map cmd+opt+up new_session")
         #expect(keymap.builtinOverrides.isEmpty)
         #expect(keymap.equivalent(for: .newSession) == Chord(mods: [.command], key: "n"))
@@ -277,10 +263,9 @@ struct KeymapTests {
     }
 
     @Test func customCommandOnAnArrowDefaultIsDropped() {
-        // cross-section validation sees the arrow defaults too, so a custom command can't shadow one.
+        // cmd+opt+down is next_session's shipped default.
         let (keymap, diagnostics) = parseKeymap(#"command "Nav" cmd+opt+down echo hi"#)
         #expect(keymap.commands.count == 1)
-        // the keybind is dropped but the palette entry survives.
         #expect(keymap.commands[0].name == "Nav")
         #expect(keymap.commands[0].shortcut.isEmpty)
         #expect(diagnostics.count == 1)
@@ -288,15 +273,13 @@ struct KeymapTests {
     }
 
     @Test func parseBareNonArrowMapIsStillAccepted() {
-        // the modifier requirement is arrow-ONLY — a bare non-arrow map predates the rule and stays
-        // legal. Pins the guard's scope so widening it to every chord can't slip through unnoticed.
+        // the modifier requirement is arrow-ONLY; a bare non-arrow map stays legal.
         let (keymap, diagnostics) = parseKeymap("map a new_session")
         #expect(diagnostics.isEmpty)
         #expect(keymap.equivalent(for: .newSession) == Chord(mods: [], key: "a"))
     }
 
     @Test func parseDuplicateBuiltinChordDiagnostic() {
-        // two maps to the same chord for DIFFERENT actions: the later one (line 2) is skipped.
         let text = """
         map cmd+shift+e toggle_split
         map cmd+shift+e new_session
@@ -309,12 +292,10 @@ struct KeymapTests {
     }
 
     @Test func mapToOtherBuiltinUnmovedDefaultIsRejected() {
-        // cmd+d is toggle_split's UNMOVED default; mapping new_session to it must be diagnosed and the
-        // override dropped (otherwise two menu items would carry the same key equivalent). The CRITICAL
-        // case: the prior check only caught override-vs-override, not override-vs-other-default.
+        // cmd+d is toggle_split's UNMOVED default; two menu items would otherwise carry the same key
+        // equivalent.
         let (keymap, diagnostics) = parseKeymap("map cmd+d new_session")
         #expect(keymap.builtinOverrides.isEmpty)
-        // new_session keeps its own default (the map was skipped, not applied).
         #expect(keymap.equivalent(for: .newSession) == Chord(mods: [.command], key: "n"))
         #expect(diagnostics.count == 1)
         #expect(diagnostics[0].line == 1)
@@ -322,9 +303,8 @@ struct KeymapTests {
     }
 
     @Test func mapToFreedDefaultOfMovedBuiltinSucceeds() {
-        // moving toggle_split off cmd+d frees that chord; new_session may then take it. order is
-        // intentionally move-then-take, and the resolution is a single FINAL pass so it succeeds with
-        // no diagnostic — the freed-default case must not regress.
+        // order is intentionally move-then-take: resolution is a single FINAL pass, so the freed
+        // default is takeable.
         let text = """
         map cmd+shift+e toggle_split
         map cmd+d new_session
@@ -336,9 +316,8 @@ struct KeymapTests {
     }
 
     @Test func mapToOtherBuiltinDefaultThenMoveThatBuiltinBothSucceed() {
-        // codex's reverse-order case: take cmd+d for new_session FIRST, then move toggle_split off cmd+d.
-        // resolution is order-independent and decided against the final state, so both succeed with NO
-        // diagnostic (final state is conflict-free: new_session=cmd+d, toggle_split=cmd+shift+e).
+        // the reverse order: resolution is decided against the FINAL state, so taking cmd+d before
+        // toggle_split moves off it still succeeds.
         let text = """
         map cmd+d new_session
         map cmd+shift+e toggle_split
@@ -350,23 +329,20 @@ struct KeymapTests {
     }
 
     @Test func mapTabSeparatedLineParses() {
-        // a tab between the chord and the action must parse the same as a space.
         let (keymap, diagnostics) = parseKeymap("map\tcmd+shift+e\ttoggle_split")
         #expect(diagnostics.isEmpty)
         #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "e")])
     }
 
     @Test func mapCascadingCollisionDropsBothRevertsToDefaults() {
-        // cascade: toggle_split's override (cmd+o) loses to open_directory's UNMOVED default cmd+o, so
-        // it is dropped → reverts to its OWN default cmd+d → which then collides with new_session's
-        // accepted override cmd+d. Resolution must iterate to a fixpoint and drop BOTH overrides, leaving
-        // a conflict-free all-defaults state with two diagnostics.
+        // cascade: toggle_split's cmd+o override loses to open_directory's UNMOVED default, reverts to
+        // its own cmd+d default, and that then collides with new_session's accepted cmd+d — so
+        // resolution must iterate to a fixpoint and drop BOTH.
         let text = """
         map cmd+o toggle_split
         map cmd+d new_session
         """
         let (keymap, diagnostics) = parseKeymap(text)
-        // both overrides dropped → every action sits on its shipped default.
         #expect(keymap.builtinOverrides.isEmpty)
         #expect(keymap.equivalent(for: .toggleSplit) == BuiltinAction.toggleSplit.defaultChord)
         #expect(keymap.equivalent(for: .newSession) == BuiltinAction.newSession.defaultChord)
@@ -374,7 +350,6 @@ struct KeymapTests {
         // the final state is collision-free: no two distinct actions resolve to the same chord.
         let chords = BuiltinAction.allCases.compactMap { keymap.equivalent(for: $0) }
         #expect(chords.count == Set(chords).count)
-        // two diagnostics, one per dropped override, in file order.
         #expect(diagnostics.count == 2)
         #expect(diagnostics[0].line == 1)
         #expect(diagnostics[1].line == 2)
@@ -382,8 +357,7 @@ struct KeymapTests {
     }
 
     @Test func mapBuiltinToReservedMonitorChordIsRejected() {
-        // ctrl+1 is owned by the Ctrl-1/2 pane monitor; a built-in map to it must be diagnosed + skipped
-        // (it would dead-race the monitor), so the action keeps its default.
+        // ctrl+1 is owned by the Ctrl-1/2 pane monitor, so a built-in mapped to it would dead-race it.
         let (keymap, diagnostics) = parseKeymap("map ctrl+1 new_session")
         #expect(keymap.builtinOverrides.isEmpty)
         #expect(keymap.equivalent(for: .newSession) == Chord(mods: [.command], key: "n"))
@@ -393,7 +367,7 @@ struct KeymapTests {
     }
 
     @Test func mapBuiltinToReservedCtrlTabIsRejected() {
-        // ctrl+tab is the Ctrl-Tab switcher's chord; a built-in map to it is reserved and skipped.
+        // ctrl+tab is the Ctrl-Tab switcher's chord.
         let (keymap, diagnostics) = parseKeymap("map ctrl+tab quick_terminal")
         #expect(keymap.builtinOverrides.isEmpty)
         #expect(diagnostics.count == 1)
@@ -401,8 +375,8 @@ struct KeymapTests {
     }
 
     @Test func parseHandlesCRLFLineEndings() {
-        // a CRLF file leaves a trailing \r that .whitespaces does not strip; normalization must let the
-        // line parse normally rather than reading `toggle_split\r` as an unknown action.
+        // a CRLF file leaves a trailing \r that .whitespaces does not strip, so without normalization
+        // the action reads as `toggle_split\r`.
         let text = "map cmd+shift+e toggle_split\r\ncommand \"Deploy\" ./deploy.sh\r\n"
         let (keymap, diagnostics) = parseKeymap(text)
         #expect(diagnostics.isEmpty)
@@ -412,7 +386,6 @@ struct KeymapTests {
     }
 
     @Test func mapSameActionTwiceIsLastWins() {
-        // re-mapping the SAME action can't collide with itself: the later chord wins, no diagnostic.
         let text = """
         map cmd+shift+e toggle_split
         map cmd+shift+x toggle_split
@@ -444,11 +417,9 @@ struct KeymapTests {
         map ctrl+a>g new_session
         """
         let (keymap, diagnostics) = parseKeymap(text)
-        // the two valid lines still parse.
         #expect(keymap.builtinOverrides == [.toggleSplit: Chord(mods: [.command, .shift], key: "e")])
         #expect(keymap.commands.count == 1)
         #expect(keymap.commands[0].name == "Deploy")
-        // the two bad lines each yield a diagnostic at the correct line number.
         #expect(diagnostics.count == 2)
         #expect(diagnostics[0].line == 2)
         #expect(diagnostics[0].message.contains("unknown verb"))
@@ -457,8 +428,7 @@ struct KeymapTests {
     }
 
     @Test func customChordEqualsBuiltinDefaultIsDropped() {
-        // cmd+d is toggle_split's shipped default; the custom command keeps its palette entry but
-        // loses the keybind.
+        // cmd+d is toggle_split's shipped default.
         let (keymap, diagnostics) = parseKeymap("command \"Boom\" cmd+d echo boom")
         #expect(keymap.commands.count == 1)
         #expect(keymap.commands[0].name == "Boom")
@@ -470,8 +440,7 @@ struct KeymapTests {
     }
 
     @Test func customChordEqualsOverriddenBuiltinChordIsDropped() {
-        // the built-in toggle_split is moved to cmd+shift+e; a custom command bound to the NEW
-        // built-in chord collides and is dropped.
+        // the custom command claims the chord toggle_split was just MOVED to, not its shipped default.
         let text = """
         map cmd+shift+e toggle_split
         command "Boom" cmd+shift+e echo boom
@@ -485,8 +454,8 @@ struct KeymapTests {
     }
 
     @Test func freedDefaultChordIsUsableByCustomAfterBuiltinMoves() {
-        // moving toggle_split off cmd+d frees that chord; a custom command may then take it. order
-        // is intentionally custom-before-map to prove validation is a single FINAL pass.
+        // order is intentionally custom-before-map: validation is a single FINAL pass, so the freed
+        // default is takeable.
         let text = """
         command "Boom" cmd+d echo boom
         map cmd+shift+e toggle_split
@@ -508,8 +477,7 @@ struct KeymapTests {
     }
 
     @Test func customBoundToReservedMonitorChordIsDropped() {
-        // ctrl+1 is owned by the Ctrl-1/2 pane monitor; a custom command bound to it keeps its palette
-        // entry but loses the keybind, with a diagnostic.
+        // ctrl+1 is owned by the Ctrl-1/2 pane monitor.
         let (keymap, diagnostics) = parseKeymap("command \"Boom\" ctrl+1 echo boom")
         #expect(keymap.commands.count == 1)
         #expect(keymap.commands[0].name == "Boom")
@@ -521,7 +489,7 @@ struct KeymapTests {
     }
 
     @Test func customLeaderStartingWithReservedMonitorChordIsDropped() {
-        // ctrl+tab is the Ctrl-Tab switcher's chord; a custom leader STARTING with it is reserved.
+        // ctrl+tab is the Ctrl-Tab switcher's chord.
         let (keymap, diagnostics) = parseKeymap("command \"Boom\" ctrl+tab>g echo boom")
         #expect(keymap.commands.count == 1)
         #expect(keymap.commands[0].shortcut.isEmpty)
@@ -530,9 +498,8 @@ struct KeymapTests {
     }
 
     @Test func customLeaderWhoseLaterChordIsReservedMonitorChordIsDropped() {
-        // ctrl+a>ctrl+1 — the FIRST chord (ctrl+a) is not reserved, but ctrl+1 (the later chord) is
-        // owned by the Ctrl-1/2 pane monitor, which consumes it wherever it lands in the leader, so the
-        // leader can never complete. the keybind is dropped (palette entry kept) with a diagnostic.
+        // the FIRST chord is free, but the pane monitor consumes ctrl+1 wherever it lands in the
+        // leader, so the sequence can never complete.
         let (keymap, diagnostics) = parseKeymap("command \"Boom\" ctrl+a>ctrl+1 echo boom")
         #expect(keymap.commands.count == 1)
         #expect(keymap.commands[0].name == "Boom")
@@ -544,7 +511,6 @@ struct KeymapTests {
     }
 
     @Test func customLeaderWithNoReservedChordIsAccepted() {
-        // a normal leader with no reserved chord at any position keeps its keybind, no diagnostic.
         let (keymap, diagnostics) = parseKeymap("command \"Lazygit\" ctrl+a>g lazygit")
         #expect(keymap.commands.count == 1)
         #expect(keymap.commands[0].shortcut == "ctrl+a>g")
@@ -552,7 +518,6 @@ struct KeymapTests {
     }
 
     @Test func commandWithEmptyShellLineIsDiagnosed() {
-        // a name with no shell line (or a name + chord with no command) is a no-op; skip it + diagnose.
         let (keymap, diagnostics) = parseKeymap("command \"Empty\"")
         #expect(keymap.commands.isEmpty)
         #expect(diagnostics.count == 1)
@@ -576,11 +541,9 @@ struct KeymapTests {
         #expect(keymap.commands.count == 2)
         #expect(keymap.commands[0].shortcut.isEmpty)
         #expect(keymap.commands[1].shortcut.isEmpty)
-        // both commands stay in the palette, just unkeyed.
         #expect(keymap.commands[0].command == "echo one")
         #expect(keymap.commands[1].command == "echo two")
         #expect(diagnostics.count == 2)
-        // each diagnostic names the OTHER offending command by name.
         #expect(diagnostics.contains { $0.message.contains("'First'") && $0.message.contains("'Second'") })
         #expect(diagnostics.contains { $0.message.contains("'Second'") && $0.message.contains("'First'") })
     }
@@ -596,7 +559,6 @@ struct KeymapTests {
         #expect(keymap.commands[0].shortcut.isEmpty)
         #expect(keymap.commands[1].shortcut.isEmpty)
         #expect(diagnostics.count == 2)
-        // each diagnostic names the OTHER offending command by name.
         #expect(diagnostics.contains { $0.message.contains("'Lead'") && $0.message.contains("'Leader'") })
         #expect(diagnostics.contains { $0.message.contains("'Leader'") && $0.message.contains("'Lead'") })
     }

@@ -21,7 +21,6 @@ struct ConfigPathsTests {
     }
 
     @Test func emptyStringsFallThrough() {
-        // an empty setting falls through to stateDir; an empty stateDir falls through to the default.
         #expect(ConfigPaths.configDirectory(setting: "", stateDir: "/state", home: home).path == "/state/config")
         #expect(ConfigPaths.configDirectory(setting: "", stateDir: "", home: home).path == "/Users/test/.config/agterm")
     }
@@ -51,7 +50,7 @@ struct ConfigPathsTests {
         #expect(starter.contains("(not expressible)"))
         #expect(starter.contains("#   rename_session"))
         #expect(starter.contains("(no default)"))
-        // the six arrow-bound actions print their real chords — they used to claim "(no default)".
+        // the six arrow-bound actions must print their real chords, not "(no default)".
         #expect(starter.contains("cmd+opt+left"))
         #expect(starter.contains("cmd+opt+right"))
         #expect(starter.contains("cmd+opt+up"))
@@ -92,17 +91,15 @@ struct ConfigPathsTests {
     }
 
     @Test func editorCommandRunsThroughInteractiveLoginShellThenPosixSh() {
-        // the login shell (-ilc) sources its rc + exports $EDITOR/$VISUAL, then execs /bin/sh which does the
-        // POSIX ${VISUAL:-${EDITOR:-vi}} resolution — the POSIX text rides inside single quotes so a
-        // non-POSIX login shell (fish) passes it through verbatim instead of choking on `${`.
+        // the POSIX ${VISUAL:-${EDITOR:-vi}} text rides inside single quotes so a non-POSIX login shell
+        // (fish) passes it verbatim to the exec'd /bin/sh instead of choking on `${`.
         #expect(ConfigPaths.editorCommand(forPath: "/Users/test/.config/agterm/keymap.conf")
                 == "${SHELL:-/bin/zsh} -ilc 'exec /bin/sh -c '\\''${VISUAL:-${EDITOR:-vi}} \"$1\"'\\'' agterm-config-edit '\\''/Users/test/.config/agterm/keymap.conf'\\'''")
     }
 
     @Test func editorCommandEmbedsAnyPathForBothEditorOverlays() {
-        // both the keymap and ghostty-config Edit overlays call this one function; a different path is
-        // embedded single-quoted with the same shape. Arbitrary-path integrity is proven behaviorally
-        // below, so this only checks the call site, not the full golden string again.
+        // arbitrary-path integrity is proven behaviorally below, so this only checks the call site rather
+        // than repeating the full golden string.
         let dir = URL(fileURLWithPath: "/Users/test/.config/agterm")
         let cmd = ConfigPaths.editorCommand(forPath: ConfigPaths.ghosttyConfigPath(configDirectory: dir).path)
         #expect(cmd.hasPrefix("${SHELL:-/bin/zsh} -ilc 'exec /bin/sh -c "))
@@ -111,12 +108,9 @@ struct ConfigPathsTests {
 
     // MARK: - Cross-shell behavioral tests
     //
-    // These run the command exactly as libghostty does (`/bin/sh -c "<cmd>"`) with a fake "editor" that
-    // records its argument, isolating the login shell from the machine's rc via HOME/ZDOTDIR/XDG_CONFIG_HOME.
-    // The `vi` fallback is intentionally not exercised behaviorally: it is the standard POSIX
-    // `${VISUAL:-${EDITOR:-vi}}` default (pinned literally by the golden test above), and a behavioral check
-    // would risk launching the real, tty-blocking `vi` — a login shell's /etc/{profile,zprofile} path_helper
-    // reorders PATH so a system `/usr/bin/vi` would win over a fake one.
+    // These run the command exactly as libghostty does (`/bin/sh -c "<cmd>"`). The `vi` fallback is
+    // deliberately not exercised behaviorally: a login shell's path_helper reorders PATH so the real,
+    // tty-blocking `/usr/bin/vi` would win over a fake one. The golden test above pins it literally instead.
 
     /// Writes an executable recorder at `<dir>/<name>` that records its first argument to `<dir>/<name>.got`,
     /// returning the script path and the marker URL.
@@ -158,8 +152,7 @@ struct ConfigPathsTests {
     }
 
     @Test func editorCommandResolvesExportedEditorAndPreservesPath() throws {
-        // an exported $EDITOR resolves and a path with a space AND an embedded single quote survives the
-        // nested quoting, under zsh (a POSIX login shell, always present).
+        // the fixture path carries a space AND a single quote, the characters the nested quoting can break.
         let tmp = try makeTmp(); defer { try? FileManager.default.removeItem(at: tmp) }
         let (editor, got) = try makeRecorder(in: tmp, named: "editor")
         let path = tmp.appendingPathComponent("a b/o'd.conf").path
@@ -169,7 +162,6 @@ struct ConfigPathsTests {
     }
 
     @Test func editorCommandPrefersVisualOverEditor() throws {
-        // $VISUAL wins over $EDITOR (the ${VISUAL:-${EDITOR:-vi}} precedence), under zsh.
         let tmp = try makeTmp(); defer { try? FileManager.default.removeItem(at: tmp) }
         let (visual, visualGot) = try makeRecorder(in: tmp, named: "visual")
         let (editor, editorGot) = try makeRecorder(in: tmp, named: "editor")
@@ -182,12 +174,11 @@ struct ConfigPathsTests {
     }
 
     @Test func editorCommandSourcesLoginShellRcForExportedEditor() throws {
-        // the `-ilc` hop is load-bearing: an $EDITOR exported only in the shell rc (NOT in the process env)
-        // still resolves, because the login shell sources its rc before exec'ing /bin/sh. Without `-ilc` the
-        // rc isn't sourced and this would fall back to vi.
+        // the `-ilc` hop is load-bearing: $EDITOR is exported only in the rc, never in the process env, so
+        // without it the rc is not sourced and this falls back to vi.
         let tmp = try makeTmp(); defer { try? FileManager.default.removeItem(at: tmp) }
         let (editor, got) = try makeRecorder(in: tmp, named: "rc-editor")
-        // zsh -i sources $ZDOTDIR/.zshrc; export EDITOR there and pass no EDITOR in the env.
+        // zsh -i sources $ZDOTDIR/.zshrc
         try "export EDITOR='\(editor)'\n".write(to: tmp.appendingPathComponent(".zshrc"), atomically: true, encoding: .utf8)
         let path = tmp.appendingPathComponent("k.conf").path
         let status = try runEditorCommand(forPath: path, tmp: tmp, env: ["SHELL": "/bin/zsh"])
@@ -198,9 +189,7 @@ struct ConfigPathsTests {
     @Test(.enabled(if: ConfigPathsTests.fishPath() != nil,
                    "no non-POSIX login shell (fish) installed — the cross-shell parse assertion is skipped here"))
     func editorCommandWorksUnderNonPosixLoginShell() throws {
-        // the actual bug fix: a non-POSIX login shell (fish) must run the command without choking on `${`.
-        // SKIPPED (visibly) when no fish is installed, so a green run on a POSIX-only box is not mistaken for
-        // cross-shell verification.
+        // a non-POSIX login shell (fish) must run the command without choking on `${`.
         let fish = try #require(ConfigPathsTests.fishPath())
         let tmp = try makeTmp(); defer { try? FileManager.default.removeItem(at: tmp) }
         let (editor, got) = try makeRecorder(in: tmp, named: "editor")

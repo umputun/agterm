@@ -15,15 +15,12 @@ struct AppStoreDuplicateTests {
 
         let dupe = try! #require(store.duplicateSession(first.id))
 
-        // lands directly AFTER its source, not appended at the end.
         #expect(store.workspaces[0].sessions.map(\.id) == [first.id, dupe.id, last.id])
         #expect(dupe.initialCwd == "/a")
         #expect(store.selectedSessionID == dupe.id)
     }
 
-    /// The seed is the FOCUSED pane's cwd, not the primary's: a split focused on its non-primary pane
-    /// duplicates into the split pane's directory (`focusedCwd`), not the primary's (`effectiveCwd`). Pins
-    /// the `focusedCwd`-over-`effectiveCwd` choice — swapping the seed to `effectiveCwd` fails only here.
+    // pins the `focusedCwd`-over-`effectiveCwd` seed choice — swapping to `effectiveCwd` fails only here.
     @Test func duplicateSessionSeedsFromFocusedSplitPane() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
@@ -37,7 +34,6 @@ struct AppStoreDuplicateTests {
 
         let dupe = try! #require(store.duplicateSession(source.id))
 
-        // the duplicate opens where FOCUS is (the split pane), not the primary pane's cwd.
         #expect(dupe.initialCwd == "/split-pane")
     }
 
@@ -49,11 +45,9 @@ struct AppStoreDuplicateTests {
 
         let dupe = try! #require(store.duplicateSession(source.id))
 
-        // the duplicate opens where the shell IS, not where it started.
         #expect(dupe.initialCwd == "/moved")
     }
 
-    /// The directory-only contract: a duplicate is a plain new session, NOT a clone of the source's state.
     @Test func duplicateSessionCopiesOnlyTheDirectory() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
@@ -66,7 +60,7 @@ struct AppStoreDuplicateTests {
         let dupe = try! #require(store.duplicateSession(source.id))
 
         #expect(dupe.initialCwd == "/a")
-        #expect(dupe.customName == nil) // auto basename, NOT "prod"
+        #expect(dupe.customName == nil)
         #expect(dupe.initialCommand == nil)
         #expect(dupe.flagged == false)
         #expect(dupe.isSplit == false)
@@ -75,8 +69,6 @@ struct AppStoreDuplicateTests {
         #expect(dupe.id != source.id)
     }
 
-    /// A duplicate is a fresh `Session` from `addSession`, so it inherits no restore-command override —
-    /// neither the persisted pin (which names the SOURCE's command) nor an armed payload.
     @Test func duplicateSessionCopiesNoRestoreOverride() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
@@ -92,7 +84,7 @@ struct AppStoreDuplicateTests {
         #expect(dupe.splitRestoreCommand == nil)
         #expect(dupe.pendingRestoreCommand == nil)
         #expect(dupe.pendingSplitRestoreCommand == nil)
-        #expect(source.restoreCommand == "claude --resume abc") // the source keeps its own
+        #expect(source.restoreCommand == "claude --resume abc")
     }
 
     @Test func duplicateSessionOfUnknownSessionReturnsNil() {
