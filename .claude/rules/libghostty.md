@@ -166,10 +166,17 @@ paths:
 - On didBecomeKey, `reassertCursorOnActivation` for a visible, key-window, pointer-in-bounds surface because
   AppKit does not update the visible cursor automatically. Every `deckVisible` expression must exclude full
   overlay, scratch, and persistent quick terminal coverage.
-- Known limitations: a floating overlay shares pane-visible margins, and transient SwiftUI palette/switcher
-  overlays are absent from this boolean. One terminal may affect cursor over those regions; do not expand
-  the predicate without a more precise geometry model. Reproduce manually with stacked sessions and
-  `printf '\033]22;crosshair\007'`.
+- `deckVisible` answers "am I the on-screen pane?", never "do I own this pixel?". Chrome drawn over a pane
+  — the sidebar grab handle, an `NSSplitView` divider, a floating overlay's margin — still gets the pane's
+  per-move `NSCursor.set`, which beats chrome setting the cursor on hover entry alone (#324). All four
+  writers also gate on `ownsPointer`, a hit test against the window content view; it declines for chrome
+  only, treating a hit on any surface as ownership so a hit test that cannot see through the eager deck
+  can never silence the visible terminal. Do not replace either gate with the other.
+- Chrome that paints its own cursor must re-assert per move and per drag tick, then again on the next
+  runloop turn re-reading live hover state: a replacement lands after a synchronous `.set()` returns, and a
+  deferred pass that captured hover instead strands the shape over live terminal.
+- Reproduce manually with stacked sessions and `printf '\033]22;crosshair\007'`. Cursor shape has no
+  automated coverage; verify by eye.
 
 ## OSC 52 clipboard
 

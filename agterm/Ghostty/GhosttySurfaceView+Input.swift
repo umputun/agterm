@@ -200,10 +200,12 @@ extension GhosttySurfaceView {
     /// Re-assert the libghostty-requested cursor on every move: `cursorUpdate` fires only on tracking-area
     /// entry, and SwiftUI (which owns the hosted view's cursor) can reset it on any move, so without this
     /// the pointing hand reverts to the arrow along a link. Gated on `deckVisible` so a background deck
-    /// surface never paints its shape over the visible terminal via the process-global cursor (issue #225).
+    /// surface never paints its shape over the visible terminal via the process-global cursor (issue #225),
+    /// and on `ownsPointer` so it stops at the chrome drawn over this pane (issue #324). The position report
+    /// stays ungated — libghostty tracks the pointer across the whole surface either way.
     override func mouseMoved(with event: NSEvent) {
         reportMousePos(from: event)
-        guard deckVisible else { return }
+        guard deckVisible, ownsPointer(at: event.locationInWindow) else { return }
         Self.nsCursor(for: mouseShape).set()
     }
 
@@ -407,15 +409,17 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
     // MARK: - Mouse cursor shape + link opening
 
     /// Applies the cursor shape libghostty requested (`GHOSTTY_ACTION_MOUSE_SHAPE`). No-ops when unchanged,
-    /// else sets the cursor at once, but only while this is the on-screen pane (`deckVisible`) and the
-    /// pointer is inside: a background deck surface must not paint its shape over the visible terminal
-    /// (issue #225), and a revert delivered after the pointer left (the I-beam libghostty emits once
-    /// `mouseExited` reports `-1, -1`) must not paint the terminal cursor onto the sidebar. Setting it here
-    /// is what makes a stationary shape change (⌘ over a link without moving) take effect immediately.
+    /// else sets the cursor at once, but only while this is the on-screen pane (`deckVisible`), the pointer
+    /// is inside, and no chrome covers it (`ownsPointer`): a background deck surface must not paint its
+    /// shape over the visible terminal (issue #225), a revert delivered after the pointer left (the I-beam
+    /// libghostty emits once `mouseExited` reports `-1, -1`) must not paint the terminal cursor onto the
+    /// sidebar, and a shape change arriving while the pointer rests on a divider must not repaint it
+    /// (issue #324). Setting it here is what makes a stationary shape change (⌘ over a link without moving)
+    /// take effect immediately.
     func applyMouseShape(_ shape: ghostty_action_mouse_shape_e) {
         guard shape != mouseShape else { return }
         mouseShape = shape
-        if deckVisible, pointerInside { Self.nsCursor(for: shape).set() }
+        if deckVisible, pointerInside, ownsPointer() { Self.nsCursor(for: shape).set() }
     }
 
     /// AppKit's `.cursorUpdate` tracking-area callback (NOT cursor rectangles): paint the whole surface with
@@ -423,9 +427,10 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
     /// resetting it as the mouse moves, so `addCursorRect`/`resetCursorRects` never take hold here — the
     /// link still underlines (libghostty draws it) but the pointing hand is dropped; upstream Ghostty.app
     /// drives the cursor through SwiftUI for the same reason. Gated on `deckVisible`: AppKit still delivers
-    /// a `cursorUpdate` to a hidden deck surface on window activation (issue #225 refocus).
+    /// a `cursorUpdate` to a hidden deck surface on window activation (issue #225 refocus), and on
+    /// `ownsPointer` because entry can land in the band a divider's grab handle covers (issue #324).
     override func cursorUpdate(with event: NSEvent) {
-        guard deckVisible else { return }
+        guard deckVisible, ownsPointer(at: event.locationInWindow) else { return }
         Self.nsCursor(for: mouseShape).set()
     }
 
@@ -433,11 +438,12 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
     /// on bare activation, so a reactivating click leaves the OS arrow until the next move. Gated on
     /// `deckVisible` + `isKeyWindow` + pointer-in-bounds — read fresh from
     /// `mouseLocationOutsideOfEventStream`, since `pointerInside` can be stale on a no-move activation — so
-    /// it never paints over the sidebar/titlebar or a background window.
+    /// it never paints over the sidebar/titlebar or a background window, nor over a divider parked inside
+    /// this pane's bounds (issue #324).
     func reassertCursorOnActivation() {
         guard deckVisible, let window, window.isKeyWindow else { return }
-        let pointInView = convert(window.mouseLocationOutsideOfEventStream, from: nil)
-        guard bounds.contains(pointInView) else { return }
+        let pointInWindow = window.mouseLocationOutsideOfEventStream
+        guard bounds.contains(convert(pointInWindow, from: nil)), ownsPointer(at: pointInWindow) else { return }
         Self.nsCursor(for: mouseShape).set()
     }
 
