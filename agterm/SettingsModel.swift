@@ -4,12 +4,10 @@ import os
 
 private let logger = Logger(subsystem: "com.umputun.agterm", category: "SettingsModel")
 
-/// The observable settings state for the Settings window. Loads `AppSettings` from `SettingsStore`
-/// at init; each mutation persists AND applies live to the running terminals.
-///
-/// Applying writes the ghostty settings file, rebuilds + broadcasts the config to every live
-/// surface, and clears per-session font-size overrides (the shared `update_config` resets all
-/// surfaces to the new default, so the persisted overrides are cleared to match).
+/// The observable settings state for the Settings window. Loads `AppSettings` from `SettingsStore` at
+/// init; each mutation persists AND applies live: writes the ghostty settings file, rebuilds +
+/// broadcasts the config to every live surface, and clears the per-session font-size overrides to match
+/// (the shared `update_config` resets all surfaces to the new default).
 @Observable
 @MainActor
 final class SettingsModel {
@@ -25,31 +23,26 @@ final class SettingsModel {
     /// Problems found while parsing the keymap file, surfaced read-only in the Key Mapping settings tab.
     private(set) var keymapDiagnostics: [KeymapDiagnostic] = []
 
-    /// Coalesces rapid theme-picker navigation/typing previews so a burst of `previewTheme` calls
-    /// triggers a single `apply()` once the quiet window elapses, instead of rebuilding + reloading
-    /// every surface on each arrow keypress. Commit flushes it; cancel drops it (see `commitTheme`
-    /// and `revertThemePreview`).
+    /// Coalesces a burst of `previewTheme` calls into one `apply()` once the quiet window elapses,
+    /// instead of rebuilding + reloading every surface per arrow keypress. `commitTheme` flushes it;
+    /// `revertThemePreview` drops it.
     private let previewThemeDebouncer = Debouncer()
     private static let previewThemeDebounceInterval: TimeInterval = 0.07
 
-    /// Coalesces the opacity/blur slider's live drag into a single deferred `settings.json` write: the
-    /// preview methods apply each tick WITHOUT saving and reschedule this, so the disk write fires once
-    /// the slider settles. This persists KEYBOARD adjustments too (arrow keys don't fire the slider's
-    /// `onEditingChanged`), while a mouse release flushes it immediately via `commitBackgroundSettings`.
+    /// Coalesces the opacity/blur drag into one deferred `settings.json` write: the preview methods apply
+    /// each tick WITHOUT saving and reschedule this. Covers KEYBOARD adjustments too (arrows don't fire
+    /// the slider's `onEditingChanged`); a mouse release flushes it via `commitBackgroundSettings`.
     private let backgroundSaveDebouncer = Debouncer()
     private static let backgroundSaveInterval: TimeInterval = 0.3
 
-    /// Coalesces `.agtermSystemAppearanceChanged` into a single re-apply when the macOS light/dark
-    /// appearance flips. Posted by the app-level KVO observer on `NSApplication.effectiveAppearance`
-    /// (`SystemAppearanceObserver`); the debounce absorbs any rapid repeat post during the transition.
+    /// Coalesces `.agtermSystemAppearanceChanged` (posted by the app-level KVO observer on
+    /// `NSApplication.effectiveAppearance`, `SystemAppearanceObserver`) into one re-apply per flip.
     private let appearanceDebouncer = Debouncer()
     private static let appearanceDebounceInterval: TimeInterval = 0.05
 
     /// The theme slots as of the last real persist (`persistAndApply`/`commitTheme`), NOT updated by the
-    /// live theme preview. The opacity/blur background-save debounce persists a snapshot pinned to these
-    /// values instead of the in-flight `settings.theme`/`darkTheme`, so a slider write firing mid-preview
-    /// can't leak an uncommitted previewed theme to `settings.json` (the preview persists only on
-    /// commit; Esc reverts it in memory, and disk must never have seen it).
+    /// live preview. The background-save debounce pins its snapshot to these, so a slider write firing
+    /// mid-preview can't leak an uncommitted previewed theme to `settings.json`.
     private var committedTheme: String?
     private var committedDarkTheme: String?
 
@@ -59,15 +52,13 @@ final class SettingsModel {
         self.settings = settingsStore.load()
         self.committedTheme = settings.theme
         self.committedDarkTheme = settings.darkTheme
-        // write the ghostty config from the loaded settings NOW — before GhosttyApp boots and reads it
-        // (its loadConfig runs in applicationDidFinishLaunching, AFTER this App.init). The SEEDED default
-        // theme (agterm) lives only in memory (load() seeds it; it isn't in settings.json), so without
-        // this the launch config carries no theme line and the terminal renders ghostty's built-in until
-        // the first settings change rewrites the conf. Idempotent: writeGhosttyConfig no-ops when the file
-        // already matches (e.g. a user with an explicit theme already has it on disk).
+        // write the ghostty config NOW — GhosttyApp's loadConfig runs in applicationDidFinishLaunching,
+        // AFTER this App.init. The SEEDED default theme (agterm) is memory-only (load() seeds it; it
+        // isn't in settings.json), so without this the launch config carries no theme line and the
+        // terminal renders ghostty's built-in until the next settings change. Idempotent: no-ops when
+        // the file already matches.
         _ = writeGhosttyConfig()
-        // mirror the persisted window translucency + notification toggle + toolbar mode + badge
-        // toggle into their shared channels at launch, before any settings change fires.
+        // mirror the persisted settings into their shared channels before any settings change fires.
         applyWindowTranslucency()
         applyNotificationsEnabled()
         applyDockBounce()
@@ -84,18 +75,14 @@ final class SettingsModel {
         applyAttentionButtonEnabled()
         applyInterfaceElements()
         applyAutoHideSidebarInactiveWindows()
-        // create the commented starter keymap on first launch, then load + parse it.
         ensureStarterKeymap()
         loadKeymap()
-        // create the commented starter ghostty.conf on first launch (all comments, a no-op until edited).
         ensureStarterGhosttyConfig()
-        // seed the restore-denylist.conf (multiplexers) on first launch, then parse it into GhosttyApp.
         ensureStarterRestoreDenylist()
         loadRestoreDenylist()
-        // follow the macOS light/dark appearance: `SystemAppearanceObserver` (app-level KVO on
-        // NSApp.effectiveAppearance) posts this with the resolved `isDark`; we re-feed the config so
-        // libghostty re-resolves the dual `theme = light:,dark:` conditional to the new side. The side
-        // rides the notification (the KVO-delivered value) and is threaded straight into the reload.
+        // follow the macOS appearance: `SystemAppearanceObserver` (app-level KVO on
+        // NSApp.effectiveAppearance) posts the resolved `isDark`, threaded straight into the reload,
+        // which re-feeds the config so libghostty re-resolves the dual `theme = light:,dark:` conditional.
         NotificationCenter.default.addObserver(forName: .agtermSystemAppearanceChanged, object: nil,
                                                queue: .main) { [weak self] note in
             guard let isDark = note.userInfo?["isDark"] as? Bool else { return }
@@ -107,29 +94,24 @@ final class SettingsModel {
     /// user's current work. Settings views still mutate through this model; they don't need library access.
     var activeSessionCwd: String? { library.activeStore?.activeSession?.focusedCwd }
 
-    /// The appearance side the last config feed applied, used to suppress redundant re-posts of
-    /// `.agtermSystemAppearanceChanged` on the same side (KVO `[.initial]` seeds one at launch, and the
-    /// debounce can coalesce a burst). Starts `false` because a host-loaded config is always resolved to
-    /// the LIGHT side: a light launch then skips the seeding reload entirely, while a dark launch takes
-    /// exactly one (which re-sides the chrome colors via the CONFIG_CHANGE clone). Read-only outside: the
-    /// UI-test-only `debug.appearance` probe (bare form) reports it so a test can assert a flip drove the reload.
+    /// The appearance side the last config feed applied, suppressing same-side reloads (KVO `[.initial]`
+    /// seeds one at launch, and the debounce can coalesce a burst). Starts `false` because a host-loaded
+    /// config always resolves LIGHT: a light launch skips the seeding reload, a dark launch takes exactly
+    /// one (re-siding the chrome colors via the CONFIG_CHANGE clone). Read outside only by the
+    /// UI-test-only `debug.appearance` probe (bare form), so a test can assert a flip drove the reload.
     private(set) var lastAppliedIsDark = false
 
-    /// Re-feed the config on a macOS appearance flip so libghostty re-resolves the dual theme to the new
-    /// side — the system→settings half of light/dark sync. A no-op unless following with both slots set,
-    /// and a no-op when the appearance side hasn't actually changed since the last feed (see
-    /// `lastAppliedIsDark`). The config file holds the RAW `theme = light:,dark:` value and is IDENTICAL
-    /// across flips, so `writeGhosttyConfig()` would no-op and `apply()` would skip the reload; reload
-    /// DIRECTLY instead. ghostty already recorded the new scheme (`set_color_scheme`) and re-resolves
-    /// when we re-feed the config via `update_config`. Debounced because a burst can arrive (KVO
-    /// `[.initial]` at launch, plus the seam); the latest posted side wins. Unlike an explicit File ▸
-    /// Reload / `config.reload`, an automatic flip PRESERVES each session's ⌘+/⌘− zoom — silently wiping
-    /// it on an OS schedule would be a surprise.
-    ///
-    /// `isDark` is the KVO-delivered side (from `SystemAppearanceObserver`), threaded straight into the
-    /// reload so libghostty is set to exactly this side — never re-read from a view, whose
-    /// `effectiveAppearance` can lag around sleep/wake. This makes `lastAppliedIsDark` equal the applied
-    /// side by construction. A zero-surface reload is safe (the app-scheme set re-sides the chrome clone).
+    /// Re-feed the config on a macOS appearance flip so libghostty re-resolves the dual theme — the
+    /// system→settings half of light/dark sync. No-op unless following with both slots set, or when the
+    /// side is unchanged since the last feed (`lastAppliedIsDark`). The file's RAW `theme = light:,dark:`
+    /// text is IDENTICAL across flips, so `writeGhosttyConfig()`/`apply()` would skip the reload — reload
+    /// DIRECTLY instead; ghostty already recorded the scheme (`set_color_scheme`) and re-resolves on
+    /// `update_config`. Debounced against bursts (KVO `[.initial]` at launch, plus the seam); the latest
+    /// posted side wins. An automatic flip PRESERVES each session's ⌘+/⌘− zoom (unlike File ▸ Reload /
+    /// `config.reload`) — wiping it on an OS schedule would surprise. A zero-surface reload is safe: the
+    /// app-scheme set re-sides the chrome clone. `isDark` is the KVO-delivered side, threaded straight in
+    /// and never re-read from a view (whose `effectiveAppearance` lags around sleep/wake), so
+    /// `lastAppliedIsDark` equals the applied side by construction.
     private func appearanceChanged(isDark: Bool) {
         guard settings.followSystemAppearance == true, settings.theme != nil, settings.darkTheme != nil else { return }
         appearanceDebouncer.schedule(after: Self.appearanceDebounceInterval) { [weak self] in
@@ -148,8 +130,7 @@ final class SettingsModel {
     private var rendersDarkSlot: Bool { settings.followSystemAppearance == true && GhosttyApp.currentIsDark() }
 
     /// Set the light/single slot — the control channel's `theme set <name>`. A name keeps the dark side
-    /// (syncing stays on); nil ("default ghostty") clears everything, since a nil side can't be a dual
-    /// slot.
+    /// (syncing stays on); nil ("default ghostty") clears everything, since a nil side can't be a dual slot.
     func setLightTheme(_ value: String?) {
         settings.theme = value
         if value == nil { settings.darkTheme = nil; settings.followSystemAppearance = nil }
@@ -187,9 +168,8 @@ final class SettingsModel {
     }
 
     /// Settings alternate picker (shown only while following): the theme for the OTHER appearance.
-    /// Clearing the dark slot (nil while the alternate IS the dark slot) routes through `setDarkTheme(nil)`
-    /// so following can never be left ON with `darkTheme == nil` — the picker has no such row today, but the
-    /// setter stays consistent regardless of what a future caller passes.
+    /// Clearing the dark slot routes through `setDarkTheme(nil)` so following can never be left ON with
+    /// `darkTheme == nil` — no picker row does that today, but the setter holds for any caller.
     func setAlternateTheme(_ value: String?) {
         if rendersDarkSlot {
             settings.theme = value          // the alternate is the LIGHT slot while rendering dark
@@ -218,9 +198,8 @@ final class SettingsModel {
         persistAndApply()
     }
 
-    /// The light side seeded when a dark theme is chosen while the theme is nil/empty (ghostty
-    /// built-in, which cannot be a dual side) — a bundled light theme so the pick composes a
-    /// well-formed dual value.
+    /// The light side seeded when a dark theme is chosen while `theme` is nil/empty (ghostty's built-in,
+    /// which cannot be a dual side) — a bundled light theme, so the pick composes a well-formed dual value.
     static let defaultLightTheme = "Builtin Light"
 
     func setNotificationsEnabled(_ value: Bool?) { settings.notificationsEnabled = value; persistAndApply() }
@@ -244,21 +223,19 @@ final class SettingsModel {
     func setAttentionButtonEnabled(_ value: Bool?) { settings.attentionButtonEnabled = value; persistAndApply() }
 
     /// Persist whether only the frontmost window shows its sidebar. A behavior flag, not a ghostty key, so
-    /// `persistAndApply()` no-ops the config; it pushes the `GhosttyApp` mirror the frontmost-change driver
-    /// reads. Turning it ON collapses every inactive window's sidebar immediately, rather than waiting for
-    /// the next window-focus change.
+    /// `persistAndApply()` no-ops the config and just pushes the `GhosttyApp` mirror the frontmost-change
+    /// driver reads. Turning it ON collapses every inactive sidebar at once, not at the next focus change.
     func setAutoHideSidebarInactiveWindows(_ value: Bool?) {
         settings.autoHideSidebarInactiveWindows = value
         persistAndApply()
         if value == true { library.applyInactiveWindowSidebarHiding() }
     }
 
-    /// Show or hide a single title-bar / sidebar-footer chrome element, then persist. Toggling `visible`
-    /// off adds the element to `hiddenInterfaceElements`, on removes it; an empty result maps back to nil so
-    /// `settings.json` stays minimal. A GUI-only chrome flag, not a ghostty key — `persistAndApply()`
-    /// no-ops the config text but rides `.agtermAppearanceChanged` so every window re-gates the element live.
-    /// Mutates the RAW string set (not `resolvedHiddenInterfaceElements`, which drops unknown names) so a
-    /// future element hidden by a newer build survives a toggle here instead of being erased.
+    /// Show or hide one title-bar / sidebar-footer chrome element, then persist; an empty result maps back
+    /// to nil so `settings.json` stays minimal. Not a ghostty key — `persistAndApply()` no-ops the config
+    /// text but rides `.agtermAppearanceChanged`, so every window re-gates the element live. Mutates the
+    /// RAW string set: `resolvedHiddenInterfaceElements` drops unknown names, erasing an element a newer
+    /// build hid.
     func setInterfaceElementVisible(_ element: InterfaceElement, visible: Bool) {
         var hidden = Set(settings.hiddenInterfaceElements ?? [])
         if visible { hidden.remove(element.rawValue) } else { hidden.insert(element.rawValue) }
@@ -266,11 +243,11 @@ final class SettingsModel {
         persistAndApply()
     }
 
-    /// Persist whether agterm inherits the user's global `~/.config/ghostty/config` and FULLY reload the
-    /// ghostty config so the change takes effect live. NOT a `ghosttyConfigLines()` key, so
-    /// `persistAndApply`'s text-diff guard would skip the reload — but it changes WHICH files `loadConfig`
-    /// reads, so it takes the unconditional reload path (like `setConfigDirectory`). nil/false = off (the
-    /// default): agterm stays self-contained; the scoped `ghostty.conf` is the place for customizations.
+    /// Persist whether agterm inherits the user's global `~/.config/ghostty/config`, then FULLY reload so
+    /// it takes effect live. NOT a `ghosttyConfigLines()` key, so `persistAndApply`'s text-diff guard
+    /// would skip the reload — but it changes WHICH files `loadConfig` reads, so it takes the
+    /// unconditional path (like `setConfigDirectory`). nil/false = off: agterm stays self-contained, and
+    /// the scoped `ghostty.conf` is the place for customizations.
     func setInheritGlobalGhosttyConfig(_ value: Bool?) {
         settings.inheritGlobalGhosttyConfig = value
         try? settingsStore.save(settings)
@@ -288,9 +265,8 @@ final class SettingsModel {
     /// Persist the system sound played when a session enters `blocked` (nil/empty = none). Not a ghostty
     /// key and nothing renders it continuously, so it only saves — `ControlServer` reads it on demand.
     func setBlockedStatusSoundName(_ name: String?) { settings.blockedStatusSoundName = name; try? settingsStore.save(settings) }
-    /// Persist where a new (⌘T) session opens (nil = the home default). Not a ghostty key and nothing
-    /// renders it continuously — it only affects the NEXT new session, read then by `AppActions.newSession()`
-    /// — so it just saves (no config rewrite / surface reload).
+    /// Persist where a new (⌘T) session opens (nil = home). Not a ghostty key and read only at the NEXT
+    /// new session (`AppActions.newSession()`), so it just saves — no config rewrite or surface reload.
     func setNewSessionDirectory(_ value: String?) { settings.newSessionDirectory = value; try? settingsStore.save(settings) }
     /// Persist the fixed directory used when `newSessionDirectory` is `custom` (nil/empty falls back to home).
     func setNewSessionCustomDirectory(_ value: String?) { settings.newSessionCustomDirectory = value; try? settingsStore.save(settings) }
@@ -314,11 +290,9 @@ final class SettingsModel {
         applyAutoFollowToAllWindows()
     }
 
-    /// Apply a new background opacity live WITHOUT an immediate save — the live-drag half of the opacity
-    /// slider. Updates translucency on every drag tick (apply-without-save) and schedules a debounced
-    /// write, so the window updates continuously while the disk write coalesces to one once the slider
-    /// settles (covering keyboard arrow adjustments, which never fire `onEditingChanged`). A mouse
-    /// release flushes it immediately via `commitBackgroundSettings`. Mirrors the theme apply/save split.
+    /// Apply a new background opacity live WITHOUT saving — the live-drag half of the slider: each tick
+    /// applies and reschedules `backgroundSaveDebouncer`, so the disk write coalesces to one on settle.
+    /// Mirrors the theme apply/save split.
     func previewBackgroundOpacity(_ value: Double?) {
         settings.backgroundOpacity = value
         apply()
@@ -333,17 +307,15 @@ final class SettingsModel {
         scheduleBackgroundSave()
     }
 
-    /// Persist the current opacity/blur NOW — the slider's `onEditingChanged` drag-end commit. Flushes
-    /// the pending debounced write so a mouse release saves immediately (save-only; the value is already
-    /// live from the preview applies, so no redundant re-apply).
+    /// Persist the current opacity/blur NOW — the slider's `onEditingChanged` drag-end commit. Save-only:
+    /// the value is already live from the preview applies, so it just flushes the pending debounced write.
     func commitBackgroundSettings() { backgroundSaveDebouncer.flush() }
 
     private func scheduleBackgroundSave() {
         backgroundSaveDebouncer.schedule(after: Self.backgroundSaveInterval) { [weak self] in
             guard let self else { return }
-            // pin the theme to the last committed value: a theme preview mutates settings.theme in
-            // place WITHOUT persisting, so saving the live settings here would leak an uncommitted
-            // preview to disk. Opacity/blur (what this save is for) keep their live values.
+            // pin the theme to the last committed value — a live preview mutates `settings.theme` in
+            // place without persisting. Opacity/blur (what this save is for) keep their live values.
             var snapshot = settings
             snapshot.theme = committedTheme
             snapshot.darkTheme = committedDarkTheme
@@ -351,25 +323,23 @@ final class SettingsModel {
         }
     }
 
-    /// Apply a theme live WITHOUT persisting it — the live-preview half of the action-palette theme
-    /// picker (navigation/typing). Sets `settings.theme` immediately (so a commit captures the latest
-    /// even if the apply hasn't fired yet) but DEBOUNCES the expensive `apply()` (config rewrite +
-    /// surface reload + chrome refresh), so a burst of arrow/typing previews coalesces to one reload
-    /// once the quiet window elapses. Skips `settingsStore.save`, so navigating themes doesn't touch
-    /// `settings.json`; the picker commits with `commitTheme()` on Enter (which flushes the pending
-    /// apply) or reverts with `revertThemePreview(theme:darkTheme:)` on Esc (restoring both captured
-    /// slots). Writes the CURRENT-appearance slot (the dark slot while following in dark mode, else
-    /// `theme`) so the preview renders on screen.
+    /// Apply a theme live WITHOUT persisting — the action-palette picker's preview half. Sets the slot
+    /// immediately (so a commit captures the latest even if the apply hasn't fired) but DEBOUNCES the
+    /// expensive `apply()` (config rewrite + surface reload + chrome refresh) and skips
+    /// `settingsStore.save`, so browsing never touches `settings.json`. Writes the CURRENT-appearance
+    /// slot (the dark one while following in dark mode, else `theme`) so the preview renders on screen.
+    /// Enter commits via `commitTheme()` (flushing the pending apply), Esc reverts via
+    /// `revertThemePreview(theme:darkTheme:)` (restoring both captured slots).
     func previewTheme(_ value: String?) {
         if rendersDarkSlot { settings.darkTheme = value } else { settings.theme = value }
         previewThemeDebouncer.schedule(after: Self.previewThemeDebounceInterval) { [weak self] in self?.apply() }
     }
 
-    /// Restore BOTH theme slots IMMEDIATELY (no debounce), cancelling any pending debounced preview — the
-    /// revert half of the picker (Esc / scrim / mode switch / unmount). Synchronous so the captured pair
-    /// is restored with no debounce lag and no queued preview fires afterwards. Writes both slots (not
-    /// the on-screen one) so an appearance flip mid-preview can't leave a previewed value in the wrong
-    /// slot — `AppActions` snapshots the pair on open and passes it straight back.
+    /// Restore BOTH theme slots IMMEDIATELY, cancelling any pending debounced preview — the revert half
+    /// of the picker (Esc / scrim / mode switch / unmount). Synchronous, so nothing lags and no queued
+    /// preview fires after. Both slots, not just the on-screen one, so an appearance flip mid-preview
+    /// can't strand a previewed value in the other — `AppActions` snapshots the pair on open and passes
+    /// it straight back.
     func revertThemePreview(theme: String?, darkTheme: String?) {
         previewThemeDebouncer.cancel()
         settings.theme = theme
@@ -377,15 +347,13 @@ final class SettingsModel {
         apply()
     }
 
-    /// Persist the picker's final theme — the commit half, called on Enter after one or more
-    /// `previewTheme` applies. Only the slot rendering AT ENTER-TIME (the active slot) keeps its browsed
-    /// value; the OTHER slot is restored to `nonActiveOriginal` (its value when the picker opened). Without
-    /// that, a mid-preview appearance flip that browsed a value into the off-screen slot would persist it
-    /// even though it was never confirmed, and it would resurface on the next flip — the commit-side twin
-    /// of the `revertThemePreview` bug. Flushes any pending debounced preview first (so the active slot's
-    /// latest value is live), restores the off-screen slot, re-applies ONLY if that changed the config
-    /// (the flip case — so the dual line on disk matches, and the reverted slot won't resurface), then
-    /// writes `settings.json`. The common no-flip commit stays save-only (nothing to restore, no reload).
+    /// Persist the picker's final theme — the commit half, on Enter after one or more `previewTheme`
+    /// applies. Only the slot rendering AT ENTER-TIME keeps its browsed value; the OTHER is restored to
+    /// `nonActiveOriginal` (its value when the picker opened), or a mid-preview appearance flip would
+    /// persist a value into the off-screen slot that was never confirmed and would resurface on the next
+    /// flip. Flushes the pending preview first (so the active slot is live), restores the off-screen
+    /// slot, re-applies ONLY if that changed the config (the flip case, so the dual line on disk
+    /// matches), then saves; a no-flip commit stays save-only.
     func commitTheme(nonActiveOriginal: (theme: String?, dark: String?)) {
         previewThemeDebouncer.flush()
         let restored: Bool
@@ -402,18 +370,16 @@ final class SettingsModel {
         committedDarkTheme = settings.darkTheme
     }
 
-    /// Flush any pending debounced settings writes synchronously — the quit path. The opacity/blur
-    /// slider's debounced `settings.json` write (and the theme preview, for symmetry) holds a pending
-    /// save for ~0.3 s after a KEYBOARD adjustment, which never fires the slider's drag-end commit;
-    /// quitting within that window would otherwise lose it. Called from `applicationWillTerminate`.
+    /// Flush any pending debounced settings writes synchronously, from `applicationWillTerminate`. A
+    /// KEYBOARD opacity/blur adjustment never fires the slider's drag-end commit, so its ~0.3 s pending
+    /// write (and the theme preview's, for symmetry) would be lost by quitting inside that window.
     func flushPendingSaves() {
         backgroundSaveDebouncer.flush()
         previewThemeDebouncer.flush()
     }
 
-    /// Reset the whole Agent Status section to defaults (the "Reset to defaults" button): the three glyph
-    /// colors back to the system defaults, the three glyph shapes back to the default plain circle,
-    /// AND the blocked sound back to none.
+    /// Reset the whole Agent Status section (the "Reset to defaults" button): the three glyph colors to
+    /// the system defaults, the three glyph shapes to the default plain circle, the blocked sound to none.
     func resetAgentStatus() {
         settings.activeStatusColorHex = nil
         settings.blockedStatusColorHex = nil
@@ -426,9 +392,8 @@ final class SettingsModel {
     }
 
     /// Persist a new config directory (where `keymap.conf` and `ghostty.conf` live) and reload BOTH
-    /// co-located files from it, so neither lags behind a directory change (each reload posts its own
-    /// diagnostics banner). A nil value falls back to the default location resolved by
-    /// `ConfigPaths.configDirectory`.
+    /// co-located files so neither lags the change (each reload posts its own diagnostics banner). nil
+    /// falls back to the default location `ConfigPaths.configDirectory` resolves.
     func setConfigDirectory(_ value: String?) {
         settings.configDirectory = value
         try? settingsStore.save(settings)
@@ -436,11 +401,11 @@ final class SettingsModel {
         reloadGhosttyConfig()
     }
 
-    /// Re-read and re-parse `keymap.conf`, then post `.agtermKeymapChanged` so the custom-command
-    /// runner rebuilds and the action palette re-reads the custom commands. The data-driven menu
-    /// shortcuts re-render on their own (they read the `@Observable` `keymap`). Surfaces any parse
-    /// errors or conflicts as a banner — this runtime reload path runs after notification registration,
-    /// so it's safe to post here (the startup path posts from the scene `.task` instead).
+    /// Re-read and re-parse `keymap.conf`, then post `.agtermKeymapChanged` so the custom-command runner
+    /// rebuilds and the action palette re-reads them; the data-driven menu shortcuts re-render on their
+    /// own off the `@Observable` `keymap`. Parse errors/conflicts surface as a banner — safe to post here
+    /// since this runtime path runs after notification registration (the startup path posts from the
+    /// scene `.task` instead).
     func reloadKeymap() {
         loadKeymap()
         NotificationCenter.default.post(name: .agtermKeymapChanged, object: nil)
@@ -466,8 +431,7 @@ final class SettingsModel {
     /// The resolved `keymap.conf` path, exposed for the Edit Keymap action (the overlay command).
     var keymapPath: String { keymapURL().path }
 
-    /// The resolved agterm-scoped `ghostty.conf` path: `<config dir>/ghostty.conf`, co-located with
-    /// `keymap.conf`.
+    /// The resolved agterm-scoped `ghostty.conf` path: `<config dir>/ghostty.conf`, beside `keymap.conf`.
     private func ghosttyConfigURL() -> URL {
         ConfigPaths.ghosttyConfigPath(configDirectory: configDirectoryURL())
     }
@@ -524,16 +488,14 @@ final class SettingsModel {
         """
     }
 
-    /// Rebuild the ghostty config from all sources (re-reading the agterm-scoped `ghostty.conf` the user
-    /// just edited) and broadcast it to every live surface, clearing per-session font overrides like a
-    /// settings change. Unconditional — unlike `apply()`, which skips the reload when the generated
-    /// settings text is unchanged; `ghostty.conf` is edited externally, so there is always something to
-    /// re-read. Posts `.agtermAppearanceChanged` so the chrome picks up any color change, and a warning
-    /// banner on diagnostics (mirroring `reloadKeymap`, so every caller surfaces them — this runtime path
-    /// runs after notification registration, so posting here is safe). Returns the rebuilt config's
-    /// diagnostic count (0 = clean), counted across ALL config sources (libghostty diagnostics carry no
-    /// source-file attribution, so it is not specific to `ghostty.conf`). Drives File ▸ Reload Config, the
-    /// Edit-ghostty overlay close, a Key Mapping directory change, and the `config.reload` control command.
+    /// Rebuild the ghostty config from all sources (re-reading the externally edited agterm-scoped
+    /// `ghostty.conf`) and broadcast it to every live surface, clearing per-session font overrides like a
+    /// settings change. UNCONDITIONAL, unlike `apply()`'s unchanged-text skip — an external edit always
+    /// has something to re-read. Posts `.agtermAppearanceChanged` for the chrome, and a warning banner on
+    /// diagnostics (safe here, like `reloadKeymap`: a runtime path, after notification registration).
+    /// Returns the diagnostic count (0 = clean) across ALL config sources, since libghostty diagnostics
+    /// carry no source-file attribution. Drives File ▸ Reload Config, the Edit-ghostty overlay close, a
+    /// Key Mapping directory change, and the `config.reload` control command.
     @discardableResult
     func reloadGhosttyConfig() -> Int {
         let count = reloadConfigClearingSessionZoom()
@@ -542,21 +504,20 @@ final class SettingsModel {
         return count
     }
 
-    /// Clears every session's per-session ⌘+/⌘− zoom BEFORE rebuilding + rebroadcasting the ghostty
-    /// config to the live surfaces, returning the rebuilt config's diagnostic count. The ORDER is
-    /// load-bearing: `reloadConfig` re-asserts each surface's per-session overlay (`reapplySessionConfigIfNeeded`),
-    /// which re-emits `font-size` from `session.fontSize`. Clearing the override FIRST makes that re-emit
-    /// read nil — so a watermarked pane drops its zoom on screen and the snapshot persists `fontSize == nil`
-    /// in agreement, matching the documented "reload clears per-session zoom" contract (resetting AFTER would
-    /// leave the surface zoomed while the model said nil). The EXPLICIT reload callers — `reloadGhosttyConfig`
-    /// and `apply()` — funnel through here so neither can drift back to reload-then-reset; the automatic
-    /// appearance flip is the one deliberate exception (`reloadConfigPreservingSessionZoom`).
+    /// Clears every session's ⌘+/⌘− zoom BEFORE rebuilding + rebroadcasting the config to the live
+    /// surfaces, returning the rebuilt config's diagnostic count. The ORDER is load-bearing: the reload
+    /// re-asserts each surface's per-session overlay (`reapplySessionConfigIfNeeded`), re-emitting
+    /// `font-size` from `session.fontSize` — clearing first makes that read nil, so a watermarked pane
+    /// drops its zoom on screen and the snapshot persists `fontSize == nil` in agreement, matching the
+    /// documented "reload clears per-session zoom" contract (resetting AFTER leaves the surface zoomed
+    /// while the model says nil). Both EXPLICIT callers (`reloadGhosttyConfig`, `apply()`) funnel here;
+    /// the automatic appearance flip is the one exception (`reloadConfigPreservingSessionZoom`).
     @discardableResult
     private func reloadConfigClearingSessionZoom() -> Int {
         // every reload re-sides the config (surface schemes + the CONFIG_CHANGE chrome clone) to the
-        // CURRENT appearance, so record the side here — for ALL reload paths, not just the appearance
-        // flip — to keep `appearanceChanged()`'s same-side suppression from firing one spurious reload
-        // later. The app-level `NSApp.effectiveAppearance` (via `currentIsDark()`) is the single source.
+        // CURRENT appearance, from the single source `NSApp.effectiveAppearance` (via `currentIsDark()`).
+        // Record it on ALL reload paths, not just the flip, or `appearanceChanged()`'s same-side
+        // suppression fires one spurious reload later.
         let isDark = GhosttyApp.currentIsDark()
         lastAppliedIsDark = isDark
         // open windows reset live, closed ones by rewriting their snapshot file (the shared config reset
@@ -565,23 +526,20 @@ final class SettingsModel {
         return GhosttyApp.shared.reloadConfig(surfaces: liveSurfaces(), isDark: isDark)
     }
 
-    /// The appearance-flip variant of the reload above: re-feeds the config so libghostty re-resolves
-    /// the dual theme, but KEEPS every session's ⌘+/⌘− zoom — after the shared-config broadcast,
-    /// `reapplySessionConfigIfNeeded` re-emits the session's `fontSize` per surface (the same
-    /// round-trip that re-asserts watermarks). An automatic OS flip (or the launch seeding reload of a
-    /// dark launch) must not silently wipe zoom; only the explicit reloads carry the documented
-    /// zoom-clearing contract. The latch records the `isDark` we actually applied (the KVO-delivered
-    /// side threaded through the reload), so "latch == applied side" holds for ALL reload paths — there
-    /// is one source now, so the poster-vs-rendered divergence the old two-source design feared is gone.
+    /// The appearance-flip variant of the reload above: re-feeds the config so libghostty re-resolves the
+    /// dual theme, but KEEPS every session's ⌘+/⌘− zoom — after the broadcast `reapplySessionConfigIfNeeded`
+    /// re-emits each session's `fontSize` per surface (the same round-trip that re-asserts watermarks).
+    /// An automatic OS flip (or a dark launch's seeding reload) must not silently wipe zoom; only the
+    /// explicit reloads carry that contract. The latch records the `isDark` actually applied (the
+    /// KVO-delivered side threaded through the reload), so "latch == applied side" holds on every path.
     private func reloadConfigPreservingSessionZoom(isDark: Bool) {
         GhosttyApp.shared.reloadConfig(surfaces: liveSurfaces(), isDark: isDark)
         lastAppliedIsDark = isDark
     }
 
-    /// Read `keymap.conf` and parse it into `keymap` + `keymapDiagnostics`. A MISSING file is not an
-    /// error: it yields an empty keymap with no diagnostics (the starter file is created at init). A
-    /// file that EXISTS but can't be read (permissions, invalid UTF-8) is surfaced as a single line-0
-    /// diagnostic so the warning banner fires, rather than being silently treated as missing.
+    /// Read `keymap.conf` into `keymap` + `keymapDiagnostics`. A MISSING file is not an error — empty
+    /// keymap, no diagnostics (the starter is written at init). One that EXISTS but can't be read
+    /// (permissions, invalid UTF-8) becomes a single line-0 diagnostic so the warning banner fires.
     private func loadKeymap() {
         let loaded = KeymapStore(configDirectory: configDirectoryURL()).load()
         keymap = loaded.keymap
@@ -604,9 +562,8 @@ final class SettingsModel {
     }
 
     /// On first launch, if `ghostty.conf` does not exist, create the config directory and write a
-    /// commented starter file pointing at ghostty's config docs with an example override. Never
-    /// overwrites an existing file. (Seeded after GhosttyApp's first `loadConfig` runs, but harmless:
-    /// the starter is all comments — a no-op — exactly like the starter keymap.)
+    /// commented starter pointing at ghostty's config docs with an example override. Never overwrites.
+    /// Seeded AFTER GhosttyApp's first `loadConfig`, but harmless: the starter is all comments, a no-op.
     private func ensureStarterGhosttyConfig() {
         let url = ghosttyConfigURL()
         if FileManager.default.fileExists(atPath: url.path) { return }
@@ -619,9 +576,8 @@ final class SettingsModel {
         }
     }
 
-    /// The commented starter `ghostty.conf`: a header linking ghostty's config docs, a commented
-    /// example override, and a note that agterm's UI-managed keys win over this file. Every line is a
-    /// comment so a fresh file changes nothing.
+    /// The commented starter `ghostty.conf`: a header linking ghostty's config docs, an example override,
+    /// and a note that agterm's UI-managed keys win. Every line is a comment, so a fresh file is a no-op.
     private func starterGhosttyConfigText() -> String {
         """
         # agterm-scoped ghostty config — applies ONLY to agterm, not the standalone Ghostty.app.
@@ -649,26 +605,23 @@ final class SettingsModel {
         apply()
     }
 
-    /// Apply the current `settings` to the running app WITHOUT persisting: rewrite the ghostty config
-    /// and rebroadcast it to every live surface (only when the generated text changed), then refresh
-    /// the window translucency, toggles, and chrome. Split out of `persistAndApply` so the theme
-    /// picker can preview-apply without writing `settings.json`.
+    /// Apply the current `settings` to the running app WITHOUT persisting: rewrite the ghostty config and
+    /// rebroadcast it to every live surface (only when the generated text changed), then refresh the
+    /// window translucency, toggles, and chrome. Split out so the theme picker can preview-apply.
     private func apply() {
-        // only rebuild + rebroadcast the ghostty config (which resets every surface to the default
-        // font size) when the generated config TEXT actually changed. A window-opacity drag within
-        // the translucent range, or a blur change, leaves the config identical — re-syncing the
-        // window alone is enough and avoids hammering surface rebuilds on every slider tick.
+        // rebuild + rebroadcast (which resets every surface to the default font size) only when the
+        // generated config TEXT changed: an opacity drag within the translucent range, or a blur change,
+        // leaves it identical, and re-syncing the window alone avoids a rebuild per slider tick.
         let opacityBefore = GhosttyApp.shared.windowOpacity
         if writeGhosttyConfig() {
             reloadConfigClearingSessionZoom()
         }
         applyWindowTranslucency()
-        // a `.color` session background bakes the window opacity into its per-surface `background-opacity`
-        // at apply time, so re-assert those surfaces whenever the opacity changed — reloadConfig's own
-        // re-assert (when the config text changed) runs BEFORE `applyWindowTranslucency` updates the
-        // opacity, and a within-range slider drag doesn't reload at all, so neither path alone keeps a
-        // color session tracking the slider. Guarded to `.color` surfaces so a plain/image/text session
-        // isn't rebuilt on every opacity tick (blur composites at the AppKit level and needs no re-emit).
+        // a `.color` background bakes the window opacity into its per-surface `background-opacity` at
+        // apply time, so re-assert on any opacity change: reloadConfig's own re-assert runs BEFORE
+        // `applyWindowTranslucency` updates the opacity, and a within-range drag doesn't reload at all.
+        // Guarded to `.color` so a plain/image/text session isn't rebuilt per tick (blur composites in
+        // AppKit and needs no re-emit).
         if GhosttyApp.shared.windowOpacity != opacityBefore {
             for surface in liveSurfaces() { surface.reapplyColorBackgroundIfNeeded() }
         }
@@ -687,9 +640,9 @@ final class SettingsModel {
         applyAttentionButtonEnabled()
         applyInterfaceElements()
         applyAutoHideSidebarInactiveWindows()
-        // refresh the app chrome (title bar + sidebar + quick terminal) with the new terminal color,
-        // window translucency, and toolbar style immediately, rather than only when the window next
-        // re-keys. The title-bar re-sync and the cwd-subtitle drop both ride this notification.
+        // refresh the chrome (title bar + sidebar + quick terminal) for the new terminal color,
+        // translucency and toolbar style now, not at the next window re-key; the title-bar re-sync and
+        // the cwd-subtitle drop both ride this.
         NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil)
     }
 
@@ -735,19 +688,17 @@ final class SettingsModel {
         GhosttyApp.shared.setAutoHideSidebarInactiveWindows(settings.autoHideSidebarInactiveWindows ?? false)
     }
 
-    /// Push the current auto-follow configuration into a single window's store. Called when a window's
-    /// store is first resolved (`ContentView.resolveStore`) so a newly opened window honors the setting:
-    /// the store is built host-free in `WindowLibrary` and can't read these settings itself, so — unlike
-    /// the chrome flags that ride a `GhosttyApp` mirror — the value is pushed straight into the store.
+    /// Push the current auto-follow configuration into one window's store, from `ContentView.resolveStore`
+    /// so a newly opened window honors the setting. The store is built host-free in `WindowLibrary` and
+    /// can't read settings itself, so the value is pushed in rather than riding a `GhosttyApp` mirror.
     func applyAutoFollow(to store: AppStore) {
         let timeout = AppSettings.AutoFollowAttention(tolerant: settings.autoFollowAttention).timeout
         store.setAutoFollow(timeout: timeout, stayOnActive: settings.autoFollowStayOnActive ?? false)
     }
 
     /// Fan the current auto-follow configuration out to every open window's store — the settings-change
-    /// broadcast (and the launch seed, called from the scene `.task` once the model is wired). Idempotent:
-    /// re-pushing the same values is a no-op in `AppStore.setAutoFollow`. Distinct name from the single-window
-    /// `applyAutoFollow(to:)` so the fan-out and the one-store push don't read as arity-overloaded twins.
+    /// broadcast, and the launch seed from the scene `.task` once the model is wired. Idempotent:
+    /// re-pushing the same values is a no-op in `AppStore.setAutoFollow`.
     func applyAutoFollowToAllWindows() {
         for store in library.openIDs().compactMap({ library.store(for: $0) }) {
             applyAutoFollow(to: store)
@@ -798,9 +749,8 @@ final class SettingsModel {
         return true
     }
 
-    /// All live ghostty surfaces across every open window: each session's primary + split + scratch
-    /// surfaces in every open window's store, plus every open window's quick terminal. A config reload
-    /// therefore broadcasts to all windows, not just the frontmost one.
+    /// All live ghostty surfaces: every open window's sessions (primary + split + scratch) plus its quick
+    /// terminal — so a config reload broadcasts to all windows, not just the frontmost.
     private func liveSurfaces() -> [GhosttySurfaceView] {
         var views = library.openIDs()
             .compactMap { library.store(for: $0) }

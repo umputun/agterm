@@ -21,17 +21,16 @@ final class ControlTargetResolver {
 
     // MARK: - Window resolution & cross-window targeting
 
-    /// A resolution outcome carrying either the resolved value or the structured error response to
-    /// return. (`ControlResponse` isn't an `Error`, so this stands in for `Result` with the same case
-    /// names.)
+    /// The resolved value or the structured error response to return. (`ControlResponse` isn't an `Error`,
+    /// so this stands in for `Result` with the same case names.)
     enum Resolution<T> {
         case success(T)
         case failure(ControlResponse)
     }
 
-    /// The open store a placement/`active` command targets: with `window` set, the resolved open
-    /// window's store (an error response when it isn't open / can't be resolved); without it, the
-    /// frontmost window's store. Runs `body` with that store on success.
+    /// The open store a placement/`active` command targets: the resolved window's store with `window` set
+    /// (an error response when it isn't open or can't be resolved), else the frontmost window's. Runs
+    /// `body` with that store on success.
     func resolvePlacementStore(_ window: String?, _ body: (AppStore) -> ControlResponse) -> ControlResponse {
         switch resolveWindowStore(window) {
         case .failure(let response): return response
@@ -39,11 +38,10 @@ final class ControlTargetResolver {
         }
     }
 
-    /// `resolvePlacementStore` for the window-scoped commands that must FAIL rather than silently no-op
-    /// when nothing is open. Without `window` the placement default is the frontmost store, which falls
-    /// back to a throwaway `emptyStore` once every window is closed — a command driven onto that store
-    /// would answer `ok` having changed nothing. A named window already errors when it isn't open, so this
-    /// only adds the nil-window case.
+    /// `resolvePlacementStore` for window-scoped commands that must FAIL rather than silently no-op when
+    /// nothing is open: with no `window` the frontmost default falls back to the throwaway `emptyStore`
+    /// once every window is closed, and a command driven onto that answers `ok` having changed nothing. A
+    /// named window already errors when it isn't open, so this only adds the nil-window case.
     func resolveOpenPlacementStore(_ window: String?, _ body: (AppStore) -> ControlResponse) -> ControlResponse {
         if trimmed(window) == nil, library.activeStore == nil {
             return ControlResponse(ok: false, error: "no open window")
@@ -68,10 +66,10 @@ final class ControlTargetResolver {
 
     // MARK: - Session / workspace target resolution
 
-    /// Resolve `target` (defaulting to `active`) to a session and its owning store, then run `body`.
-    /// With `window` set, the search is scoped to that open window's store; without it, `active`
-    /// resolves against the frontmost store while an id/prefix is matched across ALL open stores so a
-    /// captured id resolves regardless of which window is frontmost.
+    /// Resolve `target` (defaulting to `active`) to a session and its owning store, then run `body`. With
+    /// `window` set the search is scoped to that open window's store; without it `active` resolves against
+    /// the frontmost store while an id/prefix matches across ALL open stores, so a captured id resolves
+    /// regardless of which window is frontmost.
     func resolveSession(_ target: String?, window: String?,
                         _ body: (AppStore, UUID) -> ControlResponse) -> ControlResponse {
         switch resolveSessionTarget(target, window: window) {

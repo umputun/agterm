@@ -2,11 +2,10 @@ import ArgumentParser
 import Foundation
 import agtermCore
 
-/// Shared `--pane` validation for the commands that accept `left|right|scratch` (session type, text, status,
-/// and font). Rejects any other value with a clean usage error before the socket round-trip, matching the
-/// server-side switch (so the CLI and server can't drift, and a raw socket client still hits the same check
-/// server-side). These commands intentionally reuse `StatusPane`'s `left|right|scratch` value set as the
-/// shared pane-addressing vocabulary — the enum is named for agent status but its cases are the pane names.
+/// Shared `--pane` validation for the commands accepting `left|right|scratch` (session type, text, status,
+/// font). Rejects anything else with a clean usage error before the socket round-trip, matching the
+/// server-side switch, which still catches a raw socket client. They reuse `StatusPane`'s value set as the
+/// shared pane-addressing vocabulary — named for agent status, but its cases are the pane names.
 func validatePaneArgument(_ pane: String?) throws {
     if let pane, StatusPane(rawValue: pane) == nil {
         throw ValidationError("--pane must be left, right, or scratch")
@@ -144,10 +143,9 @@ struct Session: ParsableCommand {
         @OptionGroup var target: BatchTargetOptions
         @OptionGroup var options: ClientOptions
 
-        // exactly one placement intent among {workspace positional (relocate), --to (reorder),
-        // --after/--before (anchor-relative place)}; reject the empty/conflicting cases at parse time so
-        // it's a clean usage error, unit-testable without a socket. The anchor carries its own workspace,
-        // so placement is mutually exclusive with both --to and a destination workspace.
+        // exactly one placement intent among {workspace positional (relocate), --to (reorder), --after/--before
+        // (anchor-relative)}; reject empty/conflicting cases at parse time as a clean usage error, unit-testable
+        // without a socket. the anchor carries its own workspace, so placement excludes --to and a workspace.
         func validate() throws {
             if after != nil, before != nil {
                 throw ValidationError("use either --after or --before, not both")
@@ -390,9 +388,8 @@ struct Session: ParsableCommand {
         }
     }
 
-    /// The per-session, per-pane restore-command override. Nested under `Session`, so it is a different
-    /// verb from the top-level `restore clear` in `MiscCommands.swift` — that one is app-global and
-    /// capture-scoped, this one is per-session and override-scoped.
+    /// The per-session, per-pane restore-command override. Nested under `Session`, a different verb from the
+    /// top-level `restore clear` (app-global and capture-scoped; this one per-session and override-scoped).
     struct Restore: RequestCommand {
         static let configuration = CommandConfiguration(
             abstract: "Pin the command a session's pane re-runs on the next launch.",
@@ -507,9 +504,9 @@ struct Session: ParsableCommand {
             subcommands: [Image.self, Text.self, Color.self, Clear.self]
         )
 
-        /// Shared input validation against the host-free `WatermarkConfig`, so a bad value is a clean
-        /// parse error before any socket round-trip, matching the server's rejection exactly. The enum
-        /// checks reject `""` too, so no separate empty-string special-case is needed.
+        /// Shared input validation against the host-free `WatermarkConfig`, so a bad value is a clean parse
+        /// error before any socket round-trip, matching the server's rejection exactly. The enum checks
+        /// reject `""` too, so no separate empty-string case is needed.
         static func validate(fit: String? = nil, position: String? = nil, opacity: Double? = nil,
                              color: String? = nil, text: String? = nil, path: String? = nil) throws {
             if let fit, !WatermarkConfig.isValidFit(fit) {
@@ -637,17 +634,17 @@ struct Session: ParsableCommand {
             func run() throws {
                 guard block else { try defaultRun(); return }
                 let client = SocketClient(path: options.socketPath())
-                // open via the same `makeRequest()` the non-block path uses (DRY): in block mode `validate()`
-                // guarantees `!wait`, so its `wait` is nil — identical to opening non-wait, and the floating
-                // `--size-percent` is carried through the single source instead of a duplicated ControlArgs.
+                // open via the same `makeRequest()` as the non-block path: in block mode `validate()` guarantees
+                // `!wait`, so its `wait` is nil, and the floating `--size-percent` rides that single source
+                // instead of a duplicated ControlArgs.
                 let opened = try client.send(makeRequest())
                 guard opened.ok, let id = opened.result?.id else {
                     SocketClient.printResponse(opened, json: options.json)
                     throw ExitCode.failure
                 }
-                // poll session.overlay.result until the program exits. target the returned id with NO
-                // window scope: the id is globally unique and resolves cross-window, so a frontmost-window
-                // change during the run can't make the poll miss the session.
+                // poll session.overlay.result until the program exits, targeting the returned id with NO window
+                // scope: it is globally unique and resolves cross-window, so a frontmost-window change during
+                // the run can't make the poll miss the session.
                 while true {
                     let res = try client.send(ControlRequest(cmd: .sessionOverlayResult, target: id))
                     if res.ok {

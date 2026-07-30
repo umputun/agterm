@@ -2,12 +2,11 @@ import Foundation
 
 /// Host-free on-disk location of rendered `.text` watermark PNGs — a `watermarks/` subdir of the state
 /// directory (honoring `AGTERM_STATE_DIR` for test isolation, like the snapshot/settings files). Pure
-/// Foundation (no AppKit), so both the app-target renderer (`WatermarkRenderer`, which writes the PNGs)
-/// and the host-free store (`AppStore`, which removes a session's PNG when the session is permanently
-/// destroyed) share one path definition instead of duplicating it.
-///
-/// Each function takes an optional `stateDir` override (default nil = the `AGTERM_STATE_DIR`/app-support
-/// resolution) so tests can inject a temp directory without mutating process-global env (parallel-safe).
+/// Foundation (no AppKit), so the app-target renderer (`WatermarkRenderer`, which writes the PNGs) and
+/// the host-free `AppStore` (which removes a session's PNG when the session is permanently destroyed)
+/// share one path definition. Each function takes an optional `stateDir` override (default nil = the
+/// `AGTERM_STATE_DIR`/app-support resolution) so tests can inject a temp directory without mutating
+/// process-global env (parallel-safe).
 public enum WatermarkStorage {
     /// `<stateDir>/watermarks` — NOT created. Use `ensureDirectory()` before writing.
     public static func directoryURL(stateDir: URL? = nil) -> URL {

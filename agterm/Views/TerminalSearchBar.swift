@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// A compact search bar shown over the focused terminal pane: a magnifier glyph, a query field, an
-/// "N of M" counter, previous/next chevrons, and a close button. It is decoupled from `Session` — the
-/// caller binds the needle, passes the display string, and the three navigation/close callbacks — so the
-/// bar can be hosted at the `detailPane` level (like the floating overlay) without reaching into the model.
+/// A compact search bar over the focused terminal pane: magnifier glyph, query field, "N of M" counter,
+/// previous/next chevrons, close button. Decoupled from `Session` — the caller binds the needle and passes
+/// the display string plus the three callbacks — so it hosts at `detailPane` level, like the floating overlay.
 struct TerminalSearchBar: View {
     @Binding var needle: String
     let displayText: String
@@ -25,8 +24,7 @@ struct TerminalSearchBar: View {
             TextField("Find", text: $needle)
                 .textFieldStyle(.plain)
                 .foregroundStyle(chromeText)
-                // a fixed, compact field width so the bar stays a narrow right-aligned panel
-                // instead of stretching across the top of the terminal.
+                // fixed compact width, so the bar stays a narrow right-aligned panel, not a full-width strip
                 .frame(width: 150)
                 .focused($fieldFocused)
                 .onSubmit { onNext() }

@@ -1,21 +1,20 @@
 import Foundation
 import Observation
 
-/// How the dashboard overlay sizes the font of its member surfaces.
-/// `.untouched` leaves each surface at its own `session.fontSize`; `.fixed` applies one absolute size to
-/// every cell; `.auto` derives a per-grid size from `DashboardLayout.dashboardFontSize` so a denser grid
-/// shrinks to stay readable. The app-side wiring translates the mode into a transient surface override.
+/// How the dashboard overlay sizes its member surfaces' font: `.untouched` leaves each at its own
+/// `session.fontSize`, `.fixed` applies one absolute size to every cell, `.auto` derives a per-grid size
+/// from `DashboardLayout.dashboardFontSize` so a denser grid shrinks to stay readable. The app-side wiring
+/// translates the mode into a transient surface override.
 public enum DashboardFontMode: Equatable, Sendable {
     case untouched
     case fixed(Double)
     case auto
 
     /// appliedFontSize resolves the absolute font size (points) the wiring applies to every member surface
-    /// for this mode over `memberCount` cells, or nil for `.untouched` (each surface keeps its own
-    /// `session.fontSize`). `.auto` derives it from the grid via `DashboardLayout`; `.fixed` returns its
-    /// value. Shared by the app-side font wiring and `ControlServer.setDashboard`, so the controller's
-    /// `appliedFontSize` (the `dashboardFontSize` tree read-back) is authoritative at command return — not
-    /// only after SwiftUI's onChange applies the surface overrides a runloop turn later.
+    /// over `memberCount` cells: nil for `.untouched` (each surface keeps its own `session.fontSize`),
+    /// `.fixed`'s own value, or a grid-derived one via `DashboardLayout` for `.auto`. Shared by the app-side
+    /// font wiring and `ControlServer.setDashboard`, so the controller's `appliedFontSize` (the
+    /// `dashboardFontSize` tree read-back) is authoritative at command return, not a runloop turn later.
     public func appliedFontSize(memberCount: Int, base: Double) -> Double? {
         switch self {
         case .untouched:
@@ -29,10 +28,9 @@ public enum DashboardFontMode: Equatable, Sendable {
     }
 }
 
-/// One dashboard cell's identity: a session plus which of its panes the cell hosts. A non-split session
-/// yields a single `.primary` member; a split session yields both `.primary` and `.split`, so each pane
-/// gets its own cell. `surface` is always `.primary` or `.split` for the dashboard — the `.scratch`/
-/// `.overlay` cases of `TerminalZoomSurface` are never dashboard members.
+/// One dashboard cell's identity: a session plus which of its panes it hosts. A non-split session yields one
+/// `.primary` member, a split session both `.primary` and `.split`, so each pane gets its own cell. `surface`
+/// is always `.primary` or `.split` here — `TerminalZoomSurface`'s `.scratch`/`.overlay` are never members.
 public struct DashboardMember: Equatable, Hashable, Sendable {
     public let session: UUID
     public let surface: TerminalZoomSurface
@@ -49,12 +47,11 @@ public struct DashboardMember: Equatable, Hashable, Sendable {
     }
 }
 
-/// Per-window dashboard state — the picked pane cells, the keyboard highlight, and the font mode.
-/// Host-free (`agtermCore`, Foundation + Observation only) and `@MainActor`, mirroring
-/// `TerminalZoomController`: the app target owns one per window and drives it, and `ControlServer` reaches
-/// a specific window's controller through `DashboardControllerRegistry`. `members` are `DashboardMember`
-/// pane cells (a session + which pane; resolved app-side to their live surfaces); `isOpen` derives from a
-/// non-empty member set, so `close()` (which empties it) is the single source of truth for open/closed.
+/// Per-window dashboard state — the picked pane cells, the keyboard highlight, the font mode. Host-free
+/// (`agtermCore`, Foundation + Observation only) and `@MainActor`, mirroring `TerminalZoomController`: the
+/// app target owns one per window and drives it, `ControlServer` reaches a specific window's through
+/// `DashboardControllerRegistry`. `members` are `DashboardMember` pane cells resolved app-side to their live
+/// surfaces; `isOpen` derives from a non-empty member set, so `close()` is the open/closed source of truth.
 @Observable
 @MainActor
 public final class DashboardController {
@@ -77,7 +74,7 @@ public final class DashboardController {
 
     public init() {}
 
-    /// Whether the dashboard is open, i.e. it holds at least one member.
+    /// Whether the dashboard is open.
     public var isOpen: Bool { !members.isEmpty }
 
     /// open shows the dashboard over `members`. The highlight starts on `highlighted` when it is one of
@@ -101,9 +98,9 @@ public final class DashboardController {
         appliedFontSize = nil
     }
 
-    /// highlight moves the highlight directly to `member`, but only when `member` is one of the current
-    /// members — a stray one leaves it unchanged; a no-op when closed. Used by a mouse click to flash the
-    /// active frame on the clicked cell before entering it (the keyboard walks the highlight with `move`).
+    /// highlight moves the highlight to `member`, only when it is a current member (a stray one changes
+    /// nothing); a no-op when closed. A mouse click uses it to flash the active frame on the clicked cell
+    /// before entering it; the keyboard walks the highlight with `move`.
     public func highlight(_ member: DashboardMember) {
         guard members.contains(member) else { return }
         highlighted = member
@@ -118,25 +115,24 @@ public final class DashboardController {
         self.highlighted = members[to]
     }
 
-    /// setAppliedFontSize records the absolute font size the app-side wiring applied to the member surfaces,
-    /// for the `dashboardFontSize` tree read-back. The stored property stays `private(set)` so only this
-    /// method (never a stray external write) mutates it; the wiring calls it on every font (re)apply.
+    /// setAppliedFontSize records the size the app-side wiring applied to the member surfaces, for the
+    /// `dashboardFontSize` tree read-back. `private(set)` keeps this the only writer; the wiring calls it on
+    /// every font (re)apply.
     public func setAppliedFontSize(_ size: Double?) {
         appliedFontSize = size
     }
 
-    /// requestFocus bumps `focusRevision` so the dashboard's AppKit key catcher reclaims first responder
-    /// once an overlay above it (a control picker) resolves. Called by `restoreFocusAfterPick`; the value
-    /// itself carries no meaning beyond changing.
+    /// requestFocus bumps `focusRevision` so the dashboard's AppKit key catcher reclaims first responder once
+    /// an overlay above it (a control picker) resolves. Called by `restoreFocusAfterPick`; only the change
+    /// carries meaning, never the value.
     public func requestFocus() {
         focusRevision &+= 1
     }
 
-    /// reconcile drops any member pane no longer present in `existing` (a member session closed, OR a split
-    /// pane closed, while the dashboard is open — e.g. over the control socket), preserving order. It closes
-    /// the dashboard when no member survives, and moves the highlight to the first survivor when the
-    /// highlighted one vanished. A no-op when nothing was removed, so it is cheap to call on every
-    /// session/split add/remove.
+    /// reconcile drops any member pane absent from `existing` (a member session or split pane closed while
+    /// the dashboard is open — e.g. over the control socket), preserving order. Closes the dashboard when no
+    /// member survives, and moves the highlight to the first survivor when the highlighted one vanished. A
+    /// no-op when nothing was removed, so it is cheap to call on every session/split add/remove.
     public func reconcile(existing: Set<DashboardMember>) {
         let survivors = members.filter { existing.contains($0) }
         guard survivors.count != members.count else { return }

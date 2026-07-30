@@ -8,15 +8,14 @@ struct PaletteItem: Identifiable {
     let id: String
     let title: String
     let subtitle: String?
-    /// The action's keyboard shortcut hint shown right-aligned, nil for items with no shortcut.
-    /// Rebindable built-ins read the live keymap (`AppActions.shortcutGlyph`) so it tracks rebinds and
-    /// render as macOS menu glyphs (e.g. `⌘⇧E`); custom commands show their raw kitty shortcut string
-    /// (e.g. `cmd+shift+e`).
+    /// The right-aligned keyboard-shortcut hint, nil for items with no shortcut. Rebindable built-ins read
+    /// the live keymap (`AppActions.shortcutGlyph`), so it tracks rebinds, and render as macOS menu glyphs
+    /// (e.g. `⌘⇧E`); custom commands show their raw kitty shortcut string (e.g. `cmd+shift+e`).
     let shortcut: String?
     /// A small trailing badge label (e.g. `custom` for user-defined keymap commands), nil for none.
     let badge: String?
-    /// A leading agent-status glyph (the attention palette's rows carry it), nil for items with no
-    /// status — only the `.attention` palette sets it, so the other palettes render no glyph.
+    /// A leading agent-status glyph, nil for items with no status — only the `.attention` palette sets it,
+    /// so the other palettes render no glyph.
     let status: AgentStatus?
     /// Per-call `#rrggbb` glyph-tint override for the leading status glyph (the session's
     /// `AgentIndicator.color`), so the attention row matches the sidebar; nil = the default status color.
@@ -24,9 +23,9 @@ struct PaletteItem: Identifiable {
     /// Per-call silhouette override for the leading status glyph (the session's `AgentIndicator.shape`),
     /// so the attention row matches the sidebar; nil = the Settings shape for that status.
     let statusShape: StatusShape?
-    /// Fired when this item BECOMES the selection (keyboard navigation), distinct from `run` (Enter/
-    /// click). Only the `.themes` palette sets it — it drives the live theme preview; nil everywhere
-    /// else, so the other palettes have no selection side effect.
+    /// Fired when this item BECOMES the selection (keyboard navigation), distinct from `run` (Enter/click).
+    /// Only `.themes` sets it, to drive the live theme preview; nil elsewhere, so the other palettes have no
+    /// selection side effect.
     let onSelect: (() -> Void)?
     let run: () -> Void
 
@@ -97,9 +96,9 @@ struct CommandPalette: View {
 
     @State private var query = ""
     @State private var selection = 0
-    /// The visible, filtered result list. Held in `@State` (recomputed on query/mode change) so
-    /// the rendered rows and the Enter target are guaranteed to be the same array — a recomputed
-    /// property could otherwise be evaluated out of sync between the list and the run handler.
+    /// The visible, filtered result list. Held in `@State` (recomputed on query/mode change) so the rendered
+    /// rows and the Enter target are guaranteed to be the same array — a computed property could be
+    /// evaluated out of sync between the list and the run handler.
     @State private var filtered: [PaletteItem] = []
     @FocusState private var fieldFocused: Bool
 
@@ -133,10 +132,9 @@ struct CommandPalette: View {
     private func updateFiltered() {
         let q = query.trimmingCharacters(in: .whitespaces)
         // the attention palette's empty-query order is the paletteAttention()/attentionSessions ranking
-        // (blocked→active→completed, newest change first). preserve it verbatim instead of falling through
-        // to the alphabetical tie-break below — every row scores 0 for an empty query, so that tie-break
-        // would re-sort them A→Z and Return would jump to the alphabetically-first session, not the blocked
-        // one. fuzzy filtering still applies once the user types.
+        // (blocked→active→completed, newest change first), preserved verbatim: every row scores 0 for an
+        // empty query, so the alphabetical tie-break below would re-sort them A→Z and Return would jump to
+        // the alphabetically-first session, not the blocked one. fuzzy filtering applies once the user types.
         if explicitItems == nil, controller.mode == .attention, q.isEmpty {
             filtered = allItems
             selection = filtered.isEmpty ? 0 : min(selection, filtered.count - 1)
@@ -164,10 +162,9 @@ struct CommandPalette: View {
         }
     }
 
-    /// Enter/leave the live-preview theme session as the palette opens, switches mode, or closes:
-    /// entering `.themes` captures the current theme (so Esc can revert) and starts the selection on
-    /// the current theme's row; leaving it (to another mode or closed) reverts any uncommitted preview.
-    /// Idempotent — `AppActions` guards begin/cancel on its active flag.
+    /// Enter/leave the live-preview theme session as the palette opens, switches mode, or closes: entering
+    /// `.themes` captures the current theme (so Esc can revert) and starts the selection on its row; leaving
+    /// it reverts any uncommitted preview. Idempotent — `AppActions` guards begin/cancel on its active flag.
     private func syncThemeSession() {
         guard explicitItems == nil, controller.mode == .themes else {
             actions.cancelThemePreview()
@@ -210,8 +207,6 @@ struct CommandPalette: View {
             Divider()
             results
         }
-        // Keep the live material in its own invalidation boundary: arrow-key selection changes
-        // rebuild the palette content, but must not recreate/re-resolve the whole panel backdrop.
         .background { PalettePanelBackground() }
         .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.1)))
         .shadow(radius: 24)
@@ -220,11 +215,10 @@ struct CommandPalette: View {
             fieldFocused = true
             updateFiltered()
             if explicitItems == nil { syncThemeSession() }
-            // a palette opened from a title-bar button (the attention bell) mounts while that button
-            // still holds first responder, so the synchronous focus above loses the race and the field
-            // never takes the keyboard. re-assert on the next runloop tick — after the click settles —
-            // so the field wins. for the menu/hotkey/⌃P paths the field is already focused by then, so
-            // this is a no-op (see swiftui focus-pattern: onAppear focus may need a main-async kick).
+            // a palette opened from a title-bar button (the attention bell) mounts while that button still
+            // holds first responder, so the synchronous focus above loses the race and the field never takes
+            // the keyboard. re-assert on the next runloop tick, after the click settles, so the field wins;
+            // a no-op for the menu/hotkey/⌃P paths, where the field is already focused by then.
             DispatchQueue.main.async { fieldFocused = true }
         }
         .onChange(of: controller.mode) {
@@ -252,13 +246,10 @@ struct CommandPalette: View {
             .frame(maxHeight: 320)
             .onChange(of: selection) { _, sel in
                 guard filtered.indices.contains(sel) else { return }
-                // live theme preview: navigating a row applies it (no-op for non-theme palettes,
-                // whose items carry no onSelect).
                 filtered[sel].onSelect?()
-                // With no anchor, scrollTo is a no-op while the row is already visible and performs
-                // only the minimum reveal at an edge. Animating a center-anchored scroll on every
-                // key-repeat event continually interrupted layout/compositing and made the whole
-                // material-backed palette flash.
+                // with no anchor, scrollTo no-ops while the row is already visible and does the minimum
+                // reveal at an edge. animating a center-anchored scroll on every key-repeat event
+                // continually interrupted layout/compositing and made the material-backed palette flash.
                 proxy.scrollTo(filtered[sel].id)
             }
         }

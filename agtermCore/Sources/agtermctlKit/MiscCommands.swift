@@ -143,8 +143,7 @@ struct Quick: ParsableCommand {
     }
 
     /// `agtermctl quick type TEXT` — inject literal keystrokes into the frontmost window's quick terminal
-    /// (the quick-terminal twin of `session type`). No `--target`/`--window`: it's always the frontmost
-    /// window's quick terminal.
+    /// (the quick-terminal twin of `session type`). No `--target`/`--window`: always the frontmost window's.
     struct TypeText: RequestCommand {
         static let configuration = CommandConfiguration(commandName: "type", abstract: "Inject text into the quick terminal.")
         @Argument(help: "Text to inject (omit with --stdin).") var text: String?
@@ -166,9 +165,8 @@ struct Quick: ParsableCommand {
         }
     }
 
-    /// `agtermctl quick text` — print the frontmost window's quick-terminal buffer as plain text (the
-    /// read-back for `quick type`; does not touch the system clipboard). No `--pane`: the quick terminal
-    /// has a single surface.
+    /// `agtermctl quick text` — print the frontmost window's quick-terminal buffer as plain text, the
+    /// read-back for `quick type`; does not touch the system clipboard. No `--pane`: one surface only.
     struct Text: RequestCommand {
         static let configuration = CommandConfiguration(commandName: "text", abstract: "Print the quick terminal's buffer as plain text.")
         @Flag(name: .long, help: "Read the full screen + scrollback instead of just the visible screen.") var all = false
@@ -214,12 +212,11 @@ struct Surface: ParsableCommand {
 // MARK: - dashboard
 
 /// `agtermctl dashboard <ids…> [--font-size N | --auto-size] [--window W]` opens a view-only grid of the
-/// named sessions (max 9); `agtermctl dashboard --mru [--font-size N | --auto-size] [--window W]` opens one
-/// of the window's most-recently-used sessions (up to 9) instead of naming ids; `agtermctl dashboard --close
-/// [--window W]` closes the open one. The positional ids map to `ControlArgs.targets`; the dispatcher caps
-/// them at 9, dedups, and reports any drop. The CLI re-checks the flag combinations `validate()`-style so a
-/// bad invocation is a clean usage error without a socket round-trip (the dispatcher enforces the same rules
-/// server-side).
+/// named sessions (max 9), `--mru` populates it from the window's most-recently-used sessions (up to 9)
+/// instead of naming ids, and `--close [--window W]` closes the open one. Positional ids map to
+/// `ControlArgs.targets`; the dispatcher caps them at 9, dedups, and reports any drop. The CLI re-checks the
+/// flag combinations in `validate()`, so a bad invocation is a clean usage error with no socket round-trip
+/// (the dispatcher enforces the same rules server-side).
 struct Dashboard: RequestCommand {
     static let configuration = CommandConfiguration(
         abstract: "Open a view-only grid of live sessions, or --close the open one.",
@@ -251,7 +248,6 @@ struct Dashboard: RequestCommand {
         if mru, !ids.isEmpty {
             throw ValidationError("--mru cannot be combined with session ids")
         }
-        // an open needs explicit ids OR --mru (which supplies them from the window's recency).
         guard !ids.isEmpty || mru else {
             throw ValidationError("dashboard requires at least one session id (or --mru, or --close)")
         }
@@ -340,9 +336,8 @@ struct Pick: ParsableCommand {
             )
         }
 
-        /// Execute open → poll with injectable I/O. The production wrapper supplies the socket, sleep,
-        /// stdin, stdout, and stderr; unit tests exercise the unbounded blocking flow without real delays
-        /// or process file descriptors.
+        /// Execute open → poll with injectable I/O: production supplies the socket, sleep, stdin, stdout and
+        /// stderr, while unit tests exercise the unbounded blocking flow without real delays or process fds.
         func execute(
             input: Data,
             send: (ControlRequest) throws -> ControlResponse,
@@ -370,15 +365,14 @@ struct Pick: ParsableCommand {
                 do {
                     response = try send(ControlRequest(cmd: .pickResult, target: pickID))
                 } catch {
-                    // a transport failure mid-wait — a refused connect, a truncated or empty reply —
-                    // leaves the picker up with nobody waiting on it. every request opens its own
-                    // connection, so the cancel can still land even though this poll could not.
+                    // a transport failure mid-wait (refused connect, truncated or empty reply) leaves the
+                    // picker up with nobody waiting on it; every request opens its own connection, so the
+                    // cancel can still land even though this poll could not.
                     abandon(pickID, send: send)
                     throw error
                 }
-                // the poll carries no window selector, so a pending picker is always found by id and
-                // answers ok. a not-ok response therefore means the server no longer holds one, and
-                // there is nothing left to dismiss.
+                // the poll carries no window selector, so a pending picker is always found by id and answers
+                // ok; a not-ok response means the server no longer holds one, with nothing left to dismiss.
                 guard response.ok else {
                     Self.writeResponse(response, json: options.json, output: output, errorOutput: errorOutput)
                     throw ExitCode.failure
@@ -402,8 +396,8 @@ struct Pick: ParsableCommand {
         }
 
         /// Dismiss the picker this command opened but can no longer wait on, so the window is not left
-        /// holding a picker whose owner is gone and the next `pick.open` there is not refused. Best effort:
-        /// the poll already failed, so a failing cancel adds nothing to report.
+        /// holding one whose owner is gone and the next `pick.open` there is not refused. Best effort: the
+        /// poll already failed, so a failing cancel adds nothing to report.
         private func abandon(_ pickID: String, send: (ControlRequest) throws -> ControlResponse) {
             _ = try? send(ControlRequest(cmd: .pickCancel, target: pickID))
         }
@@ -528,9 +522,8 @@ struct Sidebar: ParsableCommand {
         }
     }
 
-    /// `agtermctl sidebar expand [--window W]` — expand every workspace in a window's sidebar tree
-    /// (defaults to the frontmost). Unlike `visibility`/`mode`, this carries the `--window` selector so a
-    /// script can expand a background window's tree.
+    /// `agtermctl sidebar expand [--window W]` — expand every workspace in a window's sidebar tree (default
+    /// frontmost). Unlike `visibility`/`mode` it carries `--window`, so a script can reach a background one.
     struct Expand: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Expand every workspace in the sidebar.")
         @OptionGroup var options: ClientOptions

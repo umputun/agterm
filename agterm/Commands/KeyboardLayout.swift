@@ -14,9 +14,9 @@ import Foundation
 /// records a conflicting account for ⌘C/⌘V/⌘A. Do not cite this type as evidence either way.
 enum KeyboardLayout {
     /// Whether the active keyboard layout can type ASCII. Read fresh on every key press — the query costs
-    /// well under a microsecond, so it needs no cache and no input-source-changed observer, and can never
-    /// go stale mid-session. Falls back to true (bind by produced character) when the layout cannot be
-    /// resolved, which is how every Latin layout already behaves.
+    /// well under a microsecond, so it needs no cache and no input-source-changed observer and can never go
+    /// stale mid-session. An unresolvable layout falls back to true (bind by produced character), which is
+    /// how every Latin layout already behaves.
     static var isASCIICapable: Bool {
         guard let source = TISCopyCurrentKeyboardLayoutInputSource()?.takeRetainedValue(),
               let value = TISGetInputSourceProperty(source, kTISPropertyInputSourceIsASCIICapable)

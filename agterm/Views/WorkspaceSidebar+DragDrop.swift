@@ -1,10 +1,10 @@
 import agtermCore
 import AppKit
 
-/// `WorkspaceSidebar.Coordinator` native drag-and-drop — the pasteboard writer plus validate/accept and
-/// the resolve helpers that glue AppKit's proposed drop to the host-free `SidebarDrop` index math. Split
-/// out of `WorkspaceSidebar.swift` to keep that file under the swiftlint size limit. `workspaceNode(forID:)`
-/// stays in the main file (it reads the private `roots` cache); the pasteboard type constants are file-level.
+/// `WorkspaceSidebar.Coordinator` native drag-and-drop: the pasteboard writer, validate/accept, and the
+/// resolve helpers gluing AppKit's proposed drop to the host-free `SidebarDrop` index math. Split out of
+/// `WorkspaceSidebar.swift` for its size limit; `workspaceNode(forID:)` stays there (it reads the private
+/// `roots` cache) and the pasteboard type constants are file-level.
 extension WorkspaceSidebar.Coordinator {
     // MARK: - Drag and drop
 
@@ -42,7 +42,6 @@ extension WorkspaceSidebar.Coordinator {
                 cancelSpringLoadedExpansion()
                 return []
             }
-            // redraw the drop highlight on the target workspace row at the resolved insert slot.
             outlineView.setDropItem(workspaceNode(forID: move.workspace), dropChildIndex: move.dropChildIndex)
             scheduleSpringLoadedExpansion(of: move.workspace, in: outlineView)
             return .move
@@ -118,11 +117,10 @@ extension WorkspaceSidebar.Coordinator {
         let destination: Int
     }
 
-    /// Resolves a proposed session drop into the move it would perform, or nil when the drop is
-    /// invalid or a no-op (so both `validateDrop` and `acceptDrop` agree exactly). Reads the pasteboard
-    /// + store to map the dragged sessions and drop-target row to indices, then defers the index
-    /// arithmetic (drop-on-row redirect, post-removal insertion slot, no-op detection) to the host-free
-    /// `SidebarDrop.resolveSessions`.
+    /// Resolves a proposed session drop into the move it would perform, nil when the drop is invalid or a
+    /// no-op, so `validateDrop` and `acceptDrop` agree exactly. Reads the pasteboard + store to map dragged
+    /// sessions and the drop-target row to indices, then defers the index arithmetic (drop-on-row redirect,
+    /// post-removal insertion slot, no-op detection) to the host-free `SidebarDrop.resolveSessions`.
     private func resolveSessionMove(from info: NSDraggingInfo, item: Any?, childIndex index: Int) -> SessionMove? {
         let sessionIDs = draggedSessionIDs(from: info)
         guard !sessionIDs.isEmpty, let node = item as? SidebarNode else { return nil }
@@ -148,10 +146,9 @@ extension WorkspaceSidebar.Coordinator {
                            dropChildIndex: move.dropChildIndex, destination: move.destination)
     }
 
-    /// Resolves a Finder drop to existing directory URLs and a destination workspace. Dropping on a
-    /// workspace row adds there; dropping on a session row adds to that session's workspace; dropping into
-    /// empty sidebar space uses the store's `soleFocusedWorkspaceID` (the workspace the tree is zoomed to),
-    /// otherwise the current workspace.
+    /// Resolves a Finder drop to existing directory URLs and a destination workspace: a workspace row adds
+    /// there, a session row adds to that session's workspace, and empty sidebar space uses the store's
+    /// `soleFocusedWorkspaceID` (the workspace the tree is zoomed to), otherwise the current workspace.
     private func resolveDirectoryDrop(from info: NSDraggingInfo, item: Any?) -> DirectoryDrop? {
         let resolved = directoryURLs(from: info)
         guard !resolved.urls.isEmpty,
@@ -238,10 +235,9 @@ extension WorkspaceSidebar.Coordinator {
         suppressExpansionPersist = false
     }
 
-    /// Drops the pending spring-load work item and the opened-row tracking WITHOUT collapsing. Used on a
-    /// successful drop so a workspace the drag spring-opened stays open to reveal the dropped/moved
-    /// session — a `moveSessions` accept never changes the selection, so `syncSelection`'s reveal can't
-    /// re-expand it, and collapsing here would hide the moved row until a manual expand.
+    /// Drops the pending spring-load work item and the opened-row tracking WITHOUT collapsing, so a workspace
+    /// the drag spring-opened stays open on a successful drop: a `moveSessions` accept never changes the
+    /// selection, so `syncSelection`'s reveal can't re-expand it and collapsing would hide the moved row.
     private func clearSpringLoadedTracking() {
         pendingSpringLoadedExpansion?.workItem.cancel()
         pendingSpringLoadedExpansion = nil
@@ -273,18 +269,17 @@ extension WorkspaceSidebar.Coordinator {
         }
     }
 
-    /// Resolves a workspace drop into the top-level reorder it would perform, or nil when it is a no-op
-    /// (so `validateDrop` and `acceptDrop` agree exactly). A workspace reorder is a TOP-LEVEL move, but
-    /// with workspaces expanded their sessions fill the gaps between workspace rows, so `NSOutlineView`
-    /// only ever proposes drops INTO a workspace's children (`item != nil`) — never the clean root
-    /// between-rows slot — making the reorder impossible from the proposed `item`/`childIndex` alone.
-    /// Derive the insert slot from the cursor Y against the workspace ROWS' midpoints instead (sessions
-    /// ignored): the slot is the count of RENDERED workspace rows whose midpoint sits above the cursor, so
-    /// the top half of a row drops before it and the bottom half after it. The focus filter can render a
-    /// non-contiguous subset of the workspaces, so that slot is a VISIBLE-row count, not a full-array
-    /// index; `SidebarDrop.workspaceInsertIndex` maps it back onto the full array (landing adjacent to the
-    /// aimed-at row rather than jumping across the hidden workspaces between them), and the index
-    /// arithmetic (post-removal off-by-one, no-op detection) defers to `SidebarDrop.resolveWorkspace`.
+    /// Resolves a workspace drop into the TOP-LEVEL reorder it would perform, nil when it is a no-op, so
+    /// `validateDrop` and `acceptDrop` agree exactly. With workspaces expanded their sessions fill the gaps
+    /// between workspace rows, so `NSOutlineView` only ever proposes drops INTO a workspace's children
+    /// (`item != nil`), never the clean root between-rows slot — the reorder is impossible from the proposed
+    /// `item`/`childIndex` alone. The insert slot instead comes from the cursor Y against the workspace ROWS'
+    /// midpoints (sessions ignored): the count of RENDERED rows whose midpoint sits above the cursor, so a
+    /// row's top half drops before it and its bottom half after. The focus filter can render a non-contiguous
+    /// subset, so that is a VISIBLE-row count, not a full-array index; `SidebarDrop.workspaceInsertIndex` maps
+    /// it back onto the full array (landing adjacent to the aimed-at row rather than jumping across the hidden
+    /// workspaces between them), and the arithmetic (post-removal off-by-one, no-op detection) defers to
+    /// `SidebarDrop.resolveWorkspace`.
     private func resolveWorkspaceMove(from info: NSDraggingInfo, in outlineView: NSOutlineView)
         -> (workspaceID: UUID, dropChildIndex: Int, destination: Int)? {
         guard let workspaceID = draggedWorkspaceID(from: info),

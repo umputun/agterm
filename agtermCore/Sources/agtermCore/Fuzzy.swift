@@ -1,14 +1,11 @@
 import Foundation
 
-/// Scores how well `query` matches `target` for the command palettes — lower is a better match,
-/// `nil` means no match. The query is split on whitespace into terms (`"cap dev"` is two terms);
-/// EVERY term must match `target` and the score is the sum of the per-term scores, so the order
-/// between terms doesn't matter — `"cap dev"` and `"dev cap"` both match `caprica-dev`. An empty or
-/// whitespace-only query matches everything at `0` (so the unfiltered list keeps its natural order).
-/// Case-insensitive.
-///
-/// Per term: an exact prefix is `0`; a substring is `5 +` the offset where it starts; a scattered
-/// subsequence is `40 +` the length gap.
+/// Scores how well `query` matches `target` for the command palettes — lower is better, `nil` is no match.
+/// The query splits on whitespace into terms (`"cap dev"` is two); EVERY term must match `target` and the
+/// score is their sum, so term order is irrelevant — `"cap dev"` and `"dev cap"` both match `caprica-dev`.
+/// An empty or whitespace-only query matches everything at `0`, keeping the unfiltered list's natural
+/// order. Case-insensitive. Per term: an exact prefix is `0`, a substring `5 +` its start offset, a
+/// scattered subsequence `40 +` the length gap.
 public func fuzzyScore(query: String, target: String) -> Int? {
     let terms = query.lowercased().split(whereSeparator: \.isWhitespace).map(String.init)
     guard !terms.isEmpty else { return 0 }
@@ -21,12 +18,12 @@ public func fuzzyScore(query: String, target: String) -> Int? {
     return total
 }
 
-/// Ranks `items` against `query` for the command palettes: an item matches when any of its `keys`
-/// (for example, a title and optional subtitle) matches, scored by the best/lower score of those keys.
-/// Matches are sorted best-first with ties broken by the first key, case-insensitively.
+/// Ranks `items` against `query` for the command palettes: an item matches when any of its `keys` (a title
+/// and optional subtitle, say) matches, scored by the best (lowest) of those keys. Sorted best-first, ties
+/// broken by the first key case-insensitively.
 ///
-/// Empty queries score every item at `0`, which makes this an alphabetical sort by first key. Callers
-/// that need an empty query to preserve natural input order should skip ranking for that case.
+/// An empty query scores every item `0`, making this an alphabetical sort by first key — a caller needing
+/// natural input order there should skip ranking.
 public func fuzzyRank<Item>(query: String, items: [Item], keys: (Item) -> [String]) -> [Item] {
     items.compactMap { item -> (item: Item, score: Int, label: String)? in
         let itemKeys = keys(item)
@@ -41,9 +38,8 @@ public func fuzzyRank<Item>(query: String, items: [Item], keys: (Item) -> [Strin
     .map(\.item)
 }
 
-/// Scores a single whitespace-free `term` against the already-lowercased `target`: an exact prefix
-/// is `0`, a substring is `5 +` its start offset, a scattered subsequence is `40 +` the length gap,
-/// and `nil` when the term doesn't appear at all.
+/// Scores a single whitespace-free `term` against the already-lowercased `target` (see `fuzzyScore` for
+/// the scale), `nil` when the term doesn't appear at all.
 private func termScore(_ term: String, in target: String) -> Int? {
     if target.hasPrefix(term) { return 0 }
     if let range = target.range(of: term) {

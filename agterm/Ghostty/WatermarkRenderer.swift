@@ -4,11 +4,11 @@ import os
 
 private let logger = Logger(subsystem: "com.umputun.agterm", category: "WatermarkRenderer")
 
-/// Turns a `BackgroundWatermark` into a PNG file path for libghostty's `background-image`. For `.image`
-/// it validates and returns the user's file; for `.text` it rasterizes the string (via Core Text on a
-/// transparent canvas) to a per-session PNG in the state dir, which `background-image-fit` then scales
-/// to the surface. AppKit-only and `@MainActor` (it reads the live terminal foreground color for the
-/// default text tint), so it lives in the app target, not the host-free `agtermCore`.
+/// Turns a `BackgroundWatermark` into a PNG file path for libghostty's `background-image`: `.image`
+/// validates and returns the user's file, `.text` rasterizes the string (Core Text on a transparent canvas)
+/// to a per-session PNG in the state dir for `background-image-fit` to scale to the surface. AppKit-only and
+/// `@MainActor` (it reads the live terminal foreground for the default text tint), so it lives in the app
+/// target, not the host-free `agtermCore`.
 @MainActor
 enum WatermarkRenderer {
     /// The image formats libghostty reads (Config.zig: PNG or JPEG only).
@@ -43,10 +43,9 @@ enum WatermarkRenderer {
         }
     }
 
-    /// Rasterize `text` in `color` onto a transparent PNG sized to the glyphs (plus padding), at a large
-    /// fixed resolution so `background-image-fit = contain` scales it up crisply to fill the terminal.
-    /// Transparent background → only the glyphs composite over the terminal; the overall translucency is
-    /// applied by `background-image-opacity`, not baked into the pixels.
+    /// Rasterize `text` in `color` onto a transparent PNG sized to the glyphs plus padding, at a large fixed
+    /// resolution so `background-image-fit = contain` scales it up crisply to fill the terminal. Transparent,
+    /// so only the glyphs composite over it; translucency comes from `background-image-opacity`, not pixels.
     private static func renderText(_ text: String, color: NSColor, to url: URL) -> Bool {
         let fontSize: CGFloat = 256
         let attributes: [NSAttributedString.Key: Any] = [

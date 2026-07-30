@@ -11,10 +11,9 @@ public enum WatermarkConfig {
     /// The libghostty `background-image-position` values, derived from `BackgroundWatermark.Position`.
     public static var validPositions: [String] { BackgroundWatermark.Position.allCases.map(\.rawValue) }
 
-    /// Upper bound on watermark text length accepted at the control boundary. `WatermarkRenderer`
-    /// rasterizes the string at a fixed 256pt font with a bitmap sized to the glyph run, so the canvas
-    /// width grows linearly with character count — an uncapped string would drive a multi-GB allocation.
-    /// A watermark is a word or two; 256 is far beyond any real use and keeps the bitmap small.
+    /// Upper bound on watermark text at the control boundary. `WatermarkRenderer` rasterizes at a fixed
+    /// 256pt font with a bitmap sized to the glyph run, so canvas width grows linearly with character count
+    /// and an uncapped string would drive a multi-GB allocation; 256 is far beyond a word-or-two watermark.
     public static let maxTextLength = 256
 
     public static func isValidFit(_ fit: String) -> Bool { BackgroundWatermark.Fit(rawValue: fit) != nil }
@@ -31,12 +30,11 @@ public enum WatermarkConfig {
         !text.isEmpty && text.count <= maxTextLength
     }
 
-    /// Valid `#rrggbb` hex color — exactly what `NSColor(agtermHex:)` parses (an optional leading `#` then
-    /// six hex digits). A malformed value is rejected at the boundary rather than silently falling back to
-    /// the terminal foreground, matching the fit/position rejection. The digit check is ASCII-only
-    /// (`isASCII && isHexDigit`): plain `isHexDigit` also accepts fullwidth Unicode forms (e.g. `ＦＦ００００`)
-    /// that `NSColor(agtermHex:)`'s `UInt32(radix:)` cannot parse, which would pass validation and then
-    /// silently render the default color.
+    /// Valid `#rrggbb` hex color — exactly what `NSColor(agtermHex:)` parses (optional leading `#`, six hex
+    /// digits). Malformed is rejected at the boundary rather than silently falling back to the terminal
+    /// foreground, like fit/position. The digit check is ASCII-only: plain `isHexDigit` also accepts
+    /// fullwidth forms (e.g. `ＦＦ００００`) that `NSColor(agtermHex:)`'s `UInt32(radix:)` cannot parse, which
+    /// would pass validation and then silently render the default color.
     public static func isValidColorHex(_ hex: String) -> Bool {
         var s = Substring(hex)
         if s.first == "#" { s = s.dropFirst() }
@@ -44,12 +42,12 @@ public enum WatermarkConfig {
     }
 
     /// Valid `.image` watermark path: no ASCII control character (any scalar `< 0x20`). `imagePath` is the
-    /// ONLY free-text field that reaches a ghostty config line, and it is emitted RAW/unquoted as
-    /// `background-image = <path>` (`overlayText`) — so an embedded newline would split the value and let
-    /// the line's tail inject an arbitrary ghostty key (e.g. `clipboard-read = allow`) into the per-surface
-    /// overlay, which wins on that surface. The owner-only socket + the `fileExists` gate keep it well short
-    /// of RCE, but the spec is persisted and re-applied on restore from semi-trusted (agent) input, so the
-    /// injection vector is closed at the boundary. Shared by the control server and the CLI `validate()`.
+    /// ONLY free-text field reaching a ghostty config line, emitted RAW/unquoted as `background-image =
+    /// <path>` (`overlayText`), so an embedded newline would split the value and let the tail inject an
+    /// arbitrary ghostty key (e.g. `clipboard-read = allow`) into the per-surface overlay, which wins there.
+    /// Well short of RCE (owner-only socket, `fileExists` gate), but the spec is persisted and re-applied on
+    /// restore from semi-trusted agent input, so the vector is closed at the boundary. Shared by the control
+    /// server and the CLI `validate()`.
     public static func isValidImagePath(_ path: String) -> Bool {
         !path.unicodeScalars.contains { $0.value < 0x20 }
     }
@@ -57,29 +55,28 @@ public enum WatermarkConfig {
     /// The per-surface ghostty config overlay (loaded LAST, so it wins) for `watermark` pointed at
     /// `resolvedImagePath` (the user's file for `.image`, the rendered PNG for `.text`, nil for `.color`):
     ///
-    /// - for `.color`: a `background = <hex>` line plus `background-opacity = <windowOpacity>` so the color
-    ///   honors the window translucency the user set in Settings (the base config pins the global
-    ///   `background-opacity` to 0 under translucency, which would otherwise make the color invisible;
-    ///   `windowOpacity` = 1 when translucency is off = a solid color) — no image keys, and the window
-    ///   blur is composited at the AppKit level, so it shows through a translucent color unchanged;
-    /// - for `.image`/`.text`: the `background-image*` lines, plus `background-opacity = 1` so the image is
-    ///   visible even when window translucency pins the global `background-opacity` to 0 (image opacity is
-    ///   RELATIVE to it, so `0 × anything = 0` = invisible) — the user-chosen "auto-raise" behavior;
-    /// - a `font-size` line preserving the session's cmd-+/- zoom (a per-surface `update_config` otherwise
-    ///   resets font size to the config default).
+    /// - `.color`: `background = <hex>` plus `background-opacity = <windowOpacity>`, so the color honors the
+    ///   Settings window translucency — the base config pins the global `background-opacity` to 0 under
+    ///   translucency, which would make the color invisible (`windowOpacity` = 1 when off = solid). No image
+    ///   keys; the window blur composites at the AppKit level and shows through a translucent color unchanged.
+    /// - `.image`/`.text`: the `background-image*` lines plus `background-opacity = 1`, the user-chosen
+    ///   "auto-raise", so the image stays visible when translucency pins the global value to 0 (image
+    ///   opacity is RELATIVE to it: `0 × anything = 0`).
+    /// - a `font-size` line preserving the session's cmd-+/- zoom, which a per-surface `update_config`
+    ///   otherwise resets to the config default.
     ///
-    /// A nil `watermark` (or an `.image`/`.text` whose `resolvedImagePath` is missing) yields ONLY the
-    /// font-size line — clearing the image while keeping zoom; a `.color` still emits its `background`
-    /// lines (it needs no `resolvedImagePath`). Returns "" when there is nothing to override (no watermark, no zoom).
-    /// Values are emitted RAW (no quotes): ghostty takes the whole line remainder as the value, so a path
-    /// with spaces works unquoted — matching `AppSettings.ghosttyConfigLines()`.
+    /// A nil `watermark` (or an `.image`/`.text` with no `resolvedImagePath`) yields ONLY the font-size line,
+    /// clearing the image while keeping zoom; a `.color` still emits its `background` lines, needing no path.
+    /// Returns "" when there is nothing to override (no watermark, no zoom). Values are emitted RAW (no
+    /// quotes): ghostty takes the whole line remainder as the value, so a path with spaces works unquoted —
+    /// matching `AppSettings.ghosttyConfigLines()`.
     public static func overlayText(watermark: BackgroundWatermark?, resolvedImagePath: String?,
                                    fontSize: Double?, windowOpacity: Double = 1) -> String {
         var lines: [String] = []
-        // re-validate the free-text fields on EMIT, not just at the control boundary: `AppStore.restore`
-        // assigns a persisted spec raw, so a hand-edited `workspaces.json` could carry a control-char path
-        // or a malformed color that would inject a ghostty key here. A poisoned value drops the background
-        // entirely (font-size still emitted). `fit`/`position` are typed enums, so they can't inject.
+        // re-validate free text on EMIT, not just at the control boundary: `AppStore.restore` assigns a
+        // persisted spec raw, so a hand-edited `workspaces.json` could carry a control-char path or a
+        // malformed color. A poisoned value drops the background entirely (font-size still emitted);
+        // `fit`/`position` are typed enums, so they can't inject.
         if let watermark, watermark.kind == .color, let hex = watermark.colorHex, isValidColorHex(hex) {
             let opacity = windowOpacity.isFinite ? min(max(windowOpacity, 0), 1) : 1
             lines.append("background = \(hex)")
@@ -96,18 +93,16 @@ public enum WatermarkConfig {
         return lines.isEmpty ? "" : lines.joined(separator: "\n") + "\n"
     }
 
-    /// The per-surface ghostty config overlay that makes a program's LIVE OSC 11 background visible: a
+    /// The per-surface overlay that makes a program's LIVE OSC 11 background visible: a
     /// `background-opacity = <windowOpacity>` line plus the usual `font-size` zoom preservation.
     ///
-    /// It deliberately carries NO `background` key, which is what separates it from the `.color` overlay
-    /// above. libghostty holds the OSC color in the terminal's dynamic `override` layer and the renderer
-    /// already draws `override orelse default`, so the color needs no restating — only the opacity, which
-    /// the base config pins to 0 under window translucency (leaving the OSC tint invisible).
-    ///
-    /// Writing the color into `background` instead would reach ghostty's `Termio.changeConfig`, which
-    /// seeds the terminal's `default` color layer from the config on every surface update. Since OSC 111
-    /// resets the override TO that default, restating the OSC color here makes the reset a no-op and
-    /// strands the pane on the program's color after it exits.
+    /// It deliberately carries NO `background` key, unlike the `.color` overlay above. libghostty holds the
+    /// OSC color in the terminal's dynamic `override` layer and the renderer draws `override orelse
+    /// default`, so only the opacity needs restating — the base config pins it to 0 under window
+    /// translucency, leaving the OSC tint invisible. Writing the color into `background` would reach
+    /// ghostty's `Termio.changeConfig`, which seeds the `default` color layer from the config on every
+    /// surface update; since OSC 111 resets the override TO that default, the reset would become a no-op
+    /// and strand the pane on the program's color after it exits.
     public static func oscBackgroundOverlayText(fontSize: Double?, windowOpacity: Double) -> String {
         let opacity = windowOpacity.isFinite ? min(max(windowOpacity, 0), 1) : 1
         var lines = ["background-opacity = \(formatted(opacity))"]
@@ -115,15 +110,14 @@ public enum WatermarkConfig {
         return lines.joined(separator: "\n") + "\n"
     }
 
-    /// Format a `Double` for a ghostty config value: an integral value without a trailing `.0`
-    /// (`14.0` → `14`), else the minimal decimal (`0.15` → `0.15`). Locale-independent (always `.`):
-    /// `String(format:)` uses the C locale. Uses fixed-point, NOT `String(Double)`, because the latter
-    /// emits scientific notation for tiny magnitudes (`0.00001` → `1e-05`) which ghostty's config parser
-    /// rejects — it would silently drop the line and fall back to the default opacity.
+    /// Format a `Double` for a ghostty config value: integral without a trailing `.0` (`14.0` → `14`), else
+    /// the minimal decimal (`0.15` → `0.15`). Locale-independent (always `.`) — `String(format:)` uses the C
+    /// locale. Fixed-point, NOT `String(Double)`, which emits scientific notation for tiny magnitudes
+    /// (`0.00001` → `1e-05`) that ghostty's config parser rejects, silently dropping the line back to the
+    /// default opacity.
     static func formatted(_ value: Double) -> String {
-        // guard the integral fast-path against non-finite / out-of-Int-range values: `Int(value)` TRAPS on
-        // .infinity or |value| ≥ ~9.2e18. Those never arise from a validated opacity or a live font size,
-        // but `fontSize` is read straight from a (possibly hand-edited) snapshot, so stay total.
+        // `Int(value)` TRAPS on .infinity or |value| ≥ ~9.2e18, so guard the integral fast-path: a validated
+        // opacity or live font size never gets there, but `fontSize` comes from a hand-editable snapshot.
         if value == value.rounded(), value.isFinite, abs(value) < Double(Int.max) { return String(Int(value)) }
         var s = String(format: "%.6f", value)
         while s.hasSuffix("0") { s.removeLast() }

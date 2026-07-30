@@ -1,8 +1,8 @@
 import Foundation
 
-/// Pure, host-free logic for the restore-running-command feature: parsing a macOS `KERN_PROCARGS2`
-/// blob into argv, deciding whether a captured foreground command should be re-run, and rendering an
-/// argv back into a shell command line. The app target owns the `sysctl`/libghostty calls; every
+/// Pure, host-free logic for the restore-running-command feature: parsing a macOS `KERN_PROCARGS2` blob
+/// into argv, deciding whether a captured foreground command should be re-run, and rendering an argv
+/// back into a shell command line. The app target owns only the `sysctl`/libghostty calls; every
 /// judgement defers here so it stays unit-tested and off the C boundary.
 public enum CommandRestore {
     /// The login shells treated as "no program to restore" (the pane was at its prompt).
@@ -16,10 +16,10 @@ public enum CommandRestore {
         path.split(separator: "/").last.map(String.init) ?? path
     }
 
-    /// Whether `basename` is a login shell to skip, optionally also matching the user's `$SHELL`
-    /// basename passed as `extra` (so a non-standard login shell is recognized too). A leading `-` is
-    /// stripped first: macOS marks a login shell with a dash in argv[0], which for a bare-name argv0
-    /// (`-zsh`) survives `basename` (a path form like `-/bin/zsh` already loses it on the `/` split).
+    /// Whether `basename` is a login shell to skip, also matching the user's `$SHELL` basename passed as
+    /// `extra` (so a non-standard login shell counts). A leading `-` is stripped first: macOS dash-marks a
+    /// login shell's argv[0], which survives `basename` for a bare name (`-zsh`) but not a path
+    /// (`-/bin/zsh`, which loses it on the `/` split).
     public static func isKnownShell(_ basename: String, extra: String? = nil) -> Bool {
         let name = basename.hasPrefix("-") ? String(basename.dropFirst()) : basename
         if knownShells.contains(name) { return true }
@@ -27,12 +27,11 @@ public enum CommandRestore {
         return false
     }
 
-    /// Whether `argv` is an interactive shell sitting at its prompt — the "idle pane, nothing to restore"
-    /// case: `argv[0]` is a known shell (or `$SHELL`, passed as `extra`) AND there is no payload argument
-    /// after it, only option flags. A shell RUNNING something is NOT idle and IS captured: a script path
-    /// (`/bin/sh /usr/local/bin/cld`, the foreground of any `#!/bin/sh` wrapper) or a `-c` command leaves a
-    /// non-flag argument after `argv[0]`. Without this, every shell-script wrapper was wrongly skipped as a
-    /// prompt while a plain binary (`htop`) restored.
+    /// Whether `argv` is an interactive shell at its prompt — the "idle pane, nothing to restore" case:
+    /// `argv[0]` is a known shell (or `$SHELL`, passed as `extra`) AND only option flags follow it. A
+    /// shell RUNNING something is NOT idle and IS captured — a script path (`/bin/sh /usr/local/bin/cld`,
+    /// the foreground of any `#!/bin/sh` wrapper) or a `-c` command leaves a non-flag argument after
+    /// `argv[0]`.
     public static func isIdleShell(argv: [String], extra: String? = nil) -> Bool {
         guard let first = argv.first, isKnownShell(basename(first), extra: extra) else { return false }
         return !argv.dropFirst().contains { !$0.hasPrefix("-") }
@@ -58,13 +57,13 @@ public enum CommandRestore {
         }
     }
 
-    /// The inputs `restorePlan` decides from — everything about a pane that bears on what it seeds with.
-    /// - `wasRestored`: the session came from a restore (a FRESH command session always runs its command; a
+    /// The inputs `restorePlan` decides from.
+    /// - `wasRestored`: the session came from a restore (a FRESH command session always runs its command, a
     ///   RESTORED one only when the opt-in is on).
     /// - `restoreEnabled`: the `restoreRunningCommand` opt-in.
-    /// - `hadForeground`: a foreground command was CAPTURED at the last quit. A captured foreground PREEMPTS
-    ///   `initialCommand` even when suppressed (denylisted/off → `foregroundInput` nil), yielding a plain
-    ///   shell rather than the stale creation command — so gate on capture, not on whether the input survived.
+    /// - `hadForeground`: a foreground command was CAPTURED at the last quit. It PREEMPTS `initialCommand`
+    ///   even when suppressed (denylisted/off → `foregroundInput` nil), yielding a plain shell rather than
+    ///   the stale creation command — so gate on capture, not on the input surviving.
     /// - `foregroundInput`: the rendered foreground command line to type, or nil (none / suppressed).
     /// - `initialCommand`: the session's persisted `--command`.
     /// - `restoreOverride`: the pane's pinned restore command (`session.restore`), tri-state — nil = no
@@ -88,10 +87,10 @@ public enum CommandRestore {
     }
 
     /// The `initial_input` for a pane: a pinned override (empty → nil, a plain shell) when one exists, else
-    /// the captured foreground input. The override is gated on `restoreEnabled` — the toggle stays the single
-    /// master switch, matching `initialCommand`, the other explicit user-set seed. It is typed VERBATIM (never
-    /// run through `shellQuotedLine`), so `cd x && claude --resume y` works as written; the captured input
-    /// arrives already gated + denylist-filtered from the app side.
+    /// the captured foreground input. The override is gated on `restoreEnabled`, keeping the toggle the
+    /// single master switch (like `initialCommand`, the other explicit user-set seed), and is typed
+    /// VERBATIM — never through `shellQuotedLine` — so `cd x && claude --resume y` works as written; the
+    /// captured input arrives already gated + denylist-filtered from the app side.
     public static func restoreInput(restoreEnabled: Bool, restoreOverride: String?,
                                     capturedInput: String?) -> String? {
         guard let restoreOverride else { return capturedInput }
@@ -99,14 +98,12 @@ public enum CommandRestore {
         return restoreOverride + "\n"
     }
 
-    /// Decide a pane's seed on create/restore. Pure so the gate + precedence is unit-tested off the C
-    /// boundary; the app target owns only the libghostty seeding.
-    ///
-    /// A present `restoreOverride` short-circuits everything: it wins over both the captured foreground and
-    /// `initialCommand`, `command` is always nil (an override never takes the exec path), and the input comes
-    /// from `restoreInput` — so it obeys the `restoreEnabled` toggle while bypassing the denylist structurally
-    /// (that heuristic guards BLIND capture; an override names its command deliberately). With no override
-    /// this reproduces the capture/`initialCommand` precedence unchanged.
+    /// Decide a pane's seed on create/restore. Pure, so the gate + precedence is unit-tested off the C
+    /// boundary; the app target owns only the libghostty seeding. A present `restoreOverride`
+    /// short-circuits everything: it wins over the captured foreground and `initialCommand`, `command` is
+    /// always nil (an override never takes the exec path), and the input comes from `restoreInput` — so it
+    /// obeys the `restoreEnabled` toggle while bypassing the denylist, which guards BLIND capture, not a
+    /// deliberately named command. With no override the capture/`initialCommand` precedence applies.
     public static func restorePlan(_ inputs: RestoreInputs) -> RestorePlan {
         if inputs.restoreOverride != nil {
             let input = restoreInput(restoreEnabled: inputs.restoreEnabled, restoreOverride: inputs.restoreOverride,
@@ -131,9 +128,9 @@ public enum CommandRestore {
         return result
     }
 
-    /// Render an argv into a single POSIX shell command line by single-quoting each argument (so spaces,
-    /// `$`, globs, and quotes survive intact), space-joined. The inverse of capture; fed to a restored
-    /// login shell via `initial_input`.
+    /// Render an argv into one POSIX shell command line, single-quoting each argument (so spaces, `$`,
+    /// globs and quotes survive intact) and space-joining. The inverse of capture; fed to a restored login
+    /// shell via `initial_input`.
     public static func shellQuotedLine(_ argv: [String]) -> String {
         argv.map(shellQuote).joined(separator: " ")
     }

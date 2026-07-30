@@ -3,17 +3,16 @@ import Foundation
 // MARK: - Split, overlay, and scratch panes
 
 extension AppStore {
-    /// Toggles the one-level split for a session. The second pane's surface is created
-    /// lazily by the detail pane on first show and kept alive when hidden, so this only
-    /// flips the flag. The flag is persisted, so the split is restored on relaunch.
+    /// Toggles the one-level split. The second pane's surface is created lazily by the detail pane on first
+    /// show and kept alive when hidden, so this only flips the flag, which is persisted and restored on
+    /// relaunch.
     public func toggleSplit(_ sessionID: UUID) {
         guard let session = session(withID: sessionID) else { return }
         session.isSplit.toggle()
-        // opening a NEW split marks the session as having one and moves focus to the new (right) pane;
-        // RE-showing a hidden split preserves whichever pane was focused before it was hidden (so a
-        // hide/show round-trip, e.g. the tmux-style zoom script, doesn't jerk focus to the right pane).
-        // hiding (toggling off) leaves `hasSplit` and `splitFocused` set so the split indicators persist
-        // and the focused pane is the one shown maximized. Only `closeSplit` clears them.
+        // opening a NEW split marks the session as having one and moves focus to the new (right) pane, while
+        // RE-showing a hidden one preserves the pane focused before hiding (so a hide/show round-trip, e.g.
+        // the tmux-style zoom script, doesn't jerk focus right). hiding leaves `hasSplit`/`splitFocused` set,
+        // so the indicators persist and the focused pane shows maximized; only `closeSplit` clears them.
         if session.isSplit {
             let isNewSplit = !session.hasSplit
             session.hasSplit = true
@@ -22,10 +21,10 @@ extension AppStore {
         save()
     }
 
-    /// Sets a session's split-divider left-pane fraction to `ratio`, clamped to the bounds, and persists.
-    /// Returns the applied (clamped) fraction, or nil when the id is unknown. Moving the LIVE divider is
-    /// driven separately by the caller (`session.resize` posts `.agtermApplySplitRatio` to the pane view) —
-    /// this is control-native, so there is no GUI surface that goes through `AppActions`.
+    /// Sets a session's split-divider left-pane fraction to `ratio`, clamped and persisted; returns the
+    /// applied (clamped) fraction, nil for an unknown id. Moving the LIVE divider is the caller's
+    /// (`session.resize` posts `.agtermApplySplitRatio` to the pane view): control-native, no GUI path
+    /// through `AppActions`.
     @discardableResult
     public func applySplitRatio(_ ratio: Double, forSession id: UUID) -> Double? {
         guard let session = session(withID: id) else { return nil }
@@ -35,20 +34,20 @@ extension AppStore {
         return applied
     }
 
-    /// Clear the agent-status indicator when the pane that OWNED it is being torn down, so a pane-tagged
-    /// block (`session.status --pane`) can't strand a glyph no surviving surface can keystroke-clear
-    /// (`AgentIndicator.clearedBy` requires the typing pane to match `statusPane`). `owner` is the pane
-    /// whose surface is going away; a nil tag counts as `.left` (main), matching the clear-decision default.
-    /// Mirrors the `clearSearch()` reconcile on these same teardown paths.
+    /// Clear the agent-status indicator when the pane that OWNED it is torn down, so a pane-tagged block
+    /// (`session.status --pane`) can't strand a glyph no surviving surface can keystroke-clear
+    /// (`AgentIndicator.clearedBy` requires the typing pane to match `statusPane`). `owner` is the departing
+    /// pane; a nil tag counts as `.left` (main), matching the clear-decision default. Mirrors `clearSearch()`
+    /// on these same teardown paths.
     private func clearIndicatorOwnedByPane(_ owner: StatusPane, of session: Session) {
         guard session.agentIndicator.status != .idle,
               (session.agentIndicator.statusPane ?? .left) == owner else { return }
         setAgentIndicator(AgentIndicator(), forSession: session.id)
     }
 
-    /// Closes the split pane: hides it AND tears down its surface, so a subsequent split
-    /// starts a fresh shell. Used when the split shell exits on its own; resets the focus flag so a
-    /// stale `splitFocused` doesn't point the collapsed view at the gone pane.
+    /// Closes the split pane: hides it AND tears down its surface, so a later split starts a fresh shell.
+    /// Used when the split shell exits on its own; resets the focus flag so a stale `splitFocused` can't
+    /// point the collapsed view at the gone pane.
     public func closeSplit(_ sessionID: UUID) {
         guard let session = session(withID: sessionID) else { return }
         session.isSplit = false
@@ -73,15 +72,15 @@ extension AppStore {
         save()
     }
 
-    /// The primary pane's shell exited. If a split pane is alive it is PROMOTED into the primary slot
-    /// and the session survives as a single (non-split) pane; otherwise the session is closed. The
-    /// survivor MOVES from `splitSurface` into `surface` (its surface, cwd, title, and foreground command
-    /// migrate to the main fields, and its split-role reporting is turned off via `promoteToPrimaryPane`),
-    /// so the session becomes indistinguishable from a fresh single pane: `surface != nil`,
-    /// `splitSurface == nil`, `hasSplit == false`, `splitFocused == false`. That is what makes the
-    /// promoted pane addressable as the MAIN/left pane everywhere — `session.type`/`session.text --pane
-    /// left` (and omitted) reach it, `{AGT_PANE}` reports `left`, and a later `session.split` opens a
-    /// fresh RIGHT pane instead of displacing the survivor. Called by the primary surface's `onExit`.
+    /// The primary pane's shell exited: a live split pane is PROMOTED into the primary slot and the session
+    /// survives as a single (non-split) pane, otherwise the session is closed. The survivor MOVES from
+    /// `splitSurface` into `surface` (surface, cwd, title, and foreground command migrate to the main fields,
+    /// and `promoteToPrimaryPane` turns off its split-role reporting), leaving the session indistinguishable
+    /// from a fresh single pane — `surface != nil`, `splitSurface == nil`, `hasSplit == false`,
+    /// `splitFocused == false` — so the promoted pane is addressable as the MAIN/left pane everywhere:
+    /// `session.type`/`session.text --pane left` (and omitted) reach it, `{AGT_PANE}` reports `left`, and a
+    /// later `session.split` opens a fresh RIGHT pane instead of displacing it. Called by the primary
+    /// surface's `onExit`.
     public func closePrimaryPane(_ sessionID: UUID) {
         guard let session = session(withID: sessionID) else { return }
         guard let survivor = session.splitSurface else {
@@ -90,8 +89,8 @@ extension AppStore {
         }
         let priorPrimary = session.surface // the exiting pane, torn down below; scopes the search reset
         priorPrimary?.teardown()
-        // promote the surviving split pane into the primary slot. `promoteToPrimaryPane` flips the
-        // surface's split-role flag so its future pwd/title reports write to the main fields.
+        // `promoteToPrimaryPane` flips the surface's split-role flag so its future pwd/title reports
+        // write to the main fields.
         survivor.promoteToPrimaryPane()
         session.surface = survivor
         session.splitSurface = nil
@@ -104,20 +103,18 @@ extension AppStore {
         // promoted shell, and a snapshot would persist commandWait with no initialCommand.
         session.initialCommand = nil
         session.commandWait = false
-        // migrate the split pane's live/persisted metadata up to the session (main) fields, then clear the
-        // now-meaningless split fields so nothing still describes a pane that no longer exists.
-        // cwd prefers the split's live PWD, then its restore-seed (`initialSplitCwd`, set for a restored
-        // split whose shell hasn't emitted OSC yet), and only falls back to the exited primary's cwd when
-        // the split has none at all (a fresh split seeds its cwd from the primary anyway). title is replaced
-        // OUTRIGHT from the split's (nil clears it) so the dead primary's title can never linger on the
-        // survivor — likewise foregroundCommand, so the exited primary's captured command can't either.
+        // migrate the split pane's live/persisted metadata up to the main fields, then clear the split ones
+        // so nothing still describes a pane that no longer exists. cwd prefers the split's live PWD, then its
+        // restore-seed (`initialSplitCwd`, for a restored split whose shell hasn't emitted OSC yet), falling
+        // back to the exited primary's only when the split has none (a fresh split seeds from the primary
+        // anyway). title is replaced OUTRIGHT from the split's (nil clears it), so the dead primary's title
+        // can never linger on the survivor — likewise foregroundCommand and its captured command.
         session.currentCwd = session.splitCwd ?? session.initialSplitCwd ?? session.currentCwd
         session.oscTitle = session.splitTitle
         session.foregroundCommand = session.splitForegroundCommand
-        // the restore-command override follows the survivor into the main slot the same way, BOTH halves:
-        // the persisted pin (so the next launch restores the promoted pane's command, not the dead
-        // primary's) and any payload still armed for this launch (so a surface built after promotion
-        // still runs it).
+        // the restore-command override follows the survivor into the main slot, BOTH halves: the persisted
+        // pin (so the next launch restores the promoted pane's command, not the dead primary's) and any
+        // payload still armed for this launch (so a surface built after promotion still runs it).
         session.restoreCommand = session.splitRestoreCommand
         session.pendingRestoreCommand = session.pendingSplitRestoreCommand
         session.splitCwd = nil
@@ -132,11 +129,11 @@ extension AppStore {
         if session.searchSurface == nil || session.searchSurface === priorPrimary {
             session.clearSearch()
         }
-        // migrate the agent-status identity like the cwd/title above: the exited primary owned any
-        // `.left`/nil-tagged block, which dies with it (clear); a `.right`-tagged block belonged to the
-        // promoted survivor and FOLLOWS it into the main slot — re-tag to `.left` so the `tree` (which now
-        // reports `split:false`) and the survivor's now-`.left`-role-aware keystroke-clear agree, instead of
-        // a self-contradictory `split:false` + `statusPane:"right"`. A `.scratch` block is untouched.
+        // migrate the agent-status identity like the cwd/title: the exited primary owned any `.left`/nil tag,
+        // which dies with it, while a `.right` tag belonged to the survivor and FOLLOWS it into the main slot
+        // — re-tagged to `.left` so `tree` (now reporting `split:false`) and the survivor's `.left`-role
+        // keystroke-clear agree, not a self-contradictory `split:false` + `statusPane:"right"`. `.scratch` is
+        // untouched.
         if session.agentIndicator.status != .idle {
             switch session.agentIndicator.statusPane ?? .left {
             case .left: setAgentIndicator(AgentIndicator(), forSession: session.id)
@@ -150,14 +147,13 @@ extension AppStore {
         save()
     }
 
-    /// The split pane's shell exited. It collapses to the primary (`closeSplit`) ONLY when a genuine
-    /// two-pane split is live — BOTH `surface` and `splitSurface` set. Otherwise this was the session's
-    /// last pane and the session is closed: the surface has been PROMOTED into the primary slot
-    /// (`splitSurface == nil`) — a promoted survivor keeps the split pane's `onExit`, so its own exit still
-    /// routes here, and closing (not collapsing a split that no longer exists) is what keeps it from
-    /// leaving a zombie session. (The `surface == nil` half of the guard is defensive: `closePrimaryPane`
-    /// now always promotes the survivor INTO `surface`, so a live `splitSurface` implies a live `surface`.)
-    /// Called by the split surface's `onExit`.
+    /// The split pane's shell exited: collapses to the primary (`closeSplit`) ONLY when a genuine two-pane
+    /// split is live, BOTH `surface` and `splitSurface` set. Otherwise this was the session's last pane —
+    /// the surface having been PROMOTED into the primary slot (`splitSurface == nil`) while keeping the split
+    /// pane's `onExit`, so its own exit routes here — and closing, rather than collapsing a split that no
+    /// longer exists, is what avoids a zombie session. The `surface == nil` half of the guard is defensive:
+    /// `closePrimaryPane` always promotes the survivor INTO `surface`, so a live `splitSurface` implies a
+    /// live `surface`. Called by the split surface's `onExit`.
     public func closeSplitPane(_ sessionID: UUID) {
         guard let session = session(withID: sessionID) else { return }
         guard session.surface != nil, session.splitSurface != nil else {
@@ -167,17 +163,14 @@ extension AppStore {
         closeSplit(sessionID)
     }
 
-    /// Opens an ephemeral overlay terminal on a session running `command` (e.g. a TUI). The overlay
-    /// surface is created lazily by the detail pane and runs the command as its process; when the
-    /// program exits, `closeOverlay` tears it down. No-op (returns false) when the session is unknown
-    /// or already has an overlay open. NOT persisted — the overlay never survives a relaunch.
-    ///
-    /// `sizePercent` (clamped to 1...100) requests a *floating* overlay: an opaque, framed panel sized
-    /// to that percent of the pane, with the session still visible behind it. nil gives the default
-    /// full-pane overlay that hides the session.
-    ///
-    /// `backgroundColor` (`#rrggbb`) gives the overlay pane its own solid background, independent of the
-    /// session's; nil leaves the default theme background. Read by the overlay surface factory at creation.
+    /// Opens an ephemeral overlay terminal on a session running `command` (e.g. a TUI). The surface is
+    /// created lazily by the detail pane and runs the command as its process; `closeOverlay` tears it down
+    /// when the program exits. No-op (returns false) for an unknown session or one already showing an
+    /// overlay. NOT persisted, so it never survives a relaunch.
+    /// - `sizePercent` (clamped to 1...100) requests a *floating* overlay: an opaque framed panel at that
+    ///   percent of the pane with the session visible behind it; nil gives the full-pane overlay that hides it.
+    /// - `backgroundColor` (`#rrggbb`) gives the overlay pane its own solid background, independent of the
+    ///   session's; nil leaves the default theme background. Read by the overlay factory at creation.
     @discardableResult public func openOverlay(_ sessionID: UUID, command: String, cwd: String? = nil,
                                                wait: Bool = false, sizePercent: Int? = nil,
                                                backgroundColor: String? = nil) -> Bool {
@@ -192,27 +185,24 @@ extension AppStore {
         return true
     }
 
-    /// Resizes an already-open overlay in place. `sizePercent` (clamped to 1...100) switches it to a
-    /// *floating* opaque framed panel at that percent of the pane with the session visible behind it;
-    /// nil switches it to the full-pane overlay that hides the session and draws translucent. The overlay
-    /// surface stays mounted (the detail pane hosts both variants in one place), so this only re-flows the
-    /// layout — the program keeps running, never re-spawns. No-op (returns false) with no overlay open.
+    /// Resizes an already-open overlay in place: `sizePercent` (clamped to 1...100) switches it to a *floating*
+    /// opaque framed panel at that percent of the pane with the session visible behind it, nil to the translucent
+    /// full-pane overlay that hides the session. The surface stays mounted (the detail pane hosts both variants),
+    /// so only the layout re-flows and the program never re-spawns. No-op (false) with no overlay open.
     @discardableResult public func resizeOverlay(_ sessionID: UUID, sizePercent: Int?) -> Bool {
         guard let session = session(withID: sessionID), session.overlayActive else { return false }
         session.overlaySizePercent = sizePercent.map { min(100, max(1, $0)) }
         return true
     }
 
-    /// Records the overlay program's exit status (parsed app-side from the wrapper's temp file on the
-    /// surface's teardown) so `session.overlay.result` can report it after the overlay closes. No-op
-    /// for an unknown session.
+    /// Records the overlay program's exit status (parsed app-side from the wrapper's temp file at surface
+    /// teardown) so `session.overlay.result` can report it after the overlay closes. No-op for an unknown id.
     public func recordOverlayExit(_ sessionID: UUID, code: Int) {
         session(withID: sessionID)?.overlayExitCode = code
     }
 
-    /// Closes the overlay terminal: hides it AND tears down its surface (unlike the split, the overlay
-    /// is never kept alive — it is ephemeral). Used both on explicit close and when the overlay's
-    /// program exits on its own. No-op (returns false) when there is no overlay.
+    /// Closes the overlay terminal: hides it AND tears down its surface — unlike the split it is ephemeral,
+    /// never kept alive. Used on explicit close and when the program exits. No-op (false) with no overlay.
     @discardableResult public func closeOverlay(_ sessionID: UUID) -> Bool {
         guard let session = session(withID: sessionID), session.overlayActive else { return false }
         session.overlayActive = false
@@ -226,25 +216,24 @@ extension AppStore {
         return true
     }
 
-    /// Toggles the scratch terminal for a session — a third, full-overlay login shell. The scratch
-    /// surface is created lazily by the detail pane on first show and, like the split, kept alive when
-    /// hidden (this only flips `scratchActive`), so a re-show reuses the same shell. Not persisted, so
-    /// no `save()`. No-op for an unknown session.
+    /// Toggles the scratch terminal — a third, full-overlay login shell. Its surface is created lazily by
+    /// the detail pane on first show and, like the split, kept alive when hidden (this only flips
+    /// `scratchActive`), so a re-show reuses the same shell. Not persisted, so no `save()`. No-op for an
+    /// unknown session.
     public func toggleScratch(_ sessionID: UUID) {
         guard let session = session(withID: sessionID) else { return }
         session.scratchActive.toggle()
     }
 
-    /// Closes the scratch terminal: hides it AND tears down its surface (so a subsequent show starts a
-    /// fresh shell). Used on the scratch shell's own `exit` and on session/workspace/window teardown.
-    /// No-op (returns false) when there is no scratch surface.
+    /// Closes the scratch terminal: hides it AND tears down its surface, so a later show starts a fresh
+    /// shell. Used on the scratch shell's own `exit` and on session/workspace/window teardown. No-op
+    /// (returns false) when there is no scratch surface.
     @discardableResult public func closeScratch(_ sessionID: UUID) -> Bool {
         guard let session = session(withID: sessionID), let scratch = session.scratchSurface else { return false }
         session.scratchActive = false
         // if the open search bar is pinned to the scratch being torn down, reset search rather than leave a
-        // stuck, no-op bar (the weak `searchSurface` zeroes but `searchActive` stays true) — mirrors the
-        // closeSplit/closePrimaryPane handling. Guarded on identity so a search owned by the main/split pane
-        // (the scratch can cover a session whose pane opened search) survives the scratch teardown.
+        // stuck no-op bar (the weak `searchSurface` zeroes but `searchActive` stays true), mirroring
+        // closeSplit/closePrimaryPane. guarded on identity so a search owned by the main/split pane survives.
         if session.searchSurface === scratch { session.clearSearch() }
         // a `.scratch`-tagged block loses its owning surface here; clear it so it can't strand a glyph the
         // surviving main/split panes can never keystroke-clear (a main/split tag survives — the helper guards).

@@ -9,8 +9,8 @@ public enum SkillInstall {
     public static let skillName = "agterm"
 
     /// A sentinel embedded in the bundled `SKILL.md` (an HTML comment, invisible when rendered) so a
-    /// reinstall can tell an agterm-authored skill from a same-named skill the user wrote themselves,
-    /// and refuse to clobber the latter.
+    /// reinstall can tell an agterm-authored skill from a user's own same-named one, and refuse to
+    /// clobber the latter.
     public static let marker = "<!-- agterm-skill -->"
 
     /// One install destination: which agent, and the `…/skills/agterm` directory to write.
@@ -29,10 +29,9 @@ public enum SkillInstall {
         home + "/" + base + "/skills/" + skillName
     }
 
-    /// The install targets given which agent base dirs exist. Install into each agent that is present
-    /// (Claude Code and/or Codex); if NEITHER is present, fall back to creating Claude Code's (the
-    /// primary), so the install is never a no-op. Caller supplies the existence flags (a filesystem
-    /// check), keeping this pure and testable.
+    /// The install targets given which agent base dirs exist: each agent that is present (Claude Code
+    /// and/or Codex), falling back to creating Claude Code's (the primary) when NEITHER is, so the install
+    /// is never a no-op. The caller supplies the existence flags (a filesystem check), keeping this pure.
     public static func installTargets(home: String, claudeExists: Bool, codexExists: Bool) -> [Target] {
         var targets: [Target] = []
         if claudeExists {
@@ -47,11 +46,10 @@ public enum SkillInstall {
         return targets
     }
 
-    /// Whether the installer may overwrite a destination. An absent directory is always safe to write
-    /// (nothing to clobber). When the directory already exists, it is overwritable only when its
-    /// `SKILL.md` carries `marker` (i.e. agterm put it there) — a present directory with an absent,
-    /// unreadable, or unmarked `SKILL.md` is treated as user-authored content and refused, so a user's
-    /// own skill named `agterm` is preserved rather than recursively wiped.
+    /// Whether the installer may overwrite a destination. An absent directory is always safe (nothing to
+    /// clobber). An existing one is overwritable only when its `SKILL.md` carries `marker` (agterm put it
+    /// there); an absent, unreadable, or unmarked `SKILL.md` counts as user-authored and is refused, so a
+    /// user's own skill named `agterm` is preserved rather than recursively wiped.
     public static func mayOverwrite(directoryExists: Bool, existingSKILL contents: String?) -> Bool {
         guard directoryExists else { return true }
         guard let contents else { return false }

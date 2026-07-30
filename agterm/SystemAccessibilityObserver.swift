@@ -1,20 +1,19 @@
 import AppKit
 import Foundation
 
-/// Bridges macOS accessibility display-option changes into agterm's app-local notification center.
-/// AppKit posts this notification on `NSWorkspace.notificationCenter` (not the default center), while
-/// agterm's window and sidebar consumers use lifecycle-scoped tokens on the default center.
-///
-/// Consumers read the settled values directly from `NSWorkspace` when handling the bridged event:
-/// `WindowAppearance` handles Reduce Transparency and `StatusIconView` handles Reduce Motion. Native
-/// SwiftUI consumers use the matching accessibility environment values and update independently.
+/// Bridges macOS accessibility display-option changes into agterm's app-local notification center: AppKit
+/// posts them on `NSWorkspace.notificationCenter`, not the default center that agterm's window and sidebar
+/// consumers observe with lifecycle-scoped tokens. Consumers read the settled values directly from
+/// `NSWorkspace` when handling the bridged event — `WindowAppearance` for Reduce Transparency,
+/// `StatusIconView` for Reduce Motion; native SwiftUI consumers use the matching accessibility environment
+/// values and update independently.
 @MainActor
 final class SystemAccessibilityObserver {
     private var displayOptionsObserver: NSObjectProtocol?
 
-    /// Register once for the process. The scene `.task` runs for every window, so this must be
-    /// idempotent like `SystemAppearanceObserver.start()`. No initial post is needed because consumers
-    /// read the current preference during their normal first render or window attachment.
+    /// Register once for the process — the scene `.task` runs for every window, so this must be idempotent
+    /// like `SystemAppearanceObserver.start()`. No initial post: consumers read the current preference
+    /// during their normal first render or window attachment.
     func start() {
         guard displayOptionsObserver == nil else { return }
         let workspace = NSWorkspace.shared

@@ -3,9 +3,9 @@ import AppKit
 import SwiftUI
 
 /// Bridges to the AppKit `NSSplitView` under SwiftUI's `HSplitView` to (1) persist and restore the split
-/// divider ratio — no public SwiftUI API exposes the divider position — and (2) clip the split's divider out
-/// of the titlebar strip. Attached as a `.background` on the primary pane so its `NSView` lives inside the
-/// split's view tree without becoming a third arranged pane.
+/// divider ratio — no public SwiftUI API exposes the divider position — and (2) clip the split's divider
+/// out of the titlebar strip. Attached as a `.background` on the primary pane so its `NSView` lives inside
+/// the split's view tree without becoming a third arranged pane.
 ///
 /// (1) Once the split has a real width it restores `session.splitRatio` via `setPosition`; on each divider
 /// resize it writes the current left-pane fraction back to the session, which the next `save()` (or the
@@ -13,13 +13,13 @@ import SwiftUI
 ///
 /// (2) In COMPACT mode the SwiftUI `.padding(.top, titlebarHeight)` (30px) lands inside the window's
 /// safe-area band, so the AppKit `NSSplitView` ignores it and grows to the FULL window height (verified:
-/// its frame + both arranged panes span pt 0..windowHeight). The panes' top strip is empty terminal-bg
-/// (invisible against the window bg), but the divider draws BLACK through it — a streak up through the
-/// transparent titlebar. A 48px inset clears the band so normal mode is already bounded. The fix is a
-/// CALayer mask on the split that hides its top `titlebarHeight` strip: a layer mask clips without
-/// reflowing the terminal grid (a SwiftUI `.mask`/`.clipped()` here scrolled the top row away), the panes'
-/// empty top strip is harmless to clip, and it composes with translucency (it reveals the window backing,
-/// never an opaque color over the titlebar).
+/// its frame + both arranged panes span pt 0..windowHeight); the panes' top strip is then empty
+/// terminal-bg (invisible against the window bg), but the divider draws BLACK through it — a streak up
+/// through the transparent titlebar. The 48px inset clears the band, so normal mode is already bounded.
+/// The fix is a CALayer mask hiding the split's top `titlebarHeight` strip: a layer mask clips without
+/// reflowing the terminal grid (a SwiftUI `.mask`/`.clipped()` here scrolled the top row away), the empty
+/// strip is harmless to clip, and it composes with translucency (revealing the window backing, never an
+/// opaque color over the titlebar).
 struct SplitRatioAccessor: NSViewRepresentable {
     let session: Session
     let titlebarHeight: CGFloat
@@ -92,8 +92,8 @@ struct SplitRatioAccessor: NSViewRepresentable {
                 MainActor.assumeIsolated { self?.capture() }
             }
             // `session.resize` stores a new fraction on the session and posts this (object-scoped to the
-            // session) to move the LIVE divider — the programmatic analogue of a user drag. Unlike the
-            // one-shot restore in `layout()`, it fires on every resize command.
+            // session) to move the LIVE divider — the programmatic analogue of a user drag, firing on
+            // every resize command unlike the one-shot restore in `layout()`.
             applyObserver = NotificationCenter.default.addObserver(
                 forName: .agtermApplySplitRatio, object: session, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.applyRatio() }
@@ -102,7 +102,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
 
         /// Move the live divider to the session's stored `splitRatio` (set by `session.resize` just before
         /// it posts `.agtermApplySplitRatio`). The follow-on `didResizeSubviews` → `capture()` is a no-op:
-        /// the captured fraction equals the value we just set, so `capture()`'s near-equal guard skips it.
+        /// the captured fraction equals what was just set, so `capture()`'s near-equal guard skips it.
         private func applyRatio() {
             guard !suspended else { restored = false; return }
             guard let split = splitView, let ratio = session.splitRatio else { return }
@@ -113,12 +113,11 @@ struct SplitRatioAccessor: NSViewRepresentable {
             split.setPosition(total * CGFloat(ratio), ofDividerAt: 0)
         }
 
-        /// Mask the split's divider out of the titlebar zone — the strip ABOVE the window's titlebar boundary
-        /// (`titlebarHeight` points from the content top) that the NSSplitView overruns into in compact mode.
-        /// The clip amount is the split's overrun ABOVE that boundary, computed live: ~`titlebarHeight` in
-        /// compact (the split spans the full window) and 0 in normal (the split is already bounded at the
-        /// content top, so clipping a fixed strip would eat real terminal rows). A layer mask, not a frame
-        /// change, so the panes never reflow.
+        /// Mask the split's divider out of the titlebar zone — the strip ABOVE the window's titlebar
+        /// boundary (`titlebarHeight` points from the content top) that the NSSplitView overruns into in
+        /// compact mode. The clip amount is that overrun, computed live: ~`titlebarHeight` in compact (the
+        /// split spans the full window) and 0 in normal (already bounded at the content top, where clipping
+        /// a fixed strip would eat real terminal rows). A layer mask, not a frame change, so panes never reflow.
         private func updateDividerClip() {
             guard let split = splitView, let contentH = split.window?.contentView?.bounds.height else { return }
             split.wantsLayer = true
@@ -150,8 +149,8 @@ struct SplitRatioAccessor: NSViewRepresentable {
             split.layer?.mask = mask // re-assert (SwiftUI may rebuild the split's layer)
         }
 
-        /// Record the current left-pane fraction onto the session, skipping no-op and degenerate values so a
-        /// window resize that keeps the ratio doesn't churn it.
+        /// Record the current left-pane fraction onto the session, skipping no-op and degenerate values so
+        /// a window resize that keeps the ratio doesn't churn it.
         private func capture() {
             guard !suspended else { return }
             guard restored, let split = splitView, let first = split.arrangedSubviews.first else { return }

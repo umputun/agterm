@@ -2,19 +2,16 @@ import agtermCore
 import AppKit
 import SwiftUI
 
-/// The Ctrl-Tab "previously visited session" switcher (macOS app-switcher style). Hold Ctrl and
-/// press Tab to walk a frozen most-recently-used list (Shift+Tab reverses); releasing Ctrl commits
-/// the highlighted session. The order comes from `AppStore.sessionRecency`; the candidate list is
-/// snapshotted on `begin()` so cycling never reorders it — only the commit does (via selection).
-///
-/// Keys are caught by app-wide `NSEvent` local monitors rather than SwiftUI shortcuts, because the
-/// interaction needs Tab while a modifier is held plus the modifier-release ("commit") signal.
+/// The Ctrl-Tab "previously visited session" switcher (macOS app-switcher style): hold Ctrl and press Tab to
+/// walk a frozen most-recently-used list (Shift+Tab reverses), release Ctrl to commit the highlighted
+/// session. The order comes from `AppStore.sessionRecency`, snapshotted on `begin()` so cycling never
+/// reorders it — only the commit does, via selection. Keys come from app-wide `NSEvent` local monitors, not
+/// SwiftUI shortcuts, because the interaction needs Tab-while-held plus the modifier-release commit signal.
 @Observable
 @MainActor
 final class SessionSwitcher {
-    /// The window library; the switcher cycles the frontmost window's session recency. (A
-    /// per-window switcher tracking each window's own MRU is a later concern — for now it follows
-    /// the frontmost window, matching the single-window behavior.)
+    /// The window library; the switcher cycles the FRONTMOST window's session recency (a per-window
+    /// switcher tracking each window's own MRU is a later concern).
     private let library: WindowLibrary
     private let canSwitch: () -> Bool
     private var store: AppStore? { library.activeStore }
@@ -27,9 +24,9 @@ final class SessionSwitcher {
 
     private static let tabKey: UInt16 = 48
     private static let escapeKey: UInt16 = 53
-    /// Cap on rows the Ctrl-Tab switcher shows: it's a quick most-recent jump, not a full session list
-    /// (the ⌃P fuzzy palette covers everything). The recency STORE keeps its full 100-item history.
-    /// Shared with the mouse-driven recent-sessions popover so the two list the same sessions.
+    /// Cap on rows shown: a quick most-recent jump, not a full session list (the ⌃P fuzzy palette covers
+    /// everything); the recency STORE keeps its full 100-item history. Shared with the mouse-driven
+    /// recent-sessions popover so the two list the same sessions.
     static let maxCandidates = 10
 
     init(library: WindowLibrary, canSwitch: @escaping () -> Bool) {
@@ -77,10 +74,9 @@ final class SessionSwitcher {
     }
 
     /// Snapshot the MRU order (live sessions only, capped at `maxCandidates`) and pre-select the previous
-    /// session. No-op when there's nothing to switch to (fewer than two sessions). The candidate set is
-    /// scoped to the VISIBLE/FILTERED sessions (`navigableSessions` — the flagged set in flagged mode, the
-    /// sessions of the workspaces MARKED in the focus set while the filter applies, else all), so clearing
-    /// the flag or suspending the filter restores the full MRU.
+    /// session; no-op with fewer than two sessions. Scoped to the VISIBLE/FILTERED set (`navigableSessions`
+    /// — the flagged set in flagged mode, the MARKED workspaces' sessions while the filter applies, else
+    /// all), so clearing the flag or suspending the filter restores the full MRU.
     private func begin() {
         guard let store else { return }
         let valid = Set(store.navigableSessions.map(\.id))
@@ -117,9 +113,9 @@ final class SessionSwitcher {
     }
 }
 
-/// The switcher overlay: a top-centered list of the frozen candidate sessions (name + workspace ·
-/// cwd) with the current pick highlighted. Keyboard-driven (no controls to focus), so the terminal
-/// keeps first responder and the global monitors drive selection.
+/// The switcher overlay: a top-centered list of the frozen candidates (name + workspace · cwd), current pick
+/// highlighted. Keyboard-driven with no focusable control, so the terminal keeps first responder and the
+/// global monitors drive selection.
 struct SessionSwitcherOverlay: View {
     let switcher: SessionSwitcher
     let store: AppStore
@@ -166,10 +162,10 @@ struct SessionSwitcherOverlay: View {
     }
 }
 
-/// One session row for the switcher surfaces — the display name over a `workspace · cwd` subtitle.
-/// Shared by the keyboard Ctrl-Tab overlay (`SessionSwitcherOverlay`) and the mouse-driven recent-sessions
-/// popover (`WindowContentView.recentSessionsPopover`) so the two rows never drift; the caller supplies the
-/// row's background (the overlay's keyboard highlight, the popover's button hover).
+/// One session row for the switcher surfaces — the display name over a `workspace · cwd` subtitle. Shared by
+/// the Ctrl-Tab overlay (`SessionSwitcherOverlay`) and the recent-sessions popover
+/// (`WindowContentView.recentSessionsPopover`) so the two never drift; the caller supplies the row's
+/// background (the overlay's keyboard highlight, the popover's button hover).
 struct SessionSwitcherRow: View {
     let title: String
     let subtitle: String

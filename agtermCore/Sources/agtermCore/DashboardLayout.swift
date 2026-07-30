@@ -1,10 +1,9 @@
 import Foundation
 
-/// Pure grid geometry, keyboard navigation, and auto-size font math for the dashboard overlay.
-/// Host-free (Foundation-only, `Int`/`Double` — no CoreGraphics/AppKit) so `swift test` covers it with
-/// no app host. The dashboard shows up to `maxCells` live session surfaces in a `ceil(sqrt(n))`-wide grid;
-/// a keyboard highlight walks the cells and the auto-size math shrinks the font as the grid grows so a
-/// dense grid stays readable.
+/// Pure grid geometry, keyboard navigation, and auto-size font math for the dashboard overlay. Host-free
+/// (Foundation-only, `Int`/`Double` — no CoreGraphics/AppKit) so `swift test` covers it with no app host.
+/// The dashboard shows up to `maxCells` live session surfaces in a `ceil(sqrt(n))`-wide grid; a keyboard
+/// highlight walks the cells and the auto-size math shrinks the font as the grid grows, to stay readable.
 public enum DashboardLayout {
     /// Largest number of cells the grid holds; the call site caps a bigger request to this.
     public static let maxCells = 9

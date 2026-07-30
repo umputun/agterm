@@ -3,12 +3,12 @@ import Foundation
 /// Pure builders for the agterm identity and `AGTERM_*` values injected into spawned shells.
 /// The platform surface owns shell creation; this keeps the variable set testable.
 public enum SurfaceEnvironment {
-    /// Environment for a session-owned surface: main pane, split pane, overlay, or scratch.
-    /// `pane`, when non-nil, adds `AGTERM_PANE` so the hook wrapper can forward `--pane` and a status
-    /// set from a background pane records which surface blocked; overlay surfaces pass nil (nil→main).
-    /// `paneToken`, when non-empty, adds `AGTERM_PANE_ID` — the surface's STABLE spawn identity (see
-    /// `TerminalSurface.paneToken`), which the hook forwards as `--pane-id` so the status handler resolves
-    /// the surface's LIVE role instead of the stale baked `AGTERM_PANE` after a promote + re-split (#199).
+    /// Environment for a session-owned surface: main pane, split pane, overlay, or scratch. `pane`, when
+    /// non-nil, adds `AGTERM_PANE` so the hook wrapper can forward `--pane` and a status set from a
+    /// background pane records which surface blocked; overlay surfaces pass nil (nil→main). `paneToken`,
+    /// when non-empty, adds `AGTERM_PANE_ID` — the surface's STABLE spawn identity
+    /// (`TerminalSurface.paneToken`), which the hook forwards as `--pane-id` so the status handler resolves
+    /// the LIVE role instead of the stale baked `AGTERM_PANE` after a promote + re-split (#199).
     public static func session(sessionID: UUID, windowID: UUID?, workspaceID: UUID?,
                                socketPath: String, programVersion: String,
                                pane: StatusPane? = nil, paneToken: String? = nil) -> [String: String] {
@@ -43,8 +43,8 @@ public enum SurfaceEnvironment {
     }
 
     private static func terminalIdentity(programVersion: String) -> [String: String] {
-        // Embedded libghostty defaults these to Ghostty, then reapplies the surface env as overrides.
-        // Identify the actual host so Ghostty-aware shell tools do not invoke a standalone Ghostty.app.
+        // embedded libghostty defaults these to Ghostty, then reapplies the surface env as overrides.
+        // identify the actual host so Ghostty-aware shell tools do not invoke a standalone Ghostty.app.
         [
             "TERM_PROGRAM": "agterm",
             "TERM_PROGRAM_VERSION": programVersion,

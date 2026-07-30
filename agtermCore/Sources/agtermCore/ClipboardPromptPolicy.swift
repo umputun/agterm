@@ -16,11 +16,10 @@ public enum ClipboardDecision: Sendable {
     case prompt
 }
 
-/// ClipboardPromptPolicy remembers, per direction, whether the user has chosen to allow or deny OSC 52
-/// clipboard access for the rest of the app session (the "don't ask again this session" choice). With no
-/// remembered choice a direction defaults to `.prompt`. Read and write are independent so allowing writes
-/// never silently allows reads. Pure value logic: the app owns an instance, shows the dialog on `.prompt`,
-/// and records the outcome via `remember`.
+/// ClipboardPromptPolicy remembers, per direction, whether the user allowed or denied OSC 52 clipboard
+/// access for the rest of the app session (the "don't ask again this session" choice), defaulting to
+/// `.prompt` with no remembered choice. Read and write are independent, so allowing writes never silently
+/// allows reads. Pure value logic: the app owns an instance, prompts on `.prompt`, records via `remember`.
 public struct ClipboardPromptPolicy: Sendable {
     private var readChoice: Bool?
     private var writeChoice: Bool?

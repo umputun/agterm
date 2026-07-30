@@ -266,7 +266,6 @@ public struct ControlDispatcher {
         case .sessionSelect:
             return actions.selectSession(request.target, window: request.args?.window)
         case .sessionGo:
-            // unknown/missing `to` is a structured error.
             guard let dir = (request.args?.to).flatMap(SessionNavigation.init(wire:)) else {
                 return ControlResponse(ok: false, error: "session.go requires --to next|prev|first|last|next-attention|prev-attention")
             }
@@ -365,9 +364,8 @@ public struct ControlDispatcher {
     /// `session.restore`: parse the `set`|`none`|`clear` mode into a `ControlRestoreOverride` and the pane
     /// selector into a `StatusPane`, then hand both to the host. A pinned command is validated but NEVER
     /// rewritten — it is a shell line, so metacharacters are the point; it is rejected only for being
-    /// absent, carrying control characters, or exceeding the storage cap. An EMPTY command is the same
-    /// pinned-to-nothing state as `none`. `paneID` rides through opaquely (the dispatcher has no session
-    /// to resolve it against).
+    /// absent, carrying control characters, or exceeding the storage cap. An EMPTY command means the same
+    /// pinned-to-nothing state as `none`. `paneID` rides through opaquely (no session here to resolve it).
     private func dispatchSessionRestore(_ request: ControlRequest) -> ControlResponse {
         let args = request.args
         let pin: ControlRestoreOverride
@@ -616,8 +614,8 @@ public struct ControlDispatcher {
     }
 
     /// The quick-terminal input/read commands, `async` because the app side polls briefly for the surface
-    /// to mount + realize after `quick show` (the twin of `session.type`/`session.text`, which are async
-    /// for the same realize-wait reason).
+    /// to mount + realize after `quick show` — the same realize-wait that makes `session.type`/`session.text`
+    /// async.
     private func dispatchQuickCommand(_ request: ControlRequest) async -> ControlResponse {
         switch request.cmd {
         case .quickType:
@@ -757,14 +755,14 @@ public struct ControlDispatcher {
         }
     }
 
-    /// The dashboard overlay is host-free-validated here. The open path needs at least one id (or `--mru`)
-    /// and at most one font flag; `--close` takes no id, `--mru`, or font flag; a `--font-size` must be
-    /// finite and positive; `--mru` cannot be combined with explicit ids (but composes with the font flags).
-    /// The 9-cell cap is NOT applied here: the cell unit is a session+pane, so a split session expands to two
-    /// cells and the cap counts PANES — that expansion needs the store, so it lives app-side in
-    /// `ControlServer.setDashboard`, which also reports any dropped panes. Target resolution (incl. the
-    /// `--mru` recency lookup), the pane expansion + cap, the surface reparent, and the per-window controller
-    /// all stay app-side behind `ControlActions.setDashboard`; this only forwards the raw ids.
+    /// The dashboard overlay is host-free-validated here: an open needs at least one id (or `--mru`) and at
+    /// most one font flag, `--close` takes no id/`--mru`/font flag, a `--font-size` must be finite and
+    /// positive, and `--mru` cannot be combined with explicit ids (but composes with the font flags).
+    /// The 9-cell cap is NOT applied here — the cell unit is a session+pane, so a split session expands to
+    /// two cells and the cap counts PANES, which needs the store. That expansion + cap, the dropped-pane
+    /// report, target resolution (incl. the `--mru` recency lookup), the surface reparent, and the
+    /// per-window controller all live app-side behind `ControlActions.setDashboard`
+    /// (`ControlServer.setDashboard`); this only forwards the raw ids.
     private func dispatchDashboard(_ request: ControlRequest) -> ControlResponse {
         let args = request.args
         let targets = args?.targets ?? []
@@ -787,8 +785,6 @@ public struct ControlDispatcher {
         }
         let fontMode: DashboardFontMode = autoSize ? .auto : (fontSize.map(DashboardFontMode.fixed) ?? .untouched)
         if mru {
-            // --mru supplies the members app-side from the window's recency, so it takes no explicit ids; the
-            // font flags still apply.
             guard targets.isEmpty else {
                 return ControlResponse(ok: false, error: "dashboard --mru cannot be combined with explicit session ids")
             }

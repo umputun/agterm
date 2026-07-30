@@ -3,20 +3,17 @@ import AppKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    /// The app-global window library, handed over once the scene appears so the delegate can
-    /// flush every open window's state on terminate.
+    /// The app-global window library, set once the scene appears so terminate can flush every window's state.
     var library: WindowLibrary?
 
-    /// The control channel, handed over once the scene appears so the delegate can
-    /// stop the listener and unlink the socket on terminate.
+    /// The control channel, set once the scene appears so terminate can stop the listener and unlink the socket.
     var controlServer: ControlServer?
 
-    /// The custom-command key-monitor runner, handed over once the scene appears so the delegate can
-    /// remove its `NSEvent` monitor and observer on terminate.
+    /// The custom-command key-monitor runner, set on scene appear; terminate removes its monitor + observer.
     var customCommandRunner: CustomCommandRunner?
 
-    /// The settings model, handed over once the scene appears so the delegate can flush its pending
-    /// debounced `settings.json` writes (opacity/blur, theme preview) on terminate.
+    /// The settings model, set on scene appear so terminate can flush its pending debounced `settings.json`
+    /// writes (opacity/blur, theme preview).
     var settingsModel: SettingsModel?
 
     /// The action hub, handed over once the scene appears so `application(_:open:)` can open a session at
@@ -28,26 +25,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// the set is invalidated and replaced whenever the Dock asks for a fresh menu.
     var dockMenuActionTargets: [DockMenuActionTarget] = []
 
-    /// Directories requested via `open -a agterm /path` (the OS "open terminal here" integration) that
-    /// haven't become sessions yet — queued until the frontmost window's store resolves, so a `session
-    /// new`-style graft lands in the last-active window.
+    /// Directories from `open -a agterm /path` (the OS "open terminal here" integration) not yet turned into
+    /// sessions — queued until the frontmost window's store resolves, so a `session new`-style graft lands in
+    /// the last-active window.
     private var pendingOpenDirectories: [String] = []
 
     private var restoreObserver: NSObjectProtocol?
     private var scheduledReconciliationReasons: Set<String> = []
 
     func applicationWillFinishLaunching(_: Notification) {
-        // agterm has its own multi-window model and does NOT support native window tabs; disabling
-        // automatic tabbing removes AppKit's injected "Show Tab Bar" / "Show All Tabs" / "Move Tab to
-        // New Window" menu items and the tab affordances. Must be set before any window is created.
+        // agterm has its own multi-window model and no native window tabs; disabling automatic tabbing
+        // strips AppKit's injected "Show Tab Bar" / "Show All Tabs" / "Move Tab to New Window" items and
+        // the tab affordances. Must be set before any window is created.
         NSWindow.allowsAutomaticWindowTabbing = false
-        // NOTE: do NOT set NSApp.applicationIconImage. The app icon is the adaptive Icon Composer
-        // `AppIcon.icon`, which the system renders LIVE in the Dock with the current appearance
-        // (light/dark/clear/tinted, Liquid Glass). applicationIconImage takes a STATIC NSImage, so
-        // setting it (even from the compiled asset) freezes the Dock to one flat rendering and defeats
-        // the adaptive icon. Let LaunchServices render the bundle icon. (The Dock unseen-count badge is
-        // the modern `UNUserNotificationCenter.setBadgeCount` — see `DockBadgeController` — which renders
-        // over the live adaptive icon without touching `applicationIconImage`.)
+        // do NOT set NSApp.applicationIconImage: the icon is the adaptive Icon Composer `AppIcon.icon`,
+        // which the system renders LIVE in the Dock per appearance (light/dark/clear/tinted, Liquid Glass),
+        // while applicationIconImage takes a STATIC NSImage and would freeze the Dock to one flat
+        // rendering. Let LaunchServices render the bundle icon. The Dock unseen-count badge uses
+        // `UNUserNotificationCenter.setBadgeCount` (`DockBadgeController`), which draws over the live
+        // adaptive icon without touching `applicationIconImage`.
         restoreObserver = NotificationCenter.default.addObserver(
             forName: NSApplication.didFinishRestoringWindowsNotification,
             object: NSApp,
@@ -70,11 +66,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = GhosttyApp.shared
         scheduleRestoredWindowReconciliation(reason: "did-finish-launching")
         // AppKit auto-adds its own "Enter Full Screen" item (Globe+F / ⌃⌘F) to the View menu for any
-        // fullscreen-capable window, and RE-INJECTS it each time the menu opens. agterm ships its OWN
-        // rebindable "Toggle Full Screen" item (so full screen is drivable from the keymap, action palette,
-        // and control channel), so leaving AppKit's item renders a duplicate. Strip the native one
-        // just-in-time whenever a menu begins tracking (the point AppKit re-injects it); a launch-time
-        // one-shot does NOT stick because of the re-injection.
+        // fullscreen-capable window and RE-INJECTS it each time the menu opens, duplicating agterm's own
+        // rebindable "Toggle Full Screen" (which is what makes full screen drivable from the keymap, action
+        // palette and control channel). Strip the native one whenever a menu begins tracking — the point of
+        // re-injection, so a launch-time one-shot does NOT stick.
         AppDelegate.removeNativeFullScreenMenuItem()
         NotificationCenter.default.addObserver(self, selector: #selector(menuBeganTracking),
                                                name: NSMenu.didBeginTrackingNotification, object: nil)
@@ -107,13 +102,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Keep ⌘W with agterm's File ▸ Close Session whenever the keymap says it owns that chord.
     ///
-    /// SwiftUI hands the stock File ▸ Close (`performClose:`) a ⌘W key equivalent the moment agterm's own
-    /// item vacates the chord — a `map cmd+<other> close_session` plus `keymap reload` is enough. Putting
-    /// `close_session` back on ⌘W does NOT reclaim it: SwiftUI resolves the collision by dropping the
-    /// shortcut from its OWN item, leaving Close Session unbound and ⌘W closing the whole window until the
-    /// app is relaunched (issue #296). So agterm asserts the split itself rather than leaving it to
-    /// SwiftUI's one-time conflict resolution. Reconciled from the AppKit side, like
-    /// `removeNativeFullScreenMenuItem`, because there is no SwiftUI API for either half.
+    /// SwiftUI hands the stock File ▸ Close (`performClose:`) a ⌘W key equivalent the moment agterm's item
+    /// vacates the chord (a `map cmd+<other> close_session` plus `keymap reload` is enough), and putting
+    /// `close_session` back does NOT reclaim it: SwiftUI resolves the collision by dropping the shortcut from
+    /// its OWN item, leaving Close Session unbound and ⌘W closing the whole window until relaunch (issue
+    /// #296). So agterm asserts the split itself, from the AppKit side like `removeNativeFullScreenMenuItem`
+    /// — there is no SwiftUI API for either half.
     private func reconcileCloseSessionChord() {
         guard let keymap = settingsModel?.keymap else { return }
         AppDelegate.applyCloseSessionChord(keymap, in: NSApp.mainMenu)
@@ -122,14 +116,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Split ⌘W between agterm's Close Session item and the stock `performClose:` one, following `keymap`.
     /// Operates on whichever submenu holds `performClose:`; a menu without both items is left alone.
     ///
-    /// The stock item may hold ⌘W only while NO built-in resolves to it. Deciding that from `close_session`
-    /// alone is not enough: `parseKeymap` rejects a chord only when two DISTINCT actions resolve to it, so
-    /// `map cmd+e close_session` plus `map cmd+w new_session` is a clean keymap in which another action
-    /// legitimately owns ⌘W, and arming the stock item there would advertise the chord twice and let
-    /// SwiftUI's next rebuild unbind agterm's own item — the very failure this reconcile exists to prevent.
+    /// The stock item may hold ⌘W only while NO built-in resolves to it; `close_session` alone is not enough,
+    /// since `parseKeymap` rejects a chord only when two DISTINCT actions claim it — `map cmd+e close_session`
+    /// plus `map cmd+w new_session` is a clean keymap where another action legitimately owns ⌘W, and arming
+    /// the stock item there would advertise the chord twice and let SwiftUI's next rebuild unbind agterm's
+    /// own item, the failure this reconcile exists to prevent.
     ///
-    /// agterm's item is a SwiftUI closure button with no distinguishing selector, so it can only be matched
-    /// by title — scoping that match to the submenu that owns `performClose:` keeps it narrow.
+    /// agterm's item is a SwiftUI closure button with no distinguishing selector, so it is matched by title;
+    /// scoping that match to the submenu owning `performClose:` keeps it narrow.
     static func applyCloseSessionChord(_ keymap: Keymap, in mainMenu: NSMenu?) {
         let closeSessionOwns = keymap.equivalent(for: .closeSession) == commandW
         let anyBuiltinOwns = BuiltinAction.allCases.contains { keymap.equivalent(for: $0) == commandW }
@@ -139,7 +133,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                   let stockClose = submenu.items.first(where: { $0.action == closeSelector }),
                   let ours = submenu.items.first(where: { $0.title == closeSessionItemTitle })
             else { continue }
-            // our item carries ⌘W exactly while close_session owns it. Clearing a stale one matters because
+            // our item carries ⌘W exactly while close_session owns it; clearing a stale one matters because
             // SwiftUI defers its rebuild to the next activation, so straight after a reload that rebound
             // close_session away our item still advertises the chord the stock item is about to take.
             if closeSessionOwns {
@@ -162,10 +156,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     static let closeSessionItemTitle = "Close Session"
     private static let commandW = Chord(mods: [.command], key: "w")
 
-    /// Remove AppKit's auto-injected fullscreen menu item — the one whose action is `toggleFullScreen:`.
-    /// agterm's own item uses a SwiftUI closure action (a different selector), so only the native item
-    /// matches and our "Toggle Full Screen" is left intact. Finds the owning submenu by content rather than
-    /// by the localized "View" title.
+    /// Remove AppKit's auto-injected fullscreen item — the one whose action is `toggleFullScreen:`. agterm's
+    /// own item uses a SwiftUI closure action (a different selector), so only the native one matches and our
+    /// "Toggle Full Screen" survives. Finds the owning submenu by content, not by the localized "View" title.
     @MainActor
     private static func removeNativeFullScreenMenuItem() {
         let selector = #selector(NSWindow.toggleFullScreen(_:))
@@ -177,11 +170,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// `open -a agterm /path` (the OS "open terminal here" integration): macOS delivers the folder/file
-    /// URLs here. Each resolves to a directory (a folder → itself, a file → its parent, via the host-free
-    /// `OpenPathResolver`), which is queued and drained into a new session in the last-active window.
-    /// This serves the WARM case — agterm already running (its daily-driver norm) — where the running
-    /// instance has a window and grafts the session immediately.
+    /// `open -a agterm /path` (the OS "open terminal here" integration): macOS delivers the URLs here. Each
+    /// resolves to a directory (folder → itself, file → its parent, via host-free `OpenPathResolver`), which
+    /// is queued and drained into a new session in the last-active window. Serves the WARM case — agterm
+    /// already running (its daily-driver norm), so the instance has a window and grafts immediately.
     func application(_: NSApplication, open urls: [URL]) {
         let directories = urls.compactMap { OpenPathResolver.directory(for: $0) }
         guard !directories.isEmpty else { return }
@@ -190,9 +182,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Turn every queued `open -a` directory into a new session in the last-active window, one at a time,
-    /// dropping each entry only after its session lands (a transient failure keeps it queued). No-op when
-    /// the queue is empty. When the frontmost store isn't resolvable yet it retries on a 0.1 s backoff,
-    /// giving up after a bounded number of ticks so a folder can't wedge a stuck timer.
+    /// dropping each entry only once its session lands (a transient failure keeps it queued). No-op on an
+    /// empty queue; when the frontmost store isn't resolvable yet, retries on a 0.1 s backoff, bounded so a
+    /// folder can't wedge a stuck timer.
     func drainPendingOpenDirectories(retry: Int = 0) {
         guard !pendingOpenDirectories.isEmpty else { return }
         guard let actions, library?.activeStore?.currentWorkspaceID != nil else {
@@ -207,10 +199,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         while let directory = pendingOpenDirectories.first, actions.openSession(atDirectory: directory) {
             pendingOpenDirectories.removeFirst()
         }
-        // raise/deminiaturize the window the session landed in — `NSApp.activate()` only brings the app
-        // forward, so an "open terminal here" into a minimized last-active window would otherwise leave it
-        // in the Dock and show nothing. `WindowRegistry.raise` deminiaturizes + makes key; a no-op for an
-        // already-frontmost window. Only when a session actually landed.
+        // raise the window the session landed in: `NSApp.activate()` only fronts the app, so an "open
+        // terminal here" into a minimized last-active window would stay in the Dock showing nothing.
+        // `WindowRegistry.raise` deminiaturizes + makes key, a no-op for an already-frontmost window; only
+        // when a session actually landed.
         if pendingOpenDirectories.count < beforeCount, let windowID = library?.activeWindowID {
             WindowRegistry.shared.raise(windowID)
         }
@@ -230,10 +222,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// On macOS 15+ a SwiftUI WindowGroup app launched by another process (XCUITest, launchd) often
-    /// never auto-presents its window (FB11763863): the dock icon shows but no window appears and the
-    /// scene's `.task`/`.onAppear` never fire. A reopen event — what a dock click sends — creates it.
-    /// Fire that reopen once when no real window exists, then bring whatever windows appear forward.
+    /// On macOS 15+ a SwiftUI WindowGroup app launched by another process (XCUITest, launchd) often never
+    /// auto-presents its window (FB11763863): the dock icon shows, no window appears, the scene's
+    /// `.task`/`.onAppear` never fire. A reopen event (what a dock click sends) creates it — fire one once
+    /// when no real window exists, then bring whatever appears forward.
     private func bringUITestWindowsForward() {
         if !didForceReopen, NSApp.windows.allSatisfy({ $0 is NSPanel }) {
             didForceReopen = true
@@ -241,10 +233,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         NSApp.setActivationPolicy(.regular)
         NSApp.unhide(nil)
-        // present the launch window ONCE (FB11763863), then latch off. The windows are
-        // isRestorable=false so they won't re-minimize, and continuing to re-front every tick would
-        // oscillate the key window and fight a deliberate window.select (which made multi-window control
-        // tests flaky). A runtime window.new presents via its own per-window retry instead.
+        // present the launch window ONCE (FB11763863), then latch off: the windows are isRestorable=false
+        // so they won't re-minimize, and re-fronting every tick would oscillate the key window and fight a
+        // deliberate window.select (which made multi-window control tests flaky). A runtime window.new
+        // presents via its own per-window retry instead.
         guard !didPresentUITestWindow else { return }
         NSApp.activate()
         for window in NSApp.windows where window.canBecomeKey {
@@ -255,16 +247,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// One-shot latch: true once the launch UI-test window has been presented, so the activation retry
-    /// schedule stops re-fronting (which would oscillate the key window).
+    /// One-shot latch: true once the launch UI-test window is presented, so the retry schedule stops re-fronting.
     private var didPresentUITestWindow = false
 
     private var didForceReopen = false
 
-    /// SwiftUI/AppKit can restore stale plain-WindowGroup windows before the app's own
-    /// `WindowLibrary` reopen pass has finished. Closing them from inside the stray view races that
-    /// restoration machinery, so reconcile after AppKit posts its restoration-complete notification
-    /// and after the real windows have had time to register through `TitleProbeView`.
+    /// SwiftUI/AppKit can restore stale plain-WindowGroup windows before the app's own `WindowLibrary`
+    /// reopen pass finishes. Closing them from inside the stray view races that restoration machinery, so
+    /// reconcile after AppKit's restoration-complete notification and after the real windows have had time
+    /// to register through `TitleProbeView`.
     func scheduleRestoredWindowReconciliation(reason: String) {
         guard scheduledReconciliationReasons.insert(reason).inserted else { return }
         for delay in [0, 0.05, 0.15, 0.35, 0.7, 1.2, 2.0] {
@@ -316,11 +307,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Confirm a quit (menu Quit / ⌘Q) before the app tears down its windows — closing them ends every
-    /// session's running shell with no undo, the same loss the workspace/window delete actions confirm.
-    /// Reports the open-window and session counts in the prompt; proceeds without asking when nothing is
-    /// open (the auto-quit after the last window closed) or under an XCUITest launch (a modal would hang
-    /// the test's terminate).
+    /// Confirm a quit (menu Quit / ⌘Q) before the app tears down its windows — that ends every session's
+    /// shell with no undo, the same loss the workspace/window delete actions confirm. Reports the
+    /// open-window and session counts; proceeds without asking when nothing is open (the auto-quit after the
+    /// last window closed) or under an XCUITest launch, where a modal would hang the test's terminate.
     func applicationShouldTerminate(_: NSApplication) -> NSApplication.TerminateReply {
         guard !ContentView.isUITestLaunch, let library else { return .terminateNow }
         let counts = library.openCounts()
@@ -335,27 +325,27 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_: Notification) {
-        // Resolve in-memory picker state before closing the socket. A client that is already polling may
-        // observe cancellation; process exit still means a later poll can race socket teardown.
+        // resolve in-memory picker state before closing the socket: a client already polling may observe
+        // cancellation, but a later poll can still race socket teardown at process exit.
         actions?.cancelAllPendingPicks()
         controlServer?.stop()
         customCommandRunner?.stop()
-        // clear the OS-level Dock badge — it outlives the process, and unseenCount is ephemeral, so a quit
-        // with unseen > 0 would leave a stale count pinned on the Dock icon (the willClose refresh() poke
-        // can't: isTerminating below makes closeWindow no-op, so the total recomputes unchanged).
+        // clear the OS-level Dock badge — it outlives the process and unseenCount is ephemeral, so a quit
+        // with unseen > 0 would pin a stale count on the icon (the willClose refresh() poke can't:
+        // isTerminating below makes closeWindow no-op, so the total recomputes unchanged).
         DockBadgeController.shared.clear()
         // mark terminating so the per-window willClose close-reporting can't zero the open-set as each
         // window tears down during quit — the set must survive for the next launch's reopen-all.
         library?.isTerminating = true
         // restore-running-command: capture each pane's live foreground command into the session fields
-        // BEFORE the snapshot save below, so a restored pane can re-run it. Only when the feature is on;
-        // a force-quit/crash skips this (sessions + cwd still restore from the debounced snapshot).
+        // BEFORE the snapshot save below, so a restored pane can re-run it. Only when the feature is on; a
+        // force-quit/crash skips it (sessions + cwd still restore from the debounced snapshot).
         if settingsModel?.settings.restoreRunningCommand == true, let library {
             captureForegroundCommands(library: library)
         }
         library?.finalizeAllPendingCloses()
         // flush every open window's store (per-window cwd changes since the last structural mutation
-        // aren't auto-persisted) and the index. replaces the single-store save.
+        // aren't auto-persisted) and the index.
         library?.saveAllOpen()
         library?.saveIndex()
         // flush the settings model's pending debounced writes (a keyboard-driven opacity/blur change
@@ -363,9 +353,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsModel?.flushPendingSaves()
     }
 
-    /// Capture every open pane's foreground command (main + split) into its `Session` fields, so the
-    /// snapshot save persists them for the next launch's restore. `ForegroundProcess` returns nil for a
-    /// pane sitting at its shell prompt, so plain shells stay plain on restore.
+    /// Capture every open pane's foreground command (main + split) into its `Session` fields, so the snapshot
+    /// save persists them for the next launch's restore. `ForegroundProcess` returns nil for a pane sitting
+    /// at its shell prompt, so plain shells stay plain.
     @MainActor
     private func captureForegroundCommands(library: WindowLibrary) {
         let shellBasename = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
@@ -373,9 +363,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             if let view = session.surface as? GhosttySurfaceView {
                 session.foregroundCommand = ForegroundProcess.command(for: view, shellBasename: shellBasename)
             }
-            // only a SHOWN split is recreated on restore (the factory runs when isSplit is true), so
-            // capturing a HIDDEN split's command would leave it stale to fire on the next manual ⌘D.
-            // Gate on isSplit so capture and restore agree.
+            // only a SHOWN split is recreated on restore (the factory runs when isSplit is true), so gate on
+            // isSplit: capturing a HIDDEN split's command would leave it stale, to fire on the next ⌘D.
             if session.isSplit, let split = session.splitSurface as? GhosttySurfaceView {
                 session.splitForegroundCommand = ForegroundProcess.command(for: split, shellBasename: shellBasename)
             }
@@ -383,10 +372,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_: NSApplication) -> Bool {
-        // key termination off the model open-set, NOT AppKit's transient window count: closing one
-        // window (or a re-render that briefly drops the surviving NSWindow) can leave a momentary
-        // zero-window state while the library still has an open window, and quitting there would kill
-        // the app (and the control server) mid-session. Quit only when no window is open in the model.
+        // key termination off the model open-set, NOT AppKit's transient window count: closing one window
+        // (or a re-render that briefly drops the surviving NSWindow) can leave a momentary zero-window state
+        // while the library still has one open, and quitting there would kill the app and the control server
+        // mid-session.
         guard let library else { return true }
         return library.openIDs().isEmpty
     }

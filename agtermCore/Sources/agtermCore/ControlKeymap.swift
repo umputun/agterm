@@ -6,16 +6,16 @@ public struct ControlKeymapAction: Codable, Sendable, Equatable {
     public var action: String
     /// The resolved chord in kitty syntax (`cmd+shift+e`), omitted when the action is keyless.
     ///
-    /// One shipped default cannot be typed back into `keymap.conf`: `increase_font_size` is ⌘+, which
-    /// renders `cmd++` and does not re-parse (`+` is the chord joiner). It is reported verbatim anyway,
-    /// because the live `menu` half renders that item identically — substituting a placeholder here would
-    /// turn the one row that compares correctly into a false mismatch, which costs more than the wart.
+    /// One shipped default cannot be typed back into `keymap.conf`: `increase_font_size` is ⌘+, rendering
+    /// `cmd++`, which does not re-parse (`+` is the chord joiner). Reported verbatim anyway — the live `menu`
+    /// half renders that item identically, so a placeholder would turn the one row that compares correctly
+    /// into a false mismatch.
     public var chord: String?
     /// `true` when the action's resolved chord DIFFERS from its shipped default; omitted otherwise.
     ///
-    /// Deliberately a comparison of chords rather than "a `map` line exists for this action": a
-    /// redundant `map cmd+w close_session` parses fine and leaves the action on its default, and marking
-    /// that as overridden would report a difference a caller cannot see anywhere else.
+    /// Deliberately a chord comparison rather than "a `map` line exists for this action": a redundant
+    /// `map cmd+w close_session` parses fine and leaves the action on its default, and marking that overridden
+    /// would report a difference a caller cannot see anywhere else.
     public var overridden: Bool?
 
     public init(action: String, chord: String? = nil, overridden: Bool? = nil) {
@@ -53,10 +53,9 @@ public struct ControlKeymapDiagnostic: Codable, Sendable, Equatable {
 
 /// A live menu item that carries a key equivalent.
 ///
-/// This is the half that makes `keymap.list` diagnostic rather than merely descriptive. The `actions`
-/// list says what the keymap RESOLVED; this says what the menu bar is actually dispatching, and the two
-/// can disagree — SwiftUI defers its menu rebuild to the next app activation, so a chord can be correct
-/// in the model and stale in the menu.
+/// The half that makes `keymap.list` diagnostic rather than merely descriptive: `actions` says what the keymap
+/// RESOLVED, this says what the menu bar is actually dispatching, and the two can disagree — SwiftUI defers its
+/// menu rebuild to the next app activation, so a chord can be correct in the model and stale in the menu.
 public struct ControlKeymapMenuItem: Codable, Sendable, Equatable {
     /// The owning top-level menu's title, e.g. `File`.
     public var menu: String
@@ -67,14 +66,12 @@ public struct ControlKeymapMenuItem: Codable, Sendable, Equatable {
     /// anything else is an AppKit-supplied item (`performClose:`, `closeAll:`, …), which is what a
     /// stock item competing for an agterm chord looks like.
     public var selector: String?
-    /// `false` when the item is disabled and its chord therefore INERT — AppKit consumes the key
-    /// equivalent and fires nothing, so a same-chord enabled sibling does not run either. Omitted when
-    /// the item is enabled, which is the ordinary case.
+    /// `false` when the item is disabled and its chord therefore INERT — AppKit consumes the key equivalent
+    /// and fires nothing, so a same-chord enabled sibling does not run either. Omitted when enabled.
     ///
-    /// Worth reporting because disabled items are routine here rather than exotic: most File/View/Navigate
-    /// items carry a `modalActive` gate, so with the dashboard open the menu is largely inert while still
-    /// holding every chord. A caller comparing `actions` against `menu` would otherwise see the binding
-    /// present and conclude the menu is fine.
+    /// Reported because disabled items are routine here rather than exotic: most File/View/Navigate items carry
+    /// a `modalActive` gate, so with the dashboard open the menu is largely inert while still holding every
+    /// chord, and a caller comparing `actions` against `menu` would see the binding present and think it fine.
     public var enabled: Bool?
 
     public init(menu: String, title: String, chord: String, selector: String? = nil, enabled: Bool? = nil) {
@@ -107,12 +104,12 @@ public struct ControlKeymap: Codable, Sendable, Equatable {
 }
 
 public extension ControlKeymap {
-    /// Project a parsed keymap into the `keymap.list` payload. Host-free: the caller supplies the live
-    /// `menu` separately, since only the app target can read `NSApp.mainMenu`.
+    /// Project a parsed keymap into the `keymap.list` payload. Host-free: the caller supplies the live `menu`
+    /// separately, since only the app target can read `NSApp.mainMenu`.
     ///
-    /// Actions come out in `BuiltinAction.allCases` order rather than sorted, so the listing groups the
-    /// way the file's own reference comment does (window, workspace, session, …) instead of scattering
-    /// related actions alphabetically.
+    /// Actions come out in `BuiltinAction.allCases` order rather than sorted, so the listing groups the way the
+    /// file's own reference comment does (window, workspace, session, …) instead of scattering them
+    /// alphabetically.
     static func project(keymap: Keymap, diagnostics: [KeymapDiagnostic], path: String,
                         menu: [ControlKeymapMenuItem]? = nil) -> ControlKeymap {
         let actions = BuiltinAction.allCases.map { action in

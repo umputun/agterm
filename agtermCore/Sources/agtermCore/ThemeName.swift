@@ -1,10 +1,8 @@
 import Foundation
 
-/// Reduces a ghostty `theme` value to the theme name active for the current appearance.
-///
-/// The `light:…,dark:…` form must collapse to one name before agterm's by-hand `selection-*` lookup:
-/// the raw form matches no theme file, so the selected sidebar row falls back to an unreadable wash.
-/// Host-free so it is unit-tested.
+/// Reduces a ghostty `theme` value to the name active for the current appearance. The `light:…,dark:…`
+/// form must collapse to one name before agterm's by-hand `selection-*` lookup: the raw form matches no
+/// theme file, so the selected sidebar row falls back to an unreadable wash. Host-free, so unit-tested.
 public enum ThemeName {
     /// The theme name for `value` under the appearance. Only a well-formed `light:…,dark:…` (both sides
     /// present) resolves to a variant; a plain or malformed value is returned as-is.
@@ -20,7 +18,6 @@ public enum ThemeName {
                 dark = name
             }
         }
-        // The split form needs both sides; one-sided or malformed is a plain name.
         guard let light, let dark else { return trimmed }
         return isDark ? dark : light
     }

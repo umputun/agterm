@@ -1,11 +1,8 @@
 import Foundation
 
-/// The parsed keymap: the built-in actions the user rebound, plus the custom commands defined in
-/// `keymap.conf`.
-///
-/// `builtinOverrides` maps a `BuiltinAction` to the single chord the user `map`ped to it (built-in
-/// overrides are single-chord only). `commands` are the custom commands, each with a `shortcut` that
-/// may be empty (palette-only) or a leader sequence.
+/// The parsed `keymap.conf`: `builtinOverrides` maps a `BuiltinAction` to the single chord the user
+/// `map`ped to it (built-in overrides are single-chord only); `commands` are the custom commands, each
+/// with a `shortcut` that may be empty (palette-only) or a leader sequence.
 public struct Keymap: Equatable, Sendable {
     public let builtinOverrides: [BuiltinAction: Chord]
     public let commands: [CustomCommand]
@@ -21,18 +18,17 @@ public struct Keymap: Equatable, Sendable {
         builtinOverrides[action] ?? action.defaultChord
     }
 
-    /// The action's current shortcut as a macOS menu glyph string (e.g. `⌘N`, `⌃⌘S`), or `nil` when
-    /// the action has no shortcut at all. Resolves the effective chord (`equivalent(for:)` — user
-    /// override else shipped default) and renders it via `Chord.glyphString`. `nil` means "not
-    /// configured" — the caller shows no shortcut. Drives both the action-palette hints and the toolbar
-    /// tooltips so the two surfaces can't drift.
+    /// The action's current shortcut as a macOS menu glyph string (`⌘N`, `⌃⌘S`): the effective chord
+    /// (`equivalent(for:)` — user override else shipped default) rendered via `Chord.glyphString`. `nil`
+    /// means "not configured" and the caller shows no shortcut. Drives both the action-palette hints and
+    /// the toolbar tooltips so the two surfaces can't drift.
     public func glyphHint(for action: BuiltinAction) -> String? {
         equivalent(for: action)?.glyphString
     }
 }
 
-/// A single problem found while parsing `keymap.conf`. `line` is 1-based; `0` is reserved for a
-/// whole-file or cross-section diagnostic that doesn't belong to a single line.
+/// A single problem found while parsing `keymap.conf`. `line` is 1-based; `0` is a whole-file or
+/// cross-section diagnostic belonging to no single line.
 public struct KeymapDiagnostic: Equatable, Sendable {
     public let line: Int
     public let message: String
@@ -73,47 +69,37 @@ public struct KeymapStore: Sendable {
     }
 }
 
-/// Parse the text of a `keymap.conf` into a `Keymap` plus a list of diagnostics. Never throws: a bad
-/// line becomes a diagnostic and is skipped, so a single malformed line never discards the rest of
-/// the file.
+/// Parse the text of a `keymap.conf` into a `Keymap` plus diagnostics. Never throws: a bad line becomes a
+/// diagnostic and is skipped, so one malformed line never discards the rest of the file.
 ///
-/// Grammar (kitty-flavored): the file is line-based. Blank lines and lines whose first non-space
-/// character is `#` are ignored. A trailing inline comment is stripped when a `#` is preceded by
-/// whitespace AND lies outside any quoted span, single OR double (so a `#` inside a `command "name"`,
-/// inside a double-quoted shell arg, or inside a single-quoted one like `git commit -m 'fix #42'` is
-/// kept) — this keeps `command "x" echo a#b` and `map cmd+a#` handling simple while allowing
-/// `map cmd+d toggle_split  # rebind`.
+/// Grammar (kitty-flavored), line-based. Blank lines and lines whose first non-space character is `#` are
+/// ignored. A trailing inline comment is stripped when a `#` is preceded by whitespace AND sits outside any
+/// quoted span, single OR double — so a `#` inside a `command "name"`, a double-quoted shell arg, or a
+/// single-quoted one like `git commit -m 'fix #42'` is kept, which keeps `command "x" echo a#b` and
+/// `map cmd+a#` simple while allowing `map cmd+d toggle_split  # rebind`.
 ///
 /// The first whitespace-token is the verb:
-/// - `map <chord> <action>`: `<chord>` is parsed via `parseKeybind` (a leader sequence, count > 1, is
-///   rejected — built-ins are single-chord); `<action>` must be a `BuiltinAction` raw value. Resolution
-///   is order-INDEPENDENT and decided against the FINAL resolved built-in set: only a chord that two
-///   DISTINCT actions resolve to in the final state is a duplicate. When that happens an override
-///   colliding with another action's unmoved default loses (the default owner keeps the chord); two
-///   colliding overrides → the later one (in file order) loses, each with a diagnostic. So
-///   `map cmd+d new_session` and `map cmd+shift+d toggle_split` both succeed in either order (the final
-///   state is conflict-free — toggle_split has moved off cmd+d).
-/// - `command "<name>" [chord] <shell...>`: `<name>` is a required double-quoted string (may contain
-///   spaces). The token right after the closing quote is the chord IFF `parseKeybind` accepts it;
-///   otherwise there is no chord and the whole remainder is the shell line (palette-only). The shell
-///   line keeps `{AGT_X}` tokens verbatim.
-/// - anything else is an unknown verb and is skipped with a diagnostic.
+/// - `map <chord> <action>`: `<chord>` goes through `parseKeybind` (a leader sequence, count > 1, is
+///   rejected — built-ins are single-chord); `<action>` must be a `BuiltinAction` raw value. Collisions are
+///   resolved order-INDEPENDENTLY against the final chord set, see `resolveBuiltinOverrides`.
+/// - `command "<name>" [chord] <shell...>`: `<name>` is a required double-quoted string (spaces allowed).
+///   The token right after the closing quote is the chord IFF `parseKeybind` accepts it; otherwise there is
+///   no chord and the whole remainder is the shell line (palette-only), keeping `{AGT_X}` tokens verbatim.
+/// - anything else is an unknown verb, skipped with a diagnostic.
 ///
-/// After every line is parsed, a SINGLE final cross-section validation pass runs (see
-/// `validateCommands`): it drops any custom keybind that collides with an active built-in chord or with
-/// another custom keybind, appending a diagnostic for each. The dropped command stays in the result
-/// (palette-only) with its `shortcut` cleared.
+/// After every line is parsed, a SINGLE final cross-section pass (`validateCommands`) drops any custom
+/// keybind colliding with an active built-in chord or another custom keybind, one diagnostic each. The
+/// dropped command stays in the result, palette-only, with its `shortcut` cleared.
 public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [KeymapDiagnostic]) {
-    // overrides are collected in file order (NOT folded into a dict yet), so the final cross-builtin
+    // overrides are collected in file order, NOT folded into a dict yet, so the final cross-builtin
     // duplicate pass can resolve them against the FULLY-resolved active chord set and skip the
     // later-in-file member of a colliding pair.
     var parsedOverrides: [ParsedOverride] = []
     var commands: [CustomCommand] = []
     var diagnostics: [KeymapDiagnostic] = []
 
-    // normalize line endings so CRLF (`\r\n`) and lone-CR (`\r`) files split into lines correctly:
-    // without this a CRLF line leaves a trailing `\r` that .whitespaces won't strip (so `toggle_split\r`
-    // reads as an unknown action) and a lone-CR file collapses into one line.
+    // normalize line endings: a CRLF line otherwise leaves a trailing `\r` that .whitespaces won't strip
+    // (so `toggle_split\r` reads as an unknown action) and a lone-CR file collapses into one line.
     let normalized = text.replacingOccurrences(of: "\r\n", with: "\n").replacingOccurrences(of: "\r", with: "\n")
     let rawLines = normalized.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
     for (index, rawLine) in rawLines.enumerated() {
@@ -134,17 +120,13 @@ public func parseKeymap(_ text: String) -> (keymap: Keymap, diagnostics: [Keymap
         }
     }
 
-    // resolve the overrides against the final active chord set (a built-in's unmoved default OR an
-    // already-accepted override), skipping any `map` whose chord is already owned by a DIFFERENT
-    // action and diagnosing it. This must be a final pass, not incremental: `map cmd+shift+d
-    // toggle_split` then `map cmd+d new_session` succeeds (toggle_split moved off cmd+d frees it),
-    // and the freed-default case for custom commands below relies on the same final resolution.
+    // a final pass, not incremental — the custom-command validation below needs the same fully resolved
+    // chord set.
     let builtinOverrides = resolveBuiltinOverrides(parsedOverrides, diagnostics: &diagnostics)
 
-    // cross-section validation is a SINGLE final pass over the fully-resolved built-in set, NOT run
-    // incrementally during line parsing: a custom line parsed before a later keyless-built-in `map`
-    // must still be validated against the override that `map` installs, so all `map`/`command` lines
-    // are collected first.
+    // likewise a SINGLE final pass over the fully-resolved built-in set: a custom line parsed before a
+    // later keyless-built-in `map` must still be validated against the override that `map` installs, so
+    // all `map`/`command` lines are collected first.
     let keymap = Keymap(builtinOverrides: builtinOverrides, commands: commands)
     let validated = validateCommands(keymap.commands, against: keymap, diagnostics: &diagnostics)
 
@@ -158,26 +140,23 @@ private struct ParsedOverride {
     let line: Int
 }
 
-/// Fold the file-order overrides into the final `[BuiltinAction: Chord]`, rejecting only those that
-/// produce a TRUE final-state collision: two DISTINCT actions resolving to the same chord. Resolution
-/// is order-independent — it is NOT decided against a partially-built map, so `map cmd+d new_session`
-/// and `map cmd+shift+d toggle_split` succeed in EITHER order (the final state is conflict-free:
-/// new_session=cmd+d, toggle_split moved off cmd+d).
+/// Fold the file-order overrides into the final `[BuiltinAction: Chord]`, rejecting only a TRUE
+/// final-state collision: two DISTINCT actions resolving to the same chord. Order-independent — NOT
+/// decided against a partially-built map, so `map cmd+d new_session` and `map cmd+shift+d toggle_split`
+/// succeed in EITHER order (final state: new_session=cmd+d, toggle_split moved off cmd+d). Re-mapping the
+/// SAME action is last-wins; it can't collide with itself.
 ///
 /// Algorithm: (1) fold overrides last-wins per action into a candidate map; (2) iterate to a FIXPOINT —
-/// each pass computes every action's resolved chord (candidate override, else its default), finds a
-/// chord claimed by two distinct actions, and drops one loser. Dropping a loser REVERTS it to its own
-/// default, which may collide afresh with another action; the loop re-checks until no collision remains.
-/// Loser rule per collision: an override colliding with another action's UNMOVED default loses (keep the
-/// default owner); two colliding OVERRIDES → the later-in-file one loses. Each dropped override is
-/// diagnosed. The shipped defaults are all distinct (pinned by `BuiltinActionTests`), so every collision
-/// involves at least one override and each iteration removes ≥1 override → the loop terminates.
-/// Re-mapping the SAME action is last-wins
-/// (it can't collide with itself).
+/// each pass resolves every action's chord (candidate override, else its default), finds one claimed by
+/// two distinct actions, and drops a loser, which REVERTS to its own default and may collide afresh, so
+/// the loop re-checks until clean. Per collision: an override colliding with another action's UNMOVED
+/// default loses (the default owner keeps it); two colliding OVERRIDES → the later-in-file one loses. Each
+/// drop is diagnosed. The shipped defaults are all distinct (pinned by `BuiltinActionTests`), so every
+/// collision involves ≥1 override and each iteration removes one → the loop terminates.
 private func resolveBuiltinOverrides(_ overrides: [ParsedOverride],
                                      diagnostics: inout [KeymapDiagnostic]) -> [BuiltinAction: Chord] {
-    // (1) candidate overrides folded last-wins; remember the file line of the winning override per
-    // action so a two-override collision can name the later one.
+    // (1) fold last-wins, remembering the winning override's file line per action so a two-override
+    // collision can name the later one.
     var candidates: [BuiltinAction: Chord] = [:]
     var overrideLine: [BuiltinAction: Int] = [:]
     for override in overrides {
@@ -185,9 +164,8 @@ private func resolveBuiltinOverrides(_ overrides: [ParsedOverride],
         overrideLine[override.action] = override.line
     }
 
-    // (2) iterate to a fixpoint. each pass drops one collision's loser; dropping reverts it to its
-    // default, which the next pass re-checks. drops are remembered (line-sorted at the end) so the
-    // emitted diagnostics are deterministic regardless of dictionary iteration order.
+    // (2) iterate to a fixpoint, one loser per pass. drops are remembered and line-sorted at the end so
+    // the diagnostics are deterministic regardless of dictionary iteration order.
     var pending: [(loser: BuiltinAction, keeper: BuiltinAction, line: Int)] = []
     while let drop = firstBuiltinCollision(candidates: candidates, overrideLine: overrideLine) {
         candidates.removeValue(forKey: drop.loser)
@@ -203,9 +181,9 @@ private func resolveBuiltinOverrides(_ overrides: [ParsedOverride],
     return candidates
 }
 
-/// One iteration of the fixpoint: find the first chord that two distinct actions resolve to (an
-/// override colliding with a default, or two overrides), and return the loser to drop, the keeper it
-/// collided with, and the loser's file line. Returns nil when the candidate set is collision-free.
+/// One fixpoint iteration: find the first chord two distinct actions resolve to (an override against a
+/// default, or two overrides) and return the loser to drop, the keeper, and the loser's file line. nil
+/// when the candidate set is collision-free.
 private func firstBuiltinCollision(candidates: [BuiltinAction: Chord],
                                    overrideLine: [BuiltinAction: Int])
     -> (loser: BuiltinAction, keeper: BuiltinAction, line: Int)? {
@@ -242,30 +220,29 @@ private func firstBuiltinCollision(candidates: [BuiltinAction: Chord],
     return best
 }
 
-/// Cross-section validation: drop a custom keybind whose FIRST chord equals any active built-in chord
-/// OR a reserved monitor chord (Ctrl-Tab / Ctrl-1/2), and drop both keybinds of any custom-vs-custom
-/// duplicate/prefix conflict. A dropped keybind clears the command's `shortcut` to `""` (the command
-/// stays in the palette, unkeyed) and adds a diagnostic.
+/// Cross-section validation: drop a custom keybind whose FIRST chord equals any active built-in chord OR a
+/// reserved monitor chord (Ctrl-Tab / Ctrl-1/2), and drop both keybinds of any custom-vs-custom
+/// duplicate/prefix conflict. A dropped keybind clears the command's `shortcut` to `""` — the command stays
+/// in the palette, unkeyed — and adds a diagnostic.
 ///
-/// Built-ins are single-chord, so any custom bind STARTING with that chord — single or leader — is
-/// shadowed by the menu and is dropped. The reserved monitor chords (`isReservedMonitorChord`) are owned
-/// by the app's always-on NSEvent monitors, not the menu, and are equally un-rebindable. The active
-/// built-in chord set already has every override applied (via `Keymap.equivalent(for:)`), so a custom
-/// command may freely reuse a default chord the user moved a built-in off of.
+/// Built-ins are single-chord, so any custom bind STARTING with that chord, single or leader, is shadowed
+/// by the menu. The reserved monitor chords (`isReservedMonitorChord`) belong to the app's always-on
+/// NSEvent monitors rather than the menu and are equally un-rebindable. The active built-in set already has
+/// every override applied (`Keymap.equivalent(for:)`), so a custom command may freely reuse a default chord
+/// the user moved a built-in off of.
 private func validateCommands(_ commands: [CustomCommand], against keymap: Keymap,
                               diagnostics: inout [KeymapDiagnostic]) -> [CustomCommand] {
-    // active built-in chords: the override when present, else the shipped default. The keyless actions
-    // contribute a chord only when the user mapped one (defaultChord == nil); every shipped default,
-    // arrows included, is in the set, so a custom command can't shadow one.
+    // active built-in chords: the override when present, else the shipped default. keyless actions
+    // (defaultChord == nil) contribute only when the user mapped one; every shipped default, arrows
+    // included, is in the set, so a custom command can't shadow one.
     let builtinChords = Set(BuiltinAction.allCases.compactMap { keymap.equivalent(for: $0) })
 
     var result = commands
 
-    // pass 1: drop a custom keybind that collides with a built-in (its FIRST chord — built-ins are
-    // single-chord and shadow anything starting with that chord) OR with a reserved monitor chord at
-    // ANY position (the monitor consumes its chord wherever it lands in a leader, so a later reserved
-    // chord like `ctrl+a>ctrl+1` is just as dead as a leading one). line 0 — the command's source line
-    // isn't tracked, so cross-section diagnostics use the whole-file line.
+    // pass 1: drop a custom keybind colliding with a built-in on its FIRST chord, or with a reserved
+    // monitor chord at ANY position — the monitor consumes its chord wherever it lands in a leader, so
+    // `ctrl+a>ctrl+1` is just as dead as a leading one. line 0 because the command's source line isn't
+    // tracked, so cross-section diagnostics use the whole-file line.
     for index in result.indices {
         let command = result[index]
         guard !command.shortcut.isEmpty, let keybind = parseKeybind(command.shortcut),
@@ -285,9 +262,9 @@ private func validateCommands(_ commands: [CustomCommand], against keymap: Keyma
         result[index].shortcut = ""
     }
 
-    // pass 2: drop BOTH keybinds of any custom-vs-custom duplicate/prefix conflict (computed over the
-    // post-pass-1 set so a keybind already dropped in pass 1 can't re-trigger here). One diagnostic per
-    // command names the OTHER offender (the conflict carries both ids) so the user can find the pair.
+    // pass 2: drop BOTH keybinds of any custom-vs-custom duplicate/prefix conflict, computed over the
+    // post-pass-1 set so a keybind dropped there can't re-trigger. One diagnostic per command names the
+    // OTHER offender (the conflict carries both ids) so the user can find the pair.
     let conflicts = keybindConflicts(result)
     let nameByID = Dictionary(uniqueKeysWithValues: result.map { ($0.id, $0.name) })
     var otherOffender: [UUID: String] = [:]
@@ -306,12 +283,11 @@ private func validateCommands(_ commands: [CustomCommand], against keymap: Keyma
     return result
 }
 
-/// Strip a trailing inline comment: a `#` is a comment when it is preceded by whitespace AND sits
-/// outside a quoted span (single OR double). A leading `#` (the whole-line comment) is handled by the
-/// caller, but it also falls out here since position 0 has no preceding whitespace only when the line
-/// starts with `#` after trimming — the caller trims and re-checks emptiness, so a `# ...` line becomes
-/// empty. Single quotes matter because a shell line like `git commit -m 'fix #42'` must keep its `#`;
-/// the two quote states are mutually exclusive (a `"` inside `'...'` is literal, and vice versa).
+/// Strip a trailing inline comment: a `#` is a comment when preceded by whitespace AND outside a quoted
+/// span, single OR double. A whole-line `#` comment also falls out here, and the caller trims and
+/// re-checks emptiness, so a `# ...` line becomes empty. Single quotes matter because a shell line like
+/// `git commit -m 'fix #42'` must keep its `#`; the two quote states are mutually exclusive (a `"` inside
+/// `'...'` is literal, and vice versa).
 private func stripComment(_ line: String) -> String {
     var inSingleQuotes = false
     var inDoubleQuotes = false
@@ -339,10 +315,9 @@ private func stripComment(_ line: String) -> String {
     return result
 }
 
-/// Parse the remainder of a `map` line (everything after the `map` verb): `<chord> <action>`. On
-/// success it appends a `ParsedOverride` (in file order); on any failure it appends a diagnostic and
-/// leaves `overrides` untouched. Cross-builtin duplicate detection is deferred to
-/// `resolveBuiltinOverrides` (a final pass over the resolved active chord set).
+/// Parse the remainder of a `map` line (after the verb): `<chord> <action>`. On success it appends a
+/// `ParsedOverride` in file order; on any failure it appends a diagnostic and leaves `overrides` untouched.
+/// Cross-builtin duplicate detection is deferred to `resolveBuiltinOverrides`.
 private func parseMapLine(_ rest: String, line: Int, overrides: inout [ParsedOverride],
                           diagnostics: inout [KeymapDiagnostic]) {
     // split on the first run of general whitespace (space OR tab) so a tab-separated `map` line works.
@@ -362,15 +337,15 @@ private func parseMapLine(_ rest: String, line: Int, overrides: inout [ParsedOve
         return
     }
     // a chord owned by an always-on NSEvent monitor (Ctrl-Tab / Ctrl-1/2) can't be a menu key-equivalent
-    // without dead-racing the monitor, so reject it for built-ins exactly as for custom commands.
+    // without dead-racing the monitor, so reject it for built-ins as for custom commands.
     guard !isReservedMonitorChord(chord) else {
         diagnostics.append(KeymapDiagnostic(line: line, message: "chord '\(chordText)' is a reserved shortcut; map skipped"))
         return
     }
-    // a modifier-less arrow would install an always-on menu key-equivalent that swallows the key
-    // everywhere at once — the terminal, the palettes, the dashboard grid, and every text field — and
-    // the menu path (unlike the custom-command monitor) has no text-field pass-through to soften it.
-    // `parseCommandLine` requires a modifier for the same reason.
+    // a modifier-less arrow would install an always-on menu key-equivalent swallowing the key everywhere
+    // at once — the terminal, the palettes, the dashboard grid, every text field — and the menu path,
+    // unlike the custom-command monitor, has no text-field pass-through. `parseCommandLine` requires a
+    // modifier for the same reason.
     guard !(bindableArrowKeys.contains(chord.key) && chord.mods.isEmpty) else {
         diagnostics.append(KeymapDiagnostic(line: line,
                                             message: "bare arrow chord '\(chordText)' needs a modifier; map skipped"))
@@ -383,9 +358,8 @@ private func parseMapLine(_ rest: String, line: Int, overrides: inout [ParsedOve
     overrides.append(ParsedOverride(action: action, chord: chord, line: line))
 }
 
-/// Parse the remainder of a `command` line (everything after the `command` verb):
-/// `"<name>" [chord] <shell...>`. On any failure it appends a diagnostic and leaves `commands`
-/// untouched.
+/// Parse the remainder of a `command` line (after the verb): `"<name>" [chord] <shell...>`. On any failure
+/// it appends a diagnostic and leaves `commands` untouched.
 private func parseCommandLine(_ rest: String, line: Int, commands: inout [CustomCommand],
                               diagnostics: inout [KeymapDiagnostic]) {
     guard rest.first == "\"", let closeQuote = rest.dropFirst().firstIndex(of: "\"") else {
@@ -395,11 +369,10 @@ private func parseCommandLine(_ rest: String, line: Int, commands: inout [Custom
     let name = String(rest[rest.index(after: rest.startIndex)..<closeQuote])
     let afterName = String(rest[rest.index(after: closeQuote)...]).trimmingCharacters(in: .whitespaces)
 
-    // the token right after the closing quote is the chord iff parseKeybind accepts it AND it carries
-    // a modifier; otherwise the whole remainder is the shell line (palette-only). a modifier is
-    // required so a custom shortcut can't be a bare key that shadows that key in the terminal — and so
-    // a palette-only shell line that happens to start with a single-char token (`[`, `:`, a one-letter
-    // alias) isn't silently swallowed as a binding.
+    // the token right after the closing quote is the chord iff parseKeybind accepts it AND it carries a
+    // modifier; otherwise the whole remainder is the shell line (palette-only). the modifier is required so
+    // a custom shortcut can't be a bare key shadowing that key in the terminal, and so a palette-only shell
+    // line starting with a single-char token (`[`, `:`, a one-letter alias) isn't swallowed as a binding.
     let firstToken = String(afterName.prefix(while: { !$0.isWhitespace }))
     var shortcut = ""
     var shellLine = afterName

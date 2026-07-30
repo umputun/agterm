@@ -1,10 +1,9 @@
 import agtermCore
 import AppKit
 
-/// `WorkspaceSidebar.Coordinator` row rendering — the `NSOutlineViewDelegate` cell/row builders and
-/// their helpers (cell construction, badge/icon application, row labels). Split out of
-/// `WorkspaceSidebar.swift` to keep that file under the swiftlint size limit. The lazy icon caches and
-/// `rowIcon`/`rowLabel(for:workspaceName:)` stay in the main file (lazy stored properties can't live in
+/// `WorkspaceSidebar.Coordinator` row rendering — the `NSOutlineViewDelegate` cell/row builders and their
+/// helpers, split out to keep `WorkspaceSidebar.swift` under the swiftlint size limit. The lazy icon caches
+/// and `rowIcon`/`rowLabel(for:workspaceName:)` stay in the main file (lazy stored properties can't live in
 /// an extension, and those two are shared with the reconcile path).
 extension WorkspaceSidebar.Coordinator {
     // MARK: - NSOutlineViewDelegate
@@ -52,10 +51,9 @@ extension WorkspaceSidebar.Coordinator {
             // roll-up badge so an unseen notification stays visible when the workspace is collapsed
             // (gated by the Settings badge toggle, like the session badge below)
             applyBadge(toCell: cell, count: effectiveUnseen(workspace?.unseenCount ?? 0))
-            // a workspace in the focus set draws the SAME grid glyph at BLACK weight. keyed on
-            // MEMBERSHIP alone, not on `focusEnabled`: a marked workspace reads black while the filter
-            // is off too, which is the point — the marked set stays legible while looking at the whole
-            // tree.
+            // a workspace in the focus set draws the SAME grid glyph at BLACK weight, keyed on MEMBERSHIP
+            // alone and NOT on `focusEnabled` — so the marked set stays legible with the filter off, while
+            // looking at the whole tree.
             cell.imageView?.image = store.focusedWorkspaceIDs.contains(node.id) ? focusedWorkspaceIcon : workspaceIcon
             cell.imageView?.setAccessibilityIdentifier("workspace-icon")
         case .session:
@@ -67,10 +65,10 @@ extension WorkspaceSidebar.Coordinator {
             applyBadge(toCell: cell, count: effectiveUnseen(session?.unseenCount ?? 0))
             // gate the agent-status glyph: hidden for the frontmost window's selected session.
             cell.statusIcon.apply(effectiveIndicator(forSession: node.id))
-            // a session with a split shows the split-rectangle icon (matching the toolbar split
-            // button) in BOTH modes so it stays distinguishable at a glance; `hasSplit` keeps it while
-            // merely hidden. only the filled `flagged` variant is tree-mode only — in the flat flagged
-            // view every row is flagged, so the fill marker would be noise.
+            // the split-rectangle icon (matching the toolbar split button) shows in BOTH modes so a split
+            // stays distinguishable at a glance, and `hasSplit` keeps it while merely hidden. Only the
+            // filled `flagged` variant is tree-mode only — every row in the flat flagged view is flagged,
+            // so the fill would be noise.
             let showSplitIcon = session?.hasSplit == true
             let flagged = store.sidebarMode == .tree && session?.flagged == true
             cell.imageView?.image = iconForSession(split: showSplitIcon, flagged: flagged)
@@ -93,9 +91,8 @@ extension WorkspaceSidebar.Coordinator {
         cell.badge.count = count
     }
 
-    /// The leading icon for a session row: the split-rectangle when split, the plain terminal
-    /// otherwise, each swapped to its filled variant when `flagged`. The filled variant is
-    /// tree-mode only (the caller passes `flagged: false` in the flat flagged view).
+    /// The leading session-row icon: split-rectangle when split, else plain terminal, each swapped to its
+    /// filled variant when `flagged` — tree mode only, the flat flagged view passes `flagged: false`.
     private func iconForSession(split: Bool, flagged: Bool) -> NSImage? {
         switch (split, flagged) {
         case (true, true): return flaggedSplitSessionIcon
@@ -105,17 +102,14 @@ extension WorkspaceSidebar.Coordinator {
         }
     }
 
-    /// Builds a view-based outline cell: an `SidebarCellView` with a leading icon
-    /// (`cell.imageView`), the name `NSTextField` (`cell.textField`, editable on demand by
-    /// `beginEditing`), and a trailing notification badge. The name hugs and resists compression
-    /// weakly while the icon and badge hug and resist strongly, so the name truncates first and
-    /// the icon and badge stay whole.
+    /// Builds a view-based outline cell: a `SidebarCellView` with a leading icon (`cell.imageView`), the
+    /// name `NSTextField` (`cell.textField`, made editable on demand by `beginEditing`), and a trailing
+    /// notification badge. The name hugs and resists compression weakly while the icon and badge do so
+    /// strongly, so the name truncates first and both stay whole.
     ///
-    /// Workspace cells additionally get an inline "+" button (`cell.addButton`) between the name
-    /// and the status icon, revealed only while the pointer hovers the row (the Finder/Xcode
-    /// convention; see `SidebarCellView.setAddButtonVisible`) — clicking it adds a new session to
-    /// that workspace via `addSessionButtonClicked`, the same path as the right-click "New Session"
-    /// menu item.
+    /// Workspace cells also get an inline "+" (`cell.addButton`) between the name and the status icon,
+    /// revealed only on hover (the Finder/Xcode convention; `SidebarCellView.setAddButtonVisible`); it runs
+    /// `addSessionButtonClicked`, the same path as the right-click "New Session" item.
     private func makeCell(identifier: NSUserInterfaceItemIdentifier) -> SidebarCellView {
         let cell = SidebarCellView()
         cell.identifier = identifier

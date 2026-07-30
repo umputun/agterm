@@ -4,17 +4,17 @@ import os
 
 private let logger = Logger(subsystem: "com.umputun.agterm", category: "CustomCommandRunner")
 
-/// Drives user-defined custom commands: an app-wide `NSEvent` local key monitor turns key presses
-/// into chords, a `CustomCommandEngine` resolves them to a command (firing simple chords and leader
-/// sequences like `ctrl+a > g`), and a fired command is run as a detached `/bin/sh -c` with the
-/// active session's context available as both `{AGT_X}` template tokens and `$AGT_X` environment.
+/// Drives user-defined custom commands: an app-wide `NSEvent` local key monitor turns key presses into
+/// chords, a `CustomCommandEngine` resolves them (simple chords and leader sequences like `ctrl+a > g`), and
+/// a fired command runs detached as `/bin/sh -c` with the active session's context in both `{AGT_X}` tokens
+/// and `$AGT_X` environment.
 ///
-/// `@MainActor` and constructed once as `@State` in `agtermApp`. `start()`/`stop()` install/remove
-/// the monitor (the asymmetric lifecycle the control server uses); `start()` is idempotent because
-/// the scene `.task` fires once per window. The matcher is rebuilt from the keymap on `start()` and
-/// on the `.agtermKeymapChanged` notification. Pure parsing/matching/expansion lives in agtermCore;
-/// this class only maps `NSEvent` → agtermCore types, owns the leader timeout timer, resolves the
-/// focused surface's owning session via the host-free `WindowLibrary`, and spawns the process.
+/// `@MainActor`, constructed once as `@State` in `agtermApp`. `start()`/`stop()` install/remove the monitor
+/// (the asymmetric lifecycle the control server uses); `start()` is idempotent because the scene `.task`
+/// fires once per window, and the matcher rebuilds from the keymap there and on `.agtermKeymapChanged`.
+/// Pure parsing/matching/expansion lives in agtermCore; this class only maps `NSEvent` → agtermCore types,
+/// owns the leader timeout timer, resolves the focused surface's owning session via the host-free
+/// `WindowLibrary`, and spawns the process.
 @MainActor
 final class CustomCommandRunner {
     private let library: WindowLibrary
@@ -63,9 +63,9 @@ final class CustomCommandRunner {
     }
 
     /// Rebuild the matcher and the id→command map from the current keymap, skipping empty shortcuts
-    /// (palette-only commands have none). Cross-section validation in `parseKeymap` already clears the
-    /// shortcut of any command whose first chord collides with a built-in or another custom command,
-    /// so a conflicted bind arrives here with an empty shortcut and is dropped from the matcher.
+    /// (palette-only commands have none). `parseKeymap`'s cross-section validation already clears the
+    /// shortcut of a command whose first chord collides with a built-in or another custom one, so a
+    /// conflicted bind arrives with an empty shortcut and drops out of the matcher.
     private func rebuild() {
         let commands = settings.keymap.commands
         for command in commands where !command.shortcut.isEmpty {
@@ -81,23 +81,22 @@ final class CustomCommandRunner {
     /// base key handled via `namedKey(forKeyCode:)`, not here.
     private static let escapeKeyCode: UInt16 = 53
 
-    /// Feed one key event to the matcher. Returns whether the event was consumed (so the caller drops
-    /// it). Esc while armed resets and is consumed; a `.fired` runs and is consumed; `.armed` arms the
-    /// leader timer and is consumed; `.unmatched` passes through to the terminal.
+    /// Feed one key event to the matcher; returns whether it was consumed (so the caller drops it). Esc
+    /// while armed resets, `.fired` runs, `.armed` arms the leader timer — all consumed; `.unmatched`
+    /// passes through to the terminal.
     ///
     /// Acts when the key window's first responder is a terminal surface (context from that surface), OR
-    /// when the key window is an agterm terminal window whose focus is NOT on a text field — including
-    /// one emptied to zero sessions (the SSH-disconnect state where every session's shell exited). It
-    /// passes through for a focused text field (Settings editor, inline rename, palette search) so a
-    /// bound chord never eats those keystrokes, and for an auxiliary window (Settings) whose focus is off
-    /// a text field. A key repeat is ignored so a held-down shortcut spawns one process, not one per OS
-    /// repeat.
+    /// when the key window is an agterm terminal window whose focus is NOT on a text field — including one
+    /// emptied to zero sessions (the SSH-disconnect state where every session's shell exited). Passes
+    /// through for a focused text field (Settings editor, inline rename, palette search) so a bound chord
+    /// never eats those keystrokes, and for an auxiliary window (Settings) focused off a text field. A key
+    /// repeat is ignored, so a held-down shortcut spawns one process rather than one per OS repeat.
     private func handleKeyDown(_ event: NSEvent) -> Bool {
         guard !event.isARepeat else { return false }
         guard let keyWindow = NSApp.keyWindow else { return false }
         let responder = keyWindow.firstResponder
-        // a focused text field (Settings editor, inline rename, palette search) becomes the window's
-        // NSText field editor; it must keep its keystrokes, so drop any half-typed leader and pass through.
+        // a focused text field becomes the window's NSText field editor and must keep its keystrokes:
+        // drop any half-typed leader and pass through.
         if responder is NSText {
             if commandEngine.isArmed {
                 commandEngine.reset()
@@ -106,8 +105,8 @@ final class CustomCommandRunner {
             return false
         }
         let focusedSurface = responder as? GhosttySurfaceView
-        // with no focused terminal surface, fire ONLY from an agterm terminal window (an empty one still
-        // qualifies) — never from an auxiliary window like Settings whose focus sits off a text field.
+        // with no focused surface, fire ONLY from an agterm terminal window (an empty one qualifies),
+        // never from an auxiliary window like Settings.
         guard focusedSurface != nil || WindowRegistry.shared.contains(keyWindow) else {
             if commandEngine.isArmed {
                 commandEngine.reset()
@@ -115,8 +114,8 @@ final class CustomCommandRunner {
             }
             return false
         }
-        // Esc abandons a half-typed leader sequence (the same call the timeout makes); it never
-        // advances the matcher (Esc is not a bindable base key), so handle it before deriving a chord.
+        // Esc abandons a half-typed leader (the same call the timeout makes) and is not a bindable base
+        // key, so handle it before deriving a chord.
         if event.keyCode == Self.escapeKeyCode {
             guard commandEngine.isArmed else { return false }
             commandEngine.reset()
@@ -131,13 +130,10 @@ final class CustomCommandRunner {
         case .fired(let command):
             cancelLeaderTimer()
             if let focusedSurface {
-                // resolve context from the surface that actually had focus at key-down time, NOT the
-                // frontmost active session — firing from a split/overlay/quick terminal (or during a
-                // window-switch race) must run against THAT surface's session/cwd/selection.
+                // context from the surface that had focus at key-down, not the frontmost active session.
                 runFromKeybind(command, focusedSurface: focusedSurface)
             } else {
-                // no fired-from surface (an emptied window, or focus off any surface in a terminal
-                // window): use the active session if one exists, else the session-free launcher path.
+                // no fired-from surface: the active session if one exists, else the launcher path.
                 runNoSurface(command)
             }
             return true
@@ -165,15 +161,12 @@ final class CustomCommandRunner {
         if let named = namedKey(forKeyCode: event.keyCode) {
             return Chord(mods: mods, key: named)
         }
-        // Derive the UNSHIFTED base key so every key normalizes the same way. `charactersIgnoringModifiers`
-        // KEEPS shift (shift+/ → "?", shift+= → "+"), and `.lowercased()` only undoes that for letters, so
-        // punctuation would otherwise land on the shifted glyph and never match a `shift+/`-style binding.
-        // `characters(byApplyingModifiers: [])` applies NO modifiers, giving the base char for any key
-        // (shift+/ → "/", shift+5 → "5", shift+u → "u"), matching how the keymap spells chords as
-        // `shift+<base>` (same call `GhosttySurfaceView` uses for unmodified key input).
-        // `chordKey` then resolves the whole layout: a layout that cannot type ASCII binds by physical
-        // position, so a `cmd+o` command still fires on a Cyrillic layout (where that key types `щ`),
-        // while a Latin layout keeps binding by the character it produces.
+        // `characters(byApplyingModifiers: [])` applies NO modifiers, giving the UNSHIFTED base key for any
+        // key (shift+/ → "/", shift+5 → "5", shift+u → "u") and matching how the keymap spells `shift+<base>`
+        // — the same call `GhosttySurfaceView` uses for unmodified input. `charactersIgnoringModifiers`
+        // instead KEEPS shift (shift+/ → "?", shift+= → "+") and `.lowercased()` undoes that only for
+        // letters, so punctuation would land on the shifted glyph and never match a `shift+/` binding.
+        // `chordKey` then applies the layout rule, so `cmd+o` still fires on a Cyrillic layout (key types `щ`).
         let produced = event.characters(byApplyingModifiers: []) ?? event.charactersIgnoringModifiers
         guard let key = chordKey(forKeyCode: event.keyCode, produced: produced,
                                  layoutIsASCIICapable: KeyboardLayout.isASCIICapable) else { return nil }
@@ -196,25 +189,22 @@ final class CustomCommandRunner {
         leaderTimer = nil
     }
 
-    /// Run a command fired from the PALETTE: resolve context from the active session (the palette has no
-    /// first responder to key off). Detached `/bin/sh -c` with the `AGT_*` env, notifying on a spawn
-    /// error or non-zero exit. No-op when no window/session is active — firing a session-scoped command
-    /// with silently-empty tokens is unsafe (an empty `{AGT_SESSION_PWD}` turns `rm -rf …/*` into a root
-    /// glob), so only the deliberate empty-window KEYBIND path (handleKeyDown) fires a session-free
-    /// launcher via `sessionlessContext()`.
+    /// Run a command fired from the PALETTE: context from the active session (the palette has no first
+    /// responder to key off). Detached `/bin/sh -c` with the `AGT_*` env, notifying on a spawn error or
+    /// non-zero exit. No-op when no window/session is active — a session-scoped command with silently-empty
+    /// tokens is unsafe (an empty `{AGT_SESSION_PWD}` turns `rm -rf …/*` into a root glob), so only the
+    /// deliberate empty-window KEYBIND path fires a session-free launcher via `sessionlessContext()`.
     func run(_ command: CustomCommand) {
         guard let store = library.activeStore, let session = store.activeSession else {
             logger.notice("custom command \"\(command.name, privacy: .public)\" fired with no active session; ignored")
             return
         }
-        // palette path: selection + pane both come from the active session's focused pane. the palette has
-        // no fired-from surface to key off, so the focus flag is the source — but gated on the split surface
-        // EXISTING (the `Session.onScreenSurface` idiom, `splitFocused && splitSurface != nil`): in the
-        // window right after `session split on`, `splitFocused` is already true while `splitSurface` is
-        // still nil, so a bare flag would report `.right` (and read the selection from the nil split
-        // surface) when `session.type --pane right` still errors "no split pane". A promoted survivor now
-        // lives in the `surface` slot with `splitSurface == nil` and `splitFocused == false`, so `onSplit`
-        // is false and it reports `.left` — the pane `--pane left` reaches.
+        // selection + pane come from the active session's focused pane; with no fired-from surface the
+        // focus flag is the source, gated on the split surface EXISTING (the `Session.onScreenSurface`
+        // idiom). In the window right after `session split on`, `splitFocused` is already true while
+        // `splitSurface` is still nil, so a bare flag would report `.right` and read the selection off the
+        // nil surface while `session.type --pane right` still errors "no split pane". A promoted survivor
+        // sits in the `surface` slot with both nil/false, so it reports `.left` — the pane `--pane left` reaches.
         let onSplit = session.splitFocused && session.splitSurface != nil
         let selectionSurface = (onSplit ? session.splitSurface : session.surface) as? GhosttySurfaceView
         let context = self.context(for: session, in: store, selectionSurface: selectionSurface,
@@ -222,30 +212,28 @@ final class CustomCommandRunner {
         spawn(command, context: context)
     }
 
-    /// Run a command fired by KEYBIND: resolve context from the surface that actually had focus at
-    /// key-down time, so a chord fired from a split/scratch (or during a window-switch race) runs
-    /// against THAT surface's session/cwd/window and reads the selection from THAT exact surface. The
-    /// owning session/store come from the focused surface's `session` resolved through the host-free
-    /// `WindowLibrary` (no AppKit lives in core). A sessionless focused surface (quick terminal /
-    /// overlay / scratch) routes through `runFromSessionlessSurface`, which reports `.scratch` for the
-    /// active session's scratch and otherwise takes the palette path.
+    /// Run a command fired by KEYBIND: context from the surface that had focus at key-down, so a chord
+    /// fired from a split/scratch (or during a window-switch race) runs against THAT surface's
+    /// session/cwd/window and reads its selection. Session/store come from the surface's `session` resolved
+    /// through the host-free `WindowLibrary` (no AppKit in core). A sessionless focused surface (quick
+    /// terminal / overlay / scratch) routes through `runFromSessionlessSurface`.
     func runFromKeybind(_ command: CustomCommand, focusedSurface: GhosttySurfaceView) {
         guard let session = focusedSurface.session, let store = library.store(forSession: session.id) else {
             runFromSessionlessSurface(command, focusedSurface: focusedSurface)
             return
         }
-        // the fired-from pane is the surface's identity, not the session's focus flag — a chord fired
-        // from a pane the focus flag hasn't caught up to still reports the pane it was typed in.
+        // the pane is the surface's identity, not the focus flag, so a chord fired from a pane the flag
+        // hasn't caught up to still reports the pane it was typed in.
         let pane: CommandContext.Pane = (session.splitSurface as? GhosttySurfaceView) === focusedSurface ? .right : .left
         let context = self.context(for: session, in: store, selectionSurface: focusedSurface, pane: pane)
         spawn(command, context: context)
     }
 
-    /// The keybind fallback for a sessionless focused surface (no `view.session`: the quick terminal,
-    /// an overlay, or the scratch). The scratch belongs to the ACTIVE session, so a chord fired from it
-    /// runs against that session with `pane = .scratch` and reads the scratch's own selection — the read
-    /// leg of the `$AGT_PANE` → `session type --pane scratch` round-trip. The quick terminal and overlays
-    /// are not panes (their state is queryable via `tree`), so they take the plain palette path.
+    /// The keybind fallback for a sessionless focused surface (no `view.session`: quick terminal, overlay,
+    /// scratch). The scratch belongs to the ACTIVE session, so a chord from it runs against that session
+    /// with `pane = .scratch` and reads the scratch's own selection — the read leg of `$AGT_PANE` →
+    /// `session type --pane scratch`. The others are not panes (`tree` queries their state) and take the
+    /// plain palette path.
     private func runFromSessionlessSurface(_ command: CustomCommand, focusedSurface: GhosttySurfaceView) {
         if let store = library.activeStore, let session = store.activeSession,
            (session.scratchSurface as? GhosttySurfaceView) === focusedSurface {
@@ -256,10 +244,9 @@ final class CustomCommandRunner {
         runNoSurface(command)
     }
 
-    /// Run a command fired by keybind with NO usable fired-from session — an emptied window, or focus off
-    /// any surface (the dashboard key-catcher, a quick terminal / overlay with no owning session). Uses
-    /// the active session's context when one exists (like the palette), else the session-free launcher
-    /// path via `spawnSessionless`.
+    /// Keybind fire with NO usable fired-from session — an emptied window, or focus off any surface (the
+    /// dashboard key-catcher, a quick terminal / overlay with no owning session). Uses the active session's
+    /// context when one exists, like the palette, else the session-free `spawnSessionless`.
     private func runNoSurface(_ command: CustomCommand) {
         if library.activeStore?.activeSession != nil {
             run(command)
@@ -268,11 +255,11 @@ final class CustomCommandRunner {
         }
     }
 
-    /// Fire `command` with a session-free context (the empty-window launcher path) — UNLESS its body
-    /// references session-scoped tokens, which expand dangerously empty with no session (an empty
-    /// `{AGT_SESSION_PWD}` makes `rm -rf …/*` a root glob, defeating even the quoted `$AGT_X` form). Such
-    /// a command NO-OPS with a notice, exactly like the palette's `run(_:)`; a launcher (referencing only
-    /// `AGT_SOCKET`/`AGT_WINDOW`/`AGT_PANE`, e.g. `agtermctl session new --command "ssh …"`) still fires.
+    /// Fire `command` with a session-free context (the empty-window launcher path) — UNLESS its body names
+    /// session-scoped tokens, which expand dangerously empty (an empty `{AGT_SESSION_PWD}` makes
+    /// `rm -rf …/*` a root glob, defeating even the quoted `$AGT_X` form); that NO-OPS with a notice like
+    /// the palette's `run(_:)`. A launcher naming only `AGT_SOCKET`/`AGT_WINDOW`/`AGT_PANE`, e.g.
+    /// `agtermctl session new --command "ssh …"`, still fires.
     private func spawnSessionless(_ command: CustomCommand) {
         guard !CommandContext.referencesSessionScopedContext(command.command) else {
             logger.notice("custom command \"\(command.name, privacy: .public)\" references session context but no session is active; ignored")
@@ -303,10 +290,9 @@ final class CustomCommandRunner {
         )
     }
 
-    /// A session-free `CommandContext` for a command fired with no active session (an emptied window, or
-    /// none open): every `{AGT_SESSION_*}`/`{AGT_WORKSPACE_*}` token and the selection resolve empty, the
-    /// window id/name come from the frontmost window when there is one, and the socket lets a launcher
-    /// chord reach `agtermctl` to create a fresh session.
+    /// A session-free `CommandContext` (an emptied window, or none open): every `{AGT_SESSION_*}`/
+    /// `{AGT_WORKSPACE_*}` token and the selection resolve empty, the window id/name come from the frontmost
+    /// window when there is one, and the socket lets a launcher chord reach `agtermctl` for a fresh session.
     private func sessionlessContext() -> CommandContext {
         let windowID = library.activeWindowID
         return CommandContext(windowID: windowID?.uuidString ?? "", windowName: library.windowName(for: windowID),
@@ -322,8 +308,8 @@ final class CustomCommandRunner {
         process.executableURL = URL(fileURLWithPath: "/bin/sh")
         process.arguments = ["-c", line]
         process.environment = ProcessInfo.processInfo.environment.merging(context.environment()) { _, new in new }
-        // fire-and-forget: no output capture, so pin stdio to /dev/null rather than inheriting the
-        // app's fds (which vary by launch method).
+        // fire-and-forget: no output capture, so pin stdio to /dev/null rather than inherit the app's fds,
+        // which vary by launch method.
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice

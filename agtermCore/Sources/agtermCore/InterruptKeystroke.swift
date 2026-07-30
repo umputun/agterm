@@ -1,8 +1,7 @@
 import Foundation
 
-/// Host-free keyboard modifiers, mirroring the subset of `NSEvent.ModifierFlags` the interrupt
-/// classifier needs. The app target maps an `NSEvent`'s flags onto this so the classification stays
-/// testable without AppKit.
+/// Host-free keyboard modifiers, the subset of `NSEvent.ModifierFlags` the interrupt classifier needs. The
+/// app target maps an `NSEvent`'s flags onto this so the classification stays testable without AppKit.
 public struct KeyModifiers: OptionSet, Sendable {
     public let rawValue: Int
     public init(rawValue: Int) { self.rawValue = rawValue }
@@ -13,10 +12,9 @@ public struct KeyModifiers: OptionSet, Sendable {
     public static let shift = KeyModifiers(rawValue: 1 << 3)
 }
 
-/// Classifies a keystroke as one that interrupts a working agent — Escape, or a bare Ctrl-C. Both
-/// dismiss a pending Claude Code / TUI prompt, which is what clears a stale `active` status glyph. Kept
-/// host-free so the full truth table (including the negatives ordinary-key / Cmd-C / Ctrl-Shift-C) is
-/// unit-testable; the app target reduces an `NSEvent` to these primitives.
+/// Classifies a keystroke as one that interrupts a working agent — Escape or a bare Ctrl-C, both of which
+/// dismiss a pending Claude Code / TUI prompt and so clear a stale `active` status glyph. Host-free so the
+/// full truth table (negatives included: ordinary key, Cmd-C, Ctrl-Shift-C) is unit-testable.
 public enum InterruptKeystroke {
     /// The physical C key position (macOS `kVK_ANSI_C`). Layout-independent, unlike the produced character.
     public static let cKeyCode: UInt16 = 8
@@ -24,14 +22,13 @@ public enum InterruptKeystroke {
     public static let escapeKeyCode: UInt16 = 53
 
     /// Whether the keystroke interrupts the agent. `character` is the layout's base letter for the key
-    /// (`NSEvent.charactersIgnoringModifiers`); matching it covers Latin layouts including Dvorak, where
-    /// the C letter sits at a non-`cKeyCode` physical key. The `cKeyCode` fallback covers non-Latin layouts
-    /// (Cyrillic, Greek) where that physical key produces a non-Latin character rather than "c" — the same
-    /// layout-independent fallback the built-in `super+key_c` binds use — but only when the produced base
-    /// is non-Latin or unavailable: a remapped Latin layout where `cKeyCode` yields a Latin letter other
-    /// than "c" (Dvorak's "j") is left alone, so Ctrl-J there is not a false interrupt. Escape interrupts
-    /// under any modifiers; Ctrl-C must be bare (control only, no command/option/shift) so a copy-style
-    /// chord like Ctrl-Shift-C does not clear a glyph while the agent is still working.
+    /// (`NSEvent.charactersIgnoringModifiers`); matching it covers Latin layouts including Dvorak, where the
+    /// C letter sits at a non-`cKeyCode` physical key. The `cKeyCode` fallback — the layout-independent one
+    /// the built-in `super+key_c` binds use — covers non-Latin layouts (Cyrillic, Greek) where that physical
+    /// key produces no "c", but fires only when the produced base is non-Latin or unavailable, so a remapped
+    /// Latin layout yielding another letter there (Dvorak's "j") is left alone and Ctrl-J is no false
+    /// interrupt. Escape interrupts under any modifiers; Ctrl-C must be bare (control only, no
+    /// command/option/shift) so a copy-style chord like Ctrl-Shift-C can't clear a glyph mid-work.
     public static func isInterrupt(keyCode: UInt16, character: String?, modifiers: KeyModifiers) -> Bool {
         if keyCode == escapeKeyCode { return true }
         guard modifiers.contains(.control),

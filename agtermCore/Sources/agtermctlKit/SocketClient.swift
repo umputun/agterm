@@ -198,10 +198,10 @@ struct SocketClient {
         return "ok"
     }
 
-    /// Render the `theme.list` payload as one theme name per line, the active theme(s) marked with `* `
-    /// and a leading "default ghostty" entry for the no-theme (ghostty built-in) case (no trailing newline).
-    /// When `sync` is on, both the light and dark themes are marked and a header notes the appearance pair;
-    /// otherwise the single `current` theme is marked.
+    /// Render the `theme.list` payload as one theme name per line (no trailing newline), the active
+    /// theme(s) marked `* `, with a leading "default ghostty" entry for the no-theme (ghostty built-in)
+    /// case. With `sync` on, both the light and dark themes are marked under a header naming the
+    /// appearance pair; otherwise the single `current` theme is marked.
     static func formatThemes(_ themes: [String], current: String?, sync: Bool = false,
                              light: String? = nil, dark: String? = nil) -> String {
         let active: (String?) -> Bool = sync ? { $0 != nil && ($0 == light || $0 == dark) } : { $0 == current }
@@ -214,11 +214,10 @@ struct SocketClient {
 
     /// Render the `keymap.list` payload as sections: the resolved built-ins, then custom commands, parse
     /// diagnostics, and the live menu key equivalents (no trailing newline). An overridden built-in is
-    /// marked `*`, and a keyless one prints `-` rather than being dropped, so the listing is the full
-    /// action set.
+    /// marked `*`, a keyless one prints `-` rather than being dropped, so the listing is the full action set.
     ///
     /// The menu section is the point of the command: comparing it against the actions above is what shows
-    /// a chord the keymap resolved but the menu is not carrying. Menu items are printed in menu-bar order.
+    /// a chord the keymap resolved but the menu is not carrying. Menu items print in menu-bar order.
     static func formatKeymap(_ keymap: ControlKeymap) -> String {
         var lines = ["keymap: \(keymap.path)", "", "actions:"]
         let width = keymap.actions.map(\.action.count).max() ?? 0

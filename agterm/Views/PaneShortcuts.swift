@@ -1,11 +1,10 @@
 import agtermCore
 import AppKit
 
-/// App-wide Ctrl-1 / Ctrl-2 to focus the active session's left (primary) / right (split) pane
-/// directly — a faster alias for the ⌘⌥←/→ menu nav. Caught by an `NSEvent` local monitor rather
-/// than a SwiftUI shortcut so it isn't a duplicate menu item, matching the Ctrl-Tab switcher. The
-/// keys are always consumed (reserved app shortcuts), so they never leak to the shell — on a
-/// non-split session `focusPane` is simply a no-op rather than the terminal printing a literal "1".
+/// App-wide Ctrl-1 / Ctrl-2 focus the active session's left (primary) / right (split) pane directly, a
+/// faster alias for the ⌘⌥←/→ menu nav. Caught by an `NSEvent` local monitor rather than a SwiftUI shortcut
+/// so it isn't a duplicate menu item, like the Ctrl-Tab switcher. Always consumed (reserved app shortcuts),
+/// so they never leak to the shell — on a non-split session `focusPane` no-ops instead of printing "1".
 @MainActor
 final class PaneShortcuts {
     private let library: WindowLibrary
@@ -33,7 +32,6 @@ final class PaneShortcuts {
     private func handleKeyDown(_ event: NSEvent) -> Bool {
         let mods = event.modifierFlags.intersection([.command, .option, .control, .shift])
         guard mods == .control else { return false }
-        // always consume ⌃1/⌃2 so they never reach the shell; `focusPane` no-ops when not split.
         switch event.keyCode {
         case Self.oneKey: actions.focusPane(.main); return true
         case Self.twoKey: actions.focusPane(.split); return true

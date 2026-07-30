@@ -29,9 +29,8 @@ public enum ConfigPaths {
         // longer than any current one can never silently truncate.
         let nameColumnWidth = (BuiltinAction.allCases.map { $0.rawValue.count }.max() ?? 0) + 2
         let actionLines = BuiltinAction.allCases.map { action -> String in
-            // a default whose key can't round-trip through the keymap grammar (e.g. increase_font_size's
-            // `+`, which clashes with the `+` separator) is documented as not file-expressible rather
-            // than printed as an unparseable token like `cmd++`.
+            // a default whose key can't round-trip through the keymap grammar (increase_font_size's `+`
+            // clashes with the `+` separator) documents as not-expressible, not an unparseable `cmd++`.
             let chord = action.defaultChord.map(starterChordSyntax) ?? "(no default)"
             return "#   \(action.rawValue.padding(toLength: nameColumnWidth, withPad: " ", startingAt: 0))\(chord)"
         }.joined(separator: "\n")
@@ -104,32 +103,28 @@ public enum ConfigPaths {
         configDirectory.appendingPathComponent("restore-denylist.conf")
     }
 
-    /// The shell command that opens `path` in the user's editor (`$VISUAL` else `$EDITOR` else `vi`),
-    /// working under POSIX login shells (zsh/bash/dash) AND fish. Shared by the keymap and ghostty-config
-    /// editor overlays.
+    /// The shell command that opens `path` in the user's editor (`$VISUAL` else `$EDITOR` else `vi`), under
+    /// POSIX login shells (zsh/bash/dash) AND fish. Shared by the keymap and ghostty-config editor overlays.
     ///
-    /// The user's INTERACTIVE login shell (`$SHELL -ilc`) is run first so it sources its rc and EXPORTS
-    /// `$EDITOR`/`$VISUAL` — the overlay's own process is a bare non-interactive `/bin/sh` that sources
-    /// none of the user's shell config, and a GUI-launched app inherits no shell env, so without this the
-    /// editor resolution always fell back to `vi`. The login shell then `exec`s a POSIX `/bin/sh` that does
-    /// the actual `${VISUAL:-${EDITOR:-vi}} "$1"` resolution + launch. Doing the resolution in the inner
-    /// `/bin/sh` (not in `$SHELL` directly) is what makes this work for fish: it can't parse POSIX
-    /// `${VAR:-default}` parameter-expansion, so the previous `$SHELL -ilc '${VISUAL:-${EDITOR:-vi}} …'`
-    /// died with `${ is not a valid variable` (exit 127) and the overlay just flashed. Here that POSIX text
-    /// rides inside single quotes that fish (and POSIX shells) pass through verbatim to the inner `/bin/sh`.
-    /// The path is embedded single-quoted as the inner `/bin/sh`'s positional `$1` (NOT passed positionally
-    /// to `$SHELL`, since fish has no `$1`), so spaces and embedded quotes survive.
+    /// The user's INTERACTIVE login shell (`$SHELL -ilc`) runs first so it sources its rc and EXPORTS
+    /// `$EDITOR`/`$VISUAL`: the overlay's own process is a bare non-interactive `/bin/sh` sourcing none of
+    /// the user's shell config, and a GUI-launched app inherits no shell env, so without this the editor
+    /// resolution always fell back to `vi`. It then `exec`s a POSIX `/bin/sh` doing the actual
+    /// `${VISUAL:-${EDITOR:-vi}} "$1"` resolution + launch — resolving there rather than in `$SHELL` is what
+    /// makes fish work, since fish cannot parse POSIX `${VAR:-default}` and the previous
+    /// `$SHELL -ilc '${VISUAL:-${EDITOR:-vi}} …'` died with `${ is not a valid variable` (exit 127), leaving
+    /// the overlay to flash. That POSIX text rides in single quotes fish and POSIX shells pass through
+    /// verbatim, and the path is embedded single-quoted as the inner shell's positional `$1` (NOT passed
+    /// positionally to `$SHELL`, since fish has no `$1`), so spaces and embedded quotes survive.
     ///
-    /// Two known limits: it assumes `$SHELL` accepts the `-ilc` flags and passes single-quoted text
-    /// verbatim — true for sh/bash/zsh/fish, NOT csh/tcsh (which reject `-ilc`); and it resolves
-    /// `$EDITOR`/`$VISUAL` only when EXPORTED (their universal convention — `export EDITOR=…` /
-    /// fish `set -gx EDITOR …`), since a non-exported, shell-local value does not survive the `exec`.
+    /// Two known limits: `$SHELL` must accept `-ilc` and pass single-quoted text verbatim — true for
+    /// sh/bash/zsh/fish, NOT csh/tcsh, which reject `-ilc`; and `$EDITOR`/`$VISUAL` resolve only when
+    /// EXPORTED (their universal convention — `export EDITOR=…` / fish `set -gx EDITOR …`), since a
+    /// non-exported, shell-local value does not survive the `exec`.
     public static func editorCommand(forPath path: String) -> String {
         // POSIX single-quote: wrap in '…' and escape any embedded ' as '\'' (works in fish + POSIX shells).
         func singleQuoted(_ s: String) -> String { "'\(s.replacingOccurrences(of: "'", with: "'\\''"))'" }
-        // the POSIX resolution + launch, run by the inner /bin/sh regardless of the login shell.
         let inner = "${VISUAL:-${EDITOR:-vi}} \"$1\""
-        // what the login shell runs: source its rc (above), then hand off to /bin/sh with the path as $1.
         let viaPosix = "exec /bin/sh -c \(singleQuoted(inner)) agterm-config-edit \(singleQuoted(path))"
         return "${SHELL:-/bin/zsh} -ilc \(singleQuoted(viaPosix))"
     }

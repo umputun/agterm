@@ -2,9 +2,8 @@ import agtermCore
 import AppKit
 import SwiftUI
 
-/// Window-local handoff between picker dismissal and the owning window becoming frontmost.
-/// A background window must not claim first responder, but its removed picker field cannot remain
-/// the responder when that window is activated later.
+/// Window-local handoff between picker dismissal and the owning window becoming frontmost: a background
+/// window must not claim first responder, yet its removed picker field cannot stay the responder later.
 struct PickFocusRestorationState {
     private(set) var isDeferred = false
 
@@ -20,10 +19,9 @@ struct PickFocusRestorationState {
     }
 }
 
-/// The actual per-window UI: the workspace/session sidebar + the active session's terminal, plus
-/// the quick-terminal / palette / switcher overlays. Holds the resolved non-optional `AppStore` so
-/// the binding-based wiring is unchanged from the single-window version; `ContentView` resolves the
-/// store and hands it in.
+/// The per-window UI: the workspace/session sidebar + the active session's terminal, plus the
+/// quick-terminal / palette / switcher overlays. `ContentView` resolves the store and hands in the
+/// non-optional `AppStore` the binding-based wiring needs.
 struct WindowContentView: View {
     let windowID: WindowInfo.ID
     @Bindable var store: AppStore
@@ -36,9 +34,8 @@ struct WindowContentView: View {
     let actions: AppActions
     let palette: PaletteController
     let sessionSwitcher: SessionSwitcher
-    /// This window's own quick terminal, owned here (one per window). Registered in
-    /// `QuickTerminalRegistry` on appear so the frontmost-window call sites can reach it, and its
-    /// `cwdProvider` binds to this window's active session.
+    /// This window's own quick terminal (one per window). Registered in `QuickTerminalRegistry` on appear
+    /// so the frontmost-window call sites reach it; its `cwdProvider` binds to this window's active session.
     @State var quickTerminal = QuickTerminalController()
     /// Window-level terminal zoom: rehosts the currently visible terminal surface above the sidebar,
     /// titlebar, quick terminal frame, palettes, and switcher until the toggle is invoked again.
@@ -56,46 +53,39 @@ struct WindowContentView: View {
     /// Defers picker focus restoration when a control request resolves in a background window. The
     /// always-mounted frontmost observer consumes it without activating or ordering that window.
     @State private var pickFocusRestoration = PickFocusRestorationState()
-    /// The terminal background color, mirrored from the (non-observable) `GhosttyApp` into view
-    /// state and used as the quick terminal's opaque backing, so a settings theme change (posting
-    /// `.agtermAppearanceChanged`) re-renders it live.
+    /// The terminal background color, mirrored from the non-observable `GhosttyApp` and used as the quick
+    /// terminal's opaque backing; `.agtermAppearanceChanged` re-renders it live on a settings theme change.
     @State var terminalColor: Color = WindowContentView.resolvedTerminalColor()
-    /// Mirror of `GhosttyApp.toolbarMode`: `normal` shows the cwd subtitle, `compact` collapses the title
-    /// bar to a single line, `hidden` drops the row (and the traffic lights) for a full-bleed terminal.
-    /// Refreshed on `.agtermAppearanceChanged`, like `terminalColor`.
+    /// Mirror of `GhosttyApp.toolbarMode`: `normal` shows the cwd subtitle, `compact` collapses the title bar
+    /// to a single line, `hidden` drops the row (and the traffic lights) for a full-bleed terminal. Refreshed
+    /// on `.agtermAppearanceChanged`, like every mirror below.
     @State var toolbarMode: ToolbarMode = WindowContentView.resolvedToolbarMode()
-    /// Mirror of `GhosttyApp.inactivePaneMuteStrength` (0...10): how strongly `paneDim` mutes the
-    /// inactive split pane's text. Refreshed on `.agtermAppearanceChanged`, like `toolbarMode`.
+    /// Mirror of `GhosttyApp.inactivePaneMuteStrength` (0...10): how strongly `paneDim` mutes the inactive
+    /// split pane's text.
     @State private var inactivePaneMute: Int = WindowContentView.resolvedInactivePaneMute()
     /// Mirror of `GhosttyApp.sidebarBackgroundShift` (0...10, 5 = neutral): how much lighter/darker the
-    /// sidebar background is than the terminal. Drives `sidebarTintWash`; refreshed on
-    /// `.agtermAppearanceChanged`, like `inactivePaneMute`.
+    /// sidebar background is than the terminal. Drives `sidebarTintWash`.
     @State var sidebarShift: Int = WindowContentView.resolvedSidebarShift()
-    /// The terminal theme's foreground color, mirrored from `GhosttyApp` and used for the chrome text
-    /// (title bar text + buttons, sidebar bottom bar) so non-terminal text tracks the theme. Refreshed
-    /// on `.agtermAppearanceChanged`, like `terminalColor`.
+    /// The terminal theme's foreground, mirrored from `GhosttyApp` for the chrome text (title bar text +
+    /// buttons, sidebar bottom bar) so non-terminal text tracks the theme.
     @State var chromeText: Color = WindowContentView.resolvedChromeText()
-    /// Mirror of `GhosttyApp.attentionButtonEnabled`: when true the title bar shows the attention bell.
-    /// Refreshed on `.agtermAppearanceChanged`, like `toolbarMode`, so flipping the Settings toggle
-    /// shows/hides the bell live without a relaunch.
+    /// Mirror of `GhosttyApp.attentionButtonEnabled`: when true the title bar shows the attention bell, so
+    /// flipping the Settings toggle shows/hides it live without a relaunch.
     @State var attentionButtonEnabled: Bool = WindowContentView.resolvedAttentionButtonEnabled()
-    /// Mirror of `GhosttyApp.hiddenInterfaceElements`: the title-bar / sidebar-footer chrome elements the
-    /// user has hidden in Settings ▸ Interface. Refreshed on `.agtermAppearanceChanged`, like `toolbarMode`,
-    /// so flipping a toggle shows/hides the element live without a relaunch. `shows(_:)` reads it.
+    /// Mirror of `GhosttyApp.hiddenInterfaceElements`: the title-bar / sidebar-footer chrome the user hid in
+    /// Settings ▸ Interface, read by `shows(_:)`; a toggle flip applies live without a relaunch.
     @State var hiddenInterfaceElements: Set<InterfaceElement> = WindowContentView.resolvedHiddenInterfaceElements()
-    /// Whether the recent-sessions popover (the mouse equivalent of the Ctrl-Tab switcher) is shown,
-    /// anchored on the title-bar clock button. Non-private so the `+RecentSessions` extension's button/rows
-    /// can toggle it.
+    /// Whether the recent-sessions popover (the mouse form of the Ctrl-Tab switcher) is shown, anchored on
+    /// the title-bar clock button. Non-private so `+RecentSessions`'s button/rows can toggle it.
     @State var recentSessionsShown = false
     /// Whether the attention popover (the mouse equivalent of the ⌃⇧I attention palette) is shown, anchored
     /// on the title-bar bell. Non-private so the `+RecentSessions` extension's bell/rows can toggle it.
     @State var attentionPopoverShown = false
-    /// Custom sidebar width and show/hide both live on the per-window `AppStore` (`sidebarWidth` /
-    /// `sidebarVisible`), persisted in `Snapshot` so they restore on relaunch. The toolbar button, the View
-    /// menu, the palette, and the `sidebar` control command share `sidebarVisible`.
-    /// Height of the custom titlebar row: two lines (title + cwd) when normal, one short line when
-    /// compact, and zero when hidden (the row collapses to an invisible drag strip and the terminal
-    /// runs full-bleed). The split content is inset by this so it sits below the row.
+    /// Custom sidebar width and show/hide live on the per-window `AppStore` (`sidebarWidth` /
+    /// `sidebarVisible`), persisted in `Snapshot`; the toolbar button, View menu, palette, and the
+    /// `sidebar` control command share `sidebarVisible`.
+    /// Height of the custom titlebar row: two lines (title + cwd) normal, one short line compact, zero
+    /// hidden (an invisible drag strip, terminal full-bleed). The split content is inset by this.
     var titlebarHeight: CGFloat {
         switch toolbarMode {
         case .normal: return 48
@@ -106,10 +96,9 @@ struct WindowContentView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            // The split's AppKit HSplitView can overrun into the titlebar zone and steal header clicks, so
-            // the deck stays inset below the titlebar. While zoomed, keep that eager deck mounted so
-            // background sessions and control-opened overlays still realize their terminal surfaces and run;
-            // the zoom layer owns the visible window.
+            // the AppKit HSplitView can overrun into the titlebar zone and steal header clicks, so the deck
+            // stays inset below it. Kept mounted while zoomed (the zoom layer owns the visible window) so
+            // background sessions and control-opened overlays still realize their surfaces and run.
             alwaysMountedSplitLayer
             if let zoomTarget = terminalZoom.target {
                 terminalZoomLayer(zoomTarget)
@@ -118,18 +107,17 @@ struct WindowContentView: View {
                     .zIndex(11)
             } else {
                 // the window overlays (quick terminal / palettes / switcher) sit BELOW the titlebar, inset by
-                // its height — NOT as a body-level `.overlay` above EVERYTHING. A full-window overlay's dim
-                // scrim composites OVER the transparent custom titlebar (whose AppKit backing is deliberately
-                // hidden for translucency, WindowAppearance), darkening + seaming the normal non-compact titlebar
-                // (the corruption). Keeping the titlebar at the highest zIndex means a scrim can never cover it.
+                // its height — NOT a body-level `.overlay` above everything: a full-window overlay's dim scrim
+                // would composite over the transparent custom titlebar (backing deliberately hidden for
+                // translucency, WindowAppearance) and darken + seam the non-compact one. Keeping the titlebar
+                // at the highest zIndex means a scrim can never cover it.
                 windowOverlayLayer
                     .padding(.top, titlebarHeight)
                     .zIndex(1)
                 if dashboard.isOpen {
-                    // the open dashboard is a view-only modal, like terminal zoom: swap the full titlebar for
-                    // a stripped bar (mirroring zoomTitlebar) so its interactive buttons can't steal the
-                    // key-catcher's first responder — which strands Esc — or drive actions that make no sense
-                    // behind the grid. The two modes are mutually exclusive, so only one titlebar is ever up.
+                    // the open dashboard is a view-only modal like zoom: a stripped bar (mirroring
+                    // zoomTitlebar) so titlebar buttons can't steal the key-catcher's first responder — which
+                    // strands Esc — or drive actions meaningless behind the grid. The two modes are exclusive.
                     dashboardTitlebar
                         .zIndex(2)
                 } else {
@@ -162,7 +150,6 @@ struct WindowContentView: View {
         }
         .onChange(of: terminalZoom.target) { old, new in
             handleZoomTargetChange(old: old, new: new)
-            // reciprocal exclusivity: a zoom becoming active while the dashboard is open closes the dashboard.
             closeDashboardIfZoomActive(new)
         }
         // dashboard open/close drives the modal lifecycle + auto-follow pause; the font key (members + font
@@ -221,9 +208,8 @@ struct WindowContentView: View {
             inactivePaneMute = WindowContentView.resolvedInactivePaneMute()
             sidebarShift = WindowContentView.resolvedSidebarShift()
         }
-        // blend the title bar with the terminal; report frontmost/close to the library; surface the
-        // window un-minimized on launch. the title token makes updateNSView re-run the blend on a
-        // session switch.
+        // blend the title bar with the terminal; report frontmost/close to the library; surface the window
+        // un-minimized on launch. the title token re-runs the blend in updateNSView on a session switch.
         .background(WindowAccessor(titleToken: windowTitle, windowID: windowID, library: library, store: store))
         // own a per-window quick terminal: register it so the frontmost-window call sites resolve it,
         // and spawn its shell in THIS window's active session's directory.
@@ -267,50 +253,44 @@ struct WindowContentView: View {
                                             currentOpenOverlaySessionIDs new: [UUID]) {
         let closed = Set(old).subtracting(new)
         if let id = actions.keymapEditOverlaySession, closed.contains(id) {
-            // a keymap-edit overlay just closed -> reapply the edited keymap.
             actions.keymapEditOverlaySession = nil
             actions.reloadKeymap()
         }
         if let id = actions.ghosttyEditOverlaySession, closed.contains(id) {
-            // a ghostty.conf-edit overlay just closed -> reload the edited ghostty config (skipped when the
-            // file is unchanged, so a no-op editor session keeps per-session font zoom).
+            // the reload is skipped when the file is unchanged, so a no-op editor session keeps its font zoom.
             actions.ghosttyEditOverlaySession = nil
             actions.reloadGhosttyConfigIfEdited()
         }
     }
 
-    /// EXPERIMENT (custom-sidebar branch): our own split instead of `NavigationSplitView`, so macOS 26
-    /// doesn't impose the Liquid-Glass sidebar chrome (inset panel, toggle capsule) or couple it to the
-    /// toolbar style. A plain `HStack` gives the sidebar tree + a themed draggable divider + the terminal.
+    /// Our own split instead of `NavigationSplitView`, so macOS 26 cannot impose the Liquid-Glass sidebar
+    /// chrome (inset panel, toggle capsule) or couple it to the toolbar style: a plain `HStack` of the
+    /// sidebar tree + a themed draggable divider + the terminal.
     @ViewBuilder private var splitRoot: some View {
         HStack(spacing: 0) {
             if store.sidebarVisible {
                 sidebarColumn
                     .frame(width: CGFloat(store.sidebarWidth))
                 sidebarDivider
-                    // draw/hit above the terminal: the divider is the middle HStack child, so without this
-                    // the detail column (drawn last) shadows the right half of the grab handle, leaving only
-                    // a few points grabbable. zIndex lifts the whole handle on top so the full strip works.
+                    // the divider is the middle HStack child, so without this the detail column (drawn last)
+                    // shadows the right half of the grab handle and only a few points stay grabbable.
                     .zIndex(1)
             }
             detailColumn
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        // deliberately NOT animated on visibility: animating the split width interpolates the detail
-        // column's frame every display frame, and detailPane is the EAGER deck (a ZStack over EVERY
-        // session's surface, all mounted). so an animated collapse/expand resizes every ghostty surface
-        // each frame — each resize reflows the grid (set_size) AND force-repaints (refresh), even hidden
-        // opacity-0 panes — a cost that scales with total session count and janks on a window with many
-        // sessions. an instant toggle reflows each surface exactly once. DO NOT re-add the width animation.
-        // the mode switch below is safe to animate — it swaps sidebar CONTENT, not the split width, so
-        // the detail column (and the deck) never resize.
+        // DO NOT animate visibility: the width animation interpolates the detail column's frame every
+        // display frame, and detailPane is the EAGER deck (every session's surface mounted), so each frame
+        // reflows the grid (set_size) AND force-repaints (refresh) EVERY surface, hidden opacity-0 panes
+        // included — a cost scaling with session count that janks a many-session window. An instant toggle
+        // reflows each surface once. The mode switch below is safe: it swaps sidebar CONTENT, not the split
+        // width, so the detail column (and the deck) never resize.
         .animation(.easeInOut(duration: 0.15), value: store.sidebarMode)
     }
 
-    /// The eager split/deck remains mounted behind every modal presentation, including terminal zoom.
-    /// Keep frontmost-driven cleanup here rather than on `windowOverlayLayer`, which is absent while
-    /// zoomed: otherwise a palette owned by the old front window can survive the handoff and remount
-    /// after the picker and zoom both close.
+    /// The eager split/deck stays mounted behind every modal presentation, zoom included. Frontmost-driven
+    /// cleanup belongs here, not on `windowOverlayLayer` (absent while zoomed): otherwise a palette owned by
+    /// the old front window survives the handoff and remounts after the picker and zoom both close.
     private var alwaysMountedSplitLayer: some View {
         splitRoot
             .padding(.top, titlebarHeight)
@@ -326,10 +306,8 @@ struct WindowContentView: View {
 
     private var sidebarColumn: some View {
         VStack(spacing: 0) {
-            // matches the detail pane's hairline so the line continues across the full width under
-            // the title bar (the vertical divider hangs from it at the sidebar/terminal junction).
-            // themed (chromeText at low opacity), same as the detail-pane half, so it stays visible on
-            // light themes too.
+            // matches the detail pane's hairline so the line runs the full width under the title bar (the
+            // vertical divider hangs from it at the junction); themed so it stays visible on light themes.
             Rectangle()
                 .fill(chromeText.opacity(0.1))
                 .frame(height: 1)
@@ -337,17 +315,15 @@ struct WindowContentView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
         }
         .safeAreaInset(edge: .bottom) { bottomBar }
-        // the lighter/darker sidebar tint: a wash behind the transparent outline + bottom bar, so the
-        // whole column reads as one surface a touch darker/lighter than the terminal. Behind the column
-        // content (so it never tints row text) and over the window background (so it composes with
+        // the sidebar tint wash sits behind the transparent outline + bottom bar so the column reads as one
+        // surface, behind the content (never tints row text) and over the window background (composes with
         // translucency/blur). Neutral paints nothing.
         .background(sidebarTintWash)
     }
 
-    /// The sidebar lighter/darker wash for the current `sidebarShift`: black (darker) or white (lighter)
-    /// at the shift's magnitude, composited over the window background. Compositing this over the window
-    /// background equals blending the terminal color toward black/white, and works the same over an
-    /// opaque or a translucent+blurred backdrop. Neutral (`amount == 0`) renders nothing.
+    /// The wash for the current `sidebarShift`: black (darker) or white (lighter) at the shift's magnitude
+    /// over the window background — equivalent to blending the terminal color toward black/white, and the
+    /// same over an opaque or a translucent+blurred backdrop. Neutral (`amount == 0`) renders nothing.
     @ViewBuilder private var sidebarTintWash: some View {
         let amount = AppSettings.sidebarShiftAmount(strength: sidebarShift)
         if amount != 0 {
@@ -355,9 +331,9 @@ struct WindowContentView: View {
         }
     }
 
-    /// A 1px themed vertical separator with a wider invisible drag handle to resize the sidebar. The
-    /// handle is wider than the line and the divider carries `.zIndex(1)` at the call site so the full
-    /// grab strip is reachable from both sides (the terminal column would otherwise shadow its right half).
+    /// A 1px themed vertical separator with a wider invisible drag handle to resize the sidebar. The divider
+    /// carries `.zIndex(1)` at the call site so the full grab strip is reachable from both sides (the
+    /// terminal column would otherwise shadow its right half).
     private var sidebarDivider: some View {
         Rectangle()
             .fill(chromeText.opacity(0.1))
@@ -371,9 +347,8 @@ struct WindowContentView: View {
                         if inside { NSCursor.resizeLeftRight.set() } else { NSCursor.arrow.set() }
                     }
                     .gesture(
-                        // drive width from the absolute cursor X (window coords), NOT accumulated
-                        // translation: the divider moves with the width, so translation-based resize
-                        // feeds back on itself and the line flickers. Absolute position is stable.
+                        // width comes from the absolute cursor X, NOT accumulated translation: the divider
+                        // moves with the width, so translation feeds back on itself and the line flickers.
                         DragGesture(minimumDistance: 1, coordinateSpace: .global)
                             .onChanged { value in
                                 store.sidebarWidth = min(AppStore.sidebarWidthMax, max(AppStore.sidebarWidthMin, Double(value.location.x)))
@@ -386,27 +361,22 @@ struct WindowContentView: View {
 
     @ViewBuilder private var detailColumn: some View {
         VStack(spacing: 0) {
-            // a subtle hairline between the title bar and the terminal; lives in the
-            // detail pane so it starts at the sidebar's right edge, not the full width.
-            // themed (chromeText at low opacity) so it stays visible on light themes too.
+            // hairline between the title bar and the terminal; in the detail pane so it starts at the
+            // sidebar's right edge, themed (chromeText, low opacity) so it stays visible on light themes.
             Rectangle()
                 .fill(chromeText.opacity(0.1))
                 .frame(height: 1)
             detailPane
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-                // the overlay renders in-deck inside `sessionDetail` (`overlayPanel`), not at this
-                // `detailPane` level.
-                // the search bar, anchored at the `detailPane` level (never inside `sessionDetail`'s
-                // HSplitView ZStack) so toggling it can't overrun the NSSplitView up into the titlebar.
-                // Sits at the top-right of the detail area, like a standard find bar.
+                // the overlay renders in-deck inside `sessionDetail` (`overlayPanel`), not at this level.
                 .overlay(alignment: .topTrailing) { searchBarLayer }
         }
     }
 
-    /// The terminal area: a DECK of EVERY session's terminal, all mounted so each is realized (its
-    /// shell spawned) at startup, with only the selected one visible + hit-testable. Switching is a
-    /// visibility flip, not a re-host, so the surface NSView is never detached/re-attached (re-hosting
-    /// invalidates the Metal drawable and flickers). A placeholder shows behind when nothing is selected.
+    /// The terminal area: a DECK of EVERY session's terminal, all mounted so each spawns its shell at
+    /// startup, only the selected one visible + hit-testable. Switching is a visibility flip, never a
+    /// re-host (re-hosting invalidates the Metal drawable and flickers). A placeholder shows when nothing
+    /// is selected.
     @ViewBuilder private var detailPane: some View {
         let sessions = store.workspaces.flatMap(\.sessions)
         ZStack {
@@ -424,16 +394,15 @@ struct WindowContentView: View {
     }
 
     /// One session's terminal content: the primary pane, a side-by-side split (`HSplitView`), or the
-    /// maximized hidden-split pane, plus any overlay. `isActive` gates which pane auto-grabs focus —
-    /// only the visible deck entry, and within a split only the focused pane.
+    /// maximized hidden-split pane, plus any overlay. `isActive` gates which pane auto-grabs focus — only
+    /// the visible deck entry, and within a split only the focused pane.
     ///
-    /// While terminal zoom hosts one of this session's surfaces, the deck entry stays MOUNTED with the
-    /// SAME shape — only the zoom-owned slot swaps to its `deckHostsSurface` placeholder (an NSView can
-    /// live in one host at a time). Everything else keeps realizing surfaces, so a control-opened
-    /// split/scratch/overlay on the zoomed session still spawns and runs behind the zoom layer; swapping
-    /// the whole entry out would re-host the NSSplitView (the titlebar-overrun rule) and orphan those
-    /// surfaces until zoom exits. The split's arranged panes are stable ZStack wrappers (content swaps
-    /// INSIDE them), so the NSSplitView never re-layouts on a zoom toggle and the divider stays put;
+    /// While zoom hosts one of these surfaces the deck entry stays MOUNTED at the SAME shape, only the
+    /// zoom-owned slot swapping to its `deckHostsSurface` placeholder (an NSView lives in one host at a
+    /// time), so a control-opened split/scratch/overlay still spawns and runs behind the zoom layer —
+    /// swapping the whole entry out would re-host the NSSplitView (the titlebar-overrun rule) and orphan
+    /// those surfaces until zoom exits. The arranged panes are stable ZStack wrappers (content swaps
+    /// INSIDE), so the NSSplitView never re-layouts on a zoom toggle and the divider stays put;
     /// `SplitRatioAccessor` rides the primary wrapper as one persistent instance, suspended while zoomed.
     @ViewBuilder private func sessionDetail(_ session: Session, isActive: Bool) -> some View {
         // a FULL overlay (no size) hides the session beneath it (opacity 0) and draws translucent; a
@@ -444,25 +413,23 @@ struct WindowContentView: View {
         // surfaces; it must not focus, register drag targets, or show focusable controls behind the
         // full-window modal layer (both are mutually exclusive, so at most one gate is ever active).
         let deckInteractive = terminalZoom.target == nil && !dashboard.isOpen
-        // the scratch terminal is a full-coverage overlay too, so it hides the pane(s) exactly like a
-        // FULL overlay; `hideForOverlay` drives opacity + hit-testing. `overlaid` (any overlay OR scratch)
-        // is what owns focus, so it gates the pane(s)' `isActive` (focus goes to the overlay/scratch, not
-        // the pane). NOTE `hideForOverlay` stays false for a FLOATING overlay — preserving the rule that
-        // this subtree's shape/hit-testing must not change when a floating overlay opens (NSSplitView overrun).
+        // the scratch is full-coverage too, so `hideForOverlay` hides the pane(s) like a FULL overlay
+        // (opacity + hit-testing); `overlaid` (any overlay OR scratch) owns focus, so it gates the panes'
+        // `isActive`. `hideForOverlay` stays false for a FLOATING overlay — this subtree's shape and
+        // hit-testing must not change when one opens (NSSplitView overrun).
         let hideForOverlay = fullOverlay || session.scratchActive
         let overlaid = session.overlayActive || session.scratchActive
-        // on-screen = selected session, not hidden by a full overlay/scratch, and not covered by the
-        // window-level quick terminal. Shared by BOTH split panes (unlike the focus-gated `isActive`), it
-        // gates each surface's drag-type (un)registration AND its mouse-cursor tracking (the `deckVisible`
-        // note in libghostty.md) so neither a file drop nor a cursor write lands on an off-screen surface.
-        // `!quickTerminal.isVisible` mutes the covered pane while the quick terminal is up — otherwise the
-        // covered pane keeps deckVisible=true and races the quick-terminal surface for the cursor and fans
-        // mouse-motion into the covered TUI (issue #225 quick-terminal path).
+        // on-screen = selected, not hidden by a full overlay/scratch, not covered by the quick terminal.
+        // Shared by BOTH split panes (unlike the focus-gated `isActive`), it gates each surface's drag-type
+        // (un)registration AND its mouse-cursor tracking (the `deckVisible` note in libghostty.md), so no
+        // file drop or cursor write lands off-screen. Without `!quickTerminal.isVisible` the covered pane
+        // keeps deckVisible=true, races the quick-terminal surface for the cursor, and fans mouse-motion
+        // into the covered TUI (issue #225 quick-terminal path).
         let visible = deckInteractive && isActive && !hideForOverlay && !quickTerminal.isVisible
-        // focus gate: while the window-level quick terminal is up it OWNS first responder, so no deck
-        // surface may be `isActive` behind it — `TerminalView.updateNSView` would grab focus and send
-        // keystrokes to a covered session. Every automatic reselection (`reselectIfSelectionHidden`,
-        // auto-follow) reaches this, not just a click. The quick terminal's own hide flips it back.
+        // focus gate: a visible quick terminal OWNS first responder, so no deck surface may be `isActive`
+        // behind it — `TerminalView.updateNSView` would grab focus and send keystrokes to a covered session.
+        // Every automatic reselection (`reselectIfSelectionHidden`, auto-follow) reaches this, not just a
+        // click; the quick terminal's own hide flips it back.
         let focusable = deckInteractive && isActive && !quickTerminal.isVisible
         ZStack {
             // the session's pane(s), kept MOUNTED while an overlay is up — shells stay alive, like the deck
@@ -472,11 +439,10 @@ struct WindowContentView: View {
                 if session.isSplit {
                     HSplitView {
                         // each arranged pane is a STABLE ZStack wrapper whose CONTENT swaps between the live
-                        // TerminalView and the zoom placeholder. Swapping the arranged subview itself (the
-                        // pre-wrapper design) made NSSplitView re-layout and normalize the divider on every
-                        // zoom enter/exit — with no stored ratio there was nothing to restore, so the
-                        // proportions broke. With the wrapper, the split's two arranged NSViews never change
-                        // identity and the divider never moves.
+                        // TerminalView and the zoom placeholder: swapping the arranged subview itself makes
+                        // NSSplitView re-layout and normalize the divider on every zoom enter/exit, and with
+                        // no stored ratio there is nothing to restore. The wrapper keeps both arranged
+                        // NSViews' identity, so the divider never moves.
                         ZStack {
                             if deckHostsSurface(session: session, surface: .primary) {
                                 TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
@@ -489,10 +455,10 @@ struct WindowContentView: View {
                                     .id("\(session.id.uuidString)-primary-placeholder")
                             }
                         }
-                        // introspects the AppKit NSSplitView to persist/restore the divider ratio AND to
-                        // clip its divider out of the titlebar strip (see SplitRatioAccessor); a background
-                        // on the stable wrapper (not a third pane, not inside the swapped content), so ONE
-                        // probe instance survives zoom and its suspend/resume actually flips in place.
+                        // introspects the AppKit NSSplitView to persist/restore the divider ratio and clip it
+                        // out of the titlebar strip (see SplitRatioAccessor); a background on the stable
+                        // wrapper (not a third pane, not inside the swapped content), so ONE probe survives
+                        // zoom and its suspend/resume flips in place.
                         .background { SplitRatioAccessor(session: session, titlebarHeight: titlebarHeight, suspended: !deckInteractive, onPersist: { store.save() }) }
                         ZStack {
                             if deckHostsSurface(session: session, surface: .split) {
@@ -532,26 +498,22 @@ struct WindowContentView: View {
                 }
             }
             .opacity(hideForOverlay ? 0 : 1)
-            // gate hit-testing on `hideForOverlay` (full overlay OR scratch), NOT `session.overlayActive`:
-            // this modifier must NOT change when a floating overlay opens, or the AppKit NSSplitView
-            // re-lays-out and overruns up into the titlebar (same class of perturbation as adding a sibling).
-            // a floating overlay therefore leaves the panes hit-testable here; `overlayPanel`'s transparent
-            // catcher absorbs clicks around the panel so they can't reach the panes.
+            // gate on `hideForOverlay` (full overlay OR scratch), NOT `session.overlayActive`: this modifier
+            // must not change when a floating overlay opens, or the NSSplitView re-lays-out and overruns up
+            // into the titlebar (same perturbation class as adding a sibling). A floating overlay leaves the
+            // panes hit-testable; `overlayPanel`'s transparent catcher absorbs the clicks around it.
             .allowsHitTesting(deckInteractive && !hideForOverlay)
-            // the scratch terminal renders here, in-deck, above the (hidden) pane(s) — a full-coverage sibling
-            // is safe (the panes go opacity 0, the split's frame is hidden). It sits BELOW the ephemeral overlay
-            // (zIndex 1 vs `overlayPanel`'s 3) AND goes hidden while a full overlay is up, exactly like the
-            // pane(s): under window translucency every surface's background renders fully transparent, so a
-            // scratch left visible below would show through the overlay (reading as "the overlay opened under
-            // the scratch"). BOTH overlay variants are the `overlayPanel` sibling below (zIndex 3): it is ALWAYS
-            // present with a constant shape (its content is gated internally), so opening/resizing an overlay
-            // never re-hosts the NSSplitView — and the floating panel's opaque backing needs no hiding of the
-            // scratch behind it.
+            // the scratch renders in-deck above the (hidden) pane(s) — a full-coverage sibling is safe (the
+            // panes go opacity 0, the split's frame is hidden). It sits BELOW the ephemeral overlay (zIndex 1
+            // vs `overlayPanel`'s 3) and hides under a FULL overlay like the panes: under window translucency
+            // every surface background renders fully transparent, so a scratch left visible would show THROUGH
+            // it (reading as "the overlay opened under the scratch"); a FLOATING panel's opaque backing needs
+            // no such hiding. `overlayPanel` hosts BOTH variants, always present at a constant shape (content
+            // gated internally), so opening or resizing an overlay never re-hosts the NSSplitView.
             if session.scratchActive, deckHostsSurface(session: session, surface: .scratch) {
-                // a full overlay renders above the scratch (`overlayPanel`, zIndex 3), so it gates focus here
-                // on top of what `focusable` already covers. (matches the autoFocus suppression in
-                // makeScratchSurface.) `deckVisible` mirrors the panes' rule so only an on-screen scratch is
-                // a file-drop target.
+                // a full overlay renders above the scratch (`overlayPanel`, zIndex 3), so it gates focus on
+                // top of `focusable` (matching makeScratchSurface's autoFocus suppression); `deckVisible`
+                // mirrors the panes' rule so only an on-screen scratch is a file-drop target.
                 TerminalView(session: session, surfaceKeyPath: \.scratchSurface, makeSurface: makeScratchSurface,
                              isActive: focusable && !session.overlayActive,
                              deckVisible: deckInteractive && isActive && !fullOverlay && !quickTerminal.isVisible)
@@ -560,23 +522,18 @@ struct WindowContentView: View {
                     .id("\(session.id.uuidString)-scratch")
                     .zIndex(1)
             }
-            // the overlay — FULL or FLOATING — renders IN-DECK (per session) so its surface mounts + program
-            // runs even when the session isn't active. ONE ALWAYS-PRESENT host (constant ZStack shape): the
-            // content is gated INSIDE `overlayPanel`, the sibling itself never appears/disappears, so opening,
-            // closing, OR resizing an overlay never re-hosts the NSSplitView (the titlebar-overrun trigger)
-            // and never re-parents the surface (which would blank its Metal drawable). Full fills the area
-            // translucent with the pane(s) hidden by `hideForOverlay`; floating draws an opaque framed panel
-            // over the still-visible pane(s). Switching full<->% (session.overlay.resize) only re-flows the frame.
+            // the overlay renders IN-DECK per session, so its program runs even when the session isn't
+            // active; see `overlayPanel` for the constant-shape rule that keeps open/close/resize from
+            // re-hosting the NSSplitView or re-parenting the surface.
             overlayPanel(session: session, isActive: focusable)
                 .zIndex(3)
         }
-        // when the overlay closes, the underlying pane must reclaim first responder. the pane re-activating
-        // only does a single makeFirstResponder, which loses the race with the overlay view's teardown/
-        // re-host — so drive the bounded retry the split-collapse survivor uses. gated on isActive so only
-        // the visible session reclaims focus.
         // on overlay close, refocus the topmost remaining surface (scratch if still shown, else the pane)
-        // via the shared `topmostSurface` precedence — never a pane hidden under the scratch, and not at all
-        // while the quick terminal covers the window (it owns focus; its own hide restores the session).
+        // via the shared `topmostSurface` precedence — never a pane hidden under the scratch. A single
+        // makeFirstResponder loses the race with the overlay view's teardown/re-host, so drive the bounded
+        // retry the split-collapse survivor uses. Gated on isActive so only the visible session reclaims
+        // focus, and skipped while the quick terminal covers the window (it owns focus; its own hide
+        // restores the session).
         .onChange(of: session.overlayActive) { _, isOpen in
             if !isOpen, deckInteractive, isActive, !quickTerminal.isVisible {
                 (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
@@ -595,32 +552,31 @@ struct WindowContentView: View {
     }
 
     /// The overlay — FULL or FLOATING — rendered IN-DECK inside each session's `sessionDetail` ZStack as ONE
-    /// ALWAYS-PRESENT sibling. The content is gated INSIDE the GeometryReader, so the ZStack's child count
-    /// never changes when an overlay opens/closes (constant shape = no NSSplitView re-host = no titlebar
-    /// overrun), and BOTH variants share this single surface host, so `session.overlay.resize` switching
-    /// full<->% only re-flows the frame — it never re-parents the NSView (which would blank its Metal drawable).
-    /// A nil `overlaySizePercent` fills the detail area translucent (no opaque backing/frame) with the pane(s)
-    /// hidden by `hideForOverlay`; a percent draws an opaque, framed panel at that size, centered, with the
-    /// pane(s) visible around it. Per-session in the eager deck, so the surface mounts + program runs even when
-    /// the session isn't active.
+    /// ALWAYS-PRESENT sibling, its content gated INSIDE the GeometryReader so the ZStack's child count never
+    /// changes (constant shape = no NSSplitView re-host = no titlebar overrun). Both variants share this one
+    /// surface host, so `session.overlay.resize` switching full<->% only re-flows the frame and never
+    /// re-parents the NSView (which would blank its Metal drawable). A nil `overlaySizePercent` fills the
+    /// detail area translucent (no backing/frame), panes hidden by `hideForOverlay`; a percent draws an
+    /// opaque framed panel at that size, centered, panes visible around it. Per-session in the eager deck,
+    /// so the surface mounts and its program runs while the session is inactive.
     @ViewBuilder private func overlayPanel(session: Session, isActive: Bool) -> some View {
         GeometryReader { geo in
             ZStack {
                 if session.overlayActive, deckHostsSurface(session: session, surface: .overlay) {
                     let floating = session.overlaySizePercent != nil
                     let fraction = session.overlaySizePercent.map { CGFloat($0) / 100 } ?? 1
-                    // transparent click-catcher over the whole detail area: absorbs clicks AROUND a floating
-                    // panel so they can't reach the still-hit-testable panes and steal the overlay's first
-                    // responder (the full variant hides the panes, so it's covered either way).
+                    // transparent click-catcher: absorbs clicks AROUND a floating panel so they can't reach
+                    // the still-hit-testable panes and steal the overlay's first responder (the full variant
+                    // hides the panes anyway).
                     Color.clear.contentShape(Rectangle())
                     TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                  makeSurface: makeOverlaySurface, isActive: isActive, deckVisible: isActive)
                         .frame(width: geo.size.width * fraction, height: geo.size.height * fraction)
                         // floating = opaque backing + hairline frame + shadow so it reads as a distinct window
                         // over the still-visible session; full = translucent, no chrome (libghostty draws only
-                        // the terminal, so the window backing shows through). The modifier CHAIN stays constant
-                        // across both variants — only the parameters go inert for full — so a full<->% resize
-                        // keeps the same view tree and never re-hosts the surface NSView.
+                        // the terminal, so the window backing shows through). The modifier CHAIN is constant
+                        // across both — only the parameters go inert for full — so a full<->% resize keeps
+                        // the same view tree and never re-hosts the surface NSView.
                         .background(floating ? terminalColor : Color.clear)
                         .clipShape(RoundedRectangle(cornerRadius: floating ? 12 : 0))
                         .overlay(
@@ -638,10 +594,10 @@ struct WindowContentView: View {
         .allowsHitTesting(isActive && session.overlayActive && deckHostsSurface(session: session, surface: .overlay))
     }
 
-    /// The terminal search bar, attached as a top-aligned `.overlay` on `detailPane` — NOT inside any
-    /// session's `sessionDetail`/HSplitView ZStack, so toggling it never perturbs the split and overruns the
-    /// NSSplitView into the titlebar. Shown only while zoom is off and the active session's `searchActive`
-    /// is set; the needle binding drives the query through `actions.updateSearchNeedle`.
+    /// The terminal search bar, a top-aligned `.overlay` on `detailPane` — NOT inside any session's
+    /// `sessionDetail`/HSplitView ZStack, so toggling it can't perturb the split and overrun the NSSplitView
+    /// into the titlebar. Shown while zoom is off and the active session's `searchActive` is set; the needle
+    /// binding drives the query through `actions.updateSearchNeedle`.
     @ViewBuilder private var searchBarLayer: some View {
         if terminalZoom.target == nil, let session = store.activeSession, session.searchActive {
             TerminalSearchBar(
@@ -662,20 +618,19 @@ struct WindowContentView: View {
         }
     }
 
-    /// Keeps a primary host stable through lazy surface creation and ordinary updates, but remounts it
-    /// when one live surface replaces another (split-survivor promotion). `TerminalView.updateNSView`
-    /// cannot replace the AppKit view that `makeNSView` returned, so session identity alone would keep
-    /// hosting the torn-down prior primary.
+    /// Keeps a primary host stable through lazy surface creation and ordinary updates, but remounts it when
+    /// one live surface replaces another (split-survivor promotion): `TerminalView.updateNSView` cannot
+    /// replace the view `makeNSView` returned, so session identity alone would keep hosting the torn-down
+    /// prior primary.
     func primarySurfaceID(_ session: Session) -> String {
         "\(session.id.uuidString)-primary-\(session.primarySurfaceHostRevision)"
     }
 
-    /// Mutes the inactive split pane's TEXT so the active pane stands out, WITHOUT darkening the
-    /// background: a translucent wash of the terminal background color over the pane. Background pixels
-    /// blend bg→bg (unchanged), text pixels blend text→bg (less bright) — the way other terminals dim an
-    /// inactive pane. The opacity comes from the Settings mute-strength slider (0...10) via
-    /// `AppSettings.muteOpacity`, so strength 0 renders nothing. Clicks pass through
-    /// (`allowsHitTesting(false)`) so the muted pane can still be focused; `dimmed == false` renders nothing.
+    /// Mutes the inactive split pane's TEXT without darkening the background: a translucent wash of the
+    /// terminal background over the pane, so background pixels blend bg→bg (unchanged) and text pixels
+    /// text→bg (less bright). Opacity comes from the Settings mute-strength slider via
+    /// `AppSettings.muteOpacity` (0...10, strength 0 renders nothing); clicks pass through so the muted
+    /// pane can still be focused.
     @ViewBuilder private func paneDim(_ dimmed: Bool) -> some View {
         let opacity = AppSettings.muteOpacity(strength: inactivePaneMute)
         if dimmed, opacity > 0 {
@@ -683,28 +638,23 @@ struct WindowContentView: View {
         }
     }
 
-    /// The terminal background color from the ghostty config (a dark fallback if libghostty hasn't
-    /// reported one), used as the quick terminal's opaque backing. Read into the `terminalColor`
-    /// view state so it re-renders when the theme changes.
+    /// The terminal background color from the ghostty config, with a dark fallback if libghostty has none.
     private static func resolvedTerminalColor() -> Color {
         Color(nsColor: GhosttyApp.shared.terminalBackgroundColor
             ?? NSColor(srgbRed: 0.157, green: 0.173, blue: 0.204, alpha: 1))
     }
 
-    /// The toolbar mode from the (non-observable) `GhosttyApp`, mirrored into view state so a settings
-    /// change (posting `.agtermAppearanceChanged`) re-renders the title bar (subtitle / hidden) live.
+    /// The toolbar mode from the (non-observable) `GhosttyApp`; see the `toolbarMode` mirror.
     private static func resolvedToolbarMode() -> ToolbarMode {
         GhosttyApp.shared.toolbarMode
     }
 
-    /// The attention-button flag from the (non-observable) `GhosttyApp`, mirrored into view state so a
-    /// settings change (posting `.agtermAppearanceChanged`) shows/hides the title bar bell live.
+    /// The attention-button flag from the non-observable `GhosttyApp`; see the `attentionButtonEnabled` mirror.
     private static func resolvedAttentionButtonEnabled() -> Bool {
         GhosttyApp.shared.attentionButtonEnabled
     }
 
-    /// The hidden-chrome-element set from the (non-observable) `GhosttyApp`, mirrored into view state so a
-    /// settings change (posting `.agtermAppearanceChanged`) shows/hides the gated chrome live.
+    /// The hidden-chrome-element set from the non-observable `GhosttyApp`; see the mirror above.
     private static func resolvedHiddenInterfaceElements() -> Set<InterfaceElement> {
         GhosttyApp.shared.hiddenInterfaceElements
     }
@@ -715,48 +665,42 @@ struct WindowContentView: View {
         !hiddenInterfaceElements.contains(element)
     }
 
-    /// The inactive-pane mute strength from the (non-observable) `GhosttyApp`, mirrored into view state
-    /// so a settings change (posting `.agtermAppearanceChanged`) re-renders the inactive pane live.
+    /// The inactive-pane mute strength from the non-observable `GhosttyApp`; see the `inactivePaneMute` mirror.
     private static func resolvedInactivePaneMute() -> Int {
         GhosttyApp.shared.inactivePaneMuteStrength
     }
 
-    /// The sidebar background shift from the (non-observable) `GhosttyApp`, mirrored into view state so a
-    /// settings change (posting `.agtermAppearanceChanged`) re-tints the sidebar wash live.
+    /// The sidebar background shift from the (non-observable) `GhosttyApp`; see the `sidebarShift` mirror.
     private static func resolvedSidebarShift() -> Int {
         GhosttyApp.shared.sidebarBackgroundShift
     }
 
-    /// The terminal theme's foreground color (a light fallback if libghostty hasn't reported one),
-    /// mirrored into view state so a theme change re-tints the chrome text live.
+    /// The terminal theme's foreground color, with a light fallback if libghostty hasn't reported one.
     private static func resolvedChromeText() -> Color {
         Color(nsColor: GhosttyApp.shared.terminalForegroundColor ?? .labelColor)
     }
 
-    /// A tooltip string with the action's current shortcut appended in parentheses (e.g. `Toggle
-    /// Sidebar (⌃⌘S)`), or just the base text when the action has no configured shortcut. Keeps the
-    /// toolbar/sidebar hints in lockstep with the keymap — a rebind shows the new chord, an unbound
-    /// action shows none — via the SAME `AppActions.shortcutGlyph` resolver the action palette uses.
-    /// Non-private so the `+RecentSessions` extension's attention button can build its tooltip.
+    /// The base text with the action's current shortcut appended in parentheses (`Toggle Sidebar (⌃⌘S)`),
+    /// or bare when the action has none — via the SAME `AppActions.shortcutGlyph` resolver the action
+    /// palette uses, so a rebind shows the new chord. Non-private so the `+RecentSessions` extension's
+    /// attention button can build its tooltip.
     func helpHint(_ base: String, _ action: BuiltinAction) -> String {
         guard let glyph = actions.shortcutGlyph(for: action) else { return base }
         return "\(base) (\(glyph))"
     }
 
-    /// The quick-terminal overlay: the scratch terminal centered at 90% of the window, framed by a
-    /// hairline border and shadow so it reads as a distinct floating window over the (undimmed)
-    /// content. libghostty renders only the terminal content, so the frame is drawn here. The margin
-    /// is a transparent tap-catcher that dismisses on click — no darkening, because the overlay
-    /// can't cover the AppKit title bar, so a dim would shade the body but not the chrome. Rendered
-    /// only while visible; the surface it hosts is owned by the controller, so hiding keeps the
-    /// shell alive.
-    /// The window-level overlays (quick terminal, command palettes, Ctrl-Tab switcher) as one layer,
-    /// rendered as a ZStack sibling INSIDE the body's root ZStack rather than as body-level `.overlay`s —
-    /// so it can be inset below the titlebar and ordered BELOW `customTitlebar` (which a body-level
-    /// `.overlay` cannot). Each child is conditional, so when none is showing this is empty (an empty
-    /// frame is not hit-testable, so the terminal below stays interactive); each overlay's own
-    /// `GeometryReader` fills the inset area. Order here = z-order (switcher on top of palette on top of
-    /// quick terminal), matching the previous `.overlay` stacking.
+    /// The quick-terminal overlay: the scratch terminal centered at 90% of the window, framed by a hairline
+    /// border and shadow so it reads as a distinct floating window over the (undimmed) content — libghostty
+    /// renders only the terminal, so the frame is drawn here. The margin is a transparent tap-catcher that
+    /// dismisses on click; no dim, because the overlay cannot cover the AppKit title bar and would shade the
+    /// body but not the chrome. Rendered only while visible; the controller owns the surface, so hiding
+    /// keeps the shell alive.
+    /// The window-level overlays (quick terminal, command palettes, Ctrl-Tab switcher) as one layer: a ZStack
+    /// sibling INSIDE the body's root ZStack, not body-level `.overlay`s, so it can be inset below the
+    /// titlebar and ordered BELOW `customTitlebar` (which a body-level `.overlay` cannot). Every child is
+    /// conditional, so with none showing this is an empty frame — not hit-testable, so the terminal below
+    /// stays interactive; each overlay's own `GeometryReader` fills the inset area. Order here = z-order
+    /// (switcher over palette over quick terminal).
     private var windowOverlayLayer: some View {
         ZStack {
             quickTerminalOverlay
@@ -773,9 +717,8 @@ struct WindowContentView: View {
         if quickTerminal.isVisible {
             GeometryReader { geo in
                 ZStack {
-                    // the transparent tap-catcher also carries the `quick-terminal` accessibility id:
-                    // a SwiftUI view is exposed in the accessibility tree (the Metal-backed
-                    // `QuickTerminalPane` is not), so this is the element control-API tests query for.
+                    // the tap-catcher carries the `quick-terminal` accessibility id: a SwiftUI view is in
+                    // the a11y tree (the Metal-backed `QuickTerminalPane` is not), so tests query this one.
                     Color.clear
                         .contentShape(Rectangle())
                         .onTapGesture { quickTerminal.hide() }
@@ -798,12 +741,11 @@ struct WindowContentView: View {
         }
     }
 
-    /// True only for the frontmost window. The palette and session switcher are app-global single
-    /// instances (they act on the frontmost store), so only the frontmost window mounts their
-    /// overlays — otherwise every open window would render a duplicate overlay, contending for focus
-    /// and showing the wrong window's candidates. Uses `activeWindowID` (frontmost-or-first-open, the
-    /// same accessor the palette/actions resolve through), so exactly one window matches even before
-    /// the first `didBecomeKey` sets `frontmostWindowID`. Reactive: `frontmostWindowID` is observed.
+    /// True only for the frontmost window. The palette and session switcher are app-global singles acting on
+    /// the frontmost store, so only that window mounts their overlays — otherwise every open window renders
+    /// a duplicate, contending for focus and showing the wrong window's candidates. `activeWindowID`
+    /// (frontmost-or-first-open, the accessor the palette/actions resolve through) matches exactly one
+    /// window even before the first `didBecomeKey` sets `frontmostWindowID`, and is observed, so this reacts.
     private var isFrontmost: Bool { library.activeWindowID == windowID }
 
     /// The command-palette overlay, mounted only while a palette is open in the frontmost window. Its
@@ -814,11 +756,11 @@ struct WindowContentView: View {
         }
     }
 
-    /// A control picker is per-window rather than frontmost-global, so a caller may present one in a
-    /// background window without duplicating it elsewhere. Selection preserves the caller's original
-    /// item index even though fuzzy filtering reorders the visible rows. Keyed by the pending id so one
-    /// picker replacing another in the same view update gets fresh palette state rather than keeping the
-    /// previous picker's rows, whose select closures capture the previous picker's items.
+    /// A control picker is per-window rather than frontmost-global, so a caller can present one in a
+    /// background window without duplicating it elsewhere. Selection preserves the caller's original item
+    /// index even though fuzzy filtering reorders the visible rows. Keyed by the pending id so a picker
+    /// replacing another in the same view update gets fresh palette state instead of the previous picker's
+    /// rows, whose select closures capture the previous picker's items.
     @ViewBuilder private var pickPaletteOverlay: some View {
         if let pending = pick.pending {
             CommandPalette(
@@ -852,10 +794,10 @@ struct WindowContentView: View {
         }
     }
 
-    /// The sidebar footer, source-list style: two add controls on the left — add a workspace, and a menu
-    /// to add a session to the current workspace (default cwd) or a picked directory — and two view
-    /// toggles on the right, the workspace focus filter and the flagged working-set view. Each of the four
-    /// is individually hideable via Settings ▸ Interface (`shows(_:)`).
+    /// The sidebar footer, source-list style: two add controls on the left (a workspace; a menu adding a
+    /// session to the current workspace at the default cwd or at a picked directory) and two view toggles on
+    /// the right (the workspace focus filter, the flagged working-set view). Each of the four is
+    /// individually hideable via Settings ▸ Interface (`shows(_:)`).
     private var bottomBar: some View {
         HStack(spacing: 2) {
             if shows(.newWorkspace) {
@@ -893,8 +835,7 @@ struct WindowContentView: View {
             Spacer()
 
             // apply or suspend the marked-workspace filter WITHOUT losing the set, so peeking at the whole
-            // tree costs one click each way. 2-state glyph (filled while the filter applies); it is both
-            // the indicator and the control for the filter state.
+            // tree costs one click each way. 2-state glyph (filled while applied): indicator and control.
             if shows(.focusFilter) {
                 Button {
                     actions.toggleFocusFilter()
@@ -904,9 +845,8 @@ struct WindowContentView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                // nothing marked means nothing to filter to, and the store refuses to enable an empty set
-                // anyway. The explicit chromeText foregroundStyle defeats SwiftUI's default disabled
-                // dimming, so mute it by hand — the flagged toggle's rule.
+                // nothing marked = nothing to filter to, and the store refuses an empty set anyway. The
+                // explicit chromeText foregroundStyle defeats SwiftUI's disabled dimming, so mute by hand.
                 .disabled(store.focusedWorkspaceIDs.isEmpty)
                 .opacity(store.focusedWorkspaceIDs.isEmpty ? 0.35 : 1)
                 .help(helpHint(store.focusEnabled ? "Show all workspaces" : "Show only focused workspaces",
@@ -929,9 +869,8 @@ struct WindowContentView: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.borderless)
-                // nothing to show: disable entering an empty flagged view (tree mode + no flags). Stays
-                // enabled in flagged mode so the button can always switch back to the tree. The explicit
-                // chromeText foregroundStyle defeats SwiftUI's default disabled dimming, so mute it by hand.
+                // disable entering an empty flagged view (tree mode + no flags); stays enabled in flagged
+                // mode so the button can always switch back to the tree. Hand-muted, like the filter above.
                 .disabled(store.sidebarMode == .tree && store.flaggedSessions.isEmpty)
                 .opacity(store.sidebarMode == .tree && store.flaggedSessions.isEmpty ? 0.35 : 1)
                 .help(helpHint(store.sidebarMode == .flagged ? "Show all sessions" : "Show flagged sessions", .toggleFlaggedView))
@@ -943,8 +882,8 @@ struct WindowContentView: View {
         .padding(.vertical, 4)
         // the add buttons track the terminal theme's foreground, matching the sidebar rows above.
         .foregroundStyle(chromeText)
-        // no explicit background: the sidebar is transparent (the window's terminal color shows
-        // through), so a `.bar` material here would paint a mismatched darker strip.
+        // no explicit background: the sidebar is transparent (the window's terminal color shows through),
+        // so a `.bar` material here would paint a mismatched darker strip.
     }
 
 }

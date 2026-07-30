@@ -1,24 +1,17 @@
 import AppKit
 import agtermCore
 
-/// StatusSoundPlayer plays the one-shot sound requested by `session.status --sound`. It is a thin AppKit
-/// wrapper over `NSSound`: a shared `@MainActor` singleton used by `ControlServer` (the per-call and
-/// blocked-default status sounds) and by the Settings sound pickers' selection previews.
+/// StatusSoundPlayer plays the one-shot sound requested by `session.status --sound`: a thin `@MainActor`
+/// singleton over `NSSound`, used by `ControlServer` (the per-call and blocked-default status sounds) and
+/// by the Settings sound pickers' selection previews.
 ///
-/// `action(for:)` resolves a sound name to its play closure (or nil when a named sound can't be found),
-/// so the caller can validate before mutating the indicator and surface an `unknown sound` error. The
-/// `default`/`beep` value maps to the system alert sound; any other value is a named system sound via
-/// `NSSound(named:)`, which also resolves custom sounds in `~/Library/Sounds`. `play(_:)` resolves AND
-/// plays, but de-bounces a replay of the same sound within a short window (`SoundThrottle`) so a burst of
-/// rapid status sets can't machine-gun an identical clip.
-///
-/// Resolved `NSSound` instances are cached and thus retained for the app's lifetime — both to skip
-/// reloading and to avoid the AppKit gotcha where a locally-scoped `NSSound` is deallocated mid-play and
-/// the clip is cut off.
+/// `action(for:)` resolves a name without playing it, so the caller can validate before mutating the
+/// indicator and surface an `unknown sound` error; `NSSound(named:)` also resolves `~/Library/Sounds`.
+/// Resolved sounds are cached, so they are retained for the app's lifetime — skipping a reload, and dodging
+/// the AppKit gotcha where a locally-scoped `NSSound` is deallocated mid-play and the clip is cut off.
 @MainActor
 final class StatusSoundPlayer {
-    /// Shared player so the control server (per-call + blocked-default sounds) and the Settings picker
-    /// preview share one `NSSound` cache.
+    /// Shared so every caller reuses one `NSSound` cache.
     static let shared = StatusSoundPlayer()
 
     private var cache: [String: NSSound] = [:]
@@ -27,9 +20,8 @@ final class StatusSoundPlayer {
     /// transitions) doesn't stutter the same clip; the Settings preview bypasses this and always sounds.
     private var throttle = SoundThrottle(window: .milliseconds(200))
 
-    /// The standard macOS system sound names: the option list of the Settings sound pickers (the
-    /// blocked-status and notification sounds), and the suggested valid values in the `unknown sound`
-    /// error; any name `NSSound(named:)` can resolve is accepted, not just these.
+    /// The standard macOS system sound names: the Settings sound pickers' option list (blocked-status and
+    /// notification) and the `unknown sound` error's suggestions; any name `NSSound(named:)` resolves works.
     static let standardNames = ["Basso", "Blow", "Bottle", "Frog", "Funk", "Hero", "Morse",
                                 "Ping", "Pop", "Purr", "Sosumi", "Submarine", "Tink", "Glass"]
 
@@ -43,11 +35,11 @@ final class StatusSoundPlayer {
         return { sound.stop(); sound.play() }
     }
 
-    /// Resolve and play `name`, suppressing a replay of the SAME sound within the throttle window so a
-    /// burst of rapid status sets doesn't machine-gun an identical clip. Returns false ONLY when the name
-    /// can't be resolved (so the caller can surface `unknown sound`); a throttled replay returns true
-    /// (resolvable, just intentionally silent). The control server's play path uses this; the Settings
-    /// picker preview calls `action(for:)` directly so a deliberate preview click always sounds.
+    /// Resolve and play `name`, suppressing a replay of the SAME sound within the throttle window so a burst
+    /// of rapid status sets doesn't machine-gun an identical clip. Returns false ONLY when the name can't be
+    /// resolved (so the caller can surface `unknown sound`); a throttled replay returns true — resolvable,
+    /// just intentionally silent. The control server plays through this; the Settings picker preview calls
+    /// `action(for:)` directly so a deliberate click always sounds.
     @discardableResult
     func play(_ name: String) -> Bool {
         guard let action = action(for: name) else { return false }

@@ -1,12 +1,11 @@
 import Foundation
 
-/// Coalesces rapid repeated calls into a single deferred action. `schedule(after:_:)`
-/// cancels any pending work and reschedules, so only the latest action runs once the
-/// quiet window elapses. `flush()` runs the pending work synchronously (used by a
-/// commit/quit path that must capture the latest state now); `cancel()` drops it.
+/// Coalesces rapid repeated calls into a single deferred action: `schedule(after:_:)` cancels any pending
+/// work and reschedules, so only the latest runs once the quiet window elapses; `flush()` runs it
+/// synchronously (for a commit/quit path that must capture the latest state now); `cancel()` drops it.
 ///
-/// `@MainActor` so the scheduled work runs on the main actor like its callers
-/// (AppStore saves, SettingsModel theme preview). Foundation-only — host-free.
+/// `@MainActor` so the work runs on the main actor like its callers (AppStore saves, SettingsModel theme
+/// preview). Foundation-only — host-free.
 @MainActor
 public final class Debouncer {
     private var work: DispatchWorkItem?

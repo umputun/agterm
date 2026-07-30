@@ -17,9 +17,8 @@ public struct ControlEventPayload: Codable, Sendable, Equatable {
     public var pane: String?
     public var blink: Bool?
     public var color: String?
-    /// The `status` event's per-call glyph silhouette (a `StatusShape` raw value), or nil when the glyph
-    /// uses the Settings shape / the default plain circle. A shape-only change is a real indicator change,
-    /// so it DOES emit a `status` event — without this field a consumer could not explain it.
+    /// The `status` event's per-call glyph silhouette (a `StatusShape` raw value), nil when the glyph uses the
+    /// Settings shape / default plain circle. A shape-only change emits a `status` event, unexplainable without it.
     public var shape: String?
     public var title: String?
     public var body: String?

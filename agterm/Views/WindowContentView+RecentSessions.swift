@@ -7,20 +7,19 @@ import SwiftUI
 /// equivalent of the Ctrl-Tab switcher — and the attention bell. Both open a session picker over the
 /// frontmost window and are referenced from `WindowContentView.titlebarRow`.
 extension WindowContentView {
-    /// The frontmost window's most-recently-used sessions, EXCLUDING the current one (it's not a jump target —
-    /// you're already there), scoped to the visible/filtered set and capped like the Ctrl-Tab switcher.
-    /// The live refresh rides the OBSERVED `activeSession`/`navigableSessions` reads — every `sessionRecency`
-    /// mutation co-occurs with one of them (a push on select changes `activeSession`, a prune on close changes
-    /// `navigableSessions`); `sessionRecency` itself is `@ObservationIgnored`, read for its value, not for
-    /// observation, so it registers none on its own.
+    /// The frontmost window's most-recently-used sessions, EXCLUDING the current one (not a jump target —
+    /// you're already there), scoped to the visible/filtered set and capped like the Ctrl-Tab switcher. The
+    /// live refresh rides the OBSERVED `activeSession`/`navigableSessions` reads — every `sessionRecency`
+    /// mutation co-occurs with one (a push on select changes `activeSession`, a prune on close changes
+    /// `navigableSessions`); `sessionRecency` itself is `@ObservationIgnored` and registers no observation.
     private var recentSessions: [UUID] {
         store.navigableRecentSessions(limit: SessionSwitcher.maxCandidates)
     }
 
-    /// Title-bar button that opens the recent-sessions popover — the mouse equivalent of the Ctrl-Tab
-    /// switcher. Lists the window's most-recently-used OTHER sessions; disabled/dimmed when there's nothing
-    /// to switch to (only the current session). Opening a popover is interactive-only, so it's control-API
-    /// keep-in-sync exempt (like the bell opening the attention palette).
+    /// Title-bar button opening the recent-sessions popover — the mouse equivalent of the Ctrl-Tab switcher.
+    /// Lists the window's most-recently-used OTHER sessions; disabled/dimmed when there is nothing to switch to
+    /// (only the current session). Opening a popover is interactive-only, so it is control-API keep-in-sync
+    /// exempt, like the bell opening the attention palette.
     var recentSessionsButton: some View {
         let enabled = !recentSessions.isEmpty && pick.pending == nil
         return Button {
@@ -30,9 +29,9 @@ extension WindowContentView {
             Label("Recent sessions", systemImage: "clock.arrow.circlepath")
         }
         .help("Recent sessions (⌃Tab)")
-        // pin the tint to chromeText like the attention bell: without it a disabled plain button resolves
-        // the SF Symbol to the system disabled color, which is near-invisible on the themed titlebar (the
-        // dimmed clock would vanish instead of graying out like the bell).
+        // pin the tint to chromeText like the attention bell: a disabled plain button otherwise resolves the SF
+        // Symbol to the system disabled color, near-invisible on the themed titlebar — the dimmed clock would
+        // vanish instead of graying out like the bell.
         .foregroundStyle(chromeText)
         .disabled(!enabled)
         .opacity(enabled ? 1 : 0.35)
@@ -41,9 +40,9 @@ extension WindowContentView {
             recentSessionsPopover
         }
         .onChange(of: recentSessionsShown) { _, shown in
-            // suppress this window's auto-follow while the popover is open so an armed idle jump can't
-            // reshuffle the MRU rows under the pointer (the command palette + dashboard bracket the same way);
-            // the counted suppression stays balanced across open/close and with the attention popover.
+            // suppress this window's auto-follow while the popover is open so an armed idle jump can't reshuffle
+            // the MRU rows under the pointer (the palette + dashboard bracket the same way); the counted
+            // suppression stays balanced across open/close and with the attention popover.
             if shown { store.suppressAutoFollow() } else { store.resumeAutoFollow() }
         }
         .onChange(of: recentSessions.isEmpty) { _, empty in
@@ -53,16 +52,14 @@ extension WindowContentView {
         }
     }
 
-    /// The recent-sessions popover body: the MRU OTHER sessions as full-row `RecentSessionRow`s (the shared
-    /// two-line `SessionSwitcherRow`) — the current session is omitted since it isn't a jump target. Each row
-    /// highlights on hover and, on click anywhere in the row, commits the switch (`noteUserActivity` +
-    /// `selectSession` + focus, like the Ctrl-Tab release) then closes the popover — the palette-row feel.
-    /// Tinted to the terminal theme (`terminalColor` panel, `chromeText` text, selection-color hover) so it
-    /// matches the themed sidebar/titlebar chrome rather than the system popover look.
+    /// The recent-sessions popover body: the MRU OTHER sessions as full rows (the shared two-line
+    /// `SessionSwitcherRow`). Each row highlights on hover and, on a click anywhere in the row, commits the
+    /// switch (`noteUserActivity` + `selectSession` + focus, like the Ctrl-Tab release) then closes the popover
+    /// — the palette-row feel. Tinted to the terminal theme (`terminalColor` panel, `chromeText` text,
+    /// selection-color hover) so it matches the themed chrome rather than the system popover look.
     private var recentSessionsPopover: some View {
-        // no `.accessibilityIdentifier` on this container: a SwiftUI accessibility identifier on a parent
-        // propagates to and OVERRIDES its descendants' identifiers, which would clobber the per-row
-        // `recent-session-row` ids the tests read. The rows carry their own ids.
+        // no `.accessibilityIdentifier` on this container: a SwiftUI identifier on a parent propagates to and
+        // OVERRIDES its descendants', clobbering the per-row `recent-session-row` ids the tests read.
         VStack(spacing: 2) {
             ForEach(recentSessions, id: \.self) { id in
                 recentSessionRow(id)
@@ -108,14 +105,14 @@ extension WindowContentView {
         recentSessionsShown = false
     }
 
-    /// Title-bar bell reflecting the window's attention state at a glance (opt-in, gated by the
-    /// `attentionButtonEnabled` mirror). Three states from `store.attentionSessions`: empty → a dimmed
-    /// disabled outline bell; non-empty with nothing blocked → a plain enabled bell in `chromeText`; any
-    /// blocked session → a filled bell tinted the blocked-status color. No count, no pulse. Click opens the
-    /// attention popover (the mouse form; ⌃⇧I / the Navigate menu keep the searchable `.attention` palette).
-    /// Reading `store.attentionSessions` in the body registers the per-session `agentIndicator` observation,
-    /// so the glyph re-renders live as a status changes. `.accessibilityValue` (none|attention|blocked)
-    /// exposes the otherwise-unobservable bell↔bell.fill state to XCUITest, mirroring `StatusIconView`.
+    /// Title-bar bell reflecting the window's attention state (opt-in, gated by the `attentionButtonEnabled`
+    /// mirror). Three states from `store.attentionSessions`: empty → a dimmed disabled outline bell; non-empty
+    /// with nothing blocked → a plain enabled bell in `chromeText`; any blocked session → a filled bell tinted
+    /// the blocked-status color. No count, no pulse. Click opens the attention popover (the mouse form; ⌃⇧I /
+    /// the Navigate menu keep the searchable `.attention` palette). Reading `store.attentionSessions` in the
+    /// body registers the per-session `agentIndicator` observation, so the glyph re-renders live;
+    /// `.accessibilityValue` (none|attention|blocked) exposes the otherwise-unobservable bell↔bell.fill state
+    /// to XCUITest, mirroring `StatusIconView`.
     var attentionButton: some View {
         let sessions = store.attentionSessions
         let blocked = sessions.contains { $0.agentIndicator.status == .blocked }
@@ -137,8 +134,7 @@ extension WindowContentView {
             attentionPopover
         }
         .onChange(of: attentionPopoverShown) { _, shown in
-            // same as the recent popover: suppress auto-follow while open so an armed idle jump can't
-            // reshuffle the listed attention sessions under the pointer; counted, so it stays balanced.
+            // same as the recent popover: suppress auto-follow while open (counted, so it stays balanced).
             if shown { store.suppressAutoFollow() } else { store.resumeAutoFollow() }
         }
         .onChange(of: empty) { _, isEmpty in
@@ -150,8 +146,8 @@ extension WindowContentView {
 
     /// The attention popover body: the window's sessions needing attention (`store.attentionSessions`, sorted
     /// blocked→active→completed) as full-row `SessionPopoverRow`s with a leading status glyph — the mouse form
-    /// of the ⌃⇧I attention palette, themed and hover-highlighted like the recent-sessions popover. Clicking a
-    /// row selects the session and reveals its blocked pane. Same tint (`terminalColor`/`chromeText`/selection).
+    /// of the ⌃⇧I attention palette, tinted and hover-highlighted like the recent-sessions popover. Clicking a
+    /// row selects the session and reveals its blocked pane.
     private var attentionPopover: some View {
         VStack(spacing: 2) {
             ForEach(store.attentionSessions) { session in
@@ -187,10 +183,9 @@ extension WindowContentView {
 /// One clickable session row for the title-bar popovers (recent-sessions and attention) — the shared two-line
 /// `SessionSwitcherRow` tinted with the terminal theme (`foreground`), with an optional leading status glyph
 /// (`status` plus its per-call `statusColorHex`/`statusShape` overrides, set only by the attention popover so
-/// the row matches the sidebar glyph), a pointer-hover highlight (`hoverColor`) and a full-row hit
-/// area (`.contentShape`), so the WHOLE row selects on click, not just the text (the command-palette-row
-/// feel). Kept a `Button` so it reads as an actionable control to VoiceOver; `accessibilityID` distinguishes
-/// the two popovers' rows for the tests.
+/// the row matches the sidebar glyph), a pointer-hover highlight (`hoverColor`) and a full-row hit area
+/// (`.contentShape`), so the WHOLE row selects on click, not just the text. Kept a `Button` so it reads as an
+/// actionable control to VoiceOver; `accessibilityID` distinguishes the two popovers' rows for the tests.
 private struct SessionPopoverRow: View {
     let title: String
     let subtitle: String

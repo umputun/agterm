@@ -1,18 +1,16 @@
 import agtermCore
 import AppKit
 
-/// `WorkspaceSidebar.Coordinator` per-row context menu and its actions — the double-click rename
-/// trigger, the menu builder, and the `@objc` handlers that drive the store/`AppActions`. Split out of
-/// `WorkspaceSidebar.swift` to keep that file under the swiftlint size limit. Selector dispatch from an
-/// extension works, so the handlers stay private.
+/// `WorkspaceSidebar.Coordinator`'s per-row context menu and actions — the double-click rename trigger, the
+/// menu builder, and the `@objc` handlers driving the store/`AppActions`. Split from `WorkspaceSidebar.swift`
+/// for the swiftlint size limit; selector dispatch from an extension works, so the handlers stay private.
 extension WorkspaceSidebar.Coordinator {
     // MARK: - Context menu
 
-    /// Single click on a workspace row toggles its expansion, so the whole row is a hit target for
-    /// expand/collapse (not just the disclosure triangle). The toggle is DEFERRED by the double-click
-    /// interval: a double-click (`handleDoubleClick`) cancels it, so renaming a workspace no longer flips
-    /// it open/closed on the way into edit mode. `action` fires on a genuine click, never during a drag,
-    /// so workspace drag-reorder is unaffected.
+    /// Single click anywhere on a workspace row toggles its expansion, so the whole row is the hit target,
+    /// not just the disclosure triangle. The toggle is DEFERRED by the double-click interval and cancelled
+    /// by `handleDoubleClick`, so renaming does not flip the row open/closed on the way into edit mode.
+    /// `action` fires on a genuine click, never during a drag, so workspace drag-reorder is unaffected.
     @objc func handleSingleClick(_ sender: NSOutlineView) {
         let row = sender.clickedRow
         guard row >= 0, let node = sender.item(atRow: row) as? SidebarNode, node.kind == .workspace else { return }
@@ -47,19 +45,16 @@ extension WorkspaceSidebar.Coordinator {
         if outline.isItemExpanded(node) { outline.collapseItem(node) } else { outline.expandItem(node) }
     }
 
-    /// Builds the per-row context menu. Resolves the clicked row lazily so the
-    /// same menu serves every row.
+    /// Builds the per-row context menu, resolving the clicked row lazily so one menu serves every row.
     func menu(forRow row: Int) -> NSMenu? {
         guard let outline = outlineView, row >= 0, let node = outline.item(atRow: row) as? SidebarNode else { return nil }
         let menu = NSMenu()
-        // manage enabled state explicitly (the Delete item is disabled at the last workspace)
-        // rather than via the responder-chain auto-enabling.
+        // explicit enabled state (Delete is disabled at the last workspace), not responder-chain auto-enabling.
         menu.autoenablesItems = false
         let sessionTargets = node.kind == .session ? store.sidebarSelectionTargets(forContextSession: node.id) : []
         let sessionCount = sessionTargets.count
 
-        // "Clear Status" sits first for a session row that has a status to clear (same effect as
-        // `agtermctl session status idle`).
+        // "Clear Status" sits first for a session row with a status, the `agtermctl session status idle` effect.
         if node.kind == .session, sessionTargets.contains(where: { store.session(withID: $0)?.agentIndicator.status != .idle }) {
             let clearStatus = NSMenuItem(title: sessionCount == 1 ? "Clear Status" : "Clear Statuses",
                                          action: #selector(menuClearStatus(_:)), keyEquivalent: "")
@@ -78,9 +73,9 @@ extension WorkspaceSidebar.Coordinator {
 
         switch node.kind {
         case .session:
-            // "Duplicate Session" opens a fresh shell in this session's directory, right after it —
-            // single-selection only (like Rename/Reveal in Finder), and sitting next to Rename mirrors
-            // Finder's ordering. The title matches the New Session / Close Session naming on the same menu.
+            // "Duplicate Session" opens a fresh shell in this session's directory, right after it.
+            // Single-selection only and next to Rename, mirroring Finder; the title matches the New
+            // Session / Close Session naming on this menu.
             if sessionCount == 1 {
                 let duplicate = NSMenuItem(title: "Duplicate Session", action: #selector(menuDuplicate(_:)), keyEquivalent: "")
                 duplicate.target = self
@@ -102,8 +97,7 @@ extension WorkspaceSidebar.Coordinator {
                 moveTo.submenu = submenu
                 menu.addItem(moveTo)
             }
-            // "Flag"/"Unflag" toggles the session's flagged working-set membership; the label
-            // reflects the current state.
+            // "Flag"/"Unflag" toggles flagged working-set membership; the label reflects the current state.
             let allFlagged = !sessionTargets.isEmpty && sessionTargets.allSatisfy { store.session(withID: $0)?.flagged == true }
             let flagTitle: String
             if sessionCount == 1 {
@@ -136,8 +130,8 @@ extension WorkspaceSidebar.Coordinator {
             openSession.target = self
             openSession.representedObject = node
             menu.addItem(openSession)
-            // the two focus items are their own group: they filter what the tree shows, unlike the
-            // create items above and the destructive one below.
+            // the focus items are their own group: they filter what the tree shows, unlike the create items
+            // above and the destructive one below.
             menu.addItem(.separator())
             // "Focus"/"Unfocus" REPLACES the marked set with this workspace (or clears it when this is
             // already the only marked one, with the filter on); the label reflects the current state.
@@ -207,8 +201,7 @@ extension WorkspaceSidebar.Coordinator {
 
     @objc private func menuDuplicate(_ sender: NSMenuItem) {
         guard let node = sender.representedObject as? SidebarNode else { return }
-        // pass THIS sidebar's window-local store, like Close/Flag: a background window's Duplicate must
-        // act on its own row, not the frontmost window's session.
+        // this sidebar's window-local store, like Close/Flag — a background window acts on its own row.
         actions.duplicateSession(node.id, in: store)
     }
 
@@ -224,9 +217,8 @@ extension WorkspaceSidebar.Coordinator {
         addSession(toWorkspace: node.id, cwd: actions.resolvedNewSessionCwd())
     }
 
-    /// Inline "+" button on a workspace row — same action as the right-click "New Session" menu item.
-    /// The button carries no workspace id; we derive it from the outline row at click time so reused
-    /// cells always target the correct workspace.
+    /// Inline "+" button on a workspace row, the right-click "New Session" action. The button carries no
+    /// workspace id, so it is derived from the outline row at click time — reused cells target the right one.
     @objc func addSessionButtonClicked(_ sender: NSButton) {
         // cancel any pending single-click workspace toggle so clicking "+" doesn't also flip expansion.
         pendingRowToggle?.cancel()
@@ -239,17 +231,15 @@ extension WorkspaceSidebar.Coordinator {
 
     @objc private func menuDeleteWorkspace(_ sender: NSMenuItem) {
         guard let node = sender.representedObject as? SidebarNode else { return }
-        // pass THIS sidebar's window-local store, like Close/Flag/Duplicate/Focus: the item's enabled state
-        // came from `store.canRemoveWorkspace`, so a background window's row must delete its own workspace —
-        // routing through the frontmost store would not find the id there and would silently do nothing.
+        // this sidebar's window-local store, like Close/Flag/Duplicate/Focus: the enabled state came from
+        // `store.canRemoveWorkspace`, and the frontmost store would not find the id — a silent no-op.
         actions.deleteWorkspace(node.id, in: store)
     }
 
     @objc private func menuFocusWorkspace(_ sender: NSMenuItem) {
         guard let node = sender.representedObject as? SidebarNode else { return }
-        // pass THIS sidebar's window-local store, like Close/Flag/Duplicate: the "Focus"/"Unfocus" label
-        // was computed from it, so a background window's row must toggle its own tree — routing through
-        // the frontmost store would read one window and write another.
+        // this sidebar's window-local store, like Close/Flag/Duplicate: the "Focus"/"Unfocus" label was
+        // computed from it, and the frontmost store would read one window and write another.
         actions.focusWorkspace(node.id, in: store)
     }
 

@@ -1,11 +1,9 @@
 import Foundation
 
-/// A user-defined command: a shell line run via `/bin/sh -c`, optionally bound to a keyboard
-/// shortcut and always listed in the action palette.
-///
-/// The `command` body may contain `{AGT_X}` template tokens (see `CommandContext`), expanded at
-/// fire time; the same values are also exported as `$AGT_X` environment variables on the spawned
-/// process. An empty `shortcut` means palette-only (no keybind).
+/// A user-defined command: a shell line run via `/bin/sh -c`, optionally bound to a keyboard shortcut
+/// and always listed in the action palette. The body may carry `{AGT_X}` template tokens (see
+/// `CommandContext`), expanded at fire time and also exported as `$AGT_X` environment variables on the
+/// spawned process. An empty `shortcut` means palette-only (no keybind).
 public struct CustomCommand: Codable, Equatable, Sendable, Identifiable {
     public let id: UUID
     /// Display name, shown in the palette and used in the failure banner.
@@ -23,11 +21,10 @@ public struct CustomCommand: Codable, Equatable, Sendable, Identifiable {
     }
 }
 
-/// The already-resolved session context for a command fire: one field per `{AGT_X}` token.
-///
-/// The app target builds this from the active session at fire time; agtermCore only turns it into
-/// the token substitutions (`expand`) and the environment dictionary (`environment`). Both derive
-/// from the single `tokens` table, so the `{AGT_X}` set and the `$AGT_X` set can never drift.
+/// The already-resolved session context for a command fire: one field per `{AGT_X}` token. The app
+/// target builds it from the active session at fire time; agtermCore only derives the token
+/// substitutions (`expand`) and the environment dictionary (`environment`), both off the single `tokens`
+/// table, so the `{AGT_X}` set and the `$AGT_X` set can never drift.
 public struct CommandContext: Equatable, Sendable {
     /// Which pane a command fired from. The raw values are exactly the `--pane` argument strings, so
     /// `pane.rawValue` is always a valid `session.type`/`session.text --pane` value.
@@ -47,10 +44,10 @@ public struct CommandContext: Equatable, Sendable {
     /// The pane that had focus at fire time — `.left` (main), `.right` (split), or `.scratch` (the
     /// session's scratch terminal). `.left` for any single-pane session, including a promoted split
     /// survivor: when the primary pane exits, `closePrimaryPane` moves the surviving split pane into the
-    /// main slot, so it reports `.left` and `session.type --pane left` reaches it. Typed (not a raw
-    /// `String`) so `rawValue` can only be `left`/`right`/`scratch`; it is consumed as the `$AGT_PANE`
-    /// env var a script feeds back through `session type --pane` (re-validated CLI- AND server-side —
-    /// the enum pins the token this emits, not the shell round-trip).
+    /// main slot, so it reports `.left` and `session.type --pane left` reaches it. Typed, so `rawValue`
+    /// can only be `left`/`right`/`scratch`; it is consumed as the `$AGT_PANE` env var a script feeds
+    /// back through `session type --pane` (re-validated CLI- AND server-side — the enum pins the token
+    /// emitted here, not the shell round-trip).
     public var pane: Pane
     public var selection: String
     public var socket: String
@@ -86,9 +83,9 @@ public struct CommandContext: Equatable, Sendable {
          ("AGT_SOCKET", socket)]
     }
 
-    /// The `AGT_X` token names available in a command body, in declaration order. Derived from the
-    /// same `tokens` table that `expand`/`environment` use, so the Settings token reference (the UI
-    /// that lists them) can't drift from the expansion set.
+    /// The `AGT_X` token names available in a command body, in declaration order. Off the same `tokens`
+    /// table `expand`/`environment` use, so the Settings token reference (the UI listing them) can't
+    /// drift from the expansion set.
     public static var tokenNames: [String] {
         CommandContext().tokens.map(\.name)
     }
@@ -99,20 +96,18 @@ public struct CommandContext: Equatable, Sendable {
     /// with no session, which is what keeps a launcher command firable in an emptied window.
     public static let sessionScopedTokenBases = ["AGT_SESSION", "AGT_WORKSPACE", "AGT_SELECTION"]
 
-    /// Whether `commandBody` references any session-scoped token (in `{AGT_X}`, `$AGT_X`, or `${AGT_X}`
-    /// form — a plain substring match, since these base names are specific enough not to occur by
-    /// accident). The empty-window keybind uses this to keep such a command inert with no active session
-    /// (matching the palette's no-op) instead of firing it with silently-empty tokens.
+    /// Whether `commandBody` references any session-scoped token (`{AGT_X}`, `$AGT_X` or `${AGT_X}` — a
+    /// plain substring match, the base names being specific enough not to occur by accident). The
+    /// empty-window keybind keeps such a command inert with no active session (like the palette's no-op)
+    /// instead of firing it with silently-empty tokens.
     public static func referencesSessionScopedContext(_ commandBody: String) -> Bool {
         sessionScopedTokenBases.contains { commandBody.contains($0) }
     }
 
-    /// Substitutes each `{AGT_X}` occurrence in `template` with its resolved value from this context.
-    /// A token whose value is empty becomes an empty string; an unknown `{...}` is left untouched.
-    ///
-    /// Single-pass: the input is scanned once and each `{...}` is replaced from the token table, so a
-    /// replaced value that itself contains a `{AGT_X}` literal (e.g. a selection that reads
-    /// `{AGT_SOCKET}`) is NOT re-substituted.
+    /// Substitutes each `{AGT_X}` occurrence in `template` with its resolved value from this context; an
+    /// empty value becomes an empty string, an unknown `{...}` is left untouched. Single-pass, so a
+    /// replaced value that itself contains a `{AGT_X}` literal (e.g. a selection reading `{AGT_SOCKET}`)
+    /// is NOT re-substituted.
     public func expand(_ template: String) -> String {
         let table = Dictionary(uniqueKeysWithValues: tokens.map { ($0.name, $0.value) })
         var result = ""
@@ -129,7 +124,6 @@ public struct CommandContext: Equatable, Sendable {
             if let value = table[name] {
                 result += value
             } else {
-                // not a known token — keep the `{...}` literal untouched.
                 result += rest[open...close]
             }
             rest = rest[rest.index(after: close)...]

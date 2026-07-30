@@ -1,49 +1,45 @@
 import Foundation
 
-/// The app-side terminal surface (a libghostty-backed NSView) seen by the
-/// host-free model. Kept minimal so `agtermCore` stays free of GhosttyKit/AppKit:
-/// the concrete `GhosttySurfaceView` in the app target conforms to it.
+/// The app-side terminal surface (a libghostty-backed NSView) seen by the host-free model. Kept minimal so
+/// `agtermCore` stays free of GhosttyKit/AppKit; the app target's `GhosttySurfaceView` conforms to it.
 ///
-/// `@MainActor`-isolated: the only owner is the `@MainActor` `Session`, and the
-/// concrete conformer is a `@MainActor` `NSView`, so isolation lines up without
-/// crossing actor boundaries.
+/// `@MainActor`-isolated: the only owner is the `@MainActor` `Session` and the concrete conformer is a
+/// `@MainActor` `NSView`, so isolation lines up without crossing actor boundaries.
 @MainActor
 public protocol TerminalSurface: AnyObject {
-    /// Frees the underlying libghostty surface and shell. Called when the
-    /// owning session is closed.
+    /// Frees the underlying libghostty surface and shell. Called when the owning session is closed.
     func teardown()
 
-    /// Reassigns this surface from the split (right) pane role to the primary pane, so its live
-    /// pwd/title reports flow to the session's main fields (`currentCwd`/`oscTitle`) instead of the
-    /// split fields (`splitCwd`/`splitTitle`). Called by `closePrimaryPane` when the primary pane's
-    /// shell exits and the surviving split pane is promoted to the session's sole pane. A hard
-    /// requirement (no default) like `teardown()`: a conformer that routes pwd/title by role MUST
-    /// reassign here, so a future surface fails to compile rather than silently mis-reporting.
+    /// Reassigns this surface from the split (right) pane role to the primary, so its live pwd/title reports
+    /// flow to the session's main fields (`currentCwd`/`oscTitle`) not the split ones
+    /// (`splitCwd`/`splitTitle`). Called by `closePrimaryPane` when the primary pane's shell exits and the
+    /// surviving split pane becomes the session's sole pane. A hard requirement (no default) like
+    /// `teardown()`: a conformer routing pwd/title by role MUST reassign here, so a future surface fails to
+    /// compile rather than silently mis-reporting.
     func promoteToPrimaryPane()
 
-    /// A stable per-surface identity assigned when the surface spawns, distinct from the pane ROLE
-    /// (`left|right|scratch`), which is NOT stable: a promoted split survivor keeps its baked `right`
-    /// role but moves into the main slot. Baked into the shell's env as `AGTERM_PANE_ID` and forwarded by
-    /// the agent-status hook as `session.status --pane-id`, it lets `Session.paneRole(forToken:)` resolve
-    /// the surface's CURRENT slot rather than trusting the stale baked role — the fix for a status set from
-    /// a promoted-then-re-split pane (#199). Empty for a surface spawned without a pane identity (overlay /
-    /// quick terminal, or a test stub), which `paneRole(forToken:)` never matches.
+    /// A stable per-surface identity assigned at spawn, distinct from the pane ROLE (`left|right|scratch`),
+    /// which is NOT stable: a promoted split survivor keeps its baked `right` role while moving into the main
+    /// slot. Baked into the shell env as `AGTERM_PANE_ID` and forwarded by the agent-status hook as
+    /// `session.status --pane-id`, it lets `Session.paneRole(forToken:)` resolve the CURRENT slot instead of
+    /// the stale baked role — the fix for a status set from a promoted-then-re-split pane (#199). Empty for a
+    /// surface spawned with no pane identity (overlay / quick terminal, or a test stub), which
+    /// `paneRole(forToken:)` never matches.
     var paneToken: String { get }
 }
 
-/// The direction the search selection steps, in agterm's natural convention:
-/// `next` = forward = visually DOWN the screen (toward newer output), `previous` = back = visually UP
-/// (toward older scrollback). Host-free so the inversion to libghostty's own `navigate_search` strings is
-/// unit-testable without GhosttyKit.
+/// The direction the search selection steps, in agterm's natural convention: `next` = forward = visually DOWN
+/// the screen (toward newer output), `previous` = back = visually UP (toward older scrollback). Host-free so
+/// the inversion to libghostty's own `navigate_search` strings is unit-testable without GhosttyKit.
 public enum SearchDirection: String, Sendable {
     case next
     case previous
 
-    /// The libghostty `navigate_search:<dir>` argument for this direction. libghostty's own `next` walks
-    /// matches newest→oldest (visually UP) and its `previous` walks oldest→newest (visually DOWN), the
-    /// OPPOSITE of agterm's convention — so agterm's `.next` (down) maps to `previous` and `.previous`
-    /// (up) maps to `next`. Centralizing the inversion here keeps the DOWN chevron / Enter / `--next`
-    /// moving visually down and the UP chevron / Shift-Enter / `--prev` moving visually up.
+    /// The libghostty `navigate_search:<dir>` argument for this direction. libghostty's `next` walks matches
+    /// newest→oldest (visually UP) and its `previous` oldest→newest (visually DOWN), the OPPOSITE of agterm's
+    /// convention, so `.next` (down) maps to `previous` and `.previous` (up) to `next`. Centralizing the
+    /// inversion keeps the DOWN chevron / Enter / `--next` moving down and the UP chevron / Shift-Enter /
+    /// `--prev` moving up.
     public var ghosttyAction: String {
         switch self {
         case .next: return "navigate_search:previous"

@@ -1,14 +1,12 @@
 import Foundation
 
-/// A per-session background composited behind the terminal grid: a user-supplied image file (`.image`)
-/// or a string agterm rasterizes to a PNG (`.text`), both via libghostty's `background-image*` keys, or
-/// a solid `#rrggbb` background color (`.color`) via the `background` key. Stored on `Session`, persisted
-/// in `SessionSnapshot`, and carried on the control wire. Host-free + `Codable`: the app target turns it
-/// into a per-surface ghostty config overlay (see `WatermarkConfig`) and, for `.text`, renders the PNG
-/// (the only step that needs AppKit).
-///
-/// libghostty re-fits the image to the surface on every resize (`background-image-fit`), so the
-/// "auto-resize to the window" behavior needs no app-side resize handling.
+/// A per-session background composited behind the terminal grid: a user-supplied image file (`.image`) or
+/// a string agterm rasterizes to a PNG (`.text`), both via libghostty's `background-image*` keys, or a
+/// solid `#rrggbb` background color (`.color`) via the `background` key. Stored on `Session`, persisted in
+/// `SessionSnapshot`, carried on the control wire. Host-free + `Codable`: the app target turns it into a
+/// per-surface ghostty config overlay (see `WatermarkConfig`) and renders the `.text` PNG (the only step
+/// needing AppKit). libghostty re-fits the image on every resize (`background-image-fit`), so the
+/// auto-resize-to-the-window behavior needs no app-side resize handling.
 public struct BackgroundWatermark: Codable, Sendable, Equatable {
     public enum Kind: String, Codable, Sendable {
         /// `imagePath` points at a user-supplied PNG/JPEG (the only formats libghostty reads).
@@ -21,9 +19,8 @@ public struct BackgroundWatermark: Codable, Sendable, Equatable {
         case color
     }
 
-    /// libghostty `background-image-fit` (Config.zig `BackgroundImageFit`). A typed enum (like `Kind`)
-    /// so an invalid value can't reach a config line and the raw `validFits` array is unneeded — the raw
-    /// values match ghostty's keys exactly, so it serializes identically to the former `String`.
+    /// libghostty `background-image-fit` (Config.zig `BackgroundImageFit`). Typed like `Kind` so an invalid
+    /// value can't reach a config line; the raw values are ghostty's keys, so it serializes as that string.
     public enum Fit: String, Codable, Sendable, CaseIterable {
         case contain, cover, stretch, none
     }

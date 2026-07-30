@@ -1,11 +1,10 @@
 import agtermCore
 import AppKit
 
-/// Owns the sidebar's inline-rename interaction: it is the `NSTextFieldDelegate` for the outline's
-/// editable name fields and holds the rename reentrancy flags. The `WorkspaceSidebar.Coordinator`
-/// creates one, points it at the outline, and starts an edit via `beginEditing(node:)`; it reads
-/// `isEditing`/`isCommitting` to gate its own row reloads and focus hand-back, and supplies
-/// `onRenameEnded` to return keyboard focus to the terminal once an edit finishes.
+/// Owns the sidebar's inline-rename interaction: the `NSTextFieldDelegate` for the outline's editable name
+/// fields, plus the rename reentrancy flags. `WorkspaceSidebar.Coordinator` creates one, points it at the
+/// outline, starts an edit via `beginEditing(node:)`, reads `isEditing`/`isCommitting` to gate its own row
+/// reloads and focus hand-back, and supplies `onRenameEnded` to return keyboard focus to the terminal.
 @MainActor
 final class SidebarRenameController: NSObject, NSTextFieldDelegate {
     private let store: AppStore
@@ -16,27 +15,26 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
     /// field editor's resign settles first.
     var onRenameEnded: (() -> Void)?
 
-    /// Set while an end-editing notification is being processed, to ignore the
-    /// re-entrant end-editing the cancel/commit path can trigger.
+    /// Set while an end-editing notification is being processed, to ignore the re-entrant end-editing the
+    /// cancel/commit path can trigger.
     private var committing = false
-    /// Set while a rename field is the active first responder (between
-    /// `beginEditing` and `restore`), so a badge tick can't reload the row out
-    /// from under the in-progress edit. `committing` covers only the end-editing
-    /// instant; this covers the whole typing window.
+    /// Set while a rename field is the active first responder (between `beginEditing` and `restore`), so a
+    /// badge tick can't reload the row out from under the in-progress edit. `committing` covers only the
+    /// end-editing instant; this covers the whole typing window.
     private var editing = false
     /// Set by the Esc handler (`doCommandBy` cancelOperation) so the end-editing that the
     /// manual resign triggers is treated as a cancel — the typed value is discarded.
     private var cancellingRename = false
-    /// The row's pre-edit label, captured in `beginEditing` so an Esc-cancel can restore the
-    /// displayed text (a manual resign keeps the edited stringValue, and a cancel makes no model
-    /// change so no reload refreshes the row).
+    /// The row's pre-edit label, captured in `beginEditing` so an Esc-cancel can restore the displayed text
+    /// (a manual resign keeps the edited stringValue, and a cancel makes no model change, so no reload
+    /// refreshes the row).
     private var renameOriginalValue: String?
 
-    /// Whether a rename field is currently being edited (first responder between `beginEditing` and
-    /// `restore`). Read by the Coordinator to skip row reloads and focus hand-back mid-edit.
+    /// Whether a rename field is being edited (first responder between `beginEditing` and `restore`). Read by
+    /// the Coordinator to skip row reloads and focus hand-back mid-edit.
     var isEditing: Bool { editing }
-    /// Whether an end-editing notification is currently being processed. Read by the Coordinator to
-    /// skip a row reload during the commit instant.
+    /// Whether an end-editing notification is being processed. Read by the Coordinator to skip a row reload
+    /// during the commit instant.
     var isCommitting: Bool { committing }
 
     init(store: AppStore) {
@@ -44,27 +42,26 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
         super.init()
     }
 
-    /// Puts the row's text field into editing mode and focuses it. Called from
-    /// the "Rename" menu item and from double-click.
+    /// Puts the row's text field into editing mode and focuses it. Called from the "Rename" menu item and
+    /// from double-click.
     func beginEditing(node: SidebarNode) {
         guard let outline = outlineView else { return }
         let row = outline.row(forItem: node)
         guard row >= 0, let cell = outline.view(atColumn: 0, row: row, makeIfNecessary: true) as? NSTableCellView,
               let field = cell.textField else { return }
         renameOriginalValue = field.stringValue
-        // the flagged view shows a decorated `name : workspace` row label; seed the editable field with
-        // the bare session name so an edit that keeps the ` : workspace` tail never bakes it into the
-        // custom name. tree mode already shows the bare name, so this is a no-op there.
+        // the flagged view shows a decorated `name : workspace` label; seed the field with the bare session
+        // name so an edit never bakes the ` : workspace` tail into the custom name. no-op in tree mode.
         if node.kind == .session, let session = store.session(withID: node.id) {
             field.stringValue = session.displayName
         }
         field.isEditable = true
         field.isBordered = true
         field.drawsBackground = true
-        // the editable field draws its own background, and the label color was set to the row's
-        // (often dark) selection-foreground — leaving those makes the edit text unreadable (dark-on-
-        // dark) on every theme. paint the field with the terminal theme's foreground-on-background so
-        // it reads everywhere; setColors restores the row's color when it reloads after the commit.
+        // the editable field draws its own background while the label color is the row's (often dark)
+        // selection-foreground, so leaving both makes the edit text dark-on-dark on every theme. paint the
+        // field with the theme's foreground-on-background; setColors restores the row color on the
+        // post-commit reload.
         let theme = GhosttyApp.shared
         field.textColor = theme.terminalForegroundColor ?? .labelColor
         field.backgroundColor = theme.terminalBackgroundColor ?? .textBackgroundColor
@@ -77,11 +74,10 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
         store.suppressAutoFollow()
     }
 
-    /// Intercepts Esc during an inline rename. The field is focused via `makeFirstResponder`
-    /// (not the outline's edit session), so AppKit never delivers the cancel text-movement for
-    /// Esc — `cancelOperation:` would otherwise do nothing and leave the field stuck in edit
-    /// mode. Flag the cancel, resign so `controlTextDidEndEditing` fires, and consume the
-    /// command so the default (no-op) handling doesn't run.
+    /// Intercepts Esc during an inline rename. The field is focused via `makeFirstResponder`, not the
+    /// outline's edit session, so AppKit never delivers the cancel text-movement and `cancelOperation:`
+    /// would leave the field stuck in edit mode. Flag the cancel, resign so `controlTextDidEndEditing` fires,
+    /// and consume the command so the no-op default handling doesn't run.
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         guard editing, commandSelector == #selector(NSResponder.cancelOperation(_:)),
               let field = control as? NSTextField else { return false }
@@ -95,7 +91,6 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
         committing = true
         defer { committing = false }
 
-        // resolve which node this field belongs to via the row of its cell view
         let row = outline.row(for: field)
         let node = row >= 0 ? outline.item(atRow: row) as? SidebarNode : nil
 
@@ -122,8 +117,8 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
         }
     }
 
-    /// Returns a renamed/edited field to its non-editable label state and resets
-    /// its accessibility identifier to the row identifier for its kind.
+    /// Returns a renamed/edited field to its non-editable label state and resets its accessibility
+    /// identifier to the row identifier for its kind.
     private func restore(field: NSTextField, kind: SidebarNode.Kind?) {
         editing = false
         // rename ended (commit or cancel) — lift the suppression `beginEditing` took so auto-follow resumes.
@@ -132,12 +127,11 @@ final class SidebarRenameController: NSObject, NSTextFieldDelegate {
         field.isBordered = false
         field.drawsBackground = false
         field.setAccessibilityIdentifier(kind == .workspace ? "workspace-row" : "session-row")
-        // beginEditing painted the field with the theme fg-on-bg for the edit box; restore the row's
-        // selection-aware themed color so a commit that didn't change the name (no reload) doesn't
-        // leave the edit color stuck on the row. read the hosting row view's live isSelected (the
-        // state the selection pill draws from) rather than recomputing via row(for:), which can miss
-        // if the row was reloaded during the edit — a stale tint here is invisible text on themes
-        // where foreground == selection-background.
+        // restore the row's selection-aware themed color so a commit that didn't change the name (no
+        // reload) doesn't leave beginEditing's edit-box color stuck on the row. read the hosting row view's
+        // live isSelected — the state the selection pill draws from — rather than recomputing via
+        // row(for:), which can miss if the row was reloaded during the edit; a stale tint here is invisible
+        // text on themes where foreground == selection-background.
         if let cell = field.superview as? SidebarCellView {
             cell.setColors(selected: (cell.superview as? NSTableRowView)?.isSelected ?? false)
         }

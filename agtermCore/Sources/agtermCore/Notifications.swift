@@ -8,21 +8,19 @@ public enum PaneRole: String, Codable, Sendable, CaseIterable {
     case overlay
 }
 
-/// Pure helpers for terminal desktop notifications (OSC 9 / 777): the coalescing identity that ties
-/// a system notification back to a session/pane, and the suppression rule. Host-free and unit-tested;
-/// the app target's `NotificationManager` builds the actual `UNNotificationRequest` from these.
+/// Pure helpers for terminal desktop notifications (OSC 9 / 777): the coalescing identity tying a system
+/// notification to a session/pane, and the suppression rule. `NotificationManager` builds the request.
 public enum TerminalNotification {
-    /// The notification's identity, `"<windowID>:<sessionID>:<paneRole>"`. Repeated notifications
-    /// from the same pane share it, so the OS replaces the prior banner instead of stacking
-    /// duplicates. The windowID lets a click reopen the owning window when it was closed since the
-    /// banner fired (the firing surface is always in an open window at fire time, so it is known).
+    /// The notification's identity, `"<windowID>:<sessionID>:<paneRole>"`. Repeats from the same pane share
+    /// it, so the OS replaces the prior banner instead of stacking duplicates. The windowID lets a click
+    /// reopen the owning window if it closed since the banner fired (the firing surface is always in an
+    /// open window at fire time, so it is known).
     public static func identity(windowID: UUID, sessionID: UUID, pane: PaneRole) -> String {
         "\(windowID.uuidString):\(sessionID.uuidString):\(pane.rawValue)"
     }
 
-    /// Parses an `identity(windowID:sessionID:pane:)` string back into its parts, or nil if
-    /// malformed. The role is the suffix after the last colon; the two UUID strings (no colons of
-    /// their own) precede it, window id first.
+    /// Parses an `identity(windowID:sessionID:pane:)` string back into its parts, or nil if malformed. The
+    /// role is the suffix after the last colon, preceded by the two colon-free UUIDs, window id first.
     public static func parseIdentity(_ identity: String) -> (windowID: UUID, sessionID: UUID, pane: PaneRole)? {
         let parts = identity.split(separator: ":", omittingEmptySubsequences: false)
         guard parts.count == 3,

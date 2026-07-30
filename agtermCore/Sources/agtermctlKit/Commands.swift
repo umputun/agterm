@@ -2,10 +2,9 @@ import ArgumentParser
 import Foundation
 import agtermCore
 
-/// The connection/print surface every subcommand shares: where to connect and how to print. The
-/// `RequestCommand.run()` default drives only these, so a command's options can be `BasicOptions`
-/// (socket/json only, for `window.*` which target via the positional id) or `ClientOptions` (those
-/// plus `--window`).
+/// The connection/print surface every subcommand shares. The `RequestCommand.run()` default drives only
+/// these, so a command's options can be `BasicOptions` (socket/json only, for `window.*`, which targets via
+/// the positional id) or `ClientOptions` (those plus `--window`).
 protocol ConnectionOptions {
     /// Print the raw JSON response instead of a human-readable line.
     var json: Bool { get }
@@ -18,8 +17,8 @@ extension ConnectionOptions {
     func socketPath() -> String { socketPath(env: ProcessInfo.processInfo.environment) }
 }
 
-/// Where to connect and how to print — the options every subcommand accepts. `window.*` commands use
-/// this directly (they target via the positional id, so `--window` has no meaning for them); the
+/// Where to connect and how to print — the options every subcommand accepts. `window.*` commands use this
+/// directly (they target via the positional id, so `--window` has no meaning for them); the
 /// session/workspace/tree/font commands layer `--window` on top via `ClientOptions`.
 struct BasicOptions: ParsableArguments, ConnectionOptions {
     /// Override the resolved socket path. Defaults to the `AGTERM_STATE_DIR`/app-support rendezvous.
@@ -29,10 +28,9 @@ struct BasicOptions: ParsableArguments, ConnectionOptions {
     @Flag(name: .long, help: "Print the raw JSON response.")
     var json = false
 
-    /// Resolve the socket path: explicit `--socket`, else the agtermCore rendezvous resolver. Precedence:
-    /// `--socket` → `<AGTERM_STATE_DIR>/agterm.sock` → `<$HOME>/Library/Application Support/agterm/agterm.sock` →
-    /// `/tmp/agterm/agterm.sock`. `env` is injectable so the precedence is unit-testable; production passes the
-    /// process environment.
+    /// Resolve the socket path, in precedence order: `--socket` → `<AGTERM_STATE_DIR>/agterm.sock` →
+    /// `<$HOME>/Library/Application Support/agterm/agterm.sock` → `/tmp/agterm/agterm.sock`. `env` is
+    /// injectable so the precedence is unit-testable; production passes the process environment.
     func socketPath(env: [String: String] = ProcessInfo.processInfo.environment) -> String {
         if let socket { return socket }
         let appSupport = (env["HOME"].map { ($0 as NSString).appendingPathComponent("Library/Application Support/agterm") })
@@ -46,7 +44,7 @@ struct ClientOptions: ParsableArguments, ConnectionOptions {
     @OptionGroup var basic: BasicOptions
 
     /// Target window for session/workspace/tree/font commands: id / prefix / `active` (=frontmost).
-    /// Selects the window whose tree the command operates on; maps to `ControlArgs.window`.
+    /// Maps to `ControlArgs.window`.
     @Option(name: .long, help: "Target window id, unique prefix, or 'active' (defaults to the frontmost).")
     var window: String?
 
@@ -54,9 +52,9 @@ struct ClientOptions: ParsableArguments, ConnectionOptions {
 
     func socketPath(env: [String: String] = ProcessInfo.processInfo.environment) -> String { basic.socketPath(env: env) }
 
-    /// Fold the `--window` selector into an existing args bag, or build one carrying only the window.
-    /// Returns `nil` when there is no window and no base bag, so the request stays in its compact form
-    /// (no empty `args` object on the wire) and matches the no-window request value.
+    /// Fold the `--window` selector into an existing args bag, or build one carrying only the window. Nil
+    /// when there is no window and no base bag, so the request stays compact (no empty `args` object on
+    /// the wire) and matches the no-window request value.
     func withWindow(_ base: ControlArgs? = nil) -> ControlArgs? {
         guard window != nil else { return base }
         var args = base ?? ControlArgs()
@@ -97,16 +95,16 @@ public struct Agtermctl: ParsableCommand {
     public init() {}
 }
 
-/// A subcommand that knows how to build the `ControlRequest` it should send. The default `run()`
-/// sends it and prints the response; tests build the request directly via `makeRequest()`. `Options`
-/// is `ClientOptions` for the window-targeting commands and `BasicOptions` for `window.*`.
+/// A subcommand that knows how to build the `ControlRequest` it should send. The default `run()` sends it
+/// and prints the response; tests build the request directly via `makeRequest()`. `Options` is
+/// `ClientOptions` for the window-targeting commands and `BasicOptions` for `window.*`.
 protocol RequestCommand: ParsableCommand {
     associatedtype Options: ParsableArguments & ConnectionOptions
     var options: Options { get }
     func makeRequest() throws -> ControlRequest
-    /// Whether the human-readable output should echo `result.id`. Default false — the id is just noise
-    /// when the caller already named the target; the create commands (`*.new`) override it to true,
-    /// since the new id isn't known until the command runs. The id is always present under `--json`.
+    /// Whether the human-readable output should echo `result.id`. Default false — the id is noise when the
+    /// caller already named the target; the create commands (`*.new`) override it to true, since the new id
+    /// isn't known until the command runs. The id is always present under `--json`.
     var echoesResultID: Bool { get }
 }
 

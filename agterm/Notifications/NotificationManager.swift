@@ -7,9 +7,9 @@ private let logger = Logger(subsystem: "com.umputun.agterm", category: "Notifica
 
 /// Owns the macOS notification surface for terminal desktop notifications (OSC 9 / 777).
 ///
-/// `@MainActor` and the `UNUserNotificationCenterDelegate`. `@preconcurrency` on the
-/// conformance lets the delegate methods stay main-actor isolated against the pre-concurrency
-/// UserNotifications API (matches macterm).
+/// `@MainActor` and the `UNUserNotificationCenterDelegate`. `@preconcurrency` on the conformance keeps
+/// the delegate methods main-actor isolated against the pre-concurrency UserNotifications API (as
+/// macterm does).
 @MainActor
 final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCenterDelegate {
     static let shared = NotificationManager()
@@ -18,9 +18,9 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     /// `agtermApp`; weak since `AppActions` outlives the manager only by app lifetime.
     weak var actions: AppActions?
 
-    /// The window library, used to resolve the firing surface's owning window id when building a
-    /// notification identity (so a click can reopen that window if it has since closed). Set at
-    /// launch by `agtermApp`; weak for the same app-lifetime reason as `actions`.
+    /// Resolves the firing surface's owning window id when building a notification identity, so a click
+    /// can reopen a since-closed window. Set at launch by `agtermApp`; weak for the same app-lifetime
+    /// reason as `actions`.
     weak var library: WindowLibrary?
 
     /// Whether to post macOS banners (the General settings toggle, default on). When off, banners are
@@ -28,25 +28,24 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     var bannersEnabled = true
 
     /// How a delivered notification bounces the Dock icon (the Notifications settings picker, default
-    /// `off`). Independent of `bannersEnabled` — like the badge, a bounce can fire whether or not banners
-    /// show. Set by `SettingsModel`. `.once` requests a single `.informationalRequest`; `.untilFocused` a
-    /// `.criticalRequest` macOS auto-cancels when agterm becomes active — both no-op while agterm is the
-    /// active app, so a bounce only fires when a notification arrives in the background.
+    /// `off`, set by `SettingsModel`). Independent of `bannersEnabled` — like the badge, a bounce fires
+    /// whether or not banners show. `.once` is a single `.informationalRequest`, `.untilFocused` a
+    /// `.criticalRequest` macOS auto-cancels on activation; both no-op while agterm is the active app, so
+    /// a bounce only fires for a notification arriving in the background.
     var dockBounce: DockBounce = .off
 
-    /// Name of the system sound attached to a delivered notification (the Notifications settings
-    /// picker, default nil = silent). Routed through the OS (`UNNotificationSound` on the banner's
-    /// content), NOT played directly — so it follows the banner: gated by `bannersEnabled` and the
-    /// macOS notification authorization, and silenced by Do Not Disturb / Focus, unlike the raw
-    /// `NSSound` agent-status sounds. Set by `SettingsModel`.
+    /// Name of the system sound attached to a delivered notification (the Notifications settings picker,
+    /// default nil = silent, set by `SettingsModel`). Routed through the OS as `UNNotificationSound` on
+    /// the banner's content, NOT played directly, so it follows the banner: gated by `bannersEnabled` and
+    /// the macOS notification authorization, and silenced by Do Not Disturb / Focus, unlike the raw
+    /// `NSSound` agent-status sounds.
     var notificationSoundName: String?
 
-    /// Register as the notification delegate and request alert + badge + sound authorization.
-    /// Idempotent; the scene `.task` may re-run. Best-effort: a denial just means no banners. The
-    /// `.badge` option is what lets `DockBadgeController` render the Dock count via
-    /// `UNUserNotificationCenter.setBadgeCount` — the legacy `NSApp.dockTile.badgeLabel` is silently
-    /// suppressed for agterm without it. `.sound` is what lets the configured notification sound
-    /// (attached to the banner's content) actually play.
+    /// Register as the notification delegate and request alert + badge + sound authorization. Idempotent
+    /// (the scene `.task` may re-run) and best-effort — a denial just means no banners. `.badge` is what
+    /// lets `DockBadgeController` render the Dock count via `UNUserNotificationCenter.setBadgeCount`;
+    /// without it the legacy `NSApp.dockTile.badgeLabel` is silently suppressed for agterm. `.sound` is
+    /// what lets the configured notification sound, attached to the banner's content, actually play.
     func start() {
         let center = UNUserNotificationCenter.current()
         center.delegate = self
@@ -102,11 +101,11 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         }
     }
 
-    /// Post a desktop notification for a session via the control channel (the `notify` command), as
-    /// opposed to a terminal OSC. Unlike the OSC path there is NO focus-suppression — the caller asked
-    /// for it explicitly, so it always bumps the badge and posts a banner (gated only by
-    /// `bannersEnabled`). Attributed to the session's primary pane so a click reveals it. Returns false
-    /// when no open window owns the session (the click-reveal identity can't be built) → not sent.
+    /// Post a desktop notification for a session via the control channel (the `notify` command) rather
+    /// than a terminal OSC. NO focus-suppression here — the caller asked for it, so it always bumps the
+    /// badge and posts a banner (gated only by `bannersEnabled`), attributed to the session's primary pane
+    /// so a click reveals it. False, and nothing sent, when no open window owns the session (there is then
+    /// no click-reveal identity to build).
     @discardableResult
     func send(toSession session: Session, title: String, body: String) -> Bool {
         guard let windowID = library?.windowID(forSession: session.id) else { return false }
@@ -134,10 +133,9 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         return true
     }
 
-    /// Remove any delivered banners for a session from Notification Center — called when you focus
-    /// the session, so a notification you've navigated to doesn't linger. Covers all of the session's
-    /// panes by removing each possible `<windowID>:<sessionID>:<paneRole>` identifier. No-op when the
-    /// session's window isn't open (nothing it delivered could be lingering).
+    /// Remove a session's delivered banners from Notification Center — called when you focus the session,
+    /// so one you've navigated to doesn't linger. Covers every pane by removing each possible
+    /// `<windowID>:<sessionID>:<paneRole>` identifier. No-op when the session's window isn't open.
     func clearDelivered(sessionID: UUID) {
         guard let windowID = library?.windowID(forSession: sessionID) else {
             logger.debug("clearDelivered: no open window owns session \(sessionID, privacy: .public); nothing to clear")
@@ -177,10 +175,10 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
 
     /// Post a banner when the ghostty config reloaded with problems (parse errors or invalid keys), so
     /// they're visible without digging through the log. The count spans ALL config sources (bundled
-    /// defaults, the global `~/.config/ghostty/config`, the agterm-scoped `ghostty.conf`, and the UI
-    /// settings conf) because libghostty diagnostics carry no source-file attribution, so the banner does
-    /// NOT blame `ghostty.conf` specifically. Session-less and app-level, like `notifyKeymapDiagnostics`:
-    /// no focus/window gating; a fixed identifier coalesces repeated reloads to a single banner.
+    /// defaults, the global `~/.config/ghostty/config`, the agterm-scoped `ghostty.conf`, the UI settings
+    /// conf) since libghostty diagnostics carry no source-file attribution, so the banner does NOT blame
+    /// `ghostty.conf`. Session-less and app-level like `notifyKeymapDiagnostics`: no focus/window gating,
+    /// and a fixed identifier coalesces repeated reloads to a single banner.
     func notifyConfigDiagnostics(count: Int) {
         guard bannersEnabled else { return }
         let content = UNMutableNotificationContent()
@@ -192,10 +190,8 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         }
     }
 
-    /// Bounce the Dock icon for a background notification per the configured mode. `.once` is a single
-    /// `.informationalRequest`; `.untilFocused` a `.criticalRequest` that bounces until agterm becomes active
-    /// (macOS auto-cancels it then, so there is no cancel bookkeeping). Both are automatically a no-op while
-    /// agterm is the active app, so a notification for a session you're already looking at never bounces.
+    /// Bounce the Dock icon for a background notification per the configured `dockBounce` mode. macOS
+    /// auto-cancels `.untilFocused`'s `.criticalRequest` on activation, so there is no cancel bookkeeping.
     private func bounceDock() {
         switch dockBounce {
         case .off: return
@@ -204,11 +200,11 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         }
     }
 
-    /// The `UNNotificationSound` for the configured name, or nil when unset (silent, the default).
-    /// `default`/`beep` map to the system alert sound; any other value names a sound file the OS
-    /// resolves against the standard sound locations (`~/Library/Sounds` through
-    /// `/System/Library/Sounds`), with `.aiff` assumed when the name carries no extension — the system
-    /// sounds' format, and how the Settings picker stores them.
+    /// The `UNNotificationSound` for the configured name, nil when unset (silent, the default).
+    /// `default`/`beep` map to the system alert sound; any other value names a sound file the OS resolves
+    /// against the standard locations (`~/Library/Sounds` through `/System/Library/Sounds`), with `.aiff`
+    /// assumed when the name carries no extension — the system sounds' format, and how the Settings
+    /// picker stores them.
     private var notificationSound: UNNotificationSound? {
         guard let name = notificationSoundName, !name.isEmpty else { return nil }
         if name == "default" || name == "beep" { return .default }
@@ -222,10 +218,9 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
         return .main
     }
 
-    /// Present banners — with their attached sound — even while agterm is the active app (the
-    /// focused-pane case is dropped before delivery, so anything reaching here should show). Without
-    /// `.sound` a foreground banner would show silently, so a notification from a session you're NOT
-    /// looking at would only ding while agterm is backgrounded.
+    /// Present banners, with their attached sound, even while agterm is the active app — the focused-pane
+    /// case is dropped before delivery, so anything reaching here should show. Without `.sound` a
+    /// foreground banner is silent, so a session you're NOT looking at would only ding while backgrounded.
     func userNotificationCenter(_: UNUserNotificationCenter, willPresent _: UNNotification,
                                 withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
         completionHandler([.banner, .list, .sound])

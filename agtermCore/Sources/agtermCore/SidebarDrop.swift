@@ -1,22 +1,22 @@
 import Foundation
 
-/// SidebarDrop holds the pure index arithmetic for sidebar drag-and-drop reorder, so the trickiest
-/// part of the drop handling (post-removal off-by-one, drop-on-row redirect, cross-workspace vs
-/// same-parent index spaces, no-op detection) is host-free and table-testable. The AppKit/store glue
-/// (reading the pasteboard, resolving the dragged/target ids) stays in `WorkspaceSidebar.Coordinator`,
-/// which feeds resolved indices in and applies the returned destination via `AppStore`.
+/// SidebarDrop holds the pure index arithmetic for sidebar drag-and-drop reorder, so the trickiest part
+/// (post-removal off-by-one, drop-on-row redirect, cross-workspace vs same-parent index spaces, no-op
+/// detection) is host-free and table-testable. The AppKit/store glue — reading the pasteboard, resolving
+/// the dragged/target ids — stays in `WorkspaceSidebar.Coordinator`, which feeds resolved indices in and
+/// applies the returned destination via `AppStore`.
 public enum SidebarDrop {
     /// Mirrors AppKit's `NSOutlineViewDropOnItemIndex`: a drop landing ON a row rather than between rows.
     public static let onItemIndex = -1
     /// Prevents an accidental Finder multi-selection from spawning an unbounded number of shells.
     public static let maximumDirectoryImportCount = 20
 
-    /// Resolves the workspace for a Finder directory drop. Folder import is a tree-only affordance; a drop
-    /// ON a row lands in that row's workspace, and an EMPTY-SPACE drop takes `fallbackWorkspaceID` when the
-    /// caller can name an unambiguous one (`AppStore.soleFocusedWorkspaceID`: the sole marked workspace
-    /// while the focus filter applies — the only state where the tree renders exactly one workspace), else
-    /// the current workspace. With no marked set, the filter off, or two or more members there is no such
-    /// workspace, so the caller passes nil and the drop falls through to `currentWorkspaceID`.
+    /// Resolves the workspace for a Finder directory drop. Folder import is tree-only; a drop ON a row lands
+    /// in that row's workspace, and an EMPTY-SPACE drop takes `fallbackWorkspaceID` when the caller can name
+    /// an unambiguous one (`AppStore.soleFocusedWorkspaceID`: the sole marked workspace while the focus
+    /// filter applies — the only state where the tree renders exactly one workspace), else the current
+    /// workspace. With no marked set, the filter off, or two or more members the caller passes nil and the
+    /// drop falls through to `currentWorkspaceID`.
     public static func resolveDirectoryWorkspace(sidebarMode: SidebarMode, rowWorkspaceID: UUID?,
                                                  fallbackWorkspaceID: UUID?, currentWorkspaceID: UUID?) -> UUID? {
         guard sidebarMode == .tree else { return nil }
@@ -50,11 +50,11 @@ public enum SidebarDrop {
         case sessionRow(workspace: UUID, sessionIndex: Int, sessionCount: Int)
     }
 
-    /// Resolves a session drop into the move it would perform (target workspace + post-removal index),
-    /// or nil for a no-op. `childIndex` is AppKit's proposed child index (`onItemIndex` for a drop ON
-    /// the target). For a same-workspace DOWNWARD move the slot shifts up by one after the removal, so
-    /// 1 is subtracted; cross-workspace and upward moves pass through. A same-workspace move that lands
-    /// the session back in its current slot (including appending an already-last session) is a no-op.
+    /// Resolves a session drop into the move it would perform (target workspace + post-removal index), or
+    /// nil for a no-op. `childIndex` is AppKit's proposed child index (`onItemIndex` for a drop ON the
+    /// target). A same-workspace DOWNWARD move subtracts 1, since the slot shifts up after the removal;
+    /// cross-workspace and upward moves pass through. A same-workspace move landing the session back in its
+    /// current slot (including appending an already-last session) is a no-op.
     public static func resolveSession(sourceWorkspace: UUID, sourceIndex: Int,
                                       target: SessionDropTarget, childIndex: Int) -> SessionResolution? {
         let workspace: UUID
@@ -80,8 +80,8 @@ public enum SidebarDrop {
         }
 
         if sameWorkspace {
-            // moveSession removes the source first (shrinking the array to targetCount - 1), then clamps,
-            // so the landed slot is the clamped destination; equal to the source slot means no change.
+            // moveSession removes the source first (shrinking to targetCount - 1) then clamps, so the landed
+            // slot is the clamped destination; equal to the source slot means no change.
             let landed = max(0, min(destination, targetCount - 1))
             if landed == sourceIndex { return nil }
         }
@@ -124,11 +124,11 @@ public enum SidebarDrop {
         return SessionResolution(workspace: workspace, dropChildIndex: dropChildIndex, destination: destination)
     }
 
-    /// Resolves an anchor-relative session placement (control `--after`/`--before <sid>`) into the same
-    /// move `resolveSession` produces for a drag. `placeAfter` lands just after the anchor row (via
-    /// `onItemIndex`, which maps to `anchorIndex + 1`); otherwise it lands at the anchor's slot. Reuses
-    /// the drop math verbatim, so the post-removal off-by-one, cross-workspace index space, and
-    /// anchor==source no-op all fall out unchanged. Returns nil for a no-op.
+    /// Resolves an anchor-relative session placement (control `--after`/`--before <sid>`) into the same move
+    /// `resolveSession` produces for a drag: `placeAfter` lands just after the anchor row (via `onItemIndex`,
+    /// which maps to `anchorIndex + 1`), otherwise at the anchor's slot. Reuses the drop math verbatim, so
+    /// the post-removal off-by-one, cross-workspace index space and anchor==source no-op all fall out
+    /// unchanged. Returns nil for a no-op.
     public static func resolveRelative(source: (workspace: UUID, index: Int),
                                        anchor: (workspace: UUID, index: Int, count: Int),
                                        placeAfter: Bool) -> SessionResolution? {
@@ -149,17 +149,16 @@ public enum SidebarDrop {
 
     /// Maps a drop slot read off the RENDERED workspace rows onto the FULL workspace array's index space,
     /// which is what `resolveWorkspace`/`AppStore.moveWorkspace` work in. `visibleIndices` holds the
-    /// full-array indices of the workspace rows the sidebar actually renders, in order — under the focus
-    /// filter those are the marked set's, so they can be non-contiguous; `slot` is how many of those rows
-    /// have their midpoint above the cursor (0 = the cursor is above every rendered row).
+    /// full-array indices of the rows the sidebar renders, in order — under the focus filter the marked
+    /// set's, so possibly non-contiguous; `slot` is how many of those rows have their midpoint above the
+    /// cursor (0 = above every rendered row).
     ///
     /// A drop lands IMMEDIATELY ADJACENT to the visible row it was aimed at, never at a raw array index the
-    /// filter has no row for: above the first rendered row it takes that row's own index (landing just
-    /// before it), otherwise the index just after the last rendered row above the cursor. Anything else
-    /// would jump the dragged workspace across the hidden workspaces in between — invisible at drop time
-    /// and only revealed once the filter is switched off. With every workspace rendered
-    /// (`visibleIndices == Array(0..<count)`) it returns `slot` unchanged, so the unfiltered tree behaves
-    /// exactly as before. Returns 0 for an empty `visibleIndices` (nothing to drop against).
+    /// filter has no row for: above the first rendered row it takes that row's own index, otherwise the
+    /// index just after the last rendered row above the cursor. Anything else would jump the dragged
+    /// workspace across the hidden workspaces in between — invisible at drop time, revealed only once the
+    /// filter is switched off. With every workspace rendered (`visibleIndices == Array(0..<count)`) it
+    /// returns `slot` unchanged. Returns 0 for an empty `visibleIndices` (nothing to drop against).
     public static func workspaceInsertIndex(visibleIndices: [Int], slot: Int) -> Int {
         guard let firstVisible = visibleIndices.first else { return 0 }
         guard slot > 0 else { return firstVisible }

@@ -1,16 +1,16 @@
 import AppKit
 import agtermCore
 
-/// ClipboardPromptController gates OSC 52 clipboard access a terminal program requests. One shared
+/// ClipboardPromptController gates the OSC 52 clipboard access a terminal program requests. One shared
 /// instance holds an app-session-scoped `ClipboardPromptPolicy` (the remembered allow/deny spans every
-/// window and terminal session until agterm quits): a remembered choice resolves immediately, otherwise
-/// it shows a warning sheet. Requests from the SAME (surface, direction) coalesce behind that one prompt
-/// so a program looping OSC 52 can't stack a wall of sheets, while a request from a DIFFERENT surface
-/// always gets its own prompt, so one Allow never authorizes another surface's read or write.
+/// window and terminal session until agterm quits): a remembered choice resolves immediately, else a
+/// warning sheet is shown. Requests from the SAME (surface, direction) coalesce behind that one prompt so
+/// a program looping OSC 52 can't stack a wall of sheets, while a DIFFERENT surface always gets its own,
+/// so one Allow never authorizes another surface's read or write.
 ///
-/// `@MainActor`: it touches AppKit and the controller's shared mutable state. The C clipboard callbacks reach it by
-/// hopping through `DispatchQueue.main.async`, which also defers the sheet past the current libghostty
-/// tick so the modal run loop never re-enters it.
+/// `@MainActor`: it touches AppKit and shared mutable state. The C clipboard callbacks reach it through
+/// `DispatchQueue.main.async`, which also defers the sheet past the current libghostty tick so the modal
+/// run loop never re-enters it.
 @MainActor
 final class ClipboardPromptController {
     static let shared = ClipboardPromptController()
@@ -23,9 +23,8 @@ final class ClipboardPromptController {
     }
 
     /// A pending prompt: the waiters plus a STRONG reference to the requester, held until the sheet
-    /// resolves. Retaining the requester stops its `ObjectIdentifier` from being reused by a newly
-    /// allocated surface while the prompt is open, which would otherwise let that new surface's request
-    /// hash to the same `PromptKey` and ride this prompt's decision.
+    /// resolves — retaining it stops its `ObjectIdentifier` being reused by a surface allocated while the
+    /// prompt is open, whose request would then hash to the same `PromptKey` and ride this decision.
     private struct Pending {
         let requester: AnyObject?
         var waiters: [(Bool) -> Void]
@@ -49,7 +48,6 @@ final class ClipboardPromptController {
 
     private func enqueue(_ key: PromptKey, requester: AnyObject?, completion: @escaping (Bool) -> Void) {
         if pending[key] != nil {
-            // a sheet for this (surface, direction) is already up — ride its decision instead of stacking.
             pending[key]?.waiters.append(completion)
             return
         }
@@ -78,7 +76,7 @@ final class ClipboardPromptController {
             for waiter in entry?.waiters ?? [] { waiter(allowed) }
         }
 
-        // attach to the REQUESTING surface's own window when we can, so the prompt lands on the terminal
+        // attach to the REQUESTING surface's own window when possible, so the prompt lands on the terminal
         // whose program triggered it (not some other key window); fall back to key/main.
         let requesterWindow = (pending[key]?.requester as? NSView)?.window
         if let window = requesterWindow ?? NSApp.keyWindow ?? NSApp.mainWindow {

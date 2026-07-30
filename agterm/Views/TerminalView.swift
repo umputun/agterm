@@ -4,16 +4,14 @@ import SwiftUI
 
 /// Bridges one session's libghostty surface (a `GhosttySurfaceView`) into SwiftUI.
 ///
-/// The surface is owned by the `Session` (`session.surface`), not the
-/// representable. `makeNSView` returns the session's cached surface view,
-/// creating it through the app-supplied `makeSurface` factory on first display;
-/// `dismantleNSView` is a no-op so the surface (and its shell) survives view
-/// churn when switching sessions. Only an explicit `teardown()` frees it.
+/// The surface is owned by the `Session` (`session.surface`), not the representable: `makeNSView` returns
+/// the cached view, creating it through the app-supplied `makeSurface` factory on first display, and
+/// `dismantleNSView` is a no-op so the surface (and its shell) survives view churn across session switches.
+/// Only an explicit `teardown()` frees it.
 ///
-/// The detail pane keeps every session's `TerminalView` mounted (a deck) and toggles visibility +
-/// `isActive` on selection rather than swapping by `.id`, so switching sessions does NOT dismantle/
-/// re-host the surface NSView (a re-host invalidates the Metal drawable and flickers). Surfaces stay
-/// alive regardless.
+/// The detail pane keeps every session's `TerminalView` mounted (a deck), toggling visibility + `isActive`
+/// on selection rather than swapping by `.id`, so a switch never dismantles/re-hosts the surface NSView —
+/// a re-host invalidates the Metal drawable and flickers.
 struct TerminalView: NSViewRepresentable {
     let session: Session
     /// Which surface slot this view binds to: the primary `\.surface` or the split
@@ -25,18 +23,16 @@ struct TerminalView: NSViewRepresentable {
     /// Whether this is the active (visible) pane in the deck. Every session's surface stays mounted, so
     /// a view only auto-grabs focus when active — otherwise every mounted pane would fight for it.
     var isActive = true
-    /// Whether this pane is on-screen (its session is selected and not hidden by a full overlay/scratch).
-    /// UNLIKE `isActive` this is NOT split-focus-gated: both panes of a visible split are `deckVisible`.
-    /// Drives `GhosttySurfaceView`'s drag-type (un)registration so a file drop can't land on an invisible
-    /// background surface.
+    /// Whether this pane is on-screen (its session selected and not hidden by a full overlay/scratch). UNLIKE
+    /// `isActive` it is NOT split-focus-gated — both panes of a visible split are `deckVisible`. Drives the
+    /// drag-type (un)registration, so a file drop can't land on an invisible background surface.
     var deckVisible = true
     /// False for the terminal-zoom host: zoom reparenting/focus must not mutate session state such as
     /// `splitFocused`, but libghostty should still receive normal focus updates.
     var reportsFocusChange = true
     /// True for the view-only dashboard grid cell: the surface renders but takes NO mouse or keyboard input,
     /// so it never grabs first responder from the dashboard's key-catcher. `.allowsHitTesting(false)` alone
-    /// doesn't stop AppKit routing a click to the real NSView, so the surface itself refuses hits + first
-    /// responder (`GhosttySurfaceView.viewOnly`).
+    /// doesn't stop AppKit routing a click to the NSView, so the surface itself refuses hits + first responder.
     var viewOnly = false
 
     func makeCoordinator() -> Coordinator { Coordinator() }
@@ -60,14 +56,14 @@ struct TerminalView: NSViewRepresentable {
         nsView.deckVisible = deckVisible
         nsView.suppressFocusChange = !reportsFocusChange
         nsView.viewOnly = viewOnly
-        // makeNSView may have run before the view had a sized window; createSurface is idempotent
-        // (guards surface == nil and a non-zero backing size), so calling it here is safe. Synchronous
-        // on purpose: a deferred next-tick create races the layout and gives the surface a stale size.
+        // makeNSView may have run before the view had a sized window; createSurface is idempotent (guards
+        // surface == nil and a non-zero backing size). synchronous on purpose: a deferred next-tick create
+        // races the layout and gives the surface a stale size.
         nsView.createSurface()
         guard isActive else {
-            // hidden deck pane: drop the focus latch so it re-grabs when it next becomes active, and
-            // never keep first responder while hidden — the active pane needs it, and a background pane
-            // that still looks "focused" wrongly suppresses its own OSC 9 desktop notification.
+            // hidden deck pane: drop the focus latch so it re-grabs when next active, and never hold first
+            // responder while hidden — the active pane needs it, and a background pane that still looks
+            // "focused" wrongly suppresses its own OSC 9 desktop notification.
             context.coordinator.didFocus = false
             if let window = nsView.window, window.firstResponder === nsView { window.makeFirstResponder(nil) }
             return
@@ -75,21 +71,17 @@ struct TerminalView: NSViewRepresentable {
         focusIfNeeded(nsView, coordinator: context.coordinator)
     }
 
-    /// Grabs first responder for this session's surface only when it is the
-    /// natural focus target, so unrelated detail-pane re-renders (window resize,
-    /// observable invalidations) don't steal focus.
+    /// Grabs first responder for this session's surface only when it is the natural focus target, so
+    /// unrelated detail-pane re-renders (window resize, observable invalidations) don't steal focus.
     ///
-    /// Focus is taken once, when this representable first attaches to a window
-    /// (each terminal host carries stable session + surface identity, so replacing
-    /// the hosted surface creates a fresh representable). On later updates focus is left
-    /// alone unless the surface already holds it — and never grabbed while a text
-    /// field editor is first responder, so editing a sidebar rename survives a
-    /// re-render. Mouse clicks (`mouseDown`) cover focus for the rest.
+    /// Focus is taken once, when the representable first attaches to a window (each terminal host carries
+    /// stable session + surface identity, so replacing the hosted surface makes a fresh representable). Later
+    /// updates leave it alone unless the surface already holds it, and never grab it while a text field editor
+    /// is first responder, so editing a sidebar rename survives a re-render. `mouseDown` covers the rest.
     private func focusIfNeeded(_ nsView: GhosttySurfaceView, coordinator: Coordinator) {
         guard let window = nsView.window else { return }
         if window.firstResponder === nsView { return }
-        // don't steal focus from an active text field editor (e.g. a sidebar
-        // rename TextField); its field editor is an NSText serving the window.
+        // don't steal focus from an active text field editor (a sidebar rename); its editor is an NSText.
         if window.firstResponder is NSText { return }
         guard !coordinator.didFocus else { return }
         coordinator.didFocus = true
@@ -97,12 +89,11 @@ struct TerminalView: NSViewRepresentable {
     }
 
     static func dismantleNSView(_: GhosttySurfaceView, coordinator _: Coordinator) {
-        // No-op: the surface outlives the representable and is owned by the
-        // session. Only an explicit teardown() may free it.
+        // no-op: the surface outlives the representable; only an explicit teardown() may free it.
     }
 
-    /// Tracks whether this representable has already claimed first responder, so
-    /// focus is grabbed only on first attach, not on every `updateNSView`.
+    /// Tracks whether this representable already claimed first responder, so focus is grabbed on first
+    /// attach only, not on every `updateNSView`.
     final class Coordinator {
         var didFocus = false
     }

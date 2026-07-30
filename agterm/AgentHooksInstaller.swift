@@ -1,18 +1,17 @@
 import AppKit
 import agtermCore
 
-/// Installs the bundled agent-status hooks package into the user's home: copies the scripts from the
-/// app bundle into `~/.config/agterm/agent-status/`, bakes the bundled `agtermctl`'s absolute path
-/// into the wrapper, appends a marker-guarded `source` line to `~/.zshrc`, `~/.bashrc`, and `~/.config/fish/config.fish`, merges
-/// the four Claude Code hooks into `~/.claude/settings.json`, merges the six Codex lifecycle hooks into
-/// `~/.codex/config.toml`, installs Pi's lifecycle extension into `~/.pi/agent/extensions/` when Pi
-/// is configured, and installs OpenCode's lifecycle plugin into `~/.config/opencode/plugins/` when
-/// OpenCode is configured. Claude/Codex configs write a `.bak` first; the Codex step parses TOML and falls back to
-/// surfacing a manual block when the file already has hooks or does not parse. The host-free string/JSON/
-/// TOML transforms and Pi/OpenCode ownership policy live in `agtermCore.AgentHooksInstall`; this type owns the
-/// AppKit filesystem glue.
-/// Idempotent and re-runnable: re-running refreshes the baked `agtermctl` path (healing a
-/// moved/reinstalled bundle) and is a clean no-op for already-present rc/settings/config entries.
+/// Installs the bundled agent-status hooks package into the user's home: copies the scripts from the app
+/// bundle into `~/.config/agterm/agent-status/`, bakes the bundled `agtermctl`'s absolute path into the
+/// wrapper, appends a marker-guarded `source` line to `~/.zshrc`/`~/.bashrc`/`~/.config/fish/config.fish`,
+/// merges the four Claude Code hooks into `~/.claude/settings.json` and the six Codex lifecycle hooks into
+/// `~/.codex/config.toml`, and — when each is configured — installs Pi's lifecycle extension into
+/// `~/.pi/agent/extensions/` and OpenCode's plugin into `~/.config/opencode/plugins/`. Claude/Codex configs
+/// write a `.bak` first; the Codex step parses TOML and surfaces a manual block instead when the file
+/// already has hooks or does not parse. The host-free string/JSON/TOML transforms and Pi/OpenCode ownership
+/// policy live in `agtermCore.AgentHooksInstall`; this type owns the AppKit filesystem glue. Re-running is
+/// idempotent: it refreshes the baked `agtermctl` path (healing a moved/reinstalled bundle) and is a clean
+/// no-op for already-present rc/settings/config entries.
 @MainActor
 enum AgentHooksInstaller {
     private struct InstallError: Error { let message: String }
@@ -46,8 +45,7 @@ enum AgentHooksInstaller {
         }
     }
 
-    // the Pi extension-install outcome, mirroring CodexResult: installed/alreadyConfigured/noPi are
-    // informational; the warning cases mean agterm could not safely write and left the destination as-is.
+    // the Pi extension-install outcome, mirroring CodexResult.
     private enum PiResult {
         case installed, alreadyConfigured, userOwned, unreadable, writeFailed, noPi
 
@@ -99,9 +97,7 @@ enum AgentHooksInstaller {
         }
     }
 
-    // settingsSkipped is true when the Claude settings merge was SKIPPED because ~/.claude/settings.json
-    // isn't valid JSON or couldn't be read (it is left untouched); codex/pi/opencode report their
-    // respective integration outcomes. Every step still runs regardless.
+    // every step runs regardless of an earlier one's outcome; each reports its own result.
     private static func install() throws -> InstallOutcome {
         try copyBundledFolder()
         try bakeAgtermctlPath()
@@ -113,8 +109,6 @@ enum AgentHooksInstaller {
         return InstallOutcome(settingsSkipped: settingsSkipped, codex: codex, pi: pi, opencode: opencode)
     }
 
-    // copy the bundled agent-status folder into ~/.config/agterm/agent-status, overwriting any prior
-    // install so a re-run is clean.
     private static func copyBundledFolder() throws {
         guard let source = bundledFolder, FileManager.default.fileExists(atPath: source.path) else {
             throw InstallError(message: "The agent-status scripts are not bundled in this build.")
@@ -130,11 +124,10 @@ enum AgentHooksInstaller {
     // and replaces it so the path is refreshed rather than duplicated.
     private static let agtermctlMarker = "# >>> agterm agtermctl path (installer-baked) >>>"
 
-    // bake the bundled agtermctl's absolute path into the installed wrappers so the hooks fire even when
-    // the CLI was never symlinked into PATH. `[ -n "${AGTERMCTL:-}" ] || AGTERMCTL='<path>'` sets it only
-    // when AGTERMCTL is unset, so an explicit env override still wins (resolution order 1 > 2 > PATH); the
-    // path is single-quoted (shellQuote) so spaces / shell metacharacters in the bundle path are inert.
-    // refreshed on every run: any prior baked block is stripped first, healing a moved bundle.
+    // bake the bundled agtermctl's absolute path into the installed wrappers so the hooks fire even when the
+    // CLI was never symlinked into PATH. `[ -n "${AGTERMCTL:-}" ] ||` sets it only when AGTERMCTL is unset,
+    // so an explicit env override still wins (resolution order 1 > 2 > PATH); the path is single-quoted
+    // (shellQuote) so spaces / shell metacharacters in the bundle path are inert.
     private static func bakeAgtermctlPath() throws {
         guard let tool = bundledTool else { return } // no bundled CLI: leave the PATH fallback in place
         for name in [AgentHooksInstall.wrapperName, AgentHooksInstall.codexWrapperName] {
@@ -147,7 +140,6 @@ enum AgentHooksInstaller {
         }
     }
 
-    // remove a previously baked AGTERMCTL block (the marker line plus the assignment line under it).
     private static func stripBakedBlock(from text: String) -> String {
         let lines = text.components(separatedBy: "\n")
         var result: [String] = []
@@ -160,7 +152,6 @@ enum AgentHooksInstaller {
         return result.joined(separator: "\n")
     }
 
-    // insert the baked block right after the shebang (or at the top when there is none).
     private static func insertAfterShebang(_ text: String, block: String) -> String {
         var lines = text.components(separatedBy: "\n")
         let insertAt = lines.first?.hasPrefix("#!") == true ? 1 : 0
@@ -168,11 +159,10 @@ enum AgentHooksInstaller {
         return lines.joined(separator: "\n")
     }
 
-    // write text to a path, PRESERVING an existing symlink: when the path is a symlink (e.g. a
-    // dotfiles-managed `~/.claude/settings.json` or `~/.zshrc`), write atomically to its resolved
-    // target so the symlink and the user's dotfiles stay intact, instead of an atomic rename
-    // replacing the symlink with a standalone regular file. when `posixMode` is non-nil the resolved
-    // target inherits that mode so a restrictive (chmod-600) file isn't widened by the atomic rewrite.
+    // write text to a path, PRESERVING an existing symlink: for a symlink (e.g. a dotfiles-managed
+    // `~/.claude/settings.json` or `~/.zshrc`) write atomically to its resolved target, so the link and the
+    // user's dotfiles stay intact instead of an atomic rename replacing it with a regular file. a non-nil
+    // `posixMode` is applied to the resolved target, so a chmod-600 file isn't widened by the rewrite.
     private static func writePreservingSymlink(_ text: String, to url: URL, posixMode: NSNumber? = nil) throws {
         let target = symlinkTarget(of: url) ?? url
         try AgentHooksInstall.writeFile(text, toPath: target.path, posixMode: posixMode)
@@ -186,10 +176,9 @@ enum AgentHooksInstaller {
         return url.resolvingSymlinksInPath()
     }
 
-    // read an existing config file's contents. Returns nil when the file is ABSENT (a fresh install);
-    // the raw contents when present and readable; and THROWS `UnreadableExisting` when the file EXISTS
-    // but cannot be read (permission / non-UTF8), so callers leave it untouched instead of clobbering it
-    // with no backup — the destructive path that `(try? String(contentsOf:)) ?? ""` silently took.
+    // read an existing config file: nil when ABSENT (a fresh install), the raw contents when readable, and
+    // a thrown `UnreadableExisting` when it EXISTS but cannot be read (permission / non-UTF8) — so callers
+    // leave it untouched instead of clobbering it with no backup, as `(try? String(contentsOf:)) ?? ""` did.
     private struct UnreadableExisting: Error {}
     private static func readExistingConfig(at url: URL) throws -> String? {
         guard FileManager.default.fileExists(atPath: url.path) else { return nil }
@@ -220,15 +209,15 @@ enum AgentHooksInstaller {
         }
         guard merged.changed else { return false }
         try FileManager.default.createDirectory(at: claudeDir, withIntermediateDirectories: true)
-        // resolve the symlink target FIRST (so a dotfiles-managed settings.json link survives) and read
-        // its mode once, so the rewrite AND the .bak inherit the original (possibly chmod-600) mode
-        // instead of an atomic rename widening a secret file to 0644.
+        // resolve the symlink target FIRST (so a dotfiles-managed settings.json link survives) and read its
+        // mode once, so the rewrite AND the .bak inherit the original (possibly chmod-600) mode instead of
+        // an atomic rename widening a secret file to 0644.
         let target = symlinkTarget(of: settings) ?? settings
         let mode = AgentHooksInstall.posixMode(ofFile: target.path)
         if let existing { // back up the prior file before overwriting it, with the source's mode
-            // keep the .bak next to ~/.claude/settings.json (the symlink), NOT next to the resolved
-            // target — a dotfiles-managed link resolves into a git-tracked dir we must not litter; only
-            // the MODE comes from the resolved target.
+            // keep the .bak next to ~/.claude/settings.json (the symlink), NOT the resolved target — a
+            // dotfiles-managed link resolves into a git-tracked dir we must not litter; only the MODE
+            // comes from the resolved target.
             let backup = AgentHooksInstall.backupPath(for: settings.path)
             try AgentHooksInstall.writeFile(existing, toPath: backup, posixMode: mode)
         }
@@ -236,7 +225,8 @@ enum AgentHooksInstaller {
         return false
     }
 
-    // append the marker-guarded source line to ~/.zshrc, ~/.bashrc, and ~/.config/fish/config.fish (idempotent per file).
+    // append the marker-guarded source line to ~/.zshrc, ~/.bashrc and ~/.config/fish/config.fish
+    // (idempotent per file).
     private static func appendShellRC() throws {
         let home = FileManager.default.homeDirectoryForCurrentUser
         for name in [".zshrc", ".bashrc", ".config/fish/config.fish"] {
@@ -253,10 +243,10 @@ enum AgentHooksInstaller {
         }
     }
 
-    // Install Pi's auto-discovered global extension only when Pi has already created ~/.pi/agent. A
-    // same-named, unmarked extension is user-owned and left untouched; an agterm-managed one refreshes
-    // from the newly copied package. Pi has no config merge, and its extension carries no user state, so
-    // unlike Claude/Codex config we do not create a backup for a managed refresh.
+    // install Pi's auto-discovered global extension only when Pi has already created ~/.pi/agent. a
+    // same-named UNMARKED extension is user-owned and left untouched; an agterm-managed one refreshes from
+    // the copied package. no backup, unlike Claude/Codex config: Pi has no config merge and its extension
+    // carries no user state.
     private static func installPiExtension() throws -> PiResult {
         let fm = FileManager.default
         let home = fm.homeDirectoryForCurrentUser
@@ -273,9 +263,9 @@ enum AgentHooksInstaller {
         }
 
         let destination = URL(fileURLWithPath: AgentHooksInstall.piExtensionPath(home: home.path))
-        // read the destination the same way the Claude/Codex merges read their configs: nil = absent,
-        // throw = exists-but-unreadable (folded to .unreadable). Reusing readExistingConfig means a
-        // non-ENOENT stat error can't masquerade as "absent" and slip past the ownership-marker gate.
+        // read the destination like the Claude/Codex merges: nil = absent, throw = exists-but-unreadable
+        // (folded to .unreadable). reusing readExistingConfig stops a non-ENOENT stat error masquerading
+        // as "absent" and slipping past the ownership-marker gate.
         let existing: String?
         do {
             existing = try readExistingConfig(at: destination)
@@ -287,9 +277,8 @@ enum AgentHooksInstaller {
         }
         guard existing != sourceContents else { return .alreadyConfigured }
 
-        // a filesystem error on ~/.pi/agent/extensions degrades to a warning like every sibling
-        // integration, rather than throwing and aborting the whole install (which would hide that the
-        // Claude/Codex/shell steps already ran).
+        // a filesystem error on ~/.pi/agent/extensions degrades to a warning like every sibling integration
+        // rather than aborting the whole install, which would hide that the Claude/Codex/shell steps ran.
         do {
             try fm.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
             let target = symlinkTarget(of: destination) ?? destination
@@ -341,10 +330,10 @@ enum AgentHooksInstaller {
         return .installed
     }
 
-    // merge the Codex lifecycle hooks into ~/.codex/config.toml, writing a .bak first when the merge
-    // changes anything. Gated on ~/.codex existing (like the fish rc gate) so a non-Codex user's home
-    // isn't seeded with a config.toml. The host-free `AgentHooksInstall.mergeCodexConfig` PARSES the file
-    // to decide the outcome; this method only reads/writes and maps the outcome to a `CodexResult`.
+    // merge the Codex lifecycle hooks into ~/.codex/config.toml, writing a .bak first when the merge changes
+    // anything. gated on ~/.codex existing (like the fish rc gate) so a non-Codex home isn't seeded with a
+    // config.toml. the host-free `AgentHooksInstall.mergeCodexConfig` PARSES the file to decide the outcome;
+    // this only reads/writes and maps it to a `CodexResult`.
     private static func mergeCodexConfig() throws -> CodexResult {
         let codexDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex")
         guard FileManager.default.fileExists(atPath: codexDir.path) else { return .noCodex }
@@ -363,8 +352,8 @@ enum AgentHooksInstaller {
         case .unparseable:
             return .unparseable
         case .merged(let contents):
-            // resolve the symlink target FIRST (so a dotfiles-managed config.toml link survives) and read
-            // its mode once, so the rewrite AND the .bak inherit the original mode instead of widening it.
+            // resolve the symlink target FIRST (so a dotfiles-managed config.toml link survives) and read its
+            // mode once, so the rewrite AND the .bak inherit the original mode instead of widening it.
             let target = symlinkTarget(of: config) ?? config
             let mode = AgentHooksInstall.posixMode(ofFile: target.path)
             if let existing, !existing.isEmpty { // back up the prior file before overwriting it
@@ -376,8 +365,8 @@ enum AgentHooksInstaller {
         }
     }
 
-    // the success-alert text. Explains what was left out when the Claude settings merge was skipped, or
-    // when the Codex/Pi/OpenCode integrations could not safely update a user-owned or unreadable file.
+    // the success-alert text: what was left out when the Claude settings merge was skipped, or when the
+    // Codex/Pi/OpenCode integrations could not safely update a user-owned or unreadable file.
     private static func successText(_ outcome: InstallOutcome) -> String {
         let claudeLine = outcome.settingsSkipped
             ? "Your ~/.claude/settings.json isn't valid JSON (or couldn't be read), so the Claude Code hooks were NOT added "

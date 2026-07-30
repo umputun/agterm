@@ -1,11 +1,9 @@
 import Foundation
 
-/// A rebindable, menu-backed built-in action. Each case has a canonical kitty-style raw name (the
-/// token the user writes after `map` in `keymap.conf`) and a `defaultChord` — the shortcut the menu
-/// ships with today, or `nil` for an action that has no default key.
-///
-/// The raw names mirror the menu items in `agtermApp`'s `.commands`; `defaultChord` is the single
-/// source of truth for those default shortcuts once the menu reads `equivalent(for:)`.
+/// A rebindable, menu-backed built-in action. Each case has a canonical kitty-style raw name (the token the
+/// user writes after `map` in `keymap.conf`) and a `defaultChord` — the shortcut the menu ships with, or
+/// `nil` for an action with no default key. The raw names mirror the menu items in `agtermApp`'s
+/// `.commands`; `defaultChord` is the single source of truth for those shortcuts, read via `equivalent(for:)`.
 public enum BuiltinAction: String, CaseIterable, Sendable {
     case newWindow = "new_window", renameWindow = "rename_window", deleteWindow = "delete_window"
     case newWorkspace = "new_workspace", renameWorkspace = "rename_workspace", deleteWorkspace = "delete_workspace"
@@ -26,14 +24,10 @@ public enum BuiltinAction: String, CaseIterable, Sendable {
     case customCommandPalette = "custom_command_palette", showAttention = "show_attention"
     case dashboard = "dashboard"
 
-    /// The shipped default chord for this action, or `nil` when it has no default key today.
-    ///
-    /// `nil` covers only the keyless actions (`rename_*`/`delete_*`/`duplicate_session`/`clear_status`/
-    /// `first_session`/`last_session`/`select_theme`/`toggle_flagged_view`/`focus_workspace`/
-    /// `toggle_workspace_filter`), which gain
-    /// a key only when the user `map`s one. Every action that ships with a key returns it here, including
-    /// the six arrow-bound ones — the arrows are part of the chord grammar, so their defaults round-trip
-    /// through `keymap.conf` like any other and the menu needs no hardcoded fallback.
+    /// The shipped default chord, or `nil` for a keyless action, which gains a key only when the user
+    /// `map`s one. Every action that ships with a key returns it here, including the six arrow-bound ones —
+    /// arrows are part of the chord grammar, so their defaults round-trip through `keymap.conf` like any
+    /// other and the menu needs no hardcoded fallback.
     public var defaultChord: Chord? {
         switch self {
         case .newWindow: return Chord(mods: [.command, .option], key: "n")

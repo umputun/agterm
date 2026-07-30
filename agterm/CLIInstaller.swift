@@ -1,11 +1,10 @@
 import AppKit
 import agtermCore
 
-/// Installs the bundled `agtermctl` CLI into the user's PATH by symlinking it from the app bundle
-/// into `/usr/local/bin`. Tries a direct symlink first (no prompt when the dir is user-writable);
-/// falls back to a one-time GUI admin prompt via `osascript` when it isn't (a clean Apple Silicon
-/// Mac has a root-owned `/usr/local/bin`). The host-free path/command logic lives in
-/// `agtermCore.CLIInstall`; this type owns the AppKit filesystem + authorization glue.
+/// Installs the bundled `agtermctl` CLI into the user's PATH by symlinking it from the app bundle into
+/// `/usr/local/bin`: a direct symlink when the dir is user-writable (no prompt), else a one-time GUI admin
+/// prompt via `osascript` (a clean Apple Silicon Mac has a root-owned `/usr/local/bin`). Host-free
+/// path/command logic is `agtermCore.CLIInstall`; this owns the AppKit filesystem + authorization glue.
 @MainActor
 enum CLIInstaller {
     enum InstallResult {
@@ -14,8 +13,8 @@ enum CLIInstaller {
         case cancelled
     }
 
-    /// The bundled helper at `Contents/MacOS/agtermctl`, or nil when this build skipped the bundling
-    /// phase (e.g. a bare `swift build`).
+    /// The bundled helper at `Contents/MacOS/agtermctl`, or nil when this build skipped the bundling phase
+    /// (e.g. a bare `swift build`).
     static var bundledTool: URL? { Bundle.main.url(forAuxiliaryExecutable: CLIInstall.toolName) }
 
     /// Run the install and show a result alert (a cancelled admin prompt shows nothing).
@@ -39,12 +38,12 @@ enum CLIInstaller {
         return elevatedSymlink(source: source)
     }
 
-    /// Replace any existing link and symlink the bundled tool into place. Succeeds only when the
-    /// target directory is user-writable; any error (typically a root-owned dir) returns false so
-    /// the caller escalates.
+    /// Replace any existing link and symlink the bundled tool into place. Succeeds only when the target
+    /// directory is user-writable; any error (typically a root-owned dir) returns false so the caller
+    /// escalates.
     private static func directSymlink(source: String) -> Bool {
         let fm = FileManager.default
-        try? fm.removeItem(atPath: CLIInstall.installPath) // remove a prior link if present (ignore if absent)
+        try? fm.removeItem(atPath: CLIInstall.installPath)
         do {
             try fm.createSymbolicLink(atPath: CLIInstall.installPath, withDestinationPath: source)
             return true
@@ -53,8 +52,8 @@ enum CLIInstaller {
         }
     }
 
-    /// Create the symlink through a single GUI admin prompt. Returns `.cancelled` when the user
-    /// dismisses the authorization dialog (AppleScript error -128).
+    /// Create the symlink through a single GUI admin prompt. Returns `.cancelled` when the user dismisses
+    /// the authorization dialog (AppleScript error -128).
     private static func elevatedSymlink(source: String) -> InstallResult {
         let command = CLIInstall.privilegedInstallCommand(source: source)
         let apple = "do shell script \(appleScriptString(command)) with administrator privileges"

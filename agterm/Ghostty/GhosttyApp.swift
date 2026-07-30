@@ -15,109 +15,99 @@ final class GhosttyApp {
 
     private(set) var app: ghostty_app_t?
     private(set) var config: ghostty_config_t?
-    /// The number of config diagnostics (parse errors / invalid keys) from the most recent `loadConfig`,
-    /// counted across ALL loaded sources (bundled defaults, `~/.config/ghostty/config`, the agterm-scoped
-    /// `ghostty.conf`, and the UI settings conf). libghostty diagnostics carry no source-file attribution,
-    /// so this is NOT specific to `ghostty.conf`. Surfaced by `reloadConfig` so File ▸ Reload Config (and
-    /// `config.reload`) can warn the user when the resolved config has problems; the Console log shows the
-    /// offending line. Reset on each `loadConfig`.
+    /// Config diagnostics (parse errors / invalid keys) from the most recent `loadConfig`, reset each load.
+    /// Spans ALL sources (bundled defaults, `~/.config/ghostty/config`, the agterm-scoped `ghostty.conf`, the
+    /// UI settings conf) — libghostty attributes none of them to a file, so this is NOT `ghostty.conf`-specific.
+    /// `reloadConfig` surfaces it so File ▸ Reload Config / `config.reload` can warn; the Console log shows the
+    /// offending line.
     private(set) var lastConfigDiagnosticsCount = 0
-    /// The terminal background color parsed from the resolved config. Used to tint the
-    /// window so the title bar blends with the terminal instead of drawing the default
-    /// titlebar material. Nil if the color couldn't be read.
+    /// The terminal background from the resolved config, tinting the window so the title bar blends with the
+    /// terminal instead of the default titlebar material. Nil when the color couldn't be read.
     private(set) var terminalBackgroundColor: NSColor?
-    /// The terminal foreground (text) color parsed from the resolved config. The chrome (sidebar row
-    /// text + icons, title bar text + buttons) uses it so non-terminal text tracks the theme instead
-    /// of the system label color. Nil if the color couldn't be read.
+    /// The terminal foreground from the resolved config. The chrome (sidebar row text + icons, title-bar text
+    /// + buttons) uses it so non-terminal text tracks the theme, not the system label color. Nil when unread.
     private(set) var terminalForegroundColor: NSColor?
-    /// Whether the active terminal theme reads as dark, by the perceived luminance of the sidebar
-    /// background the disclosure triangle sits on — the theme background with the sidebar-tint wash
-    /// applied. Pins AppKit-drawn chrome (the sidebar disclosure triangle) to the theme instead of the
-    /// macOS system appearance, so a light theme under macOS dark mode still draws dark, visible chrome.
-    /// Classifying the washed color (not the raw background) keeps it correct when a strong sidebar tint
-    /// pushes a near-threshold theme across the midpoint. Defaults to dark when the background couldn't
-    /// be read (the app's default chrome).
+    /// Whether the active theme reads as dark, by the perceived luminance of the WASHED sidebar background
+    /// (theme background plus the sidebar-tint wash) — the color the disclosure triangle actually sits on, so a
+    /// strong tint pushing a near-threshold theme across the midpoint still classifies correctly. Pins
+    /// AppKit-drawn chrome (the sidebar disclosure triangle) to the theme rather than the macOS system
+    /// appearance, so a light theme under macOS dark mode still draws dark, visible chrome. Defaults to dark
+    /// (the app's default chrome) when the background couldn't be read.
     var terminalThemeIsDark: Bool {
         guard let bg = terminalBackgroundColor?.usingColorSpace(.sRGB) else { return true }
         let shiftAmount = AppSettings.sidebarShiftAmount(strength: sidebarBackgroundShift)
         return ThemeBrightness.isDark(red: Double(bg.redComponent), green: Double(bg.greenComponent),
                                       blue: Double(bg.blueComponent), shiftAmount: shiftAmount)
     }
-    /// The terminal selection-background color (theme `selection-background`). The selected sidebar row
-    /// draws its pill in this color so it matches the terminal's own selection. Nil if the theme
-    /// doesn't set it (the row falls back to a soft white wash).
+    /// The theme's `selection-background`; the selected sidebar row draws its pill in it so it matches the
+    /// terminal's own selection. Nil when the theme doesn't set it (the row falls back to a soft white wash).
     private(set) var terminalSelectionBackgroundColor: NSColor?
     /// The selected sidebar row's text color: the theme `selection-foreground`, or a black/white
     /// contrast of the selection-background when the theme sets only the background. Nil if neither set.
     private(set) var terminalSelectionForegroundColor: NSColor?
-    /// Window translucency the chrome composites at the AppKit level — the background opacity
-    /// (0...1) and CGS blur radius the Settings window last applied. NOT ghostty-resolved:
-    /// `WindowAppearance.sync` reads these, `SettingsModel` writes them. Defaults are opaque.
+    /// Window translucency the chrome composites at the AppKit level — background opacity (0...1) + CGS blur
+    /// radius, opaque by default. NOT ghostty-resolved: `WindowAppearance.sync` reads, `SettingsModel` writes.
     private(set) var windowOpacity: Double = 1
     private(set) var windowBlurRadius: Int = 0
-    /// The custom title bar row state (normal/compact/hidden): normal stacks the cwd subtitle, compact is a
-    /// single short row, hidden drops the row and the traffic lights for a full-bleed terminal. NOT
-    /// ghostty-resolved: `WindowContentView`/`WindowAppearance.sync` read it, `SettingsModel` writes it.
-    /// Defaults to compact (the app default; `settings.toolbarMode == nil` resolves to `.compact`).
+    /// The title-bar row state: normal stacks the cwd subtitle, compact is one short row, hidden drops the row
+    /// and the traffic lights for a full-bleed terminal. NOT ghostty-resolved: `WindowContentView`/
+    /// `WindowAppearance.sync` read it, `SettingsModel` writes it. Defaults `.compact` (a nil
+    /// `settings.toolbarMode` resolves to it).
     private(set) var toolbarMode: ToolbarMode = .compact
-    /// Whether the sidebar draws the red unseen-notification count badge. NOT ghostty-resolved: the
-    /// sidebar Coordinator reads it (gating the count to 0 when off), `SettingsModel` writes it. The
-    /// re-render rides the `.agtermAppearanceChanged` notification, like `toolbarMode`.
+    /// Whether the sidebar draws the red unseen-notification count badge. NOT ghostty-resolved: the sidebar
+    /// Coordinator reads it (gating the count to 0 when off), `SettingsModel` writes it; the re-render rides
+    /// `.agtermAppearanceChanged`, like `toolbarMode`.
     private(set) var notificationBadgeEnabled: Bool = true
-    /// Whether a restored pane re-runs the command it had in the foreground at the last clean quit
-    /// (`AppSettings.restoreRunningCommand`). The surface factories read it to decide whether to feed the
-    /// captured command as `initial_input`; `SettingsModel` writes it. Not ghostty-resolved, and it only
-    /// affects the next restore, so no live re-render notification.
+    /// Whether a restored pane re-runs its last clean-quit foreground command
+    /// (`AppSettings.restoreRunningCommand`). The surface factories read it to decide whether to feed that
+    /// command as `initial_input`; `SettingsModel` writes it. Not ghostty-resolved, and it affects only the
+    /// next restore — no live re-render notification.
     private(set) var restoreRunningCommand: Bool = false
-    /// Whether the window title bar shows the attention bell icon. NOT ghostty-resolved: the title bar
-    /// reads it (via `WindowContentView`'s mirrored chrome state), `SettingsModel` writes it. The
-    /// re-render rides the `.agtermAppearanceChanged` notification, like `toolbarMode`. Defaults off.
+    /// Whether the window title bar shows the attention bell icon; off by default. NOT ghostty-resolved: the
+    /// title bar reads it via `WindowContentView`'s mirrored chrome state, `SettingsModel` writes it; the
+    /// re-render rides `.agtermAppearanceChanged`, like `toolbarMode`.
     private(set) var attentionButtonEnabled: Bool = false
-    /// Which title-bar / sidebar chrome elements are hidden (`AppSettings.hiddenInterfaceElements`).
-    /// NOT ghostty-resolved: `WindowContentView` mirrors it into view state and gates each element,
-    /// `SettingsModel` writes it. The re-render rides the `.agtermAppearanceChanged` notification, like
-    /// `toolbarMode`. Empty by default (everything shown).
+    /// Which title-bar / sidebar chrome elements are hidden (`AppSettings.hiddenInterfaceElements`), empty by
+    /// default. NOT ghostty-resolved: `WindowContentView` mirrors it into view state and gates each element,
+    /// `SettingsModel` writes it; the re-render rides `.agtermAppearanceChanged`, like `toolbarMode`.
     private(set) var hiddenInterfaceElements: Set<InterfaceElement> = []
     /// Whether only the frontmost window shows its sidebar, collapsing every other open window's
-    /// (`AppSettings.autoHideSidebarInactiveWindows`). NOT ghostty-resolved: `WindowAccessor.reportFrontmost`
-    /// reads it on every frontmost change to gate the `WindowLibrary` driver, `SettingsModel` writes it.
-    /// Off by default.
+    /// (`AppSettings.autoHideSidebarInactiveWindows`), off by default. NOT ghostty-resolved:
+    /// `WindowAccessor.reportFrontmost` reads it on every frontmost change to gate the `WindowLibrary` driver,
+    /// `SettingsModel` writes it.
     private(set) var autoHideSidebarInactiveWindows: Bool = false
-    /// Program basenames NOT to re-run on restore — the parsed user-editable `restore-denylist.conf`
-    /// (seeded with the terminal multiplexers). The surface factories read it via
-    /// `CommandRestore.shouldRestore`; `SettingsModel` parses the file and writes it. Read at launch only.
+    /// Program basenames NOT to re-run on restore — the parsed user-editable `restore-denylist.conf` (seeded
+    /// with the terminal multiplexers), read at launch only. The surface factories consult it via
+    /// `CommandRestore.shouldRestore`; `SettingsModel` parses the file and writes it.
     private(set) var restoreDenylist: Set<String> = []
-    /// Inactive-split-pane text mute strength on the 0...10 scale. NOT ghostty-resolved: the detail
-    /// pane's `paneDim` overlay reads it (via `AppSettings.muteOpacity`), `SettingsModel` writes it. The
-    /// re-render rides the `.agtermAppearanceChanged` notification, like `toolbarMode`.
+    /// Inactive-split-pane text mute strength on the 0...10 scale. NOT ghostty-resolved: the detail pane's
+    /// `paneDim` overlay reads it (via `AppSettings.muteOpacity`), `SettingsModel` writes it; the re-render
+    /// rides `.agtermAppearanceChanged`, like `toolbarMode`.
     private(set) var inactivePaneMuteStrength: Int = AppSettings.defaultInactivePaneMuteStrength
     /// How much darker/lighter the sidebar background is than the terminal (0...10, 5 = neutral). NOT
     /// ghostty-resolved: `ContentView` mirrors it into view state and renders the sidebar wash (via
-    /// `AppSettings.sidebarShiftAmount`), `SettingsModel` writes it. The re-render rides the
-    /// `.agtermAppearanceChanged` notification, like `toolbarMode`.
+    /// `AppSettings.sidebarShiftAmount`), `SettingsModel` writes it; re-render rides `.agtermAppearanceChanged`.
     private(set) var sidebarBackgroundShift: Int = AppSettings.defaultSidebarBackgroundShift
-    /// The sidebar row-text point size. NOT ghostty-resolved: the sidebar Coordinator reads it when
-    /// building each row's font and deriving the row height (via `AppSettings.sidebarRowHeight`),
-    /// `SettingsModel` writes it. The re-render rides the `.agtermAppearanceChanged` notification, like
-    /// `toolbarMode`.
+    /// The sidebar row-text point size. NOT ghostty-resolved: the sidebar Coordinator reads it for each row's
+    /// font and the derived row height (via `AppSettings.sidebarRowHeight`), `SettingsModel` writes it; the
+    /// re-render rides `.agtermAppearanceChanged`, like `toolbarMode`.
     private(set) var sidebarFontSize: CGFloat = CGFloat(AppSettings.defaultSidebarFontSize)
-    /// The base terminal font size in points (the Settings default; nil → the ghostty built-in). NOT a
-    /// value the renderer reads — it is the size a session whose `session.fontSize` is nil reverts to,
-    /// which the dashboard font-override clear needs to recognize its own async CELL_SIZE report (see
-    /// `GhosttySurfaceView.pendingFontRestore`). `SettingsModel` writes it at launch and on every change.
+    /// The base terminal font size in points (the Settings default; nil → the ghostty built-in), written by
+    /// `SettingsModel` at launch and on every change. NOT a value the renderer reads — it is the size a session
+    /// with a nil `session.fontSize` reverts to, which the dashboard font-override clear needs to recognize its
+    /// own async CELL_SIZE report (see `GhosttySurfaceView.pendingFontRestore`).
     private(set) var baseFontSize: Double = DashboardLayout.ghosttyDefaultFontSize
-    /// The agent-status glyph colors (active/blocked/completed). NOT ghostty-resolved: `StatusIconView`
-    /// reads them when building the glyph, `SettingsModel` writes them (resolved from the user's hex or
-    /// the default). The sidebar re-render rides the `.agtermAppearanceChanged` notification. The active
-    /// default is a muted lavender-grey (`#DBD9E6`); blocked/completed default to system orange/green.
+    /// The agent-status glyph colors — active defaults to a muted lavender-grey (`#DBD9E6`), blocked/completed
+    /// to system orange/green. NOT ghostty-resolved: `StatusIconView` reads them when building the glyph,
+    /// `SettingsModel` writes them (from the user's hex or the default); the sidebar re-render rides
+    /// `.agtermAppearanceChanged`.
     static let defaultActiveStatusColor: NSColor = NSColor(agtermHex: "#DBD9E6") ?? .systemBlue
     private(set) var activeStatusColor: NSColor = GhosttyApp.defaultActiveStatusColor
     private(set) var blockedStatusColor: NSColor = .systemOrange
     private(set) var completedStatusColor: NSColor = .systemGreen
-    /// The agent-status glyph silhouettes (active/blocked/completed), nil meaning the built-in plain
-    /// circle. NOT ghostty-resolved: the two render sites read them through `statusSymbolName(for:override:)`,
-    /// `SettingsModel` writes them (tolerantly decoded from `AppSettings`). The sidebar re-render rides
-    /// the `.agtermAppearanceChanged` notification, like the colors above.
+    /// The agent-status glyph silhouettes, nil meaning the built-in plain circle. NOT ghostty-resolved: the two
+    /// render sites read them through `statusSymbolName(for:override:)`, `SettingsModel` writes them (tolerantly
+    /// decoded from `AppSettings`); the sidebar re-render rides `.agtermAppearanceChanged`, like the colors.
     private(set) var activeStatusShape: StatusShape?
     private(set) var blockedStatusShape: StatusShape?
     private(set) var completedStatusShape: StatusShape?
@@ -157,12 +147,11 @@ final class GhosttyApp {
         }
         app = createdApp
         config = cfg
-        // boot-time: no surface exists yet, so the NSApp read is the only side source (and nothing has
-        // rendered, so it cannot disagree with a surface).
+        // boot-time: no surface exists yet, so the NSApp read is the only side source, and nothing has rendered
+        // that it could disagree with.
         resolveThemeColors(from: cfg, inputs: configInputs, isDark: Self.currentIsDark())
-        // demand-driven: no poll timer. ticks come from libghostty wakeups (coalesced in
-        // GhosttyCallbacks.wakeup) and surfaces draw on GHOSTTY_ACTION_RENDER, matching Ghostty.app/conterm
-        // — an idle terminal does no work, where a 120Hz poll ticked continuously.
+        // demand-driven, no poll timer: ticks come from libghostty wakeups (coalesced in GhosttyCallbacks.wakeup)
+        // and surfaces draw on GHOSTTY_ACTION_RENDER, like Ghostty.app/conterm — an idle terminal does no work.
     }
 
     func tick() {
@@ -170,76 +159,64 @@ final class GhosttyApp {
         ghostty_app_tick(app)
     }
 
-    /// Set the window translucency the chrome applies. Called by `SettingsModel` at launch and on
-    /// every change; the actual window re-sync rides the `.agtermAppearanceChanged` notification.
+    /// Set the window translucency the chrome applies. `SettingsModel` calls this and every setter below at
+    /// launch and on each change; the window re-syncs on `.agtermAppearanceChanged`.
     func setWindowTranslucency(opacity: Double, blurRadius: Int) {
         windowOpacity = opacity
         windowBlurRadius = blurRadius
     }
 
-    /// Set the custom title bar row state (normal/compact/hidden). Called by `SettingsModel` at launch
-    /// and on every change; the window re-sync rides the `.agtermAppearanceChanged` notification.
+    /// Set the title-bar row state (normal/compact/hidden); the window re-syncs on `.agtermAppearanceChanged`.
     func setToolbarMode(_ mode: ToolbarMode) {
         toolbarMode = mode
     }
 
-    /// Set whether the sidebar draws the notification count badge. Called by `SettingsModel` at launch
-    /// and on every change; the sidebar re-reconcile rides the `.agtermAppearanceChanged` notification.
+    /// Set whether the sidebar draws the notification count badge.
     func setNotificationBadgeEnabled(_ enabled: Bool) {
         notificationBadgeEnabled = enabled
     }
 
-    /// Set whether restored panes re-run their captured foreground command. Called by `SettingsModel` at
-    /// launch and on every change; read by the surface factories at restore time.
+    /// Set whether restored panes re-run their captured foreground command.
     func setRestoreRunningCommand(_ enabled: Bool) {
         restoreRunningCommand = enabled
     }
 
-    /// Set whether the title bar shows the attention bell icon. Called by `SettingsModel` at launch and on
-    /// every change; the title-bar re-render rides the `.agtermAppearanceChanged` notification.
+    /// Set whether the title bar shows the attention bell icon.
     func setAttentionButtonEnabled(_ enabled: Bool) {
         attentionButtonEnabled = enabled
     }
 
-    /// Set which title-bar / sidebar-footer chrome elements are hidden. Called by `SettingsModel` at launch
-    /// and on every change; the chrome re-render rides the `.agtermAppearanceChanged` notification.
+    /// Set which title-bar / sidebar-footer chrome elements are hidden.
     func setHiddenInterfaceElements(_ elements: Set<InterfaceElement>) {
         hiddenInterfaceElements = elements
     }
 
-    /// Set whether only the frontmost window shows its sidebar. Called by `SettingsModel` at launch and on
-    /// every change; read by `WindowAccessor.reportFrontmost` to gate the auto-hide driver.
+    /// Set whether only the frontmost window shows its sidebar.
     func setAutoHideSidebarInactiveWindows(_ enabled: Bool) {
         autoHideSidebarInactiveWindows = enabled
     }
 
-    /// Set the parsed restore denylist (program basenames not to re-run). Called by `SettingsModel` at
-    /// launch from `restore-denylist.conf`; read by the surface factories at restore time.
+    /// Set the parsed restore denylist (program basenames not to re-run).
     func setRestoreDenylist(_ denylist: Set<String>) {
         restoreDenylist = denylist
     }
 
-    /// Set the inactive-split-pane mute strength (0...10). Called by `SettingsModel` at launch and on
-    /// every change; the detail-pane re-render rides the `.agtermAppearanceChanged` notification.
+    /// Set the inactive-split-pane mute strength (0...10).
     func setInactivePaneMuteStrength(_ strength: Int) {
         inactivePaneMuteStrength = strength
     }
 
-    /// Set the sidebar background shift (0...10, 5 = neutral). Called by `SettingsModel` at launch and on
-    /// every change; the window re-sync rides the `.agtermAppearanceChanged` notification.
+    /// Set the sidebar background shift (0...10, 5 = neutral); the window re-syncs on the same notification.
     func setSidebarBackgroundShift(_ strength: Int) {
         sidebarBackgroundShift = strength
     }
 
-    /// Set the base terminal font size (the Settings default; nil → the ghostty built-in). Called by
-    /// `SettingsModel` at launch and on every change, so the dashboard font-override clear can compute the
-    /// size a default-following session reverts to.
+    /// Set the base terminal font size (the Settings default; nil → the ghostty built-in).
     func setBaseFontSize(_ size: Double?) {
         baseFontSize = size ?? DashboardLayout.ghosttyDefaultFontSize
     }
 
-    /// Set the sidebar row-text point size. Called by `SettingsModel` at launch and on every change; the
-    /// sidebar re-render (fonts + row height) rides the `.agtermAppearanceChanged` notification.
+    /// Set the sidebar row-text point size.
     func setSidebarFontSize(_ size: Double) {
         // clamp here so both readers (the row font AND the row height) see an in-range value. the Settings
         // stepper already bounds 9...20, but a hand-edited or future-range settings.json must not render a
@@ -247,18 +224,15 @@ final class GhosttyApp {
         sidebarFontSize = CGFloat(AppSettings.clampSidebarFontSize(size))
     }
 
-    /// Set the agent-status glyph colors from the user's hex settings (nil/malformed → the system
-    /// default). Called by `SettingsModel` at launch and on every change; the sidebar re-renders the
-    /// glyphs on the `.agtermAppearanceChanged` notification.
+    /// Set the agent-status glyph colors from the user's hex settings; nil or malformed → the system default.
     func setAgentStatusColors(activeHex: String?, blockedHex: String?, completedHex: String?) {
         activeStatusColor = NSColor(agtermHex: activeHex) ?? GhosttyApp.defaultActiveStatusColor
         blockedStatusColor = NSColor(agtermHex: blockedHex) ?? .systemOrange
         completedStatusColor = NSColor(agtermHex: completedHex) ?? .systemGreen
     }
 
-    /// Set the agent-status glyph silhouettes from the user's Settings (nil keeps that status on the
-    /// default plain circle). Called by `SettingsModel` at launch and on every change; the sidebar
-    /// re-renders the glyphs on the `.agtermAppearanceChanged` notification.
+    /// Set the agent-status glyph silhouettes from the user's Settings; nil keeps that status on the default
+    /// plain circle.
     func setAgentStatusShapes(active: StatusShape?, blocked: StatusShape?, completed: StatusShape?) {
         activeStatusShape = active
         blockedStatusShape = blocked
@@ -266,11 +240,10 @@ final class GhosttyApp {
     }
 
     /// The SF Symbol for a status glyph, honoring an optional per-call shape OVERRIDE from
-    /// `session.status --shape` (set on the ephemeral `AgentIndicator`). The override wins, else this
-    /// status's Settings shape, else the default plain circle — the precedence itself is the host-free
-    /// `AgentStatus.symbolName(override:configured:)`, so this only supplies the mirrored Settings value.
-    /// The single resolver the AppKit sidebar `StatusIconView` and the SwiftUI `StatusGlyph` share, so
-    /// the two can't drift.
+    /// `session.status --shape` (set on the ephemeral `AgentIndicator`). The precedence — override, else this
+    /// status's Settings shape, else the default plain circle — is the host-free
+    /// `AgentStatus.symbolName(override:configured:)`; this only supplies the mirrored Settings value. Shared by
+    /// the AppKit sidebar `StatusIconView` and the SwiftUI `StatusGlyph` so the two can't drift.
     func statusSymbolName(for status: AgentStatus, override shape: StatusShape?) -> String {
         let configured: StatusShape?
         switch status {
@@ -282,9 +255,9 @@ final class GhosttyApp {
         return status.symbolName(override: shape, configured: configured)
     }
 
-    /// The configured tint for a status glyph, shared by the AppKit sidebar `StatusIconView` and the
-    /// SwiftUI `StatusGlyph` so the two can't drift. `idle` never renders a glyph (it is filtered out
-    /// before any glyph is built), so its color is unused — it returns `.clear` as a benign default.
+    /// The configured tint for a status glyph, shared by the AppKit sidebar `StatusIconView` and the SwiftUI
+    /// `StatusGlyph` so the two can't drift. `idle` never renders a glyph (it is filtered out before any glyph
+    /// is built), so its `.clear` is a benign unused default.
     func statusColor(for status: AgentStatus) -> NSColor {
         switch status {
         case .active: return activeStatusColor
@@ -295,9 +268,9 @@ final class GhosttyApp {
     }
 
     /// The tint for a status glyph, honoring an optional per-call `#rrggbb` OVERRIDE from
-    /// `session.status --color` (set on the ephemeral `AgentIndicator`). A valid override wins; nil or
-    /// malformed falls back to the Settings-configured `statusColor(for:)`. Shared by the AppKit sidebar
-    /// `StatusIconView` and the SwiftUI `StatusGlyph` so the two can't drift.
+    /// `session.status --color` (set on the ephemeral `AgentIndicator`); a valid override wins, nil or malformed
+    /// falls back to the Settings-configured `statusColor(for:)`. Shared by the AppKit sidebar `StatusIconView`
+    /// and the SwiftUI `StatusGlyph` so the two can't drift.
     func statusColor(for status: AgentStatus, override hex: String?) -> NSColor {
         NSColor(agtermHex: hex) ?? statusColor(for: status)
     }
@@ -313,14 +286,13 @@ final class GhosttyApp {
     }
 
     /// The config inputs resolved from `settings.json` in ONE read: the agterm-scoped `ghostty.conf` URL
-    /// (`<configDir>/ghostty.conf`, co-located with `keymap.conf`) and whether to inherit the user's GLOBAL
-    /// `~/.config/ghostty/config` (`inheritGlobalGhosttyConfig`, default off). Callers resolve this ONCE per
-    /// config build and thread it to `loadConfig`/`resolveSelectionColors`, so a single reload reads
-    /// `settings.json` at most once. Resolved self-contained because `loadConfig` runs before any
-    /// `SettingsModel` exists (its first touch of `GhosttyApp.shared` is inside `SettingsModel.init`): it
-    /// reads the persisted `configDirectory` + flag from a `SettingsStore` rooted the SAME way
-    /// `agtermApp.init` builds it (via `settingsStore()`), applying the keymap's precedence
-    /// (explicit setting → `AGTERM_STATE_DIR/config` → `~/.config/agterm`).
+    /// (`<configDir>/ghostty.conf`, beside `keymap.conf`) and whether to inherit the user's GLOBAL
+    /// `~/.config/ghostty/config` (`inheritGlobalGhosttyConfig`, default off). Resolved ONCE per config build
+    /// and threaded to `loadConfig`/`resolveSelectionColors`, so a reload reads `settings.json` at most once.
+    /// Self-contained because `loadConfig` runs before any `SettingsModel` exists (whose init is the first touch
+    /// of `GhosttyApp.shared`): it reads the persisted `configDirectory` + flag from a `SettingsStore` rooted the
+    /// SAME way `agtermApp.init` builds it (via `settingsStore()`), with the keymap's precedence (explicit
+    /// setting → `AGTERM_STATE_DIR/config` → `~/.config/agterm`).
     struct ConfigInputs {
         let scopedURL: URL
         let inheritGlobalConfig: Bool
@@ -336,63 +308,58 @@ final class GhosttyApp {
                             inheritGlobalConfig: settings.inheritGlobalGhosttyConfig ?? false)
     }
 
-    /// The persisted settings store, rooted the SAME way `agtermApp.init` builds it: `AGTERM_STATE_DIR`
-    /// when set (test isolation), else the default Application Support directory. `ghosttyConfigURL`
-    /// reads `configDirectory` through this so it resolves the SAME `settings.json` the active
-    /// `SettingsModel` does. A bare `SettingsStore()` would read the default app-support file even under
-    /// `AGTERM_STATE_DIR` isolation, so an explicit `configDirectory` in the state-dir settings would be
-    /// ignored (and a production one could leak into an isolated run), pointing GhosttyApp and
-    /// SettingsModel at different `ghostty.conf` files.
+    /// The persisted settings store, rooted the SAME way `agtermApp.init` builds it: `AGTERM_STATE_DIR` when
+    /// set (test isolation), else the default Application Support directory — so it resolves the SAME
+    /// `settings.json` the active `SettingsModel` does. A bare `SettingsStore()` would read the app-support file
+    /// even under `AGTERM_STATE_DIR` isolation, ignoring an explicit `configDirectory` in the state-dir settings
+    /// (and leaking a production one into an isolated run), pointing GhosttyApp and SettingsModel at different
+    /// `ghostty.conf` files.
     private static func settingsStore() -> SettingsStore {
         ProcessInfo.processInfo.environment["AGTERM_STATE_DIR"]
             .map { SettingsStore(directory: URL(fileURLWithPath: $0, isDirectory: true)) } ?? SettingsStore()
     }
 
-    /// Rebuilds the config (re-reading the agterm settings file) and broadcasts it to the app and the
-    /// given live surfaces — a live appearance change. Keeps the new config as `self.config`; the
-    /// previous config is intentionally NOT freed: settings changes are rare and `update_config`
-    /// has no documented ownership contract, so this matches the existing never-free pattern over
-    /// risking a use-after-free. Returns the rebuilt config's diagnostic count (0 = clean) so a
-    /// Reload Config can warn the user about a malformed `ghostty.conf`.
+    /// Rebuilds the config (re-reading the agterm settings file) and broadcasts it to the app and the given
+    /// live surfaces — a live appearance change. Keeps the new config as `self.config`; the previous one is
+    /// intentionally NOT freed — settings changes are rare and `update_config` has no documented ownership
+    /// contract, so this follows the never-free pattern rather than risk a use-after-free. Returns the rebuilt
+    /// config's diagnostic count (0 = clean) so a Reload Config can warn about a malformed `ghostty.conf`.
     @discardableResult
     func reloadConfig(surfaces: [GhosttySurfaceView], isDark: Bool) -> Int {
-        // no app (called before `ghostty_app_new` succeeded) or `ghostty_config_new` allocation failure:
-        // nothing was re-read, so report the last known count. The property name is "from the most recent
-        // loadConfig", and both paths are effectively unreachable in practice (the app is always booted
-        // before a reload is reachable, and config allocation only fails under OOM).
+        // no app (called before `ghostty_app_new` succeeded) or a `ghostty_config_new` allocation failure:
+        // nothing was re-read, so report the last known count. Both are unreachable in practice — boot always
+        // precedes a reachable reload, and config allocation only fails under OOM.
         guard let app else { return lastConfigDiagnosticsCount }
         let inputs = Self.resolveConfigInputs()
         guard let newConfig = loadConfig(inputs) else { return lastConfigDiagnosticsCount }
-        // Re-assert the app + each surface's light/dark scheme from the authoritative `isDark` (the
-        // KVO-delivered side, else `currentIsDark()`) BEFORE feeding the config: libghostty re-resolves a
-        // dual `theme = light:,dark:` to the side matching the recorded conditional state, so a stale side
-        // would re-derive the wrong theme. Setting the APP scheme here (not only per surface) makes a
-        // ZERO-surface reload chrome-correct — the CONFIG_CHANGE clone below resolves to `isDark` even with
-        // no surfaces, so a dark launch re-sides the sidebar/titlebar before any surface exists. Cheap
-        // (each set no-ops when unchanged); the config re-feed below is what actually re-renders.
+        // re-assert the app + each surface's light/dark scheme from the authoritative `isDark` (the
+        // KVO-delivered side, else `currentIsDark()`) BEFORE feeding the config: libghostty re-resolves a dual
+        // `theme = light:,dark:` against the recorded conditional state, so a stale side derives the wrong
+        // theme. Setting the APP scheme (not only per surface) makes a ZERO-surface reload chrome-correct — the
+        // CONFIG_CHANGE clone below then resolves to `isDark` too, so a dark launch re-sides the
+        // sidebar/titlebar before any surface exists. Cheap (each set no-ops when unchanged); the config
+        // re-feed is what actually re-renders.
         ghostty_app_set_color_scheme(app, isDark ? GHOSTTY_COLOR_SCHEME_DARK : GHOSTTY_COLOR_SCHEME_LIGHT)
         for surface in surfaces { surface.syncColorScheme(isDark: isDark) }
         ghostty_app_update_config(app, newConfig)
-        // ghostty replies to update_config with a synchronous app-target CONFIG_CHANGE carrying the
-        // config it APPLIED — the dual `theme = light:,dark:` resolved to the current appearance side.
-        // Read the chrome colors from THAT clone below: newConfig itself is always finalized with the
-        // default (light) conditional state, so reading it directly while following in dark mode would
-        // tint the sidebar/titlebar with the LIGHT slot while the terminal renders the dark one. Falls
-        // back to newConfig when nothing was stashed (no conditional in play).
+        // ghostty replies to update_config with a synchronous app-target CONFIG_CHANGE carrying the config it
+        // APPLIED — the dual `theme = light:,dark:` resolved to the current appearance side. Read the chrome
+        // colors from THAT clone: newConfig is always finalized with the default (light) conditional state, so
+        // reading it directly while following in dark mode tints the sidebar/titlebar with the LIGHT slot while
+        // the terminal renders the dark one. Falls back to newConfig when nothing was stashed (no conditional).
         let derivedConfig = callbacks.takeDerivedAppConfig()
         for surface in surfaces { surface.applyConfig(newConfig) }
         config = newConfig
         // refresh the chrome colors from the NEW config BEFORE the watermark re-assert below: a default-tinted
-        // `.text` watermark re-renders its PNG reading `terminalForegroundColor`, so the foreground must already
-        // reflect the new theme — otherwise the text watermark's color lags one reload behind a theme change.
-        // the selection colors re-side from the authoritative `isDark` passed in (the side the app +
-        // surfaces were just set to), NOT re-read from any view.
+        // `.text` watermark re-renders its PNG from `terminalForegroundColor`, so a stale foreground lags one
+        // reload behind a theme change. the selection colors re-side from the authoritative `isDark` passed in
+        // (the side the app + surfaces were just set to), NOT re-read from any view.
         resolveThemeColors(from: derivedConfig ?? newConfig, inputs: inputs, isDark: isDark)
         if let derivedConfig { ghostty_config_free(derivedConfig) }
         // the broadcast above pushes the shared config (no background image, default font size) to every
-        // surface, wiping any per-surface watermark and zoom — so re-assert each affected surface's
-        // overlay afterwards. No-op for the surfaces without either; on the zoom-clearing reload paths
-        // the per-session fontSize was already nil'd, so only watermarks re-apply there.
+        // surface, wiping any per-surface watermark and zoom — so re-assert each affected surface's overlay
+        // after. No-op without either; on the zoom-clearing reload paths the per-session fontSize was already
+        // nil'd, so only watermarks re-apply there.
         for surface in surfaces { surface.reapplySessionConfigIfNeeded() }
         return lastConfigDiagnosticsCount
     }
@@ -401,10 +368,10 @@ final class GhosttyApp {
     /// selection colors after a live color change without a full config reload.
     private var lastConfigInputs: ConfigInputs?
 
-    /// Re-read the chrome colors (background, foreground, selection background/foreground) from a
-    /// resolved config. Called at init and on every settings reload. `background`/`foreground` come
-    /// from the resolved config; the selection colors are resolved separately (see below) because
-    /// `ghostty_config_get` does not expose the optional `selection-*` keys.
+    /// Re-read the chrome colors (background, foreground, selection background/foreground) from a resolved
+    /// config; called at init and on every settings reload. `background`/`foreground` come from the config, the
+    /// selection colors separately (see below) — `ghostty_config_get` does not expose the optional
+    /// `selection-*` keys.
     private func resolveThemeColors(from config: ghostty_config_t, inputs: ConfigInputs, isDark: Bool) {
         lastConfigInputs = inputs
         terminalBackgroundColor = Self.color(from: config, key: "background")
@@ -412,11 +379,10 @@ final class GhosttyApp {
         refreshSelectionColors(isDark: isDark)
     }
 
-    /// Re-resolve the selection chrome colors for the given appearance side. Used by the full config
-    /// load AND by the appearance-flip reload (which re-resolves the theme's colors), so the
-    /// selected-row pill follows a light/dark theme flip. `isDark` is explicit at every call site (the
-    /// reload threads the KVO-delivered side) — no defaulted appearance read a future caller could
-    /// silently pick up. No-op until a config has loaded.
+    /// Re-resolve the selection chrome colors for the given appearance side, so the selected-row pill follows a
+    /// light/dark theme flip. Used by the full config load AND the appearance-flip reload (which re-resolves
+    /// the theme's colors). `isDark` is explicit at every call site (the reload threads the KVO-delivered side)
+    /// — no defaulted appearance read a future caller could silently pick up. No-op until a config has loaded.
     func refreshSelectionColors(isDark: Bool) {
         guard let inputs = lastConfigInputs else { return }
         let (selectionBackground, selectionForeground) = Self.resolveSelectionColors(
@@ -427,34 +393,32 @@ final class GhosttyApp {
             ?? selectionBackground.map(Self.contrastingText(for:))
     }
 
-    /// Whether the app is currently in the dark appearance. `NSApp` is an implicitly-unwrapped global
-    /// that is still nil during the very early `GhosttyApp.shared` init (it boots from `SettingsModel.init`
-    /// before AppKit finishes wiring `NSApp`), so chain through it safely; that early window no longer
-    /// resolves a theme (the config emits the raw dual value and ghostty picks the side from the color
-    /// scheme set at surface creation), so a light default there is harmless.
+    /// Whether the app is currently in the dark appearance. `NSApp` is an implicitly-unwrapped global still nil
+    /// during the very early `GhosttyApp.shared` init (it boots from `SettingsModel.init`, before AppKit wires
+    /// `NSApp`), so chain through it safely; that early window resolves no theme (the config emits the raw dual
+    /// value and ghostty picks the side from the color scheme set at surface creation), so a light default
+    /// there is harmless.
     static func currentIsDark() -> Bool {
         guard let appearance = NSApp?.effectiveAppearance else { return false }
         return appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
     }
 
-    /// The selection colors can't be read back through `ghostty_config_get` (it doesn't expose the
-    /// optional `selection-background`/`selection-foreground` keys), so resolve them by reading the
-    /// same config sources `loadConfig` loads — in the same order — plus the active theme file. An
-    /// explicit `selection-*` line wins over the theme's; either color may be nil when unset. The `theme`
-    /// value may be the `light:…,dark:…` auto-switch form, resolved to the active side via `isDark`.
+    /// `ghostty_config_get` doesn't expose the optional `selection-background`/`selection-foreground` keys, so
+    /// resolve them by reading the same config sources `loadConfig` loads — in the same order — plus the active
+    /// theme file. An explicit `selection-*` line wins over the theme's; either color may be nil when unset.
+    /// The `theme` value may be the `light:…,dark:…` auto-switch form, resolved to the active side via
+    /// `isDark`, and the user's global `~/.config/ghostty/config` is a source ONLY when `inheritGlobalConfig`
+    /// is on, matching `loadConfig`'s gate.
     ///
-    /// Known limitation: this scans only the top-level config files; it does NOT follow `config-file`
-    /// includes that `ghostty_config_load_recursive_files` expands, so a `selection-*` delegated through
-    /// an include is missed and the sidebar pill falls back. A known edge case (it pre-dates the
-    /// agterm-scoped `ghostty.conf`). The user's global `~/.config/ghostty/config` is a source ONLY when
-    /// `inheritGlobalConfig` is on, matching `loadConfig`'s gate.
+    /// Known limitation: only the top-level config files are scanned — the `config-file` includes
+    /// `ghostty_config_load_recursive_files` expands are NOT followed, so a `selection-*` delegated through an
+    /// include is missed and the sidebar pill falls back.
     private static func resolveSelectionColors(ghosttyConfigPath: String, inheritGlobalConfig: Bool,
                                                isDark: Bool) -> (NSColor?, NSColor?) {
         var sources: [String] = []
         if let defaults = Bundle.main.url(forResource: "ghostty-defaults", withExtension: "conf") {
             sources.append(defaults.path)
         }
-        // the user's global ~/.config/ghostty/config is a source only when inheritance is opted in
         if inheritGlobalConfig {
             sources.append((NSHomeDirectory() as NSString).appendingPathComponent(".config/ghostty/config"))
         }
@@ -474,13 +438,12 @@ final class GhosttyApp {
                 }
             }
         }
-        // the theme file fills any selection color not set explicitly above. Our own settings conf now
-        // carries the raw dual `theme = light:,dark:` value (ghostty resolves the terminal side itself),
-        // so pick the side matching the current appearance here for the pill.
+        // the theme file fills any selection color not set explicitly above; our settings conf carries the raw
+        // dual `theme = light:,dark:` (ghostty picks the terminal side itself), so pick the side matching the
+        // current appearance for the pill.
         if selBg == nil || selFg == nil, let themeName, !themeName.isEmpty,
            let themesDir = Bundle.main.url(forResource: "ghostty", withExtension: nil)?
                .appendingPathComponent("themes", isDirectory: true) {
-            // `theme` may be the `light:…,dark:…` form; reduce to the active name.
             let effectiveName = ThemeName.resolved(from: themeName, isDark: isDark)
             for (key, value) in keyValues(ofFileAt: themesDir.appendingPathComponent(effectiveName).path) {
                 if key == "selection-background", selBg == nil { selBg = parseHexColor(value) }
@@ -515,12 +478,11 @@ final class GhosttyApp {
                        alpha: 1)
     }
 
-    /// Black or white, whichever gives higher contrast against `color`, decided by WCAG relative luminance.
-    /// The selected-row text falls back to this when the theme sets a selection-background but no
-    /// selection-foreground, and the dashboard status pill uses it to keep its name readable over an
-    /// arbitrary status-color fill. WCAG relative luminance (gamma-linearized channels, not a raw luma
-    /// average) is what makes a saturated mid-tone like `systemGreen` correctly pick BLACK: a plain luma
-    /// cutoff reads green as "dark" and picks unreadable white-on-green.
+    /// Black or white, whichever gives higher contrast against `color`, by WCAG relative luminance. Used by the
+    /// selected-row text when the theme sets a selection-background but no selection-foreground, and by the
+    /// dashboard status pill over an arbitrary status-color fill. The gamma-linearized WCAG luminance (not a
+    /// raw luma average) is what makes a saturated mid-tone like `systemGreen` correctly pick BLACK — a plain
+    /// luma cutoff reads green as "dark" and picks unreadable white-on-green.
     static func contrastingText(for color: NSColor) -> NSColor {
         let c = color.usingColorSpace(.sRGB) ?? color
         func linear(_ v: CGFloat) -> Double {
@@ -534,12 +496,12 @@ final class GhosttyApp {
     }
 
     /// Build a per-surface config = the SAME base files as `loadConfig` plus a small overlay (a session's
-    /// `background-image*` + font-size lines, from `WatermarkConfig.overlayText`). The overlay is written
-    /// to a temp file, loaded LAST (so it wins over the settings conf), then deleted (`load_file` reads
-    /// synchronously). The caller (`GhosttySurfaceView`) owns the returned config and frees it on surface
-    /// teardown. An empty overlay yields the plain base config (used to CLEAR a watermark). The app-wide
-    /// `lastConfigDiagnosticsCount` is preserved (a per-surface build must not clobber what `config.reload`
-    /// reports). Returns nil on allocation failure.
+    /// `background-image*` + font-size lines, from `WatermarkConfig.overlayText`), written to a temp file,
+    /// loaded LAST so it wins over the settings conf, then deleted (`load_file` reads synchronously). The
+    /// caller (`GhosttySurfaceView`) owns the returned config and frees it on surface teardown. An empty
+    /// overlay yields the plain base config (used to CLEAR a watermark). The app-wide
+    /// `lastConfigDiagnosticsCount` is preserved — a per-surface build must not clobber what `config.reload`
+    /// reports. Returns nil on allocation failure.
     func configWithOverlay(_ overlayText: String) -> ghostty_config_t? {
         var overlayPath: String?
         if !overlayText.isEmpty {
@@ -561,16 +523,16 @@ final class GhosttyApp {
     private func loadConfig(_ inputs: ConfigInputs, extraOverlayPath: String? = nil) -> ghostty_config_t? {
         guard let cfg = ghostty_config_new() else { return nil }
 
-        // app's built-in defaults (terminal padding, etc.), loaded first so the
-        // agterm-scoped ghostty.conf (and the global config, when opted in) still overrides them.
+        // app's built-in defaults (terminal padding, etc.) first, so the agterm-scoped ghostty.conf (and the
+        // global config, when opted in) still override them.
         if let defaults = Bundle.main.url(forResource: "ghostty-defaults", withExtension: "conf") {
             defaults.path.withCString { ghostty_config_load_file(cfg, $0) }
         }
 
-        // the user's GLOBAL ~/.config/ghostty/config is OFF by default (agterm is self-contained): a
-        // config written for the standalone Ghostty.app must not silently change agterm. It is loaded
-        // only when `inheritGlobalGhosttyConfig` is opted in. libghostty does NOT read the XDG config on
-        // its own, so we load it explicitly when present; `config-file` includes resolve below.
+        // the user's GLOBAL ~/.config/ghostty/config is OFF by default (agterm is self-contained — a config
+        // written for the standalone Ghostty.app must not silently change agterm), loaded only when
+        // `inheritGlobalGhosttyConfig` is opted in. libghostty does NOT read the XDG config on its own, so load
+        // it explicitly when present; `config-file` includes resolve below.
         if inputs.inheritGlobalConfig {
             let userPath = (NSHomeDirectory() as NSString).appendingPathComponent(".config/ghostty/config")
             if FileManager.default.fileExists(atPath: userPath) {
@@ -580,11 +542,11 @@ final class GhosttyApp {
             }
         }
 
-        // agterm-scoped ghostty config (`<configDir>/ghostty.conf`, co-located with keymap.conf) — the
-        // place for agterm overrides/customizations. ALWAYS loaded (regardless of the inherit toggle),
-        // after the optional global config so it overrides the bundled defaults + the user's global
-        // config for any key, but BEFORE agterm's UI settings so the Settings picker still wins for what
-        // it manages. Skipped when absent (the starter is comment-only, so a fresh install is a no-op).
+        // agterm-scoped ghostty config (`<configDir>/ghostty.conf`, beside keymap.conf) — the place for agterm
+        // overrides. ALWAYS loaded regardless of the inherit toggle, after the optional global config so it
+        // wins over the bundled defaults + the user's global config for any key, but BEFORE agterm's UI
+        // settings so the Settings picker still wins for what it manages. Skipped when absent (the starter is
+        // comment-only, so a fresh install is a no-op).
         let scopedPath = inputs.scopedURL.path
         if FileManager.default.fileExists(atPath: scopedPath) {
             scopedPath.withCString { ghostty_config_load_file(cfg, $0) }
@@ -631,12 +593,10 @@ final class GhosttyApp {
 
     // MARK: - Resources
 
-    /// Candidate ghostty resource dirs, highest priority first. agterm ships the
-    /// ghostty resources in its own bundle (downloaded by setup.sh) under
-    /// `Contents/Resources/ghostty`, mirroring a real Ghostty.app, with the
-    /// compiled terminfo DB at the sibling `Contents/Resources/terminfo`. The
-    /// installed Ghostty.app dirs remain as fallbacks for an unprepared dev
-    /// checkout.
+    /// Candidate ghostty resource dirs, highest priority first. agterm ships the ghostty resources in its own
+    /// bundle (produced by setup.sh) under `Contents/Resources/ghostty`, mirroring a real Ghostty.app, with the
+    /// compiled terminfo DB at the sibling `Contents/Resources/terminfo`. The installed Ghostty.app dirs remain
+    /// as fallbacks for an unprepared dev checkout.
     private static let resourcePaths: [String] = {
         var paths: [String] = []
         if let resources = Bundle.main.resourceURL?.path {
@@ -648,15 +608,11 @@ final class GhosttyApp {
     }()
 
     private func resolveResources() {
-        // Always resolve from our own candidates (bundle first), ignoring any
-        // inherited GHOSTTY_RESOURCES_DIR. A stale value would otherwise shadow
-        // our complete bundle and leave libghostty deriving a broken TERMINFO.
-        //
-        // We only set GHOSTTY_RESOURCES_DIR. TERMINFO is NOT set here on
-        // purpose: libghostty unconditionally overwrites it at shell spawn with
-        // dirname(GHOSTTY_RESOURCES_DIR)/terminfo, so any setenv here would be
-        // clobbered. Because our resources dir is .../Resources/ghostty, that
-        // derivation lands on .../Resources/terminfo — the sibling dir we ship.
+        // always resolve from our own candidates (bundle first), ignoring any inherited GHOSTTY_RESOURCES_DIR —
+        // a stale value would shadow our complete bundle and leave libghostty deriving a broken TERMINFO.
+        // TERMINFO itself is NOT set here on purpose: libghostty unconditionally overwrites it at shell spawn
+        // with dirname(GHOSTTY_RESOURCES_DIR)/terminfo, clobbering any setenv. Our resources dir is
+        // .../Resources/ghostty, so that derivation lands on the sibling .../Resources/terminfo we ship.
         let resolver = GhosttyResourceResolver(
             candidates: Self.resourcePaths,
             fileExists: { FileManager.default.fileExists(atPath: $0) }
@@ -671,20 +627,18 @@ final class GhosttyApp {
 }
 
 extension Notification.Name {
-    /// Posted after the ghostty config is reloaded from a settings change, so the SwiftUI chrome
-    /// (the quick terminal backing) and the AppKit window appearance (title bar + window background →
-    /// sidebar) re-read the new `GhosttyApp.terminalBackgroundColor` immediately instead of waiting
-    /// for the window to re-key.
+    /// Posted after the ghostty config is reloaded from a settings change, so the SwiftUI chrome (the quick
+    /// terminal backing) and the AppKit window appearance (title bar + window background → sidebar) re-read the
+    /// new `GhosttyApp.terminalBackgroundColor` immediately instead of waiting for the window to re-key.
     static let agtermAppearanceChanged = Notification.Name("agterm.appearanceChanged")
 
     /// Posted by `SystemAppearanceObserver` (an app-level KVO observer on `NSApplication.effectiveAppearance`)
-    /// when the macOS light/dark appearance changes, and once at launch, carrying the resolved `isDark` in
-    /// userInfo. `SettingsModel` re-resolves the active side of a `theme = light:,dark:` pair and
-    /// rewrites+reloads the config — this pinned libghostty doesn't switch the dual conditional at runtime,
-    /// so agterm drives the swap itself. KVO delivers the settled value across sleep/wake, unlike the old
-    /// per-view `viewDidChangeEffectiveAppearance` hook that wedged. Also posted by the `debug.appearance`
-    /// UI-test seam. Distinct from `agtermAppearanceChanged` (the settings→chrome direction); this is the
-    /// system→settings direction.
+    /// on every macOS light/dark change and once at launch, carrying the resolved `isDark` in userInfo.
+    /// `SettingsModel` re-resolves the active side of a `theme = light:,dark:` pair and rewrites+reloads the
+    /// config — this pinned libghostty doesn't switch the dual conditional at runtime, so agterm drives the
+    /// swap itself. KVO because it delivers the settled value across sleep/wake, unlike a per-view
+    /// `viewDidChangeEffectiveAppearance` hook, which wedges. Also posted by the `debug.appearance` UI-test
+    /// seam. This is the system→settings direction; `agtermAppearanceChanged` is settings→chrome.
     static let agtermSystemAppearanceChanged = Notification.Name("agterm.systemAppearanceChanged")
 
     /// Posted by `SystemAccessibilityObserver` when a macOS accessibility display option changes.
@@ -693,21 +647,21 @@ extension Notification.Name {
     static let agtermAccessibilityDisplayOptionsChanged =
         Notification.Name("agterm.accessibilityDisplayOptionsChanged")
 
-    /// Posted when a window becomes frontmost (the active-window change is async, via the window's
-    /// didBecomeKey), so the control server can refresh its cached `window.list` — whose `active` flag
-    /// would otherwise stay stale until the next dispatched command.
+    /// Posted when a window becomes frontmost (the change is async, via the window's didBecomeKey), so the
+    /// control server can refresh its cached `window.list` — whose `active` flag would otherwise stay stale
+    /// until the next dispatched command.
     static let agtermWindowFrontmostChanged = Notification.Name("agterm.windowFrontmostChanged")
 
     /// Posted by `WindowRegistry` when a window's NSWindow attaches or detaches, so the control server can
-    /// refresh its cached `window.list`. A window is "open" (its store loaded) well before its NSWindow
-    /// exists, so `window.new` builds its cached node with no `geometry`/`fullscreen`/`zoomed`/`minimized`;
-    /// nothing else refreshes it afterwards on that path — `newWindow()` pre-sets `frontmostWindowID`, so
-    /// the first `didBecomeKey` is a no-change and skips `.agtermWindowFrontmostChanged`, and a brand-new
-    /// window has no saved frame to restore, so no `didMove`/`didResize` fires either.
+    /// refresh its cached `window.list`. A window is "open" (its store loaded) well before its NSWindow exists,
+    /// so `window.new` builds its cached node with no `geometry`/`fullscreen`/`zoomed`/`minimized` and nothing
+    /// else refreshes it on that path: `newWindow()` pre-sets `frontmostWindowID`, so the first `didBecomeKey`
+    /// is a no-change that skips `.agtermWindowFrontmostChanged`, and a brand-new window has no saved frame to
+    /// restore, so no `didMove`/`didResize` fires either.
     static let agtermWindowAttachmentChanged = Notification.Name("agterm.windowAttachmentChanged")
 
-    /// Posted after `keymap.conf` is (re)loaded and reparsed, so the custom-command runner rebuilds its
-    /// matcher and the action palette re-reads the custom commands. The data-driven menu shortcuts
-    /// re-render on their own because they read the `@Observable` keymap directly.
+    /// Posted after `keymap.conf` is (re)loaded and reparsed, so the custom-command runner rebuilds its matcher
+    /// and the action palette re-reads the custom commands. The data-driven menu shortcuts re-render on their
+    /// own, reading the `@Observable` keymap directly.
     static let agtermKeymapChanged = Notification.Name("agterm.keymapChanged")
 }

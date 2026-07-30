@@ -8,13 +8,11 @@ public struct PaletteContext: Sendable, Equatable {
     public let sidebarShowsFlaggedOnly: Bool
     public let activeSessionFlagged: Bool
     /// Whether ANY workspace is MARKED in the focus set — membership, NOT whether the filter is applied
-    /// (`workspaceFilter`). Named for the fact it reports: the marked set is what Clear Focus empties and
-    /// what Toggle Workspace Filter has something to apply.
+    /// (`workspaceFilter`): the marked set is what Clear Focus empties and Toggle Workspace Filter applies.
     public let hasMarkedWorkspaces: Bool
     /// Whether the CURRENT workspace is already marked, so "Add Workspace to Focus" can hide instead of
-    /// offering a silent no-op (unlike the sidebar row's item, which has a clicked row and flips its label
-    /// to "Remove from Focus"). The ONLY term that entry keys on, matching the View-menu twin's disabled
-    /// predicate — marking is offered in either sidebar mode.
+    /// offering a silent no-op (the sidebar row's item has a clicked row and flips to "Remove from Focus").
+    /// The ONLY term that entry keys on, matching the View-menu twin — marking is offered in either mode.
     public let activeWorkspaceMarked: Bool
     public let activeSessionHasSplit: Bool
     public let hasPendingClose: Bool
@@ -66,18 +64,17 @@ public enum PaletteCommand: String, CaseIterable, Sendable {
         case .clearFlagged:
             return context.hasFlaggedSessions
         case .clearFocus, .toggleWorkspaceFilter:
-            // nothing marked means nothing to clear and nothing to filter to, and the store refuses to
-            // enable an empty set — the same state the bottom-bar toggle renders disabled in, so the two
-            // surfaces agree.
+            // nothing marked means nothing to clear and nothing to filter to, and the store refuses to enable
+            // an empty set — the state the bottom-bar toggle renders disabled in, so the two surfaces agree.
             return context.hasMarkedWorkspaces
         case .addWorkspaceToFocus:
-            // hidden only where it would be a silent no-op — the current workspace is already a member.
-            // The row menu instead flips to "Remove from Focus", which it can do having a clicked row;
-            // this keyless entry targets `currentWorkspaceID`. Deliberately NOT gated on the sidebar mode:
-            // membership is model state that the tree applies the moment it is shown again, and every
-            // sibling is mode-agnostic too — the View-menu item, Focus Workspace, Toggle Workspace Filter,
-            // Clear Focus, the `focus_workspace` keybind, and `workspace.focus`/`workspace.filter`. The
-            // tree-mode gate belongs to expand/collapse, which manipulate rows flagged mode never renders.
+            // hidden only where it would be a silent no-op: the current workspace is already a member (the
+            // row menu flips to "Remove from Focus" instead, having a clicked row, while this keyless entry
+            // targets `currentWorkspaceID`). NOT gated on sidebar mode — membership is model state the tree
+            // applies the moment it is shown again, and every sibling is mode-agnostic: the View-menu item,
+            // Focus Workspace, Toggle Workspace Filter, Clear Focus, the `focus_workspace` keybind,
+            // `workspace.focus`/`workspace.filter`. the tree-mode gate belongs to expand/collapse, whose rows
+            // flagged mode never renders.
             return !context.activeWorkspaceMarked
         case .expandWorkspaces, .collapseWorkspaces:
             return context.sidebarShowsWorkspaceTree

@@ -64,11 +64,10 @@ struct Workspace: ParsableCommand {
         }
     }
 
-    /// `agtermctl workspace focus [on|off|toggle|add] [--target W]` — marks or unmarks ONE workspace in
-    /// the sidebar's focus set. `add` only marks; applying the set is `workspace filter on`. The accepted
-    /// list, the per-mode help prose, and the local rejection message ALL derive from
-    /// `ControlWorkspaceFocusMode.allCases` (via `validNamesList`/`helpPhrase`/`validNamesPhrase`), so a
-    /// new case reaches every one of them and the CLI cannot drift from the dispatcher's parse.
+    /// `agtermctl workspace focus [on|off|toggle|add] [--target W]` — marks or unmarks ONE workspace in the
+    /// sidebar's focus set; `add` only marks, applying the set is `workspace filter on`. The accepted list, the
+    /// per-mode help prose, and the rejection message all derive from `ControlWorkspaceFocusMode.allCases` (via
+    /// `validNamesList`/`helpPhrase`/`validNamesPhrase`), so a new case reaches each and cannot drift from it.
     struct Focus: RequestCommand {
         static let configuration = CommandConfiguration(
             abstract: "Mark a workspace in the sidebar focus set (\(ControlWorkspaceFocusMode.validNamesList))."
@@ -89,13 +88,12 @@ struct Workspace: ParsableCommand {
         }
     }
 
-    /// `agtermctl workspace filter [on|off|toggle] [--window W]` — turns the sidebar's workspace focus
-    /// filter on or off for a WHOLE window, leaving the marked set intact. It deliberately carries NO
-    /// `--target`: it flips the window's filter rather than acting on one workspace, so its shape is
-    /// `sidebar expand`/`sidebar collapse` (`ClientOptions` only), not the `workspace.*` target commands.
-    /// The three mode names are spelled out here rather than derived: `ControlToggleMode` carries no
-    /// `validNames` (its tokens are per-command — `sidebar` spells the same three `show|hide|toggle`), so
-    /// this matches its siblings (`session flag`, `sidebar mode`) instead of the enum-derived `Focus` above.
+    /// `agtermctl workspace filter [on|off|toggle] [--window W]` — turns the sidebar's workspace focus filter
+    /// on or off for a WHOLE window, leaving the marked set intact. Deliberately NO `--target`: it flips the
+    /// window's filter rather than one workspace, so its shape is `sidebar expand`/`collapse` (`ClientOptions`
+    /// only), not the `workspace.*` target commands. The three mode names are spelled out rather than derived:
+    /// `ControlToggleMode` carries no `validNames` (its tokens are per-command — `sidebar` spells the same
+    /// three `show|hide|toggle`), so this matches `session flag`/`sidebar mode`, not the enum-derived `Focus`.
     struct Filter: RequestCommand {
         static let configuration = CommandConfiguration(
             abstract: "Turn the sidebar workspace focus filter on or off (on|off|toggle)."

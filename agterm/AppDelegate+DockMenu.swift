@@ -2,7 +2,7 @@ import agtermCore
 import AppKit
 
 /// A retained target for one Dock-menu command. The Dock invokes menu actions with a nil sender, so a
-/// recent/attention session's identity lives in this target's closure instead of in `representedObject`.
+/// recent/attention session's identity lives in this closure instead of in `representedObject`.
 @MainActor
 final class DockMenuActionTarget: NSObject {
     private let action: () -> Void
@@ -43,8 +43,8 @@ private enum DockSessionGroup {
 
 extension AppDelegate {
     /// Builds the app-specific portion of the Dock icon's contextual menu from the last-active window.
-    /// AppKit asks for this menu when the user opens the Dock menu, so MRU order and attention state are
-    /// current without maintaining a second observed menu model.
+    /// AppKit asks for it when the user opens the Dock menu, so MRU order and attention state are current
+    /// without maintaining a second observed menu model.
     func applicationDockMenu(_: NSApplication) -> NSMenu? {
         dockMenuActionTargets.forEach { $0.invalidate() }
         dockMenuActionTargets.removeAll(keepingCapacity: true)
@@ -68,14 +68,13 @@ extension AppDelegate {
             actions?.newSession()
         }
 
-        // The one app-level item: a new window belongs to no existing window, so unlike its neighbours it
-        // captures nothing, is always enabled, and skips the frontmost-window modal gate. It activates the
-        // app itself because ordinary window presentation does not — `WindowAccessor.bringForward` unhides
-        // and activates only on the UI-test path — so without this the new window opens behind whatever app
-        // the user right-clicked the Dock from.
+        // the one app-level item: a new window belongs to no existing window, so unlike its neighbours it
+        // captures nothing and skips the frontmost-window modal gate. It activates the app itself because
+        // ordinary window presentation does not (`WindowAccessor.bringForward` unhides and activates only on
+        // the UI-test path), else the new window opens behind whatever app the Dock was right-clicked from.
         // Enabled on the action hub alone, never on the captured window: `actions` is wired in the scene
-        // `.task`, so before that runs every other item is disabled (nil library → nil windowID) and this
-        // one would be the only enabled item in the menu — activating the app and then doing nothing.
+        // `.task`, so before that runs every other item is disabled (nil library → nil windowID) and an
+        // always-enabled one here would be the menu's only live item, activating the app and doing nothing.
         addDockMenuItem("New Window", enabled: actions != nil, to: menu) { [weak self] in
             guard let self else { return }
             NSApp.unhide(nil)
@@ -184,16 +183,16 @@ extension AppDelegate {
     }
 
     /// Dock commands do not activate or unhide the app automatically. Raise and synchronously publish the
-    /// window captured when AppKit built the menu, so every top-level and session action stays scoped to
-    /// that window even when a different window becomes frontmost while the menu is tracking.
+    /// window captured when AppKit built the menu, keeping every top-level and session action scoped to it
+    /// even when another window becomes frontmost while the menu is tracking.
     @discardableResult
     private func activate(windowID: UUID, store: AppStore) -> Bool {
         guard let library, library.store(for: windowID) === store else { return false }
         NSApp.unhide(nil)
         NSApp.activate()
         WindowRegistry.shared.raise(windowID)
-        // WindowAccessor reports ordinary key-window changes asynchronously. Publish this Dock-driven
-        // change now so shared AppActions resolve through the captured store during this same invocation.
+        // WindowAccessor reports ordinary key-window changes asynchronously; publish this Dock-driven one
+        // now so shared AppActions resolve through the captured store during this same invocation.
         if library.frontmostWindowID != windowID {
             library.frontmostWindowID = windowID
             library.saveIndex()
@@ -202,9 +201,9 @@ extension AppDelegate {
         return true
     }
 
-    /// Selects a session captured when the Dock menu was built. The store is captured as well, so the action
-    /// remains correctly window-scoped; synchronously marking that window frontmost lets the shared action
-    /// hub focus the selected session and reveal the pane that raised its status, when present.
+    /// Selects a session captured when the Dock menu was built. Its store is captured too, keeping the
+    /// action window-scoped; synchronously marking that window frontmost lets the shared action hub focus
+    /// the selected session and reveal the pane that raised its status, when present.
     private func activate(_ sessionID: UUID, in store: AppStore) {
         guard store.session(withID: sessionID) != nil,
               let library,

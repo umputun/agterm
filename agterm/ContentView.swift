@@ -2,27 +2,23 @@ import agtermCore
 import AppKit
 import SwiftUI
 
-/// Top-level per-window entry point: resolves this window's `AppStore` from the
-/// `WindowLibrary` claim queue on appear, then hands off to `WindowContentView`
-/// for the actual layout (a stray restored window with no id closes itself via
-/// `StrayWindowCloser`).
+/// Top-level per-window entry point: resolves this window's `AppStore` from the `WindowLibrary` claim queue
+/// on appear, then hands off to `WindowContentView` for the layout (a stray restored window with no id
+/// closes itself via `StrayWindowCloser`).
 ///
-/// The detail pane (in `WindowContentView`) is an EAGER deck — every session's
-/// `TerminalView` is mounted at once and switching flips visibility/`isActive`,
-/// never an `.id(session.id)` re-host (which would invalidate the Metal drawable
-/// and flicker), so the session-owned surfaces survive switching. The sidebar is
-/// an AppKit `NSOutlineView` (`WorkspaceSidebar`) for native cross-workspace
-/// drag-and-drop; the bottom bar holds a workspace button and a session menu
-/// (New Session / Open Directory…).
+/// The detail pane (in `WindowContentView`) is an EAGER deck — every session's `TerminalView` is mounted at
+/// once and switching flips visibility/`isActive`, never an `.id(session.id)` re-host (which would
+/// invalidate the Metal drawable and flicker), so session-owned surfaces survive switching. The sidebar is
+/// an AppKit `NSOutlineView` (`WorkspaceSidebar`) for native cross-workspace drag-and-drop; the bottom bar
+/// holds a workspace button and a session menu (New Session / Open Directory…).
 struct ContentView: View {
     let library: WindowLibrary
     let makeSurface: (Session, AppStore) -> GhosttySurfaceView
     let makeSplitSurface: (Session, AppStore) -> GhosttySurfaceView
     let makeOverlaySurface: (Session, AppStore) -> GhosttySurfaceView
     let makeScratchSurface: (Session, AppStore) -> GhosttySurfaceView
-    /// The `AGTERM_*` environment a window's quick terminal exposes (ENABLED + WINDOW_ID + SOCKET),
-    /// resolved per window id. Threaded down so `WindowContentView` can bind its quick terminal's
-    /// `envProvider` with its own window id.
+    /// The `AGTERM_*` environment a window's quick terminal exposes (ENABLED + WINDOW_ID + SOCKET), per
+    /// window id. Threaded down so `WindowContentView` binds its quick terminal's `envProvider` with its own id.
     let quickTerminalEnv: (WindowInfo.ID) -> [String: String]
     let actions: AppActions
     let palette: PaletteController
@@ -35,20 +31,18 @@ struct ContentView: View {
     /// reporting and the frame autosave name.
     @State private var resolvedID: WindowInfo.ID?
 
-    /// Set when this window is a SwiftUI-restored stray with no library id to claim. The stray branch
-    /// then closes the NSWindow via AppKit — SwiftUI's `@Environment(\.dismiss)` is unreliable for
-    /// restored WindowGroup windows (they linger on screen as empty windows).
+    /// Set when this window is a SwiftUI-restored stray with no library id to claim; the stray branch then
+    /// closes the NSWindow via AppKit, since `@Environment(\.dismiss)` is unreliable for restored
+    /// WindowGroup windows (they linger on screen as empty windows).
     @State private var isStray = false
 
-    /// True when running under an isolated XCUITest (`AGTERM_STATE_DIR` set AND the
-    /// `AGTERM_UITEST_FORCE_SIDEBAR_VISIBLE` env sentinel present). Gates the FB11763863 window-present
-    /// workaround. The custom sidebar is always visible, so this no longer forces sidebar state; the
-    /// env var keeps its historical name.
+    /// True under an isolated XCUITest (`AGTERM_STATE_DIR` set AND the `AGTERM_UITEST_FORCE_SIDEBAR_VISIBLE`
+    /// sentinel present), gating the FB11763863 window-present workaround. The custom sidebar is always
+    /// visible, so this forces no sidebar state — the env var only keeps that name.
     static var isUITestLaunch: Bool {
         let process = ProcessInfo.processInfo
-        // the sentinel rides launch ENVIRONMENT, not launch arguments: a process-launched SwiftUI
-        // WindowGroup app fails to present its window under some launch-arg patterns on macOS 15+
-        // (FB11763863). Env sidesteps that.
+        // the sentinel rides launch ENVIRONMENT, not arguments: a process-launched SwiftUI WindowGroup app
+        // fails to present its window under some launch-arg patterns on macOS 15+ (FB11763863).
         return process.environment["AGTERM_STATE_DIR"] != nil
             && process.environment["AGTERM_UITEST_FORCE_SIDEBAR_VISIBLE"] != nil
     }
@@ -86,12 +80,11 @@ struct ContentView: View {
         .onAppear(perform: resolveStore)
     }
 
-    /// Resolves the window's store once on appear by claiming the next open window id from the
-    /// library's queue (the scene is a plain `WindowGroup`, so a window has no presented id). The
-    /// launch window claims the launch id, additional `openWindow()`-opened windows claim the rest in
-    /// order. A window beyond the open set — a SwiftUI-restored extra (Task 0 dedup-by-id) — gets no
-    /// id and dismisses itself, so stale restoration state can't pile up windows. Idempotent —
-    /// re-running with an already-resolved store is a no-op.
+    /// Resolves the window's store once on appear by claiming the next open window id from the library's
+    /// queue (the scene is a plain `WindowGroup`, so a window has no presented id): the launch window claims
+    /// the launch id, additional `openWindow()` windows the rest in order. A window beyond the open set — a
+    /// SwiftUI-restored extra — gets no id and dismisses itself, so stale restoration state can't pile up
+    /// windows. Idempotent: re-running with an already-resolved store is a no-op.
     private func resolveStore() {
         guard store == nil, !isStray else { return }
         guard let id = claimWindowID(),
@@ -109,23 +102,20 @@ struct ContentView: View {
         DockBadgeController.shared.refresh()
     }
 
-    /// The window id this view adopts: normally the next id in the library's claim queue. If the
-    /// queue is empty before the launch reopen-all has seeded it (the scene `.task` may not have run
-    /// `consumeReopen()` when this `.onAppear` fires), adopt the launch id rather than dismissing the
-    /// launch window — `adoptLaunchWindowID()` records it so the later `consumeReopen()` excludes it
-    /// from the seeded queue (no second window claims it). Once the queue has been seeded
-    /// (`hasReopened`), an empty queue genuinely means this is a SwiftUI-restored stray, so return nil
-    /// and let the caller dismiss it.
+    /// The window id this view adopts: normally the next in the library's claim queue. When the queue is
+    /// empty before the launch reopen-all seeded it (the scene `.task` may not have run `consumeReopen()`
+    /// when this `.onAppear` fires), adopt the launch id rather than dismissing the launch window —
+    /// `adoptLaunchWindowID()` records it so the later `consumeReopen()` excludes it and no second window
+    /// claims it. Once seeded (`hasReopened`), an empty queue means a SwiftUI-restored stray: return nil.
     private func claimWindowID() -> WindowInfo.ID? {
         if let id = library.claimNextWindowID() { return id }
         return library.hasReopened ? nil : library.adoptLaunchWindowID()
     }
 }
 
-/// Closes a SwiftUI-restored stray `WindowGroup` window via AppKit. SwiftUI's `@Environment(\.dismiss)`
-/// is unreliable for restored windows — they linger on screen as empty windows — so this reaches the
-/// backing `NSWindow` and `close()`s it directly. It also clears `isRestorable` so SwiftUI stops
-/// persisting + re-restoring this stray on the next launch.
+/// Closes a SwiftUI-restored stray `WindowGroup` window via AppKit: `@Environment(\.dismiss)` is unreliable
+/// for restored windows (they linger on screen as empty windows), so this reaches the backing `NSWindow` and
+/// `close()`s it. It also clears `isRestorable` so SwiftUI stops re-restoring the stray on the next launch.
 private struct StrayWindowCloser: NSViewRepresentable {
     func makeNSView(context _: Context) -> ClosingView { ClosingView() }
     func updateNSView(_ view: ClosingView, context _: Context) { view.closeIfNeeded() }

@@ -2,22 +2,20 @@ import AppKit
 import Foundation
 import agtermCore
 
-/// `ControlServer` window-command action arms — create, list, select, close, resize, move, zoom, rename,
-/// and delete on-screen windows via `WindowRegistry` + the `WindowLibrary`. Split out of
-/// `ControlServer.swift` for the swiftlint size limit.
+/// `ControlServer` window-command action arms — create, list, select, close, resize, move, zoom, rename and
+/// delete on-screen windows via `WindowRegistry` + `WindowLibrary`. Split out of `ControlServer.swift` for
+/// the swiftlint size limit.
 extension ControlServer {
-    /// Create a new window (library) and open its on-screen window via the action hub's window opener
-    /// (the same `enqueueClaim` + `openWindow(id:)` path the menu uses). Returns the new window id.
+    /// Create a new window (library) and open its on-screen window via the action hub's window opener (the
+    /// same `enqueueClaim` + `openWindow(id:)` path the menu uses). Returns the new window id.
     ///
-    /// Bounded-polls for the NSWindow to ATTACH before replying, so `window.new` followed immediately by
-    /// `window.resize`/`move`/`zoom` works — those need a registered window and would otherwise fail. The
-    /// poll must gate on `WindowRegistry.isRegistered`, NOT `library.isOpen`: `newWindow()` loads the store
-    /// synchronously, so `isOpen` is already true and would prove nothing, while the NSWindow only attaches
-    /// after SwiftUI resolves the store and runs a second render pass. Fire-and-forget like the other
-    /// polls — a window that never renders times out and the command still replies ok.
-    ///
-    /// `minimized` creates the window and THEN parks it in the Dock, so a script can build a set of
-    /// project windows and be left on one it can still see.
+    /// Bounded-polls for the NSWindow to ATTACH before replying, so an immediately following
+    /// `window.resize`/`move`/`zoom` — which needs a registered window — works. The poll must gate on
+    /// `WindowRegistry.isRegistered`, NOT `library.isOpen`: `newWindow()` loads the store synchronously so
+    /// `isOpen` is already true and proves nothing, while the NSWindow attaches only after SwiftUI resolves
+    /// the store and runs a second render pass. Fire-and-forget like the other polls — a window that never
+    /// renders times out and the command still replies ok. `minimized` parks it in the Dock AFTER creating,
+    /// so a script can build project windows and be left on one it can still see.
     func windowNew(name: String?, minimized: Bool) async -> ControlResponse {
         let info = library.newWindow(name: trimmed(name))
         actions.openWindow?(info.id)
@@ -28,15 +26,13 @@ extension ControlServer {
 
     /// Park a freshly created window: minimize it, wait out the animation, and hand frontmost back.
     ///
-    /// The wait before minimizing is load-bearing. `WindowAccessor` presents the window on attach BOTH
+    /// The wait BEFORE minimizing is load-bearing: `WindowAccessor` presents the window on attach both
     /// synchronously and again on the next main-queue turn, and that second present deminiaturizes — so
-    /// minimizing the instant registration lands would simply be undone. One poll tick yields the main
-    /// actor long enough for the queued present to drain first.
-    ///
-    /// The attach poll above is bounded and fire-and-forget, so a window that never rendered reaches here
-    /// unregistered and `minimize` answers `.notOpen`. LOG that rather than swallowing it: the window is
-    /// then still on screen holding focus while the caller was told it was parked. Frontmost is handed off
-    /// only when the park actually applied — an unparked window is visible, so nothing is owed.
+    /// minimizing the instant registration lands would be undone. One poll tick yields the main actor long
+    /// enough for the queued present to drain first. A window that never rendered reaches here unregistered
+    /// (the attach poll is bounded and fire-and-forget) and `minimize` answers `.notOpen`; LOG that rather
+    /// than swallow it, since the window is then still on screen holding focus while the caller was told it
+    /// was parked. Frontmost is handed off only when the park applied — an unparked window is visible.
     private func park(_ id: WindowInfo.ID) async {
         try? await Task.sleep(nanoseconds: 50_000_000)
         guard case .applied = WindowRegistry.shared.minimize(id, mode: .on) else {
@@ -47,8 +43,7 @@ extension ControlServer {
         handOffFrontmost(from: id)
     }
 
-    /// Project the window library into the `window.list` response: every window with its open flag and
-    /// whether it is the frontmost (active) window.
+    /// Project the window library into `window.list`: every window with its open + frontmost (active) flags.
     func buildWindowList() -> [ControlWindowNode] {
         library.controlWindowNodes(geometry: { WindowRegistry.shared.geometry(for: $0) },
                                    flags: { WindowRegistry.shared.windowFlags(for: $0) })
@@ -58,21 +53,20 @@ extension ControlServer {
         ControlResponse(ok: true, result: ControlResult(windows: buildWindowList()))
     }
 
-    /// Resolve a window id and surface it: raise an already-open window, or open a closed one (the
-    /// action hub's opener claims its id + spawns the window). This bounded-polls for the NSWindow to
-    /// ATTACH before replying — a script can then immediately target it (`tree --window <id>`, or a
-    /// frame command) without racing the window appearing. Returns the window id.
+    /// Resolve a window id and surface it: raise an already-open window, or open a closed one (the action
+    /// hub's opener claims its id + spawns the window). Returns the window id.
     ///
-    /// The poll waits for BOTH the store and the NSWindow. `library.isOpen` alone only reports that the
-    /// store loaded — which is what `tree --window` needs, so it stays — but it flips a render pass before
-    /// the NSWindow exists, so a frame command issued right after would still hit `window not open`. An
-    /// already-open, already-attached window satisfies both on the first iteration.
+    /// Bounded-polls for BOTH the store and the NSWindow before replying, so a script can immediately target
+    /// it (`tree --window <id>`, a frame command) without racing the window appearing. `library.isOpen` alone
+    /// reports only that the store loaded — what `tree --window` needs, so it stays — but flips a render pass
+    /// before the NSWindow exists, so a frame command right after would hit `window not open`. An
+    /// already-attached window satisfies both on the first iteration.
     ///
-    /// Selecting also takes frontmost EXPLICITLY. `raise` makes the window key, but `frontmostWindowID` is
-    /// only updated by `WindowAccessor.reportFrontmost` on `didBecomeKey`, which AppKit does not deliver
-    /// while the app is inactive — so a background `window select` used to reply ok while every untargeted
-    /// command kept routing into the previously-active window. Same asymmetry `handOffFrontmost` fixes on
-    /// the minimize path, and the same reconcile is owed.
+    /// Selecting also takes frontmost EXPLICITLY: `raise` makes the window key, but `frontmostWindowID` is
+    /// updated only by `WindowAccessor.reportFrontmost` on `didBecomeKey`, which AppKit does not deliver
+    /// while the app is inactive — so a background `window select` would reply ok while untargeted commands
+    /// kept routing into the previously-active window. Same asymmetry `handOffFrontmost` fixes on the
+    /// minimize path, and the same reconcile is owed.
     func windowSelect(_ target: String?) async -> ControlResponse {
         switch resolver.resolveWindowID(target) {
         case .failure(let response): return response
@@ -84,18 +78,16 @@ extension ControlServer {
         }
     }
 
-    /// Resolve a window id and close its on-screen window (the registry's `performClose` runs the
-    /// standard teardown + `closeWindow` path, which fires asynchronously). Bounded-polls for the
-    /// library to mark it closed before replying, so an immediate follow-up command sees it closed. A
-    /// no-op for an already-closed window still reports ok with the id. Returns the window id.
+    /// Resolve a window id and close its on-screen window (the registry's `performClose` runs the standard
+    /// teardown + `closeWindow` path, asynchronously). Bounded-polls for the library to mark it closed, so
+    /// an immediate follow-up sees it closed. An already-closed window still reports ok. Returns the id.
     func windowClose(_ target: String?) async -> ControlResponse {
         switch resolver.resolveWindowID(target) {
         case .failure(let response): return response
         case .success(let id):
-            // close the on-screen window if it's registered (drives the willClose teardown), then a
-            // semantic fallback: if it isn't registered yet (window.close racing window.new before the
-            // NSWindow attaches) or willClose hasn't flipped the flag, drop the store directly so the
-            // window is reliably marked closed regardless of the attach timing.
+            // close the registered window (driving the willClose teardown), then a semantic fallback: when
+            // it isn't registered yet (window.close racing window.new before the NSWindow attaches) or
+            // willClose hasn't flipped the flag, drop the store so it is marked closed whatever the timing.
             let hadWindow = WindowRegistry.shared.close(id)
             if hadWindow {
                 await pollUntil { !self.library.isOpen(id) }
@@ -110,10 +102,10 @@ extension ControlServer {
     }
 
     /// Bounded poll for an asynchronous window lifecycle transition (open after `window.select`, closed
-    /// after `window.close`): the SwiftUI scene opens/closes the window off this dispatch, so the
-    /// library flag flips a beat later. 30 × 0.05 s (≈1.5 s) of `Task.sleep` yields the main actor
-    /// between checks — it never blocks the accept loop. Returns when `done()` holds or the budget is
-    /// spent (the caller replies ok regardless: fire-and-forget, the poll only narrows the race).
+    /// after `window.close`): the SwiftUI scene opens/closes off this dispatch, so the library flag flips a
+    /// beat later. 30 × 0.05 s (≈1.5 s) of `Task.sleep` yields the main actor between checks, never blocking
+    /// the accept loop. Returns when `done()` holds or the budget is spent — the caller replies ok either
+    /// way, so the poll only narrows the race.
     private func pollUntil(_ done: () -> Bool) async {
         for _ in 0..<30 {
             if done() { return }
@@ -121,9 +113,9 @@ extension ControlServer {
         }
     }
 
-    /// Resolve a window id and resize its on-screen window to `width` x `height` points (frame size).
-    /// The window must be open; a closed window errors (resize it after `window.select`). Control-native
-    /// (no GUI surface — the native title bar already drags-to-resize).
+    /// Resolve a window id and resize its on-screen window to `width` x `height` points (frame size). Open
+    /// windows only; a closed one errors (resize after `window.select`). Control-native — no GUI surface,
+    /// the native title bar already drags-to-resize.
     func windowResize(_ target: String?, width: Int, height: Int) -> ControlResponse {
         return resolver.resolveWindowID(target) { id in
             guard WindowRegistry.shared.resize(id, width: width, height: height) else {
@@ -133,9 +125,9 @@ extension ControlServer {
         }
     }
 
-    /// Resolve a window id and move its on-screen window so its top-left corner is at (`x`, `y`) points in
-    /// the global top-left space (origin = the primary display's top-left, spanning all displays). The
-    /// window must be open; a closed window errors. Control-native (no GUI surface).
+    /// Resolve a window id and move its top-left corner to (`x`, `y`) points in the global top-left space
+    /// (origin = the primary display's top-left, spanning all displays). Open only; a closed window errors.
+    /// Control-native (no GUI surface).
     func windowMove(_ target: String?, x: Int, y: Int, display: Int?) -> ControlResponse {
         if let display, display < 0 || display >= NSScreen.screens.count {
             return ControlResponse(ok: false, error: "display \(display) out of range (have \(NSScreen.screens.count))")
@@ -148,9 +140,9 @@ extension ControlServer {
         }
     }
 
-    /// Resolve a window id and zoom (maximize-to-screen toggle) its on-screen window. The window must be
-    /// open; a closed window errors. The control half of the double-click-header gesture (a plain green-button
-    /// click does native full screen, not zoom) — drives the same `NSWindow.zoom` as `WindowRegistry.zoom`.
+    /// Resolve a window id and zoom (maximize-to-screen toggle) its on-screen window; a closed window errors.
+    /// The control half of the double-click-header gesture — a plain green-button click does native full
+    /// screen, not zoom.
     func windowZoom(_ target: String?) -> ControlResponse {
         return resolver.resolveWindowID(target) { id in
             guard WindowRegistry.shared.zoom(id) else {
@@ -160,9 +152,8 @@ extension ControlServer {
         }
     }
 
-    /// Resolve a window id and toggle native macOS full screen on its on-screen window. The window must be
-    /// open; a closed window errors. The control half of the View ▸ Toggle Full Screen menu item / the green
-    /// traffic-light button — drives the same `NSWindow.toggleFullScreen` as `WindowRegistry.fullscreen`.
+    /// Resolve a window id and toggle native macOS full screen on it; a closed window errors. The control
+    /// half of the View ▸ Toggle Full Screen menu item / the green traffic-light button.
     func windowFullscreen(_ target: String?) -> ControlResponse {
         return resolver.resolveWindowID(target) { id in
             guard WindowRegistry.shared.fullscreen(id) else {
@@ -172,14 +163,13 @@ extension ControlServer {
         }
     }
 
-    /// Resolve a window id and minimize it to the Dock, or restore it, per the mode. The window must be
-    /// open; a closed window errors, as does one in native full screen (AppKit no-ops `miniaturize` there,
-    /// so reporting ok would be a lie). The control half of ⌘M / the yellow traffic-light button / the
-    /// Minimize title-bar double-click action.
+    /// Resolve a window id and minimize it to the Dock, or restore it, per the mode. A closed window errors,
+    /// as does one in native full screen (AppKit no-ops `miniaturize` there, so ok would be a lie). The
+    /// control half of ⌘M / the yellow traffic-light button / the Minimize title-bar double-click action.
     ///
-    /// Miniaturize and deminiaturize are ANIMATED, so `isMiniaturized` lags the call — without the settle
-    /// poll the `defer`-ed window-cache refresh would capture the OLD value and the very next
-    /// `window.list` would report the state the caller just changed away from.
+    /// Miniaturize and deminiaturize are ANIMATED, so `isMiniaturized` lags the call: without the settle
+    /// poll the `defer`-ed window-cache refresh captures the OLD value and the next `window.list` reports
+    /// the state the caller just changed away from.
     func windowMinimize(_ target: String?, mode: ControlToggleMode) async -> ControlResponse {
         switch resolver.resolveWindowID(target) {
         case .failure(let response): return response
@@ -200,13 +190,12 @@ extension ControlServer {
 
     /// After parking the FRONTMOST window, point `frontmostWindowID` at a window the user can still see.
     ///
-    /// `activeWindowID` only falls back when the frontmost window's STORE is gone (i.e. closed), and a
-    /// minimized window keeps its store — so without this every untargeted command (`tree`, `session.new`,
-    /// `quick`, the palette, the menu bar) keeps routing into a window sitting in the Dock. AppKit keys
-    /// another window on a minimize only while the APP is active, so a script parking windows in the
-    /// background never gets that handoff; when AppKit DID hand off, `reportFrontmost` already moved the
-    /// id and the guard below skips. With every open window minimized there is nothing to hand to, so the
-    /// pointer stays put rather than being cleared.
+    /// `activeWindowID` falls back only when the frontmost window's STORE is gone (closed), and a minimized
+    /// window keeps its store — so without this every untargeted command (`tree`, `session.new`, `quick`,
+    /// the palette, the menu bar) keeps routing into a window sitting in the Dock. AppKit keys another
+    /// window on a minimize only while the APP is active, so a script parking windows in the background
+    /// never gets that handoff; when AppKit DID hand off, `reportFrontmost` already moved the id and the
+    /// guard below skips. With every open window minimized there is nothing to hand to, so the pointer stays.
     private func handOffFrontmost(from id: WindowInfo.ID) {
         guard library.frontmostWindowID == id else { return }
         guard let next = library.openIDs().first(where: { $0 != id && !WindowRegistry.shared.isMinimized($0) })
@@ -214,15 +203,14 @@ extension ControlServer {
         takeFrontmost(next)
     }
 
-    /// Make `id` the logical frontmost window, the way `WindowAccessor.reportFrontmost` does on the GUI
-    /// path: record it, persist the index, and reconcile the auto-hidden sidebars. Shared by every
-    /// control path that presents a window — `window.select`, the minimize hand-off, `pick.open --follow`.
+    /// Make `id` the logical frontmost window the way `WindowAccessor.reportFrontmost` does on the GUI path:
+    /// record it, persist the index, reconcile the auto-hidden sidebars. Shared by every control path that
+    /// presents a window — `window.select`, the minimize hand-off, `pick.open --follow`.
     ///
     /// The control channel needs its own path because `reportFrontmost` fires on `didBecomeKey`, which
-    /// AppKit does not deliver while the app is inactive — exactly when a script is driving. Without the
-    /// reconcile the window that just became visible keeps its sidebar collapsed until the user next
-    /// activates agterm. Idempotent, and the reconcile resolves through `activeWindowID`, which returns
-    /// the id assigned just above.
+    /// AppKit does not deliver while the app is inactive — exactly when a script is driving; without the
+    /// reconcile the newly visible window keeps its sidebar collapsed until the user next activates agterm.
+    /// Idempotent, and the reconcile resolves through `activeWindowID`, which returns the id assigned above.
     func takeFrontmost(_ id: WindowInfo.ID) {
         guard library.frontmostWindowID != id else { return }
         library.frontmostWindowID = id

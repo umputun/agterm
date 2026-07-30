@@ -1,18 +1,18 @@
 import agtermCore
 import Foundation
 
-/// Command palettes (action / session / attention / custom-command feeds) and the live-preview
-/// theme picker for `AppActions`. The theme-preview session state (`themePreviewActive` /
-/// `themePreviewOriginal`) lives on the main `AppActions` declaration — stored properties cannot
-/// live in an extension — while the preview/commit/cancel logic that drives it lives here.
+/// Command palettes (action / session / attention / custom-command feeds) and the live-preview theme
+/// picker for `AppActions`. The theme-preview session state (`themePreviewActive`/`themePreviewOriginal`)
+/// lives on the main `AppActions` declaration — an extension can hold no stored properties — while the
+/// preview/commit/cancel logic that drives it lives here.
 extension AppActions {
     // MARK: - Command palettes
 
     /// The macOS glyph string for a rebindable built-in's CURRENT shortcut (`⌘N`, `⌃⌘S`) — tracking
     /// rebinds, reading like the menu equivalent — or `nil` when the action has no shortcut. The SINGLE
-    /// resolver behind both the action-palette hints and the toolbar/sidebar tooltips, so the two
-    /// surfaces can't drift. `glyphHint` resolves the live keymap (override else shipped default);
-    /// before `settingsModel` is wired, the shipped default alone.
+    /// resolver behind both the action-palette hints and the toolbar/sidebar tooltips, so the two can't
+    /// drift. `glyphHint` resolves the live keymap (override else shipped default); before `settingsModel`
+    /// is wired, the shipped default alone.
     func shortcutGlyph(for action: BuiltinAction) -> String? {
         guard let keymap = settingsModel?.keymap else { return action.defaultChord?.glyphString }
         return keymap.glyphHint(for: action)
@@ -95,8 +95,6 @@ extension AppActions {
     /// The app's commands as palette items, sharing the same logic as the menu/buttons. Includes a
     /// "Move Session to …" item per other workspace (when there's an active session to move).
     func paletteActions() -> [PaletteItem] {
-        // built-in shortcut hints read the live keymap (`shortcutGlyph`) so a rebind updates them too,
-        // matching the data-driven menu key-equivalents; custom commands show their raw shortcut below.
         let context = paletteContext
         var items = PaletteCommand.allCases
             .filter { $0.isVisible(in: context) }
@@ -121,15 +119,13 @@ extension AppActions {
                 })
             }
         }
-        // user-defined keymap commands: marked `custom`, showing the bound chord (if any).
         items.append(contentsOf: customCommandItems(badge: "custom"))
         return items
     }
 
     /// The user-defined keymap commands as palette items, showing the bound chord (if any). Running one
     /// delegates to the runner, which resolves the active session's context and spawns the shell line.
-    /// `badge` tags each entry (`custom` in the mixed action palette); the custom-only palette passes nil
-    /// since every row there is already a custom command.
+    /// `badge` tags each entry (`custom` in the mixed action palette); the custom-only palette passes nil.
     private func customCommandItems(badge: String?) -> [PaletteItem] {
         (settingsModel?.keymap.commands ?? []).map { command in
             PaletteItem(id: "custom-\(command.id)", title: command.name,
@@ -149,10 +145,10 @@ extension AppActions {
 
     /// The VISIBLE/FILTERED sessions as palette items (the ⌃P switcher); choosing one selects it. Scoped
     /// to `navigableSessions` — the MARKED workspaces' sessions while the focus filter is applied, the
-    /// flagged set in flagged mode, else all — so the ⌃P list matches the sidebar (and the Ctrl-Tab MRU switcher
-    /// and `session.go` nav, which already filter the same way). The subtitle leads with the owning
-    /// workspace (so you can tell sessions of the same name apart, and search by workspace) followed by
-    /// `subtitleDetail` (the focused pane's terminal title for a remote session, else its cwd).
+    /// flagged set in flagged mode, else all — so the ⌃P list matches the sidebar (and the Ctrl-Tab MRU
+    /// switcher and `session.go` nav, which filter the same way). The subtitle leads with the owning
+    /// workspace (telling same-named sessions apart, and searchable), then `subtitleDetail` — the focused
+    /// pane's terminal title for a remote session, else its cwd.
     func paletteSessions() -> [PaletteItem] {
         guard let store else { return [] }
         return store.navigableSessions.map { paletteItem(for: $0, in: store) }
@@ -160,8 +156,8 @@ extension AppActions {
 
     /// The window's non-idle sessions as palette items (the `.attention` mode), each row carrying the
     /// session's agent-status glyph. Sourced from `store.attentionSessions` (blocked→active→completed,
-    /// newest status-change first) so the empty-query order matches that ranking; choosing one selects
-    /// it. Same subtitle shape as `paletteSessions()` (owning workspace · `subtitleDetail`).
+    /// newest status-change first) so the empty-query order matches that ranking; choosing one selects it.
+    /// Same subtitle shape as `paletteSessions()` (owning workspace · `subtitleDetail`).
     func paletteAttention() -> [PaletteItem] {
         guard let store else { return [] }
         return store.attentionSessions.map {
@@ -172,8 +168,8 @@ extension AppActions {
 
     /// Maps one session to a palette row — title=`displayName`, subtitle="`workspace` · `subtitleDetail`",
     /// `run` selects it. Shared by `paletteSessions()` (status nil) and `paletteAttention()` (status set so
-    /// `CommandPalette.row` renders the leading `StatusGlyph`, tinted by the session's per-call `statusColor`
-    /// and shaped by its per-call `statusShape`).
+    /// `CommandPalette.row` renders the leading `StatusGlyph`, tinted and shaped by the session's per-call
+    /// `statusColor`/`statusShape`).
     private func paletteItem(for session: Session, in store: AppStore, status: AgentStatus? = nil,
                              statusColor: String? = nil, statusShape: StatusShape? = nil) -> PaletteItem {
         let id = session.id
@@ -193,9 +189,9 @@ extension AppActions {
     }
 
     /// Toggle the `.attention` command palette (the window's non-idle sessions). Driven by the ⌃⇧I
-    /// `BuiltinAction.showAttention`, the Navigate ▸ Go to Attention… menu item, and the titlebar bell
-    /// icon — none of these route through the action palette's `runItem`, so a synchronous toggle is
-    /// correct. The ⌃⇧P launcher uses `openAttentionPalette()` instead (it must reopen async).
+    /// `BuiltinAction.showAttention`, Navigate ▸ Go to Attention…, and the titlebar bell icon — none route
+    /// through the action palette's `runItem`, so a synchronous toggle is correct. The ⌃⇧P launcher uses
+    /// `openAttentionPalette()` instead (it must reopen async).
     func toggleAttentionPalette() {
         guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
         palette?.toggle(.attention)
@@ -218,11 +214,10 @@ extension AppActions {
         palette?.toggle(.customCommands)
     }
 
-    /// Open the `.attention` command palette from the action-palette "Show Attention" launcher. Opened on
-    /// the next runloop tick (mirroring `openThemePalette()`): the launcher runs inside the open action
-    /// palette's `runItem`, which calls `controller.close()` right after this returns, so a synchronous
-    /// `toggle` would be undone by that close. The async `open` lets `.attention` reopen a tick later as a
-    /// fresh view that survives the close.
+    /// Open the `.attention` command palette from the action-palette "Show Attention" launcher, on the next
+    /// runloop tick (mirroring `openThemePalette()`): the launcher runs inside the open action palette's
+    /// `runItem`, which calls `controller.close()` right after this returns, so a synchronous `toggle`
+    /// would be undone. The async `open` lets `.attention` reopen a tick later as a fresh view.
     func openAttentionPalette() {
         guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
         DispatchQueue.main.async { [weak self] in
@@ -235,10 +230,9 @@ extension AppActions {
     // MARK: - Theme picker
 
     /// Open the `.themes` command palette (the live-preview theme picker). Invoked by the action-palette
-    /// "Select Theme…" launcher and the View ▸ Select Theme… menu item. Opened on the next runloop tick:
-    /// when launched from the open action palette, that palette's run handler closes itself right after
-    /// this returns, so reopening async lets `.themes` survive the close (the rename actions reopen the
-    /// same way).
+    /// "Select Theme…" launcher and View ▸ Select Theme…, on the next runloop tick: when launched from the
+    /// open action palette, that palette's run handler closes itself right after this returns, so
+    /// reopening async lets `.themes` survive the close (the rename actions reopen the same way).
     func openThemePalette() {
         guard !terminalZoomActive, !pickActive(for: library.activeWindowID) else { return }
         DispatchQueue.main.async { [weak self] in
@@ -261,10 +255,10 @@ extension AppActions {
                             self?.commitThemePreview()
                         })
         }
-        // the nil row is ghostty's built-in default (no theme file); the app's own default is the
-        // bundled "agterm" theme, which appears in the named list like any other. While following the
-        // system appearance the nil row is OMITTED (mirroring the Settings picker): a dual conditional
-        // needs two NAMED themes, so previewing nil would blank a slot and wedge the following state.
+        // the nil row is ghostty's built-in default (no theme file); the app's own default is the bundled
+        // "agterm" theme, listed like any other. While following the system appearance the nil row is
+        // OMITTED (mirroring the Settings picker): a dual conditional needs two NAMED themes, so previewing
+        // nil would blank a slot and wedge the following state.
         let entries = ThemeCatalog(names: SettingsCatalog.themeNames()).entries
         return (followsSystemAppearance ? entries.filter { !$0.isDefault } : entries).map(item)
     }
@@ -280,9 +274,9 @@ extension AppActions {
         settingsModel?.settings.activeTheme(isDark: GhosttyApp.currentIsDark())
     }
 
-    /// Capture BOTH theme slots so Esc/cancel can restore the pre-preview pair. Snapshotting the whole
+    /// Capture BOTH theme slots so Esc/cancel can restore the pre-preview pair — snapshotting the whole
     /// pair (not just the on-screen slot) keeps the revert correct even if macOS flips appearance
-    /// mid-preview — see `cancelThemePreview`. Idempotent while a preview is active.
+    /// mid-preview (see `cancelThemePreview`). Idempotent while a preview is active.
     func beginThemePreview() {
         guard let settingsModel, !themePreviewActive else { return }
         themePreviewOriginal = (settingsModel.settings.theme, settingsModel.settings.darkTheme)
@@ -295,11 +289,11 @@ extension AppActions {
         settingsModel?.previewTheme(name)
     }
 
-    /// Persist the previewed theme (Enter/click). Ends the preview so the subsequent palette close can't
-    /// revert it. The preview already wrote the current-appearance slot (dark slot while following in
-    /// dark mode, else `theme`), so only that slot commits — the captured pair is passed back so the
-    /// OTHER slot is restored to its pre-preview value, otherwise a value browsed into it during a
-    /// mid-preview appearance flip would leak in on commit (the flip-safe twin of `cancelThemePreview`).
+    /// Persist the previewed theme (Enter/click), ending the preview so the subsequent palette close can't
+    /// revert it. The preview already wrote the current-appearance slot (dark slot while following in dark
+    /// mode, else `theme`), so only that slot commits — the captured pair is passed back so the OTHER slot
+    /// is restored to its pre-preview value, else a value browsed into it during a mid-preview appearance
+    /// flip would leak in on commit (the flip-safe twin of `cancelThemePreview`).
     func commitThemePreview() {
         guard themePreviewActive else { return }
         if let original = themePreviewOriginal {
@@ -310,11 +304,10 @@ extension AppActions {
     }
 
     /// Restore BOTH captured slots and end the preview (Esc / scrim / mode switch / unmount without a
-    /// commit). No-op when no preview is active (e.g. right after a commit). Routes through the IMMEDIATE
+    /// commit); no-op when no preview is active (e.g. right after a commit). Routes through the IMMEDIATE
     /// (non-debounced) revert so Esc restores the original pair instantly — the navigation preview is
-    /// debounced, so calling `previewTheme` here would lag or leave the last previewed theme stuck
-    /// applied. Reverting the WHOLE pair (not the on-screen slot) is flip-safe: an appearance flip
-    /// mid-preview can't strand a previewed value in the wrong slot.
+    /// debounced, so `previewTheme` here would lag or leave the last previewed theme stuck applied.
+    /// Reverting the WHOLE pair is flip-safe: a mid-preview flip can't strand a value in the wrong slot.
     func cancelThemePreview() {
         guard themePreviewActive else { return }
         if let original = themePreviewOriginal {

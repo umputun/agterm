@@ -33,15 +33,14 @@ extension AppStore {
             // a close. its original object is alive in that record, so rebuild everything except it.
             let taken = Set(workspaces.flatMap(\.sessions).map(\.id)).union(pendingHeldSessionIDs())
             workspace.sessions.removeAll { taken.contains($0.id) }
-            // Persistent Open Recent appends like most editors' recent-project flow:
-            // reopening brings the workspace back without reshuffling current workspaces.
+            // persistent Open Recent appends, like most editors' recent-project flow: a reopen brings the
+            // workspace back without reshuffling current workspaces.
             workspaces.append(workspace)
             for session in workspace.sessions { emitSessionCreated(session, workspace: workspace.id) }
             if workspace.sessions.isEmpty { scheduleTreeChanged() }
             // re-mark BEFORE the reselect below, so a restored member is inside the set when
-            // `disableFocusIfSelectionOutsideSet` runs; the workspace is already in the tree, so the
-            // unguarded insert cannot leave a phantom member behind. Entries written before the field
-            // existed carry nil and restore unmarked.
+            // `disableFocusIfSelectionOutsideSet` runs; the workspace is already in the tree, so the unguarded
+            // insert can't leave a phantom member. entries predating the field carry nil and restore unmarked.
             if recent.focusMember == true { markFocusMember(workspace.id) }
             selectedSessionID = recent.selectedSessionID.flatMap { sessionID in
                 workspace.sessions.contains { $0.id == sessionID } ? sessionID : nil
@@ -66,20 +65,19 @@ extension AppStore {
     private func restoreOrSelectExistingRecentWorkspace(_ recent: RecentClosedWorkspace) -> Bool {
         let sessionIDs = Set(recent.snapshot.sessions.map(\.id))
         // pending closes may hold this workspace, or any number of its sessions closed one at a time. undo
-        // every match, not only the newest: an undo returns live sessions to the tree, and the merge below
-        // skips rebuilding only what it can see there. a session left pending would be rebuilt from the
-        // snapshot beside its live original, two objects under one id, and the original's surfaces torn
-        // down once its grace expired. each undo drops its own record, so the loop drains them. falling
-        // through matters too: returning an undo's result would report success while the caller deletes
-        // the recent entry holding the sessions that undo did not restore.
+        // every match, not just the newest: an undo returns live sessions to the tree and the merge below only
+        // skips what it sees there, so a session left pending would be rebuilt from the snapshot beside its
+        // live original — two objects under one id, the original's surfaces torn down at grace expiry. each
+        // undo drops its own record, so the loop drains them; and falling through matters, since returning an
+        // undo's result would report success while the caller deletes the entry holding the unrestored sessions.
         while let pendingID = pendingCloseID(forWorkspaceID: recent.snapshot.id, sessionIDs: sessionIDs) {
             undoPendingClose(pendingID)
         }
         if let index = workspaces.firstIndex(where: { $0.id == recent.snapshot.id }) {
             // reopening a session first rebuilds this workspace as a shell holding only that session, so
-            // selecting without merging would drop the snapshot's other sessions while the caller deletes
-            // the recent entry on success — their only copy. rebuild the ones that exist nowhere: not in
-            // the tree, and not held by a pending close whose undo would reinsert the original.
+            // selecting without merging would drop the snapshot's other sessions — their only copy — while the
+            // caller deletes the recent entry on success. rebuild only the ones absent from the tree AND from
+            // a pending close whose undo would reinsert the original.
             let taken = Set(workspaces.flatMap(\.sessions).map(\.id)).union(pendingHeldSessionIDs())
             let missing = recent.snapshot.sessions.filter { !taken.contains($0.id) }.map { session(from: $0) }
             workspaces[index].sessions.append(contentsOf: missing)
@@ -103,8 +101,8 @@ extension AppStore {
         for id in pendingCloseOrder.reversed() {
             guard let record = pendingCloseRecords[id] else { continue }
             switch record {
-            // A grace-period reopen restores the grouped batch close as one undo record, matching
-            // workspace close behavior while the record is still pending.
+            // a grace-period reopen restores the grouped batch close as one undo record, matching workspace
+            // close behavior while the record is still pending.
             case .sessions(let close) where close.sessions.contains(where: { $0.session.id == sessionID }):
                 return id
             case .workspace(let close) where close.workspace.sessions.contains(where: { $0.id == sessionID }):
@@ -116,10 +114,10 @@ extension AppStore {
         return nil
     }
 
-    /// A pending close this workspace's restore should consume. Only records of the workspace itself: a
-    /// foreign workspace that merely holds one of the snapshot's sessions (moved there before it closed)
-    /// is a close the user meant, and undoing it would resurrect a workspace they deliberately dismissed.
-    /// The merge treats such a session as occupied instead, so it is never rebuilt beside the original.
+    /// A pending close this workspace's restore should consume — records of the workspace itself only: a
+    /// foreign workspace merely holding one of the snapshot's sessions (moved there before it closed) is a
+    /// close the user meant, and undoing it would resurrect a deliberately dismissed workspace. The merge
+    /// treats such a session as occupied instead, so it is never rebuilt beside the original.
     private func pendingCloseID(forWorkspaceID workspaceID: UUID, sessionIDs: Set<UUID>) -> UUID? {
         for id in pendingCloseOrder.reversed() {
             guard let record = pendingCloseRecords[id] else { continue }

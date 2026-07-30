@@ -1,12 +1,11 @@
 import AppKit
 import agtermCore
 
-/// Installs the bundled agent skill into the skills directories of the coding agents present on the
-/// machine: Claude Code (`~/.claude/skills/agterm/`) and Codex (`~/.codex/skills/agterm/`) — both use
-/// the same SKILL.md Agent-Skill format. So an agent running INSIDE an agterm session learns how to
-/// drive the app via `agtermctl`. The host-free path/target/ownership logic lives in
-/// `agtermCore.SkillInstall`; this type owns the AppKit filesystem glue. Idempotent: re-running
-/// refreshes the skill. It refuses to overwrite a same-named skill the user authored themselves.
+/// Installs the bundled agent skill into the skills directories of the coding agents present on the machine:
+/// Claude Code (`~/.claude/skills/agterm/`) and Codex (`~/.codex/skills/agterm/`), both using the same
+/// SKILL.md Agent-Skill format, so an agent running INSIDE an agterm session learns to drive the app via
+/// `agtermctl`. The host-free path/target/ownership logic is `agtermCore.SkillInstall`; this type owns the
+/// AppKit filesystem glue. Idempotent, and it refuses to overwrite a same-named skill the user authored.
 @MainActor
 enum SkillInstaller {
     private struct InstallError: Error { let message: String }
@@ -51,11 +50,11 @@ enum SkillInstaller {
         var report = Report()
         for target in targets {
             let destination = URL(fileURLWithPath: target.skillDirectory)
-            // refuse to clobber a same-named skill the user authored themselves (a present dir whose
-            // SKILL.md is absent, unreadable, or lacks the agterm marker). `attributesOfItem` uses lstat
-            // semantics (does NOT follow the final symlink), so a dangling/any symlink at the destination
-            // counts as present too — unlike `fileExists(atPath:)`, which follows the link and would read a
-            // dangling symlink as absent, letting the wipe path delete the user's own symlink.
+            // refuse to clobber a same-named skill the user authored (a present dir whose SKILL.md is
+            // absent, unreadable, or lacks the agterm marker). `attributesOfItem` uses lstat semantics (does
+            // NOT follow the final symlink), so any symlink at the destination counts as present —
+            // `fileExists(atPath:)` follows it and reads a dangling one as absent, letting the wipe path
+            // delete the user's own symlink.
             let directoryExists = (try? fm.attributesOfItem(atPath: destination.path)) != nil
             let existingSKILL = try? String(contentsOf: destination.appendingPathComponent("SKILL.md"), encoding: .utf8)
             guard SkillInstall.mayOverwrite(directoryExists: directoryExists, existingSKILL: existingSKILL) else {
