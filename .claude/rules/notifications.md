@@ -7,304 +7,131 @@ paths:
 
 ## Notifications
 
-- Terminal desktop notifications (OSC 9 / 777).
-  `GhosttyCallbacks.action` handles `GHOSTTY_ACTION_DESKTOP_NOTIFICATION` — copies the `title`/`body`
-  C strings synchronously (only valid for the call), recovers the firing `GhosttySurfaceView` via the
-  existing `surfaceView(from:)`, and hops to `NotificationManager.shared.notify(surface:title:body:)`.
-  (The bell, `GHOSTTY_ACTION_RING_BELL`, is intentionally NOT a notification source.)
-- `NotificationManager` (`agterm/Notifications/`, `@MainActor` singleton + `UNUserNotificationCenterDelegate`,
-  `@preconcurrency` conformance like macterm) owns the macOS surface.
-  `notify` resolves the owning `Session` (the view's `weak var session`) + `PaneRole` (identity-compare
-  the view to the session's `surface`/`splitSurface`/`overlaySurface`), applies suppression,
-  **always bumps `session.unseenCount`** (the badge), then posts a `UNNotificationRequest` ONLY if `bannersEnabled`
-  (the General toggle) — so turning banners off still tracks the badge.
-  Registered + `requestAuthorization([.alert])` from the scene `.task` (alongside `controlServer.start()`);
-  auth is best-effort — the badge works even when banners are denied.
-  `willPresent` returns `[.banner, .list]` so banners show even while agterm is frontmost (the focused-pane
-  case is dropped at delivery, NOT in `willPresent`).
-  `clearDelivered(sessionID:)` removes a session's delivered banners (all three pane identifiers) when
-  you focus it, so a notification you've navigated to doesn't linger in Notification Center.
-  `send(toSession:title:body:)` is the control channel's entry point (the `notify` command / `agtermctl notify`):
-  same badge + banner + reveal-identity machinery, but NO focus-suppression (the caller asked for it)
-  and attributed to the `.main` pane.
-- **Every silent drop is LOGGED, and a banners-off `notify` says so in its response (#286).**
-  Both gates used to return without a trace: the OSC path's focus suppression and, in BOTH paths, the
-  `bannersEnabled` guard.
-  A user reading the documented `log show --predicate 'subsystem == "com.umputun.agterm"'` recipe therefore
-  got a COMPLETELY EMPTY log from a perfectly healthy notify — the success path logged nothing either —
-  and reasonably concluded notifications were broken (reproduced: banners-on delivery and banners-off
-  suppression produced byte-identical empty logs).
-  So `notify`/`send` now `logger.notice` on posting AND on each suppression, naming the setting.
-  Keep it at `.notice`, not `.debug`/`.info`: a notification is a rare user-driven event, and only the
-  default level is PERSISTED, so a `log show --last 30m` after the fact still finds it.
-  The control arm additionally returns the shared `ControlNotify.bannersOffNote` in `result.text` when
-  banners are off — `ok` alone is indistinguishable from a broken path, since the OS is never touched.
-  This is the `session.restore`-with-`restoreRunningCommand`-off note precedent (see [[control-api]]);
-  the CLI prints `result.text` in place of `ok` with no CLI change.
-  The e2e is `NotifyBannersUITests` (both polarities); it seeds `notificationsEnabled` into the isolated
-  state dir before launch via `ControlAPITestCase.seededSettings`, since there is no `settings.*` control
-  command to flip it at runtime.
-- **Suppression**
-  is the pure, agtermCore-tested `TerminalNotification.shouldDeliver(firingIsFocused:appActive:)`:
-  drop entirely only when the firing surface is the key window's first responder AND `NSApp.isActive`
-  (you're already looking at it).
-  The manager uses the strict first-responder check (NOT `AppActions.focusedSurface()`,
-  whose active-session fallback would wrongly count a sidebar-focused window as "looking at the pane").
-- **Identity / navigation.**
-  `TerminalNotification.identity`/`parseIdentity` (agtermCore) make the request identifier `"<sessionID>:<paneRole>"`
-  — it both coalesces repeats from the same pane (the OS replaces, doesn't stack) and carries the click
-  target (no `userInfo` needed).
-  `didReceive` parses it, `NSApp.activate`s, and calls `AppActions.reveal(sessionID:pane:)`:
-  `selectSession` (which clears the badge + derives the workspace) then `focusSplitPane` for the pane,
-  stale-safe (unknown session → just activate; a `.split` no longer split → primary).
-  `revealSession` ALSO raises the owning window (`WindowRegistry.raise`, which deminiaturizes first).
-  `NSApp.activate` brings the APP forward, and `makeFirstResponder` moves focus WITHIN a window, but
-  neither orders a window front — so without the raise a banner for a session in a MINIMIZED or merely
-  backgrounded window changed the selection invisibly and the click looked dead.
-  The closed-window branch already raised via `openWindow`; the open-window branch now matches.
-  This path has no automated coverage — its only caller is the `UNUserNotificationCenter` delegate, which
-  XCUITest cannot drive — so verify it by hand; the raise MECHANISM is pinned by
-  `testWindowMinimizeAndRestore`, which asserts `window.select` un-minimizes.
-  `reveal` is internal click-routing (not on toolbar/menu/palette) composing the already-controllable
-  `session.select`, so it has NO control command (keep-in-sync exempt, by user decision).
-- **Badge.**
-  `Session.unseenCount` (observed; ephemeral — `SessionSnapshot` doesn't capture it,
-  so it never persists).
-  `SidebarCellView.badge` is a custom-drawn `BadgeView` (an accent capsule,
-  count capped `99+`, accessibility role `.staticText` with id `notify-badge`) at the row's trailing
-  edge, with a `Workspace.unseenCount` roll-up on the workspace row so an unseen badge stays visible
-  when the workspace is collapsed.
-  `unseenCount` is folded into the sidebar's `updateNSView` dependency read,
-  and `reloadChangedBadgeRows`/`snapshotBadges` reload only the changed session + workspace rows.
-  Cleared by `AppStore.selectSession` and by a pane's `onFocusChange(true)` (which also calls `clearDelivered`
-  — focusing a pane means you've seen the session).
-  `onFocusChange(true)` fires on a first-responder TRANSITION, which does NOT happen when agterm merely
-  regains key focus (AppKit's per-window first responder never resigned while the app was backgrounded),
-  so refocusing the app onto the same on-screen session left the badge stuck (#155).
-  `GhosttySurfaceView.clearUnseenOnRefocus` closes that: the `didBecomeKey` observer (already re-pushing
-  the cursor's `liveFocus`) also re-runs the same `onFocusChange(true)` clear on the become-key edge, gated
-  on `liveFocus` (key window AND this pane is first responder) so it fires only for the ONE focused pane of
-  the now-key window — the inverse of the suppression condition below. A non-focused session's pill is
-  untouched (its `liveFocus` is false), so it stays until you select that session.
-  **The count pill rendering is gated by the `notificationBadgeEnabled` Settings toggle** (see the Settings
-  section): the Coordinator's `effectiveUnseen(_:)` returns 0 when the flag is off,
-  applied to BOTH the session badge and the workspace roll-up (and to `RowContent.unseen` so a toggle
-  reloads the rows).
-  This gates ONLY the red count pill — the agent-status glyph (drawn just left of it by `StatusIconView`)
-  is always on, never gated by this.
-- **Dock badge (`DockBadgeController`, app target).**
-  A `@MainActor` singleton (next to `NotificationManager`, wired in the scene `.task`) that shows the
-  app-wide unseen total on the Dock icon.
-  The total is the host-free `WindowLibrary.totalUnseenCount` (sum of every open window's sessions'
-  `unseenCount`, unit-tested); it's gated by the SAME `notificationBadgeEnabled` toggle as the sidebar
-  pill (badge count is 0 when off).
-  **Uses `UNUserNotificationCenter.setBadgeCount(_:)`, NOT `NSApp.dockTile.badgeLabel`.** For agterm the
-  legacy dock-tile label is silently suppressed — the value sets and persists on the tile but the Dock
-  never draws the pill — because it needs the `.badge` authorization option; `NotificationManager.start`
-  now requests `[.alert, .badge]`.
-  The modern UN badge renders correctly over the LIVE adaptive Icon Composer icon with no loss of
-  light/dark/tint/clear adaptivity, so there is NO `applicationIconImage` override.
-  Cleared to 0 on quit (`DockBadgeController.clear()` from `applicationWillTerminate`) — the OS badge
-  outlives the process and `unseenCount` is ephemeral, so without it a quit with unseen > 0 would leave a
-  stale count pinned on the Dock icon (the `willClose` poke can't do it: `isTerminating` makes `closeWindow`
-  no-op, so the total recomputes unchanged).
-  Reactivity is the Observation re-registration pattern (`apply()` reads `totalUnseenCount` inside
-  `withObservationTracking` and re-arms on change), with explicit `refresh()` pokes on the two
-  unobservable store mutations — a window CLOSE (`willClose` teardown in `ContentView`, `window.close` in
-  `ControlServer`) AND a window REOPEN (`ContentView.resolveStore` after `loadStore`, so a reopened
-  window's bumps aren't stale) — and an `.agtermAppearanceChanged` observer for the (non-`@Observable`)
-  toggle flip.
-  Keep-in-sync EXEMPT — pure derived chrome (`unseenCount` is already driven by `notify` / `session.select`),
-  nothing new to drive over the socket.
-- **Dock bounce (opt-in, off by default) — a three-mode picker.**
-  `AppSettings.dockBounce` (a `DockBounce` raw string `off`/`once`/`untilFocused`, nil = `off`, resolved
-  via `effectiveDockBounce`) chooses whether a delivered notification ALSO bounces the Dock icon:
-  `off` no bounce, `once` a single `NSApp.requestUserAttention(.informationalRequest)`, `untilFocused` a
-  `.criticalRequest` that bounces until agterm becomes active.
-  The default case is named `off` (not `none`) to avoid the `Optional.none` collision at the
-  `effectiveDockBounce` call site, matching the `AutoFollowAttention.off` precedent.
-  `.criticalRequest` is auto-cancelled by macOS the moment agterm activates, so `untilFocused` needs NO
-  `cancelUserAttentionRequest` bookkeeping — that free "until focused" stop, plus the one-shot `once`, is
-  why the picker exposes both modes instead of hard-coding one.
-  `NotificationManager.bounceDock()` switches on the mode and fires right after the `unseenCount` bump in
-  BOTH the OSC path (`notify`) and the control path (`send` / `agtermctl notify`), independent of
-  `bannersEnabled` — like the badge, a bounce can fire whether or not banners show.
-  It needs NO explicit app-active gate: BOTH request types are a no-op while agterm is the frontmost app,
-  so the OSC path's `shouldDeliver` suppression plus that no-op mean a bounce only ever fires for a
-  BACKGROUND notification — exactly "bounce when a notification arrives for a session you're not looking at".
-  The `NotificationManager.dockBounce` mirror of `AppSettings.effectiveDockBounce` is pushed by
-  `SettingsModel.applyDockBounce` alongside `applyNotificationsEnabled` (the other `NotificationManager`
-  mirror) — NOT a ghostty key and NOT a chrome mirror, so no `.agtermAppearanceChanged` re-render (nothing
-  renders it continuously; it is read on the next notification).
-  GUI-only and keep-in-sync EXEMPT (a settings picker; only `theme.set`/`config.reload` touch settings over
-  the socket).
-  The bounce animation is not accessibility-observable, so it is verified by eye like the cursor-focus /
-  disclosure-triangle cases; only the `AppSettings` round-trip / tolerant-decode and the settings-picker
-  persistence (`SettingsUITests.testDockBouncePickerPersists`) are tested.
-- **Notification sound (opt-in, None by default) — a system-sound picker, routed through the banner.**
-  `AppSettings.notificationSoundName` (nil/empty = silent, the default; else a system sound name) is
-  attached to the delivered banner as `content.sound` (`UNNotificationSound`) in BOTH the OSC path (`notify`)
-  and the control path (`send` / `agtermctl notify`) — deliberately NOT played via raw `NSSound` (review
-  decision on #232): riding the banner means the sound follows `bannersEnabled`, the macOS notification
-  authorization, AND Do Not Disturb / Focus, and a banners-off user is never audibly interrupted.
-  This is the OPPOSITE of the badge/bounce independence — a sound is an active interruption, not a
-  glance-level cue.
-  The name maps to a sound FILE: `.aiff` is assumed when the name has no extension (the system sounds'
-  format); `default`/`beep` map to `UNNotificationSound.default`; `start()` requests `.sound` in the
-  authorization options, and `willPresent` returns `[.banner, .list, .sound]` so a foreground banner
-  (a session you're NOT looking at) dings too — the focused-pane case is already dropped by `shouldDeliver`.
-  The `StatusSoundPlayer` throttle is NOT involved (the OS owns playback; same-pane repeats coalesce by
-  request identifier); the picker's selection preview still plays via `StatusSoundPlayer.action`.
-  The `NotificationManager.notificationSoundName` mirror is pushed by `SettingsModel.applyNotificationSound`
-  alongside `applyNotificationsEnabled`/`applyDockBounce` — read on the next notification, not rendered
-  continuously, so no `.agtermAppearanceChanged` re-render.
-  The Notifications tab's `Picker("Notification sound")` mirrors the Agent Status blocked-sound picker
-  (None maps back to nil to keep `settings.json` minimal; selecting a sound previews it).
-  GUI-only and keep-in-sync EXEMPT (a settings picker, like `dockBounce`); the control channel's per-call
-  audible nudge remains `session.status --sound`.
-- **Agent-status glyph.**
-  Mirrors the `notify-badge` cell pattern (see the Control API `session.status`).
-  `StatusIconView` (an `NSImageView` sibling of `BadgeView` in `WorkspaceSidebar`) draws the row's tinted
-  SF Symbol just LEFT of the count badge — a PLAIN filled silhouette carrying no interior mark,
-  `.idle`=hidden.
-  The three states share the built-in default `circle.fill` and are separated by TINT until a shape is
-  picked; the old marked circles (`ellipsis`/`exclamationmark`/`checkmark` knocked out of a circle) are
-  GONE, because a mark inside a 13pt symbol is legible only in the popup, which is exactly the complaint
-  the shapes answer (discussion #277).
-  The silhouette resolves through the shared host-free `AgentStatus.symbolName(override:configured:)`
-  (via `GhosttyApp.statusSymbolName(for:override:)`, the tint helper's twin): the ephemeral
-  `AgentIndicator.shape` per-call OVERRIDE (`session.status --shape`) wins, else the Settings shape for
-  that status (`GhosttyApp.{active,blocked,completed}StatusShape`, mirrored from
-  `AppSettings.effectiveStatusShape(for:)`), else `StatusShape.circle`.
-  Neither `symbolName` parameter is defaulted on purpose: a render site that forgot to pass the Settings
-  shape would silently draw the wrong glyph, so the omission has to be a compile error.
-  `StatusShape` is a fixed set of six — `circle`, `square`, `triangle`, `diamond`, `capsule`, `star` —
-  whose raw value IS the SF Symbol base name (`symbolName` = `"<raw>.fill"`); the set is capped there
-  because at the sidebar's 13pt render size in a 16pt slot `hexagon`/`octagon`/`pentagon`/`seal` are
-  indistinguishable from `circle`, `app` duplicates `square` and `rhombus` duplicates `diamond`, so a
-  wider picker would only let a user believe they had distinguished a status when they had not.
-  Adding a case is still not a one-line change: the `ControlArgs.shape` doc, the website command
-  reference and the agent skill each enumerate the set by hand (the dispatcher's rejection message and
-  the CLI's `--shape` help/rejection derive theirs from `StatusShape.validNamesList`/`validNamesPhrase`,
-  the `WatermarkConfig.validFits` precedent, so those three can't go stale).
-  `StatusShape.displayName` (the capitalized raw value) is the host-free picker label the Settings
-  options and the picker's accessibility value read, so the six names have ONE definition.
-  Each glyph is tinted via the shared `GhosttyApp.statusColor(for:override:)`: the ephemeral
-  `AgentIndicator.color` per-call OVERRIDE (`session.status --color`, a valid `#rrggbb` wins) else its
-  configurable Settings color (`GhosttyApp.{active,blocked,completed}StatusColor`,
-  default `#DBD9E6` muted lavender-grey / system amber / system green; see the Settings + Control API sections)
-  — the SwiftUI attention-list `StatusGlyph` resolves through the SAME two override helpers, tint and
-  silhouette alike, so the two render sites can't drift —
-  with accessibility role `.staticText`, id `agent-status`, value = the state name (so XCUITest matches `app.staticTexts["agent-status"]`;
-  neither the glyph TINT nor its SHAPE, per-call or not, is accessibility-observable, which is why the
-  e2e asserts the command path and the `tree` read-back rather than the drawn pixels),
-  and a `CABasicAnimation` `opacity` pulse added only while visible AND `blink` (the install's `UserPromptSubmit→active --blink`
-  hook pulses the in-progress glyph). `StatusIconView.apply` also requires
-  `!NSWorkspace.shared.accessibilityDisplayShouldReduceMotion`, so Reduce Motion keeps the glyph/color
-  visible but suppresses the indefinite pulse. `SystemAccessibilityObserver.start()` observes
-  `NSWorkspace.accessibilityDisplayOptionsDidChangeNotification` on `NSWorkspace.notificationCenter`
-  and posts app-local `.agtermAccessibilityDisplayOptionsChanged`; the sidebar Coordinator observes that
-  on `NotificationCenter.default` and calls `reapplyStatusGlyphs()` so every visible row updates live.
-  The dashboard's `DashboardCaptionPill` uses SwiftUI's `accessibilityReduceMotion` environment value to
-  gate its matching `repeatForever` wash, preserving the filled status pill without animation. Because
-  the model's `blink` request is retained, both pulses resume if Reduce Motion is disabled.
-  The glyph shows on EVERY non-idle session, the selected one INCLUDED — there is NO visibility gate.
-  (An earlier `isFrontmostWindow`-driven hide-on-the-selected-session gate was removed:
-  blanking the status on the row you're viewing read as confusing, since every other row carried a state;
-  the `isFrontmostWindow` plumbing went with it.) `effectiveIndicator(forSession:)` is just the session's
-  own `agentIndicator`; it rides in `RowContent` (Equatable) so a status/blink change reloads only that
-  row, and `agentIndicator` is folded into the `updateNSView` dependency read.
-  A one-time `completed --auto-reset` is cleared by `AppStore.selectSession` on BOTH the session visited
-  AND the one left (`clearAutoResetIndicator(new)` + `clearAutoResetIndicator(previous)`) so it never
-  lingers on the row you switch away from — a Claude Code hook can't do this,
-  it has no notion of the agterm selection.
-  `StatusIconView` owns its OWN width constraint (0 when `.idle`, glyph-width otherwise,
-  toggled in `apply`) so an idle row collapses the slot and reads full-width;
-  `BadgeView.intrinsicContentSize` likewise collapses to zero width at `count == 0` (so a hidden OSC
-  badge reserves no trailing slot and the glyph sits flush-right), with the glyph-to-badge gap baked
-  into the badge's leading edge so it only appears when the badge does.
-  **Clear Status** forces a session's indicator back to idle from the GUI:
-  the sidebar row's right-click menu (first item, only when non-idle), the menu bar,
-  and the ⌃⇧P palette — the row menu targets the clicked node id, the menu bar + palette go through `AppActions.clearActiveSessionStatus`
-  (the active session); all route to `AppStore.setAgentIndicator(AgentIndicator(), forSession:)`,
-  the GUI half of `session.status idle`.
-  **Typing also clears an attention glyph (pane-scoped):** `GhosttySurfaceView.keyDown` fires
-  `onUserInputClearsStatus(isInterrupt:)` UNCONDITIONALLY (it no longer reads `agentIndicator` itself),
-  and each surface factory — main (`left`), split (`right`), and scratch (`scratch`) — wires that closure
-  to the pane-scoped decision, clearing to idle via `setAgentIndicator(AgentIndicator(), …)` ONLY when the
-  host-free `AgentIndicator.clearedBy(pane:isInterrupt:)` says the keystroke's OWN pane owns the current status.
-  So a block set from a background pane (a `right`- or `scratch`-tagged `session status --pane`) SURVIVES
-  foreground typing in the main pane — only a keystroke in the owning pane clears it — and the scratch,
-  which has no `view.session`, still self-clears because the closure (not `keyDown`) owns the decision.
-  The per-status decision is host-free + unit-tested in `agtermCore` (`clearedBy` gates `clearedByKeystroke`
-  on the pane match): `blocked`/`completed` clear on ANY key (you've engaged with the prompt / finished result);
-  `active` clears ONLY on an interrupt keystroke — Escape (`keyCode == 53`) or a bare Ctrl-C —
-  so ordinary typing while the agent works does NOT wipe the "working" glyph,
-  but cancelling a prompt does; `idle` has no glyph.
-  The host-free `InterruptKeystroke.isInterrupt(keyCode:character:modifiers:)` (agtermCore) computes the
-  flag from primitives — Esc (`keyCode == 53`), or a bare Ctrl-C: `.control` held with no
-  command/option/shift and the base letter `c` OR the physical `c` key (`keyCode == 8`).
-  The keyCode fallback is load-bearing for non-Latin layouts: on a Cyrillic/Greek layout the physical C
-  key produces a non-Latin char (`с`), so character matching alone misses it — the same reason the
-  `super+key_c` binds are keycode-based (see [[libghostty]]).
-  The character check still covers Dvorak, where the `c` letter sits at a different physical key.
-  `.shift` is excluded so a copy-style Ctrl-Shift-C does not clear a working glyph.
-  `GhosttySurfaceView.isInterruptKeystroke` (app target, `keyDown`) is a thin `NSEvent` adapter over it;
-  the full truth table, including the negatives, is unit-tested host-free in `InterruptKeystrokeTests`.
-  This is the ONE input-driven clear (status is otherwise control-driven).
-  Because the clear is pane-SCOPED, a tag whose owning pane's shell EXITS would otherwise strand a glyph
-  no surviving surface can match, so `AppStore.closeSplit`/`closePrimaryPane`/`closeScratch` reconcile the
-  indicator on teardown — clearing a status owned by the destroyed pane (`.right` on closeSplit, `.left`/nil
-  on the primary→split promote, `.scratch` on closeScratch) — mirroring the `clearSearch()` reset on the
-  same paths (host-free, `AppStorePaneTests`).
-  It covers the Esc/Ctrl-C decline/interrupt case Claude Code fires NO hook for — the keystroke flows through
-  the surface's `keyDown` on its way to the agent's PTY, so it clears the stale glyph the moment you
-  deal with the prompt — and clears the `completed` flash once you re-engage.
-  The `active`-on-interrupt arm is load-bearing for the QUICK-cancel case: a pending question can still read
-  `active` when you cancel it, because Claude Code's `blocked` (`Notification[permission_prompt]`) fires on a
-  DELAY (~tens of seconds — its idle-notification timer, `messageIdleNotifThresholdMs`,
-  default 60000), so a fast Esc/Ctrl-C lands while the glyph is still `active`,
-  and the interrupt itself fires no hook (verified by a status-hook probe:
-  an Esc-cancel logs no hook at all; a manual decline fires neither `Stop` nor `PostToolUse`) — the keystroke
-  clear is the only signal.
-  The `PostToolUse→active --blink` install hook covers the answer-then-resume case (the agent's next
-  tool re-asserts `active`).
-  Peer terminals get the decline case for free by different means agterm avoids:
-  cmux owns the permission decision UI (a blocking hook round-trip captures accept/deny),
-  herdr scrapes the PTY (the prompt chrome leaving the screen clears it).
-- **Pane-aware selection reveal.**
-  The same `AgentIndicator.statusPane` tag set via `session.status --pane` decides WHERE a GUI selection lands when the status NEEDS ATTENTION.
-  Attention-nav, plain session nav, the command palettes, a sidebar row click, a Dock-menu session row, and idle auto-follow reveal and focus the pane that set the block.
-  The shared `AppActions.revealActiveBlockedPane(captured:)` flips to a tagged split, shows a hidden tagged scratch, or explicitly targets the primary pane for left/nil.
-  IDLE and ACTIVE selections use ordinary focus and preserve the existing pane choice.
-  The `session.go next-attention|prev-attention` control arm only steps the selection (`navigateSession`),
-  it does NOT itself run the reveal — the pane focus is a GUI/auto-follow concern.
-  So a `right`- or `scratch`-tagged block both survives foreground typing in another pane AND pulls you to
-  the waiting pane, not just the session.
-- **Titlebar attention bell (opt-in, window-wide aggregate of the glyph).**
-  When `attentionButtonEnabled` is on (Settings ▸ Notifications, default OFF — see the Settings section),
-  `customTitlebar` (`ContentView`) shows a bell icon in the trailing action cluster (after the
-  recent-sessions clock, before the divider and the scratch/split/quick-terminal buttons) that recovers
-  the per-session attention signal when the sidebar is hidden.
-  It derives THREE states from the window's `AppStore.attentionSessions` (the host-free per-window set
-  — ALL non-idle sessions, broader than `needsAttention`): empty → `bell`,
-  ~0.35 opacity, `.disabled(true)`; non-empty no-blocked → `bell`, `chromeText`,
-  enabled; any `.blocked` → `bell.fill` tinted `GhosttyApp.shared.blockedStatusColor`,
-  enabled.
-  No count, no pulse.
-  Reading `attentionSessions` registers the `agentIndicator` observation,
-  so the icon updates LIVE on status change.
-  Click → toggles the **attention popover** (`WindowContentView+RecentSessions.swift`, the MOUSE form): a
-  theme-tinted popover listing `AppStore.attentionSessions` as `SessionPopoverRow`s with a leading `StatusGlyph`,
-  sorted blocked→active→completed, hover-highlighted; a row click selects the session + reveals its blocked
-  pane (`selectAttention` → `selectSession` + `AppActions.revealActiveBlockedPane`).
-  ⌃⇧I / Navigate ▸ Go to Attention… / the ⌃⇧P "Show Attention" entry keep the SEARCHABLE `.attention` palette
-  (`toggleAttentionPalette`), so the bell is the mouse form and the palette the keyboard form — mirroring the
-  recent-sessions clock ↔ Ctrl-Tab split (see the Menu/actions section).
-  It carries `.accessibilityIdentifier("attention-button")`, a `.help` string,
-  and an `.accessibilityValue` of `none`|`attention`|`blocked` — mirroring `StatusIconView`'s state-name
-  value so XCUITest can read the otherwise-unobservable `bell`↔`bell.fill` highlight.
-  `WindowContentView` mirrors the chrome flag into `@State` (seeded from `GhosttyApp.shared.attentionButtonEnabled`,
-  refreshed on `.agtermAppearanceChanged`), NOT from `model.settings`.
-  The bell is pure visual chrome (it opens the attention popover, a mouse form of the already-controllable
-  attention list / `session.select`) — keep-in-sync EXEMPT, like the other titlebar buttons.
+- OSC 9/777 reaches `GHOSTTY_ACTION_DESKTOP_NOTIFICATION`; copy its call-scoped C strings immediately,
+  recover the `GhosttySurfaceView`, and call `NotificationManager.notify`. `GHOSTTY_ACTION_RING_BELL`
+  is not a notification source.
+- `NotificationManager` is an `@MainActor` singleton and `@preconcurrency`
+  `UNUserNotificationCenterDelegate`. It resolves `Session` and `PaneRole` by surface identity, applies
+  suppression, always increments `unseenCount`, and posts only when `bannersEnabled`. Authorization is
+  best-effort; request `[.alert, .badge, .sound]` from the scene task. `willPresent` returns
+  `[.banner, .list, .sound]`. `clearDelivered` removes all three pane IDs on focus.
+- `send(toSession:)`, used by `notify`, shares badge, banner, bounce, sound, and identity behavior but
+  deliberately skips focus suppression and attributes the request to `.main`.
+- Log every post and suppression at `.notice`, including the focus and banners-off gates (#286).
+  Lower levels are not persisted by default, so post-event `log show --last 30m` depends on notice.
+  When banners are off, return
+  `ControlNotify.bannersOffNote` in `result.text`; plain `ok` cannot distinguish suppression from failure.
+  This follows the `session.restore` note precedent. `NotifyBannersUITests` seeds
+  `notificationsEnabled` through `ControlAPITestCase.seededSettings`; there is no runtime settings command.
+- Suppress only when `TerminalNotification.shouldDeliver` sees both an active app and the firing surface
+  as the key window's first responder. Do not use `AppActions.focusedSurface()`: its active-session
+  fallback mistakes sidebar focus for viewing the pane.
+- `TerminalNotification.identity` encodes `"<sessionID>:<paneRole>"`, coalescing repeats and carrying the
+  click target without `userInfo`. `didReceive` activates the app and calls `AppActions.reveal`: select
+  the session, clear its badge, derive its workspace, focus the pane, and raise its window through
+  `WindowRegistry.raise`, which deminiaturizes first. Unknown sessions only activate; a missing split
+  falls back to primary. Activation and first-responder changes do not order a background window front.
+  XCUITest cannot drive the notification delegate, so verify clicks manually; `testWindowMinimizeAndRestore`
+  covers the raise mechanism. Internal `reveal` composes controllable selection and is keep-in-sync exempt.
+
+## Badges
+
+- `Session.unseenCount` is observed but excluded from `SessionSnapshot`. `BadgeView` draws an accent
+  capsule capped at `99+`, role `.staticText`, ID `notify-badge`; workspace rows roll up descendant counts.
+  Dependency reads plus `snapshotBadges`/`reloadChangedBadgeRows` limit reloads to changed rows.
+- Selection and pane focus clear unseen state and delivered banners. App activation does not transition
+  the retained first responder, which caused #155; the `didBecomeKey` observer therefore calls
+  `clearUnseenOnRefocus` only when `liveFocus` says this pane is the key window's first responder.
+- `notificationBadgeEnabled` gates session, workspace, and Dock counts through `effectiveUnseen`, including
+  `RowContent.unseen` so toggles reload rows. It never gates the agent-status glyph.
+- `DockBadgeController` shows host-free `WindowLibrary.totalUnseenCount`. Use
+  `UNUserNotificationCenter.setBadgeCount`, not `NSApp.dockTile.badgeLabel`, which stores but does not draw
+  agterm's value. The modern API preserves the adaptive icon, so never override `applicationIconImage`.
+  Clear the OS-persistent badge in `applicationWillTerminate`; `willClose` cannot do this because
+  `isTerminating` makes `closeWindow` a no-op.
+- `apply()` observes and re-arms on `totalUnseenCount`. Explicitly refresh after window close, control
+  `window.close`, and `ContentView.resolveStore` reopen; observe `.agtermAppearanceChanged` for the
+  non-observable toggle. This derived chrome is keep-in-sync exempt.
+
+## Bounce and sound
+
+- `DockBounce` is `off`, `once`, or `untilFocused`, with nil resolving to `off`; avoid `none` because it
+  collides with `Optional.none`. `once` requests `.informationalRequest`; `untilFocused` uses
+  `.criticalRequest`, which macOS cancels on activation, so no cancellation bookkeeping is needed.
+  Bounce after every unseen increment in OSC and control paths, independent of banners. Both requests are
+  no-ops while frontmost, so no extra app-active gate is needed.
+- `SettingsModel.applyDockBounce` mirrors the setting into `NotificationManager`; it is neither a Ghostty
+  key nor rendered chrome. The GUI-only picker is keep-in-sync exempt. Bounce is visually verified;
+  tests cover tolerant settings round-trip and `SettingsUITests.testDockBouncePickerPersists`.
+- `notificationSoundName` is nil/empty for silence or a system sound name. Attach it as
+  `UNNotificationSound` to both OSC and control banners; do not use raw `NSSound` (#232). Sound must obey
+  banners, authorization, and Focus, unlike badge and bounce. Assume `.aiff` without an extension;
+  `default` and `beep` use `.default`. Same-pane requests coalesce, and `StatusSoundPlayer` throttling is
+  irrelevant except for picker preview.
+- `SettingsModel.applyNotificationSound` mirrors the next-delivery value. The Notifications picker maps
+  None to nil and previews choices. It is keep-in-sync exempt; per-call sound remains
+  `session.status --sound`.
+
+## Agent status
+
+- `StatusIconView`, an `NSImageView` beside `BadgeView`, draws every non-idle session as a filled SF Symbol
+  in a 16pt slot at 13pt, with no selected-row hiding. Idle collapses its width to zero; a zero-count badge
+  also collapses, with the inter-item gap owned by the badge.
+- Default states share `circle.fill` and differ by tint. Discussion #277 rejected marked circles because
+  their interior marks are illegible at row size. `AgentStatus.symbolName(override:configured:)` resolves
+  per-call shape, configured status shape, then `circle`; require both arguments so omitted settings fail
+  compilation. The fixed useful set is `circle`, `square`, `triangle`, `diamond`, `capsule`, `star`.
+  `hexagon`/`octagon`/`pentagon`/`seal` resemble circle, `app` duplicates square, and `rhombus` duplicates
+  diamond at this size. Raw values form `"<raw>.fill"` and `displayName` is the shared picker label.
+  Keep `ControlArgs.shape`, website command docs, and agent skill lists synchronized; CLI and dispatcher
+  validation derive from `validNamesList`/`validNamesPhrase`.
+- `GhosttyApp.statusColor(for:override:)` similarly resolves per-call `#rrggbb`, configured status color,
+  then the muted lavender-grey `#DBD9E6`, system amber, or system green defaults. SwiftUI `StatusGlyph`
+  uses the same shape and tint helpers.
+- The glyph is `.staticText`, ID `agent-status`, accessibility value equal to the state. Color and shape
+  are not accessibility-observable, so end-to-end tests assert command and `tree` state, not pixels.
+  `RowContent.agentIndicator` and the update dependency read restrict reloads to changed rows.
+- Blink adds an opacity `CABasicAnimation` only while visible and when Reduce Motion is off.
+  `SystemAccessibilityObserver` translates the workspace notification to
+  `.agtermAccessibilityDisplayOptionsChanged`, and the sidebar reapplies visible glyphs. Dashboard pills
+  gate their SwiftUI repeat with `accessibilityReduceMotion`. Retain `blink` so both resume when re-enabled.
+- `completed --auto-reset` clears both the session entered and the session left in
+  `AppStore.selectSession`; hooks cannot infer agterm selection.
+- Clear Status is the first row-menu item when non-idle and also appears in the menu bar and palette.
+  Row menus target their node; global surfaces call `clearActiveSessionStatus`; all set an empty indicator.
+- `GhosttySurfaceView.keyDown` always calls `onUserInputClearsStatus(isInterrupt:)`. Main `.left`, split
+  `.right`, and scratch `.scratch` factories own the pane-scoped decision, allowing scratch to clear
+  without `view.session`. `AgentIndicator.clearedBy` clears blocked/completed on any key, active only on
+  interrupt, and only when the key's pane owns the status. Thus foreground typing cannot clear another
+  pane's status.
+- Interrupt means Esc (`keyCode == 53`) or bare Ctrl-C: control with no command/option/shift and either
+  character `c` or physical key code 8. Physical matching covers non-Latin layouts; character matching
+  covers Dvorak; excluding shift preserves Ctrl-Shift-C. Keep the full host-free truth table in
+  `InterruptKeystrokeTests`.
+- On pane teardown, `closeSplit`, `closePrimaryPane`, and `closeScratch` clear status owned by the removed
+  `.right`, `.left`/nil, or `.scratch` pane, respectively, as they do search state.
+- Input clearing covers the hookless Esc/Ctrl-C decline and completed re-engagement. It must also clear
+  active on quick interrupt: Claude's delayed `Notification[permission_prompt]` uses
+  `messageIdleNotifThresholdMs` (default 60000), and Esc/manual decline emits neither `Stop` nor
+  `PostToolUse`. `PostToolUse` reasserts `active --blink` after an answered prompt. cmux can observe its
+  own permission UI and herdr scrapes PTY state; agterm does neither.
+- `AgentIndicator.statusPane` also directs GUI selections needing attention. Attention and ordinary
+  navigation, palettes, sidebar and Dock rows, and idle auto-follow use
+  `revealActiveBlockedPane` to select split, reveal scratch, or target primary. Idle and active preserve
+  current pane choice. Control `session.go next-attention|prev-attention` changes only selection; pane
+  reveal remains a GUI/auto-follow concern.
+
+## Titlebar attention
+
+- With `attentionButtonEnabled` off by default, `customTitlebar` places a bell after recent sessions and
+  before scratch/split/quick-terminal controls. It derives live state from all non-idle
+  `AppStore.attentionSessions`: empty is disabled `bell` at about 0.35 opacity; non-blocked is enabled
+  `bell` in `chromeText`; any blocked is enabled `bell.fill` in `blockedStatusColor`. There is no count
+  or pulse.
+- Clicking opens the mouse popover of `SessionPopoverRow`s with `StatusGlyph`, ordered
+  blocked, active, completed; selection reveals the tagged blocked pane. Ctrl-Shift-I, Navigate > Go to
+  Attention, and Show Attention in the palette retain the searchable keyboard surface.
+- The button ID is `attention-button`, with help and value `none`, `attention`, or `blocked`.
+  `WindowContentView` mirrors `GhosttyApp.attentionButtonEnabled` into state and refreshes on
+  `.agtermAppearanceChanged`, not `model.settings`. This mouse form of controllable attention selection is
+  keep-in-sync exempt.

@@ -6,251 +6,100 @@ paths:
 
 ## Application-hosted tests (`agtermTests/`)
 
-These run INSIDE the real app, so a mistake here kills the process instead of failing an assertion.
+These run inside the app, so a mistake can kill the host instead of failing an assertion.
 
-- **A window a test owns MUST set `isReleasedWhenClosed = false`.**
-  `NSWindow`'s designated initializer defaults it to true, so `close()` sends a release ARC never
-  balances while the suite still holds the window (a `registeredWindows` dictionary, `WindowRegistry`).
-  The over-release frees it under its surviving references and the next autorelease-pool pop on the main
-  queue dereferences freed memory.
-  The symptom is NOT a test failure: the host dies, xcodebuild says `Restarting after unexpected exit,
-  crash, or test timeout` with no assertion and no signal, and the suite restarts and finishes.
-  Freed memory is reused nondeterministically, so it passes locally and dies on the runner — and adding
-  unrelated tests to the same class can be what makes a latent one start firing.
-  `orderOut(nil)` does not trigger it; only `close()` does.
-- **Read a dead host, do not infer it.**
-  The streamed CI log names nothing useful.
-  `xcrun xcresulttool get test-results tests --path <xcresult>` gives the real message (e.g. "The test
-  runner exited with code 1 before finishing running tests").
-  The STACK comes from ghostty's crash handler: `~/.local/state/ghostty/crash/*.ghosttycrash` is a sentry
-  envelope whose attachment is a minidump — split the envelope (header line, then item-header/payload
-  pairs), write the `.dmp`, and read it with `lldb -b -o "bt all" -c <dmp>`.
-  CI discards both, so add a temporary `upload-artifact` step with `if: failure()` covering the crash
-  directory and `build/DerivedData/Logs/Test/*.xcresult`, then remove it once the cause is known.
-  Reaching for the artifact after the FIRST failed fix is cheaper than a second guess.
-- **Never stub out `GhosttyApp` to make a hosted test quieter.**
-  Ghostty's handler is the app's crash reporter; suppressing its init deletes the only record of why the
-  host died and converts an immediate death into a silent one.
-- **The hosted host is not the app you think.**
-  `AGTERM_HOSTED_TESTS=1` (set by the `agtermTests` scheme in `project.yml`) makes the scene render
-  `Color.clear`, which skips the `.task` that assigns `appDelegate.library` — so the delegate's `library`
-  is nil for the whole run, and code keying off it behaves differently than in the real app.
-  `NSApp.delegate as? AppDelegate` is also nil (SwiftUI wraps it in `@NSApplicationDelegateAdaptor`), so
-  reach the delegate another way rather than asserting on that cast.
-  Locally the placeholder window IS presented (`NSApp.windows.count == 1`, titled "Agterm"); launched by
-  another process on CI it is not — the same FB11763863 shape as the UI-test note below, and the reason
-  window-count assumptions differ between the two environments.
+- **Set `isReleasedWhenClosed = false` on every test-owned `NSWindow`.** The initializer defaults true;
+  `close()` can over-release a window still held by `registeredWindows`/`WindowRegistry`, then crash at
+  the main-queue autorelease-pool pop. xcodebuild reports `Restarting after unexpected exit, crash, or
+  test timeout`, may restart and finish, and can fail only on CI or after unrelated tests alter reuse.
+  `orderOut(nil)` is safe.
+- For a dead host, inspect `xcrun xcresulttool get test-results tests --path <xcresult>`.
+  `~/.local/state/ghostty/crash/*.ghosttycrash` is a sentry envelope: split its header and
+  item-header/payload pairs, write the minidump attachment as `.dmp`, then run
+  `lldb -b -o "bt all" -c <dmp>`. CI discards both sources, so temporarily upload the crash directory
+  and `build/DerivedData/Logs/Test/*.xcresult` under `if: failure()`, then remove the step.
+- Never stub `GhosttyApp`; its handler is the only crash record.
+- `AGTERM_HOSTED_TESTS=1`, set by the `agtermTests` scheme, renders `Color.clear` and skips the scene task
+  that assigns `appDelegate.library`; it stays nil. SwiftUI's `@NSApplicationDelegateAdaptor` also makes
+  `NSApp.delegate as? AppDelegate` nil, so obtain the delegate another way. The local placeholder window
+  exists (`NSApp.windows.count == 1`, title "Agterm"), but another-process CI launch may hit FB11763863
+  and create none.
 
 ## UI tests
 
-- `agtermUITests/` is an XCUITest target that launches the real app and drives the sidebar (rename,
-  close, move, drag, add-session) through the accessibility API — the coverage the host-free `agtermCore`
-  unit tests can't provide.
+- `agtermUITests/` launches the real app and drives UI behavior unavailable to host-free tests.
   Run with `xcodebuild test -project agterm.xcodeproj -scheme agterm -destination 'platform=macOS'`.
-- Tests pass `AGTERM_STATE_DIR` (a temp dir) via launch environment to isolate persistence;
-  the app honors it in `agtermApp.restoredStore()`.
-  The native `Open Directory…` panel is system UI, verified manually rather than in XCUITest.
-- **Launch the app with `app.launchForUITest()` — never bare `app.launch()`.**
-  Apple bug **FB11763863**: on macOS 15+/Xcode 16+ (incl.
-  26) a SwiftUI `WindowGroup` app launched by another process (XCUITest,
-  launchd) frequently **never auto-presents its window** — dock icon shows,
-  no window, the scene's `.task`/`.onAppear` never fire, `NSApp.windows` stays empty,
-  so elements exist in the AX tree (`waitForExistence` passes) but are un-hittable and every interaction
-  silently no-ops.
-  It is OS-version dependent, so the SAME app code "worked before" a macOS upgrade and breaks after.
-  The fix lives in `AppDelegate.bringUITestWindowsForward` (UITest path):
-  when no real window exists it fires a programmatic **reopen** — `NSWorkspace.shared.open(Bundle.main.bundleURL)`,
-  the same event a dock click sends — and SwiftUI then creates the window.
-  `XCUIApplication.activate()` / `NSApp.activate()` / `orderFrontRegardless()` / `.defaultLaunchBehavior(.presented)`
-  do NOT help (the window is never created, not just un-focused).
-  `launchForUITest()` (in `XCUIApplicationSidebarIsolation.swift`) feeds the `AGTERM_UITEST_FORCE_SIDEBAR_VISIBLE`
-  sentinel via launch **environment** (NOT `launchArguments` — args trip a related variant),
-  launches, and `activate()`s.
-  The reopen re-triggers macOS state restoration, so the `Settings` window is marked **non-restorable**
-  (`SettingsView`'s `NonRestorableWindow`) or a stale Settings window resurrects and steals key focus.
-  To diagnose this class of bug, `NSLog` `NSApp.windows.count` on a timer and read it via `log show --predicate 'eventMessage CONTAINS "…"'`;
-  `total=0` for seconds = "never created".
-  See [[reference_swiftui-windowgroup-no-window-xcuitest]].
-- **Open a Settings tab via the retrying `settingsControl(tab:control:)` helper,
-  not a one-shot `app.buttons[tab].click()`.** The reopen can leave a half-open/non-key Settings window
-  that silently drops the first tab click; `settingsControl` re-clicks each tick until the expected control
-  is hittable, which is what makes the Settings tests non-flaky.
-- **Add a UI test when you add UI functionality**
-  — don't ship UI behavior with only `agtermCore` model-level unit tests.
-  For behavior the accessibility tree can't observe (the Metal `GhosttySurfaceView`,
-  transient non-persisted state), drive it through an observable side effect:
-  e.g. the split test types `tty > <file>` into the focused pane and compares the written tty to verify
-  which shell received the keystrokes and that focus follows.
-- **Simulating a macOS light/dark flip: the `debug.appearance` control seam.**
-  macOS XCUITest has no API to change the system appearance, so `AppearanceFlipUITests` drives the
-  UI-test-only `debug.appearance` command (`light`|`dark`), which sets `NSApp.appearance` AND posts
-  `.agtermSystemAppearanceChanged` directly, driving the REAL flip path (scheme sync → debounced
-  zoom-preserving reload) end to end.
-  Production follows the appearance via an app-level KVO observer on `NSApplication.effectiveAppearance`
-  (`SystemAppearanceObserver`); the seam posts the notification itself so the test does not depend on
-  whether KVO fires on an explicit `NSApp.appearance` set.
-  The arm is refused outside an XCUITest launch and is keep-in-sync EXEMPT (see [[control-api]]).
-  Set an explicit STARTING side first so the test is independent of the machine's appearance,
-  assert the response's echoed side to prove the flip reached the app,
-  and poll the seam's BARE (read) form — it reports the last-applied side — to prove the flip actually
-  drove the reload (a suppressed flip leaves it on the old side).
-  Gotcha: on the current libghostty pin `update_config` does NOT reset the runtime font zoom,
-  so a wrongly-routed zoom-clearing flip only BLIPS the persisted `fontSize` nil for ~0.4 s before the
-  surface's CELL_SIZE report re-persists it — assert zoom preservation by SAMPLING the snapshot
-  continuously, never by one settled read (it would pass on the broken path).
-- **Driving an OSC terminal title in a test (and reading it back).**
-  `Session.oscTitle`/`subtitleDetail` are ephemeral (never persisted) and the second line renders as
-  a SwiftUI `Text`, so test through observable side effects, not the snapshot.
-  Set a title by typing/injecting `printf '\033]2;TITLE\007'; cat` into the session — the trailing `; cat`
-  is **LOAD-BEARING**: a one-shot printf sets the title but the local shell returns to its prompt where
-  the title is cleared again (the prompt cycle), so it reverts to the cwd basename;
-  `cat` holds the foreground so no prompt redraw fires, mirroring why a real `ssh` keeps its title but
-  a quick local printf "looks broken" (see [[libghostty]]).
-  Type **LITERAL** `\033`/`\007` (Swift `"printf '\\033]2;…\\007'"`) so the SESSION shell's printf expands
-  them — do NOT pre-expand to raw ESC/BEL bytes (e.g. a host-side `printf` building the string),
-  which injects control bytes the shell's line editor reads as keystrokes and garbles the command (it
-  can even fire history/ZLE widgets and run an unrelated history command).
-  Read the result through an observable: **line 1** (displayName) via the `session-row` static-text **VALUE**
-  (not label — see `SidebarUITests`); **line 2** (`subtitleDetail`) via the `palette-subtitle` AX id
-  read as VALUE in the Go-to-Session palette.
-  Gotcha: `FileManager.default.homeDirectoryForCurrentUser` resolves DIFFERENTLY in the XCUITest runner
-  process vs the app, so assert a cwd second line against a stable marker like `/Users/`,
-  NOT the runner's own home.
-  (`agtermctl session.type` is the control-channel equivalent of the typed injection;
-  `agtermctl tree --json` now carries the raw `title`, which an e2e can poll instead of reading the AX
-  tree.
-  See `SessionSubtitleUITests` + `ControlAPIUITests.testTreeExposesOscTitle`.)
-- **Driving an `NSOutlineView` row drag from XCUITest needs three things,
-  ALL load-bearing (see `ReorderUITests.dragRow`).** Getting any one wrong means the drag silently does
-  nothing — `validateDrop`/`acceptDrop` never fire and the model never mutates:
-  (1) **SELECT the source row first** (`from.click()` + a short run-loop drain) — the outline only begins
-  a drag from the *selected* row, so dragging an unselected row (e.g. a middle row that wasn't the last
-  one touched) never starts a drag session at all.
-  This was the actual cause of a "downward drag doesn't work" red herring — the up-drag happened to drag
-  the just-renamed (hence selected) row, the down-drag dragged an unselected one.
-  (2) **Drag via `coordinate(withNormalizedOffset:)`, NOT element-to-element** — a row's AX element is
-  the recycled `NSTextField` inside the cell, while the drag tracking lives in the outline;
-  a coordinate drag targets the outline machinery directly.
-  (3) **Use the mouse-native `click(forDuration:thenDragTo:withVelocity:thenHoldForDuration:)`,
-  NOT the touch `press(forDuration:thenDragTo:)`** — `pressForDuration:` is the touch-events API and
-  delivers an `NSDraggingInfo` only intermittently to AppKit.
-  One drag per test launch is the reliable unit — a *second chained* native drag in the same method does
-  not reliably re-start a drag session (it ends up testing XCTest's event injector,
-  not the drop delegate), so cover a second direction in a separate `func test…` (fresh launch),
-  never by chaining.
-  To diagnose a non-delivering drag, `NSLog` from `validateDrop`/`acceptDrop` and read it with `log show --last 90s --predicate 'eventMessage CONTAINS "…"'`:
-  *zero* events = the drag never started (selection/gesture problem); events present but the wrong `dest`
-  = a drop-resolution bug in the delegate.
-- **NEVER run XCUITests while the user is interacting with a handed-off dev build — it HIJACKS their
-  screen.** XCUITest launches/activates app instances and synthesizes REAL keyboard + mouse events on
-  the live screen (`typeText`/`typeKey`/`click` drive the actual cursor and focus),
-  so a UI run while the user is trying a build types into their windows and steals focus — it interrupts
-  their work, hard.
-  When you hand the user a build to try ("try it", a launched demo instance),
-  do NOT start any `xcodebuild test` (UI target) until they say they're done.
-  Run UI tests BEFORE handing off, or AFTER the user is finished — never concurrently with their hands-on
-  testing, and never "in parallel/background" (background only hides the output,
-  not the on-screen event synthesis).
-  Host-free `swift test` is fine anytime (no screen interaction).
-- **Test cadence — ASK before a full UI run; don't default to it.**
-  The host-free `cd agtermCore && swift test` is fast (~0.2 s) — always run it.
-  The XCUITest suite is SLOW (~75 s for one class, ~460 s for all 77) and re-runs unaffected tests,
-  so a full UI run is NOT a default pre-commit gate.
-  For an isolated change, scope to the EXACT affected test METHODS — one `-only-testing:agtermUITests/<Class>/<method>`
-  flag per method (e.g. `…/SettingsUITests/testInterfaceElementTogglePersists`),
-  NOT the whole enclosing class, and NEVER an adjacent class "for extra confidence" on a pure refactor.
-  A refactor/extraction that preserves accessibility ids and behavior needs NO UI test at all — `make build`
-  + `make lint` already cover it (a code MOVE with identical ids is not "shared-chrome" work that warrants
-  a broad run).
-  Before committing UI-affecting work, ASK which UI-test scope is wanted and RECOMMEND one:
-  the specific new/changed methods for a self-contained change; a full class or broader run ONLY for
-  foundational/cross-concern work that actually changes behavior (app launch, signing/bundle, the eager
-  deck, window/scene wiring), never merely because a file under shared chrome was touched.
-  Don't burn minutes re-running the whole suite (or unrelated classes) when the change is self-contained —
-  running too many unrelated tests is a repeat offense the user has interrupted.
-- **After editing a TEST file, rebuild the test bundle with `build-for-testing` — `test-without-building`
-  runs the STALE bundle.**
-  `xcodebuild build` (or `make build`) builds only the APP target, NOT the `agtermUITests` bundle.
-  So `xcodebuild build` then `test-without-building` runs the OLD compiled test against the NEW app —
-  the source edit is silently ignored.
-  The symptom is confusing: the run reports `Executed 0 tests` with a crash/`Restarting after unexpected
-  exit` line and the named test under "Failing tests", which looks like an app launch crash — but the
-  xcresult `Failure Message` is an ordinary `XCTAssertTrue failed` from the OLD assertion (e.g. it still
-  looks for a control the new UI renamed).
-  Fix: run `xcodebuild build-for-testing …` (builds app + test bundle) before `test-without-building`, or
-  just `xcodebuild test …` (builds then tests).
-  Read the real reason from the xcresult (`xcrun xcresulttool get test-results tests --path <xcresult>`,
-  find the `Failure Message` node) rather than trusting the "0 tests / crash" summary.
-- **A palette row answers to its identifier more than once, and the match you get first cannot be clicked.**
-  `PaletteRow` sets `palette-item-<id>` on the row, and SwiftUI propagates an identifier to every text
-  child that has none of its own, so a row WITH a subtitle exposes two matching elements.
-  `matching(identifier:).firstMatch` returns the title `StaticText`, which is never hittable — the row owns
-  the tap target, so the AX hit test at the title's center does not resolve to the title — while the
-  subtitle child right below it IS.
-  A row with no subtitle collapses to the full-width row element and clicks fine, which is what makes this
-  look intermittent: the same helper works until an item carries a subtitle.
-  CLICK a row through a helper that picks the first HITTABLE match
-  (`allElementsBoundByIndex.first { $0.isHittable } ?? matches.firstMatch`) and keep the plain lazy
-  `firstMatch` helper for the existence waits — see `ControlPickUITests.clickPaletteRow` vs `paletteRow`.
-  Keep the two SEPARATE: `allElementsBoundByIndex` resolves eagerly, and folding it into the helper the
-  `waitForExistence` calls use broke `testPickKeepsKeyboardAfterClosingBuiltInPalette`, whose row does not
-  exist yet when the helper is called.
-  The symptom is a fast `Not hittable: StaticText …` failure, NOT the slow synthesize-event timeout that
-  means occlusion; it reproduces with HazeOver quit and on a clean checkout.
-- **Driving a Picker in XCUITest depends on its style.**
-  A `.segmented` Picker exposes each option as a hittable descendant by label — match
-  `picker.descendants(matching: .any).matching(label == "X").firstMatch` and `.click()` it directly.
-  A default/menu Picker (macOS Form dropdown, e.g. Font/Theme/Toolbar) does NOT — `picker.click()` to
-  open the popup, then click `app.menuItems["X"]` (see `SettingsUITests.testNewSessionDirectoryPickerPersists`
-  / `testToolbarModePickerPersists`).
-  Changing a Picker's style therefore requires updating its test's interaction, not just the label.
-- **XCUITest can NOT click a SwiftUI `Button` inside a `.popover` (`NSPopover`).**
-  A synthesized click — element `.click()` OR `coordinate(withNormalizedOffset:).click()` — reaches the row
-  (the trace shows "Click … Button", the event synthesizes) but the SwiftUI action NEVER fires (confirmed by
-  instrumenting the action to a `/tmp` marker: the app is un-sandboxed so it can write, and the marker stayed
-  empty across both click styles + retries).
-  A real mouse click works because it makes the transient popover key first; the synthesized one doesn't.
-  So a `.popover`-hosted control is only e2e-testable up to OPEN + CONTENTS, not the click:
-  assert the popover opens and lists the right elements (find the row `Button` by `accessibilityIdentifier`
-  once no PARENT carries an id — a SwiftUI id on a container propagates to and OVERRIDES its descendants'
-  ids, so the popover container must have NONE), and verify the click→action by hand + host-free unit tests.
-  Also the transient popover can dismiss before the first AX snapshot, so RETRY the open (click the anchor
-  only while no row is showing, so an already-open popover is never toggled shut).
-  See `RecentSessionsButtonUITests` / `AttentionButtonUITests` and the recent/attention popover note in
+- Pass a temporary `AGTERM_STATE_DIR` in the launch environment; `agtermApp.restoredStore()` honors it.
+  Verify the native `Open Directory...` panel manually.
+- **Use `app.launchForUITest()`, never `app.launch()`.** FB11763863 on macOS 15+/Xcode 16+, including
+  Xcode 26, can leave a
+  process-launched SwiftUI `WindowGroup` with a Dock icon and AX elements but no `NSWindow`, task, or
+  `onAppear`; activation/order-front APIs cannot create the missing window.
+  `AppDelegate.bringUITestWindowsForward` responds by reopening
+  `Bundle.main.bundleURL`. `launchForUITest()` sets `AGTERM_UITEST_FORCE_SIDEBAR_VISIBLE` in the
+  environment, not arguments, launches, and activates. Keep Settings non-restorable because reopen
+  retriggers restoration. Diagnose with timed `NSApp.windows.count` logging; persistent zero means
+  "never created". See [[reference_swiftui-windowgroup-no-window-xcuitest]].
+- Use retrying `settingsControl(tab:control:)`; reopen can leave a non-key Settings window that drops the
+  first tab click.
+- Add UI coverage for UI behavior. For Metal/transient state absent from AX, assert an observable side
+  effect, such as `tty > <file>` identifying the focused pane.
+- `AppearanceFlipUITests` uses XCUITest-only `debug.appearance light|dark`, which sets
+  `NSApp.appearance` and posts `.agtermSystemAppearanceChanged`; production uses app-level KVO.
+  Refuse the command outside XCUITest and exempt it from keep-in-sync. Set a starting side, assert the
+  echoed response, and poll the bare form's last-applied side. To catch a zoom-clearing misroute, sample
+  `fontSize` continuously: current libghostty `update_config` does not reset runtime zoom, so CELL_SIZE
+  can repersist it about 0.4 seconds after a brief nil.
+- For OSC titles, type literal `printf '\\033]2;TITLE\\007'; cat`; let the session shell expand escapes.
+  `cat` prevents the next prompt from clearing the title. Raw ESC/BEL bytes can trigger line-editor
+  keystrokes. Read display name from the `session-row` static text's value, and subtitle from
+  `palette-subtitle`'s value. Assert cwd against `/Users/`, not the runner's different home.
+  `tree --json` exposes raw `title`; see `SessionSubtitleUITests` and
+  `ControlAPIUITests.testTreeExposesOscTitle`.
+- `ReorderUITests.dragRow` must select the source and drain the run loop, drag between normalized
+  coordinates, and use mouse-native
+  `click(forDuration:thenDragTo:withVelocity:thenHoldForDuration:)`. Element-to-element targets the
+  recycled cell text; touch `press(forDuration:thenDragTo:)` delivers AppKit dragging intermittently.
+  Run one drag per fresh launch. For failures, log `validateDrop`/`acceptDrop`: no events means the
+  gesture never started; wrong `dest` means delegate resolution. Query the last 90s of unified logs.
+- **Never run XCUITests while the user is testing a handed-off build.** They activate apps and send real
+  keyboard/mouse events even in the background. Run them before handoff or after the user finishes.
+  Host-free tests are safe.
+- Always run `cd agtermCore && swift test`, normally about 0.2 seconds. Ask before XCUITest.
+  The suite is about 75 seconds per
+  class and 460 seconds for all 77; target exact affected methods with one
+  `-only-testing:agtermUITests/<Class>/<method>` each. A behavior-preserving extraction with unchanged AX
+  identifiers needs `make build` and lint, not UI tests. Recommend a class/broader run only for changed
+  cross-cutting behavior such as launch, signing/bundle, eager-deck, or scene/window wiring.
+- After changing a test, run `build-for-testing`; app-only `xcodebuild build` leaves a stale XCUITest
+  bundle for `test-without-building`. A stale assertion may appear as `Executed 0 tests` plus restart and
+  a named failure. Read the xcresult failure message, or use `xcodebuild test`.
+- Palette identifiers propagate to text children, so a subtitle row can have duplicate matches whose
+  `firstMatch` title is not hittable. Click
+  `allElementsBoundByIndex.first { $0.isHittable } ?? matches.firstMatch`, but keep lazy `firstMatch` for
+  existence waits; eager resolution before the row exists breaks
+  `testPickKeepsKeyboardAfterClosingBuiltInPalette`. Fast `Not hittable: StaticText` is this issue, not
+  the slow occlusion timeout. See `ControlPickUITests.clickPaletteRow`.
+- For `.segmented` Picker, click the labeled descendant. For a default/menu Picker, click the picker then
+  `app.menuItems["X"]`. Update the interaction when changing style; see the Settings picker tests.
+- XCUITest-synthesized clicks do not fire a SwiftUI `Button` inside `NSPopover`; a real click makes the
+  popover key. Test open and contents, then verify selection manually and through host-free APIs. Put AX
+  ids on rows, not a parent that would override descendant ids. Retry opening only while no row is
+  visible, since the popover can dismiss before the first snapshot. See the recent/attention tests and
   [[menu-actions]].
-- **A screen-occluding overlay app (HazeOver) makes `app.typeText`/`typeKey` fail with `Failed to synthesize event: Timed out while synthesizing event`**
-  — a ~90 s hang that ends the test with NO `XCTAssert` failure (the keyboard event never reaches the
-  covered window; the run log shows `Synthesize event` → `Failed: Timed out` ~64 s apart).
-  It is ENVIRONMENTAL, not a test-logic or app bug: the SAME test passes in ~13 s once HazeOver is quit.
-  Treat a `synthesize event` / `Unable to find hit point` timeout (as opposed to a real assertion failure)
-  as an occlusion symptom — quit HazeOver and clear covered/minimized/Spaces windows,
-  then re-run before suspecting the test or the fix.
-  Distinct from FB11763863 (window never created → AX tree empty); here the window exists but is covered.
-- **`XCUIApplication.terminate()` HARD-KILLS — it does NOT fire `applicationWillTerminate`.** A test
-  that needs the app's graceful-quit path (anything in `applicationWillTerminate`:
-  the restore-running-command capture, a quit-flush write) must quit with **⌘Q** (`app.typeKey("q", modifierFlags: .command)`
-  then `app.wait(for: .notRunning, timeout:)`), NOT `terminate()`.
-  The quit-confirm modal is auto-skipped under XCUITest (`ContentView.isUITestLaunch` → `.terminateNow`),
-  so ⌘Q quits cleanly AND runs `applicationWillTerminate`.
-  Verified by instrumenting the top of `applicationWillTerminate` to a `/tmp` file:
-  empty under `terminate()`, written under ⌘Q.
-  (`MultiWindowUITests` survives `terminate()` only because the open-set is also saved by in-session
-  structural saves, NOT because the quit-flush ran.) This is the same write-to-a-temp-FILE diagnostic
-  the project uses for launch-time values — `NSLog` doesn't reach the unified log from an `open -n`/XCUITest
-  dev build.
-- **`ghostty_surface_foreground_pid` returns the actual FOREGROUND process,
-  not the session's shell.** Confirmed empirically (`tee <file>` → the captured pid/argv is `tee`,
-  not `zsh`).
-  The restore-running-command capture skips ONLY an IDLE shell-at-prompt (`CommandRestore.isIdleShell`:
-  a known-shell argv0 with no payload argument, only `-flags`).
-  A shell RUNNING something IS captured: a `#!/bin/sh` wrapper script (its foreground is `/bin/sh <script>`,
-  the real-world `cld` claude-code bug) and a `sh -c '…'` BOTH carry a payload argument and are captured
-  — only a bare `-zsh`/`/bin/zsh` prompt is dropped.
-  `tee <file>` is still the cleanest e2e marker: it creates its output file on start and blocks reading
-  the pty, so it's the live foreground at quit, and re-running it recreates the file (a delete-then-relaunch-then-exists
-  cycle is the observable proof).
-  `RestoreCommandUITests.testRestoreReRunsShellScriptWrapper` covers the shell-with-payload case via
-  `sh -c 'tee …; true'` (a compound list keeps `sh` the foreground) — NOT an executable script file,
-  since the runner writes its sandboxed temp dir and the app can't exec a script from there (a plain
-  `tee` marker writes there fine, but exec is blocked).
-
+- `Failed to synthesize event: Timed out while synthesizing event` or `Unable to find hit point` after
+  about 90 seconds, with no assertion, indicates window occlusion such as HazeOver. The observed keyboard
+  failure occurred about 64 seconds after synthesis began and the same test passed in about 13 seconds
+  without HazeOver. Quit overlays and
+  clear covered/minimized/other-Space windows before debugging the test. FB11763863 instead has no
+  window/AX tree.
+- `XCUIApplication.terminate()` does not call `applicationWillTerminate`. Use ⌘Q plus
+  `wait(for: .notRunning, timeout:)` for restore-command or quit-flush tests; XCUITest auto-skips the
+  quit-confirm modal. `MultiWindowUITests` survives hard termination only because structural saves
+  already persist the open set. Use a temp file, not unreliable `NSLog`, to instrument the callback.
+- `ghostty_surface_foreground_pid` returns the actual foreground process. Restore skips only a known idle
+  shell with no payload arguments except flags; shell scripts and `sh -c` payloads are captured. Use
+  blocking `tee <file>` as the e2e marker and prove relaunch by delete/recreate.
+  `RestoreCommandUITests.testRestoreReRunsShellScriptWrapper` uses `sh -c 'tee ...; true'` so `sh` remains
+  foreground. Do not execute a script from the runner's sandboxed temp dir; the app can write there but
+  cannot exec it.
