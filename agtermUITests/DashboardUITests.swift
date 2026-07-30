@@ -16,8 +16,6 @@ import XCTest
 final class DashboardUITests: ControlAPITestCase {
     // MARK: - open / cell count / read-back
 
-    // opening a 3-session dashboard renders exactly three member cells and reports the members on `tree`;
-    // closing removes the overlay and clears every dashboard read-back.
     func testDashboardOpensWithMemberCellsAndClosesClean() throws {
         let ids = try prepareSessions(extra: 2) // 3 sessions → a 2x2 grid with three real cells + one filler
         XCTAssertEqual(ids.count, 3, "the seeded session plus two new ones")
@@ -35,16 +33,11 @@ final class DashboardUITests: ControlAPITestCase {
         XCTAssertNil(dashHighlighted(), "tree.dashboardHighlighted clears on close")
     }
 
-    // `dashboard --mru` populates the grid from the window's most-recently-used sessions (no explicit ids):
-    // a KNOWN recency order is seeded via explicit `session.select`s (the LAST selected is most-recent), then
-    // the mru members are asserted to equal that order exactly (recency is deterministic — the RecencyStack is
-    // pushed on every select), one cell per session (fewer than the 9-cell cap). Asserts ORDER, not just the
-    // set, since the switcher/recency behavior is deterministic.
+    // asserts ORDER, not just the set: RecencyStack is pushed on every select, so it is deterministic.
     func testDashboardMruOpensRecentSessions() throws {
         let ids = try prepareSessions(extra: 3) // 4 sessions total (seeded + three new)
         XCTAssertEqual(ids.count, 4)
 
-        // seed recency by selecting each session in a known sequence; most-recent-first is its reverse.
         let selectOrder = [ids[1], ids[3], ids[0], ids[2]]
         for id in selectOrder {
             XCTAssertEqual(try sendCommand(#"{"cmd":"session.select","target":"\#(id)"}"#)["ok"] as? Bool, true,
@@ -59,7 +52,7 @@ final class DashboardUITests: ControlAPITestCase {
 
         XCTAssertTrue(pollCellCount(4, timeout: 15), "mru renders one cell per recent session (≤9, fewer if fewer)")
         let members = try XCTUnwrap(dashMembers(), "tree carries the mru members while open")
-        // the sessions have no split, so each is a single primary-pane cell (`<id>:left`), in mru order.
+        // no split, so each session is a single `<id>:left` cell.
         XCTAssertEqual(members.map { $0.lowercased() }, expected.map { "\($0.lowercased()):left" },
                        "mru members are the window's sessions in most-recent-first order (each a primary pane cell)")
 
@@ -68,16 +61,11 @@ final class DashboardUITests: ControlAPITestCase {
         XCTAssertNil(dashMembers(), "the mru members read-back clears on close")
     }
 
-    // a SPLIT session opens as TWO cells — its primary AND its split pane — so tree.dashboardMembers carries
-    // BOTH `<id>:left` and `<id>:right`. Highlighting the split (right) cell and pressing Enter focuses the
-    // RIGHT pane, asserted via the tree `splitFocused` read-back (flips false → true). The focus routing is
-    // real behavior, not a weaker proxy: `splitFocused` is the same field `session.focus` reads back.
+    // `splitFocused` is the same field `session.focus` reads back, so this is real routing, not a proxy.
     func testSplitSessionOpensTwoCellsAndEnterFocusesSplitPane() throws {
         let ids = try prepareSessions(extra: 0) // just the seeded session
         let id = ids[0]
-        // give the session a split pane (both shells alive). `session.split on` shows it and focuses the new
-        // RIGHT pane, so move focus back to the LEFT pane first — that makes the split-cell Enter below flip
-        // splitFocused false → true, a real (non-vacuous) effect to assert.
+        // `split on` focuses the RIGHT pane, so move back to LEFT first or the Enter below asserts nothing.
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool,
                        true, "session.split on should succeed")
         XCTAssertTrue(try pollSplit(id, timeout: 10), "the session should report a split")
@@ -92,7 +80,6 @@ final class DashboardUITests: ControlAPITestCase {
                        Set(["\(id.lowercased()):left", "\(id.lowercased()):right"]),
                        "the two cells are the session's left and right panes")
 
-        // highlight the split (right) cell (right arrow: primary[0] → split[1]), then Enter.
         settle(0.5)
         app.typeKey(.rightArrow, modifierFlags: [])
         XCTAssertTrue(pollDashHighlightedRef("\(id):right", timeout: 8), "right arrow highlights the split pane cell")
@@ -104,21 +91,16 @@ final class DashboardUITests: ControlAPITestCase {
                       "Enter on the split cell focuses the RIGHT pane (splitFocused flips to true)")
     }
 
-    // regression: opening the dashboard over a session whose FOCUSED split pane holds first responder must
-    // hand the keyboard to the dashboard's key-catcher, not leave it with the reparented pane surface. The
-    // focused split surface carries first responder ACROSS the reparent into the view-only cell
-    // (`acceptsFirstResponder=false` blocks only NEW grabs, never a HELD one), so without the viewOnly resign
-    // it keeps the keyboard — a bare arrow goes to that pane (invisible) instead of walking the highlight.
-    // Deliberately does NOT use the `openDashboard` helper: its post-open cell click forces a key-catcher
-    // re-grab that would MASK this exact race (the test would then pass even on the broken code). Routing is
-    // established by the pre-open `row.click()` + `splitButton.click()` (the SplitUITests idiom) and persists
-    // into the socket-opened dashboard, so the bare arrow below is the real discriminator.
+    // `acceptsFirstResponder=false` blocks only NEW grabs, never a HELD one, so the focused split surface
+    // carries first responder across the reparent unless viewOnly resigns it.
+    // Deliberately does NOT use `openDashboard`: its post-open cell click forces a key-catcher re-grab that
+    // MASKS this race, so the test would pass on the broken code.
     func testDashboardOverFocusedSplitPaneGivesKeyboardToKeyCatcher() throws {
         let ids = try prepareSessions(extra: 0) // just the seeded session
         let id = ids[0]
 
-        // GUI click establishes XCUITest key routing AND focuses the seeded terminal; the split button then
-        // moves focus to the NEW right pane, so its surface holds first responder (SplitUITests idiom).
+        // the GUI click establishes XCUITest key routing; the split button then hands first responder to
+        // the new right pane (SplitUITests idiom).
         let row = app.staticTexts["session-row"]
         XCTAssertTrue(row.waitForExistence(timeout: 15), "the seeded row should exist")
         row.click()
@@ -129,25 +111,19 @@ final class DashboardUITests: ControlAPITestCase {
         XCTAssertTrue(try pollSplit(id, timeout: 10), "the session should report a split")
         XCTAssertTrue(try pollSplitFocused(id, expected: true, timeout: 10), "opening the split focuses the right pane")
 
-        // open the dashboard over the split session via the SOCKET, WITHOUT the masking cell click.
         let response = try sendCommand(#"{"cmd":"dashboard","args":{"targets":["\#(id)"]}}"#)
         XCTAssertEqual(response["ok"] as? Bool, true, "dashboard open should succeed: \(response)")
         XCTAssertTrue(dashboardOverlay.waitForExistence(timeout: 15), "the dashboard overlay should appear")
         XCTAssertTrue(pollCellCount(2, timeout: 15), "the split session opens as two pane cells")
         XCTAssertTrue(pollDashHighlightedRef("\(id):left", timeout: 8), "the highlight starts on the primary pane cell")
 
-        // a bare right arrow must WALK the highlight to the split cell — proving the key-catcher owns the
-        // keyboard. Without the viewOnly resign, the carried-in split surface swallows the arrow and the
-        // highlight never leaves the primary cell.
+        // a bare arrow is the discriminator: the carried-in split surface would swallow it instead.
         settle(0.5)
         app.typeKey(.rightArrow, modifierFlags: [])
         XCTAssertTrue(pollDashHighlightedRef("\(id):right", timeout: 8),
                       "a bare arrow walks the highlight — the key-catcher, not the reparented split pane, owns keys")
     }
 
-    // arrow keys walk the highlight between cells (observed via tree.dashboardHighlighted and the
-    // `dashboard-highlighted` marker), and Enter jumps into the highlighted session — closing the overlay AND
-    // moving the selection to that session.
     func testArrowMovesHighlightAndEnterSelectsClosingDashboard() throws {
         let ids = try prepareSessions(extra: 1) // [seeded, new1] → a 1x2 grid
         try openDashboard(members: ids)
@@ -156,25 +132,20 @@ final class DashboardUITests: ControlAPITestCase {
         XCTAssertEqual(refSession(initial), ids[0].lowercased(), "the highlight starts on the first member")
         XCTAssertTrue(highlightedMarker.waitForExistence(timeout: 10), "the highlighted cell renders its marker")
 
-        // give the AppKit key-catcher a beat to own first responder, then move the highlight right.
         settle(0.5)
         app.typeKey(.rightArrow, modifierFlags: [])
         let moved = pollDashHighlighted(changedFrom: ids[0], timeout: 8)
         XCTAssertEqual(moved.map(refSession), ids[1].lowercased(), "right arrow moves the highlight to the next cell")
 
-        // Enter selects the highlighted session and closes the dashboard.
         app.typeKey(.return, modifierFlags: [])
         XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "Enter closes the dashboard")
         XCTAssertNil(dashMembers(), "the dashboard read-backs clear once it closes")
         XCTAssertTrue(pollSelectedSession(ids[1], timeout: 10), "Enter selects the highlighted session")
     }
 
-    // Esc dismisses the dashboard WITHOUT jumping in: the selection is whatever it was before opening, even
-    // though the highlight was moved onto a different session.
     func testEscapeClosesDashboardWithoutChangingSelection() throws {
         let ids = try prepareSessions(extra: 1)
-        // pin a known baseline selection distinct from the cell we will highlight (so a wrongly-selecting Esc
-        // would be observable as a change to ids[1]).
+        // the baseline must differ from the highlighted cell, or a wrongly-selecting Esc is unobservable.
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.select","target":"\#(ids[0])"}"#)["ok"] as? Bool, true,
                        "selecting the seeded session should succeed")
         XCTAssertTrue(pollSelectedSession(ids[0], timeout: 10), "the seeded session is selected before opening")
@@ -186,67 +157,47 @@ final class DashboardUITests: ControlAPITestCase {
 
         app.typeKey(.escape, modifierFlags: [])
         XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "Esc closes the dashboard")
-        // give any (wrongly) armed selection change time to LAND and assert it never does — polling for the
-        // WRONG state's absence, rather than a fixed settle before one read that could pass vacuously.
+        // polls for the WRONG state's ABSENCE: a fixed settle then one read could pass vacuously.
         XCTAssertFalse(pollSelectedSession(ids[1], timeout: 3), "Esc must not select the highlighted session")
         XCTAssertEqual(selectedSessionID()?.lowercased(), ids[0].lowercased(),
                        "Esc leaves the pre-open selection in place")
     }
 
-    // while the view-only dashboard is open the full titlebar is swapped for a stripped bar (mirroring
-    // terminal zoom): its interactive session controls are GONE, so a stray click on one can no longer steal
-    // the key-catcher's first responder (which stranded Esc) or drive an action behind the grid. Only an exit
-    // button remains, and clicking it closes the dashboard.
+    // the controls are gone so a stray click cannot steal the key-catcher's first responder, which
+    // stranded Esc.
     func testDashboardTitlebarStripsInteractiveButtonsAndExitCloses() throws {
         let ids = try prepareSessions(extra: 1)
 
-        // baseline: the full titlebar's session controls exist before opening.
         XCTAssertTrue(app.buttons["split-toggle"].waitForExistence(timeout: 15),
                       "the split button renders in the normal titlebar")
 
         try openDashboard(members: ids)
 
-        // opening swaps in the stripped titlebar: every interactive session control is gone...
         for control in ["split-toggle", "sidebar-toggle-button", "scratch-toggle", "quick-terminal-toggle"] {
             XCTAssertTrue(app.buttons[control].waitForNonExistence(timeout: 10),
                           "\(control) must not render while the dashboard is open")
         }
-        // ...and only the exit button remains (the counterpart of terminal-zoom-exit).
         let exit = app.buttons["dashboard-exit"]
         XCTAssertTrue(exit.waitForExistence(timeout: 10), "the stripped dashboard titlebar shows an exit button")
 
-        // the exit button closes the dashboard (same close-and-refocus path as Esc)...
         exit.click()
         XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "the exit button closes the dashboard")
-        // ...and the full titlebar returns once it is closed.
         XCTAssertTrue(app.buttons["split-toggle"].waitForExistence(timeout: 10),
                       "the full titlebar returns once the dashboard closes")
     }
 
-    // the correctness crux: while the dashboard is open it is VIEW-ONLY — a typed keystroke never reaches
-    // any terminal. Proven with a three-phase probe so the negative is not vacuous:
-    //   1. before opening, GUI typing DOES reach the focused terminal (a marker file is written);
-    //   2. while open, a typed sentinel is swallowed (it never echoes into the surface buffer) — a bare arrow
-    //      that walks the highlight proves the key pipeline drained PAST the sentinel first (a leaked
-    //      keystroke would already be in the buffer);
-    //   3. after closing, GUI typing reaches the terminal again — so the block in phase 2 was the dashboard,
-    //      not a dead terminal.
-    // A single mouse CLICK on a cell now ENTERS it — that mouse path is covered by
-    // testDashboardCellSingleClickEntersSession, which also proves a click is consumed by the dashboard's hit
-    // target rather than the terminal beneath it.
+    // three phases so the negative is not vacuous: typing works before, is swallowed while open, and works
+    // again after — proving phase 2 was the dashboard, not a dead terminal. The bare arrow in phase 2 proves
+    // the pipeline drained PAST the sentinel, since a leaked keystroke would already be in the buffer.
     func testDashboardIsViewOnlyKeystrokesDoNotReachTerminal() throws {
         let ids = try prepareSessions(extra: 1) // [seeded, new1]
 
-        // focus the seeded terminal via its sidebar row (row click → select + focus, the SplitUITests idiom).
         let seededRow = app.staticTexts.matching(identifier: "session-row").element(boundBy: 0)
         XCTAssertTrue(seededRow.waitForExistence(timeout: 15), "the seeded row should exist")
         seededRow.click()
         settle(0.8)
 
-        // PHASE 1 — GUI keystrokes reach the focused terminal (baseline that typing works at all). Retry the
-        // GUI type until the marker lands: a freshly focused terminal's pty may not be ready to read when the
-        // first keystrokes arrive (especially under full-suite CPU load), so a single type can be dropped —
-        // the GUI-input twin of the base typeUntilMarker readiness wait.
+        // PHASE 1 — a freshly focused pty may drop the first keystrokes, so retry until the marker lands.
         let beforeFile = markerDir.appendingPathComponent("before")
         XCTAssertNotNil(typeShellMarkerUntilFile(token: "DASHBEFORE7788", file: beforeFile),
                         "GUI keystrokes should reach the terminal before the dashboard opens")
@@ -254,7 +205,6 @@ final class DashboardUITests: ControlAPITestCase {
         try openDashboard(members: ids)
         settle(0.6)
 
-        // PHASE 2 — typing while open is swallowed by the key-catcher, so nothing echoes into the surface.
         // No Return: a Return would be consumed as Enter=select and close the overlay, so a leak is detected
         // by the sentinel appearing in the buffer, not by a marker file.
         app.typeText("LEAKSENTINEL9911")

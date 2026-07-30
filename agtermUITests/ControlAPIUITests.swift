@@ -8,7 +8,6 @@ import XCTest
 /// assert against the response and the `workspaces.json` file-polling oracle the sidebar tests use.
 @MainActor
 final class ControlAPIUITests: ControlAPITestCase {
-    // a `tree` request returns the seeded workspace and session with non-empty ids.
     func testTreeReturnsSeededWorkspaceAndSession() throws {
         let response = try sendCommand(#"{"cmd":"tree"}"#)
         XCTAssertEqual(response["ok"] as? Bool, true, "tree should succeed: \(response)")
@@ -26,8 +25,7 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertEqual(sessions[0]["active"] as? Bool, true, "the seeded session should be active")
     }
 
-    // the tree exposes a session's raw OSC title. Set one by typing a printf that emits OSC 2, held by
-    // `cat` so the local shell can't clear it at the next prompt (mirroring how a remote keeps its title).
+    // `cat` holds the foreground so the next prompt can't clear the title, as a remote session keeps it.
     func testTreeExposesOscTitle() throws {
         let text = "printf '\\033]2;CTL-OSC-TITLE\\007'; cat\n"
         let payload: [String: Any] = ["cmd": "session.type", "args": ["text": text]]
@@ -53,8 +51,7 @@ final class ControlAPIUITests: ControlAPITestCase {
         return sessions.first?["title"] as? String
     }
 
-    // tree exposes each session's LIVE foreground command: run a non-shell blocking process (`tee` opens
-    // its file on start, then blocks reading the pty) so the foreground is `tee`, not the shell prompt.
+    // `tee` opens its file on start then blocks on the pty, so the foreground is `tee`, not the prompt.
     func testTreeExposesForegroundProcess() throws {
         let marker = markerDir.appendingPathComponent("fg-\(UUID().uuidString)").path
         let payload: [String: Any] = ["cmd": "session.type", "args": ["text": "tee \(marker)\n"]]
@@ -79,8 +76,7 @@ final class ControlAPIUITests: ControlAPITestCase {
         return sessions.first?["foreground"] as? [String]
     }
 
-    // tree exposes each session's agent status: setting `blocked` surfaces `status: "blocked"` on that
-    // session's node, while a session left idle omits the key entirely (the read side of session.status).
+    // an idle session omits the status key entirely, which the second session is here to prove.
     func testTreeExposesAgentStatus() throws {
         let tree = try sendCommand(#"{"cmd":"tree"}"#)
         let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
@@ -89,17 +85,14 @@ final class ControlAPIUITests: ControlAPITestCase {
         let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
         let seeded = try XCTUnwrap(sessions.first?["id"] as? String, "should have a seeded session id")
 
-        // a second session stays idle so its node can prove the status key is omitted when idle.
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let createdResult = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
         let idleID = try XCTUnwrap(createdResult["id"] as? String, "session.new should return the new id")
         XCTAssertTrue(pollSessionCount(2, timeout: 10), "the new session should land")
 
-        // baseline: every fresh session is idle, so the seeded node omits the status key.
         let before = try sendCommand(#"{"cmd":"tree"}"#)
         XCTAssertNil(sessionNode(before, id: seeded)?["status"], "an idle session should omit the status key")
 
-        // set blocked on the seeded session; its node now reports status "blocked".
         let set = try sendCommand(#"{"cmd":"session.status","target":"\#(seeded)","args":{"status":"blocked"}}"#)
         XCTAssertEqual(set["ok"] as? Bool, true, "session.status blocked should succeed: \(set)")
 
@@ -111,7 +104,6 @@ final class ControlAPIUITests: ControlAPITestCase {
         }
         XCTAssertEqual(seededStatus, "blocked", "tree should report the seeded session's blocked status")
 
-        // the untouched second session is still idle, so it omits the status key.
         let after = try sendCommand(#"{"cmd":"tree"}"#)
         XCTAssertNil(sessionNode(after, id: idleID)?["status"], "an idle session should omit the status key")
     }
@@ -130,15 +122,12 @@ final class ControlAPIUITests: ControlAPITestCase {
         return nil
     }
 
-    // restore.clear succeeds and the server keeps serving. The saved-command WIPE is only observable across
-    // a quit (the field is populated at quit, consumed at restore), so the cross-relaunch behavior is left
-    // to the arm's trivial nil+saveAllOpen logic plus the protocol round-trip + CLI parse tests.
+    // the WIPE itself is only observable across a quit, so this covers the arm, not the wipe.
     func testRestoreClearSucceeds() throws {
         let resp = try sendCommand(#"{"cmd":"restore.clear"}"#)
         XCTAssertEqual(resp["ok"] as? Bool, true, "restore.clear should succeed: \(resp)")
 
-        // the two verbs are easy to confuse: `restore clear` is app-global and CAPTURE-scoped, so it must
-        // leave a per-session `session.restore` override pinned.
+        // `restore clear` is app-global and CAPTURE-scoped, so a per-session override must survive it.
         let sessionID = try activeSessionID()
         XCTAssertEqual(try sendRestore(target: sessionID, mode: "set", command: "echo kept")["ok"] as? Bool, true,
                        "pinning an override should succeed")
@@ -147,9 +136,8 @@ final class ControlAPIUITests: ControlAPITestCase {
                        "restore.clear captures only — the per-session override must survive it")
     }
 
-    // the two `--pane-id` FALLBACK paths, the other half of the deliberate divergence from session.status:
-    // an EMPTY token counts as ABSENT (an older shell exporting no $AGTERM_PANE_ID), and an unresolvable
-    // token supplied WITH an explicit `--pane` falls back to that pane instead of erroring.
+    // an EMPTY token counts as ABSENT (an older shell exports none); an unresolvable one falls back to
+    // an explicit `--pane` rather than erroring.
     func testSessionRestorePaneIDFallsBackWhenEmptyOrUnresolvable() throws {
         let sessionID = try activeSessionID()
         let empty = try sendRestore(target: sessionID, mode: "set", command: "echo empty-token", paneID: "")
@@ -165,9 +153,7 @@ final class ControlAPIUITests: ControlAPITestCase {
                        "the explicit --pane is the intended fallback")
     }
 
-    // the read side of session.restore: a pinned command reads back verbatim, `--none` reads back as an
-    // EMPTY string (the key is present — the tri-state depends on it), and `--clear` omits the key.
-    // Whether the override actually RE-RUNS is a relaunch matter, covered by RestoreCommandUITests.
+    // the tri-state depends on presence: `--none` reads back as an EMPTY string, `--clear` omits the key.
     func testSessionRestoreReadsBackOnTree() throws {
         let sessionID = try activeSessionID()
         XCTAssertNil(try restoreNode(sessionID)["restoreCommand"], "a fresh session has no override pinned")
@@ -187,9 +173,7 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertNil(try restoreNode(sessionID)["restoreCommand"], "a cleared override omits the key entirely")
     }
 
-    // `--pane-id` addresses the pane's LIVE slot, which is the whole point of the token: after the MAIN
-    // pane exits, the split survivor is PROMOTED into the main slot, so its own $AGTERM_PANE_ID (baked
-    // when it was the right pane) must pin `restoreCommand`, not `splitRestoreCommand`.
+    // the survivor is PROMOTED into the main slot, so its right-pane token must pin `restoreCommand`.
     func testSessionRestorePaneIDFollowsPromotedPane() throws {
         let sessionID = try activeSessionID()
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sessionID)","args":{"mode":"on"}}"#)["ok"] as? Bool,
@@ -197,15 +181,12 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the session should report split:true")
         let rightToken = try readPaneToken(target: sessionID, pane: "right")
 
-        // prove the main pane's shell is READING keystrokes before sending `exit` — a dropped injection
-        // can't be retried here, since a second `exit` would land on the promoted survivor and close the
-        // session outright.
+        // prove the shell is READING before `exit`: a retry would land on the survivor and close the session.
         XCTAssertNotNil(try pollPaneText(target: sessionID, pane: "left", contains: "MAINRDY-42", retype: {
             _ = try self.sendCommand(self.typeRequest(text: "echo MAINRDY-$((6*7))\n", target: sessionID,
                                                       select: false, pane: "left"))
         }), "the main pane's shell should be reading keystrokes")
 
-        // exiting the main pane promotes the survivor into the main slot (session stays, split:false).
         _ = try sendCommand(typeRequest(text: "exit\n", target: sessionID, select: false, pane: "left"))
         XCTAssertTrue(pollActiveSessionSplit(false, timeout: 15), "the session should collapse to a single pane")
 
@@ -218,9 +199,7 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertNil(node["splitRestoreCommand"], "nothing may be pinned on the vacated split slot")
     }
 
-    // the pane-resolution rejections: a right pane that does not exist, a token that resolves to the
-    // scratch (never restored), and an unresolvable token with no `--pane` fallback — the last is where
-    // session.restore deliberately diverges from session.status, which would silently fall back to left.
+    // the last case is where session.restore diverges from session.status, which falls back to left.
     func testSessionRestoreRejectsUnrestorablePanes() throws {
         let sessionID = try activeSessionID()
         let noSplit = try sendRestore(target: sessionID, mode: "set", command: "echo x", pane: "right")
@@ -279,9 +258,7 @@ final class ControlAPIUITests: ControlAPITestCase {
         return String(text[try XCTUnwrap(Range(match.range(at: 1), in: text))])
     }
 
-    // session.reveal resolves the active session and drives the same focused-cwd Finder action as the
-    // main/context menus. Finder itself is outside the app's AX tree; success plus the returned id proves
-    // the command reached the platform action, while a missing target proves normal resolver errors remain.
+    // Finder is outside the AX tree, so the returned id is all that proves the action was reached.
     func testSessionRevealSucceedsAndResolvesTargets() throws {
         let activeID = try activeSessionID()
         let revealed = try sendCommand(#"{"cmd":"session.reveal","target":"active"}"#)
@@ -294,24 +271,20 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertTrue((missing["error"] as? String)?.contains("no such session") == true)
     }
 
-    // session.background sets a text watermark and clears it; bad input (missing image, invalid fit) is
-    // rejected and the server stays alive. The actual pixels are not AX-observable (Metal surface), so this
-    // covers the control round-trip + validation, like the other surface-state commands.
+    // the pixels are not AX-observable (Metal surface), so this covers the round-trip and validation only.
     func testSessionBackgroundSetClearAndValidation() throws {
         let sid = try activeSessionID()
 
         let text = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"text","text":"STAGING","opacity":0.2}}"#)
         XCTAssertEqual(text["ok"] as? Bool, true, "session.background text should succeed: \(text)")
 
-        // read-back: the watermark spec now rides the session's tree node (set/clear/query symmetry).
         let afterSet = try sendCommand(#"{"cmd":"tree"}"#)
         let setNode = try XCTUnwrap(sessionNode(afterSet, id: sid), "the session should appear in the tree")
         let bg = try XCTUnwrap(setNode["background"] as? [String: Any], "tree should expose the set watermark")
         XCTAssertEqual(bg["kind"] as? String, "text", "the watermark kind should read back")
         XCTAssertEqual(bg["text"] as? String, "STAGING", "the watermark text should read back")
 
-        // a solid background color reads back with kind "color" and the hex. The spec carries no opacity —
-        // a color honors the Settings window translucency at render time.
+        // the spec carries no opacity: a color honors the Settings translucency at render time.
         let colorSet = try sendCommand(##"{"cmd":"session.background","target":"\##(sid)","args":{"mode":"color","color":"#ff0000"}}"##)
         XCTAssertEqual(colorSet["ok"] as? Bool, true, "session.background color should succeed: \(colorSet)")
         let afterColor = try sendCommand(#"{"cmd":"tree"}"#)
@@ -323,8 +296,7 @@ final class ControlAPIUITests: ControlAPITestCase {
         let badColor = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"color","color":"red"}}"#)
         XCTAssertEqual(badColor["ok"] as? Bool, false, "a malformed color should be rejected")
 
-        // color mode with no color hits the "requires a color" guard (unreachable from the CLI, whose
-        // argument is required, so the raw-JSON e2e is the only cover for this arm).
+        // unreachable from the CLI, whose argument is required, so raw JSON is the only cover.
         let emptyColor = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"color"}}"#)
         XCTAssertEqual(emptyColor["ok"] as? Bool, false, "color mode with no color should be rejected")
         XCTAssertEqual(emptyColor["error"] as? String, "session.background color requires a color",
@@ -336,9 +308,8 @@ final class ControlAPIUITests: ControlAPITestCase {
         let badFit = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"image","path":"/no/such.png","fit":"fill"}}"#)
         XCTAssertEqual(badFit["ok"] as? Bool, false, "an invalid fit should be rejected")
 
-        // config-injection vector: a newline in the image path would smuggle an extra ghostty key into the
-        // per-surface overlay. The control-char guard runs BEFORE the format/existence checks, so its own
-        // error proves it (not fileExists) did the rejecting.
+        // a newline would smuggle an extra ghostty key in. The guard runs BEFORE the existence check, so
+        // its own error proves it did the rejecting.
         let injection = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"image","path":"x.png\nclipboard-read = allow\ny.png"}}"#)
         XCTAssertEqual(injection["ok"] as? Bool, false, "an image path with a control char must be rejected")
         XCTAssertEqual(injection["error"] as? String, "image path must not contain control characters",
@@ -347,7 +318,6 @@ final class ControlAPIUITests: ControlAPITestCase {
         let badOpacity = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"text","text":"X","opacity":5}}"#)
         XCTAssertEqual(badOpacity["ok"] as? Bool, false, "an out-of-range opacity should be rejected")
 
-        // an over-long text must be rejected at the boundary so the renderer never attempts a huge bitmap.
         let longText = String(repeating: "A", count: 5000)
         let tooLong = try sendCommand(#"{"cmd":"session.background","target":"\#(sid)","args":{"mode":"text","text":"\#(longText)"}}"#)
         XCTAssertEqual(tooLong["ok"] as? Bool, false, "an over-long watermark text should be rejected")
@@ -357,13 +327,10 @@ final class ControlAPIUITests: ControlAPITestCase {
 
         let tree = try sendCommand(#"{"cmd":"tree"}"#)
         XCTAssertEqual(tree["ok"] as? Bool, true, "the server should stay alive after background commands")
-        // read-back after clear: the background key is omitted from the node.
         let clearedNode = try XCTUnwrap(sessionNode(tree, id: sid), "the session should still appear in the tree")
         XCTAssertNil(clearedNode["background"], "a cleared watermark should be absent from the tree node")
     }
 
-    // a malformed JSON line returns ok:false with an error, and the server stays alive: a
-    // subsequent valid `tree` still succeeds.
     func testMalformedRequestErrorsAndServerStaysAlive() throws {
         let bad = try sendCommand("not json at all")
         XCTAssertEqual(bad["ok"] as? Bool, false, "malformed request should fail")
@@ -373,7 +340,6 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertEqual(good["ok"] as? Bool, true, "the server should still answer after a bad request")
     }
 
-    // session.new returns an id and the session appears in workspaces.json; session.close removes it.
     func testSessionNewAndClose() throws {
         XCTAssertTrue(pollSessionCount(1, timeout: 10), "should start with the one seeded session")
 
@@ -389,15 +355,10 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertTrue(pollSessionCount(1, timeout: 10), "closing the session should remove its row")
     }
 
-    // session.duplicate opens a fresh shell rooted at the source's cwd, inserted DIRECTLY AFTER the source
-    // in the same workspace, and focuses it. Read-back is `tree`: the new node follows its source carrying
-    // the source's cwd (the write-only command's own read-back point) and becomes the active session. Seeds
-    // the source with a real non-home directory so the cwd carry-over is a genuine assertion, not the shared
-    // new-session default.
+    // the source needs a real non-home directory, or the cwd carry-over matches the default and proves nothing.
     func testSessionDuplicate() throws {
         let sourceID = UUID(uuidString: "DD100000-0000-0000-0000-000000000001")!
-        // a real dir UNDER home (home is not a symlink, so the shell's OSC 7 report matches the seeded path
-        // verbatim — no /private canonicalization that a /tmp or NSTemporaryDirectory() seed would hit).
+        // under home, which is not a symlink: a /tmp seed would hit /private canonicalization.
         let cwd = NSHomeDirectory() + "/agterm-dup-\(UUID().uuidString)"
         try FileManager.default.createDirectory(atPath: cwd, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(atPath: cwd) }
@@ -424,20 +385,17 @@ final class ControlAPIUITests: ControlAPITestCase {
         let sessions = try XCTUnwrap(workspace["sessions"] as? [[String: Any]], "workspace should list sessions")
         XCTAssertEqual(sessions.count, 2, "the source and its duplicate")
 
-        // inserted DIRECTLY AFTER its source, not appended elsewhere.
         XCTAssertEqual((sessions[0]["id"] as? String)?.lowercased(), sourceID.uuidString.lowercased(),
                        "the source stays first")
         XCTAssertEqual((sessions[1]["id"] as? String)?.lowercased(), newID.lowercased(),
                        "the duplicate lands right after its source")
-        // carries the source's cwd (the read-back) and becomes the active session.
         XCTAssertEqual(sessions[1]["cwd"] as? String, sessions[0]["cwd"] as? String,
                        "the duplicate carries its source's cwd")
         XCTAssertEqual(sessions[1]["cwd"] as? String, cwd, "the duplicate opens in the source's specific directory")
         XCTAssertEqual(sessions[1]["active"] as? Bool, true, "the duplicate becomes the active session")
     }
 
-    // session.close with multiple targets is the control surface for the GUI batch close: one request
-    // hides all targeted sessions together (the save is deferred by the grace window, so assert via tree).
+    // the save is deferred by the grace window, so the assertion goes through `tree`, not the file.
     func testSessionCloseMultipleTargets() throws {
         let firstID = UUID(uuidString: "AA100000-0000-0000-0000-000000000001")!
         let secondID = UUID(uuidString: "AA200000-0000-0000-0000-000000000002")!
@@ -464,8 +422,7 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertNil(sessionNode(tree, id: thirdID.uuidString), "the third session should be hidden by the grouped close")
     }
 
-    // The control surface follows the GUI's grace setting. With grace disabled, batch close tears down and
-    // persists immediately instead of leaving the pre-close snapshot on disk for the undo window.
+    // with grace disabled the close persists immediately instead of leaving the pre-close snapshot on disk.
     func testSessionCloseMultipleTargetsHonorsDisabledGraceUndo() throws {
         let firstID = UUID(uuidString: "AB100000-0000-0000-0000-000000000001")!
         let secondID = UUID(uuidString: "AB200000-0000-0000-0000-000000000002")!
@@ -487,9 +444,7 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertTrue(pollSessionCount(1, timeout: 2), "grace-disabled close must persist both removals immediately")
     }
 
-    // Batch target resolution is all-or-nothing: a request naming a valid session alongside an unknown
-    // or ambiguous target must fail WHOLE, without closing the valid member — resolveBatchSessions
-    // errors before anything mutates.
+    // `resolveBatchSessions` errors before anything mutates, so the valid member must survive.
     func testSessionCloseBatchIsAllOrNothing() throws {
         let firstID = UUID(uuidString: "ABCD1111-0000-0000-0000-000000000001")!
         let secondID = UUID(uuidString: "ABCD2222-0000-0000-0000-000000000002")!
@@ -517,9 +472,7 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertNotNil(sessionNode(tree, id: thirdID.uuidString), "the valid batch member must stay open")
     }
 
-    // session.new --command runs the command AS the session's process (no shell echo): create a session
-    // whose command writes a marker file, then read it back — proof the command ran as the process, not
-    // typed into a shell. The session closes when the command exits (kitty-style).
+    // the marker file is the proof the command ran AS the process rather than being typed into a shell.
     func testSessionNewWithCommandRunsAsProcess() throws {
         let marker = NSTemporaryDirectory() + "agterm-cmd-\(UUID().uuidString).txt"
         let cmd = "printf RANCMD > \(marker)"
@@ -536,15 +489,12 @@ final class ControlAPIUITests: ControlAPITestCase {
         try? FileManager.default.removeItem(atPath: marker)
     }
 
-    // session.new --command --wait HOLDS the session open after the command exits (issue #254): the command
-    // `true` exits immediately, so WITHOUT --wait the session would vanish; WITH it the session stays on the
-    // press-any-key prompt and the tree reports commandWait=true (the read-back).
+    // `true` exits immediately, so without --wait the session would vanish (issue #254).
     func testSessionNewCommandWaitHoldsSessionAfterExit() throws {
         let created = try sendCommand(#"{"cmd":"session.new","args":{"command":"true","wait":true}}"#)
         XCTAssertEqual(created["ok"] as? Bool, true, "session.new --command --wait should succeed: \(created)")
         let newID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return an id")
 
-        // let the command run and exit; the surface holds on the prompt rather than closing the session.
         RunLoop.current.run(until: Date().addingTimeInterval(2))
 
         let tree = try sendCommand(#"{"cmd":"tree"}"#)
@@ -552,24 +502,20 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertEqual(node["commandWait"] as? Bool, true, "the tree should report commandWait=true for a held session")
     }
 
-    // --wait holds a command surface, so it is meaningless without a command; the dispatcher rejects it
-    // SERVER-SIDE (a raw socket client can't bypass the CLI validate()).
+    // rejected SERVER-SIDE, since a raw socket client bypasses the CLI's own validate().
     func testSessionNewWaitWithoutCommandRejectedServerSide() throws {
         let resp = try sendCommand(#"{"cmd":"session.new","args":{"wait":true}}"#)
         XCTAssertEqual(resp["ok"] as? Bool, false, "--wait without --command must be rejected: \(resp)")
         XCTAssertEqual(resp["error"] as? String, "--wait requires --command")
     }
 
-    // a control session.new (frontmost window) FOCUSES the new session, so real keystrokes reach it: the
-    // command is `head -n1 > marker` (captures one typed line), and we type via the keyboard — the text
-    // only lands if the new session grabbed first responder. Guards the gate-command focus fix.
+    // `head -n1 > marker` plus REAL keystrokes: the text lands only if the new session took first responder.
     func testSessionNewWithCommandFocusesTheNewSession() throws {
         let marker = NSTemporaryDirectory() + "agterm-focus-\(UUID().uuidString).txt"
         let cmd = "head -n1 > \(marker)"
         let created = try sendCommand(#"{"cmd":"session.new","args":{"command":"\#(cmd)"}}"#)
         XCTAssertEqual(created["ok"] as? Bool, true, "session.new --command should succeed: \(created)")
 
-        // let the surface mount and grab first responder (focusActiveSession's bounded retry), then type.
         RunLoop.current.run(until: Date().addingTimeInterval(2))
         app.typeText("FOCUSED")
         app.typeKey(.return, modifierFlags: [])
@@ -584,16 +530,11 @@ final class ControlAPIUITests: ControlAPITestCase {
         try? FileManager.default.removeItem(atPath: marker)
     }
 
-    // promote → re-split keystroke-clear: after the primary exits and the split survivor is promoted into
-    // the main slot, then a fresh split opens, typing a REAL keystroke in the promoted MAIN pane must NOT
-    // clear a `.right` block owned by the fresh split — the promoted survivor is the main (`.left`) pane now.
-    // Before the role-aware wireStatusClear fix the survivor stayed statically `.right`-wired, so main-pane
-    // typing wrongly cleared the split's `.right` block. Real keystrokes (not session.type inject) drive the
-    // onUserInputClearsStatus path; the socket sets + reads the status. Guards the role-aware clear + re-tag.
+    // the promoted survivor is the MAIN pane now, so its keystrokes must not clear the fresh split's
+    // `.right` block. Real keystrokes are load-bearing: a session.type inject skips onUserInputClearsStatus.
     func testPromotedMainPaneDoesNotClearSplitRightStatus() throws {
         let sid = try activeSessionID()
 
-        // open a split, focus the primary (left), and exit its shell so the right pane PROMOTES to main.
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sid)","args":{"mode":"on"}}"#)["ok"] as? Bool, true)
         RunLoop.current.run(until: Date().addingTimeInterval(1))
         app.typeKey(.leftArrow, modifierFlags: [.command, .option])
@@ -602,11 +543,9 @@ final class ControlAPIUITests: ControlAPITestCase {
         app.typeKey(.return, modifierFlags: [])
         RunLoop.current.run(until: Date().addingTimeInterval(2)) // shell exit + promotion + auto-focus
 
-        // re-split → a fresh right pane opens; block it (.right).
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(sid)","args":{"mode":"on"}}"#)["ok"] as? Bool, true)
         RunLoop.current.run(until: Date().addingTimeInterval(1))
         XCTAssertEqual(try sendCommand(#"{"cmd":"session.status","target":"\#(sid)","args":{"status":"blocked","pane":"right"}}"#)["ok"] as? Bool, true)
-        // sanity: the block is set before we test that typing elsewhere doesn't clear it.
         var set = false
         for _ in 0..<10 {
             if (sessionNode(try sendCommand(#"{"cmd":"tree"}"#), id: sid)?["status"] as? String) == "blocked" { set = true; break }
@@ -614,7 +553,6 @@ final class ControlAPIUITests: ControlAPITestCase {
         }
         XCTAssertTrue(set, "the .right block should be set before the keystroke test")
 
-        // type a REAL keystroke in the promoted MAIN (left) pane — must NOT clear the split's .right block.
         app.typeKey(.leftArrow, modifierFlags: [.command, .option])
         RunLoop.current.run(until: Date().addingTimeInterval(0.5))
         app.typeText("x")
@@ -625,8 +563,6 @@ final class ControlAPIUITests: ControlAPITestCase {
                        "typing in the promoted main pane must not clear the split pane's .right block")
     }
 
-    // session.new --name seeds the new session's custom name at creation (open a session already labeled,
-    // without a follow-up rename). Verify the returned id carries the given name in the persisted snapshot.
     func testSessionNewWithName() throws {
         let created = try sendCommand(#"{"cmd":"session.new","args":{"name":"myhost"}}"#)
         XCTAssertEqual(created["ok"] as? Bool, true, "session.new --name should succeed: \(created)")
@@ -635,37 +571,29 @@ final class ControlAPIUITests: ControlAPITestCase {
                       "the new session should carry the given custom name")
     }
 
-    // session.new --workspace-name addresses a workspace by its sidebar label. Without --create-workspace
-    // a missing name errors (nothing created); with it, the workspace is created once and REUSED on the
-    // next call (idempotent), so two creates land two sessions in a single "servers" workspace.
+    // the reuse leg is what makes it idempotent: two creates must land two sessions in ONE workspace.
     func testSessionNewWorkspaceNameCreatesThenReuses() throws {
-        // no match + no create -> error, and nothing is created.
         let missing = try sendCommand(#"{"cmd":"session.new","args":{"workspaceName":"servers"}}"#)
         XCTAssertEqual(missing["ok"] as? Bool, false, "name target with no match and no create should fail: \(missing)")
         XCTAssertTrue((missing["error"] as? String ?? "").contains("no workspace named"),
                       "should report the missing workspace name: \(missing)")
         XCTAssertTrue(pollWorkspaceNames(["workspace 1"], timeout: 5), "the failed call must not create a workspace")
 
-        // create: the "servers" workspace is added and the session lands in it.
         let created = try sendCommand(#"{"cmd":"session.new","args":{"workspaceName":"servers","createWorkspace":true}}"#)
         XCTAssertEqual(created["ok"] as? Bool, true, "create-workspace should succeed: \(created)")
         XCTAssertTrue(pollWorkspaceNames(["workspace 1", "servers"], timeout: 10), "the servers workspace should be created")
 
-        // reuse: a second call with the same name does NOT create a duplicate; both sessions sit in servers.
         let reused = try sendCommand(#"{"cmd":"session.new","args":{"workspaceName":"servers","createWorkspace":true}}"#)
         XCTAssertEqual(reused["ok"] as? Bool, true, "the second create should reuse the workspace: \(reused)")
         XCTAssertTrue(pollWorkspaceNames(["workspace 1", "servers"], timeout: 10), "still exactly one servers workspace")
         XCTAssertTrue(pollSessionCounts([1, 2], timeout: 10), "both sessions should land in the single servers workspace")
 
-        // no-create name target of an EXISTING workspace succeeds and lands there (a third session).
         let existing = try sendCommand(#"{"cmd":"session.new","args":{"workspaceName":"servers"}}"#)
         XCTAssertEqual(existing["ok"] as? Bool, true, "no-create name target of an existing workspace should succeed: \(existing)")
         XCTAssertTrue(pollSessionCounts([1, 3], timeout: 10), "the no-create name target should land a third session in servers")
     }
 
-    // the ControlServer arm enforces the two addressing rules independently of the CLI validate() (a raw
-    // socket caller bypasses the CLI), and a blank name reports must-not-be-blank rather than a misleading
-    // --create-workspace suggestion.
+    // enforced SERVER-SIDE, since a raw socket caller bypasses the CLI's validate().
     func testSessionNewWorkspaceNameValidationErrors() throws {
         let both = try sendCommand(#"{"cmd":"session.new","args":{"workspace":"active","workspaceName":"servers"}}"#)
         XCTAssertEqual(both["ok"] as? Bool, false, "both --workspace and --workspace-name should fail: \(both)")
@@ -682,9 +610,6 @@ final class ControlAPIUITests: ControlAPITestCase {
                       "a blank name should report must-not-be-blank, not suggest --create-workspace: \(blank)")
     }
 
-    // session.new --no-select creates the session in the background: it is added (a second row appears and
-    // the returned id resolves in the tree) but the ORIGINAL session stays active, so the read-back `active`
-    // flag confirms the selection was not pulled to the new one.
     func testSessionNewNoSelectKeepsActiveSelection() throws {
         let original = try activeSessionID()
 
@@ -693,7 +618,6 @@ final class ControlAPIUITests: ControlAPITestCase {
         let newID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "session.new should return an id")
         XCTAssertNotEqual(newID.lowercased(), original.lowercased(), "the background session should be a new session")
 
-        // poll until the new session appears, then assert the ORIGINAL is still active and the new one is not.
         var confirmed = false
         for _ in 0..<20 {
             let tree = try sendCommand(#"{"cmd":"tree"}"#)
@@ -707,7 +631,6 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertTrue(confirmed, "the new session should exist while the original stays active (not the new one)")
     }
 
-    // workspace.new returns an id and the workspace appears; workspace.rename is reflected in json.
     func testWorkspaceNewAndRename() throws {
         let created = try sendCommand(#"{"cmd":"workspace.new","args":{"name":"control ws"}}"#)
         XCTAssertEqual(created["ok"] as? Bool, true, "workspace.new should succeed: \(created)")
@@ -722,7 +645,6 @@ final class ControlAPIUITests: ControlAPITestCase {
                       "the rename should be reflected in workspaces.json")
     }
 
-    // workspace.delete of the last workspace returns the keep-one error and leaves the workspace present.
     func testWorkspaceDeleteLastErrors() throws {
         XCTAssertTrue(pollWorkspaceNames(["workspace 1"], timeout: 10), "should start with the one seeded workspace")
 
@@ -730,11 +652,9 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertEqual(response["ok"] as? Bool, false, "deleting the last workspace should fail")
         XCTAssertEqual(response["error"] as? String, "cannot delete last workspace",
                        "should return the keep-one error: \(response)")
-        // the workspace must still be there a beat later.
         XCTAssertTrue(pollWorkspaceNames(["workspace 1"], timeout: 5), "the workspace should still be present")
     }
 
-    // a command with an unknown target returns a structured "no such …" error.
     func testUnknownTargetErrors() throws {
         let response = try sendCommand(#"{"cmd":"session.close","target":"deadbeef"}"#)
         XCTAssertEqual(response["ok"] as? Bool, false, "an unknown target should fail")
@@ -742,9 +662,7 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertTrue(error.hasPrefix("no such session"), "should report no such session, got: \(error)")
     }
 
-    // session.type without select into a visible, realized session writes its tty to a file — read it back
-    // (the split-test idiom: the surface's own shell is the oracle for "the text actually landed"). A new
-    // session is selected and shown on creation, so its surface is realized — the immediate-inject arm.
+    // the surface's own shell is the oracle for "the text actually landed".
     func testSessionTypeIntoActiveSession() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
@@ -752,8 +670,7 @@ final class ControlAPIUITests: ControlAPITestCase {
 
         let file = markerDir.appendingPathComponent("active")
         let command = "tty > '\(file.path)'\n"
-        // type-and-retry: a freshly-realized surface's shell may not be ready for the first keystrokes under
-        // full-suite load, so re-inject until the shell writes the marker (the deterministic readiness wait).
+        // a freshly-realized shell may drop the first keystrokes, so the marker is the readiness wait.
         XCTAssertNotNil(try typeUntilMarker(command, target: newID, file: file, select: false),
                         "the typed command should run in the visible session's shell")
     }
@@ -766,17 +683,14 @@ final class ControlAPIUITests: ControlAPITestCase {
 
         let file = markerDir.appendingPathComponent("realized")
         let command = "tty > '\(file.path)'\n"
-        // --select realizes the never-shown session; type-and-retry rides out the shell-readiness race so a
-        // dropped first injection under full-suite load doesn't fail the test (the marker is the readiness signal).
+        // --select realizes the never-shown session; the marker rides out the shell-readiness race.
         XCTAssertNotNil(try typeUntilMarker(command, target: newID, file: file, select: true),
                         "the typed command should run in the realized session's shell")
     }
 
-    // eager session realization means a restored-but-not-selected session is already live, so session.type
-    // without --select reaches it (there are no never-shown sessions left to error on).
+    // the eager deck realizes every restored session, so there are no never-shown ones left to error on.
     func testSessionTypeReachesEagerlyRealizedSession() throws {
-        // pre-seed two sessions with the FIRST selected and relaunch; the second is restored but never
-        // selected, yet the deck realizes every session at startup, so its shell is already running.
+        // the second is restored but never selected, yet its shell is already running.
         let selectedID = UUID()
         let otherID = UUID()
         let snapshot = """
@@ -787,14 +701,12 @@ final class ControlAPIUITests: ControlAPITestCase {
         """
         try relaunch(withSnapshot: snapshot)
 
-        // type WITHOUT --select into the non-selected session; the command must land in its shell.
         let file = markerDir.appendingPathComponent("eager")
         XCTAssertNotNil(try typeUntilMarker("tty > '\(file.path)'\n", target: otherID.uuidString, file: file, select: false),
                         "session.type without select reaches the eagerly-realized, non-selected session")
     }
 
-    // session.copy on a session with no selection returns the "no selection" error (a fresh session has
-    // none). The with-selection path needs a real text selection in the Metal surface, verified manually.
+    // the with-selection path needs a real Metal-surface selection, verified by hand.
     func testSessionCopyWithoutSelectionErrors() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
@@ -805,10 +717,7 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertEqual(response["error"] as? String, "no selection", "should report no selection: \(response)")
     }
 
-    // session.selectall selects the WHOLE buffer; session.copy is its read-back. Two markers are echoed on
-    // separate lines (separated by blank lines) and both must come back in one copied selection — a
-    // select_all that only grabbed the current line or the visible row would return just the second marker
-    // and fail. Polling for the LAST marker also proves both echoes rendered before the selection is taken.
+    // two markers on separate lines: a select_all grabbing only the current line returns just the second.
     func testSessionSelectAllThenCopyReturnsBuffer() throws {
         let id = try activeSessionID()
         let first = "SELECTALLMARKERONE", second = "SELECTALLMARKERTWO"
@@ -829,9 +738,7 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertTrue(text.contains(second), "selection should include the last marker, got: \(text)")
     }
 
-    // session.paste pastes the SYSTEM clipboard into the session (the socket analogue of ⌘V). Put a marker
-    // on NSPasteboard.general (shared across processes), paste it, and read the buffer back until the pasted
-    // text shows at the prompt.
+    // NSPasteboard.general is shared across processes, so the test process can seed it.
     func testSessionPasteInsertsClipboardText() throws {
         let id = try activeSessionID()
         let marker = "PASTECLIPMARKER"
@@ -844,10 +751,8 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertNotNil(found, "the pasted clipboard marker should appear in the buffer")
     }
 
-    // session.paste is UNGATED, unlike the Edit menu's Paste item (which validateMenuItem disables when the
-    // clipboard holds nothing pasteable). An empty clipboard is therefore `ok` with no buffer change, matching
-    // every other binding-action arm (font.*, search), which report success without consulting libghostty's
-    // return. Pinned so the GUI-gated / socket-ungated asymmetry can't drift unnoticed.
+    // UNGATED, unlike the Edit menu's Paste item: an empty clipboard is `ok` with no buffer change, as
+    // every other binding-action arm reports success without consulting libghostty's return.
     func testSessionPasteWithEmptyClipboardSucceedsWithoutChangingBuffer() throws {
         let id = try activeSessionID()
         seedPasteboard { _ in }  // cleared, nothing written
@@ -863,7 +768,6 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertEqual(beforeText, afterText, "an empty-clipboard paste must not change the buffer")
     }
 
-    // both new commands surface the resolver's error for an unknown target rather than silently no-opping.
     func testSessionPasteAndSelectAllRejectUnknownTarget() throws {
         for cmd in ["session.paste", "session.selectall"] {
             let response = try sendCommand(#"{"cmd":"\#(cmd)","target":"deadbeef"}"#)

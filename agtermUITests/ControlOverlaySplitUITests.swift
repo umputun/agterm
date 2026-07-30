@@ -13,9 +13,7 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(response["error"] as? String, "session.overlay.open requires a command", "\(response)")
     }
 
-    // session.overlay open/close lifecycle and the guards: a long-lived command (cat waits on stdin)
-    // keeps the overlay up, so a second open errors; after close, closing again errors. The overlay
-    // actually rendering and running a TUI is verified manually (the Metal surface is not in the tree).
+    // `cat` waits on stdin, which is what keeps the overlay up long enough to assert against.
     func testOverlayOpenCloseLifecycle() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
@@ -36,36 +34,28 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(closeAgain["error"] as? String, "no overlay", "\(closeAgain)")
     }
 
-    // session.overlay.resize switches an open overlay between floating and full in place. Overlay geometry
-    // is a Metal surface (not in the AX tree), so this asserts the COMMAND PATH: resize succeeds while the
-    // overlay is up (a percent AND --full) and the overlay stays up across it, errors with no overlay, and
-    // the dispatcher rejects missing/conflicting/out-of-range size args server-side; a raw JSON client (like
-    // this test) skips the CLI's validate() entirely, so the dispatcher is the real enforcement boundary.
-    // The visual re-flow is verified manually.
+    // a raw JSON client skips the CLI's validate(), so the dispatcher is the real enforcement boundary.
+    // Geometry is a Metal surface, not in the AX tree, so only the command path is asserted.
     func testOverlayResizeSwitchesFloatingAndFull() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
         let id = try XCTUnwrap(result["id"] as? String, "session.new should return the new id")
 
-        // resizing with no overlay open errors.
         let noOverlay = try sendCommand(#"{"cmd":"session.overlay.resize","target":"\#(id)","args":{"sizePercent":60}}"#)
         XCTAssertEqual(noOverlay["ok"] as? Bool, false, "resize with no overlay should fail: \(noOverlay)")
         XCTAssertEqual(noOverlay["error"] as? String, "no overlay", "\(noOverlay)")
 
-        // open a full overlay (cat is long-lived), then resize it to floating and back to full.
         let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"command":"cat"}}"#)
         XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
         XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the overlay should be up")
 
         let toFloating = try sendCommand(#"{"cmd":"session.overlay.resize","target":"\#(id)","args":{"sizePercent":60}}"#)
         XCTAssertEqual(toFloating["ok"] as? Bool, true, "resize to floating should succeed: \(toFloating)")
-        // the overlay stays up across the resize (in-place re-flow, never a re-spawn).
         XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 5), "the overlay stays up after resize")
 
         let toFull = try sendCommand(#"{"cmd":"session.overlay.resize","target":"\#(id)","args":{"full":true}}"#)
         XCTAssertEqual(toFull["ok"] as? Bool, true, "resize back to full should succeed: \(toFull)")
 
-        // the dispatcher rejects the bad arg combos server-side.
         let neither = try sendCommand(#"{"cmd":"session.overlay.resize","target":"\#(id)"}"#)
         XCTAssertEqual(neither["ok"] as? Bool, false, "resize with neither arg should fail: \(neither)")
         let both = try sendCommand(#"{"cmd":"session.overlay.resize","target":"\#(id)","args":{"sizePercent":50,"full":true}}"#)
@@ -77,22 +67,18 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
     }
 
-    // session.overlay.open --background-color: a valid #rrggbb opens the overlay (the colored surface is
-    // a Metal layer, not in the AX tree, so the color is verified manually — this asserts the arm accepts
-    // and applies it via the lifecycle), and a malformed color is rejected before the overlay opens.
+    // the colored surface is a Metal layer, not in the AX tree, so only the arm is asserted.
     func testOverlayOpenWithBackgroundColorAndRejectsBadColor() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
         let id = try XCTUnwrap(result["id"] as? String, "session.new should return the new id")
 
-        // a malformed color is rejected up front; no overlay opens.
         let bad = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"command":"cat","color":"purple"}}"#)
         XCTAssertEqual(bad["ok"] as? Bool, false, "a malformed color should be rejected: \(bad)")
         XCTAssertEqual(bad["error"] as? String, "invalid color: purple (#rrggbb)", "\(bad)")
         XCTAssertTrue(pollSessionOverlay(id: id, expected: false, timeout: 5), "the rejected open must not open an overlay")
 
-        // a valid color opens the overlay (cat is long-lived so it stays up); close tears it down.
-        // ##"…"## delimiters so the "#2a1a3a" value's leading "# doesn't close a #"…"# raw string.
+        // ##"…"## delimiters: the value's leading `"#` would close a `#"…"#` raw string.
         let open = try sendCommand(##"{"cmd":"session.overlay.open","target":"\##(id)","args":{"command":"cat","color":"#2a1a3a"}}"##)
         XCTAssertEqual(open["ok"] as? Bool, true, "overlay open with a valid color should succeed: \(open)")
         XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the colored overlay should be up")
@@ -101,9 +87,7 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
     }
 
-    // the overlay auto-closes when its command exits (the SHOW_CHILD_EXITED path): open an overlay
-    // running a command that writes a marker then exits — the marker proves the command ran inside the
-    // overlay, and the tree's overlay flag clearing proves the overlay vanished with no key press.
+    // the marker proves the command ran INSIDE the overlay; the cleared flag proves it vanished unaided.
     func testOverlayAutoClosesWhenCommandExits() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
@@ -118,8 +102,6 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
                       "the overlay should auto-close when the command exits (no press-any-key prompt)")
     }
 
-    // session.overlay.result reports the overlay program's exit status once it exits (the --block path).
-    // while the program runs, result errors "overlay still running"; after exit it returns result.exitCode.
     func testOverlayResultReportsExitCode() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
@@ -128,7 +110,6 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"command":"sh -c 'exit 7'"}}"#)
         XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
 
-        // poll session.overlay.result (errors while running) until the program exits and the code is reported.
         var exitCode: Int?
         let deadline = Date().addingTimeInterval(15)
         while Date() < deadline {
@@ -142,14 +123,12 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(exitCode, 7, "session.overlay.result should report the program's exit status")
     }
 
-    // session.overlay.result errors "overlay still running" while the program is up, and "no overlay
-    // result" after a force-close where the program never recorded a status (killed before the wrapper).
     func testOverlayResultStillRunningThenClosed() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)
         let result = try XCTUnwrap(created["result"] as? [String: Any], "session.new should carry a result")
         let id = try XCTUnwrap(result["id"] as? String, "session.new should return the new id")
 
-        // cat with no input blocks indefinitely, so the overlay stays up.
+        // `cat` with no input blocks indefinitely, so the overlay stays up.
         let open = try sendCommand(#"{"cmd":"session.overlay.open","target":"\#(id)","args":{"command":"cat"}}"#)
         XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
         XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the overlay should be up")
@@ -162,17 +141,14 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(closed["ok"] as? Bool, true, "overlay close should succeed: \(closed)")
         XCTAssertTrue(pollSessionOverlay(id: id, expected: false, timeout: 10), "the overlay should be gone")
 
-        // cat was killed before the wrapper's `echo $?`, so no status was recorded.
+        // killed before the wrapper's `echo $?`, so no status was recorded.
         let after = try sendCommand(#"{"cmd":"session.overlay.result","target":"\#(id)"}"#)
         XCTAssertEqual(after["ok"] as? Bool, false, "result should error when no status was recorded")
         XCTAssertEqual(after["error"] as? String, "no overlay result")
     }
 
-    // closing an overlay must hand keyboard focus back to the underlying session terminal. this test is
-    // DISCRIMINATING: it first proves the overlay actually grabbed keyboard focus (an overlay shell
-    // `read` captures a typed line), so the after-close assertion is meaningful — then proves the same
-    // keystrokes reach the underlying session shell once the overlay is gone. (overlay rendering/opacity
-    // is verified manually; this asserts the focus handoff, which is automatable.)
+    // DISCRIMINATING: the overlay shell's `read` first proves the overlay HELD focus, or the after-close
+    // assertion would pass vacuously.
     func testOverlayCloseReturnsFocusToSession() throws {
         let tree = try sendCommand(#"{"cmd":"tree"}"#)
         let treeResult = try XCTUnwrap(tree["result"] as? [String: Any], "tree should carry a result")
@@ -181,14 +157,13 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         let sessions = try XCTUnwrap(workspaces.first?["sessions"] as? [[String: Any]], "workspace should list sessions")
         let id = try XCTUnwrap(sessions.first?["id"] as? String, "should have a seeded session id")
 
-        // the session's tty, captured by injecting into its surface directly (independent of focus).
+        // injected directly into the surface, so the capture is independent of focus.
         let sessionTTY = markerDir.appendingPathComponent("session-tty")
         XCTAssertEqual(try sendCommand(typeRequest(text: "tty > '\(sessionTTY.path)'\n", target: id, select: false))["ok"] as? Bool,
                        true, "typing tty into the session should succeed")
         let sessionTtyValue = try XCTUnwrap(pollMarker(sessionTTY, timeout: 12), "the session should report its tty")
 
-        // open an overlay whose shell captures one keyboard line, then stays alive (cat) so the overlay
-        // remains up until we close it. the captured line proves the overlay holds keyboard focus.
+        // the captured line proves the overlay holds keyboard focus.
         let ovlMarker = markerDir.appendingPathComponent("overlay-keys")
         let ovlCmd = "sh -c 'IFS= read -r x; printf %s \"$x\" > \(ovlMarker.path); cat'"
         let ovlJSON = try! JSONSerialization.data(withJSONObject:
@@ -197,8 +172,6 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(open["ok"] as? Bool, true, "overlay open should succeed: \(open)")
         XCTAssertTrue(pollSessionOverlay(id: id, expected: true, timeout: 10), "the overlay should be up")
 
-        // type via the KEYBOARD while the overlay is up; the overlay shell's `read` should capture it,
-        // proving the overlay (not the session) holds first responder.
         usleep(800_000) // let the overlay surface attach, grab focus, and the shell reach `read`
         app.typeText("OVLFOCUS")
         app.typeKey(.return, modifierFlags: [])
@@ -209,34 +182,24 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(close["ok"] as? Bool, true, "overlay close should succeed: \(close)")
         XCTAssertTrue(pollSessionOverlay(id: id, expected: false, timeout: 10), "the overlay should be gone")
 
-        // after the overlay tears down, type via the keyboard again: it must now reach the underlying
-        // session shell (same tty), proving focus returned. focus return is async (focusAfterReparent is a
-        // bounded makeFirstResponder retry that wins the teardown/re-host race over a few run-loop turns),
-        // so a single fixed-sleep keystroke burst can land before first responder is the session and be
-        // lost. re-type until the marker appears (same idiom as typeUntilMarker for surface-readiness):
-        // re-typing the tty line is idempotent — once focus is correct one burst writes the tty.
+        // focus return is async (a bounded makeFirstResponder retry), so a single burst can land before
+        // the session is first responder. Re-typing the tty line is idempotent.
         let afterTTY = markerDir.appendingPathComponent("after-close-tty")
         let afterValue = keyboardTypeUntilMarker("tty > '\(afterTTY.path)'", file: afterTTY)
         XCTAssertNotNil(afterValue, "after overlay close, keyboard focus should return to the session terminal")
         XCTAssertEqual(afterValue, sessionTtyValue, "focus should return to the SAME session terminal, not be lost")
     }
 
-    // a cover (overlay or scratch) is modal within its session: a sidebar click restores keyboard focus to
-    // the terminal (so the sidebar never keeps it), but it must restore focus to the cover ON TOP, not to
-    // the pane BEHIND it. clicking the covered session's own row otherwise hands first responder to the
-    // pane and the cover's program silently stops receiving input.
+    // a sidebar click must restore focus to the cover ON TOP, not the pane behind it — otherwise the
+    // cover's program silently stops receiving input.
     //
-    // each test captures TWO keyboard lines: the first, typed BEFORE the click, proves the cover already
-    // holds first responder (so the cover's own bounded auto-focus retry — 40 x 0.05s — has finished and
-    // cannot re-grab focus later and mask a steal). the second, typed after the click, is the assertion.
-    // without the pre-click line the test can pass on a buggy build: the click steals focus to the pane,
-    // then an auto-focus retry still in flight takes it back before the line is typed.
+    // the pre-click line is load-bearing: it proves the cover's own auto-focus retry has FINISHED, so a
+    // retry still in flight cannot take focus back and mask a steal.
     func testSidebarClickKeepsFocusOnOverlayNotPaneBehind() throws {
         let id = try activeSessionID()
         let pre = markerDir.appendingPathComponent("overlay-pre-click")
         let post = markerDir.appendingPathComponent("overlay-post-click")
-        // two blocking reads then `cat` to hold the shell; retyping is NOT idempotent (each `read`
-        // consumes exactly one line), so the markers are polled rather than re-typed.
+        // retyping is NOT idempotent here — each `read` consumes one line — so the markers are polled.
         let ovlCmd = "sh -c 'IFS= read -r a; printf %s \"$a\" > \(pre.path); " +
             "IFS= read -r b; printf %s \"$b\" > \(post.path); cat'"
         let ovlJSON = try! JSONSerialization.data(withJSONObject:
