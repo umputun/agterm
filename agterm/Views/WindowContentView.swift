@@ -130,6 +130,12 @@ struct WindowContentView: View {
         .onChange(of: store.sidebarVisible) { _, visible in
             if visible {
                 DispatchQueue.main.async { NotificationCenter.default.post(name: .agtermAppearanceChanged, object: nil) }
+            } else {
+                // hiding mid-drag (⌘⌃S, the palette, `sidebar hide`, inactive-window auto-hide) removes the
+                // divider and cancels its gesture without `onEnded`, so these would stay latched on this
+                // view: ↔ would survive the next hover exit and the arrow would never be restored.
+                dividerHovered = false
+                dividerDragging = false
             }
         }
         // on quick-terminal hide refocus the active session, unless this window's zoom owns focus: zoom-enter
