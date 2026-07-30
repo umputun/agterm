@@ -6,7 +6,7 @@ import SwiftUI
 private let logger = Logger(subsystem: "com.umputun.agterm", category: "SettingsView")
 
 /// The Settings window (Cmd+,): six tabs — General (mouse, sessions, ghostty config), Appearance
-/// (font/theme + window translucency + terminal mute), Interface (per-element title-bar and sidebar chrome
+/// (font/theme + window translucency + mute), Interface (per-element title-bar and sidebar chrome
 /// visibility), Notifications (banner / badge / attention toggles), Agent Status (sidebar glyph colors and
 /// shapes + blocked sound + auto-follow), and Key Mapping (config directory + keymap diagnostics + Reload).
 /// Throughout, a control's binding maps its DEFAULT value back to nil so `settings.json` stays minimal.
@@ -192,7 +192,7 @@ private struct GeneralSettingsView: View {
 }
 
 /// Appearance tab: Terminal (font family, size, theme) and Window (toolbar mode, background opacity + blur,
-/// sidebar tint + font size, unfocused-terminal mute), each persisting and live-applying via `SettingsModel`.
+/// sidebar tint + font size, pane/backdrop mute), each persisting and live-applying via `SettingsModel`.
 private struct AppearanceSettingsView: View {
     let model: SettingsModel
     private let themes = SettingsCatalog.themeNames()
@@ -284,7 +284,7 @@ private struct AppearanceSettingsView: View {
                 .accessibilityIdentifier("settings-sidebar-font-size")
 
                 HStack {
-                    Text("Inactive terminal mute")
+                    Text("Inactive pane and backdrop mute")
                     Slider(value: inactivePaneMuteStrength, in: 0 ... 10, step: 1)
                         .accessibilityIdentifier("settings-inactive-pane-mute")
                     Text("\(model.settings.inactivePaneMuteStrength ?? AppSettings.defaultInactivePaneMuteStrength)")

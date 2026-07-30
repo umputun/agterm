@@ -129,7 +129,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// from `theme == nil`, which means ghostty's own built-in default (the picker's "default ghostty").
     public static let defaultTheme = "agterm"
 
-    /// The unfocused-terminal mute strength (0...10, 0 = no mute) used when `inactivePaneMuteStrength` is nil.
+    /// The pane/backdrop mute strength (0...10, 0 = no mute) used when `inactivePaneMuteStrength` is nil.
     public static let defaultInactivePaneMuteStrength = 5
 
     /// The sidebar background shift used when `sidebarBackgroundShift` is nil; 5 is the neutral center,
@@ -190,9 +190,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Ghostty `mouse-scroll-multiplier`; nil means agterm's default of 3, which is ALWAYS emitted, so it
     /// also overrides a `mouse-scroll-multiplier` in the user's own `~/.config/ghostty/config`.
     public var mouseScrollMultiplier: Double?
-    /// How strongly text on a terminal that does not hold focus is muted, 0...10 — the inactive split pane,
-    /// and the session behind a floating overlay or the quick terminal; nil means
-    /// `defaultInactivePaneMuteStrength`. A SwiftUI overlay opacity (`muteOpacity(strength:)`).
+    /// How strongly muted text is, 0...10 — on the inactive split pane, and on the backdrop behind a
+    /// floating overlay or the quick terminal; nil means `defaultInactivePaneMuteStrength`. A SwiftUI
+    /// overlay opacity (`muteOpacity(strength:)`).
     public var inactivePaneMuteStrength: Int?
     /// How much darker or lighter the sidebar background is than the terminal background, 0...10 with 5
     /// neutral; nil means `defaultSidebarBackgroundShift`. A SwiftUI wash (`sidebarShiftAmount`).

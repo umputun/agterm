@@ -35,10 +35,8 @@ paths:
 - Non-Ghostty settings update app mirrors and `.agtermAppearanceChanged`, not surfaces. The mute wash
   fades text toward terminal color; with transparency it also tints the see-through area. Sidebar tint
   composes over opaque or blurred backgrounds; AppKit must leave the sidebar unfilled.
-- `inactivePaneMuteStrength` drives every unfocused terminal, not only the split: the inactive pane, and
-  the backdrop behind a floating overlay and the quick terminal. A full overlay and the scratch hide their
-  panes outright, so they take no wash. Both backdrops reuse the always-present tap-catcher rather than a
-  new sibling, keeping the layer shape constant.
+- `inactivePaneMuteStrength` drives the inactive split pane and the backdrop behind a floating overlay and
+  the quick terminal, so its label names both. [[libghostty]] owns how those washes render.
 - Status colors default to active `#DBD9E6`, system amber, and system green. Shapes are raw
   `StatusShape` strings resolved only by `effectiveStatusShape(for:)`; nil and circle render identically.
   `SettingsModel` pushes both into `GhosttyApp`, then `.agtermAppearanceChanged` makes

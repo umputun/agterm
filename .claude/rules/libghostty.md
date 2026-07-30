@@ -87,8 +87,12 @@ paths:
   backing, so hide panes and scratch beneath it and remove their drop eligibility. Floating overlay and
   quick terminal have opaque terminal-color panels.
 - Because those two leave a live terminal around the panel, their tap-catcher also paints the
-  `inactivePaneMuteStrength` wash. Fill the existing catcher; never add a sibling scrim. The wash is not the
-  rejected dark scrim: it blends background to background, so the un-inset title bar cannot seam.
+  `inactivePaneMuteStrength` wash. Fill the existing catcher; never add a sibling scrim. Suppress `paneDim`
+  while a backdrop wash is up or the covered inactive pane takes both.
+- The wash is neutral only at full window opacity. Below it the wash color is opaque while the backing is
+  not, so the body rises to `m + p(1-m)` against a title bar left at `p`; scaling by `windowOpacity` shrinks
+  that gap but no fill closes it. Take the covered session's own solid background when it set one, else the
+  theme color. A live OSC 11 color is not reachable from SwiftUI and stays mismatched.
 
 ## OSC 11 backgrounds
 
