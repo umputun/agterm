@@ -33,6 +33,8 @@ struct WindowContentView: View {
     let actions: AppActions
     let palette: PaletteController
     let sessionSwitcher: SessionSwitcher
+    /// Mirrors `WindowAppearance`'s other opaque-forcing condition; SwiftUI keeps it current by itself.
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     /// One quick terminal per window, registered in `QuickTerminalRegistry` on appear so the
     /// frontmost-window call sites reach it; its `cwdProvider` binds to this window's active session.
     @State var quickTerminal = QuickTerminalController()
@@ -59,8 +61,11 @@ struct WindowContentView: View {
     @State var toolbarMode: ToolbarMode = WindowContentView.resolvedToolbarMode()
     /// How strongly the mute wash fades the text of a terminal that does not hold focus (0...10).
     @State private var inactivePaneMute: Int = WindowContentView.resolvedInactivePaneMute()
-    /// The window's background opacity, which scales the backdrop wash — see `muteWashOpacity`.
+    /// The window's saved background opacity, which scales the mute wash — see `muteWashOpacity`.
     @State private var windowOpacity: Double = WindowContentView.resolvedWindowOpacity()
+    /// Whether THIS window is in native fullscreen, where AppKit renders it opaque whatever the saved
+    /// opacity says. Per-window, so it cannot ride the app-global mirrors.
+    @State private var windowFullscreen = false
     /// Live pointer/drag state for `sidebarDivider`'s grab handle, read by its deferred cursor re-assert.
     @State private var dividerHovered = false
     @State private var dividerDragging = false
@@ -204,6 +209,9 @@ struct WindowContentView: View {
             windowOpacity = WindowContentView.resolvedWindowOpacity()
             sidebarShift = WindowContentView.resolvedSidebarShift()
         }
+        .modifier(FullscreenEdgeObserver { note in
+            if let state = fullscreenState(from: note) { windowFullscreen = state }
+        })
         // blend the title bar with the terminal; report frontmost/close to the library; surface the window
         // un-minimized on launch. the title token re-runs the blend in updateNSView on a session switch.
         .background(WindowAccessor(titleToken: windowTitle, windowID: windowID, library: library, store: store))
@@ -621,16 +629,29 @@ struct WindowContentView: View {
     /// Opacity of the mute wash, shared by the inactive split pane and the backdrop behind a floating panel
     /// (overlay, quick terminal). 0 = the user turned muting off.
     ///
-    /// Scaled by `windowOpacity` because the wash color is opaque while a translucent window's backing is
-    /// not: painting alpha `m` over backing alpha `p` leaves the body at `m + p(1-m)` against a title bar
-    /// still at `p`. Nothing removes that difference — coverage only adds — so the scale shrinks it in step
-    /// with the window's own transparency and is a no-op at full opacity.
-    private var muteWashOpacity: Double { AppSettings.muteOpacity(strength: inactivePaneMute) * windowOpacity }
+    /// Scaled by the opacity the window actually renders at, because the wash color is opaque while a
+    /// translucent backing is not: painting alpha `m` over backing alpha `p` leaves the body at `m + p(1-m)`
+    /// against a title bar still at `p`. Nothing removes that difference — coverage only adds — so the scale
+    /// shrinks it in step with the window's own transparency and is a no-op at full opacity.
+    private var muteWashOpacity: Double {
+        AppSettings.muteOpacity(strength: inactivePaneMute) * effectiveWindowOpacity
+    }
+
+    /// The saved opacity, except where `WindowAppearance.sync` forces the window opaque without touching
+    /// that setting. There body and title bar share one opaque backing, so the wash needs no scaling and
+    /// scaling it would under-mute — down to nothing at a saved opacity of 0.
+    private var effectiveWindowOpacity: Double {
+        windowFullscreen || reduceTransparency ? 1 : windowOpacity
+    }
 
     /// The wash color for a session: its own solid background when it set one, else the theme background.
     /// The wash must blend background→background to fade text alone, so a session running on a different
-    /// background needs that color or the wash tints it. A live OSC 11 color is NOT covered — it lives on
-    /// the surface view, outside SwiftUI's observation, so a change here would not redraw.
+    /// background needs that color or the wash tints it.
+    ///
+    /// Sampled at redraw, and neither source is observed: `backgroundWatermark` is `@ObservationIgnored`
+    /// and a live OSC 11 color lives on the surface view. Every path that PUTS a wash on screen re-reads it
+    /// (overlay, quick-terminal and split-focus state are all observed), so only a background set while a
+    /// wash is already painted holds the old color, until the next observed change.
     private func washColor(for session: Session) -> Color {
         guard let watermark = session.backgroundWatermark, watermark.kind == .color,
               let nsColor = NSColor(agtermHex: watermark.colorHex) else { return terminalColor }
@@ -651,6 +672,13 @@ struct WindowContentView: View {
     /// Whether a floating panel is washing the whole backdrop of this session's detail pane.
     private func backdropWashActive(session: Session) -> Bool {
         quickTerminal.isVisible || (session.overlayActive && session.overlaySizePercent != nil)
+    }
+
+    /// This window's live fullscreen state from a fullscreen notification, nil when another window posted it.
+    private func fullscreenState(from note: Notification) -> Bool? {
+        guard let window = note.object as? NSWindow,
+              WindowRegistry.shared.windowID(for: window) == windowID else { return nil }
+        return window.styleMask.contains(.fullScreen)
     }
 
     /// The terminal background color from the ghostty config, with a dark fallback if libghostty has none.
@@ -897,4 +925,18 @@ struct WindowContentView: View {
         // so a `.bar` material here would paint a mismatched darker strip.
     }
 
+}
+
+/// Both native-fullscreen edges as ONE modifier on `WindowContentView`'s root chain: that body is at the
+/// type checker's limit and two more `onReceive`s there fail to compile in reasonable time. The handler
+/// reads the live style mask, so one closure serves both edges.
+private struct FullscreenEdgeObserver: ViewModifier {
+    let onEdge: (Notification) -> Void
+
+    func body(content: Content) -> some View {
+        let center = NotificationCenter.default
+        return content
+            .onReceive(center.publisher(for: NSWindow.didEnterFullScreenNotification), perform: onEdge)
+            .onReceive(center.publisher(for: NSWindow.didExitFullScreenNotification), perform: onEdge)
+    }
 }
