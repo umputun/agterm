@@ -71,7 +71,7 @@ final class GhosttyApp {
     /// Program basenames NOT to re-run on restore: the parsed user-editable `restore-denylist.conf` (seeded
     /// with the terminal multiplexers), read at launch only; consulted via `CommandRestore.shouldRestore`.
     private(set) var restoreDenylist: Set<String> = []
-    /// Inactive-split-pane text mute strength on the 0...10 scale. The detail pane's `paneDim` overlay reads
+    /// Unfocused-terminal text mute strength on the 0...10 scale. `WindowContentView.muteWashOpacity` reads
     /// it (via `AppSettings.muteOpacity`); settings-mirrored like `toolbarMode`.
     private(set) var inactivePaneMuteStrength: Int = AppSettings.defaultInactivePaneMuteStrength
     /// How much darker/lighter the sidebar background is than the terminal (0...10, 5 = neutral). `ContentView`

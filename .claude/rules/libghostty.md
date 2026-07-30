@@ -86,6 +86,9 @@ paths:
 - With translucency, every surface has zero background opacity. A full overlay has no opaque SwiftUI
   backing, so hide panes and scratch beneath it and remove their drop eligibility. Floating overlay and
   quick terminal have opaque terminal-color panels.
+- Because those two leave a live terminal around the panel, their tap-catcher also paints the
+  `inactivePaneMuteStrength` wash. Fill the existing catcher; never add a sibling scrim. The wash is not the
+  rejected dark scrim: it blends background to background, so the un-inset title bar cannot seam.
 
 ## OSC 11 backgrounds
 

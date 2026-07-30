@@ -25,16 +25,20 @@ paths:
   Default-off nil fields include attention button, Dock bounce, restore commands, global config
   inheritance, close confirmation, auto-follow, hidden inactive sidebars, and interface hiding.
 - `sidebarFontSize` is 9...20, default 13; row height is clamped size + 15, so 13 gives 28. Icons/status
-  glyphs stay fixed. Inactive-pane mute and sidebar tint are 0...10 with neutral/default 5.
+  glyphs stay fixed. Unfocused-terminal mute and sidebar tint are 0...10 with neutral/default 5.
   `muteOpacity` maps 0/5/10 to 0/0.4/0.8. `sidebarShiftAmount` maps the endpoints to signed +/-0.30;
   below 5 uses white, above 5 black, behind the transparent sidebar only, never the title strip/text.
 - `ghosttyConfigLines()` emits raw `key = value` with no quoting, including spaced names such as
   `3024 Night`. It always owns and emits `mouse-scroll-multiplier` (nil = 3 for wheel and trackpad) and
   `right-click-action` (nil/on = paste, off = ignore), overriding earlier config layers. Their Settings
   controls map defaults back to nil; right-click changes reload surfaces.
-- Non-Ghostty settings update app mirrors and `.agtermAppearanceChanged`, not surfaces. Pane mute washes
-  text toward terminal color; with transparency it also tints the see-through area. Sidebar tint
+- Non-Ghostty settings update app mirrors and `.agtermAppearanceChanged`, not surfaces. The mute wash
+  fades text toward terminal color; with transparency it also tints the see-through area. Sidebar tint
   composes over opaque or blurred backgrounds; AppKit must leave the sidebar unfilled.
+- `inactivePaneMuteStrength` drives every unfocused terminal, not only the split: the inactive pane, and
+  the backdrop behind a floating overlay and the quick terminal. A full overlay and the scratch hide their
+  panes outright, so they take no wash. Both backdrops reuse the always-present tap-catcher rather than a
+  new sibling, keeping the layer shape constant.
 - Status colors default to active `#DBD9E6`, system amber, and system green. Shapes are raw
   `StatusShape` strings resolved only by `effectiveStatusShape(for:)`; nil and circle render identically.
   `SettingsModel` pushes both into `GhosttyApp`, then `.agtermAppearanceChanged` makes

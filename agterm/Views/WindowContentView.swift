@@ -57,7 +57,7 @@ struct WindowContentView: View {
     /// `normal` shows the cwd subtitle, `compact` collapses the title bar to a single line, `hidden` drops
     /// the row (and the traffic lights) for a full-bleed terminal.
     @State var toolbarMode: ToolbarMode = WindowContentView.resolvedToolbarMode()
-    /// How strongly `paneDim` mutes the inactive split pane's text (0...10).
+    /// How strongly the mute wash fades the text of a terminal that does not hold focus (0...10).
     @State private var inactivePaneMute: Int = WindowContentView.resolvedInactivePaneMute()
     /// Live pointer/drag state for `sidebarDivider`'s grab handle, read by its deferred cursor re-assert.
     @State private var dividerHovered = false
@@ -555,8 +555,12 @@ struct WindowContentView: View {
                     let floating = session.overlaySizePercent != nil
                     let fraction = session.overlaySizePercent.map { CGFloat($0) / 100 } ?? 1
                     // absorbs clicks AROUND a floating panel so they can't reach the hit-testable panes and
-                    // steal the overlay's first responder (the full variant hides the panes anyway).
-                    Color.clear.contentShape(Rectangle())
+                    // steal the overlay's first responder (the full variant hides the panes anyway), and
+                    // carries the backdrop mute: a floating panel leaves the session live behind it, so the
+                    // same wash `paneDim` puts on an inactive split pane marks it inactive here. Full stays
+                    // clear — its panes are already hidden, and a wash would tint the window backing.
+                    (floating ? terminalColor.opacity(muteWashOpacity) : Color.clear)
+                        .contentShape(Rectangle())
                     TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                  makeSurface: makeOverlaySurface, isActive: isActive, deckVisible: isActive)
                         .frame(width: geo.size.width * fraction, height: geo.size.height * fraction)
@@ -611,13 +615,16 @@ struct WindowContentView: View {
         "\(session.id.uuidString)-primary-\(session.primarySurfaceHostRevision)"
     }
 
+    /// Opacity of the mute wash, shared by the inactive split pane and the backdrop behind a floating panel
+    /// (overlay, quick terminal). 0 = the user turned muting off.
+    private var muteWashOpacity: Double { AppSettings.muteOpacity(strength: inactivePaneMute) }
+
     /// Mutes the inactive split pane's TEXT without darkening the background: a translucent wash of the
-    /// terminal background, so background pixels blend bg→bg and text pixels text→bg. Opacity comes from
-    /// `AppSettings.muteOpacity` (strength 0 renders nothing); clicks pass through, so it stays focusable.
+    /// terminal background, so background pixels blend bg→bg and text pixels text→bg. Strength 0 renders
+    /// nothing; clicks pass through, so it stays focusable.
     @ViewBuilder private func paneDim(_ dimmed: Bool) -> some View {
-        let opacity = AppSettings.muteOpacity(strength: inactivePaneMute)
-        if dimmed, opacity > 0 {
-            terminalColor.opacity(opacity).allowsHitTesting(false)
+        if dimmed, muteWashOpacity > 0 {
+            terminalColor.opacity(muteWashOpacity).allowsHitTesting(false)
         }
     }
 
@@ -682,17 +689,18 @@ struct WindowContentView: View {
     }
 
     /// The scratch terminal centered at 90% of the window, framed by a hairline border and shadow so it reads
-    /// as a distinct floating window over the (undimmed) content — libghostty renders only the terminal, so
-    /// the frame is drawn here. The margin is a transparent tap-catcher that dismisses on click; no dim,
-    /// because the overlay cannot cover the AppKit title bar and would shade the body but not the chrome.
-    /// The controller owns the surface, so hiding keeps the shell alive.
+    /// as a distinct floating window over the content — libghostty renders only the terminal, so the frame is
+    /// drawn here. The margin is a tap-catcher that dismisses on click and carries the same backdrop mute as
+    /// a floating overlay. A dark scrim was rejected there: this layer is inset below the AppKit title bar and
+    /// would shade the body but not the chrome, while the mute wash leaves background pixels untouched and so
+    /// seams nothing. The controller owns the surface, so hiding keeps the shell alive.
     @ViewBuilder private var quickTerminalOverlay: some View {
         if quickTerminal.isVisible {
             GeometryReader { geo in
                 ZStack {
                     // the tap-catcher carries the `quick-terminal` accessibility id: a SwiftUI view is in
                     // the a11y tree (the Metal-backed `QuickTerminalPane` is not), so tests query this one.
-                    Color.clear
+                    terminalColor.opacity(muteWashOpacity)
                         .contentShape(Rectangle())
                         .onTapGesture { quickTerminal.hide() }
                         .accessibilityElement()
