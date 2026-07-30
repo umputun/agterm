@@ -2,14 +2,12 @@ import agtermCore
 import AppKit
 import SwiftUI
 
-/// Blends the window title bar with the terminal (the title text itself comes from SwiftUI's
-/// `.navigationTitle`/`.navigationSubtitle`). The probe's `window` is nil at make time, so the blend is
-/// applied from `viewDidMoveToWindow` (window attachment) and re-applied on every `titleToken` change
-/// (session switch) and on the window key/fullscreen transitions where AppKit rebuilds the titlebar subviews.
-///
-/// It also carries the per-window plumbing: persisting/restoring the frame, reporting frontmost (key/main)
-/// and close (`willClose`) to the `WindowLibrary`, and registering the `NSWindow` in `WindowRegistry` for
-/// dedup/raise.
+/// Blends the window title bar with the terminal (the title text comes from SwiftUI's
+/// `.navigationTitle`/`.navigationSubtitle`): the probe's `window` is nil at make time, so the blend is
+/// applied from `viewDidMoveToWindow` and re-applied on every `titleToken` change (session switch) and the
+/// key/fullscreen transitions where AppKit rebuilds the titlebar subviews. It also carries the per-window
+/// plumbing: persisting/restoring the frame, reporting frontmost (key/main) and close (`willClose`) to the
+/// `WindowLibrary`, and registering the `NSWindow` in `WindowRegistry`.
 struct WindowAccessor: NSViewRepresentable {
     /// Changes when the active session changes, so `updateNSView` re-runs the blend.
     let titleToken: String
@@ -30,8 +28,7 @@ struct WindowAccessor: NSViewRepresentable {
         private let library: WindowLibrary
         private let store: AppStore
 
-        /// Observer tokens for window key/fullscreen transitions, after which AppKit
-        /// rebuilds the titlebar subviews and the blend must be re-applied.
+        /// Observer tokens: AppKit rebuilds the titlebar subviews on key/fullscreen, so the blend re-applies.
         nonisolated(unsafe) private var titlebarObservers: [NSObjectProtocol] = []
 
         /// One-shot guard so the saved frame is applied exactly once per window attach.
@@ -50,12 +47,10 @@ struct WindowAccessor: NSViewRepresentable {
         @available(*, unavailable)
         required init?(coder _: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-        /// The current window title ("session — window"). Set on the OS window (for the window menu and
-        /// XCUITest title-matching) but hidden via titleVisibility, since our custom header draws the
-        /// visible one.
+        /// The current window title ("session — window"). Set on the OS window for the window menu and
+        /// XCUITest title-matching, but hidden via titleVisibility — the custom header draws the visible one.
         private var latestTitle = ""
 
-        /// Re-apply the blend with the latest title (called from `updateNSView` on a session switch).
         func reapplyBlend(title: String) {
             latestTitle = title
             if let window { applyTitlebarBlend(window) }
@@ -67,19 +62,18 @@ struct WindowAccessor: NSViewRepresentable {
             titlebarObservers.removeAll()
             guard let window else { return }
             // the app owns its window set (WindowLibrary + windows.json reopen-all); SwiftUI's WindowGroup
-            // restoration only fights it, re-creating empty stray windows from the remembered count (shared
-            // by bundle id, not isolated). Opt every real window fully out so that set never grows.
+            // restoration re-creates empty strays from its remembered count (shared by bundle id, not
+            // isolated), so opt every real window fully out.
             window.isRestorable = false
             window.restorationClass = nil
             window.disableSnapshotRestoration()
             window.invalidateRestorableState()
             frameRestored = false
-            // per-window geometry keyed by OUR window id. SwiftUI's WindowGroup autosaves frames under its
-            // own index-based name ("terminal-AppWindow-N"), OVERRIDES any setFrameAutosaveName, and that
-            // index loses a window's identity across an in-session close/reopen, landing the reopened window
-            // on the wrong/default slot. So the frame is persisted on close under the stable window UUID in
-            // UserDefaults and re-applied here AFTER SwiftUI's initial .defaultSize pass — on window-key
-            // plus a short delayed fallback, one-shot via `frameRestored`.
+            // per-window geometry keyed by OUR window id: SwiftUI's WindowGroup autosaves under its own
+            // index-based name ("terminal-AppWindow-N"), OVERRIDES any setFrameAutosaveName, and that index
+            // loses a window's identity across an in-session close/reopen, landing it on the wrong slot. so
+            // the frame is persisted on close under the stable window UUID and re-applied here, one-shot,
+            // AFTER SwiftUI's initial .defaultSize pass.
             let frameKeyToken = NotificationCenter.default.addObserver(
                 forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main) { [weak self, weak window] _ in
                 DispatchQueue.main.async {
@@ -88,15 +82,14 @@ struct WindowAccessor: NSViewRepresentable {
                 }
             }
             titlebarObservers.append(frameKeyToken)
-            // fallback on the next run-loop tick (not a fixed delay) so the saved frame snaps in as soon
-            // as SwiftUI's initial sizing pass is done, minimizing the visible default-then-resize.
+            // fallback on the next run-loop tick, not a fixed delay, so the saved frame snaps in as soon as
+            // SwiftUI's initial sizing pass ends, minimizing the visible default-then-resize.
             DispatchQueue.main.async { [weak self, weak window] in
                 guard let self, let window, self.window === window else { return }
                 self.restoreSavedFrame(window)
             }
             // attach-race guard: a window.close that dropped this store mid-attach (window.new immediately
-            // followed by window.close) leaves a zombie — close it rather than register an orphaned
-            // on-screen window for a now-closed id.
+            // followed by window.close) leaves a zombie — close it rather than register it for a closed id.
             guard library.isOpen(windowID) else {
                 DispatchQueue.main.async { [weak window] in
                     window?.orderOut(nil)
@@ -104,8 +97,7 @@ struct WindowAccessor: NSViewRepresentable {
                 }
                 return
             }
-            // register the NSWindow so the app can raise an already-open window for this id (dedup)
-            // instead of spawning a second; install the confirm-before-close delegate proxy.
+            // register the NSWindow so the app raises this id's window (dedup) instead of spawning a second.
             WindowRegistry.shared.register(windowID, window: window)
             ensureCloseProxy(on: window)
             applyTitlebarBlend(window)
@@ -117,15 +109,14 @@ struct WindowAccessor: NSViewRepresentable {
                 self.applyTitlebarBlend(window)
             }
             // AppKit rebuilds the titlebar subviews and re-renders the sidebar Liquid Glass on
-            // key/main/fullscreen transitions (becomeKey fires right at launch), undoing the cleared titlebar
-            // layer and the glass tint — so re-apply on every transition, resign included, or a background
-            // window falls back to the lighter default glass. Only becomeKey/becomeMain mean frontmost.
+            // key/main/fullscreen transitions (becomeKey fires at launch), undoing the cleared titlebar layer
+            // and glass tint — re-apply on every transition, resign included, or a background window falls
+            // back to the lighter default glass.
             let frontmostNames: Set<NSNotification.Name> = [NSWindow.didBecomeKeyNotification, NSWindow.didBecomeMainNotification]
             for name in [NSWindow.didBecomeKeyNotification, NSWindow.didBecomeMainNotification,
                          NSWindow.didResignKeyNotification, NSWindow.didResignMainNotification,
                          NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification] {
-                // the @Sendable observer block must not touch main-actor state directly; hop through
-                // DispatchQueue.main like the re-applies above.
+                // the @Sendable observer block can't touch main-actor state directly; hop through the main queue.
                 let token = NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [windowID] notification in
                     let becameFrontmost = frontmostNames.contains(notification.name)
                     DispatchQueue.main.async { [weak self] in
@@ -136,26 +127,23 @@ struct WindowAccessor: NSViewRepresentable {
                 }
                 titlebarObservers.append(token)
             }
-            // report close: tear down this window's surfaces, then mark it closed in the library.
-            // capture library/store/id directly (NOT through `self`) — the view is being deallocated
-            // as the window closes, so a `[weak self]` hop would no-op and the index would never update.
+            // report close: tear down surfaces, then mark closed. captures library/store/id directly, NOT
+            // `self` — the view deallocates as the window closes, so a `[weak self]` hop would no-op.
             let closeToken = NotificationCenter.default.addObserver(forName: NSWindow.willCloseNotification, object: window, queue: .main) { [library, store, windowID, weak window] _ in
                 MainActor.assumeIsolated {
-                    // persist this window's final frame (keyed by its id) so an in-session reopen — or
-                    // a restart — restores its size/position. SwiftUI's own index-based autosave can't.
+                    // persist the final frame (keyed by its id) so an in-session reopen or a restart restores
+                    // size/position; SwiftUI's own index-based autosave can't.
                     if let window {
                         UserDefaults.standard.set(NSStringFromRect(window.frame), forKey: TitleProbeView.frameKey(windowID))
                     }
                     WindowRegistry.shared.unregister(windowID)
-                    // unregister synchronously on the real AppKit close edge: the registry cancels any
-                    // pending pick and retains its result for a poll arriving after this window and its
-                    // store have disappeared.
+                    // unregister synchronously on the real AppKit close edge: the registry cancels any pending
+                    // pick and retains its result for a poll arriving after the window and store are gone.
                     PickRegistry.shared.unregister(windowID)
                     store.finalizeAllPendingCloses()
-                    // flush cwd drift since the last structural mutation before dropping the store —
-                    // AppStore doesn't save on a live `cd`, so a closed-then-reopened window would load a
-                    // stale snapshot. Skipped when the window is no longer open in the library: a delete
-                    // already dropped the store + removed the per-window file, so this would resurrect it.
+                    // flush cwd drift before dropping the store — AppStore doesn't save on a live `cd`, so a
+                    // reopened window would load a stale snapshot. skipped once the window is no longer open:
+                    // a delete already dropped the store and removed the per-window file, so this resurrects it.
                     if library.isOpen(windowID) { store.save() }
                     for session in store.workspaces.flatMap(\.sessions) {
                         session.surface?.teardown()
@@ -164,16 +152,16 @@ struct WindowAccessor: NSViewRepresentable {
                         session.scratchSurface?.teardown()
                     }
                     library.closeWindow(windowID)
-                    // closing a window drops its (unobserved) store, so the Dock badge's observation
-                    // tracking won't fire — refresh explicitly to drop this window's unseen total. Guarded
-                    // on isTerminating: on quit willClose fires after applicationWillTerminate's clear() and
-                    // closeWindow no-ops (stores stay loaded), so a refresh would re-pin the zeroed badge.
+                    // closing a window drops its (unobserved) store, so the Dock badge's observation won't
+                    // fire — refresh explicitly. guarded on isTerminating: at quit willClose fires after
+                    // applicationWillTerminate's clear() and closeWindow no-ops (stores stay loaded), so the
+                    // refresh would re-pin the zeroed badge.
                     if !library.isTerminating { DockBadgeController.shared.refresh() }
                 }
             }
             titlebarObservers.append(closeToken)
-            // a settings theme change updates GhosttyApp.terminalBackgroundColor; re-apply the blend so the
-            // title bar and the transparent sidebar pick up the new window color live, not on the next re-key.
+            // a settings theme change updates GhosttyApp.terminalBackgroundColor; re-apply so the title bar
+            // and transparent sidebar pick up the new window color live, not on the next re-key.
             let appearanceToken = NotificationCenter.default.addObserver(forName: .agtermAppearanceChanged, object: nil, queue: .main) { _ in
                 DispatchQueue.main.async { [weak self] in
                     guard let self, let window = self.window else { return }
@@ -192,14 +180,13 @@ struct WindowAccessor: NSViewRepresentable {
             }
             titlebarObservers.append(accessibilityToken)
             // a window restored miniaturized isn't on-screen, so a fresh launch shows nothing and UI-test
-            // automation has nothing to hit. Bring it forward un-minimized, re-asserting next tick because
+            // automation has nothing to hit. bring it forward un-minimized, re-asserted next tick because
             // state restoration can re-apply the miniaturized state right after the view attaches.
             bringForward(window)
             DispatchQueue.main.async { [weak self] in self?.bringForward(window) }
             scheduleUITestWindowForward(window)
-            // the window may already be key: a reopened/raised window can become key DURING creation, before
-            // these observers exist, so that initial didBecomeKey was missed (and bringForward above is a
-            // no-op). Report frontmost explicitly so the palette/session switcher route to THIS window.
+            // a reopened/raised window can become key DURING creation, before these observers exist, missing
+            // that initial didBecomeKey. report frontmost so the palette/session switcher route to THIS window.
             if window.isKeyWindow || window.isMainWindow { reportFrontmost(windowID) }
         }
 
@@ -209,24 +196,23 @@ struct WindowAccessor: NSViewRepresentable {
 
         /// Record this window as frontmost in the library and persist the index. The persist and the
         /// frontmost-changed post are gated on an ACTUAL change, so the paired `didBecomeKey`/`didBecomeMain`
-        /// (and a re-key of the same window) collapse to one write instead of a per-focus-change storm.
+        /// (and a re-key) collapse to one write instead of a per-focus-change storm.
         @MainActor private func reportFrontmost(_ id: WindowInfo.ID) {
             let changed = library.frontmostWindowID != id
             if changed {
                 library.frontmostWindowID = id
                 library.saveIndex()
             }
-            // auto-hide-inactive-sidebars: reconcile on EVERY activation report, even when the frontmost id
-            // is unchanged — `newWindow()` pre-sets `frontmostWindowID` before the window keys and launch
+            // auto-hide-inactive-sidebars: reconcile on EVERY activation report, even when the id is
+            // unchanged — `newWindow()` pre-sets `frontmostWindowID` before the window keys and launch
             // restores it, so a changed-only gate would leave the prior window's sidebar showing (or the
-            // restored frontmost collapsed). Runs AFTER `frontmostWindowID` is set so `activeWindowID`
-            // resolves to this window, and is idempotent, so an unchanged re-key is cheap. Only fires on
-            // becomeKey/becomeMain, never resign, so switching to another app leaves every sidebar untouched.
+            // restored frontmost collapsed). runs AFTER `frontmostWindowID` is set so `activeWindowID`
+            // resolves here; never on resign, so switching apps leaves every sidebar untouched.
             if GhosttyApp.shared.autoHideSidebarInactiveWindows {
                 library.applyInactiveWindowSidebarHiding()
             }
-            // the active-window change is async; let the control server refresh its cached window list
-            // so a `window.list` poll sees the new `active` flag without waiting for the next command.
+            // the active-window change is async; let the control server refresh its cached window list so a
+            // `window.list` poll sees the new `active` flag without waiting for the next command.
             if changed {
                 NotificationCenter.default.post(name: .agtermWindowFrontmostChanged, object: nil)
             }
@@ -237,12 +223,11 @@ struct WindowAccessor: NSViewRepresentable {
             window.makeKeyAndOrderFront(nil)
         }
 
-        /// UserDefaults key for this window's saved frame, keyed by the stable window UUID (NOT
-        /// SwiftUI's index-based autosave name, which it overrides and which doesn't track identity).
+        /// UserDefaults key for this window's saved frame, keyed by the stable window UUID.
         static func frameKey(_ id: WindowInfo.ID) -> String { "agterm-frame-\(id.uuidString)" }
 
-        /// Applies the saved frame for this window id, once. Deferred (window-key / next tick) so
-        /// SwiftUI's initial `.defaultSize` pass has run and won't clobber the restored geometry.
+        /// Applies the saved frame for this window id, once. Deferred (window-key / next tick) so SwiftUI's
+        /// initial `.defaultSize` pass has run and won't clobber the restored geometry.
         private func restoreSavedFrame(_ window: NSWindow) {
             guard !frameRestored else { return }
             frameRestored = true
@@ -252,9 +237,9 @@ struct WindowAccessor: NSViewRepresentable {
             window.setFrame(Self.constrainedRestoredFrame(frame, for: window), display: true)
         }
 
-        /// Normalize a persisted frame before restore. A saved `NSRect` may come from a display that is
-        /// no longer attached; applying it directly can put the relaunched window entirely off-screen.
-        /// Keep the saved size/position when possible, but fully contain it on a current screen.
+        /// Normalize a persisted frame before restore: a saved `NSRect` may come from a display no longer
+        /// attached, which would put the relaunched window entirely off-screen. Keeps the saved size/position
+        /// where possible, fully contained on a current screen.
         private static func constrainedRestoredFrame(_ frame: NSRect, for window: NSWindow) -> NSRect {
             let screens = NSScreen.screens
             guard !screens.isEmpty, let fallback = window.screen ?? NSScreen.main ?? screens.first else { return frame }
@@ -269,7 +254,7 @@ struct WindowAccessor: NSViewRepresentable {
         }
 
         /// Installs (or re-asserts) the confirm-before-close proxy as the window's delegate, chaining to
-        /// whatever delegate SwiftUI set. No-op when it's already the delegate.
+        /// whatever delegate SwiftUI set.
         private func ensureCloseProxy(on window: NSWindow) {
             if closeProxy == nil {
                 closeProxy = WindowCloseDelegateProxy(windowID: windowID, library: library, store: store)
@@ -281,8 +266,8 @@ struct WindowAccessor: NSViewRepresentable {
             }
         }
 
-        /// Re-assert the window forward under XCUITest: the FB11763863 reopen can present it slightly
-        /// after the view attaches, so keep ordering it front for a short schedule.
+        /// Re-assert the window forward under XCUITest: the FB11763863 reopen can present it slightly after
+        /// the view attaches, so keep ordering it front for a short schedule.
         private func scheduleUITestWindowForward(_ window: NSWindow) {
             guard ContentView.isUITestLaunch else { return }
             let delays: [TimeInterval] = [0, 0.05, 0.15, 0.35, 0.7, 0.95]
@@ -297,12 +282,12 @@ struct WindowAccessor: NSViewRepresentable {
         /// One-shot latch so the per-window retry presents this window at most once.
         private var didPresentForUITests = false
         private func bringForwardForUITests(_ window: NSWindow) {
-            // present a window that isn't on screen yet (FB11763863: created minimized/background), then
-            // latch off — re-fronting on later ticks (or a momentary !isVisible during a re-render) would
-            // fight a deliberate window.select and oscillate the key window, flapping the "active" flag.
+            // present a window that isn't on screen yet (FB11763863: created minimized/background), then latch
+            // off — re-fronting on a later tick (or a momentary !isVisible during a re-render) would fight a
+            // deliberate window.select and oscillate the key window.
             guard !didPresentForUITests else { return }
-            // already on screen: it presented itself, so latch NOW — leaving the remaining ticks armed is
-            // the same hazard one step later, dragging a window.minimize-parked window back out of the Dock.
+            // already on screen: it presented itself, so latch NOW — leaving the remaining ticks armed is the
+            // same hazard one step later, dragging a window.minimize-parked window back out of the Dock.
             guard window.isMiniaturized || !window.isVisible else {
                 didPresentForUITests = true
                 return
@@ -327,8 +312,8 @@ struct WindowAccessor: NSViewRepresentable {
     }
 }
 
-// CoreGraphics <-> host-free WindowGeometry conversions for restore-frame clamping. The arithmetic lives
-// in agtermCore so display-selection and off-screen restore edge cases stay unit-testable.
+// CoreGraphics <-> host-free WindowGeometry conversions for restore-frame clamping. the arithmetic lives in
+// agtermCore so display-selection and off-screen restore edge cases stay unit-testable.
 private extension WindowGeometry.Size {
     init(_ cg: CGSize) { self.init(width: Double(cg.width), height: Double(cg.height)) }
 }
@@ -345,11 +330,10 @@ private extension WindowGeometry.Rect {
     }
 }
 
-/// Forwarding `NSWindowDelegate` that adds a confirm-before-close for a window with running sessions,
-/// forwarding every other delegate call to whatever delegate SwiftUI installed. Owned strongly by
-/// `TitleProbeView` (`NSWindow.delegate` is weak). Intercepts USER-driven closes (red button, File ▸
-/// Close); the programmatic `WindowRegistry.close` uses `window.close()` and skips `windowShouldClose`,
-/// so Delete Window / agtermctl don't double-prompt.
+/// Forwarding `NSWindowDelegate` adding a confirm-before-close for a window with running sessions, passing
+/// every other call to whatever delegate SwiftUI installed. Owned strongly by `TitleProbeView`
+/// (`NSWindow.delegate` is weak). Intercepts USER closes (red button, File ▸ Close); `WindowRegistry.close`
+/// uses `window.close()`, which skips `windowShouldClose`, so Delete Window / agtermctl don't double-prompt.
 @MainActor
 private final class WindowCloseDelegateProxy: NSObject, NSWindowDelegate {
     nonisolated(unsafe) weak var forwardingDelegate: NSObjectProtocol?
@@ -381,8 +365,8 @@ private final class WindowCloseDelegateProxy: NSObject, NSWindowDelegate {
             MainActor.assumeIsolated {
                 self.sheetOpen = false
                 guard response == .alertFirstButtonReturn else { return }
-                // force-close: close() doesn't re-enter windowShouldClose (no re-prompt) but still runs
-                // the willClose teardown + library mark-closed. The user already confirmed.
+                // close() doesn't re-enter windowShouldClose (no re-prompt) but still runs the willClose
+                // teardown + library mark-closed.
                 sender.close()
             }
         }
@@ -394,7 +378,7 @@ private final class WindowCloseDelegateProxy: NSObject, NSWindowDelegate {
     }
 
     // forward every other NSWindowDelegate selector to SwiftUI's delegate so its window bookkeeping
-    // (willClose, didResize, …) still runs. Called by the ObjC runtime; reads the weak forward target.
+    // (willClose, didResize, …) still runs. called by the ObjC runtime; reads the weak forward target.
     nonisolated override func responds(to selector: Selector!) -> Bool {
         super.responds(to: selector) || (forwardingDelegate?.responds(to: selector) ?? false)
     }

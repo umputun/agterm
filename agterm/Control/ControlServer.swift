@@ -7,15 +7,14 @@ import Foundation
 /// `ControlRequest`s into calls on the `AppActions`/`AppStore` seam the toolbar, menu bar and palettes
 /// share. One request per connection: read a line, dispatch, write one `ControlResponse`, close.
 ///
-/// `@MainActor` because the store is: only the blocking accept/read loop runs on a background
-/// `DispatchQueue`, and each decoded request hops back to execute. Best-effort — a bind failure logs and
-/// the app still launches.
+/// `@MainActor` because the store is: only the blocking accept/read loop runs on a background queue, each
+/// decoded request hopping back to execute. Best-effort — a bind failure logs and the app still launches.
 @MainActor
 final class ControlServer {
     /// The window library; commands dispatch onto a per-request target window's store. `tree` and
-    /// placement/`active` commands take `args.window` else the frontmost, and a named window must be open.
-    /// An id/prefix session/workspace target with no `args.window` resolves across ALL open windows, so a
-    /// captured id resolves regardless of which is frontmost. `window.*` drives the library itself.
+    /// placement/`active` commands take `args.window` else the frontmost (a named window must be open); an
+    /// id/prefix session/workspace target without `args.window` resolves across ALL open windows, so a
+    /// captured id works regardless of which is frontmost. `window.*` drives the library itself.
     let library: WindowLibrary
     let actions: AppActions
     let settingsModel: SettingsModel
@@ -28,21 +27,18 @@ final class ControlServer {
     /// The listening socket fd, or -1 when not listening. `start()` is idempotent on this.
     private var listenFD: Int32 = -1
 
-    /// The socket path the listener actually bound, or nil when it isn't listening (bind failed or
-    /// not started).
+    /// The bound socket path, nil when not listening (bind failed or never started).
     var boundSocketPath: String? { listenFD >= 0 ? socketPath : nil }
 
-    /// The path the listener will bind, resolved at init via `defaultSocketPath()` (honoring a test's
-    /// `AGTERM_CONTROL_SOCKET`). The surface factories read it into `AGTERM_SOCKET`: the launch window's
-    /// surfaces can materialize BEFORE `start()` binds, and `boundSocketPath` would be nil for those,
-    /// leaking `AGTERM_SOCKET` permanently. Equal to `boundSocketPath` once bound.
+    /// The path the listener will bind, resolved at init via `defaultSocketPath()`. The surface factories
+    /// read it into `AGTERM_SOCKET`: the launch window's surfaces can materialize BEFORE `start()` binds,
+    /// and a nil `boundSocketPath` would leak `AGTERM_SOCKET` permanently. Equals it once bound.
     var resolvedSocketPath: String { socketPath }
-    /// The background queue running the blocking accept loop.
     private let acceptQueue = DispatchQueue(label: "com.umputun.agterm.control.accept")
 
-    /// Thread-safe window-list cache: refreshed on the main actor after every dispatched command, read
-    /// under the lock from the background accept loop. Answers `window.list` / `tree --window` without the
-    /// main actor, so a post-window-close main-thread stall can't wedge the serial server against polls.
+    /// Thread-safe window-list cache: refreshed on the main actor after every dispatched command, read under
+    /// the lock from the background accept loop, so a post-window-close main-thread stall can't wedge the
+    /// serial server against `window.list` / `tree --window` polls.
     private let cacheLock = NSLock()
     nonisolated(unsafe) private var cachedWindowNodes: [ControlWindowNode] = []
 
@@ -56,9 +52,9 @@ final class ControlServer {
         cacheLock.lock(); cachedWindowNodes = nodes; cacheLock.unlock()
     }
 
-    /// A cache-only response for read-only window queries, or nil to fall through to the main actor — on a
-    /// cold cache (the main-actor path populates it) and for `tree --window` targeting an OPEN window
-    /// (building the tree needs the main actor). Only the closed-window error and `window.list` land here.
+    /// A cache-only response for read-only window queries, nil to fall through to the main actor: on a cold
+    /// cache (which the main-actor path populates) and for `tree --window` on an OPEN window (building the
+    /// tree needs the main actor). Only the closed-window error and `window.list` land here.
     nonisolated func fastPathResponse(for request: ControlRequest) -> ControlResponse? {
         let nodes = cachedWindows()
         guard !nodes.isEmpty else { return nil }
@@ -77,27 +73,25 @@ final class ControlServer {
         }
     }
 
-    /// 1 MiB cap on a request line — far above any realistic `session.type` payload. Over it, the line is
-    /// rejected and the connection closed, so a bad client can never grow the buffer unbounded.
+    /// 1 MiB cap on a request line, far above any realistic `session.type` payload; over it the line is
+    /// rejected and the connection closed, so a bad client can't grow the buffer unbounded.
     nonisolated private static let maxLineBytes = 1 << 20
 
-    /// Seconds a blocking client read may stall before it times out (EAGAIN → connection closed), so a
-    /// stalled client can't park the serial accept loop forever.
+    /// Seconds a blocking client read may stall before timing out (EAGAIN → connection closed), so a stalled
+    /// client can't park the serial accept loop forever.
     nonisolated private static let readTimeoutSeconds = 5
 
-    /// Seconds a blocking response `write()` may stall before it times out. A multi-MB `session.text --all`
-    /// response won't fit the socket buffer in one write, so a client that stops reading would otherwise
-    /// park the serial accept loop indefinitely.
+    /// Seconds a blocking response `write()` may stall before timing out: a multi-MB `session.text --all`
+    /// response won't fit the socket buffer in one write, so a client that stops reading would park the loop.
     nonisolated private static let writeTimeoutSeconds = 5
 
-    /// Overall cap on a connection's request read. `readTimeoutSeconds` bounds each `read()` only, so a
-    /// slow-loris trickling a byte per interval never trips it, never sends a newline, and holds the serial
-    /// accept loop forever. A legit one-line request arrives in milliseconds.
+    /// Overall cap on a connection's request read: `readTimeoutSeconds` bounds each `read()` only, so a
+    /// slow-loris trickling a byte per interval, never a newline, never trips it and holds the loop forever.
     nonisolated private static let readDeadlineSeconds = 10
 
-    /// Overall cap on a response write, symmetric with `readDeadlineSeconds`. `SO_SNDTIMEO` bounds each
+    /// Overall cap on a response write, symmetric with `readDeadlineSeconds`: `SO_SNDTIMEO` bounds each
     /// `write()` only, so a slow-drip reader draining a multi-MB `session.text --all` keeps every write
-    /// progressing, never trips it, and parks the serial accept loop. A normal reader drains in milliseconds.
+    /// progressing and parks the accept loop. A normal reader drains in milliseconds.
     nonisolated private static let writeDeadlineSeconds = 10
 
     init(library: WindowLibrary, actions: AppActions, settingsModel: SettingsModel, socketPath: String? = nil) {
@@ -106,25 +100,23 @@ final class ControlServer {
         self.settingsModel = settingsModel
         self.resolver = ControlTargetResolver(library: library)
         self.socketPath = socketPath ?? ControlServer.defaultSocketPath()
-        // keep the cache's `active` flag fresh across async frontmost changes; the server lives for the
-        // app's lifetime, so the observer needs no removal.
+        // keep the `active` flag fresh across async frontmost changes; the server lives for the app's
+        // lifetime, so the observer needs no removal.
         NotificationCenter.default.addObserver(forName: .agtermWindowFrontmostChanged, object: nil, queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshWindowCache() }
         }
-        // a GUI-only sidebar toggle (⌃⌘S / toolbar / menu / palette) mutates sidebarVisible with no control
-        // command, so window.list's copy would lag. queue nil (NOT .main) delivers synchronously on the
-        // posting thread — setSidebarVisible is @MainActor, so the refresh lands before the toggle returns;
-        // an async .main hop leaves a window where a background fast-path read sees the stale cache.
+        // a GUI-only sidebar toggle runs no control command, so window.list's cached copy would lag. queue
+        // nil (NOT .main) delivers synchronously on the posting @MainActor thread, so the refresh lands
+        // before the toggle returns; an async .main hop leaves a window for a stale fast-path read.
         NotificationCenter.default.addObserver(forName: .agtermSidebarVisibilityChanged, object: nil, queue: nil) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshWindowCache() }
         }
-        // window.list carries LIVE NSWindow geometry + fullscreen/zoom read at cache-build time, which a
-        // user drag/resize/zoom/fullscreen changes with NO control command — and a polling window.list is
-        // fast-path-served, so it never refreshes its own cache. The fullscreen notifications fire AFTER
-        // the async transition, so the settled `styleMask` is captured. The notification is ignored rather
-        // than captured (a non-Sendable `Notification` can't cross into `assumeIsolated` under Swift 6), so
-        // this fires for ANY window — harmless: a foreign panel rebuilds the same cheap agterm nodes, and a
-        // drag's didMove/didResize storm only keeps the cache current.
+        // window.list carries LIVE NSWindow geometry + fullscreen/zoom read at cache-build time, which a user
+        // drag/resize/zoom/fullscreen changes with NO control command — and a polling window.list is
+        // fast-path-served, so it never refreshes its own cache. the fullscreen notifications fire AFTER the
+        // async transition, so the settled `styleMask` is captured. the non-Sendable `Notification` is
+        // ignored, not captured (it can't cross into `assumeIsolated` under Swift 6), so this fires for ANY
+        // window — harmless, a foreign panel just rebuilds the same cheap agterm nodes.
         for name in [NSWindow.didMoveNotification, NSWindow.didResizeNotification,
                      NSWindow.didEnterFullScreenNotification, NSWindow.didExitFullScreenNotification,
                      NSWindow.didMiniaturizeNotification, NSWindow.didDeminiaturizeNotification] {
@@ -133,18 +125,17 @@ final class ControlServer {
             }
         }
         // an NSWindow attaches a render pass or two AFTER its store loads, so the node cached right after
-        // window.new carries no geometry/flags and nothing else refreshes it there (see the
-        // .agtermWindowAttachmentChanged doc comment). Refreshing on attach/detach also covers GUI New
-        // Window and launch reopen-all, which run no control command at all.
+        // window.new carries no geometry/flags. attach/detach also covers GUI New Window and launch
+        // reopen-all, which run no control command at all.
         NotificationCenter.default.addObserver(forName: .agtermWindowAttachmentChanged, object: nil,
                                                queue: .main) { [weak self] _ in
             MainActor.assumeIsolated { self?.refreshWindowCache() }
         }
     }
 
-    /// The socket path the app and the CLI rendezvous on. `AGTERM_CONTROL_SOCKET` overrides (tests need it
-    /// — their sandboxed `AGTERM_STATE_DIR` container path exceeds `sun_path`'s ~104 bytes); else
-    /// `<AGTERM_STATE_DIR>/agterm.sock` when that var is set (state isolation), else `<app support>/agterm.sock`.
+    /// The socket path the app and the CLI rendezvous on. `AGTERM_CONTROL_SOCKET` wins (tests need it —
+    /// their sandboxed `AGTERM_STATE_DIR` container path exceeds `sun_path`'s ~104 bytes), then
+    /// `<AGTERM_STATE_DIR>/agterm.sock` (state isolation), then `<app support>/agterm.sock`.
     static func defaultSocketPath() -> String {
         let env = ProcessInfo.processInfo.environment
         if let explicit = env["AGTERM_CONTROL_SOCKET"] { return explicit }
@@ -153,8 +144,8 @@ final class ControlServer {
 
     // MARK: - Lifecycle
 
-    /// Bind and start listening. Idempotent — the scene `.task` may re-run when a window is recreated, and
-    /// a second `bind` must not be attempted. Any failure logs and returns, leaving the app to launch.
+    /// Bind and start listening. Idempotent — the scene `.task` re-runs when a window is recreated and a
+    /// second `bind` must not be attempted. Any failure logs and returns, leaving the app to launch.
     func start() {
         guard listenFD < 0 else { return }
 
@@ -207,7 +198,6 @@ final class ControlServer {
         acceptLoop(fd: fd)
     }
 
-    /// Close the listener and unlink the socket file.
     func stop() {
         guard listenFD >= 0 else { return }
         close(listenFD)
@@ -233,13 +223,12 @@ final class ControlServer {
         }
     }
 
-    /// Read one newline-delimited request from `conn`, decode it, dispatch it on `server` (main actor),
-    /// write the response back, close. A decode failure replies with a structured error rather than
-    /// crashing. Runs on the background queue.
+    /// Read one newline-delimited request from `conn`, decode it, dispatch it on `server` (main actor), write
+    /// the response back, close. A decode failure replies with a structured error. Runs on the background queue.
     nonisolated private static func handleConnection(_ conn: Int32, server: ControlServer) {
         defer { close(conn) }
-        // never let a write to a client that already hung up raise SIGPIPE (default-fatal) — that would
-        // take the whole app down mid-request; SO_NOSIGPIPE turns it into a normal EPIPE write error.
+        // a write to a client that already hung up would raise the default-fatal SIGPIPE and take the whole
+        // app down mid-request; SO_NOSIGPIPE turns it into a normal EPIPE write error.
         var noSigPipe: Int32 = 1
         setsockopt(conn, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
 
@@ -263,22 +252,20 @@ final class ControlServer {
         }
 
         // answer read-only window queries from the cache without a main-actor hop: a window close briefly
-        // stalls the main thread (surface teardown / re-render), which would leave the serial accept loop
-        // unresponsive to `window.list` polls behind it.
+        // stalls the main thread (surface teardown / re-render), wedging the accept loop against polls.
         if let cached = server.fastPathResponse(for: request) {
             writeResponse(conn, cached)
             return
         }
 
-        // hop to the main actor, blocking this background thread. dispatch refreshes the window cache in
-        // that same execution, so the fast path sees this command's mutations without a second hop that
-        // could queue behind a post-close stall.
+        // hop to the main actor, blocking this background thread. dispatch refreshes the window cache in that
+        // same execution, so the fast path sees this command's mutations without a second, stallable hop.
         let response = runBlocking { await server.dispatch(request) }
         writeResponse(conn, response)
     }
 
-    /// Read bytes from `conn` up to (and excluding) the first newline, capping at `maxLineBytes`. Returns
-    /// nil on EOF-before-newline, read error, the `maxLineBytes` cap, or the `readDeadlineSeconds` overall cap.
+    /// Read bytes from `conn` up to (and excluding) the first newline. Returns nil on EOF-before-newline, a
+    /// read error, the `maxLineBytes` cap, or the `readDeadlineSeconds` overall cap.
     nonisolated private static func readLine(_ conn: Int32) -> Data? {
         var buffer = Data()
         var byte: UInt8 = 0
@@ -341,8 +328,8 @@ final class ControlServer {
     /// Execute a request against the store/actions seam. Never throws across the socket: any failure is a
     /// `{"ok":false,"error":…}` response.
     private func dispatch(_ request: ControlRequest) async -> ControlResponse {
-        // refresh the read cache in this same main-actor execution (a window mutation just ran), so the
-        // background fast path sees the new state without a separate, stallable hop.
+        // refresh the read cache in this same main-actor execution, so the background fast path sees the new
+        // state without a separate, stallable hop.
         defer { refreshWindowCache() }
         if let response = await ControlDispatcher(actions: self).dispatch(request) {
             return response
@@ -371,16 +358,14 @@ final class ControlServer {
         }
     }
 
-    /// UI-TEST-ONLY seam: forces the app-level appearance so an XCUITest can simulate a macOS light/dark
-    /// flip deterministically (XCUITest has no API for it). Setting `NSApp.appearance` moves
-    /// `effectiveAppearance`, and this arm ALSO posts `.agtermSystemAppearanceChanged` so the REAL flip
-    /// path (scheme sync → debounced zoom-preserving reload) runs end to end without depending on KVO
-    /// firing for an explicit set (production relies on KVO for a genuine system flip). Refused outside an
-    /// XCUITest launch, and deliberately EXEMPT from the four-point keep-in-sync — test scaffolding, so no
-    /// `agtermctl` subcommand and absent from the catalog/skill. Setting echoes the effective side in
-    /// `result.text`; the BARE form (no name) reads the side the last config feed applied
-    /// (`SettingsModel.lastAppliedIsDark`), which a test polls to prove the flip drove the reload — a
-    /// suppressed flip leaves it on the old side.
+    /// UI-TEST-ONLY seam: forces the app-level appearance so an XCUITest can simulate a macOS light/dark flip
+    /// deterministically (XCUITest has no API for it). `NSApp.appearance` moves `effectiveAppearance`, and
+    /// this arm ALSO posts `.agtermSystemAppearanceChanged` so the REAL flip path (scheme sync → debounced
+    /// zoom-preserving reload) runs end to end without waiting on KVO, which production relies on for a
+    /// genuine system flip. Refused outside an XCUITest launch, and EXEMPT from the four-point keep-in-sync
+    /// as test scaffolding — no `agtermctl` subcommand, absent from the catalog/skill. A set echoes the
+    /// effective side in `result.text`; the BARE form reads `SettingsModel.lastAppliedIsDark`, which a test
+    /// polls to prove the flip drove the reload — a suppressed flip leaves it on the old side.
     private func setDebugAppearance(args: ControlArgs?) -> ControlResponse {
         guard ContentView.isUITestLaunch else {
             return ControlResponse(ok: false, error: "debug.appearance is a UI-test-only seam")
@@ -402,11 +387,10 @@ final class ControlServer {
         return ControlResponse(ok: true, result: ControlResult(text: isDark ? "dark" : "light"))
     }
 
-    /// Clear every open session's captured foreground command and persist, so the next launch restores
-    /// plain shells. The live fields are normally already nil (consumed at restore) — the SAVE is what
-    /// wipes the on-disk copy from the last quit, closing the force-quit re-fire window. Drives
-    /// `restore.clear` / `agtermctl restore clear`; app-global like `keymap.reload`, so no `--window`
-    /// selector and every open window is cleared.
+    /// Clear every open session's captured foreground command and persist, so the next launch restores plain
+    /// shells. The live fields are usually already nil (consumed at restore); the SAVE is what wipes the
+    /// on-disk copy from the last quit, closing the force-quit re-fire window. App-global like
+    /// `keymap.reload`: no `--window` selector, every open window is cleared.
     func clearRestoreCommands() -> ControlResponse {
         for session in library.allOpenSessions() {
             session.foregroundCommand = nil
@@ -417,19 +401,17 @@ final class ControlServer {
     }
 
     /// Open or close the target window's dashboard overlay — the app side of the host-free `dashboard`
-    /// command (the dispatcher validated the args and built `fontMode`; it does not cap the ids). Resolves
+    /// command (the dispatcher validated the args and built `fontMode`, but does not cap the ids). Resolves
     /// `window ?? frontmost` to an OPEN window's store. `mru` takes up to `DashboardLayout.maxCells` of that
-    /// window's most-recently-used sessions from the store's recency (fewer if it has fewer, nothing
-    /// unresolved); otherwise each id resolves to a session in THAT store, deduped by resolved UUID in
-    /// order, with misses reported in `result.text` rather than silently dropped. Each resolved session then
-    /// EXPANDS in order into pane cells — always `.primary`, plus `.split` when the session `hasSplit` (both
-    /// shells alive), so a split shows as TWO cells — and the `DashboardLayout.maxCells` (9) cap counts
-    /// PANES, applied here after expansion, dropped ones reported alongside `unresolved` (joined with "; ").
-    /// Each cell reparents its OWN pane surface (`.primary` → `\.surface`, `.split` → `\.splitSurface`)
-    /// app-side in `WindowContentView`. Opening closes the window's active terminal zoom (zoom and dashboard
-    /// are mutually exclusive) and drives its `DashboardController` via the registry; `--close` calls
-    /// `close()`. `WindowContentView` registers that controller, so until it does (or while the window tears
-    /// down) the registry returns nil and this reports the window isn't open.
+    /// store's most-recently-used sessions (fewer if it has fewer, nothing unresolved); otherwise each id
+    /// resolves within THAT store, deduped by resolved UUID in order, misses reported in `result.text`. Each
+    /// resolved session then EXPANDS in order into pane cells — always `.primary`, plus `.split` when it
+    /// `hasSplit` (both shells alive), so a split shows as TWO cells — and the `maxCells` (9) cap counts
+    /// PANES, applied here after expansion, its drops reported alongside `unresolved` (joined with "; ").
+    /// Each cell reparents its OWN pane surface (`\.surface` / `\.splitSurface`) app-side in
+    /// `WindowContentView`. Opening closes the window's terminal zoom (mutually exclusive); `--close` calls
+    /// `close()`. The registry returns nil until `WindowContentView` registers the controller (or while the
+    /// window tears down), reported as the window not being open.
     func setDashboard(targets: [String], window: String?, close: Bool,
                       fontMode: DashboardFontMode, mru: Bool) -> ControlResponse {
         resolver.resolvePlacementStore(window) { store in
@@ -474,8 +456,7 @@ final class ControlServer {
             // set the applied size SYNCHRONOUSLY so the `dashboardFontSize` read-back is authoritative at
             // command return: the SwiftUI onChange applying the surface overrides runs a runloop turn later,
             // and open() never resets appliedFontSize, so an untouched re-open would leak the prior
-            // fixed/auto size. Idempotent with the wiring — both resolve the same (base, member-count, mode)
-            // through the shared DashboardFontMode.appliedFontSize seam.
+            // fixed/auto size. idempotent with the wiring — both go through DashboardFontMode.appliedFontSize.
             let base = settingsModel.settings.fontSize ?? DashboardLayout.ghosttyDefaultFontSize
             controller.setAppliedFontSize(fontMode.appliedFontSize(memberCount: members.count, base: base))
             var notes: [String] = []
@@ -493,12 +474,10 @@ final class ControlServer {
     func buildTree(in store: AppStore) -> ControlTree {
         let shellBasename = ProcessInfo.processInfo.environment["SHELL"].map(CommandRestore.basename)
         // the projected window owns its quick terminal; find its id by store identity to read the live
-        // QuickTerminalController.isVisible (a nil controller — never opened, or tearing down — reads as
-        // not visible).
+        // QuickTerminalController.isVisible (a nil controller — never opened, or tearing down — reads false).
         let windowID = library.windowID(for: store)
-        // the window's dashboard controller (nil until WindowContentView registers it), read LIVE for the
-        // four dashboard read-backs — tree-only, since the keyboard-driven dashboard bypasses the command
-        // path and a cached copy would go stale (as for zoomedSurface/quickVisible).
+        // the window's dashboard controller (nil until WindowContentView registers it), read LIVE for the four
+        // dashboard read-backs: the keyboard-driven dashboard bypasses the command path, so a cache goes stale.
         let dashboard = DashboardControllerRegistry.shared.controller(for: windowID)
         return store.controlTree(
             foreground: { session in
@@ -516,8 +495,8 @@ final class ControlServer {
             scratchFontSize: { ($0.scratchSurface as? GhosttySurfaceView)?.currentFontSize() },
             quickVisible: { windowID.flatMap { QuickTerminalRegistry.shared.controller(for: $0)?.isVisible } ?? false },
             zoomedSurface: { windowID.flatMap { TerminalZoomRegistry.shared.controller(for: $0)?.target?.controlID } },
-            // Resolve through the projected window's registry entry on every tree build. This is deliberately
-            // tree-only: window.list is cache-backed, so mirroring a GUI-resolved pick there would go stale.
+            // resolved through the projected window's registry entry on every tree build, and tree-only:
+            // window.list is cache-backed, so mirroring a GUI-resolved pick there would go stale.
             pickPending: { windowID.flatMap { PickRegistry.shared.controller(for: $0)?.pending?.id } },
             dashboardMembers: {
                 guard let dashboard, dashboard.isOpen else { return nil }
@@ -542,13 +521,12 @@ final class ControlServer {
         )
     }
 
-    /// Creates a session in `workspaceID` of `store` with the `session.new` args (cwd default $HOME,
-    /// optional command/name), focuses it only when it lands in the frontmost window — so a keymap
-    /// `session new` opens focused like the GUI New Session while a background `--window` target keeps
-    /// focus — and returns the new id. Shared by the id- and name-addressed `.sessionNew` paths. `at` is the
-    /// anchor-relative `--after`/`--before` insertion slot (clamped in `AppStore`); nil appends.
-    /// `options.noSelect` creates in the background: `addSession` skips selecting and the focus call is
-    /// suppressed, leaving the current selection and focus untouched.
+    /// Creates a session in `workspaceID` of `store` with the `session.new` args (cwd default $HOME, optional
+    /// command/name) and returns its id; shared by the id- and name-addressed `.sessionNew` paths. Focuses it
+    /// only when it lands in the frontmost window, so a keymap `session new` opens focused like GUI New
+    /// Session while a background `--window` target keeps focus. `at` is the anchor-relative
+    /// `--after`/`--before` slot (clamped in `AppStore`), nil appends; `options.noSelect` creates in the
+    /// background, selection and focus untouched.
     func makeSessionResponse(in store: AppStore, workspaceID: UUID,
                              options: ControlSessionCreateOptions, at index: Int? = nil) -> ControlResponse {
         let cwd = options.cwd ?? FileManager.default.homeDirectoryForCurrentUser.path
@@ -568,8 +546,8 @@ final class ControlServer {
         return result.isEmpty ? nil : result
     }
 
-    /// Internal, not private: the command arms live in `ControlServer+*.swift` extensions, which cannot
-    /// reach a private member declared here.
+    /// Internal, not private: the `ControlServer+*.swift` extensions holding the command arms cannot reach a
+    /// private member declared here.
     func log(_ message: @autoclosure () -> String) {
         NSLog("agterm: %@", message())
     }

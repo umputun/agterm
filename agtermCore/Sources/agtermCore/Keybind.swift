@@ -1,10 +1,8 @@
 import Foundation
 
-/// The keyboard modifier flags a chord may require, as a host-free `OptionSet`.
-///
-/// The app target maps `NSEvent.ModifierFlags` onto this so the parser and matcher stay AppKit-free.
-/// `parseKeybind` recognizes the modifier words `ctrl`/`control`, `cmd`/`command`, `opt`/`option`/`alt`,
-/// and `shift`.
+/// The keyboard modifier flags a chord may require, as a host-free `OptionSet`. The app target maps
+/// `NSEvent.ModifierFlags` onto this so the parser and matcher stay AppKit-free; `parseKeybind` spells them
+/// `ctrl`/`control`, `cmd`/`command`, `opt`/`option`/`alt`, `shift`.
 public struct Modifier: OptionSet, Hashable, Sendable {
     public let rawValue: Int
     public init(rawValue: Int) { self.rawValue = rawValue }
@@ -15,34 +13,29 @@ public struct Modifier: OptionSet, Hashable, Sendable {
     public static let shift = Modifier(rawValue: 1 << 3)
 }
 
-/// The base keys a chord may name beyond a single printable character — exactly the named keys the
-/// app-side runner can produce from an `NSEvent`, so `parseKeybind` rejects any other name (one the UI
-/// would accept but the runner could never fire). `esc` is reserved as the leader abort and is
-/// intentionally NOT bindable. The four arrows are here because the six arrow-bound built-ins ship their
-/// defaults on them, so the grammar must be able to spell what `BuiltinAction.defaultChord` returns.
+/// The base keys a chord may name beyond a single printable character — exactly the named keys the app-side
+/// runner can produce from an `NSEvent`, so `parseKeybind` rejects any name the runner could never fire.
+/// `esc` is reserved as the leader abort and is NOT bindable. The arrows are here because the six
+/// arrow-bound built-ins ship their defaults on them, so the grammar must spell `BuiltinAction.defaultChord`.
 ///
-/// Adding a name here means updating five sites, two inbound and three outbound:
-/// - `CustomCommandRunner` and `UndoCloseShortcut` resolve `NSEvent` → name via `namedKey(forKeyCode:)`,
-///   so a name with no keycode parses in the file yet never fires;
-/// - `namedKey(forKeyEquivalent:)` resolves a live `NSMenuItem`'s key-equivalent CHARACTER back to the
-///   name for `keymap.list`, so a name missing there renders every menu item carrying that key with the
-///   key absent and stops it comparing against the resolved chord (its own test pins the two sets equal);
-/// - `Chord.glyphString` renders the name in palette hints and tooltips, degrading to the raw name — a
-///   miss there is cosmetic;
-/// - `agtermApp.toShortcut` maps the name to a SwiftUI `KeyEquivalent`, and its `default` arm is
-///   `KeyEquivalent(Character(chord.key))`, which TRAPS on a multi-character string — a crash on the
-///   first menu render, not a degradation, so update it first.
+/// Adding a name means updating five sites, two inbound and three outbound:
+/// - `CustomCommandRunner` and `UndoCloseShortcut` resolve `NSEvent` → name via `namedKey(forKeyCode:)`, so
+///   a name with no keycode parses in the file yet never fires;
+/// - `namedKey(forKeyEquivalent:)` maps a live `NSMenuItem` key-equivalent CHARACTER back for `keymap.list`;
+///   a name missing there renders the key absent and breaks comparison with the resolved chord (a test pins the sets equal);
+/// - `Chord.glyphString` renders the name in palette hints and tooltips, degrading to the raw name — cosmetic;
+/// - `agtermApp.toShortcut`'s `default` arm `KeyEquivalent(Character(chord.key))` TRAPS on a multi-character
+///   string — a crash on the first menu render, not a degradation, so update it first.
 public let bindableNamedKeys: Set<String> = Set(["tab", "space", "return", "delete"]).union(bindableArrowKeys)
 
-/// The four arrow keys, a subset of `bindableNamedKeys`. Named separately for one extra rule: a built-in
-/// `map` may not bind a modifier-less arrow (`parseMapLine`), since an always-on menu key-equivalent on a
-/// bare arrow swallows the key in the terminal, the palettes, the dashboard grid, and every text field.
+/// The four arrow keys, a subset of `bindableNamedKeys`. Separate for one extra rule: a built-in `map` may
+/// not bind a modifier-less arrow (`parseMapLine`), since an always-on menu key-equivalent on a bare arrow
+/// swallows the key in the terminal, the palettes, the dashboard grid and every text field.
 let bindableArrowKeys: Set<String> = ["left", "right", "up", "down"]
 
 /// The named key for a macOS virtual key code, or `nil` for a key carrying a normal character (which the
-/// caller derives from the event itself). The single source of truth for the keyCode→name half of the
-/// `NSEvent`→`Chord` mapping, shared by every app-side monitor so a name added to `bindableNamedKeys`
-/// can't parse in the file yet fail to fire at runtime.
+/// caller derives from the event). The single source of truth for the keyCode→name half of `NSEvent`→`Chord`,
+/// shared by every app-side monitor so a name in `bindableNamedKeys` can't parse yet fail to fire.
 public func namedKey(forKeyCode keyCode: UInt16) -> String? {
     switch keyCode {
     case 36: return "return"
@@ -57,12 +50,11 @@ public func namedKey(forKeyCode keyCode: UInt16) -> String? {
     }
 }
 
-/// The Latin base character at a physical ANSI key position, or `nil` for a position carrying no Latin
-/// key (a named key, a function key, the keypad). The letters, digits and punctuation of the ANSI layout
-/// keyed by macOS virtual key code — exactly the single characters `parseKeybind` accepts as a base key,
-/// so every entry is spellable in `keymap.conf`. This is the layout-INDEPENDENT half of key resolution:
-/// a virtual key code names a physical position and never changes with the active input source, unlike
-/// the character that position produces.
+/// The Latin base character at a physical ANSI key position, or `nil` where there is none (a named key, a
+/// function key, the keypad). ANSI letters/digits/punctuation keyed by macOS virtual key code — exactly the
+/// single characters `parseKeybind` accepts as a base key, so every entry is spellable in `keymap.conf`. The
+/// layout-INDEPENDENT half of key resolution: a key code names a physical position and never changes with
+/// the active input source, unlike the character that position produces.
 func latinKey(forKeyCode keyCode: UInt16) -> String? {
     switch keyCode {
     case 0: return "a"
@@ -117,56 +109,51 @@ func latinKey(forKeyCode keyCode: UInt16) -> String? {
 }
 
 /// The base key for a key press. `produced` is the character the ACTIVE layout puts on that key with no
-/// modifiers applied (the app-side monitors pass what the `NSEvent` reports), and
-/// `layoutIsASCIICapable` says whether that layout can type ASCII at all.
+/// modifiers applied, `layoutIsASCIICapable` whether that layout can type ASCII at all.
 ///
-/// The choice is per LAYOUT, not per key. An ASCII-capable layout — US, Dvorak, Colemak, US-International,
-/// French, German — binds by the character it produces, so a chord follows the letter the user sees on the
-/// key and an alternative Latin layout keeps its own letter positions. A layout that cannot type ASCII —
-/// Russian, Greek, Hebrew, Arabic, Thai — can never produce a character a `keymap.conf` chord is spelled
-/// with, so every one of its keys binds by physical position via `latinKey(forKeyCode:)`.
+/// The choice is per LAYOUT, not per key. An ASCII-capable layout (US, Dvorak, Colemak, US-International,
+/// French, German) binds by the character it produces, so a chord follows the letter the user sees on the
+/// key and an alternative Latin layout keeps its own letter positions. A layout that cannot type ASCII
+/// (Russian, Greek, Hebrew, Arabic, Thai) can never produce a character a `keymap.conf` chord is spelled
+/// with, so all its keys bind by physical position via `latinKey(forKeyCode:)`.
 ///
-/// Deciding per key instead (keeping any produced character that happens to be ASCII) does not work:
-/// Greek types `;` on the Q position and Hebrew types `/` there, so a Latin-spelled letter chord would
-/// stay dead on exactly the layouts this exists to serve, and two physical keys could collapse onto one
-/// chord — on Hebrew the `'` key produces `,` while the `,` key falls back to `,`. Resolving the whole
-/// layout at once keeps `latinKey`'s one-key-per-position mapping intact, so no two TABLE positions can
-/// collapse. A key code outside the table keeps what it types, which still aliases the table for the
-/// keypad — keypad `5` and the number row both give `"5"` — as it always did, since the keypad's output
-/// does not vary by layout.
+/// Deciding per key (keeping any produced character that happens to be ASCII) does not work: Greek types
+/// `;` on the Q position and Hebrew `/`, so a Latin-spelled letter chord would stay dead on exactly the
+/// layouts this exists to serve, and two physical keys could collapse onto one chord (on Hebrew the `'` key
+/// produces `,` while the `,` key falls back to `,`). Whole-layout resolution keeps `latinKey`'s
+/// one-key-per-position mapping intact, so no two TABLE positions collapse; a key code outside the table
+/// keeps what it types and still aliases the table for the keypad (keypad `5` and the number row both give
+/// `"5"`), harmless because keypad output does not vary by layout.
 ///
-/// A different rule from `InterruptKeystroke.isInterrupt`, which tests the produced character itself (is
-/// it a Latin letter?) rather than the layout: that one classifies a single hardcoded key and needs no
-/// layout context, while a chord needs the whole ANSI vocabulary.
+/// A different rule from `InterruptKeystroke.isInterrupt`, which tests the produced character (is it a Latin
+/// letter?) rather than the layout: that one classifies a single hardcoded key and needs no layout context.
 ///
-/// Returns `nil` when the press carries no usable base key. On a non-ASCII-capable layout that means a
-/// position outside `latinKey`'s table that produced nothing, plus the ISO section key; a dead key at a
-/// TABLE position resolves to its Latin key instead. On an ASCII-capable layout it means anything that
-/// produced nothing at all, table position or not — that branch never consults the table.
+/// Returns `nil` when the press carries no usable base key: on a non-ASCII-capable layout a position outside
+/// `latinKey`'s table that produced nothing, plus the ISO section key (a dead key at a TABLE position
+/// resolves to its Latin key); on an ASCII-capable layout anything that produced nothing at all, table
+/// position or not — that branch never consults the table.
 public func chordKey(forKeyCode keyCode: UInt16, produced: String?, layoutIsASCIICapable: Bool) -> String? {
     // space is a named key (`namedKey(forKeyCode:)` claims keyCode 49); a produced space is not a base key.
     let base = produced?.first.map { String($0).lowercased() }.flatMap { $0 == " " ? nil : $0 }
     guard !layoutIsASCIICapable else { return base }
     if let latin = latinKey(forKeyCode: keyCode) { return latin }
-    // the ISO section key — the extra key an ISO keyboard carries and an ANSI one does not — has no
-    // position in the table AND types a layout-dependent character, so keeping it would alias whichever
-    // table position types the same thing: Ukrainian-PC types `\` there against the ANSI backslash key,
-    // Hebrew-PC `;` against the ANSI semicolon key. Both would fire one binding from two keys and swallow
-    // the keystroke, so it cannot spell a chord on a layout resolved by position.
+    // the ISO section key (an ISO keyboard carries it, an ANSI one does not) has no table position AND types
+    // a layout-dependent character, so keeping it would alias whichever table position types the same thing:
+    // Ukrainian-PC types `\` there against the ANSI backslash key, Hebrew-PC `;` against the semicolon key.
+    // both would fire one binding from two keys and swallow the keystroke.
     return keyCode == isoSectionKeyCode ? nil : base
 }
 
 /// The ISO-only key left of Z (macOS `kVK_ISO_Section`), absent from an ANSI keyboard and from `latinKey`.
 private let isoSectionKeyCode: UInt16 = 10
 
-/// The named key for a menu item's key-equivalent CHARACTER, or `nil` for an ordinary printable key.
-///
-/// The character counterpart of `namedKey(forKeyCode:)`, for projecting live `NSMenuItem` key equivalents
-/// back into keymap syntax: a menu item carries a character rather than a virtual key code, and AppKit
-/// spells the arrows with private-use function-key scalars and return/tab/space/delete with control
-/// characters. Without this a menu chord renders as `cmd+opt+` with the key missing, which cannot be
-/// compared against the `cmd+opt+up` the keymap resolved. Matching scalar values rather than the AppKit
-/// constants keeps `agtermCore` AppKit-free; the values are the documented `NSUpArrowFunctionKey` family.
+/// The named key for a menu item's key-equivalent CHARACTER, or `nil` for an ordinary printable key — the
+/// character counterpart of `namedKey(forKeyCode:)`, projecting live `NSMenuItem` key equivalents back into
+/// keymap syntax: a menu item carries a character, not a virtual key code, and AppKit spells the arrows with
+/// private-use function-key scalars and return/tab/space/delete with control characters. Without this a menu
+/// chord renders as `cmd+opt+` with the key missing, uncomparable against the resolved `cmd+opt+up`. Matching
+/// scalars rather than the AppKit constants keeps `agtermCore` AppKit-free; they are the documented
+/// `NSUpArrowFunctionKey` family.
 public func namedKey(forKeyEquivalent character: String) -> String? {
     let scalars = character.unicodeScalars
     guard scalars.count == 1, let scalar = scalars.first else { return nil }
@@ -186,11 +173,9 @@ public func namedKey(forKeyEquivalent character: String) -> String? {
 /// Whether a chord is owned by the app's always-on `NSEvent` monitors (NOT a menu key-equivalent), so a
 /// keybind starting with it would dead-race the monitor and must be rejected. MIRRORS the monitors' real
 /// predicates, not a fixed list:
-/// - the Ctrl-Tab session switcher (`SessionSwitcher`) consumes Tab whenever Control is held, with ANY
-///   other modifiers (`ctrl+tab`, `ctrl+shift+tab`, `ctrl+opt+tab`, `ctrl+cmd+tab`);
+/// - the Ctrl-Tab session switcher (`SessionSwitcher`) consumes Tab whenever Control is held, with ANY other modifiers;
 /// - the Ctrl-1/2 pane shortcuts (`PaneShortcuts`) consume 1/2 only when Control is the SOLE modifier.
-/// Used by both the built-in `map` check and the custom-command cross-section validation so neither can
-/// rebind a reserved chord. Host-free, next to the chord model so the rule is discoverable.
+/// Used by the built-in `map` check and the custom-command cross-section validation, so neither can rebind one.
 public func isReservedMonitorChord(_ chord: Chord) -> Bool {
     if chord.mods.contains(.control), chord.key == "tab" { return true }
     if chord.mods == [.control], chord.key == "1" || chord.key == "2" { return true }
@@ -208,9 +193,8 @@ public struct Chord: Equatable, Hashable, Sendable {
         self.key = key
     }
 
-    /// The chord rendered back to kitty syntax (e.g. `cmd+shift+e`), the form the user writes in
-    /// `keymap.conf`. Modifiers are emitted in a fixed `ctrl+cmd+opt+shift` order so the round-trip is
-    /// stable; shows a built-in's current binding the same way custom commands show their raw shortcut.
+    /// The chord in kitty syntax (e.g. `cmd+shift+e`), the form the user writes in `keymap.conf`. Modifiers
+    /// emit in a fixed `ctrl+cmd+opt+shift` order so the round-trip is stable.
     public var displayString: String {
         var parts: [String] = []
         if mods.contains(.control) { parts.append("ctrl") }
@@ -221,10 +205,9 @@ public struct Chord: Equatable, Hashable, Sendable {
         return parts.joined(separator: "+")
     }
 
-    /// The chord rendered as macOS menu glyphs (e.g. `⌘N`, `⌘⌥N`, `⌃P`): modifiers in the macOS order
-    /// `⌃⌥⇧⌘`, then the key (single letters uppercased, named keys as their symbols). Used for the
-    /// action-palette hints so a built-in reads like its menu equivalent; custom commands keep the raw
-    /// kitty `displayString`.
+    /// The chord as macOS menu glyphs (e.g. `⌘⌥N`): modifiers in the macOS order `⌃⌥⇧⌘`, then the key (single
+    /// letters uppercased, named keys as symbols) — action-palette hints, so a built-in reads like its menu equivalent;
+    /// custom commands keep the raw kitty `displayString`.
     public var glyphString: String {
         var s = ""
         if mods.contains(.control) { s += "⌃" }
@@ -246,19 +229,17 @@ public struct Chord: Equatable, Hashable, Sendable {
     }
 }
 
-/// A keybind: an ordered sequence of chords. Length 1 is a simple chord (e.g. `cmd+shift+e`),
-/// length > 1 is a leader sequence (e.g. `ctrl+a > b`).
+/// A keybind: an ordered sequence of chords. Length 1 is a simple chord, length > 1 a leader sequence
+/// (e.g. `ctrl+a > b`).
 public typealias Keybind = [Chord]
 
-/// Parse a keybind string into a `Keybind`, or `nil` when it is empty, malformed, or names an unknown
-/// modifier.
+/// Parse a keybind string into a `Keybind`, or `nil` when it is empty, malformed, or names an unknown modifier.
 ///
 /// The grammar is chords separated by `>`, each a `+`-joined list of modifier words and a final base key,
-/// case-insensitive: `cmd+shift+e`, `ctrl+a>b`, `ctrl + a > b`. The base key is a single printable
-/// character or one of `bindableNamedKeys` (`tab`/`space`/`return`/`delete`/`left`/`right`/`up`/`down`) —
-/// the keys the app-side runner can actually produce; any other multi-char word (`esc`, `f1`) is rejected.
-/// Returns `nil` for an empty input, an empty chord (a trailing `>` or `+`), a chord with no base key or
-/// more than one, an unrecognized modifier word, or an unproducible named key.
+/// case-insensitive: `cmd+shift+e`, `ctrl+a>b`, `ctrl + a > b`. The base key is a single printable character
+/// or one of `bindableNamedKeys`; any other multi-char word (`esc`, `f1`) is rejected. Returns `nil` for an
+/// empty input, an empty chord (a trailing `>` or `+`), a chord with no base key or more than one, an
+/// unrecognized modifier word, or an unproducible named key.
 public func parseKeybind(_ s: String) -> Keybind? {
     let chordStrings = s.split(separator: ">", omittingEmptySubsequences: false)
     guard !chordStrings.isEmpty else { return nil }
@@ -271,9 +252,8 @@ public func parseKeybind(_ s: String) -> Keybind? {
     return keybind
 }
 
-/// Parse a single chord (a `+`-joined list of modifier words plus one base key), or `nil` when it
-/// is empty, has no base key, has multiple base keys, names an unknown modifier, or names a base key
-/// the runner can't fire (a multi-char word that is not in `bindableNamedKeys`).
+/// Parse a single chord (a `+`-joined list of modifier words plus one base key), or `nil` when it is empty,
+/// has no or multiple base keys, names an unknown modifier, or a multi-char key outside `bindableNamedKeys`.
 private func parseChord(_ s: String) -> Chord? {
     let tokens = s.split(separator: "+", omittingEmptySubsequences: false)
         .map { $0.trimmingCharacters(in: .whitespaces).lowercased() }
@@ -291,8 +271,7 @@ private func parseChord(_ s: String) -> Chord? {
         key = token
     }
 
-    // the base key must be a single character or a named key the runner can produce; reject any
-    // other multi-char word (e.g. `esc`/`f1`) so the UI never accepts a chord that can't fire.
+    // reject a multi-char word outside `bindableNamedKeys` so the UI never accepts a chord that can't fire.
     guard let key, key.count == 1 || bindableNamedKeys.contains(key) else { return nil }
     return Chord(mods: mods, key: key)
 }
@@ -320,12 +299,10 @@ public struct KeybindConflict: Equatable, Sendable {
     }
 }
 
-/// Find shortcut conflicts across a list of custom commands.
-///
-/// Two parseable, non-empty shortcuts conflict when one keybind is a prefix of the other (a duplicate is
-/// the degenerate equal-length case): the shorter bind would fire — or be forced to wait — ambiguously
-/// while the longer one is still being typed. Commands with an empty or unparseable shortcut are skipped
-/// (palette-only / surfaced separately).
+/// Find shortcut conflicts across a list of custom commands. Two parseable, non-empty shortcuts conflict when
+/// one keybind is a prefix of the other (a duplicate is the degenerate equal-length case): the shorter would
+/// fire — or be forced to wait — ambiguously while the longer is still being typed. Commands with an empty or
+/// unparseable shortcut are skipped (palette-only / surfaced separately).
 public func keybindConflicts(_ commands: [CustomCommand]) -> [KeybindConflict] {
     let parsed: [(id: UUID, keybind: Keybind)] = commands.compactMap { command in
         guard !command.shortcut.isEmpty, let keybind = parseKeybind(command.shortcut) else { return nil }
@@ -342,8 +319,7 @@ public func keybindConflicts(_ commands: [CustomCommand]) -> [KeybindConflict] {
 }
 
 /// Whether one keybind is a prefix of another (equal length counts — a duplicate is a prefix of itself).
-/// Order-independent: it sorts the two by length itself and checks the shorter-or-equal against the
-/// longer, so the caller need not pass them in both directions.
+/// Order-independent: it checks the shorter-or-equal against the longer, so callers pass one direction only.
 private func isPrefix(_ a: Keybind, of b: Keybind) -> Bool {
     let (shorter, longer) = a.count <= b.count ? (a, b) : (b, a)
     return Array(longer.prefix(shorter.count)) == shorter

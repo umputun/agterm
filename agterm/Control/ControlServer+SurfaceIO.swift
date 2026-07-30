@@ -1,15 +1,13 @@
 import Foundation
 import agtermCore
 
-/// `ControlServer` surface-I/O action arms — font size, selection copy, background watermark, buffer read,
-/// in-terminal search, and text injection. These reach into the live `GhosttySurfaceView`, so they own the
-/// surface-touching half of the dispatch. Split out of `ControlServer.swift` for the swiftlint size limit.
+/// `ControlServer` arms that reach into a live `GhosttySurfaceView` — font size, selection copy, background
+/// watermark, buffer read, in-terminal search, text injection. Split out for the swiftlint size limit.
 extension ControlServer {
-    /// Resolve the target session and run a libghostty binding action on its addressable surface (a SPECIFIC
-    /// surface, unlike the menu path, which only hits the focused one). Shared by the clipboard/selection
-    /// arms (`session.paste`/`session.selectall`). `addressableSurface` is the main pane, falling back to a
-    /// promoted split survivor whose primary shell exited (which nils `surface`) — else a session the user is
-    /// actively typing in would report "session not realized". A never-shown session has no surface → error.
+    /// Runs a libghostty binding action on the target's addressable surface — a SPECIFIC one, unlike the menu
+    /// path's focused pane. Shared by `session.paste`/`session.selectall`. `addressableSurface` falls back to
+    /// a promoted split survivor whose primary shell exited (which nils `surface`), else a session the user
+    /// is typing in reports "session not realized"; a never-shown session has no surface at all → error.
     private func surfaceBindingAction(_ target: String?, window: String?, action: String) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             guard let surface = store.session(withID: id)?.addressableSurface as? GhosttySurfaceView else {
@@ -20,18 +18,15 @@ extension ControlServer {
         }
     }
 
-    /// Run a font binding action (`font.inc`/`font.dec`/`font.reset`) on a pane of the target session; a
-    /// menu-driven font change rides the same CELL_SIZE → persist path as the keybind. `pane` picks the
-    /// surface like `session.type`/`session.text` (`left`|`right`|`scratch`, no `other`): omitted/`left` is
-    /// the main pane (`addressableSurface`, so a promoted split survivor whose primary shell exited is still
-    /// reached — the pre-pane behavior); `right` is the split pane (`session has no split pane` without one);
-    /// `scratch` is the scratch terminal (`session has no scratch terminal` when none was opened), whose
-    /// surface is kept alive so its font is settable while hidden. An unknown value is an `invalid pane`
-    /// error, validated here as well as in the CLI `validate()` so a raw socket client can't bypass it. A
-    /// resolved-but-unrealized pane returns `session not realized` (the `performBindingAction` Bool), so a
-    /// split/scratch request in the layout beat after the pane is shown never silently no-ops. Only the main
-    /// pane's size persists — the split/scratch `onFontSizeChange` is deliberately unwired, so their cmd +/-
-    /// changes aren't saved (matching a GUI font change on them).
+    /// Runs a font binding action (`font.inc`/`font.dec`/`font.reset`) on a pane of the target session; a
+    /// menu-driven change rides the same CELL_SIZE → persist path as the keybind. `pane` follows
+    /// `session.type`/`session.text` (`left`|`right`|`scratch`, no `other`): omitted/`left` is the main pane
+    /// via `addressableSurface` (the pre-pane behavior, still reaching a promoted split survivor); `scratch`
+    /// is settable while hidden, its surface kept alive. An unknown value is rejected here as well as in the
+    /// CLI `validate()`, so a raw socket client can't bypass it, and a resolved-but-unrealized pane returns
+    /// `session not realized` rather than silently no-opping in the layout beat after the pane is shown.
+    /// Only the main pane's size persists — the split/scratch `onFontSizeChange` is deliberately unwired,
+    /// matching a GUI font change on them.
     func font(_ target: String?, window: String?, pane: String?, action: String) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             // resolveSession already resolved `id` from this store, so `session(withID:)` is non-nil.
@@ -58,8 +53,7 @@ extension ControlServer {
             guard let surface = chosen as? GhosttySurfaceView else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
-            // a false return = the surface isn't realized yet; report that rather than a false ok,
-            // matching session.type's inject() Bool contract.
+            // a false return = surface not realized yet; report it, not a false ok (session.type's contract).
             guard surface.performBindingAction(action) else {
                 return ControlResponse(ok: false, error: "session not realized")
             }
@@ -67,22 +61,20 @@ extension ControlServer {
         }
     }
 
-    /// Paste the system clipboard into the target session's surface (`session.paste`, the control analogue of
-    /// ⌘V / Edit ▸ Paste), via `paste_from_clipboard` — the same libghostty path the keyboard takes
-    /// (bracketed paste, no OSC-52 prompt). Read the result back with `session.text`.
+    /// The ⌘V / Edit ▸ Paste analogue (`session.paste`): the same libghostty `paste_from_clipboard` the
+    /// keyboard takes, so bracketed paste applies and no OSC-52 prompt appears. Read back with `session.text`.
     func pasteSession(_ target: String?, window: String?) -> ControlResponse {
         surfaceBindingAction(target, window: window, action: "paste_from_clipboard")
     }
 
-    /// Select the target session's entire terminal buffer (`session.selectall`, the control analogue of
-    /// ⌘A / Edit ▸ Select All). Runs `select_all`; read the resulting selection back with `session.copy`.
+    /// Selects the target session's entire terminal buffer (`session.selectall`, the ⌘A / Edit ▸ Select All
+    /// analogue); read the resulting selection back with `session.copy`.
     func selectAllSession(_ target: String?, window: String?) -> ControlResponse {
         surfaceBindingAction(target, window: window, action: "select_all")
     }
 
-    /// Resolve the target session and return its surface's current selection text in the response (it does
-    /// NOT write the system clipboard — automation pipes the returned text into another `session.type`). A
-    /// never-shown session has no surface yet → error; an empty or absent selection → "no selection".
+    /// Returns the surface's current selection text in the response, NOT to the system clipboard (automation
+    /// pipes it into another `session.type`). No surface → error; empty or absent selection → "no selection".
     func copySelection(_ target: String?, window: String?) -> ControlResponse {
         return resolver.resolveSession(target, window: window) { store, id in
             // `addressableSurface`, not `surface`: must resolve the SAME pane `session.selectall` acted on,
@@ -97,11 +89,10 @@ extension ControlServer {
         }
     }
 
-    /// Set or clear a session's background watermark (`session.background`, mode `image|text|clear`): validate
-    /// the inputs (shared `WatermarkConfig` enum checks; image format + existence), build the
-    /// `BackgroundWatermark` spec (nil for `clear`), persist it on the session (`AppStore`, so it rides
-    /// `SessionSnapshot`), then apply it to the realized surface(s). A never-shown session keeps the spec and
-    /// applies it itself when its surface is created. Returns the session id.
+    /// Sets or clears a session's background watermark (mode `image|text|clear`): validate the inputs (shared
+    /// `WatermarkConfig` enum checks; image format + existence), persist the spec on the session so it rides
+    /// `SessionSnapshot`, then apply it to the realized surface(s). A never-shown session keeps the spec and
+    /// applies it itself on surface creation. Returns the session id.
     func setSessionBackground(_ target: String?, window: String?,
                               options: ControlSessionBackgroundOptions) -> ControlResponse {
         let watermark = options.watermark
@@ -141,13 +132,11 @@ extension ControlServer {
     }
 
     /// Returns a pane's terminal buffer as plain text: the visible screen by default, screen + scrollback
-    /// with `all`, or the last `lines` lines (reads the screen, then trims). `pane` picks the surface (`left`
-    /// main, `right` split, `scratch` the scratch terminal — readable while hidden, since its surface is kept
-    /// alive — or the on-screen pane when omitted); `right` errors without a split, `scratch` errors `session
-    /// has no scratch terminal` when none was opened. `all` and `lines` are mutually exclusive and `lines`
-    /// must be > 0, validated here as well as in the CLI `validate()` so a raw socket client can't bypass it
-    /// (an unchecked `lines <= 0` would silently fall through to the full buffer). A genuinely blank screen
-    /// reads ok with an empty string; a failed surface read is an error, not a silent empty.
+    /// with `all`, or the last `lines` lines (reads the screen, then trims). `pane` picks left/right/scratch
+    /// (the scratch readable while hidden, its surface kept alive), or the on-screen pane when omitted. `all`
+    /// and `lines` are mutually exclusive and `lines` must be > 0, rejected here as well as in the CLI so a
+    /// raw socket client can't bypass it (an unchecked `lines <= 0` would fall through to the full buffer).
+    /// A genuinely blank screen reads ok with an empty string; a failed read is an error, not a silent empty.
     func readSessionText(_ target: String?, window: String?, options: ControlSessionTextOptions) -> ControlResponse {
         let pane = options.pane, all = options.all, lines = options.lines
         if all, lines != nil {
@@ -163,8 +152,8 @@ extension ControlServer {
             let chosen: (any TerminalSurface)?
             switch pane {
             case nil:
-                // omitted = the surface ON SCREEN, the same `Session.onScreenSurface` resolution
-                // `session.search` uses, so it never reads a pane hidden under the scratch.
+                // omitted = the ON-SCREEN surface (as `session.search` resolves it), never a pane hidden
+                // under the scratch.
                 chosen = session.onScreenSurface
             case "left": chosen = session.surface
             case "right":
@@ -190,22 +179,16 @@ extension ControlServer {
         }
     }
 
-    /// Drive in-terminal search on the session `id`, mirroring the GUI bar and the `session.type`/
-    /// floating-overlay arms. `close` drives the pinned `searchSurface` WITHOUT selecting, so closing a
-    /// background session's bar never yanks the user's visible selection (`endSearch()` is a
-    /// side-effect-free exit, like `session.copy`). open/needle/navigate SELECT the target so the bar +
-    /// highlights are visible and the surface mounts, open search on the focused pane if not already active
-    /// (`startSearch`, whose START callback pins it as `searchSurface`; bounded realize-poll for a never-shown
-    /// session), then set the needle from `text` (`sendSearchQuery`) and step on `to == next|prev`
-    /// (`navigateSearch`) — both on the PINNED owner, so a split focus move after open can't retarget them.
-    /// `to` must be next/prev/close (else an `invalid` error). The count lands asynchronously via libghostty's
-    /// SEARCH_TOTAL callback; `searchTotal`/`searchSelected` are cleared before the query so the bounded
-    /// main-actor poll waits for the FRESH count, then `count` + the "N of M" string are returned in `text`.
+    /// Drives in-terminal search on session `id`, mirroring the GUI bar. `close` exits without selecting;
+    /// open/needle/navigate select the target, open search on the focused pane if not already active, then
+    /// set the needle and step on `to == next|prev` — all on the PINNED `searchSurface`, so a split focus
+    /// move after open can't retarget them. `to` must be next/prev/close. The count lands asynchronously via
+    /// libghostty's SEARCH_TOTAL callback, so a bounded main-actor poll waits for it before returning
+    /// `count` + the "N of M" string in `text`.
     func searchSession(_ target: String?, window: String?, text: String?, to: String?) async -> ControlResponse {
-        // resolve first (cross-window when no `window`), then select + realize; the realize path is async
-        // (bounded poll), so it can't use the synchronous `resolveSession` helper. error strings stay in
-        // sync with `resolve(...)`, and target lookup wins over `to` validation to preserve the
-        // pre-dispatcher error order.
+        // resolve first (cross-window when no `window`), then select + realize: the realize path is async
+        // (bounded poll), so the synchronous `resolveSession` helper can't serve. Error strings stay in sync
+        // with `resolve(...)`; target lookup must win over `to` validation.
         switch resolver.resolveSessionTarget(target, window: window) {
         case .failure(let response):
             return response
@@ -223,10 +206,10 @@ extension ControlServer {
             return ControlResponse(ok: false, error: "no such session")
         }
 
-        // close exits search without selecting: a background session's surface is already realized while
-        // hidden and end_search has no visible side effect, so don't disturb the active session. drive the
-        // PINNED `searchSurface`, not a re-resolved `activeSurface` — after a split focus move that is the
-        // wrong pane and would strand the owner. with no open search there's no owner, so close no-ops.
+        // close exits without selecting: a hidden session's surface is already realized and end_search has no
+        // visible side effect, so don't disturb the active session. Drive the PINNED `searchSurface`, not a
+        // re-resolved `activeSurface` — after a split focus move that is the wrong pane and strands the
+        // owner; with no open search there is no owner, so close no-ops.
         if to == "close" {
             (session.searchSurface as? GhosttySurfaceView)?.endSearch()
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
@@ -241,9 +224,8 @@ extension ControlServer {
         }
 
         // open/needle/navigate need the bar + highlights visible, so select the target (which also realizes
-        // a never-shown surface). the OPEN uses the search target — a covering scratch (scratchActive, no
-        // overlay) wins, mirroring AppActions.searchTarget(), else the focused pane; the factory pins it as
-        // `searchSurface`, and once open needle/navigate target the pinned owner so they can't drift.
+        // a never-shown surface). The OPEN uses the search target — a covering scratch wins, mirroring
+        // `AppActions.searchTarget()`, else the focused pane; the factory pins it as `searchSurface`.
         store.selectSession(id)
         // `onScreenSurface` is the shared pane-vs-scratch resolution, also used by `session.text`.
         var openSurface = session.onScreenSurface as? GhosttySurfaceView
@@ -271,11 +253,10 @@ extension ControlServer {
         if let text {
             // on a needle CHANGE an OLDER query's SEARCH_TOTAL may still be queued on the main loop
             // (callbacks hop via DispatchQueue.main.async), so drain one run-loop turn to deliver it BEFORE
-            // clearing — then the settle-poll below waits for THIS needle's callback, not a stale count. the
-            // SAME needle must NOT drain/clear: libghostty does not re-emit SEARCH_TOTAL for an unchanged
-            // query, so clearing would leave the count nil (the retry idiom re-sends it while the scrollback
-            // renders). residual race: a callback more than one run-loop turn late (behind heavy render
-            // work) still lands after the clear; only a per-query epoch through libghostty closes that.
+            // clearing; the settle-poll then waits for THIS needle's callback, not a stale count. The SAME
+            // needle must NOT drain/clear: libghostty does not re-emit SEARCH_TOTAL for an unchanged query,
+            // so clearing would leave the count nil. Residual race: a callback more than one turn late
+            // (behind heavy render work) still lands after the clear; only a per-query epoch closes that.
             if needleChanged {
                 await Task.yield()
                 try? await Task.sleep(nanoseconds: 30_000_000)
@@ -285,8 +266,8 @@ extension ControlServer {
             session.searchNeedle = text
             surface.sendSearchQuery(text)
             // an explicitly-empty needle clears the query: libghostty tears the search thread down and emits
-            // no fresh SEARCH_TOTAL (its quit event resets the count), so reset count/selected here and skip
-            // the settle-poll — nothing to wait for, and polling would burn the full timeout.
+            // no fresh SEARCH_TOTAL, so reset count/selected here and skip the settle-poll (it would burn
+            // the full timeout waiting for nothing).
             if text.isEmpty {
                 session.searchTotal = nil
                 session.searchSelected = nil
@@ -303,27 +284,24 @@ extension ControlServer {
             try? await Task.sleep(nanoseconds: 30_000_000)
             if session.searchTotal != nil { break }
         }
-        // an empty display string (the bar opened with no query yet) maps to a nil `text` so the CLI
-        // prints `ok` rather than a blank line; the count is nil until a query runs.
+        // an empty display string (the bar opened with no query yet) maps to nil so the CLI prints `ok`
+        // rather than a blank line; the count is nil until a query runs.
         let display = session.searchDisplayText
         return ControlResponse(ok: true, result: ControlResult(text: display.isEmpty ? nil : display,
                                                                count: session.searchTotal))
     }
 
-    /// Inject `text` into session `id`'s surface. A surface is created lazily (deferred until it has a
+    /// Injects `text` into session `id`'s surface. A surface is created lazily (deferred until it has a
     /// non-zero backing size, so a never-shown session has `surface == nil`). `inject(text:)` sends the text
     /// as `ghostty_surface_key` keystrokes (NOT `ghostty_surface_text` — see its doc for why), which write to
     /// the child pty; the kernel buffers the pty, so text is never lost even before the first prompt.
-    /// `pane` picks the pane like `session.text` (`left`|`right`|`scratch`, no `other`): omitted/`left` is
-    /// the main pane, NOT the focused one — the pre-pane behavior, so existing automation is unaffected;
-    /// `right` is the split pane (`session has no split pane` without one); `scratch` is the scratch
-    /// terminal, typable even while hidden since its surface is kept alive (`session has no scratch
-    /// terminal` when none has been opened). The realize/select path below is main-pane only — selecting
-    /// never creates a split pane, so `right`/`scratch` inject into the existing surface or error.
-    /// - surface already realized → inject immediately, ok.
-    /// - never realized, `select:true` → select it, then poll for the surface (bounded: 12 × 0.03 s, the
-    ///   `focusSplitPane` idiom) and inject on the first realized attempt; never realized → error (never a
-    ///   false ok).
+    /// `pane` follows `session.text` (`left`|`right`|`scratch`, no `other`): omitted/`left` is the main pane,
+    /// NOT the focused one — the pre-pane behavior, so existing automation is unaffected; `scratch` is
+    /// typable while hidden since its surface is kept alive. Selecting never creates a split pane, so the
+    /// realize/select path below is main-pane only and `right`/`scratch` inject or error.
+    /// - already realized → inject immediately, ok.
+    /// - never realized, `select:true` → select it, then poll (bounded: 12 × 0.03 s, the `focusSplitPane`
+    ///   idiom) and inject on the first realized attempt; still unrealized → error, never a false ok.
     /// - never realized, no select → an immediate "use select" error.
     func injectText(_ text: String, into id: UUID, store: AppStore, select: Bool, pane: String?) async -> ControlResponse {
         switch pane {
@@ -340,8 +318,8 @@ extension ControlServer {
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         case "scratch":
-            // as with `right`, a false `inject` (not yet realized in the ms after `session.scratch on`,
-            // before layout) reports `session not realized` rather than silently dropping the keystrokes.
+            // as with `right`, a false `inject` (the ms after `session.scratch on`, before layout) reports
+            // `session not realized` rather than silently dropping the keystrokes.
             guard let scratch = store.session(withID: id)?.scratchSurface else {
                 return ControlResponse(ok: false, error: "session has no scratch terminal")
             }
@@ -349,8 +327,7 @@ extension ControlServer {
                 return ControlResponse(ok: false, error: "session not realized")
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
-        // `session.type` accepts left|right|scratch, with no `other` toggle like `session.focus`
-        // (mirroring `session.text`).
+        // `session.type` accepts left|right|scratch, with no `other` toggle (mirroring `session.text`).
         case .some(let value):
             return ControlResponse(ok: false, error: "invalid pane: \(value)")
         }
@@ -366,7 +343,7 @@ extension ControlServer {
         for _ in 0..<12 {
             try? await Task.sleep(nanoseconds: 30_000_000)
             // poll for the surface AND its realization (a false inject keeps polling), so a just-selected
-            // never-shown session isn't reported ok before its libghostty surface is up.
+            // session isn't reported ok before its libghostty surface is up.
             if let surface = store.session(withID: id)?.surface as? GhosttySurfaceView, surface.inject(text: text) {
                 return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
             }

@@ -19,8 +19,7 @@ public enum ControlToggleMode: Equatable, Sendable {
     case off
     case toggle
 
-    /// Parse a mode string, nil defaulting to `toggle`. Callers keep their command-specific tokens and
-    /// error strings by choosing the true/false spellings they already expose on the wire.
+    /// Parse a mode string (nil = `toggle`); `onToken`/`offToken` keep each command's own wire spellings.
     public static func parse(_ mode: String?, on onToken: String = "on", off offToken: String = "off") -> ControlToggleMode? {
         let value = mode ?? "toggle"
         if value == onToken { return .on }
@@ -78,28 +77,23 @@ public enum ControlSidebarViewMode: Equatable, Sendable {
     }
 }
 
-/// The four modes `workspace.focus` accepts, raw values being the wire tokens: `on` replaces the marked set
-/// with the target and enables the filter; `off` removes the target, disabling once the set empties;
-/// `toggle` replace-toggles (clears when the set is exactly the target and enabled, else replaces and
-/// enables); `add` inserts the target WITHOUT touching the filter flag — marking alone, so a set is built
-/// member by member with the whole tree on screen, where an add that enabled the filter would hide the rows
-/// the next add needs. There is deliberately no membership-TOGGLE mode: the row menu's membership item
-/// computes its own direction from what it just read and maps to `add` or `off`.
+/// The four modes `workspace.focus` accepts; raw values are the wire tokens and `helpSummary` states each
+/// one's effect. `add` leaves the filter flag alone so a set is built member by member with the whole tree on
+/// screen — an add that enabled the filter would hide the rows the next add needs. There is no
+/// membership-TOGGLE mode: the row menu's membership item computes its own direction from what it just read
+/// and maps to `add` or `off`.
 public enum ControlWorkspaceFocusMode: String, CaseIterable, Equatable, Sendable {
     case on, off, toggle, add
 
-    /// The accepted names pipe-joined (`on|off|toggle|add`) — the compact form the dispatcher's rejection
-    /// message uses. Derived from `allCases`, like `StatusShape.validNamesList`, so it cannot go stale.
+    /// Pipe-joined (`on|off|toggle|add`) for the dispatcher's rejection message; derived from `allCases`.
     public static var validNamesList: String { validNames.joined(separator: "|") }
 
-    /// The accepted names comma-joined (`on, off, toggle, add`) — the prose form the `agtermctl workspace
-    /// focus` local rejection message uses.
+    /// Comma-joined (`on, off, toggle, add`) for the `agtermctl workspace focus` local rejection message.
     public static var validNamesPhrase: String { validNames.joined(separator: ", ") }
 
-    /// What this mode does to the marked set AND the filter flag in one clause — the building block of the
-    /// `agtermctl workspace focus` argument help, so that help cannot go stale when a case is added (the
-    /// `StatusShape.validNamesPhrase` precedent). Every clause names the filter effect, since `add`'s
-    /// "leaves the flag alone" reads as the exception unless the others say so too.
+    /// One clause per mode for the `agtermctl workspace focus` argument help (the
+    /// `StatusShape.validNamesPhrase` precedent), so that help cannot go stale when a case is added. Every
+    /// clause names the filter effect, else `add`'s "leaves the flag alone" reads as the exception.
     public var helpSummary: String {
         switch self {
         case .on: return "on (mark it alone and apply the filter)"
@@ -119,9 +113,8 @@ public enum ControlWorkspaceFocusMode: String, CaseIterable, Equatable, Sendable
 public enum ControlSessionMove: Equatable, Sendable {
     case reorder(ReorderDirection)
     case workspace(String)
-    /// Relocate + position relative to an anchor session (id / prefix / `active`); `after == false` places
-    /// before it. The anchor carries its own workspace, so this form self-identifies the destination and
-    /// never reads the workspace parameter.
+    /// Relocate relative to an anchor session (id / prefix / `active`); `after == false` places before it.
+    /// The anchor carries its own workspace, so this form never reads the workspace parameter.
     case place(anchor: String, after: Bool)
 }
 
@@ -139,17 +132,15 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
     public let workspaceName: String?
     public let createWorkspace: Bool?
     public let command: String?
-    /// Whether a `--command` session HOLDS its surface after the command exits (`--wait`) instead of
-    /// closing. Meaningful only with `command`; the dispatcher rejects `--wait` without a `--command`.
+    /// Hold the surface after `--command` exits; the dispatcher rejects `--wait` without a `--command`.
     public let wait: Bool?
     public let name: String?
-    /// Anchor session to place the new session right AFTER (id / prefix / `active`); the anchor carries its
-    /// own workspace, so this bypasses `workspace`/`workspaceName`. Mutually exclusive with `before`.
+    /// Anchor to place the new session right AFTER (id / prefix / `active`); it carries its own workspace,
+    /// so this bypasses `workspace`/`workspaceName`. Mutually exclusive with `before`.
     public let after: String?
     /// Anchor session to place the new session right BEFORE, the mirror of `after`.
     public let before: String?
-    /// Create in the background: skip selecting and focusing, leaving the current selection untouched (the
-    /// CLI's `--no-select`). Defaults to false, the normal select-and-focus behavior.
+    /// Create in the background (`--no-select`): skip select+focus, leaving the current selection untouched.
     public let noSelect: Bool
 
     public init(window: String?, cwd: String?, workspace: String?, workspaceName: String?,
@@ -169,25 +160,24 @@ public struct ControlSessionCreateOptions: Equatable, Sendable {
     }
 }
 
-/// Parsed `session.status` payload. Sound validation and playback stay host-side; `color` is the per-call
-/// `#rrggbb` glyph-tint override (hex-validated in the dispatcher) and `shape` the per-call silhouette
-/// override (parsed to `StatusShape` there), both threaded onto the ephemeral `AgentIndicator`.
+/// Parsed `session.status` payload. Sound validation and playback stay host-side; the dispatcher
+/// hex-validates the per-call `#rrggbb` `color`, and both overrides thread onto the ephemeral
+/// `AgentIndicator`.
 public struct ControlSessionStatusUpdate: Equatable, Sendable {
     public let status: AgentStatus
     public let blink: Bool?
     public let autoReset: Bool?
     public let sound: String?
     public let color: String?
-    /// The per-call glyph silhouette; nil falls back to the Settings shape / the built-in plain circle.
-    /// Already validated — the dispatcher rejects an unknown raw value before any mutation.
+    /// Per-call glyph silhouette; nil falls back to the Settings shape / the built-in plain circle. The
+    /// dispatcher rejects an unknown raw value before any mutation.
     public let shape: StatusShape?
     /// Which pane set the status (`left`=main, `right`=split, `scratch`), nil when unspecified. Stamped onto
     /// the indicator so pane-scoped keystroke-clear and pane-aware navigation know which surface blocked.
     public let pane: StatusPane?
-    /// The surface's STABLE spawn token (the shell's baked `AGTERM_PANE_ID`, forwarded by the hook as
-    /// `--pane-id`), carried through only — resolution stays app-side against the session's live surfaces
-    /// (`Session.paneRole(forToken:)`) because the dispatcher has no session. When it resolves it OVERRIDES
-    /// the stale role `pane`, fixing a status set from a promoted-then-re-split pane (#199);
+    /// The surface's STABLE spawn token (the shell's baked `AGTERM_PANE_ID`, forwarded as `--pane-id`),
+    /// carried through only: the dispatcher has no session, so `Session.paneRole(forToken:)` resolves it
+    /// app-side. A resolved token OVERRIDES the stale role `pane` (a promoted-then-re-split pane, #199);
     /// nil/empty/unknown falls back to `pane`.
     public let paneID: String?
 
@@ -205,10 +195,9 @@ public struct ControlSessionStatusUpdate: Equatable, Sendable {
     }
 }
 
-/// The three forms of the `session.restore` per-pane restore-command override, parsed from the wire tokens
-/// `set` / `none` / `clear`. `pinNone` is deliberately NOT spelled `none`: a bare `case none` makes the
-/// compiler warn "assuming you mean Optional<T>.none" wherever the enum appears in an Optional context,
-/// which the dispatcher's parse step does.
+/// The three forms of the `session.restore` per-pane restore-command override, from the wire tokens
+/// `set` / `none` / `clear`. `pinNone` is not spelled `none`: a bare `case none` makes the compiler warn
+/// "assuming you mean Optional<T>.none" in an Optional context, which the dispatcher's parse step is.
 public enum ControlRestoreOverride: Equatable, Sendable {
     /// wire `set` — pin this shell line, run verbatim on the next launch.
     case pin(String)
@@ -217,19 +206,17 @@ public enum ControlRestoreOverride: Equatable, Sendable {
     /// wire `clear` — drop the pin, back to the captured-foreground auto-restore.
     case unpin
 
-    /// The storage bound on a pinned command, in UTF-8 BYTES (not graphemes): the value persists in
-    /// `windows/<id>.json`, so the cap guards the snapshot, not the display width.
+    /// Storage bound in UTF-8 BYTES, not graphemes: the pin persists in `windows/<id>.json`, so the cap
+    /// guards the snapshot, not the display width.
     public static let maxCommandBytes = 1024
 }
 
-/// Parsed `session.restore` payload. Pane resolution stays host-side: `paneID` is carried opaquely and
-/// resolved app-side against the session's LIVE surfaces (`Session.paneRole(forToken:)`), falling back to
-/// the baked role `pane` — and, unlike `session.status`, an unresolvable token with no explicit `pane` is an
-/// error rather than a silent main-pane default.
+/// Parsed `session.restore` payload. `paneID` is carried opaquely and resolved app-side against the LIVE
+/// surfaces (`Session.paneRole(forToken:)`), falling back to the baked role `pane` — but unlike
+/// `session.status`, an unresolvable token with no explicit `pane` errors instead of defaulting to main.
 public struct ControlSessionRestoreUpdate: Equatable, Sendable {
     public let pin: ControlRestoreOverride
-    /// Which pane to pin (`left`=main, `right`=split; `scratch` is rejected app-side — the scratch terminal
-    /// is never restored); nil = the main pane.
+    /// Which pane to pin (`left`=main, `right`=split, nil=main); `scratch` is rejected app-side, never restored.
     public let pane: StatusPane?
     /// The surface's STABLE spawn token (the shell's baked `AGTERM_PANE_ID`), forwarded as `--pane-id`.
     public let paneID: String?

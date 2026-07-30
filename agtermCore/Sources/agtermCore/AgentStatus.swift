@@ -5,19 +5,16 @@ import Foundation
 public enum AgentStatus: String, Codable, Sendable, CaseIterable {
     case idle, active, completed, blocked
 
-    /// True for the states that need user attention (a `blocked` prompt or a `completed` run) — the set
-    /// the attention navigation (⌃⌥↑/↓, `session.go next-attention|prev-attention`) steps through,
-    /// excluding `idle` (no glyph) and `active` (the agent is still working).
+    /// True for the states attention navigation (⌃⌥↑/↓, `session.go next-attention|prev-attention`) steps
+    /// through: a `blocked` prompt or a `completed` run, not `active` (still working) or `idle` (no glyph).
     public var needsAttention: Bool { self == .blocked || self == .completed }
 
     /// Whether a keystroke in the session's terminal should clear this glyph back to idle. `blocked` and
-    /// `completed` clear on ANY key (you've engaged with the prompt / the finished result); `active` clears
-    /// ONLY on an interrupt keystroke — Escape or Ctrl-C, which Claude Code (like most TUIs) treats alike
-    /// for dismissing a pending prompt — so ordinary typing while the agent works does NOT wipe the
-    /// "working" glyph, but cancelling a prompt does. That covers the quick-cancel case: a pending question
-    /// can still read `active` when you cancel it (Claude Code's `blocked` notification lands seconds
-    /// later) and the interrupt fires no hook, so this is the only signal that drops the stale `active`.
-    /// `idle` has no glyph to clear.
+    /// `completed` clear on ANY key (you've engaged with the prompt / the finished result); `active` clears ONLY
+    /// on an interrupt (Escape or Ctrl-C), so typing while the agent works keeps the "working" glyph. That
+    /// covers the quick-cancel case: a pending question can still read `active` when you cancel it (Claude
+    /// Code's `blocked` notification lands seconds later) and the interrupt fires no hook, so nothing else
+    /// drops the stale value.
     func clearedByKeystroke(isInterrupt: Bool) -> Bool {
         switch self {
         case .blocked, .completed: return true
@@ -26,9 +23,8 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
         }
     }
 
-    /// Sort priority for the attention list, lower first: `blocked` (0) is most urgent, then `active` (1),
-    /// then `completed` (2). `idle` (3) is never sorted — idle sessions are filtered out before the list is
-    /// built — but ranks last so any accidental inclusion sorts after the rest.
+    /// Sort priority for the attention list, lower first. `idle` is never sorted — idle sessions are filtered
+    /// out before the list is built — but ranks last so an accidental inclusion sorts after the rest.
     public var attentionRank: Int {
         switch self {
         case .blocked: return 0
@@ -38,10 +34,9 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
         }
     }
 
-    /// The sound to play for a `session.status` call, or nil for none. An explicit per-call sound
-    /// (`session.status --sound`) always wins, else the caller-configured `blockedDefault` plays but ONLY
-    /// for `blocked` (the Settings "Blocked sound"); empty strings count as unset. The app resolves the
-    /// returned name with `NSSound(named:)` — this is just the host-free precedence decision.
+    /// The sound to play for a `session.status` call, or nil for none: an explicit per-call sound
+    /// (`session.status --sound`) wins, else the configured `blockedDefault` (Settings "Blocked sound") plays
+    /// ONLY for `blocked`; empty strings count as unset. The app resolves the name with `NSSound(named:)`.
     public func effectiveSound(perCall: String?, blockedDefault: String?) -> String? {
         if let perCall, !perCall.isEmpty { return perCall }
         if self == .blocked, let blockedDefault, !blockedDefault.isEmpty { return blockedDefault }
@@ -49,10 +44,8 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
     }
 
     /// symbolName resolves the SF Symbol for the status glyph, shared by the AppKit sidebar and the SwiftUI
-    /// attention list. Two-level precedence: the per-call `override` (the ephemeral `AgentIndicator.shape`
-    /// from `session.status --shape`) wins, else the `configured` Settings shape for this status, else
-    /// `StatusShape.circle` — the built-in default for every non-idle state. `idle` returns the empty
-    /// string in every combination; it never renders a glyph, so the value is filtered out before use.
+    /// attention list: the per-call `override` (from `session.status --shape`) wins, else the `configured`
+    /// Settings shape, else `StatusShape.circle`. `idle` renders no glyph, so its "" is filtered out before use.
     public func symbolName(override: StatusShape?, configured: StatusShape?) -> String {
         guard self != .idle else { return "" }
         return (override ?? configured ?? .circle).symbolName
@@ -64,62 +57,52 @@ public enum AgentStatus: String, Codable, Sendable, CaseIterable {
     }
 }
 
-/// StatusPane records which pane of a session set the current agent status, in the same
-/// `left|right|scratch` vocabulary as the `--pane` control argument (`left`=main, `right`=split). It rides
-/// on `AgentIndicator` so pane-scoped keystroke-clear and pane-aware navigation know which surface
-/// blocked; raw values serialize to JSON as `"left"|"right"|"scratch"`.
+/// StatusPane records which pane set the current agent status, in the `--pane` control vocabulary it also
+/// serializes as (`left`=main, `right`=split, `scratch`). Pane-scoped keystroke-clear and pane-aware
+/// navigation read it off `AgentIndicator` to know which surface blocked.
 public enum StatusPane: String, Codable, Sendable, CaseIterable {
     case left, right, scratch
 }
 
-/// StatusShape is the silhouette a status glyph draws, so the shape carries the state alongside the tint.
-/// Every shape is a plain silhouette with no interior mark, selectable per status in Settings or per call
-/// via `session.status --shape`; `circle` is what an unset status draws. The raw value is the SF Symbol
-/// base name and serializes to JSON as `"circle"|"square"|…`.
+/// StatusShape is the silhouette a status glyph draws, so shape carries the state alongside the tint. Every
+/// shape is plain, with no interior mark, selectable per status in Settings or per call via
+/// `session.status --shape`; `circle` is what an unset status draws. The raw value is the SF Symbol base name.
 public enum StatusShape: String, Codable, Sendable, CaseIterable {
     case circle, square, triangle, diamond, capsule, star
 
-    /// SF Symbol name for the shape — the `.fill` variant, so every glyph is a solid silhouette rather
-    /// than an outline.
+    /// SF Symbol name for the shape — the `.fill` variant, so every glyph is a solid silhouette, not an outline.
     public var symbolName: String { "\(rawValue).fill" }
 
-    /// The human-facing name for the shape ("Triangle"): the Settings picker uses it as an option's
-    /// accessibility label and as the picker's own accessibility value.
+    /// The human-facing name ("Triangle"): the Settings picker's per-option accessibility label and its value.
     public var displayName: String { rawValue.capitalized }
 
-    /// The accepted names pipe-joined (`circle|square|…`) — the compact form the control server's rejection
-    /// message uses. Derived from `allCases`, like `WatermarkConfig.validFits`, so no message can go stale.
+    /// The accepted names pipe-joined — the compact form the control server's rejection message uses. Derived
+    /// from `allCases`, like `WatermarkConfig.validFits`, so no message can go stale.
     public static var validNamesList: String { validNames.joined(separator: "|") }
 
-    /// The accepted names comma-joined (`circle, square, …`) — the prose form the `agtermctl --shape`
-    /// help text and its local rejection message use.
+    /// The accepted names comma-joined — the prose form for `agtermctl --shape` help and its local rejection.
     public static var validNamesPhrase: String { validNames.joined(separator: ", ") }
 
     private static var validNames: [String] { allCases.map(\.rawValue) }
 }
 
-/// AgentIndicator is the per-session agent status value: the state plus an optional blink flag (pulse the
-/// glyph for attention), an optional autoReset flag (clear back to idle once the session is visited),
-/// optional per-call color and shape overrides for the glyph, and the pane that set the status. Ephemeral
-/// (never persisted) and set only via the control API.
+/// AgentIndicator is the per-session agent status value: state, blink, autoReset, per-call color and shape
+/// overrides, and the pane that set it. Ephemeral (never persisted) and set only via the control API.
 public struct AgentIndicator: Equatable, Sendable {
-    /// status is the current agent state; `.idle` renders no glyph.
     public var status: AgentStatus = .idle
     /// blink makes the visible glyph pulse for attention.
     public var blink: Bool = false
-    /// autoReset, when true, the indicator resets to idle once the session is visited (selected) — a
-    /// caller-set, status-agnostic flag, like blink.
+    /// autoReset resets the indicator to idle once the session is visited (selected) — caller-set and
+    /// status-agnostic, like blink.
     public var autoReset: Bool = false
-    /// color, when set, is a `#rrggbb` hex overriding the Settings-configured tint for this glyph only — a
-    /// caller-set, per-call value riding the ephemeral indicator, so the next `session.status` without a
-    /// color naturally discards it. nil renders the default status color.
+    /// color, when set, is a `#rrggbb` hex overriding the Settings tint for this glyph only; it rides the
+    /// ephemeral indicator, so the next `session.status` without a color discards it. nil = the default tint.
     public var color: String?
-    /// shape, when set, overrides the Settings-configured silhouette for this glyph only — a caller-set,
-    /// per-call value riding the ephemeral indicator, so the next `session.status` without a shape
-    /// naturally discards it. nil falls back to the Settings shape, else the default plain circle.
+    /// shape, when set, overrides the Settings-configured silhouette for this glyph only, discarded like
+    /// `color`. nil falls back to the Settings shape, else the default plain circle.
     public var shape: StatusShape?
-    /// statusPane records which pane set this status; nil means unspecified and is treated as `.left`
-    /// (main) by the clear logic.
+    /// statusPane records which pane set this status; nil is unspecified and treated as `.left` (main) by the
+    /// clear logic.
     public var statusPane: StatusPane?
 
     public init(status: AgentStatus = .idle, blink: Bool = false, autoReset: Bool = false,
@@ -132,10 +115,8 @@ public struct AgentIndicator: Equatable, Sendable {
         self.statusPane = statusPane
     }
 
-    /// clearedBy reports whether a keystroke from `pane` should clear this indicator back to idle: only
-    /// when the keystroke's own pane owns the current status (a nil `statusPane` counts as `.left`) AND the
-    /// status is clearable by that keystroke (`AgentStatus.clearedByKeystroke`). Keeps foreground typing
-    /// from wiping a status set by a background pane.
+    /// clearedBy: a keystroke from `pane` clears this indicator only when that pane owns the current status and
+    /// `clearedByKeystroke` allows it, so foreground typing can't wipe a background pane's status.
     public func clearedBy(pane: StatusPane, isInterrupt: Bool) -> Bool {
         (statusPane ?? .left) == pane && status.clearedByKeystroke(isInterrupt: isInterrupt)
     }

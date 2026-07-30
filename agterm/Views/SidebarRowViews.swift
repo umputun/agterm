@@ -2,33 +2,29 @@ import agtermCore
 import AppKit
 
 /// An `NSTableCellView` with a leading icon, the name field, and a trailing badge. The icon is the inherited
-/// `cell.imageView` (2x2 grid glyph for a workspace, outlined terminal for a session), so AppKit re-tints it
-/// white on a selected row; the name is `cell.textField`, which the rename and selection wiring operates on.
+/// `cell.imageView` (2x2 grid for a workspace, outlined terminal for a session), so AppKit re-tints it white on
+/// a selected row; the name is `cell.textField`, which the rename and selection wiring drives.
 final class SidebarCellView: NSTableCellView {
-    /// Trailing unseen-notification count for the row (a session's `unseenCount`, or a collapsed
-    /// workspace's roll-up), drawn as a small accent capsule. Hidden when 0.
+    /// Trailing unseen-notification count — a session's `unseenCount` or a collapsed workspace's roll-up; 0 hides.
     let badge = BadgeView()
 
-    /// Agent-status glyph drawn just left of the count badge, fed from the session's `agentIndicator`.
-    /// Hidden on `.idle` (workspace rows always idle for now).
+    /// Agent-status glyph fed from the session's `agentIndicator`; hidden on `.idle` (workspace rows always idle).
     let statusIcon = StatusIconView()
 
-    /// Inline "+" button between the name and the status icon, present only on workspace cells (nil for
-    /// session cells). Set by the cell builder; `handleSingleClick` reads it to avoid toggling expansion when
-    /// the click lands on the button.
+    /// Inline "+" button between the name and the status icon, workspace cells only (nil for session cells).
+    /// Set by the cell builder; `handleSingleClick` reads it to avoid toggling expansion on a click on it.
     var addButton: NSButton?
 
-    /// Width of `addButton`, toggled between 0 (hidden) and the glyph width by `setAddButtonVisible` — the
-    /// collapse-the-slot convention of `StatusIconView.widthConstraint`, so an idle row's name reclaims the
-    /// space. Set by the cell builder alongside `addButton`.
+    /// Width of `addButton`, toggled between 0 and the glyph width by `setAddButtonVisible` — the
+    /// collapse-the-slot convention of `StatusIconView.widthConstraint`, so an idle row's name reclaims it.
     var addButtonWidthConstraint: NSLayoutConstraint?
 
     private static let addButtonWidth: CGFloat = 16
     private var hoverTrackingArea: NSTrackingArea?
 
     /// Reveals or collapses the inline "+": the Finder/Xcode hover convention, so an idle row shows no button
-    /// and the roll-up badge keeps its slot. Driven by `mouseEntered`/`mouseExited`, reset hidden when a
-    /// reused cell is reconfigured in the row provider. No-op for session cells.
+    /// and the roll-up badge keeps its slot. Driven by `mouseEntered`/`mouseExited`, reset hidden when a reused
+    /// cell is reconfigured. No-op for session cells.
     func setAddButtonVisible(_ visible: Bool) {
         guard let addButton, let addButtonWidthConstraint else { return }
         addButton.isHidden = !visible
@@ -51,11 +47,9 @@ final class SidebarCellView: NSTableCellView {
 
     override func mouseEntered(with event: NSEvent) {
         super.mouseEntered(with: event)
-        // the workspace-row "+" is a toggleable Interface element, gated here so a hover reveals it only
-        // when the element is shown. hover-time only: a live Settings flip takes effect on the next hover,
-        // and a "+" already on screen when the element is hidden lingers until the next mouse exit/enter
-        // (e.g. a keyboard-driven toggle while the pointer sits on the row) — accepted, since it is a
-        // hover-only affordance and any stale "+" clears on the next mouse move.
+        // the "+" is a toggleable Interface element, gated at hover time only: a live Settings flip takes
+        // effect on the next hover, and a "+" already on screen lingers until the next mouse exit/enter —
+        // accepted for a hover-only affordance that clears on the next mouse move.
         guard !GhosttyApp.shared.hiddenInterfaceElements.contains(.workspaceAddSession) else { return }
         setAddButtonVisible(true)
     }
@@ -65,12 +59,11 @@ final class SidebarCellView: NSTableCellView {
         setAddButtonVisible(false)
     }
 
-    /// Color the row text/icon from the terminal theme: a selected row takes the selection foreground (over
-    /// the selection-background pill the row draws), or white over the soft wash when the theme exposes no
+    /// Colors row text/icon from the terminal theme: a selected row takes the selection foreground (over the
+    /// selection-background pill the row draws), or white over the soft wash when the theme exposes no
     /// selection color; an unselected row takes the theme foreground, icons dimmed. Driven from the real
     /// selection state, not `backgroundStyle` (AppKit flips that only while the table is first responder) —
-    /// the hosting `SidebarRowView` re-asserts it from its live `isSelected` on attach and on every selection
-    /// flip, and the coordinator re-runs it on theme changes.
+    /// `SidebarRowView` re-asserts it on attach and on every selection flip, the coordinator on theme changes.
     func setColors(selected: Bool) {
         let app = GhosttyApp.shared
         let color = selected
@@ -83,9 +76,9 @@ final class SidebarCellView: NSTableCellView {
     }
 }
 
-/// A small filled accent capsule showing an unseen-notification count, custom-drawn (not an
-/// `NSTextField`) so the capsule and text center cleanly at row size. A single digit reads as a
-/// circle (min width = height). Exposed to accessibility as a `notify-badge` static text.
+/// A small filled accent capsule showing an unseen-notification count, custom-drawn (not an `NSTextField`) so
+/// capsule and text center cleanly at row size. A single digit reads as a circle (min width = height). Exposed
+/// to accessibility as a `notify-badge` static text.
 final class BadgeView: NSView {
     /// The count to show, capped at `99+`. Drives `intrinsicContentSize` and redraw.
     var count = 0 {
@@ -109,17 +102,16 @@ final class BadgeView: NSView {
     required init?(coder _: NSCoder) { fatalError("init(coder:) is not supported") }
 
     private static let font = NSFont.systemFont(ofSize: NSFont.smallSystemFontSize, weight: .bold)
-    // space reserved at the badge's LEADING edge only while the badge shows, so the capsule keeps air from
-    // the status glyph to its left; a count-0 badge collapses fully and lets that glyph sit flush.
+    // leading-edge gap so the capsule keeps air from the status glyph to its left; a count-0 badge collapses
+    // fully and lets that glyph sit flush.
     private static let leadingGap: CGFloat = 4
     private var textAttributes: [NSAttributedString.Key: Any] { [.font: Self.font, .foregroundColor: NSColor.white] }
     private var label: String { count > 99 ? "99+" : String(count) }
 
     override var intrinsicContentSize: NSSize {
         let height: CGFloat = 16
-        // `isHidden` alone does NOT collapse a view in Auto Layout, so a count-0 badge would reserve a
-        // trailing slot and push the status glyph in from the right edge; zero width lets the name reclaim
-        // it and the glyph sit flush.
+        // `isHidden` alone does NOT collapse a view in Auto Layout, so a count-0 badge would reserve a trailing
+        // slot and push the status glyph in from the right edge; zero width lets the name reclaim it.
         guard count > 0 else { return NSSize(width: 0, height: height) }
         let capsule = max((label as NSString).size(withAttributes: textAttributes).width + 9, height)
         return NSSize(width: capsule + Self.leadingGap, height: height)
@@ -128,8 +120,8 @@ final class BadgeView: NSView {
     override func draw(_: NSRect) {
         let capsule = NSRect(x: Self.leadingGap, y: 0, width: bounds.width - Self.leadingGap, height: bounds.height)
         let radius = capsule.height / 2
-        // systemRed (the conventional unread/notification color) reads on both the dark rows and the
-        // accent-colored selected row — an accent capsule would blend into a selected row.
+        // systemRed (the conventional unread color) reads on dark rows and on the accent-colored selected row,
+        // where an accent capsule would blend in.
         NSColor.systemRed.setFill()
         NSBezierPath(roundedRect: capsule, xRadius: radius, yRadius: radius).fill()
         let text = label as NSString
@@ -139,21 +131,21 @@ final class BadgeView: NSView {
     }
 }
 
-/// A small SF-Symbol agent-status glyph drawn just left of the count badge: by default a `circle.fill` tinted
+/// A small SF-Symbol agent-status glyph left of the count badge: by default a `circle.fill` tinted
 /// lavender-grey for `active`, amber for `blocked`, green for `completed`; a Settings shape or a per-call
 /// `session.status --shape` swaps the silhouette, so shape carries the state alongside the tint. Hidden on
-/// `.idle`. Exposed to accessibility as an `agent-status` static text whose value is the state name (XCUITest
-/// matches `app.staticTexts["agent-status"]`; neither tint nor silhouette is accessibility-observable).
-/// Blink is a layer `opacity` `CABasicAnimation` (autoreverse/repeat), added only while visible AND blinking.
+/// `.idle`. Accessibility: an `agent-status` static text whose value is the state name (XCUITest matches
+/// `app.staticTexts["agent-status"]`; neither tint nor silhouette is observable there). Blink is a layer
+/// `opacity` `CABasicAnimation` (autoreverse/repeat), added only while visible AND blinking.
 final class StatusIconView: NSImageView {
     private static let blinkKey = "agent-status-blink"
     private static let glyphWidth: CGFloat = 16
-    /// Symbol point size of the drawn glyph. The Settings shape picker previews its options at the same
-    /// size, so an option looks like the glyph it will install.
+    /// Symbol point size of the glyph; the Settings shape picker previews options at the same size, so an
+    /// option looks like the glyph it installs.
     static let glyphPointSize: CGFloat = 13
 
-    /// The view's width, collapsed to 0 on `.idle` so a status-less row reclaims the slot (and its
-    /// label truncates full-width); `glyphWidth` when a glyph shows. Activated in init, toggled in `apply`.
+    /// The view's width, collapsed to 0 on `.idle` so a status-less row reclaims the slot (its label truncates
+    /// full-width); `glyphWidth` when a glyph shows. Activated in init, toggled in `apply`.
     private lazy var widthConstraint = widthAnchor.constraint(equalToConstant: 0)
 
     override init(frame frameRect: NSRect) {
@@ -169,8 +161,8 @@ final class StatusIconView: NSImageView {
     @available(*, unavailable)
     required init?(coder _: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    /// apply renders the indicator's tinted glyph (hiding the view and stopping any blink on `.idle`),
-    /// updates the tooltip and accessibility value to the state name, and starts/stops the blink animation.
+    /// apply renders the indicator's tinted glyph and updates tooltip + accessibility value to the state name;
+    /// `.idle` hides the view and stops the blink.
     func apply(_ indicator: AgentIndicator) {
         toolTip = indicator.status.tooltipText
         guard indicator.status != .idle else {
@@ -206,8 +198,8 @@ final class StatusIconView: NSImageView {
 
     private static func icon(for status: AgentStatus, override colorHex: String?, shape: StatusShape?) -> NSImage? {
         guard status != .idle else { return nil } // unreachable: `apply` returns early on `.idle` before drawing
-        // symbol + color come from the shared resolvers (GhosttyApp.statusSymbolName + .statusColor) so this
-        // glyph and the SwiftUI StatusGlyph stay identical, per-call `--shape`/`--color` overrides included.
+        // symbol + color come from the shared resolvers, so this glyph and the SwiftUI StatusGlyph stay
+        // identical, per-call `--shape`/`--color` overrides included.
         let config = NSImage.SymbolConfiguration(pointSize: Self.glyphPointSize, weight: .regular)
             .applying(NSImage.SymbolConfiguration(paletteColors: [GhosttyApp.shared.statusColor(for: status, override: colorHex)]))
         let symbol = GhosttyApp.shared.statusSymbolName(for: status, override: shape)
@@ -216,21 +208,18 @@ final class StatusIconView: NSImageView {
     }
 }
 
-/// Row view that draws its own selection pill in `drawBackground`, so the selection is the terminal's
-/// `selection-background` color in every state. The table's `selectionHighlightStyle` is `.none` (set in
-/// `makeNSView`), so AppKit draws nothing of its own — otherwise it paints a gray unemphasized fill whenever
-/// the sidebar isn't first responder (the normal case, since focus lives in the terminal), overriding a
-/// custom `drawSelection`. `isEmphasized` is overridden so the row redraws on a window key-state change (the
-/// brightness dims for a background window).
+/// Row view drawing its own selection pill in `drawBackground`, so the selection is the terminal's
+/// `selection-background` color in every state. The table's `selectionHighlightStyle` is `.none` (`makeNSView`),
+/// or AppKit paints a gray unemphasized fill whenever the sidebar isn't first responder (the normal case, since
+/// focus lives in the terminal), overriding a custom `drawSelection`. `isEmphasized` is overridden so the row
+/// redraws on a window key-state change (dimmer for a background window).
 ///
-/// The row view is the single source of truth for the cell's selection tint: `isSelected` (the state the pill
-/// draws from) re-tints the hosted `SidebarCellView` whenever AppKit updates it, and `didAddSubview` tints a
-/// cell the moment it attaches. Otherwise the live pill and the imperatively-applied text color desync — and
-/// on the many themes where `foreground == selection-background` (the inverted-selection idiom), a stale tint
-/// renders the row text fully invisible.
+/// It is also the single source of truth for the cell's selection tint: `isSelected` (the state the pill draws
+/// from) re-tints the hosted `SidebarCellView` whenever AppKit updates it, and `didAddSubview` tints a cell the
+/// moment it attaches. Otherwise pill and text color desync — and on the many themes where
+/// `foreground == selection-background` (the inverted-selection idiom), a stale tint renders the text invisible.
 final class SidebarRowView: NSTableRowView {
-    /// White-wash fallback opacity (themes with no selection color): brighter for the key window,
-    /// dimmer for a background one.
+    /// White-wash fallback opacity for themes with no selection color: brighter key, dimmer background.
     private static let keyAlpha: CGFloat = 0.13
     private static let inactiveAlpha: CGFloat = 0.07
 
@@ -244,8 +233,7 @@ final class SidebarRowView: NSTableRowView {
     override var isSelected: Bool {
         didSet {
             guard isSelected != oldValue else { return }
-            // AppKit won't redraw on its own with selectionHighlightStyle == .none; re-tint the cell
-            // from the same state the pill draws from.
+            // AppKit won't redraw with selectionHighlightStyle == .none; re-tint the cell from the pill's state.
             needsDisplay = true
             retintCellViews()
         }
@@ -253,8 +241,8 @@ final class SidebarRowView: NSTableRowView {
 
     override func didAddSubview(_ subview: NSView) {
         super.didAddSubview(subview)
-        // a cell materialized into an already-selected row (reload/expand row-map flux can make the
-        // cell builder's own selection lookup miss) picks up the row's live state on attach.
+        // a cell materialized into an already-selected row (reload/expand row-map flux can make the cell
+        // builder's own selection lookup miss) picks up the row's live state on attach.
         (subview as? SidebarCellView)?.setColors(selected: isSelected)
     }
 
@@ -274,9 +262,9 @@ final class SidebarRowView: NSTableRowView {
     }
 }
 
-/// A stable reference-type node fed to `NSOutlineView`, which keys item identity and expansion state by
-/// object identity (`===`) — so nodes must be the SAME instances across reloads, never freshly-allocated
-/// structs. The coordinator caches one per workspace/session id and rebuilds only the child lists per reload.
+/// A stable reference-type node fed to `NSOutlineView`, which keys item identity and expansion state by object
+/// identity (`===`) — nodes must be the SAME instances across reloads, never fresh structs. The coordinator
+/// caches one per workspace/session id and rebuilds only the child lists.
 final class SidebarNode {
     enum Kind { case workspace, session }
 

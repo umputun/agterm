@@ -6,9 +6,7 @@ import SwiftUI
 /// pane cells in a `ceil(sqrt(n))`-wide grid. The cell unit is a session+pane (a `DashboardMember`), so a
 /// split session shows as TWO cells (its primary + split panes). No pane SURFACE takes input — each is
 /// `.allowsHitTesting(false)` and never becomes first responder, so its cursor draws hollow; an AppKit
-/// key-catcher owns first responder while open and swallows every key, walking a highlight between cells
-/// (Enter enters the highlighted session AND focuses that exact pane, Esc closes). A transparent hit target
-/// over each cell flashes the active frame before entering, since an instant jump with no flash is confusing.
+/// key-catcher owns first responder while open, walking a highlight between cells.
 ///
 /// Purely presentational and closure-driven: `WindowContentView` mounts it in `windowOverlayLayer` while
 /// `controller.isOpen`, generalizes its deck to yield each member's surface into a cell, and supplies the
@@ -21,41 +19,35 @@ struct DashboardView: View {
     let makeSurface: (Session) -> GhosttySurfaceView
     /// The split surface factory — used for a `.split` pane cell (`session.splitSurface`).
     let makeSplitSurface: (Session) -> GhosttySurfaceView
-    /// The themed chrome foreground (the terminal theme's foreground), used for the highlight ring so it
-    /// tracks the active terminal theme rather than the OS accent.
+    /// The themed chrome foreground for the highlight ring, so it tracks the terminal theme, not the OS accent.
     let highlightColor: Color
     /// The themed terminal background — the OPAQUE backing for BOTH the whole grid and each cell, so a
-    /// translucent terminal surface (window background-opacity < 1) still reads as a solid grid, and the
-    /// regular layer beneath the overlay (sidebar, add-buttons, deck) doesn't bleed through the margins.
+    /// translucent terminal surface (window background-opacity < 1) still reads as a solid grid.
     let captionBackground: Color
-    /// The IDLE caption pill's FILL — the theme's muted selection-background highlight (the same color the
-    /// selected sidebar row draws), so an idle chip is a themed, muted accent rather than the loud foreground.
-    /// A non-idle session overrides this with its agent-status color (see `DashboardCaptionPill`).
+    /// The IDLE caption pill's FILL — the theme's muted selection-background (the selected sidebar row's
+    /// color), so an idle chip is a muted themed accent rather than the loud foreground.
     let pillColor: Color
-    /// The IDLE caption pill's TEXT — the theme's selection-foreground, readable over `pillColor`. A non-idle
-    /// pill uses a luminance-contrasting black/white instead.
+    /// The IDLE caption pill's TEXT — the theme's selection-foreground, readable over `pillColor`.
     let pillTextColor: Color
     /// False while a control picker is above the dashboard, so its key catcher cannot steal focus.
     let focusAllowed: Bool
-    /// A single mouse click on a cell: the wiring flashes the active frame on it, then enters it after a brief
-    /// delay, so the click is visibly acknowledged before the grid closes.
+    /// A single click on a cell: the wiring flashes the active frame, then enters after a brief delay, so the
+    /// click is visibly acknowledged before the grid closes.
     let onClick: (DashboardMember) -> Void
-    /// Enter on the keyboard highlight jumps into that session+pane immediately (the wiring selects + closes +
-    /// focuses). No click-flash delay on this path — the keyboard highlight is already visible.
+    /// Enter jumps into the highlighted session+pane immediately (select + close + focus). No click-flash
+    /// delay — the keyboard highlight is already visible.
     let onSelect: (DashboardMember) -> Void
     /// Esc, or the wiring's close path, dismisses the dashboard.
     let onClose: () -> Void
 
     private static let cellCornerRadius: CGFloat = 6
-    /// inter-cell (and outer) gap. Kept a few points WIDER than `captionBottomOffset` so the caption chip,
-    /// which overhangs the cell's bottom edge by that offset, clears the cell below instead of touching it.
+    /// inter-cell (and outer) gap, kept WIDER than `captionBottomOffset` so the overhanging chip clears the
+    /// cell below.
     private static let gridSpacing: CGFloat = 12
     private static let highlightLineWidth: CGFloat = 1.5
-    /// how far the caption chip is nudged below the cell's bottom edge so it straddles the frame line
-    /// instead of covering the terminal's last row.
+    /// nudge below the cell's bottom edge so the chip straddles the frame line instead of the last row.
     private static let captionBottomOffset: CGFloat = 8
-    /// caption text opacity on an UNSELECTED (non-highlighted) cell — the label font reads muted there so
-    /// the highlighted cell's name stands out; the highlighted cell keeps full-opacity text.
+    /// caption text opacity on an UNSELECTED cell, so the highlighted cell's name stands out.
     private static let unselectedCaptionTextOpacity: Double = 0.55
 
     var body: some View {
@@ -72,15 +64,14 @@ struct DashboardView: View {
         }
         .padding(Self.gridSpacing)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        // an OPAQUE themed backdrop so the grid reads as a SOLID modal instead of letting the layer beneath
-        // (sidebar, add-buttons, deck) bleed through the margins — deliberately dropping window
-        // translucency/blur here. Not a black scrim: over the translucent backing that read as near-black.
+        // an OPAQUE themed backdrop: the layer beneath (sidebar, add-buttons, deck) must not bleed through
+        // the margins, deliberately dropping window translucency/blur. Not a black scrim — over the
+        // translucent backing that read as near-black.
         .background(captionBackground)
-        // restores the hairline the opaque backdrop would cover — the SAME 1px themed line `detailColumn`
-        // draws under the title bar (`highlightColor` is the chrome foreground).
+        // restores the hairline the opaque backdrop covers — the same 1px themed line `detailColumn` draws
+        // under the title bar.
         .overlay(alignment: .top) { Rectangle().fill(highlightColor.opacity(0.1)).frame(height: 1) }
-        // the key-catcher sits behind the cells so it never intercepts their click hit targets; it owns
-        // first responder and swallows every key while open.
+        // behind the cells so it never intercepts their click hit targets.
         .background {
             DashboardKeyCatcher(
                 focusRevision: controller.focusRevision,
@@ -90,14 +81,13 @@ struct DashboardView: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("dashboard")
-        // no implicit animation on the grid geometry / highlight — a modal reparent overlay applies its
-        // @Observable-driven changes instantly, never as an animated transition.
+        // no implicit animation on grid geometry or highlight — a modal reparent overlay applies its
+        // @Observable-driven changes instantly, never as a transition.
         .transaction { $0.animation = nil }
     }
 
-    /// One grid position: the member pane cell when `index` is in range and its session/pane still resolves,
-    /// else a clear filler that keeps every real cell the same size as the full rows above it (the ragged
-    /// last-row case, and the stale-member guard for a session/pane that vanished mid-frame).
+    /// One grid position: the member pane cell when `index` resolves, else a clear filler keeping every real
+    /// cell the size of the full rows above (the ragged last row, and a session/pane that vanished mid-frame).
     @ViewBuilder
     private func cellSlot(index: Int, members: [DashboardMember]) -> some View {
         if index < members.count, let session = store.session(withID: members[index].session) {
@@ -113,17 +103,16 @@ struct DashboardView: View {
             captionBackground
             memberTerminal(for: member, session: session)
                 .allowsHitTesting(false)
-            // transparent hit target above the terminal: a lone count:1 tap has no double-click interval to
-            // wait out, so the click registers immediately — a count:2 + count:1 pair delayed every click by
-            // the system timeout. Carries the per-cell a11y id (the Metal-backed surface is not in the tree).
+            // transparent hit target above the terminal: a lone count:1 tap registers immediately, while a
+            // count:2 + count:1 pair delayed every click by the double-click timeout. Carries the per-cell
+            // a11y id — the Metal-backed surface is not in the tree.
             Color.clear
                 .contentShape(Rectangle())
                 .onTapGesture { onClick(member) }
                 .accessibilityElement()
                 .accessibilityIdentifier("dashboard-cell")
             if isHighlighted {
-                // a zero-content marker the e2e queries to locate the highlighted cell; it fills the cell,
-                // so its frame identifies which cell holds the highlight.
+                // a zero-content marker the e2e queries: it fills the cell, so its frame locates the highlight.
                 Color.clear
                     .allowsHitTesting(false)
                     .accessibilityElement()
@@ -133,25 +122,22 @@ struct DashboardView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .clipShape(RoundedRectangle(cornerRadius: Self.cellCornerRadius))
         .overlay {
-            // a thin ring tracking the terminal theme, not the OS accent, in both light and dark: the chrome
-            // foreground on the highlighted cell, the same color at low opacity on the rest.
+            // the chrome foreground on the highlighted cell, the same color at low opacity on the rest.
             RoundedRectangle(cornerRadius: Self.cellCornerRadius)
                 .strokeBorder(isHighlighted ? highlightColor : highlightColor.opacity(0.12),
                               lineWidth: isHighlighted ? Self.highlightLineWidth : 1)
         }
-        // the caption rides the cell's BOTTOM frame line: an overlay OUTSIDE the clip (so its lower half
-        // survives), bottom-aligned and nudged down, so the chip straddles the stroke instead of covering
-        // the terminal's last row. Layered AFTER the ring so the frame line never crosses the name.
+        // the caption rides the cell's BOTTOM frame line: an overlay OUTSIDE the clip, so its lower half
+        // survives. Layered AFTER the ring so the frame line never crosses the name.
         .overlay(alignment: .bottom) {
             caption(for: member, session: session, isHighlighted: isHighlighted)
                 .offset(y: Self.captionBottomOffset)
         }
     }
 
-    /// Hosts the member's OWN pane surface as a view-only `TerminalView`: `.primary` → `\.surface` via
-    /// `makeSurface`, `.split` → `\.splitSurface` via `makeSplitSurface`. The `.id` carries the hosted slot
+    /// Hosts the member's OWN pane surface as a view-only `TerminalView`. The `.id` carries the hosted slot
     /// (`-dashboard-primary`/`-dashboard-split`), so a cell keyed to one pane never reuses the other's
-    /// representable, plus the surface's per-instance `surfaceToken` so a REPLACEMENT re-mounts the cell.
+    /// representable, plus `surfaceToken` so a REPLACEMENT re-mounts the cell.
     /// `isActive`/`deckVisible`/`reportsFocusChange` off and `viewOnly` on: the cell auto-focuses nothing,
     /// is not a drop target, refuses first responder, and never mutates session focus state.
     @ViewBuilder
@@ -167,29 +153,25 @@ struct DashboardView: View {
         }
     }
 
-    /// A per-instance identity token for the member's currently-resolved slot surface (`.split` →
-    /// `session.splitSurface`, else `session.surface`), folded into the cell `.id`. When a shown session's
-    /// PRIMARY shell exits, `AppStore.closePrimaryPane` PROMOTES the split survivor into `session.surface`
-    /// (a DIFFERENT instance) and nils `splitSurface`, and reconcile drops the `.split` cell but keeps
-    /// `.primary`; `TerminalView.updateNSView` never re-resolves `session[keyPath:]`, so without the surface
-    /// identity in the id SwiftUI keeps hosting the torn-down old primary (a blank cell) while the live
-    /// survivor stays unhosted. `ObjectIdentifier` changes the id ONLY on a genuine swap, forcing a re-mount
-    /// → `makeNSView` re-resolves the slot → hosts the survivor; it is STABLE across ordinary re-renders, so
-    /// no spurious re-host invalidates the Metal drawable and flickers. `session.surface`/`splitSurface` are
-    /// `@ObservationIgnored`, so the swap alone does not re-render — the reconcile-driven `controller.members`
-    /// change re-renders the grid and re-reads the new slot surface. A nil slot keeps a stable `"none"` suffix.
+    /// A per-instance identity token for the member's resolved slot surface, folded into the cell `.id`; a
+    /// nil slot keeps a stable `"none"` suffix. When a shown session's PRIMARY shell exits,
+    /// `AppStore.closePrimaryPane` PROMOTES the split survivor into `session.surface` (a DIFFERENT instance)
+    /// and nils `splitSurface`, and reconcile drops the `.split` cell but keeps `.primary`;
+    /// `TerminalView.updateNSView` never re-resolves `session[keyPath:]`, so without the surface identity in
+    /// the id SwiftUI keeps hosting the torn-down old primary (a blank cell) while the live survivor stays
+    /// unhosted. `ObjectIdentifier` changes ONLY on a genuine swap, forcing a re-mount whose `makeNSView`
+    /// re-resolves the slot; it is STABLE across ordinary re-renders, so no spurious re-host invalidates the
+    /// Metal drawable and flickers. The slots are `@ObservationIgnored`, so the swap alone does not
+    /// re-render — the reconcile-driven `controller.members` change does.
     private func surfaceToken(for member: DashboardMember, session: Session) -> String {
         let surface = member.surface == .split ? session.splitSurface : session.surface
         guard let surface else { return "none" }
         return "\(ObjectIdentifier(surface as AnyObject))"
     }
 
-    /// A small name chip riding the cell's bottom-RIGHT frame line, with a pane marker (`◀` primary / `▶`
-    /// split) appended for a split session's two cells so they read as its left/right panes. The fill DOUBLES
-    /// as the agent-status light: a non-idle `agentIndicator` colors it (pulsing while `--blink` is set), an
-    /// idle session keeps the muted theme-selection pill. `DashboardCaptionPill` owns fill, contrast and
-    /// blink; this only right-aligns it via the leading `Spacer` (which also fixes the width, so a long name
-    /// middle-truncates instead of overflowing) and makes it non-interactive so it never blocks the hit target.
+    /// A small name chip on the cell's bottom-RIGHT frame line, with a pane marker for a split session's two
+    /// cells. `DashboardCaptionPill` owns fill, contrast and blink; this only right-aligns it via the leading
+    /// `Spacer` (which also fixes the width, so a long name middle-truncates) and blocks no hit target.
     private func caption(for member: DashboardMember, session: Session, isHighlighted: Bool) -> some View {
         HStack(spacing: 0) {
             Spacer(minLength: 0)
@@ -202,8 +184,8 @@ struct DashboardView: View {
         .allowsHitTesting(false)
     }
 
-    /// The caption's pane marker: `▶` for a split (right) pane cell, `◀` for the primary (left) cell of a
-    /// SPLIT session (both cells present, so they need distinguishing), nothing for a non-split session.
+    /// The caption's pane marker: `▶` for a split (right) cell, `◀` for the primary (left) cell of a SPLIT
+    /// session (both cells present, so they need distinguishing), nothing for a non-split session.
     private func paneIndicator(for member: DashboardMember, session: Session) -> String {
         if member.surface == .split { return " ▶" }
         return session.hasSplit ? " ◀" : ""
@@ -222,14 +204,10 @@ struct DashboardView: View {
 }
 
 /// The dashboard cell's name chip, which also carries the session's agent status. IDLE draws the muted
-/// theme-selection pill — `idleText` (selection-foreground) over an `idleFill` (selection-background)
-/// capsule, the label muted (`unselectedTextOpacity`) on an unselected cell so the highlighted cell's name
-/// stands out. NON-IDLE fills the capsule with the agent-status color
-/// (`GhosttyApp.statusColor(for:override:)`, honoring a `session.status --color` override) and draws the
-/// name in luminance-contrasting black/white (`GhosttyApp.contrastingText`), readable over ANY status color
-/// including an arbitrary override. Blinking keeps the capsule fully OPAQUE and pulses a color WASH on top
-/// (brighten a light fill / darken a dark one), NOT an opacity fade — fading let the highlighted cell's
-/// bright frame ring bleed through the chip and read as broken.
+/// theme-selection pill (`idleText` over an `idleFill` capsule); NON-IDLE fills it with the agent-status
+/// color and draws the name in luminance-contrasting black/white, readable over ANY color including an
+/// arbitrary `session.status --color` override. Blinking keeps the capsule fully OPAQUE and pulses a color
+/// WASH on top, NOT an opacity fade — fading let the cell's bright frame ring bleed through and read broken.
 private struct DashboardCaptionPill: View {
     let text: String
     let indicator: AgentIndicator
@@ -238,8 +216,8 @@ private struct DashboardCaptionPill: View {
     let idleText: Color
     let unselectedTextOpacity: Double
 
-    /// peak opacity of the pulsing color wash. Deep on purpose: the wash rides a large opaque capsule, so a
-    /// shallow value reads as faint dimming rather than a blink (the small sidebar glyph needs less).
+    /// peak opacity of the pulsing wash. Deep on purpose: on a large opaque capsule a shallow value reads as
+    /// faint dimming rather than a blink (the small sidebar glyph needs less).
     private static let washPeakOpacity: Double = 0.75
     private static let pulseDuration: Double = 0.45
 
@@ -247,8 +225,7 @@ private struct DashboardCaptionPill: View {
     @State private var pulsed = false
 
     private var isStatus: Bool { indicator.status != .idle }
-    /// the resolved status tint (per-call `--color` override else the Settings color); computed once so the
-    /// fill and its contrasting text agree.
+    /// the resolved status tint (per-call `--color` override else Settings), computed once so fill and text agree.
     private var statusColor: NSColor { GhosttyApp.shared.statusColor(for: indicator.status, override: indicator.color) }
     /// black/white by the fill's luminance so the name is readable over any status color.
     private var textNSColor: NSColor { GhosttyApp.contrastingText(for: statusColor) }
@@ -257,12 +234,11 @@ private struct DashboardCaptionPill: View {
     /// wash toward the OPPOSITE of the text — white over a black-text (light) fill, black over a white-text
     /// (dark) one — so the pulse pushes the fill away from the contrast crossover, readable at the peak.
     private var washColor: Color { textNSColor == .black ? .white : .black }
-    /// full-opacity text on a status pill and on the highlighted cell; muted only for an idle, unselected cell
-    /// so the highlighted name reads as the focused one.
+    /// full opacity on a status pill and on the highlighted cell; muted only for an idle, unselected cell.
     private var textOpacity: Double { isStatus || isHighlighted ? 1 : unselectedTextOpacity }
     private var shouldPulse: Bool { isStatus && indicator.blink }
-    /// Keep status color/text as the durable signal, but suppress the indefinite wash animation when
-    /// macOS Reduce Motion is enabled. SwiftUI refreshes this environment value live.
+    /// Status color/text stay the durable signal, but the indefinite wash animation is suppressed under
+    /// macOS Reduce Motion (SwiftUI refreshes the environment value live).
     private var shouldAnimatePulse: Bool { shouldPulse && !reduceMotion }
 
     var body: some View {
@@ -276,16 +252,13 @@ private struct DashboardCaptionPill: View {
             .background {
                 Capsule()
                     .fill(fill)
-                    // the blink: the opaque fill keeps covering the cell's frame ring while this wash capsule
-                    // pulses its opacity on top, so nothing behind the chip ever shows through.
                     .overlay {
                         Capsule().fill(washColor)
                             .opacity(shouldAnimatePulse && pulsed ? Self.washPeakOpacity : 0)
                     }
             }
-            // a pill-level implicit animation on `pulsed` — deeper in the tree than the grid's
-            // `.transaction { animation = nil }`, so it re-enables the pulse for this pill WITHOUT re-animating
-            // the grid's reparent (later-in-tree wins). Only the wash opacity keys off `pulsed`.
+            // deeper in the tree than the grid's `.transaction { animation = nil }` (later-in-tree wins), so
+            // the pulse returns for this pill without re-animating the grid reparent; only the wash keys off it.
             .animation(shouldAnimatePulse
                 ? .easeInOut(duration: Self.pulseDuration).repeatForever(autoreverses: true)
                 : nil,
@@ -303,9 +276,7 @@ private enum DashboardKey {
 }
 
 /// A zero-content AppKit view that owns first responder while the dashboard is open and consumes EVERY
-/// keyDown, so no keystroke reaches a background terminal surface. Arrows move the highlight, Return/Enter
-/// selects, Escape closes, everything else is swallowed (never passed to the next responder). Placed as a
-/// `.background` so it never intercepts the cells' click hit targets. Menu key-equivalents (⌘Q, ⌘W, …) still
+/// keyDown, so no keystroke reaches a background terminal surface. Menu key-equivalents (⌘Q, ⌘W, …) still
 /// reach the menu bar via `performKeyEquivalent`, which runs before keyDown, so the user is never trapped.
 private struct DashboardKeyCatcher: NSViewRepresentable {
     let focusRevision: Int
@@ -323,8 +294,7 @@ private struct DashboardKeyCatcher: NSViewRepresentable {
         _ = focusRevision
         nsView.focusAllowed = focusAllowed
         nsView.onKey = onKey
-        // re-assert first responder on every render so a cell click (or any focus reshuffle) can't leave the
-        // overlay without the keyboard while it is open.
+        // re-assert first responder each render so a click or focus reshuffle can't leave the overlay keyless.
         if focusAllowed { nsView.grabFocus() }
     }
 
@@ -346,8 +316,7 @@ private struct DashboardKeyCatcher: NSViewRepresentable {
         }
 
         override func keyDown(with event: NSEvent) {
-            // consume EVERY key: recognized keys drive the dashboard, the rest are swallowed by NOT calling
-            // super, so nothing (and no beep) leaks to a terminal behind the overlay.
+            // the rest are swallowed by NOT calling super, so nothing (and no beep) leaks to the terminal behind.
             switch event.keyCode {
             case 123: onKey?(.move(.left)) // left arrow
             case 124: onKey?(.move(.right)) // right arrow

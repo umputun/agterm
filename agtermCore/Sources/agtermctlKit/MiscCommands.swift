@@ -12,7 +12,7 @@ struct Keymap: ParsableCommand {
 
     struct Reload: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Re-read and apply keymap.conf (prints the diagnostic count).")
-        // keymap.reload is app-global (the frontmost window's settings model), so no `--window` selector.
+        // the keymap commands are app-global (the frontmost window's settings model), so no `--window`.
         @OptionGroup var options: BasicOptions
 
         func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .keymapReload) }
@@ -28,7 +28,6 @@ struct Keymap: ParsableCommand {
             the next app activation, so a chord can be right in the keymap and wrong in the menu.
             """
         )
-        // keymap.list is app-global like keymap.reload, so no `--window` selector.
         @OptionGroup var options: BasicOptions
 
         func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .keymapList) }
@@ -129,8 +128,7 @@ struct Quick: ParsableCommand {
         defaultSubcommand: Visibility.self
     )
 
-    /// `agtermctl quick [show|hide|toggle]` — the default, so the bare verb keeps working. Shows/hides the
-    /// frontmost window's quick terminal.
+    /// `agtermctl quick [show|hide|toggle]` — the default subcommand, so the bare verb keeps working.
     struct Visibility: RequestCommand {
         static let configuration = CommandConfiguration(commandName: "visibility", abstract: "Quick terminal visibility (show|hide|toggle).")
         @Argument(help: "Mode: show, hide, or toggle (default).") var mode: String = "toggle"
@@ -142,8 +140,8 @@ struct Quick: ParsableCommand {
         }
     }
 
-    /// `agtermctl quick type TEXT` — inject literal keystrokes into the frontmost window's quick terminal
-    /// (the quick-terminal twin of `session type`). No `--target`/`--window`: always the frontmost window's.
+    /// `agtermctl quick type TEXT` — inject literal keystrokes into the quick terminal, the twin of
+    /// `session type`. No `--target`/`--window`: always the frontmost window's.
     struct TypeText: RequestCommand {
         static let configuration = CommandConfiguration(commandName: "type", abstract: "Inject text into the quick terminal.")
         @Argument(help: "Text to inject (omit with --stdin).") var text: String?
@@ -211,12 +209,8 @@ struct Surface: ParsableCommand {
 
 // MARK: - dashboard
 
-/// `agtermctl dashboard <ids…> [--font-size N | --auto-size] [--window W]` opens a view-only grid of the
-/// named sessions (max 9), `--mru` populates it from the window's most-recently-used sessions (up to 9)
-/// instead of naming ids, and `--close [--window W]` closes the open one. Positional ids map to
-/// `ControlArgs.targets`; the dispatcher caps them at 9, dedups, and reports any drop. The CLI re-checks the
-/// flag combinations in `validate()`, so a bad invocation is a clean usage error with no socket round-trip
-/// (the dispatcher enforces the same rules server-side).
+/// Opens a view-only grid of the named sessions (max 9), or of the window's most-recently-used sessions
+/// with `--mru`; `--close` closes the open one. The dispatcher caps ids at 9, dedups, and reports any drop.
 struct Dashboard: RequestCommand {
     static let configuration = CommandConfiguration(
         abstract: "Open a view-only grid of live sessions, or --close the open one.",
@@ -236,8 +230,7 @@ struct Dashboard: RequestCommand {
     @Flag(name: .long, help: "Close the open dashboard (takes no ids, --mru, or font options).") var close = false
     @OptionGroup var options: ClientOptions
 
-    // reject the invalid flag combinations at parse time (before any connection) so they are clean usage
-    // errors, unit-testable without a socket; the dispatcher re-checks the same rules server-side.
+    // reject invalid flag combinations at parse time — clean usage errors, no socket; re-checked server-side.
     func validate() throws {
         if close {
             guard ids.isEmpty, !mru, fontSize == nil, !autoSize else {
@@ -254,7 +247,7 @@ struct Dashboard: RequestCommand {
         if fontSize != nil, autoSize {
             throw ValidationError("--font-size is mutually exclusive with --auto-size")
         }
-        // nan/inf parse as Double but aren't a valid size; reject non-finite/non-positive here with a clean error.
+        // nan/inf parse as Double but aren't valid sizes; reject non-finite/non-positive with a clean error.
         if let fontSize, !fontSize.isFinite || fontSize <= 0 {
             throw ValidationError("--font-size must be a positive number")
         }
@@ -272,9 +265,8 @@ struct Dashboard: RequestCommand {
 
 // MARK: - pick
 
-/// Native fuzzy-picker commands. `Open` is the default so the shell-friendly common case is simply
-/// `printf 'one\ntwo\n' | agtermctl pick`; explicit `result` and `cancel` verbs make `--no-block`
-/// useful without requiring callers to speak the socket protocol themselves.
+/// Native fuzzy-picker commands. `Open` is the default, so the shell-friendly common case is simply
+/// `printf 'one\ntwo\n' | agtermctl pick`; `result`/`cancel` make `--no-block` usable without the protocol.
 struct Pick: ParsableCommand {
     static let configuration = CommandConfiguration(
         abstract: "Open, poll, or cancel a native fuzzy picker.",
@@ -297,8 +289,7 @@ struct Pick: ParsableCommand {
             try makeRequest(input: FileHandle.standardInput.readDataToEndOfFile())
         }
 
-        /// Build the open request from injected stdin bytes. Production passes standard input; tests pass
-        /// data directly so parsing and argument mapping never block on the process's real stdin.
+        /// Build the open request from injected stdin bytes, so tests never block on the process's real stdin.
         func makeRequest(input: Data) throws -> ControlRequest {
             let args = ControlArgs(
                 follow: follow ? true : nil,
@@ -336,8 +327,8 @@ struct Pick: ParsableCommand {
             )
         }
 
-        /// Execute open → poll with injectable I/O: production supplies the socket, sleep, stdin, stdout and
-        /// stderr, while unit tests exercise the unbounded blocking flow without real delays or process fds.
+        /// Execute open → poll with injectable I/O, so tests exercise the unbounded blocking flow without
+        /// real delays or process fds.
         func execute(
             input: Data,
             send: (ControlRequest) throws -> ControlResponse,
@@ -365,9 +356,8 @@ struct Pick: ParsableCommand {
                 do {
                     response = try send(ControlRequest(cmd: .pickResult, target: pickID))
                 } catch {
-                    // a transport failure mid-wait (refused connect, truncated or empty reply) leaves the
-                    // picker up with nobody waiting on it; every request opens its own connection, so the
-                    // cancel can still land even though this poll could not.
+                    // a transport failure mid-wait leaves the picker up with nobody waiting; every request
+                    // opens its own connection, so the cancel can still land though this poll could not.
                     abandon(pickID, send: send)
                     throw error
                 }
@@ -395,9 +385,8 @@ struct Pick: ParsableCommand {
             }
         }
 
-        /// Dismiss the picker this command opened but can no longer wait on, so the window is not left
-        /// holding one whose owner is gone and the next `pick.open` there is not refused. Best effort: the
-        /// poll already failed, so a failing cancel adds nothing to report.
+        /// Dismiss a picker this command opened but can no longer wait on: else the window holds one whose
+        /// owner is gone and refuses the next `pick.open`. Best effort — the poll already failed anyway.
         private func abandon(_ pickID: String, send: (ControlRequest) throws -> ControlResponse) {
             _ = try? send(ControlRequest(cmd: .pickCancel, target: pickID))
         }
@@ -440,8 +429,8 @@ struct Pick: ParsableCommand {
             )
         }
 
-        /// Execute a one-shot read with injectable transport/stdout/stderr so every wire outcome and exit
-        /// mapping is covered without replacing process file descriptors.
+        /// One-shot read with injectable transport/stdout/stderr, so every wire outcome and exit mapping is
+        /// covered without replacing process file descriptors.
         func execute(
             send: (ControlRequest) throws -> ControlResponse,
             output: (String) -> Void,
@@ -491,8 +480,7 @@ struct Sidebar: ParsableCommand {
         defaultSubcommand: Visibility.self
     )
 
-    /// `agtermctl sidebar [show|hide|toggle]` — the default, so the bare verb keeps working. Toggles the
-    /// frontmost window's sidebar visibility.
+    /// `agtermctl sidebar [show|hide|toggle]` — the default subcommand, so the bare verb keeps working.
     struct Visibility: RequestCommand {
         static let configuration = CommandConfiguration(commandName: "visibility", abstract: "Sidebar visibility (show|hide|toggle).")
         @Argument(help: "Mode: show, hide, or toggle (default).") var mode: String = "toggle"
@@ -504,8 +492,7 @@ struct Sidebar: ParsableCommand {
         }
     }
 
-    /// `agtermctl sidebar mode [tree|flagged|toggle]` — flips the frontmost window's sidebar view between
-    /// the workspace tree and the flat flagged working-set list.
+    /// Flips the frontmost window's sidebar between the workspace tree and the flat flagged working-set list.
     struct Mode: RequestCommand {
         static let configuration = CommandConfiguration(commandName: "mode", abstract: "Sidebar view mode (tree|flagged|toggle).")
         @Argument(help: "Mode: tree, flagged, or toggle (default).") var mode: String = "toggle"
@@ -531,8 +518,7 @@ struct Sidebar: ParsableCommand {
         func makeRequest() throws -> ControlRequest { ControlRequest(cmd: .sidebarExpand, args: options.withWindow()) }
     }
 
-    /// `agtermctl sidebar collapse [--window W]` — collapse every workspace except the active one (it
-    /// stays expanded) in a window's sidebar (defaults to the frontmost).
+    /// Collapse every workspace except the active one in a window's sidebar (frontmost by default).
     struct Collapse: RequestCommand {
         static let configuration = CommandConfiguration(abstract: "Collapse all workspaces except the active one.")
         @OptionGroup var options: ClientOptions
@@ -563,8 +549,7 @@ struct Font: ParsableCommand {
         subcommands: [Inc.self, Dec.self, Reset.self]
     )
 
-    /// Help text for the shared `--pane` option on the font subcommands. Reuses the `left|right|scratch`
-    /// vocabulary of `session type`/`session text`; omitted defaults to the main pane.
+    /// Help for the shared `--pane` option, reusing the `left|right|scratch` vocabulary of `session type`.
     static let paneHelp = "Which pane's font to change: left (main), right (split), or scratch (the "
         + "session's scratch terminal, even when hidden). Defaults to the left pane."
 
