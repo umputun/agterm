@@ -75,6 +75,31 @@ surface ownership, and the C-boundary concurrency contract before changing the b
 - **Non-trivial work goes in an ISOLATED git worktree, cleaned up after merge.**
   See the worktree rule under "Build and test commands" for the mandate, the artifact-symlink setup a
   fresh worktree needs, and the post-merge cleanup (which must never switch the main checkout's branch).
+- **Comments and docs are a liability, not a deliverable — keep them SHORT.**
+  A comment earns its place only by saying what the code cannot: a non-obvious constraint, a rejected
+  alternative, a reason it is not the obvious thing.
+  Never narrate what the code already shows, never state one fact in two places, never write a paragraph
+  where a clause does.
+  25 lines of logic do not need 100 lines of comment; when it looks like they do, the code is wrong.
+  The same holds for `.claude/rules/*.md`, README and the published references: state a contract ONCE in
+  the file that owns it and cross-reference, instead of restating it on every surface.
+  Never narrate a change's own history ("was X, now Y", "this was tried and removed") — describe what the
+  code does now.
+- **Comments in TESTS are RARE.**
+  A test name states the behavior and the body shows the setup, so almost every test comment is a
+  restatement.
+  Write one only when the code is genuinely cryptic — the goal cannot be read off the name and the setup —
+  and then keep it to a single short line.
+  Never comment an assertion with what it asserts, never narrate the arrange/act/expect steps, never
+  explain why a test exists.
+- **Review severity tracks USER-VISIBLE consequence.**
+  critical = data loss or a broken primary path; major = a wrong result or a broken secondary path a user
+  will hit; minor = everything else.
+  **A comment, godoc or documentation inaccuracy is NEVER critical or major** — it cannot break anything
+  at runtime.
+  This binds when reviewing, and when writing a review scope or configuring a reviewer.
+  A review round that comes back mostly documentation findings means the code is done and the prose is
+  overgrown: cut the prose, do not write more of it.
 
 ## Toolchain
 
