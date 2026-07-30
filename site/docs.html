@@ -608,8 +608,9 @@
                 flat working-set view (a flag is durable and survives a move), or <strong style="color: #e6e1d7">focus</strong> a
                 set of workspaces to collapse the tree to just their sessions. Focus one workspace to zoom to it, or mark
                 several from their row menus and apply the filter once with the sidebar's grid button — marking never
-                narrows the tree on its own, and suspending the filter keeps the set for one click back. The two are
-                independent.
+                narrows the tree on its own, and suspending the filter keeps the set for one click back. If narrowing
+                the sidebar would hide the session you are working in, agterm moves you to the most recent session still
+                on screen, unless the narrowing leaves nothing visible at all. The two are independent.
               </li>
             </ul>
             <figure
@@ -808,10 +809,12 @@
               belongs to no existing window and stays available whatever the last-active one is doing. That same recently-used history decides where you land when you close
               the session you are in — agterm returns you to the session you were most recently working in, not to whichever row
               happens to sit next to the one that closed. The pick stays inside the closing session's workspace, and in the flagged
-              view stays within the flagged set, widening beyond the workspace only when the close leaves nothing there to return
-              to; if no recent session qualifies, it falls back to the adjacent row in that workspace — to the adjacent flagged row
-              in the flagged view, unless the close took the last flagged session, where the plain neighbor stands — and, when the
-              closed session was the last one in its workspace, to the first session of another workspace.
+              view stays within the flagged set, while in the tree with the workspace filter applied it stays within the marked
+              workspaces. It widens
+              beyond the workspace only when the close leaves nothing there to return to, and beyond what is on screen only when
+              that too is exhausted. If no recent session qualifies at all, it falls back to the adjacent row, kept inside the
+              narrowed view while one is applied, and to the first session of another workspace when the closed session was the
+              last one in its own.
             </p>
             <div
               style="

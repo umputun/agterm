@@ -3,14 +3,12 @@ import Testing
 @testable import agtermCore
 
 /// Closing the ACTIVE session returns to the most-recently-active SURVIVING session, scoped to the
-/// closing session's workspace and — in `.flagged` sidebar mode — to the flagged set, with the
-/// positional `reselectionTarget` as the fallback (GitHub Discussion #147). The FOCUS filter
-/// deliberately does NOT scope the pick; see `closeReselectionTarget(after:)`.
+/// closing session's workspace ∩ the VISIBLE set — the flagged list in `.flagged` mode, the marked
+/// workspaces' sessions while the focus filter applies — widening through everything visible and then
+/// the whole tree, with a positional walk as the last fallback (GitHub Discussion #147).
 @MainActor
 struct AppStoreCloseReselectionTests {
     @Test func closeActiveSessionInsertedAfterCurrentReturnsToTheSessionItCameFrom() throws {
-        // discussion example 1: from `1 2 3` on `1`, a new session inserted after the current one
-        // (`1 4 2 3`) and closed lands back on `1` — not on the positional neighbor `2`.
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let one = try #require(store.addSession(toWorkspace: ws.id, cwd: "/1"))
@@ -21,12 +19,10 @@ struct AppStoreCloseReselectionTests {
         #expect(store.selectedSessionID == four.id)
 
         store.closeSession(four.id)
-        #expect(store.selectedSessionID == one.id) // not `2`, which shifted into the removed slot
+        #expect(store.selectedSessionID == one.id)
     }
 
     @Test func closeActiveSessionAppendedAtTheEndReturnsToTheSessionItCameFrom() throws {
-        // discussion example 2: from `1 2 3` on `1`, a new session appended (`1 2 3 4`) and closed
-        // lands back on `1` — not on the positional previous `3`.
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let one = try #require(store.addSession(toWorkspace: ws.id, cwd: "/1"))
@@ -36,7 +32,7 @@ struct AppStoreCloseReselectionTests {
         let four = try #require(store.addSession(toWorkspace: ws.id, cwd: "/4"))
 
         store.closeSession(four.id)
-        #expect(store.selectedSessionID == one.id) // not `3`, the positional previous
+        #expect(store.selectedSessionID == one.id)
     }
 
     @Test func closeActiveSessionPrefersTheRecentSurvivorOverThePositionalNeighbor() throws {
@@ -51,7 +47,7 @@ struct AppStoreCloseReselectionTests {
         store.selectSession(fourth.id)
 
         store.closeSession(fourth.id)
-        #expect(store.selectedSessionID == second.id) // the MRU survivor, though `c` is the neighbor
+        #expect(store.selectedSessionID == second.id)
     }
 
     @Test func closeActiveSessionIgnoresAMoreRecentSessionInAnotherWorkspace() throws {
@@ -62,17 +58,15 @@ struct AppStoreCloseReselectionTests {
         let closing = try #require(store.addSession(toWorkspace: work.id, cwd: "/b"))
         let elsewhere = try #require(store.addSession(toWorkspace: personal.id, cwd: "/x"))
         store.selectSession(inWork.id)
-        store.selectSession(elsewhere.id) // more recent than `inWork`, but in another workspace
+        store.selectSession(elsewhere.id)
         store.selectSession(closing.id)
 
         store.closeSession(closing.id)
-        #expect(store.selectedSessionID == inWork.id) // stays put, though `elsewhere` is more recent
-        #expect(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled) // the close must not introduce a focus filter
+        #expect(store.selectedSessionID == inWork.id)
+        #expect(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled)
     }
 
     @Test func closeActiveSessionEmptyingItsWorkspacePicksTheRecentSurvivorElsewhere() throws {
-        // the workspace scope has nothing left to hold on to once the close empties the workspace, so the
-        // MRU widens to the whole TREE rather than jumping positionally into the first workspace.
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
         let scratch = store.addWorkspace(name: "scratch")
@@ -84,7 +78,7 @@ struct AppStoreCloseReselectionTests {
 
         store.closeSession(onlyInScratch.id)
         #expect(store.workspaces[1].sessions.isEmpty)
-        #expect(store.selectedSessionID == cameFrom.id) // not `work`'s positionally-first session `/a`
+        #expect(store.selectedSessionID == cameFrom.id)
     }
 
     @Test func closeActiveSessionWithAFocusFilterStaysInsideTheFocusedWorkspace() throws {
@@ -100,15 +94,11 @@ struct AppStoreCloseReselectionTests {
         store.setFocusedWorkspace(work.id)
 
         store.closeSession(closing.id)
-        #expect(store.selectedSessionID == first.id) // the MRU survivor, not the positional neighbor `/b`
-        #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled) // the filter survives the close
+        #expect(store.selectedSessionID == first.id)
+        #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled)
     }
 
     @Test func closeTheFocusedWorkspacesLastSessionPicksTheRecentSurvivorElsewhere() throws {
-        // the focus filter must NOT scope the widened MRU: under focus, `navigableSessions` collapses to the
-        // focused workspace, so scoping by it would widen into an EMPTY set once the close empties that
-        // workspace and fall through to a positional jump into the FIRST workspace — the very disorientation
-        // this feature removes. `disableFocusIfSelectionOutsideSet` drops the now-meaningless filter instead.
         let store = makeStore()
         let personal = store.addWorkspace(name: "personal")
         let work = store.addWorkspace(name: "work")
@@ -121,31 +111,71 @@ struct AppStoreCloseReselectionTests {
 
         store.closeSession(onlyInWork.id)
         #expect(store.workspaces[1].sessions.isEmpty)
-        #expect(store.selectedSessionID == cameFrom.id) // not `/first`, the positional first-workspace jump
-        // the filter switches OFF to reveal the pick, but the marked set survives for one flip back on.
+        #expect(store.selectedSessionID == cameFrom.id)
         #expect(store.focusedWorkspaceIDs == [work.id] && !store.focusEnabled)
     }
 
-    @Test func closeActiveSessionWhileAnotherWorkspaceIsFocusedStaysInTheClosingWorkspace() throws {
-        // `setFocusedWorkspace` never moves the selection, so focus can sit on a workspace the ACTIVE session
-        // doesn't belong to. Scoping the MRU by focus would yank the close into the focused workspace; the
-        // pick must stay next to the session that closed, exactly as the positional neighbor used to.
+    @Test func closeUnderAFocusFilterStaysInsideTheMarkedSet() throws {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
         let personal = store.addWorkspace(name: "personal")
-        let cameFrom = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
-        _ = try #require(store.addSession(toWorkspace: work.id, cwd: "/b"))
+        let survivor = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
         let closing = try #require(store.addSession(toWorkspace: work.id, cwd: "/c"))
         let elsewhere = try #require(store.addSession(toWorkspace: personal.id, cwd: "/x"))
-        store.selectSession(elsewhere.id) // seeds `personal` into the recency stack
-        store.selectSession(cameFrom.id)
+        store.selectSession(survivor.id)
+        store.selectSession(elsewhere.id)
         store.selectSession(closing.id)
-        store.setFocusedWorkspace(personal.id) // focus elsewhere, active session still in `work`
+        store.setFocusedWorkspace(work.id)
+        #expect(store.selectedSessionID == closing.id)
 
         store.closeSession(closing.id)
-        #expect(store.selectedSessionID == cameFrom.id) // not `elsewhere`, in the focused workspace
-        // the pick is outside the set, so the filter switches off — the set itself is preserved.
-        #expect(store.focusedWorkspaceIDs == [personal.id] && !store.focusEnabled)
+        #expect(store.selectedSessionID == survivor.id)
+        #expect(store.focusedWorkspaceIDs == [work.id] && store.focusEnabled)
+    }
+
+    @Test func closeInAMarkedWorkspaceCrossesToTheOtherMemberNotAnUnmarkedSurvivor() throws {
+        // `unmarked` is deliberately more recent than `otherMember`: an unscoped MRU takes it.
+        let store = makeStore()
+        let first = store.addWorkspace(name: "first")
+        let second = store.addWorkspace(name: "second")
+        let outside = store.addWorkspace(name: "outside")
+        let closing = try #require(store.addSession(toWorkspace: first.id, cwd: "/only"))
+        let otherMember = try #require(store.addSession(toWorkspace: second.id, cwd: "/member", select: false))
+        let unmarked = try #require(store.addSession(toWorkspace: outside.id, cwd: "/stray", select: false))
+        store.selectSession(otherMember.id)
+        store.selectSession(unmarked.id)
+        store.selectSession(closing.id)
+        store.setFocusMembership(first.id, member: true)
+        store.setFocusMembership(second.id, member: true)
+        store.setFocusEnabled(true)
+
+        store.closeSession(closing.id)
+        #expect(store.workspaces[0].sessions.isEmpty)
+        #expect(store.selectedSessionID == otherMember.id)
+        #expect(store.focusedWorkspaceIDs == [first.id, second.id] && store.focusEnabled)
+    }
+
+    @Test func closeUnderAFocusFilterWithNoRecencyKeepsThePositionalPickInsideTheSet() throws {
+        // the unmarked workspace sits between the emptied one and the other marked one, so the picks differ.
+        let store = makeStore()
+        let wsClosing = UUID(), wsUnmarked = UUID(), wsOtherMember = UUID()
+        let closing = UUID(), outside = UUID(), inSet = UUID()
+        store.restore(from: Snapshot(selectedSessionID: closing, workspaces: [
+            WorkspaceSnapshot(id: wsClosing, name: "closing", sessions: [
+                SessionSnapshot(id: closing, customName: nil, cwd: "/closing"),
+            ]),
+            WorkspaceSnapshot(id: wsUnmarked, name: "unmarked", sessions: [
+                SessionSnapshot(id: outside, customName: nil, cwd: "/outside"),
+            ]),
+            WorkspaceSnapshot(id: wsOtherMember, name: "member", sessions: [
+                SessionSnapshot(id: inSet, customName: nil, cwd: "/inset"),
+            ]),
+        ], focusedWorkspaceIDs: [wsClosing, wsOtherMember], focusEnabled: true))
+        #expect(store.sessionRecency.items == [closing])
+
+        store.closeSession(closing)
+        #expect(store.selectedSessionID == inSet)
+        #expect(store.focusedWorkspaceIDs == [wsClosing, wsOtherMember] && store.focusEnabled)
     }
 
     @Test func closeActiveSessionInFlaggedModeStaysWithinTheFlaggedSet() throws {
@@ -158,17 +188,14 @@ struct AppStoreCloseReselectionTests {
         store.setFlag(true, forSession: closing.id)
         store.sidebarMode = .flagged
         store.selectSession(flagged.id)
-        store.selectSession(unflagged.id) // more recent, but outside the flagged view
+        store.selectSession(unflagged.id)
         store.selectSession(closing.id)
 
         store.closeSession(closing.id)
-        #expect(store.selectedSessionID == flagged.id) // not `unflagged`, though it is the more recent
+        #expect(store.selectedSessionID == flagged.id)
     }
 
     @Test func closeActiveSessionInFlaggedModeCrossesWorkspacesRatherThanLeavingTheFlaggedSet() throws {
-        // `flaggedSessions` is cross-workspace by definition, so when the close leaves the closing
-        // session's workspace with no flagged survivor, the pick follows the FILTER out of the workspace
-        // instead of falling back to an unflagged sibling the sidebar isn't even rendering.
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
         let personal = store.addWorkspace(name: "personal")
@@ -179,18 +206,15 @@ struct AppStoreCloseReselectionTests {
         store.setFlag(true, forSession: flaggedElsewhere.id)
         store.sidebarMode = .flagged
         store.selectSession(flaggedElsewhere.id)
-        store.selectSession(unflagged.id) // the most recent overall, but outside the flagged view
+        store.selectSession(unflagged.id)
         store.selectSession(closing.id)
 
         store.closeSession(closing.id)
-        #expect(store.selectedSessionID == flaggedElsewhere.id) // the only flagged survivor
+        #expect(store.selectedSessionID == flaggedElsewhere.id)
         #expect(store.flaggedSessions.map(\.id).contains(try #require(store.selectedSessionID)))
     }
 
     @Test func closeActiveSessionInFlaggedModeWithAnEmptyScopedRecencyStaysWithinTheFlaggedSet() throws {
-        // a cold restore in flagged mode: once the closing session is pruned the scoped recency is empty,
-        // so the pick falls back — but the positional neighbor is unflagged and the flagged sidebar has no
-        // row for it, so the fallback must stay inside the filter.
         let store = makeStore()
         let wsID = UUID()
         let ids = [UUID(), UUID(), UUID()]
@@ -200,17 +224,14 @@ struct AppStoreCloseReselectionTests {
         store.restore(from: Snapshot(selectedSessionID: ids[1],
                                      workspaces: [WorkspaceSnapshot(id: wsID, name: "work", sessions: sessions)],
                                      sidebarMode: .flagged))
-        #expect(store.sessionRecency.items == [ids[1]]) // only the restored selection
+        #expect(store.sessionRecency.items == [ids[1]])
 
         store.closeSession(ids[1])
-        #expect(store.selectedSessionID == ids[0]) // the flagged survivor, not the unflagged `ids[2]`
+        #expect(store.selectedSessionID == ids[0])
         #expect(store.flaggedSessions.map(\.id).contains(try #require(store.selectedSessionID)))
     }
 
     @Test func closeActiveSessionInFlaggedModeWithAnEmptyScopedRecencyPicksTheNEARESTFlaggedSurvivor() throws {
-        // the filtered fallback is positional WITHIN the flagged set, not "the first flagged row": closing a
-        // session in the middle of the flagged list must land on the flagged row that shifted into its slot,
-        // the same locality the unfiltered positional fallback has.
         let store = makeStore()
         let wsID = UUID()
         let ids = [UUID(), UUID(), UUID()]
@@ -218,16 +239,13 @@ struct AppStoreCloseReselectionTests {
         store.restore(from: Snapshot(selectedSessionID: ids[1],
                                      workspaces: [WorkspaceSnapshot(id: wsID, name: "work", sessions: sessions)],
                                      sidebarMode: .flagged))
-        #expect(store.sessionRecency.items == [ids[1]]) // only the restored selection
+        #expect(store.sessionRecency.items == [ids[1]])
 
         store.closeSession(ids[1])
-        #expect(store.selectedSessionID == ids[2]) // the neighbor that shifted up, not the top of the list
+        #expect(store.selectedSessionID == ids[2])
     }
 
     @Test func closeTheWorkspacesLastFlaggedSessionWithAnEmptyRecencyPicksTheADJACENTFlaggedRow() throws {
-        // the scope widens across workspaces once the close leaves the closing workspace with no flagged
-        // survivor, and the flagged sidebar renders that widened set as one flat list — so the fallback must
-        // stay positional THERE too: the flagged row adjacent to the closed one, not the top of the list.
         let store = makeStore()
         let first = UUID(), last = UUID()
         let ids = (0..<4).map { _ in UUID() }
@@ -239,43 +257,39 @@ struct AppStoreCloseReselectionTests {
                                      workspaces: [WorkspaceSnapshot(id: first, name: "work", sessions: flaggedElsewhere),
                                                   WorkspaceSnapshot(id: last, name: "personal", sessions: closing)],
                                      sidebarMode: .flagged))
-        #expect(store.sessionRecency.items == [ids[3]]) // only the restored selection
+        #expect(store.sessionRecency.items == [ids[3]])
 
         store.closeSession(ids[3])
-        #expect(store.selectedSessionID == ids[1]) // the flagged row before it, not the first flagged row
+        #expect(store.selectedSessionID == ids[1])
     }
 
-    @Test func closeTheLastFlaggedSessionFallsThroughToThePositionalTarget() throws {
-        // the flagged scope is empty once the only flagged session is the one closing, so the filtered
-        // fallback has nothing to return: the positional pick stands rather than selecting nothing (the
-        // flagged sidebar renders no rows at all in this state, so there is no in-filter row to land on).
+    @Test func closeTheLastFlaggedSessionWidensToTheWholeTree() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
-        _ = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let recentSurvivor = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
         let closing = try #require(store.addSession(toWorkspace: ws.id, cwd: "/b"))
-        let after = try #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
+        _ = try #require(store.addSession(toWorkspace: ws.id, cwd: "/c"))
         store.setFlag(true, forSession: closing.id)
         store.sidebarMode = .flagged
+        store.selectSession(recentSurvivor.id)
         store.selectSession(closing.id)
 
         store.closeSession(closing.id)
         #expect(store.flaggedSessions.isEmpty)
-        #expect(store.selectedSessionID == after.id) // the positional neighbor; nothing flagged survives
+        #expect(store.selectedSessionID == recentSurvivor.id)
     }
 
     @Test func closeActiveSessionWithAnEmptyScopedRecencyFallsBackToThePositionalTarget() throws {
-        // a cold restore: nothing has been activated, so once the closing session is pruned the scoped
-        // recency is empty and the pick is exactly today's positional neighbor.
         let store = makeStore()
         let wsID = UUID()
         let ids = [UUID(), UUID(), UUID()]
         let sessions = ids.enumerated().map { SessionSnapshot(id: $1, customName: nil, cwd: "/\($0)") }
         store.restore(from: Snapshot(selectedSessionID: ids[1],
                                      workspaces: [WorkspaceSnapshot(id: wsID, name: "work", sessions: sessions)]))
-        #expect(store.sessionRecency.items == [ids[1]]) // only the restored selection
+        #expect(store.sessionRecency.items == [ids[1]])
 
         store.closeSession(ids[1])
-        #expect(store.selectedSessionID == ids[2]) // the session that shifted into the removed slot
+        #expect(store.selectedSessionID == ids[2])
     }
 
     @Test func softCloseActiveSessionPicksTheRecentSurvivorLikeTheHardClose() throws {
@@ -289,12 +303,10 @@ struct AppStoreCloseReselectionTests {
         store.selectSession(closing.id)
 
         #expect(store.softCloseSession(closing.id, grace: 60))
-        #expect(store.selectedSessionID == first.id) // the MRU survivor, not the positional neighbor `/c`
+        #expect(store.selectedSessionID == first.id)
     }
 
     @Test func softCloseActiveSessionWithAnEmptyScopedRecencyFallsBackToThePositionalTarget() throws {
-        // the single soft close owns its own call into the helper, so pin its fallback leg too: a cold
-        // restore leaves nothing in the recency stack but the session being closed.
         let store = makeStore()
         let wsID = UUID()
         let ids = [UUID(), UUID(), UUID()]
@@ -303,7 +315,7 @@ struct AppStoreCloseReselectionTests {
                                      workspaces: [WorkspaceSnapshot(id: wsID, name: "work", sessions: sessions)]))
 
         #expect(store.softCloseSession(ids[1], grace: 60))
-        #expect(store.selectedSessionID == ids[2]) // the session that shifted into the removed slot
+        #expect(store.selectedSessionID == ids[2])
     }
 
     @Test func softCloseSessionsNeverPicksAMemberOfTheClosingGroup() throws {
@@ -321,8 +333,7 @@ struct AppStoreCloseReselectionTests {
         store.selectSession(closing.id)
 
         #expect(store.softCloseSessions([alsoClosing.id, closing.id], grace: 60))
-        #expect(store.selectedSessionID == survivor.id) // the most recent survivor OUTSIDE the group
-        // both closed sessions are more recent than `survivor` and still in the stack, yet unpickable
+        #expect(store.selectedSessionID == survivor.id)
         #expect(store.sessionRecency.items.contains(closing.id))
         #expect(store.sessionRecency.items.contains(alsoClosing.id))
     }
@@ -341,7 +352,7 @@ struct AppStoreCloseReselectionTests {
         let summary = try #require(store.pendingCloseSummary)
         #expect(store.undoPendingClose(summary.id))
         #expect(store.session(withID: closing.id) === closing)
-        #expect(store.selectedSessionID == closing.id) // undo reselects what was closed
+        #expect(store.selectedSessionID == closing.id)
     }
 
     @Test func graceExpiryAfterASoftCloseLeavesTheSelectionAlone() async throws {
@@ -363,8 +374,8 @@ struct AppStoreCloseReselectionTests {
         }
 
         #expect(surface.teardownCount == 1)
-        #expect(store.selectedSessionID == survivor.id) // finalization must not re-run reselection
-        #expect(!store.sessionRecency.items.contains(closing.id)) // finalize prunes it now
+        #expect(store.selectedSessionID == survivor.id)
+        #expect(!store.sessionRecency.items.contains(closing.id))
     }
 
     @Test func closeActiveSessionNeverClearsTheSelectionWhileSessionsSurvive() throws {
@@ -382,6 +393,6 @@ struct AppStoreCloseReselectionTests {
         }
         let last = try #require(store.selectedSessionID)
         store.closeSession(last)
-        #expect(store.selectedSessionID == nil) // the tree is empty now
+        #expect(store.selectedSessionID == nil)
     }
 }

@@ -183,9 +183,7 @@ extension AppStore {
         let focusMember = focusedWorkspaceIDs.contains(workspaceID) || folded.focusMember
         dropFocusMember(workspaceID)
         if removingActive {
-            let fallbackIndex = min(index, workspaces.count - 1)
-            selectedSessionID = workspaces[fallbackIndex].sessions.first?.id
-                ?? workspaces.first(where: { !$0.sessions.isEmpty })?.sessions.first?.id
+            selectedSessionID = workspaceRemovalTarget(at: index)
             replaceSidebarSelection(with: selectedSessionID)
             disableFocusIfSelectionOutsideSet(selectedSessionID)
             recordRecency()

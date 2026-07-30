@@ -1469,6 +1469,14 @@ paths:
   So `workspace.filter on` with nothing marked succeeds having changed nothing, which is what keeps the
   filter term of the row-visibility contract from ever lying.
   No open window is an error rather than a silent no-op.
+  **`workspace.filter`, `workspace.focus`, `sidebar.mode` AND `session.flag` all carry a SELECTION side
+  effect**: when the visible set no longer holds the window's active session, the store moves the selection
+  to the most recent session still visible (`reselectIfSelectionHidden`, see [[sidebar]]).
+  That includes a command that GROWS the set and repairs an empty one — `workspace.focus add` of a populated
+  workspace while only session-less ones are marked, `session.flag on` into an empty flagged view.
+  `session.flag clear` never does (it empties the list), and neither does `session.new --no-select`, which
+  keeps its promise instead.
+  Read back off `ControlSessionNode.active`; no new field.
   It is the control half of the bottom-bar `focus-filter-toggle`, the View-menu Toggle Workspace Filter,
   and `BuiltinAction.toggleWorkspaceFilter`.
   Its READ side is the TOP-LEVEL `ControlTree.workspaceFilter` (`focusEnabled` in the tree builder, always

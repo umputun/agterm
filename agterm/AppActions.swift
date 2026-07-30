@@ -961,23 +961,6 @@ final class AppActions {
 
     // MARK: - Focus
 
-    /// Bridge for `.agtermAutoFollowed`: an idle auto-follow has moved some window's selection to a blocked
-    /// session. Selection alone does NOT move first responder (the eager deck keeps the prior surface as
-    /// responder), so pull focus into the newly selected session — but ONLY when the firing window is key.
-    /// A non-key window keeps just the selection change and focuses normally when it next becomes key.
-    /// `revealActiveBlockedPane` targets the frontmost (= key) store — the firing window here since we gate
-    /// on its being key — and reveals the pane that set the status (split/scratch), so the initial jump lands
-    /// on the waiting pane, not just the session's plain focused pane.
-    private func autoFollowed(_ sessionID: UUID?, indicator: AgentIndicator?) {
-        guard let sessionID, let windowID = library.windowID(forSession: sessionID),
-              WindowRegistry.shared.isKeyWindow(windowID) else { return }
-        // never reveal behind the zoom layer: the reveal mutates scratch visibility / splitFocused,
-        // exactly the hidden-state writes zoom forbids. The auto-follow SELECTION stands (the user
-        // lands on the blocked session when they exit zoom); only the pane reveal is skipped.
-        guard TerminalZoomRegistry.shared.controller(for: windowID)?.target == nil else { return }
-        revealActiveBlockedPane(captured: indicator)
-    }
-
     /// Per-window generation counters (keyed by the owning window id; bumped in AppActions+Focus). A fresh
     /// `focusSplitPane` call bumps its window's counter so an older in-flight retry loop in the SAME window
     /// cancels itself when superseded, stopping the opposite-target ping-pong flicker and giving

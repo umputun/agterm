@@ -112,9 +112,10 @@ paths:
   a private transient array in host-free `AppStore`, exposed through `sidebarSelectionIDs` normalized to
   the current visible session order so batch actions are deterministic in tree and flagged modes.
   AppKit Shift-click and Command-click update the outline selection; `outlineViewSelectionDidChange`
-  mirrors it through `AppStore.setSidebarSelection(_:)`. `allowsEmptySelection` stays TRUE because a
-  focus filter can intentionally hide the active session and `syncSelection` must be able to
-  `deselectAll(nil)` in that state.
+  mirrors it through `AppStore.setSidebarSelection(_:)`. `allowsEmptySelection` stays TRUE because the
+  visible set can hold NO sessions at all — a marked workspace with none, or the flagged view emptied —
+  and `syncSelection` must be able to `deselectAll(nil)` in that state, which the gaps listed with
+  `reselectIfSelectionHidden` below can also reach.
   Right-click follows standard Mac list behavior: inside the current multi-selection it keeps the whole
   selection for the context menu, outside it narrows to the clicked row. Context menu target resolution
   is `AppStore.sidebarSelectionTargets(forContextSession:)`, which filters through the visible projection.
@@ -147,7 +148,11 @@ paths:
   then the owning workspace name) with the base leading icon — a plain terminal for a single session,
   the split-rectangle for a split one so a split stays distinguishable (the FILLED flag variant is suppressed;
   every row here is flagged) — plus the usual `StatusIconView` + `BadgeView`.
-  A row click routes through the existing `selectSession`; the mode switch is VIEW-ONLY (never re-selects/refocuses).
+  A row click routes through the existing `selectSession`.
+  BOTH mode flips re-select when they would hide the active session (`reselectIfSelectionHidden`, below):
+  into the flagged view when it is not flagged, and back to the tree when an applied workspace filter
+  excludes a session that was selected in the flagged view.
+  Otherwise view-only: an active session visible in the destination mode is left exactly where it is.
   Drag-reorder is DISABLED in `.flagged` mode.
   An empty flagged set shows a centered, non-scrolling empty-state hint ("No flagged sessions. / Right-click
   a session → Flag.") overlaid in the scroll view, re-tinted on `.agtermAppearanceChanged` and toggled
@@ -388,12 +393,42 @@ paths:
   This keeps the active session inside the visible set for those cases, which also keeps `currentWorkspaceID`
   (new-session placement) consistent with NO special-case.
   No-op when the filter is off, when nothing is selected, or when the selection sits in a member workspace.
-  The contract is ONE-DIRECTIONAL by design: an explicit cross-set select disables the filter (reveal),
-  but marking a workspace that does NOT contain the active session deliberately does NOT reselect or
-  switch the active terminal — focus is a pure view filter, never a terminal switch,
-  so the active session's terminal keeps rendering while the sidebar shows no selection until the next
-  select (the bottom-bar toggle signals the state, and it self-heals on the next `selectSession`/`addSession`).
-  This stranded-selection state is intentional, not a bug.
+  **Also a no-op in `.flagged` mode** (load-bearing, not defensive): the flat flagged list is
+  cross-workspace and ignores the marked set, so a selection landing outside the set there has not
+  navigated past the filter and there is nothing to reveal. Without the term, entering the flagged view
+  with the only flagged session in an unmarked workspace silently switches the filter off.
+  Returning to `.tree` re-applies it, and the reselect moves the selection back inside.
+  Pinned by `switchingToTheFlaggedViewNeverDisablesTheWorkspaceFilter`.
+  The contract is SYMMETRIC: a cross-set SELECT widens the view to reveal its target
+  (`disableFocusIfSelectionOutsideSet`, above), and a NARROWING that hides the active session moves the
+  selection into the view (`reselectIfSelectionHidden`, below).
+  **Invariant: the mutators below keep the active session inside a non-empty visible set** — the gap
+  those mutators do not cover is named there.
+- **`reselectIfSelectionHidden` — the selection half.**
+  Runs in `commitFocus`, `setSidebarMode`, both `setFlag` overloads, and at the END of `restore(from:)` —
+  after `sessionRecency` is re-seeded, since the pick is MRU.
+  Every GUI and control entry point funnels through those mutators, so nothing needs per-caller wiring and
+  the socket inherits it; the read-back is the existing `ControlSessionNode.active`.
+  Target: the most recent session within `navigableSessions` (`navigableRecentSessions`), else the first
+  visible one — MRU rather than positional keeps a filter-off-then-on round trip in place.
+  No-op on a nil selection (a restore clears a dangling one on purpose) and on an empty visible set.
+  Because the empty set is a no-op rather than a permanent exemption, one of these mutators running while
+  the set is empty DOES move the selection: flagging into an empty flagged view, or marking a populated
+  workspace while only session-less ones are marked.
+  `clearFlags` needs no call — it empties the list, so nothing is visible to move to.
+  KNOWN GAP: `addSession(select: false)` and `moveSession` of a non-active session grow the visible set
+  without reselecting, leaving a row rendered with nothing selected. `--no-select` promising not to touch
+  the selection wins over the invariant; the `addSession` half is pinned by
+  `aBackgroundInsertionIntoAnEmptyVisibleSetDoesNotRepairIt`, the `moveSession` half by nothing.
+  Every EXPLICIT select in `.flagged` mode is a third: `selectSession` of an unflagged session — from
+  `session.select`, a notification reveal, or an `addSession(select: true)` — only runs
+  `disableFocusIfSelectionOutsideSet`, which returns early there, so the session goes active while the
+  flagged list renders no row for it.
+  Deliberate: the flagged view has no set to suspend, so revealing would mean leaving the mode, and a
+  notification click would drop the user out of the working set they are in. Flagged mode stays sticky.
+  **Keyboard focus needs no app-target bridge**: `TerminalView.updateNSView` drops first responder from the
+  surface going inactive and `focusIfNeeded` takes it for the new one. Auto-follow posts a notification
+  because it reveals a specific PANE, which the deck cannot infer; a narrowing has no pane to reveal.
 - **Mode/focus-aware reconcile signal.**
   The reconcile `TreeShape` is computed from the MODE-selected/filtered roots:
   in `.tree` it is `visibleWorkspaces` → `(workspaceID, sessionIDs)` (so a focus flip re-shapes),

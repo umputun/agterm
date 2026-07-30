@@ -701,22 +701,6 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         return nil
     }
 
-    /// Types `command` + Return via the real keyboard (XCUI `typeText`), retrying until `file` reports a
-    /// non-empty marker. The keyboard routes to whatever holds first responder, and focus return after an
-    /// overlay/pane teardown is async (a bounded makeFirstResponder retry), so the first burst can land
-    /// before the session is first responder and be dropped. Re-typing each attempt is idempotent for a
-    /// `cmd > file` command. Returns the marker contents, or nil if it never appeared across all attempts.
-    private func keyboardTypeUntilMarker(_ command: String, file: URL,
-                                         attempts: Int = 6, perAttempt: TimeInterval = 2.5) -> String? {
-        for _ in 0..<attempts {
-            try? FileManager.default.removeItem(at: file)
-            app.typeText(command)
-            app.typeKey(.return, modifierFlags: [])
-            if let value = pollMarker(file, timeout: perAttempt) { return value }
-        }
-        return nil
-    }
-
     /// Polls `tree` (overlay state is not persisted to workspaces.json) until the session with `id` has
     /// `overlay` equal to `expected`. Absent/nil treated as false.
     private func pollSessionOverlay(id: String, expected: Bool, timeout: TimeInterval) -> Bool {

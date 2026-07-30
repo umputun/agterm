@@ -275,7 +275,29 @@ class ControlAPITestCase: XCTestCase {
             // can't be read as this attempt's success.
             try? FileManager.default.removeItem(at: file)
             let typed = try sendCommand(typeRequest(text: command, target: target, select: select))
-            XCTAssertEqual(typed["ok"] as? Bool, true, "typing the probe (attempt \(attempt)) should succeed: \(typed)")
+            if typed["ok"] as? Bool != true {
+                // `session not realized` is the same readiness race this loop exists to absorb — a background
+                // session's surface is built lazily, so an early probe can arrive before it exists. Any OTHER
+                // error is a real failure. Exhausting every attempt returns nil, which the callers unwrap.
+                XCTAssertTrue((typed["error"] as? String ?? "").contains("not realized"),
+                              "typing the probe (attempt \(attempt)) should succeed: \(typed)")
+                usleep(300_000)
+                continue
+            }
+            if let value = pollMarker(file, timeout: perAttempt) { return value }
+        }
+        return nil
+    }
+
+    /// `typeUntilMarker`'s KEYBOARD twin: types through the real keyboard, so the marker names whichever
+    /// surface actually holds first responder — the only oracle for a focus move. Retried for the same
+    /// shell-readiness reason.
+    func keyboardTypeUntilMarker(_ command: String, file: URL,
+                                 attempts: Int = 6, perAttempt: TimeInterval = 2.5) -> String? {
+        for _ in 0..<attempts {
+            try? FileManager.default.removeItem(at: file)
+            app.typeText(command)
+            app.typeKey(.return, modifierFlags: [])
             if let value = pollMarker(file, timeout: perAttempt) { return value }
         }
         return nil

@@ -1203,6 +1203,8 @@ struct AppStoreTests {
         let a = store.addSession(toWorkspace: work.id, cwd: "/a")!
         let b = store.addSession(toWorkspace: work.id, cwd: "/b")!
         let c = store.addSession(toWorkspace: personal.id, cwd: "/c")!
+        let d = store.addSession(toWorkspace: personal.id, cwd: "/d", select: false)!
+        store.selectSession(d.id)
         store.selectSession(a.id)
         store.selectSession(c.id)
         store.selectSession(b.id)
@@ -1210,7 +1212,8 @@ struct AppStoreTests {
         #expect(store.navigableRecentSessions(limit: 2) == [c.id, a.id])
 
         store.setFocusedWorkspace(personal.id)
-        #expect(store.navigableRecentSessions(limit: 9) == [c.id])
+        #expect(store.selectedSessionID == c.id)
+        #expect(store.navigableRecentSessions(limit: 9) == [d.id])
     }
 
     @Test func setFontSizeRecordsValue() {

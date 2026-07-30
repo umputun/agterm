@@ -206,7 +206,25 @@ All twelve are read-only projections of GUI state.
   Per-window and persisted; orthogonal to `sidebar mode` (the flagged flat list ignores the filter).
   While the filter is applied, `session go` navigation is scoped to the marked workspaces' sessions (and
   to the flagged set in flagged mode); an explicit `session select` of a session outside the set switches
-  the filter OFF while KEEPING the set, so re-applying it costs one `workspace filter on`. A workspace
+  the filter OFF while KEEPING the set, so re-applying it costs one `workspace filter on`.
+  That reveal is TREE-MODE ONLY: the flagged list is cross-workspace and ignores the marked set, so
+  selecting an off-set session there leaves the filter applied.
+  The converse also holds for the commands listed below, and it MOVES THE SELECTION: when one of them
+  leaves the selected session invisible, the most recently used session still visible is selected instead
+  — read back as `active` on `tree`. The transitions that do it: `workspace focus on` and a narrowing `toggle`; a
+  `workspace focus off` that drops the selected session's workspace while the remaining members keep the
+  filter applied; `workspace filter on`; both `sidebar mode` flips; and `session flag off` on the selected
+  session while the flagged view is up and other flagged sessions remain.
+  A visible set with NO sessions is the one exception — nothing to move to, so the selection stays. The
+  same commands repair it, so `session flag on` into an empty flagged view and `workspace focus add` of a
+  populated workspace while the marked set holds only empty ones both move the selection despite widening —
+  provided something was selected at all; a window restored with no selection stays unselected.
+  `session flag clear` never does (it empties the list), and neither does `session new --no-select`, so
+  the view can hold a row with nothing selected until one of the listed commands runs.
+  Nor does a plain `session new` or a `session select` in FLAGGED mode: both make the fresh or chosen
+  session active while the flagged view renders no row for it, leaving the sidebar unselected.
+  A script that changes what is visible should re-read `tree` before using the default `active` target.
+  A workspace
   created while the filter is applied joins the set, so it is visible without breaking the filter — except
   a `workspace new --collapsed` (or a `session new --no-select --create-workspace`), whose whole point is a
   quiet background build.

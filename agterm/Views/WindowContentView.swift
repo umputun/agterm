@@ -459,6 +459,11 @@ struct WindowContentView: View {
         // covered pane keeps deckVisible=true and races the quick-terminal surface for the cursor and fans
         // mouse-motion into the covered TUI (issue #225 quick-terminal path).
         let visible = deckInteractive && isActive && !hideForOverlay && !quickTerminal.isVisible
+        // focus gate: while the window-level quick terminal is up it OWNS first responder, so no deck
+        // surface may be `isActive` behind it — `TerminalView.updateNSView` would grab focus and send
+        // keystrokes to a covered session. Every automatic reselection (`reselectIfSelectionHidden`,
+        // auto-follow) reaches this, not just a click. The quick terminal's own hide flips it back.
+        let focusable = deckInteractive && isActive && !quickTerminal.isVisible
         ZStack {
             // the session's pane(s), kept MOUNTED while an overlay is up — shells stay alive, like the deck
             // does for inactive sessions. a FULL overlay hides them (opacity 0) so its translucency reveals the
@@ -475,7 +480,7 @@ struct WindowContentView: View {
                         ZStack {
                             if deckHostsSurface(session: session, surface: .primary) {
                                 TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
-                                             isActive: deckInteractive && isActive && !session.splitFocused && !overlaid,
+                                             isActive: focusable && !session.splitFocused && !overlaid,
                                              deckVisible: visible)
                                     .overlay { paneDim(session.splitFocused) }
                                     .id(primarySurfaceID(session))
@@ -492,7 +497,7 @@ struct WindowContentView: View {
                         ZStack {
                             if deckHostsSurface(session: session, surface: .split) {
                                 TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
-                                             isActive: deckInteractive && isActive && session.splitFocused && !overlaid,
+                                             isActive: focusable && session.splitFocused && !overlaid,
                                              deckVisible: visible)
                                     .overlay { paneDim(!session.splitFocused) }
                                     .id("\(session.id.uuidString)-split")
@@ -509,7 +514,7 @@ struct WindowContentView: View {
                     // split hidden while the right pane had focus: show that pane maximized.
                     if deckHostsSurface(session: session, surface: .split) {
                         TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
-                                     isActive: deckInteractive && isActive && !overlaid, deckVisible: visible)
+                                     isActive: focusable && !overlaid, deckVisible: visible)
                             .id("\(session.id.uuidString)-split")
                     } else {
                         Color.clear
@@ -518,7 +523,7 @@ struct WindowContentView: View {
                 } else {
                     if deckHostsSurface(session: session, surface: .primary) {
                         TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
-                                     isActive: deckInteractive && isActive && !overlaid, deckVisible: visible)
+                                     isActive: focusable && !overlaid, deckVisible: visible)
                             .id(primarySurfaceID(session))
                     } else {
                         Color.clear
@@ -543,13 +548,12 @@ struct WindowContentView: View {
             // never re-hosts the NSSplitView — and the floating panel's opaque backing needs no hiding of the
             // scratch behind it.
             if session.scratchActive, deckHostsSurface(session: session, surface: .scratch) {
-                // gate focus on every surface that covers the scratch — a full overlay (renders above it, in
-                // `overlayPanel` at zIndex 3) AND the window-level quick terminal — so the deck's focusIfNeeded can't grab the
-                // scratch behind them. When the cover goes away, isActive flips true and the deck re-grabs it.
-                // (matches the autoFocus suppression in makeScratchSurface.) `deckVisible` mirrors the panes'
-                // rule so only an on-screen scratch is a file-drop target.
+                // a full overlay renders above the scratch (`overlayPanel`, zIndex 3), so it gates focus here
+                // on top of what `focusable` already covers. (matches the autoFocus suppression in
+                // makeScratchSurface.) `deckVisible` mirrors the panes' rule so only an on-screen scratch is
+                // a file-drop target.
                 TerminalView(session: session, surfaceKeyPath: \.scratchSurface, makeSurface: makeScratchSurface,
-                             isActive: deckInteractive && isActive && !session.overlayActive && !quickTerminal.isVisible,
+                             isActive: focusable && !session.overlayActive,
                              deckVisible: deckInteractive && isActive && !fullOverlay && !quickTerminal.isVisible)
                     .opacity(fullOverlay ? 0 : 1)
                     .allowsHitTesting(!fullOverlay)
@@ -563,7 +567,7 @@ struct WindowContentView: View {
             // and never re-parents the surface (which would blank its Metal drawable). Full fills the area
             // translucent with the pane(s) hidden by `hideForOverlay`; floating draws an opaque framed panel
             // over the still-visible pane(s). Switching full<->% (session.overlay.resize) only re-flows the frame.
-            overlayPanel(session: session, isActive: deckInteractive && isActive)
+            overlayPanel(session: session, isActive: focusable)
                 .zIndex(3)
         }
         // when the overlay closes, the underlying pane must reclaim first responder. the pane re-activating
@@ -610,7 +614,7 @@ struct WindowContentView: View {
                     // responder (the full variant hides the panes, so it's covered either way).
                     Color.clear.contentShape(Rectangle())
                     TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
-                                 makeSurface: makeOverlaySurface, isActive: isActive, deckVisible: isActive && !quickTerminal.isVisible)
+                                 makeSurface: makeOverlaySurface, isActive: isActive, deckVisible: isActive)
                         .frame(width: geo.size.width * fraction, height: geo.size.height * fraction)
                         // floating = opaque backing + hairline frame + shadow so it reads as a distinct window
                         // over the still-visible session; full = translucent, no chrome (libghostty draws only

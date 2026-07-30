@@ -247,7 +247,8 @@ paths:
   `AppStoreCloseReselectionTests`) is the single reselection pick for all three close paths — `closeSession`
   plus the two undoable ones, `softCloseSession` / `softCloseSessions`.
   It takes `sessionRecency.top(1, in: scope)` where `scope` = the closing session's OWN workspace's surviving
-  session ids, further ∩ the flagged set in `.flagged` sidebar mode.
+  session ids, further ∩ the VISIBLE set (`navigableSessions`) — the flagged list in `.flagged` mode, and the
+  marked workspaces' sessions while the focus filter applies.
   The workspace term is what keeps the close from being disorienting: an UNSCOPED "most recent survivor" could
   yank the user into another workspace, which is worse than the positional neighbor it replaces.
   The scope set is built from the TREE, not from the recency stack: the closing session is removed from
@@ -260,31 +261,30 @@ paths:
   the disorientation the whole feature exists to remove.
   The FLAGGED term survives that widening (`flaggedSessions` is cross-workspace by definition), so a
   `.flagged`-mode close crosses workspaces rather than landing on an unflagged session the sidebar isn't rendering.
-- **The FOCUS filter deliberately does NOT scope the close-reselection MRU — do not "fix" this by reaching for
-  `navigableSessions`.**
-  It is the obvious-looking choice (one set, already the definition of "what the user is navigating within") and
-  it is WRONG here, because focus is a property of the TREE, not of the selection: neither `setFocusedWorkspace`
-  nor `setFocusMembership` ever moves the active session, so the marked set can hold workspaces the closing
-  session doesn't even belong to.
-  Generalizing focus from one id to a SET does not soften this — it widens it, since the set can now be several
-  workspaces, none of them the closing session's.
-  Scoping by `navigableSessions` (which folds focus in) breaks two reachable states: closing a session while
-  ANOTHER workspace is marked jumps the user INTO the marked set, and closing the LAST session of the only
-  marked workspace widens into an EMPTY set (`navigableSessions` has collapsed to the workspace just emptied)
-  and falls through to the positional first-workspace jump.
-  Landing outside the marked set needs no scoping defense anyway: every caller already runs
+- **The scope is `navigableSessions`, so BOTH narrowings apply — the flagged list AND the focus filter.**
+  Every mutator that NARROWS moves the active session inside the visible set (`reselectIfSelectionHidden`,
+  see [[sidebar]] for the gaps that do not), so a close that jumped OUT of it would strand the selection;
+  scoping is also what keeps a hand-curated working set alive through a ⌘W.
+  The widening runs in THREE levels, each reached only once the one before it is exhausted: the closing
+  workspace's visible sessions, then everything visible, then the WHOLE tree.
+  The third level is what makes "widen when exhausted" mean widen — without it an emptied visible scope returns a
+  nil MRU pick and the positional fallback jumps into the FIRST workspace, the disorientation this helper exists
+  to remove (pinned by `closeTheFocusedWorkspacesLastSessionPicksTheRecentSurvivorElsewhere`).
+  Landing outside the marked set at that last level is fine and needs no scoping defense: every caller runs
   `disableFocusIfSelectionOutsideSet` on the pick, which switches the filter off (KEEPING the set) to reveal
   the target.
-  Both cases are pinned by `closeActiveSessionWhileAnotherWorkspaceIsFocusedStaysInTheClosingWorkspace` and
-  `closeTheFocusedWorkspacesLastSessionPicksTheRecentSurvivorElsewhere`.
-  Only an empty MRU after that (a fresh restore before anything was activated, or the only recent entry was the one
-  just closed) falls back to the positional `reselectionTarget(after:)`, which is UNCHANGED — so the worst case is
-  the old neighbor behavior (scoped to the flagged set in `.flagged` mode, see the next paragraph), never an empty
-  selection.
-  In `.flagged` mode that fallback is scoped too — `nearestInScopeTarget` repeats `reselectionTarget`'s walk
-  restricted to the scope, because `reselectionTarget` walks the tree positionally and would otherwise land on an
-  unflagged sibling the flagged sidebar has no row for (`syncSelection` would then `deselectAll` and show nothing
-  selected).
+  In-set picking while the set still holds a survivor is pinned by `closeUnderAFocusFilterStaysInsideTheMarkedSet`.
+  Only an empty MRU after all three levels (a fresh restore before anything was activated, or the only recent entry
+  was the one just closed) falls back to a POSITIONAL walk — so the worst case is the old neighbor behavior,
+  never an empty selection.
+  WHICH walk depends on the MODE, not on how far the scope widened: `narrowed` is `sidebarMode == .flagged ||
+  focusEnabled`, so under either narrowing the flattened `nearestInScopeTarget` runs over whatever `scope`
+  ended up being, and the plain `reselectionTarget(after:)` is reached only with no narrowing applied at all.
+  The two differ once the closing workspace empties: the flat walk takes the adjacent row in the previous or
+  following workspace, `reselectionTarget` the first session of the first non-empty one.
+  Scoping the fallback matters because `reselectionTarget` walks the tree positionally and would otherwise land on
+  a row the sidebar has no entry for — an unflagged sibling, or an unmarked workspace's session (`syncSelection`
+  would then `deselectAll` and show nothing selected).
   It stays POSITIONAL within the filter, and the walk runs over the tree FLATTENED in sidebar order: the in-scope
   session that shifted into the removed slot, else the nearest in-scope one before it.
   The walk spans workspaces because the scope can — once the closing workspace holds nothing in scope the scope has
@@ -298,13 +298,19 @@ paths:
   Pinned by `closeActiveSessionInFlaggedModeWithAnEmptyScopedRecencyStaysWithinTheFlaggedSet`,
   `closeActiveSessionInFlaggedModeWithAnEmptyScopedRecencyPicksTheNEARESTFlaggedSurvivor`, and
   `closeTheWorkspacesLastFlaggedSessionWithAnEmptyRecencyPicksTheADJACENTFlaggedRow`.
-  The ONE case the flagged scoping cannot hold is closing the LAST flagged session anywhere: the scope is then
-  empty, the flagged sidebar renders no rows at all, and the positional pick stands — selecting nothing would
-  leave no terminal.
-  Pinned by `closeTheLastFlaggedSessionFallsThroughToThePositionalTarget`.
-  `reselectionTarget` now has exactly ONE caller, this helper: `removeWorkspace` / `softRemoveWorkspace` never used
-  it and keep their own inline positional pick (reselection there is deliberately untouched — the
-  "stay in the current workspace" constraint is meaningless when the workspace itself is what's being removed).
+  The ONE case the flagged scoping cannot hold is closing the LAST flagged session anywhere: the visible scope is
+  then empty and the flagged sidebar renders no rows at all, so the scope widens to the whole tree and the MRU
+  there stands — selecting nothing would leave no terminal.
+  Pinned by `closeTheLastFlaggedSessionWidensToTheWholeTree`.
+  `reselectionTarget` has exactly ONE caller, this helper.
+  `removeWorkspace` / `softRemoveWorkspace` pick through `workspaceRemovalTarget(at:)` instead: the
+  "stay in the current workspace" term is meaningless when the workspace itself is what is being removed,
+  but the VISIBLE-set term is not, so both take the most recent still-visible session (else the first) and
+  fall back to the positional walk only when nothing is visible at all.
+  Pinned by `removingAMarkedWorkspaceStaysInsideTheMarkedSet`,
+  `removingTheActiveWorkspaceInFlaggedModeStaysInsideTheFlaggedSet`,
+  `softRemovingAMarkedWorkspaceStaysInsideTheMarkedSet` and
+  `removingAMarkedWorkspacePrefersTheMostRecentVisibleSurvivor`.
   `softCloseSessions`' `removedBeforeActive` index adjustment is preserved verbatim — it now feeds only the
   fallback.
 - **Session navigation (between sessions).**

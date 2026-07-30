@@ -308,20 +308,111 @@ struct AppStoreOrganizationTests {
         #expect(store.focusedWorkspaceIDs == [work.id] && !store.focusEnabled)
     }
 
-    @Test func removeWorkspaceReselectingNonFocusedDisablesTheFilter() {
+    @Test func removingTheOnlyMarkedWorkspaceReselectsOutsideAndDisablesTheFilter() {
         let store = makeStore()
         let a = store.addWorkspace(name: "a")
         let b = store.addWorkspace(name: "b")
-        let c = store.addWorkspace(name: "c")
-        _ = store.addSession(toWorkspace: a.id, cwd: "/a")!
-        _ = store.addSession(toWorkspace: b.id, cwd: "/b")!
-        let activeInC = store.addSession(toWorkspace: c.id, cwd: "/c")!
-        store.selectSession(activeInC.id)
+        let activeInA = store.addSession(toWorkspace: a.id, cwd: "/a")!
+        _ = store.addSession(toWorkspace: b.id, cwd: "/b", select: false)!
+        store.selectSession(activeInA.id)
         store.setFocusedWorkspace(a.id)
-        store.removeWorkspace(c.id) // reselects into b (the fallback slot), outside the focused a
+        #expect(store.selectedSessionID == activeInA.id)
+
+        store.removeWorkspace(a.id)
         #expect(store.workspace(forSession: store.selectedSessionID!)?.id == b.id)
-        // the filter switches off to reveal the reselected session; the marked set is preserved.
-        #expect(store.focusedWorkspaceIDs == [a.id] && !store.focusEnabled)
+        #expect(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled)
+    }
+
+    @Test func removingAMarkedWorkspaceStaysInsideTheMarkedSet() {
+        let store = makeStore()
+        let doomed = store.addWorkspace(name: "doomed")
+        let unmarked = store.addWorkspace(name: "unmarked")
+        let alsoMarked = store.addWorkspace(name: "also-marked")
+        let active = store.addSession(toWorkspace: doomed.id, cwd: "/a")!
+        _ = store.addSession(toWorkspace: unmarked.id, cwd: "/stray", select: false)!
+        let survivor = store.addSession(toWorkspace: alsoMarked.id, cwd: "/keep", select: false)!
+        store.selectSession(active.id)
+        store.setFocusMembership(doomed.id, member: true)
+        store.setFocusMembership(alsoMarked.id, member: true)
+        store.setFocusEnabled(true)
+
+        store.removeWorkspace(doomed.id)
+
+        #expect(store.selectedSessionID == survivor.id)
+        #expect(store.focusedWorkspaceIDs == [alsoMarked.id] && store.focusEnabled)
+    }
+
+    @Test func removingTheActiveWorkspaceInFlaggedModeStaysInsideTheFlaggedSet() {
+        let store = makeStore()
+        let doomed = store.addWorkspace(name: "doomed")
+        let unflagged = store.addWorkspace(name: "unflagged")
+        let elsewhere = store.addWorkspace(name: "elsewhere")
+        let active = store.addSession(toWorkspace: doomed.id, cwd: "/a")!
+        _ = store.addSession(toWorkspace: unflagged.id, cwd: "/stray", select: false)!
+        let survivor = store.addSession(toWorkspace: elsewhere.id, cwd: "/keep", select: false)!
+        store.setFlag(true, forSession: active.id)
+        store.setFlag(true, forSession: survivor.id)
+        store.setSidebarMode(.flagged)
+        store.selectSession(active.id)
+
+        store.removeWorkspace(doomed.id)
+
+        #expect(store.selectedSessionID == survivor.id)
+        #expect(store.flaggedSessions.map(\.id) == [survivor.id])
+    }
+
+    @Test func softRemovingAMarkedWorkspaceStaysInsideTheMarkedSet() {
+        let store = makeStore()
+        let doomed = store.addWorkspace(name: "doomed")
+        let unmarked = store.addWorkspace(name: "unmarked")
+        let alsoMarked = store.addWorkspace(name: "also-marked")
+        let active = store.addSession(toWorkspace: doomed.id, cwd: "/a")!
+        _ = store.addSession(toWorkspace: unmarked.id, cwd: "/stray", select: false)!
+        let survivor = store.addSession(toWorkspace: alsoMarked.id, cwd: "/keep", select: false)!
+        store.selectSession(active.id)
+        store.setFocusMembership(doomed.id, member: true)
+        store.setFocusMembership(alsoMarked.id, member: true)
+        store.setFocusEnabled(true)
+
+        #expect(store.softRemoveWorkspace(doomed.id, grace: 60))
+
+        #expect(store.selectedSessionID == survivor.id)
+        #expect(store.focusedWorkspaceIDs == [alsoMarked.id] && store.focusEnabled)
+    }
+
+    @Test func removingTheLastFlaggedWorkspaceFallsBackToAnUnflaggedSurvivor() {
+        let store = makeStore()
+        let doomed = store.addWorkspace(name: "doomed")
+        let elsewhere = store.addWorkspace(name: "elsewhere")
+        let active = store.addSession(toWorkspace: doomed.id, cwd: "/a")!
+        let unflagged = store.addSession(toWorkspace: elsewhere.id, cwd: "/keep", select: false)!
+        store.setFlag(true, forSession: active.id)
+        store.setSidebarMode(.flagged)
+        store.selectSession(active.id)
+
+        store.removeWorkspace(doomed.id)
+
+        #expect(store.navigableSessions.isEmpty)
+        #expect(store.selectedSessionID == unflagged.id)
+    }
+
+    @Test func removingAMarkedWorkspacePrefersTheMostRecentVisibleSurvivor() {
+        let store = makeStore()
+        let doomed = store.addWorkspace(name: "doomed")
+        let alsoMarked = store.addWorkspace(name: "also-marked")
+        let active = store.addSession(toWorkspace: doomed.id, cwd: "/a")!
+        let first = store.addSession(toWorkspace: alsoMarked.id, cwd: "/first", select: false)!
+        let recent = store.addSession(toWorkspace: alsoMarked.id, cwd: "/recent", select: false)!
+        store.selectSession(recent.id)
+        store.selectSession(active.id)
+        store.setFocusMembership(doomed.id, member: true)
+        store.setFocusMembership(alsoMarked.id, member: true)
+        store.setFocusEnabled(true)
+
+        store.removeWorkspace(doomed.id)
+
+        #expect(store.selectedSessionID == recent.id)
+        #expect(first.id != recent.id)
     }
 
     @Test func addSessionToOtherWorkspaceWhileFocusedDisablesTheFilter() {

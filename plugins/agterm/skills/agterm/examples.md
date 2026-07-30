@@ -354,8 +354,21 @@ which switches the filter off as the set empties. Per-window and persisted; orth
 sessions; suspending it restores stepping over all sessions.
 
 Every mode acts on `--target`, which defaults to `active` — the workspace of the SELECTED session, not
-whatever the previous line addressed. Focusing does not move the selection, so always name the workspace
-you mean.
+whatever the previous line addressed, so always name the workspace you mean.
+
+**These commands MOVE the selection when they leave it invisible**, selecting the most recently used
+session still visible instead: `workspace focus on`, a narrowing `toggle`, a `workspace focus off` whose
+remaining members keep the filter applied, `workspace filter on`, both `sidebar mode` flips, and
+`session flag off` on the selected session while the flagged view is up with other flagged sessions left.
+Other commands do NOT: a plain `session new` or a `session select` of an unflagged session in FLAGGED
+mode makes it active while the flagged list renders no row for it.
+
+A view with NOTHING visible is the exception — nowhere to move to, so the selection stays. The same
+commands repair it, so `session flag on` into an empty flagged view and `workspace focus add` of a
+populated workspace while only empty ones are marked move the selection too. `session flag clear` never
+does, and neither does `session new --no-select`.
+
+Re-read `tree` after any command that changes what is visible, before using the default `active` target.
 
 ```bash
 agtermctl workspace focus on --target "$AGTERM_WORKSPACE_ID"  # zoom to this workspace

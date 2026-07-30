@@ -144,6 +144,12 @@ never two bundles in one window.
   `no open window` when none is open); the settings broadcast reaches every window's quick terminal via
   `allControllers()`.
   Zero `QuickTerminalController.shared` references remain.
+  **A visible quick terminal OWNS first responder, so no deck surface may be `isActive` behind it.**
+  `WindowContentView`'s `focusable` (`deckInteractive && isActive && !quickTerminal.isVisible`) gates the
+  pane, split, maximized-split, scratch and overlay hosts alike — without it an automatic reselection
+  (`reselectIfSelectionHidden`, auto-follow) flips a covered surface active and `TerminalView.updateNSView`
+  grabs focus, sending keystrokes to a session hidden behind the cover.
+  The quick terminal is an IN-WINDOW overlay, not a separate window, so first responder is shared.
 - **Cross-window notification reveal.**
   The notification identity (`TerminalNotification.identity`/`parseIdentity` in agtermCore) is now `"<windowID>:<sessionID>:<paneRole>"`
   — the windowID lets a banner clicked after its window closed know which window to reopen.

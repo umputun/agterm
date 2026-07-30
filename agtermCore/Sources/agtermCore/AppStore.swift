@@ -416,9 +416,9 @@ public final class AppStore {
     /// Removes a workspace and every session in it, tearing down each session's surfaces
     /// and pruning them from the recency stack. No-ops unless more than one workspace
     /// exists (the last one is kept). If the active session lived in the removed
-    /// workspace, reselects the first session of a remaining workspace (the one that
-    /// shifted into the removed slot, else the first non-empty workspace), or nil when
-    /// no sessions remain.
+    /// workspace, reselects through `workspaceRemovalTarget(at:)` — the most recent still
+    /// VISIBLE session, falling back to the positional walk only when nothing is visible,
+    /// and nil when no sessions remain.
     public func removeWorkspace(_ workspaceID: UUID) {
         guard canRemoveWorkspace, let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return }
         let workspace = workspaces[index]
@@ -440,9 +440,7 @@ public final class AppStore {
         dropFocusMember(workspaceID) // a marked root is gone; the filter goes with the last member
         workspaces.remove(at: index)
         if removingActive {
-            let fallbackIndex = min(index, workspaces.count - 1)
-            selectedSessionID = workspaces[fallbackIndex].sessions.first?.id
-                ?? workspaces.first(where: { !$0.sessions.isEmpty })?.sessions.first?.id
+            selectedSessionID = workspaceRemovalTarget(at: index)
             replaceSidebarSelection(with: selectedSessionID)
             disableFocusIfSelectionOutsideSet(selectedSessionID) // the reselected session may live outside the marked set
             recordRecency()
@@ -651,11 +649,13 @@ public final class AppStore {
     }
 
     /// Sets the sidebar mode and persists it. Clean no-op (no write) when the mode is unchanged, so the
-    /// delta-computed control/menu callers stay idempotent.
+    /// delta-computed control/menu callers stay idempotent. BOTH flips reselect when they would hide the
+    /// active session (`reselectIfSelectionHidden`).
     public func setSidebarMode(_ mode: SidebarMode) {
         guard sidebarMode != mode else { return }
         sidebarMode = mode
         pruneSidebarSelection()
+        reselectIfSelectionHidden()
         save()
     }
 
@@ -689,10 +689,15 @@ public final class AppStore {
     /// Sets (or clears) a session's flag — the durable flagged working-set membership the flat sidebar
     /// view projects. Persists the change. Clean no-op (no write) for an unknown id or when the flag is
     /// already in the requested state, so the delta-computed control/menu callers stay idempotent.
+    ///
+    /// Unflagging is a narrowing in `.flagged` mode — it drops the row rendering the active session — so
+    /// it runs the same reselect (`reselectIfSelectionHidden`), which the flag change itself cannot
+    /// trigger in tree mode — though it still repairs a selection stranded there by something else.
     public func setFlag(_ on: Bool, forSession id: UUID) {
         guard let session = session(withID: id), session.flagged != on else { return }
         session.flagged = on
         pruneSidebarSelection()
+        reselectIfSelectionHidden()
         save()
     }
 
@@ -709,6 +714,7 @@ public final class AppStore {
         }
         if changed {
             pruneSidebarSelection()
+            reselectIfSelectionHidden() // the batch can unflag the active session too
             save()
         }
     }
@@ -736,6 +742,9 @@ public final class AppStore {
 
     /// Unflags every session across all workspaces in one `save()`. No-ops (no write) when nothing is
     /// flagged. Backs the Clear Flagged action and the `session.flag clear` control mode.
+    ///
+    /// No `reselectIfSelectionHidden`, unlike the two `setFlag` mutators: clearing EVERY flag leaves the
+    /// list empty, so there is nowhere to move. A partial clear would need it.
     public func clearFlags() {
         var changed = false
         for workspace in workspaces {
@@ -785,9 +794,11 @@ public final class AppStore {
     /// `selectedSessionID` still resolves. Replaces the current state wholesale.
     ///
     /// Deliberately does NOT call `save()`: it loads what was just read from disk,
-    /// so re-persisting it would be a pointless write (and the only mutator that
-    /// skips `save()` for that reason). If the persisted `selectedSessionID` points
-    /// at a session that no longer exists, it is cleared to keep selection valid.
+    /// so re-persisting it would be a pointless write. The closing
+    /// `reselectIfSelectionHidden` is the exception — when it repairs a stranded
+    /// selection, `selectSession` schedules a save, and that one is worth writing.
+    /// If the persisted `selectedSessionID` points at a session that no longer
+    /// exists, it is cleared to keep selection valid.
     ///
     /// `launchRestore` marks an APP-BOOTSTRAP restore and is threaded down to `session(from:launchRestore:)`,
     /// where it is the only thing that arms a persisted `session.restore` override for this launch. It
@@ -828,6 +839,8 @@ public final class AppStore {
         let restoredIDs = Set(workspaces.flatMap(\.sessions).map(\.id))
         sessionRecency = RecencyStack(items: (snapshot.sessionRecency ?? []).filter { restoredIDs.contains($0) })
         recordRecency()
+        // LAST, after the recency stack is re-seeded: the pick is MRU, so earlier finds an empty stack.
+        reselectIfSelectionHidden()
     }
 
     /// Persists the current state eagerly. Called after every structural mutation and on

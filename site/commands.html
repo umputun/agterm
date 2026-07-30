@@ -659,8 +659,21 @@
                 While the filter is applied, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session go</span>
                 navigation is scoped to the marked workspaces' sessions, and an explicit
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session select</span> of a session outside
-                the set suspends the filter while keeping the set. Read membership back via the workspace node's
+                the set suspends the filter while keeping the set — in TREE mode only, since the flagged list ignores the
+                marked set, so a selection made there leaves the filter applied. Read membership back via the workspace node's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">focused</span> field.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                A narrowing mode CAN move the selection: when
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">on</span>, a narrowing
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">toggle</span>, or an
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">off</span> that drops the selected session's
+                workspace while other members keep the filter applied would hide the selected session, the most recently used
+                session still visible is selected instead. Read it back as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> on the session node.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">add</span> normally narrows nothing and leaves the
+                selection alone — except while the marked set holds only session-less workspaces, where nothing was visible
+                to move to: adding a populated workspace then selects its most recent session.
               </p>
             </div>
 
@@ -686,6 +699,15 @@
                 sidebar-mode term, is on the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">focused</span> field
                 in the <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> section). Read back via the
                 tree's top-level <span style="font-family: &quot;JetBrains Mono&quot;, monospace">workspaceFilter</span> field.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Applying the filter CAN move the selection: if it would hide the selected session, the most recently used
+                session still visible is selected instead — read back as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> on the session node. The same holds
+                for <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">sidebar mode flagged</span>.
+                A script that narrows and then relies on the default
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> target should re-read
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> first.
               </p>
             </div>
 
@@ -1179,6 +1201,17 @@
                 session in the window. Unknown mode errors. Pair with
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">sidebar mode flagged</span>. Read back via the node's
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">flagged</span> field.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">off</span> CAN move the selection: unflagging the
+                selected session while the flagged view is up removes the only row pointing at it, so the most recently used
+                session still flagged is selected instead — read back as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> on the session node.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">on</span> moves it the other way when the flagged
+                view is up with nothing flagged: the first flag puts a row on screen and selects it, unless nothing was
+                selected to begin with.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">clear</span> leaves nothing to move to, so it never
+                does.
               </p>
             </div>
 
@@ -1895,6 +1928,14 @@
                 While in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">flagged</span> mode,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">session go</span> navigation and the Ctrl-Tab switcher
                 are scoped to the flagged sessions only.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                BOTH flips can move the selection, since either can hide the selected session:
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">flagged</span> when it is unflagged, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span> when an applied workspace filter hides a
+                session that was selected in the flagged view. The most recently used session still visible is selected
+                instead — read back as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span> on the session node.
               </p>
             </div>
 

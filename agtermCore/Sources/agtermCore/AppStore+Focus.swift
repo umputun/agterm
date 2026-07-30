@@ -12,8 +12,13 @@ extension AppStore {
     /// (`navigableSessions`), so its targets are always in-set and never trip this. No-op when the filter
     /// is off, when nothing is selected, or when the selection sits in a member workspace. Persistence
     /// rides the caller's `selectSession` save.
+    ///
+    /// Also a no-op in `.flagged` mode: the flat flagged list is cross-workspace and ignores the marked
+    /// set, so a selection outside the set there has not navigated past the filter and there is nothing to
+    /// reveal. Without the term, entering the flagged view with the only flagged session in an unmarked
+    /// workspace silently switches the filter off. Returning to `.tree` re-applies it.
     func disableFocusIfSelectionOutsideSet(_ sessionID: UUID?) {
-        guard focusEnabled, let sessionID else { return }
+        guard focusEnabled, sidebarMode != .flagged, let sessionID else { return }
         if let owner = workspace(forSession: sessionID)?.id, focusedWorkspaceIDs.contains(owner) { return }
         focusEnabled = false
     }
@@ -126,6 +131,7 @@ extension AppStore {
         focusedWorkspaceIDs = ids
         focusEnabled = wantEnabled
         pruneSidebarSelection()
+        reselectIfSelectionHidden()
         save()
     }
 
@@ -201,5 +207,35 @@ extension AppStore {
     /// follow the same filter as the visible sidebar.
     public var navigableSessions: [Session] {
         sidebarMode == .flagged ? flaggedSessions : visibleWorkspaces.flatMap(\.sessions)
+    }
+
+    /// Moves the selection back inside the visible set whenever the active session is outside it — a
+    /// narrowing that hid it, or a widening that filled a set which was empty. The counterpart of
+    /// `disableFocusIfSelectionOutsideSet`, which handles the other direction.
+    /// Target is the most recent session within the visible set, else the first; MRU rather than
+    /// positional keeps a filter-off-then-on round trip in place.
+    /// No-op on a nil selection (a restore clears a dangling one deliberately) and on an empty visible
+    /// set. Keyboard focus needs nothing here: `TerminalView.updateNSView` moves first responder when the
+    /// selection changes.
+    func reselectIfSelectionHidden() {
+        guard let selected = selectedSessionID else { return }
+        let visible = navigableSessions
+        guard !visible.isEmpty else { return }
+        guard !visible.contains(where: { $0.id == selected }) else { return }
+        selectSession(navigableRecentSessions(limit: 1).first ?? visible[0].id)
+    }
+
+    /// The selection after the workspace holding the active session is removed: the most recent session
+    /// still VISIBLE, else the first visible one. Unlike `closeReselectionTarget` there is no
+    /// "stay in the current workspace" term — that workspace is what was removed — but the visible-set
+    /// term still holds, or the pick strands the selection on a row the sidebar cannot render.
+    /// Falls back to the positional walk at `index` only when nothing is visible at all.
+    func workspaceRemovalTarget(at index: Int) -> UUID? {
+        let visible = navigableSessions
+        if !visible.isEmpty { return navigableRecentSessions(limit: 1).first ?? visible[0].id }
+        guard !workspaces.isEmpty else { return nil }
+        let fallbackIndex = min(index, workspaces.count - 1)
+        return workspaces[fallbackIndex].sessions.first?.id
+            ?? workspaces.first(where: { !$0.sessions.isEmpty })?.sessions.first?.id
     }
 }
