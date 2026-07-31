@@ -76,6 +76,7 @@ final class ControlServerWorkspaceCommandsTests: XCTestCase {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)
         let empty = store.addWorkspace(name: "empty", revealNewWorkspace: false)
+        let other = store.addWorkspace(name: "other", revealNewWorkspace: false)
         store.setFocusMembership(owner, member: true)
         store.setFocusEnabled(true)
         XCTAssertEqual(store.visibleWorkspaces.map(\.id), [owner])
@@ -85,5 +86,7 @@ final class ControlServerWorkspaceCommandsTests: XCTestCase {
         XCTAssertTrue(response.ok, response.error ?? "")
         XCTAssertEqual(store.currentWorkspaceID, empty.id)
         XCTAssertEqual(store.visibleWorkspaces.map(\.id), [owner, empty.id], "the target must be on screen")
+        XCTAssertTrue(store.focusEnabled, "the filter must widen, not switch off")
+        XCTAssertFalse(store.focusedWorkspaceIDs.contains(other.id), "an unrelated workspace stays filtered out")
     }
 }

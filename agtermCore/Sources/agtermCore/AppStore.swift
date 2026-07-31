@@ -169,8 +169,9 @@ public final class AppStore {
     /// `selectWorkspace` on an empty one, which has no session to select. Without it a new workspace is never
     /// current (discussion #325): selection does not move on create, so Rename Workspace edited the previous
     /// one and the next new session landed there too. Dropped by a selection CHANGE
-    /// (`selectedSessionID`'s observer, so a same-value write keeps it), by removing the workspace, by the
-    /// focus filter hiding it, and by `restore(from:)`. A BACKGROUND create (`revealNewWorkspace: false`)
+    /// (`selectedSessionID`'s observer, so a same-value write keeps it), by `selectWorkspace` naming a
+    /// workspace that HAS a session — which a same-value selection alone would not do — by removing the
+    /// workspace, by the focus filter hiding it, and by `restore(from:)`. A BACKGROUND create (`revealNewWorkspace: false`)
     /// never sets it, so a script's create cannot steer the GUI's next add.
     private var freshWorkspaceID: UUID?
 
@@ -193,10 +194,12 @@ public final class AppStore {
             return true
         }
         // an empty workspace the filter hides would be a target with no row: reveal it, the same
-        // auto-reveal `addWorkspace` performs, so what is current is always on screen.
+        // auto-reveal `addWorkspace` performs, so what is current is always on screen. the target itself
+        // is live state outside `snapshot()`, so only the widened set is worth a write.
+        let marked = focusedWorkspaceIDs
         revealNewFocusMember(workspaceID)
         freshWorkspaceID = workspaceID
-        save()
+        if focusedWorkspaceIDs != marked { save() }
         return true
     }
 
