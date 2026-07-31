@@ -120,6 +120,22 @@ struct AppStoreCurrentWorkspaceTests {
         #expect(store.currentWorkspaceID == work.id)
     }
 
+    // the undo path keeps the selection, so a reopen after the grace expired must not differ
+    @Test func reopeningAnEmptyClosedWorkspaceKeepsTheSelectionAndTarget() throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        let work = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        store.selectSession(session.id)
+        let empty = store.addWorkspace(name: "empty")
+        #expect(store.softRemoveWorkspace(empty.id, grace: 60))
+        store.finalizePendingClose(try #require(store.pendingCloseSummary?.id))
+
+        #expect(store.restoreRecentClosed(try #require(recentClosed.load().first)))
+        #expect(store.workspaces.map(\.id) == [work.id, empty.id])
+        #expect(store.selectedSessionID == session.id)
+        #expect(store.currentWorkspaceID == work.id)
+    }
+
     @Test func restoringASnapshotDropsTheFreshWorkspaceAsCurrent() {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")

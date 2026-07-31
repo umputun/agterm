@@ -42,12 +42,18 @@ extension AppStore {
             // `disableFocusIfSelectionOutsideSet` runs; the workspace is already in the tree, so the unguarded
             // insert can't leave a phantom member. entries predating the field carry nil and restore unmarked.
             if recent.focusMember == true { markFocusMember(workspace.id) }
-            selectedSessionID = recent.selectedSessionID.flatMap { sessionID in
+            // an empty restored workspace has nothing to select, and deselecting would strand the live
+            // session AND hand `currentWorkspaceID` to the appended shell through the last-workspace
+            // fallback. the undo path keeps the selection for the same reason.
+            let restoredSelection = recent.selectedSessionID.flatMap { sessionID in
                 workspace.sessions.contains { $0.id == sessionID } ? sessionID : nil
             } ?? workspace.sessions.first?.id
-            replaceSidebarSelection(with: selectedSessionID)
-            disableFocusIfSelectionOutsideSet(selectedSessionID)
-            recordRecency()
+            if let restoredSelection {
+                selectedSessionID = restoredSelection
+                replaceSidebarSelection(with: restoredSelection)
+                disableFocusIfSelectionOutsideSet(restoredSelection)
+                recordRecency()
+            }
             save()
             return true
         }
