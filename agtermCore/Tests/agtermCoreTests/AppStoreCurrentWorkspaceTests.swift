@@ -169,6 +169,47 @@ struct AppStoreCurrentWorkspaceTests {
         #expect(store.currentWorkspaceID == last.id)
     }
 
+    // `workspace select` on the workspace already holding the selection lands on a same-value
+    // `selectSession`, which by itself leaves the fresh preference alive
+    @Test func selectingAWorkspaceDropsTheFreshWorkspaceAsCurrent() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        store.selectSession(session.id)
+        store.addWorkspace(name: "fresh")
+
+        #expect(store.selectWorkspace(work.id))
+        #expect(store.selectedSessionID == session.id)
+        #expect(store.currentWorkspaceID == work.id)
+    }
+
+    @Test func selectingAnEmptyWorkspaceIsANoOp() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        store.selectSession(session.id)
+        let fresh = store.addWorkspace(name: "fresh")
+
+        #expect(!store.selectWorkspace(fresh.id))
+        #expect(store.selectedSessionID == session.id)
+        #expect(store.currentWorkspaceID == fresh.id)
+    }
+
+    // the sidebar builds its row cache from `visibleWorkspaces`, so a filtered-out target would leave
+    // Rename Workspace enabled and doing nothing
+    @Test func aFilteredOutFreshWorkspaceIsNotCurrent() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        store.selectSession(session.id)
+        let fresh = store.addWorkspace(name: "fresh")
+        #expect(store.currentWorkspaceID == fresh.id)
+
+        store.setFocusedWorkspace(work.id)
+        #expect(store.visibleWorkspaces.map(\.id) == [work.id])
+        #expect(store.currentWorkspaceID == work.id)
+    }
+
     @Test func restoringASnapshotDropsTheFreshWorkspaceAsCurrent() {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")

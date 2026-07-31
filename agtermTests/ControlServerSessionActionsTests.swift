@@ -55,8 +55,8 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(store.selectedSessionID, session.id)
     }
 
-    // --follow is documented as a no-op when its target is already active, and reselecting anyway would
-    // drop a freshly created workspace as the current target.
+    // --follow is documented as a no-op when its target is already active, and it stays one only because
+    // a same-value selection leaves the fresh-workspace target alone.
     func testFollowOnTheAlreadyActiveSessionKeepsTheFreshWorkspaceCurrent() throws {
         let store = try XCTUnwrap(library.activeStore)
         let owner = try XCTUnwrap(store.currentWorkspaceID)

@@ -23,9 +23,7 @@ extension ControlServer {
         // selecting a workspace selects its first session (workspace rows are not selectable on
         // their own); an empty workspace just clears nothing and reports the workspace id.
         resolver.resolveWorkspace(target, window: window) { store, id in
-            if let first = store.workspaces.first(where: { $0.id == id })?.sessions.first {
-                store.selectSession(first.id)
-            }
+            store.selectWorkspace(id)
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }

@@ -179,11 +179,26 @@ public final class AppStore {
         if freshWorkspaceID == workspaceID { freshWorkspaceID = nil }
     }
 
+    /// Makes `workspaceID` current by selecting its first session, dropping the fresh-workspace preference
+    /// whichever way that lands: the first session may already BE the selection, and a same-value write
+    /// leaves the preference alone. An empty workspace has nothing to select and stays a no-op. Backs
+    /// `workspace.select`.
+    @discardableResult
+    public func selectWorkspace(_ workspaceID: UUID) -> Bool {
+        guard let first = workspaces.first(where: { $0.id == workspaceID })?.sessions.first else { return false }
+        selectSession(first.id)
+        freshWorkspaceID = nil
+        return true
+    }
+
     /// The workspace a new session lands in: a freshly created one, else the selected session's, else the
     /// last (nil when there are none). Drives the bottom bar's add actions, File ▸ New Session / Open
     /// Directory / Rename Workspace, and resolves `active` for control-channel workspace targets.
     public var currentWorkspaceID: UUID? {
-        if let freshWorkspaceID, workspaces.contains(where: { $0.id == freshWorkspaceID }) {
+        // the fresh workspace must be VISIBLE to be current: the focus filter can hide it while the
+        // selection stays put, and the sidebar builds its row cache from `visibleWorkspaces`, so a hidden
+        // target makes Rename Workspace an enabled no-op.
+        if let freshWorkspaceID, visibleWorkspaces.contains(where: { $0.id == freshWorkspaceID }) {
             return freshWorkspaceID
         }
         if let selectedSessionID, let workspace = workspace(forSession: selectedSessionID) {
