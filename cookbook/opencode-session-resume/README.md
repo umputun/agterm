@@ -10,7 +10,7 @@ Same idea as the Claude Code and codex recipes next door: each tab reopens its o
 
 The mechanism follows the codex one, because opencode is also unable to take a session id at launch: the function maps tab id to opencode session id in `~/.local/state/opencode/agterm/<tab-id>` and resumes that. The difference is where the session id comes from. opencode keeps conversations in sqlite rather than one file per conversation, so there is nothing to glob for; the function asks `opencode session list --format json` instead. That list holds the current project's top-level sessions, while `--session` is not scoped at all and takes any session that exists, so everything the list offers is something a resume will accept.
 
-Subcommands, an explicit `--session`/`--continue`, and any launch outside agterm pass through untouched.
+Subcommands, `--continue`, and any launch outside agterm pass through untouched, and so does an explicit `--session` — unless the id is the one this tab already owns, which the function takes back and decides on again, so that it resumes only a conversation it has just seen listed.
 
 ## Requirements
 
@@ -41,7 +41,7 @@ Turn on **Restore running commands on restart** in Settings ▸ General, under S
 
 New tabs and shells pick the functions up on their own. In an already-open shell, run `source ~/.zshrc`.
 
-To remove it, delete the two function blocks, or the `source` line, from `~/.zshrc`, and `~/.local/state/opencode/agterm/` with it.
+To remove it, delete the two function blocks, or the `source` line, from `~/.zshrc`, and `${XDG_STATE_HOME:-~/.local/state}/opencode/agterm/` with it.
 
 ## Usage
 
@@ -49,7 +49,7 @@ Run `opencode` the way you always do. Start it, send at least one message, quit 
 
 The first message matters. opencode writes the session only once there is something in it, so a tab where you started opencode and typed nothing has nothing to remember and comes back empty-handed.
 
-Mappings live one file per tab under `~/.local/state/opencode/agterm/`, each holding a single opencode session id. Deleting one unbinds that tab, and the next `opencode` you type in it starts fresh — though a tab restored as `opencode --session <id>` still reopens that conversation while it exists, since an explicit id passes through untouched.
+Mappings live one file per tab under `${XDG_STATE_HOME:-~/.local/state}/opencode/agterm/`, each holding a single opencode session id. Deleting one unbinds that tab, and the next `opencode` you type in it starts fresh — though a tab restored as `opencode --session <id>` still reopens that conversation while it exists: with no mapping left there is nothing for the function to recognise, so the explicit id passes through untouched.
 
 ## How it works
 
