@@ -76,9 +76,12 @@ SIGTERM use normal process behavior.
   (case-insensitive) or a unique prefix. Zero matches → `notFound`; ambiguous prefix → `ambiguous`
   (the error lists candidates).
 - For a WORKSPACE, `active` is where a new session lands: one created in the foreground (the GUI's New
-  Workspace, or `workspace new` without `--collapsed`) until the selection moves elsewhere, `workspace
-  select` names another, it is deleted, or the workspace filter hides it; else the selected session's
-  workspace, else the last one. A background create (`workspace new --collapsed`,
+  Workspace, or `workspace new` without `--collapsed`) until the selection moves to a DIFFERENT session,
+  `workspace select` names another, it is deleted, or the workspace filter hides it — hiding drops it for
+  good, so turning the filter off does not restore it. Reselecting the already-selected session does not
+  count: `session select`, `overlay open --follow` and single-session `session go` leave it in place.
+  `workspace select` on an EMPTY workspace has no session to select, so targeting is all it does. Else the
+  selected session's workspace, else the last one. A background create (`workspace new --collapsed`,
   `session new --create-workspace --no-select`) never takes it. The tree workspace node's `active` flag
   reads the SELECTED session's workspace only, so right after a foreground create it can name a
   different workspace than `--target active` resolves to; address by id when the two must agree.

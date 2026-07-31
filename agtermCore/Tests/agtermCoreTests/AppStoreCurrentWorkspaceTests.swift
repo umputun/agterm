@@ -183,21 +183,32 @@ struct AppStoreCurrentWorkspaceTests {
         #expect(store.currentWorkspaceID == work.id)
     }
 
-    @Test func selectingAnEmptyWorkspaceIsANoOp() throws {
+    // an empty workspace has no session to select, so targeting is the only thing `workspace select` can
+    // do there — reporting success while the target stayed elsewhere was the defect
+    @Test func selectingAnEmptyWorkspaceStillMakesItCurrent() throws {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
         store.selectSession(session.id)
-        let fresh = store.addWorkspace(name: "fresh")
+        store.addWorkspace(name: "fresh")
+        let empty = store.addWorkspace(name: "empty", revealNewWorkspace: false)
 
-        #expect(!store.selectWorkspace(fresh.id))
+        #expect(store.selectWorkspace(empty.id))
         #expect(store.selectedSessionID == session.id)
-        #expect(store.currentWorkspaceID == fresh.id)
+        #expect(store.currentWorkspaceID == empty.id)
+    }
+
+    @Test func selectingAnUnknownWorkspaceIsANoOp() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+
+        #expect(!store.selectWorkspace(UUID()))
+        #expect(store.currentWorkspaceID == work.id)
     }
 
     // the sidebar builds its row cache from `visibleWorkspaces`, so a filtered-out target would leave
-    // Rename Workspace enabled and doing nothing
-    @Test func aFilteredOutFreshWorkspaceIsNotCurrent() throws {
+    // Rename Workspace enabled and doing nothing — and un-filtering must not bring it back
+    @Test func filteringOutTheFreshWorkspaceDropsItForGood() throws {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
@@ -208,6 +219,9 @@ struct AppStoreCurrentWorkspaceTests {
         store.setFocusedWorkspace(work.id)
         #expect(store.visibleWorkspaces.map(\.id) == [work.id])
         #expect(store.currentWorkspaceID == work.id)
+
+        store.clearFocus()
+        #expect(store.currentWorkspaceID == work.id, "un-filtering must not revive a target already handed back")
     }
 
     @Test func restoringASnapshotDropsTheFreshWorkspaceAsCurrent() {

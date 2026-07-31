@@ -111,6 +111,9 @@ extension AppStore {
         guard focusedWorkspaceIDs != ids || focusEnabled != wantEnabled else { return }
         focusedWorkspaceIDs = ids
         focusEnabled = wantEnabled
+        // a filtered-out target would leave Rename Workspace enabled with no row to edit, and the sidebar
+        // builds its row cache from `visibleWorkspaces`.
+        forgetHiddenFreshWorkspace()
         pruneSidebarSelection()
         reselectIfSelectionHidden()
         save()

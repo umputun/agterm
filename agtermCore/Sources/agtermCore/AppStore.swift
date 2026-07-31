@@ -179,26 +179,34 @@ public final class AppStore {
         if freshWorkspaceID == workspaceID { freshWorkspaceID = nil }
     }
 
-    /// Makes `workspaceID` current by selecting its first session, dropping the fresh-workspace preference
-    /// whichever way that lands: the first session may already BE the selection, and a same-value write
-    /// leaves the preference alone. An empty workspace has nothing to select and stays a no-op. Backs
-    /// `workspace.select`.
+    /// Makes `workspaceID` the current one and selects its first session when it has one. Both halves are
+    /// needed: the first session may already BE the selection, and a same-value write leaves the target
+    /// alone; an empty workspace has nothing to select at all, and reporting success while targeting
+    /// somewhere else is what made `workspace.select --target <empty>` a lie. Backs `workspace.select`.
     @discardableResult
     public func selectWorkspace(_ workspaceID: UUID) -> Bool {
-        guard let first = workspaces.first(where: { $0.id == workspaceID })?.sessions.first else { return false }
-        selectSession(first.id)
-        freshWorkspaceID = nil
+        guard let workspace = workspaces.first(where: { $0.id == workspaceID }) else { return false }
+        if let first = workspace.sessions.first {
+            selectSession(first.id)
+            freshWorkspaceID = nil
+        } else {
+            freshWorkspaceID = workspaceID
+        }
         return true
+    }
+
+    /// Drops the target when the focus filter has hidden it, so turning the filter off later cannot make it
+    /// current again — hiding it hands targeting back for good. Called from the one focus commit point.
+    func forgetHiddenFreshWorkspace() {
+        guard let freshWorkspaceID else { return }
+        if !visibleWorkspaces.contains(where: { $0.id == freshWorkspaceID }) { self.freshWorkspaceID = nil }
     }
 
     /// The workspace a new session lands in: a freshly created one, else the selected session's, else the
     /// last (nil when there are none). Drives the bottom bar's add actions, File ▸ New Session / Open
     /// Directory / Rename Workspace, and resolves `active` for control-channel workspace targets.
     public var currentWorkspaceID: UUID? {
-        // the fresh workspace must be VISIBLE to be current: the focus filter can hide it while the
-        // selection stays put, and the sidebar builds its row cache from `visibleWorkspaces`, so a hidden
-        // target makes Rename Workspace an enabled no-op.
-        if let freshWorkspaceID, visibleWorkspaces.contains(where: { $0.id == freshWorkspaceID }) {
+        if let freshWorkspaceID, workspaces.contains(where: { $0.id == freshWorkspaceID }) {
             return freshWorkspaceID
         }
         if let selectedSessionID, let workspace = workspace(forSession: selectedSessionID) {

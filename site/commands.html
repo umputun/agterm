@@ -340,8 +340,10 @@
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">notFound</span>; an ambiguous prefix
               gives <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ambiguous</span>, listing the
               candidates. For a workspace, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span>
-              is where a new session lands: one you just created in the foreground, until the selection moves elsewhere or it
-              stops being visible; otherwise the selected session's workspace, otherwise the last one. A background create
+              is where a new session lands: one you just created in the foreground, until the selection moves to a different
+              session, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">workspace select</span>
+              names another, it is deleted, or the workspace filter hides it; otherwise the selected session's workspace,
+              otherwise the last one. A background create
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">workspace new --collapsed</span>,
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session new --create-workspace --no-select</span>)
               never takes it, and the tree's workspace
