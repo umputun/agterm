@@ -29,13 +29,16 @@ extension SessionNavigation {
 @MainActor
 public final class AppStore {
     public var workspaces: [Workspace]
-    /// Every assignment drops `freshWorkspaceID`, a same-value one included: selecting the session you are
-    /// already on is still a selection. Close, workspace removal, pending-close undo and Reopen Closed Item
-    /// all reselect by assigning here, so centralizing it is what keeps a fresh workspace from outliving a
-    /// selection change made outside `selectSession`. A caller documented as a no-op when its target is
-    /// already active must not reach here at all — see `openSessionOverlay`'s `follow`.
+    /// A CHANGE here drops `freshWorkspaceID`: close, workspace removal, pending-close undo and Reopen
+    /// Closed Item all reselect by assigning directly, so centralizing it is what keeps a fresh workspace
+    /// from outliving a selection made outside `selectSession`. A same-value write must not, because
+    /// reselecting the already-active session is what `navigateSession` with one visible session and
+    /// `overlay open --follow` both do, and neither moves the user. `restore(from:)` clears explicitly —
+    /// it reloads state rather than selecting.
     public var selectedSessionID: UUID? {
-        didSet { freshWorkspaceID = nil }
+        didSet {
+            if selectedSessionID != oldValue { freshWorkspaceID = nil }
+        }
     }
 
     /// Transient sidebar multi-selection, not persisted — `selectedSessionID` stays the durable active target.
@@ -162,7 +165,7 @@ public final class AppStore {
         return session(withID: selectedSessionID)
     }
 
-    /// A workspace created in the FOREGROUND that nothing has been selected in yet, so it can be current
+    /// A workspace created in the FOREGROUND that the selection has not moved away from, so it can be current
     /// while a session elsewhere is still selected. Without it a fresh workspace is never current
     /// (discussion #325): selection does not move on create, so Rename Workspace edited the previous one and the
     /// next new session landed there too. Dropped by any selection change (`selectedSessionID`'s observer) and
@@ -755,6 +758,7 @@ public final class AppStore {
     /// override for this launch. It defaults to false because reopening a closed window mid-process reloads
     /// its store through here, and that RUNTIME caller must not execute anything.
     public func restore(from snapshot: Snapshot, launchRestore: Bool = false) {
+        freshWorkspaceID = nil // live create-time state, never restored from disk
         // fold duplicate workspace ids into the first occurrence and keep only the first snapshot of a
         // repeated session id, else the rest stay unreachable past the first match and get re-saved.
         var seenSessionIDs: Set<UUID> = []

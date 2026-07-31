@@ -76,8 +76,8 @@ SIGTERM use normal process behavior.
   (case-insensitive) or a unique prefix. Zero matches → `notFound`; ambiguous prefix → `ambiguous`
   (the error lists candidates).
 - For a WORKSPACE, `active` is where a new session lands: one created in the foreground (the GUI's New
-  Workspace, or `workspace new` without `--collapsed`) that nothing has been selected in yet, else the
-  selected session's workspace, else the last one. A background create (`workspace new --collapsed`,
+  Workspace, or `workspace new` without `--collapsed`) until the selection moves to a different session,
+  else the selected session's workspace, else the last one. A background create (`workspace new --collapsed`,
   `session new --create-workspace --no-select`) never takes it. The tree workspace node's `active` flag
   reads the SELECTED session's workspace only, so right after a foreground create it can name a
   different workspace than `--target active` resolves to; address by id when the two must agree.
@@ -198,7 +198,7 @@ All twelve are read-only projections of GUI state.
 - `workspace select [--target] [--window W]`.
 - `workspace move --to up|down|top|bottom [--target] [--window W]` — reorder among siblings. Missing
   or invalid `--to` errors. Note: `--target active` resolves to the current workspace — a
-  foreground-created workspace that nothing has been selected in yet, else the selected session's, else
+  foreground-created workspace that still holds the target, else the selected session's, else
   the last one; address a specific workspace by id to step the same one.
 - `workspace focus [on|off|toggle|add] [--target] [--window W]` — mark or unmark ONE workspace in the
   sidebar's focus SET; returns the workspace id. The sidebar renders the marked workspaces when the

@@ -31,8 +31,7 @@ extension ControlServer: ControlActions {
             }
             // both overlay kinds run in the per-session eager deck whatever is active, so opening never
             // needs an implicit select — this is `--follow`, a no-op when the target is already active.
-            // reselecting it anyway would drop a freshly created workspace as the current target.
-            if options.follow, store.selectedSessionID != id {
+            if options.follow {
                 store.selectSession(id)
             }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))

@@ -35,11 +35,28 @@ struct AppStoreCurrentWorkspaceTests {
     @Test func selectingASessionDropsTheFreshWorkspaceAsCurrent() {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")
-        let session = try! #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        let first = try! #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        let other = store.addWorkspace(name: "other")
+        try! #require(store.addSession(toWorkspace: other.id, cwd: "/b"))
         store.addWorkspace(name: "fresh")
 
-        store.selectSession(session.id)
+        store.selectSession(first.id)
         #expect(store.currentWorkspaceID == work.id)
+    }
+
+    // `navigateSession` with one visible session and `overlay open --follow` both reselect the active
+    // session without moving the user, so a same-value selection must leave the target alone
+    @Test func reselectingTheActiveSessionKeepsTheFreshWorkspaceCurrent() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        let fresh = store.addWorkspace(name: "fresh")
+
+        store.selectSession(session.id)
+        #expect(store.currentWorkspaceID == fresh.id)
+        store.navigateSession(.next)
+        #expect(store.selectedSessionID == session.id)
+        #expect(store.currentWorkspaceID == fresh.id)
     }
 
     @Test func selectingASessionOnCreationDropsTheFreshWorkspaceAsCurrent() {
@@ -125,7 +142,8 @@ struct AppStoreCurrentWorkspaceTests {
         let (store, recentClosed, _) = makeStoreWithRecentClosed()
         let work = store.addWorkspace(name: "work")
         let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
-        store.selectSession(session.id)
+        let second = try #require(store.addSession(toWorkspace: work.id, cwd: "/b"))
+        store.selectSession(session.id, sidebarSelection: [session.id, second.id])
         let empty = store.addWorkspace(name: "empty")
         #expect(store.softRemoveWorkspace(empty.id, grace: 60))
         store.finalizePendingClose(try #require(store.pendingCloseSummary?.id))
@@ -133,7 +151,7 @@ struct AppStoreCurrentWorkspaceTests {
         #expect(store.restoreRecentClosed(try #require(recentClosed.load().first)))
         #expect(store.workspaces.map(\.id) == [work.id, empty.id])
         #expect(store.selectedSessionID == session.id)
-        #expect(store.sidebarSelectionIDs == [session.id])
+        #expect(store.sidebarSelectionIDs == [session.id, second.id], "a multi-row selection must survive")
         #expect(store.currentWorkspaceID == work.id)
     }
 

@@ -508,7 +508,7 @@ final class AppActions {
         collapseOtherWorkspaces(in: store)
     }
 
-    /// Collapse every workspace except the active session's in `store`'s window sidebar, keeping that one
+    /// Collapse every workspace except the current one in `store`'s window sidebar, keeping that one
     /// expanded and scrolled into view. Store-scoped like `expandAllWorkspaces(in:)`, no-op in flagged mode,
     /// and how `sidebar.collapse` targets a specific (default frontmost) window.
     func collapseOtherWorkspaces(in store: AppStore) {

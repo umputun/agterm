@@ -56,7 +56,7 @@ extension ControlServer {
         }
     }
 
-    /// Collapse every workspace except the active session's, which stays expanded and scrolled into view; same
+    /// Collapse every workspace except the current one, which stays expanded and scrolled into view; same
     /// window selector and flagged-mode/idempotency/error behavior as `expandSidebar`.
     func collapseSidebar(window: String?) -> ControlResponse {
         resolver.resolveOpenPlacementStore(window) { store in

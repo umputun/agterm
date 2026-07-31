@@ -42,6 +42,19 @@ final class ControlServerSessionActionsTests: XCTestCase {
                                          backgroundColor: nil, follow: follow)
     }
 
+    func testFollowSelectsTheTargetWhenNothingIsSelected() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let session = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        store.selectSession(nil)
+
+        let response = server.openSessionOverlay(session.id.uuidString, window: nil,
+                                                 options: overlayOptions(follow: true))
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(store.selectedSessionID, session.id)
+    }
+
     // --follow is documented as a no-op when its target is already active, and reselecting anyway would
     // drop a freshly created workspace as the current target.
     func testFollowOnTheAlreadyActiveSessionKeepsTheFreshWorkspaceCurrent() throws {
