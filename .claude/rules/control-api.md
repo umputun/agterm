@@ -120,8 +120,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   equivalent to repeated toggle; scripts read state then loop on/off. Batch Clear Status is equivalent to
   repeated `session.status idle` and needs no batch command.
 - `workspace.move --to up|down|top|bottom` reorders relative to the target. Drag remains the precise
-  between-row surface. On a sessionless window, `active` means current fallback `workspaces.last`, so
-  repeated moves may target a different workspace; use an ID to keep one target.
+  between-row surface. `active` resolves through `currentWorkspaceID` — a foreground-created workspace
+  first, then the selected session's, then `workspaces.last` — so repeated moves may target a different
+  workspace; use an ID to keep one target.
 - `session.split` drives the addressed session, not active-only `AppActions.toggleSplit`. Off hides and
   retains the shell; only shell exit tears it down.
 - `session.scratch` is a third, nonpersisted login shell with on/off/toggle. It spawns lazily, survives

@@ -1161,7 +1161,13 @@
                 >--target</span
               >/<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--workspace</span> take an id, a
               prefix, or <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> — never a
-              name. Mutating commands normally print the affected id; batch
+              name. For workspaces,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> is the one a new session
+              lands in: a workspace you just created in the foreground, otherwise the selected session's, otherwise the last one.
+              A newly created workspace stays the target until a session is selected, so New Session (and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session new</span>) right after
+              creating one lands in the new workspace rather than the one you came from. Mutating commands normally print the
+              affected id; batch
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session close</span> and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session move</span> accept repeated
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--target</span> options and print the

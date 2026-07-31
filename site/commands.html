@@ -339,7 +339,14 @@
               the current workspace). It accepts a full UUID (case-insensitive) or a unique, git-style prefix. Zero matches gives
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">notFound</span>; an ambiguous prefix
               gives <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">ambiguous</span>, listing the
-              candidates.
+              candidates. For a workspace, <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span>
+              is where a new session lands: one you just created in the foreground and have selected nothing in yet, otherwise the
+              selected session's workspace, otherwise the last one. A background create
+              (<span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">workspace new --collapsed</span>,
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">session new --create-workspace --no-select</span>)
+              never takes it, and the tree's workspace
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">active</span> flag reads the selected
+              session's workspace only, so right after a foreground create the two can name different workspaces.
             </p>
             <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0 0 16px">
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc; white-space: nowrap">--window &lt;id|prefix|active&gt;</span>
@@ -628,8 +635,8 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--target active</span> resolves to the current
-                workspace, which with no selected session falls back to the last workspace — address a specific workspace by id to
-                step the same one repeatedly.
+                workspace — one you just created in the foreground, otherwise the selected session's, otherwise the last one —
+                so address a specific workspace by id to step the same one repeatedly.
               </p>
             </div>
 
@@ -1958,7 +1965,7 @@
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">sidebar.collapse</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
-                Collapse every workspace except the active session's, which stays expanded and is scrolled into view. Same
+                Collapse every workspace except the current one, which stays expanded and is scrolled into view. Same
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> selector and defaults as
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">expand</span>. Idempotent; a graceful no-op in flagged
                 mode.

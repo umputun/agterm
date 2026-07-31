@@ -551,7 +551,7 @@ struct WorkspaceSidebar: NSViewRepresentable {
             store.setWorkspacesExpanded(expandedWorkspaceIDs)
         }
 
-        /// Collapses every workspace except the active session's (`store.currentWorkspaceID`), keeping that
+        /// Collapses every workspace except the current one (`store.currentWorkspaceID`), keeping that
         /// one expanded and scrolled into view. Tree-mode only — flagged mode has no workspace rows.
         func collapseOthers() {
             guard let outline = outlineView, store.sidebarMode == .tree else { return }

@@ -170,6 +170,7 @@ extension AppStore {
     public func softRemoveWorkspace(_ workspaceID: UUID, grace: TimeInterval = AppStore.pendingCloseGraceInterval) -> Bool {
         guard canRemoveWorkspace, let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return false }
         let visibleWorkspace = workspaces.remove(at: index)
+        forgetFreshWorkspace(workspaceID)
         for session in visibleWorkspace.sessions { emitSessionClosed(session, workspace: visibleWorkspace.id) }
         if visibleWorkspace.sessions.isEmpty { scheduleTreeChanged() }
         let folded = foldingPendingCloses(of: visibleWorkspace)

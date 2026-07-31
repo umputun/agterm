@@ -1,0 +1,135 @@
+import Foundation
+import Testing
+@testable import agtermCore
+
+/// `AppStore.currentWorkspaceID` — where a new session, a rename, and a control-channel `active` workspace
+/// target land. Split out of `AppStoreTests` for the line budget.
+@MainActor
+struct AppStoreCurrentWorkspaceTests {
+    @Test func currentWorkspaceFollowsSelectionThenFallsBackToLast() {
+        let store = makeStore()
+        #expect(store.currentWorkspaceID == nil)
+        let work = store.addWorkspace(name: "work")
+        let personal = store.addWorkspace(name: "personal")
+        #expect(store.currentWorkspaceID == personal.id)
+        let session = try! #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        store.selectSession(session.id)
+        #expect(store.currentWorkspaceID == work.id)
+        store.selectSession(nil)
+        #expect(store.currentWorkspaceID == personal.id)
+    }
+
+    // pins discussion #325: a foreground create used to leave the previous workspace current, so Rename
+    // Workspace edited the wrong row and the next new session landed in the old workspace.
+    @Test func foregroundCreateBecomesCurrentOverTheSelectedSessionsWorkspace() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let session = try! #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        store.selectSession(session.id)
+        #expect(store.currentWorkspaceID == work.id)
+
+        let fresh = store.addWorkspace(name: "fresh")
+        #expect(store.currentWorkspaceID == fresh.id)
+    }
+
+    @Test func selectingASessionDropsTheFreshWorkspaceAsCurrent() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let session = try! #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        store.addWorkspace(name: "fresh")
+
+        store.selectSession(session.id)
+        #expect(store.currentWorkspaceID == work.id)
+    }
+
+    @Test func selectingASessionOnCreationDropsTheFreshWorkspaceAsCurrent() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        store.addWorkspace(name: "fresh")
+
+        store.addSession(toWorkspace: work.id, cwd: "/a")
+        #expect(store.currentWorkspaceID == work.id)
+    }
+
+    @Test func backgroundCreateDoesNotBecomeCurrent() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let session = try! #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        store.selectSession(session.id)
+
+        store.addWorkspace(name: "background", revealNewWorkspace: false)
+        #expect(store.currentWorkspaceID == work.id)
+    }
+
+    @Test func backgroundSessionAddKeepsTheFreshWorkspaceCurrent() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let fresh = store.addWorkspace(name: "fresh")
+
+        store.addSession(toWorkspace: work.id, cwd: "/a", select: false)
+        #expect(store.currentWorkspaceID == fresh.id)
+    }
+
+    @Test func removingTheFreshWorkspaceFallsBackToSelection() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let session = try! #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        store.selectSession(session.id)
+        let fresh = store.addWorkspace(name: "fresh")
+
+        store.removeWorkspace(fresh.id)
+        #expect(store.currentWorkspaceID == work.id)
+    }
+    @Test func closingTheSelectedSessionDropsTheFreshWorkspaceAsCurrent() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let first = try! #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        try! #require(store.addSession(toWorkspace: work.id, cwd: "/b"))
+        store.selectSession(first.id)
+        let fresh = store.addWorkspace(name: "fresh")
+        #expect(store.currentWorkspaceID == fresh.id)
+
+        store.closeSession(first.id)
+        #expect(store.currentWorkspaceID == work.id)
+    }
+
+    @Test func reopeningAClosedSessionDropsTheFreshWorkspaceAsCurrent() {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        let work = store.addWorkspace(name: "work")
+        let first = try! #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        try! #require(store.addSession(toWorkspace: work.id, cwd: "/b"))
+        store.selectSession(first.id)
+        store.closeSession(first.id)
+        let fresh = store.addWorkspace(name: "fresh")
+        #expect(store.currentWorkspaceID == fresh.id)
+
+        store.restoreRecentClosed(try! #require(recentClosed.load().first))
+        #expect(store.currentWorkspaceID == work.id)
+    }
+
+    @Test func undoingAFreshWorkspaceCloseDoesNotReviveItAsCurrent() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let session = try! #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        store.selectSession(session.id)
+        let fresh = store.addWorkspace(name: "fresh")
+
+        store.softRemoveWorkspace(fresh.id, grace: 60)
+        store.undoPendingClose()
+        #expect(store.workspaces.map(\.id) == [work.id, fresh.id])
+        #expect(store.currentWorkspaceID == work.id)
+    }
+
+    @Test func restoringASnapshotDropsTheFreshWorkspaceAsCurrent() {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let session = try! #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        store.selectSession(session.id)
+        let fresh = store.addWorkspace(name: "fresh")
+        let snapshot = store.snapshot()
+        #expect(store.currentWorkspaceID == fresh.id)
+
+        store.restore(from: snapshot)
+        #expect(store.currentWorkspaceID == work.id)
+    }
+}

@@ -767,8 +767,8 @@ a graceful no-op in `flagged` mode (no workspace rows); a named-but-closed windo
 window` when none is open. The GUI half (frontmost only) is View ▸ Expand Workspaces and the ⌃⇧P palette
 "Expand Workspaces".
 
-`agtermctl sidebar collapse [--window W]` — collapse every workspace EXCEPT the active one (the
-workspace of the active session), which stays expanded and is scrolled into view. Same `--window`
+`agtermctl sidebar collapse [--window W]` — collapse every workspace EXCEPT the current one (the same
+resolution as `--target active`), which stays expanded and is scrolled into view. Same `--window`
 selector and defaults as `expand`. Idempotent; a graceful no-op in `flagged` mode; a named-but-closed
 window errors, and `no open window` when none is open. The GUI half (frontmost only) is View ▸ Collapse
 Workspaces and the ⌃⇧P palette "Collapse Workspaces".
