@@ -45,7 +45,7 @@ To remove it, delete the two function blocks, or the `source` line, from `~/.zsh
 
 ## Usage
 
-Run `opencode` the way you always do. Start it, send at least one message, then restart agterm: the tab comes back to that conversation, and `ps` shows `opencode --session ses_…`.
+Run `opencode` the way you always do. Start it, send at least one message, quit it, then start it again in the same tab — `ps` shows `opencode --session ses_…`. Restart agterm and the tab comes back to that conversation.
 
 The first message matters. opencode writes the session only once there is something in it, so a tab where you started opencode and typed nothing has nothing to remember and comes back empty-handed.
 
