@@ -133,7 +133,22 @@ struct AppStoreCurrentWorkspaceTests {
         #expect(store.restoreRecentClosed(try #require(recentClosed.load().first)))
         #expect(store.workspaces.map(\.id) == [work.id, empty.id])
         #expect(store.selectedSessionID == session.id)
+        #expect(store.sidebarSelectionIDs == [session.id])
         #expect(store.currentWorkspaceID == work.id)
+    }
+
+    @Test func closingTheOnlySessionDropsTheFreshWorkspaceAsCurrent() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        store.selectSession(session.id)
+        let fresh = store.addWorkspace(name: "fresh")
+        let last = store.addWorkspace(name: "last", revealNewWorkspace: false)
+        #expect(store.currentWorkspaceID == fresh.id)
+
+        store.closeSession(session.id)
+        #expect(store.selectedSessionID == nil)
+        #expect(store.currentWorkspaceID == last.id)
     }
 
     @Test func restoringASnapshotDropsTheFreshWorkspaceAsCurrent() {

@@ -29,9 +29,11 @@ extension SessionNavigation {
 @MainActor
 public final class AppStore {
     public var workspaces: [Workspace]
-    /// Every assignment drops `freshWorkspaceID`: close, workspace removal, pending-close undo and Reopen
-    /// Closed Item all reselect by assigning here, so centralizing it is what keeps a fresh workspace from
-    /// outliving a selection change made outside `selectSession`.
+    /// Every assignment drops `freshWorkspaceID`, a same-value one included: selecting the session you are
+    /// already on is still a selection. Close, workspace removal, pending-close undo and Reopen Closed Item
+    /// all reselect by assigning here, so centralizing it is what keeps a fresh workspace from outliving a
+    /// selection change made outside `selectSession`. A caller documented as a no-op when its target is
+    /// already active must not reach here at all — see `openSessionOverlay`'s `follow`.
     public var selectedSessionID: UUID? {
         didSet { freshWorkspaceID = nil }
     }
@@ -269,7 +271,9 @@ public final class AppStore {
     /// `addSession`; widening rather than clearing keeps the rest filtered. `false` leaves the filter
     /// untouched: a background `session.new --no-select` create must not widen the view. `collapsed: true`
     /// (backing `workspace.new --collapsed`) starts it collapsed against the runtime default of expanded, so
-    /// it can be filled with `addSession(select: false)` unopened.
+    /// it can be filled with `addSession(select: false)` unopened. `revealNewWorkspace` also decides
+    /// targeting: true makes this workspace `currentWorkspaceID` until the next selection change, false
+    /// leaves the target where it is. `ensureWorkspace(named:revealNewWorkspace:)` forwards both.
     @discardableResult
     public func addWorkspace(name: String, collapsed: Bool = false, revealNewWorkspace: Bool = true) -> Workspace {
         let workspace = Workspace(name: name, isExpanded: !collapsed)
