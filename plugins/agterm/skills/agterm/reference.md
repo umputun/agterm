@@ -75,6 +75,12 @@ SIGTERM use normal process behavior.
 - `--target` defaults to `active` (the selected session / current workspace). Accepts a full UUID
   (case-insensitive) or a unique prefix. Zero matches → `notFound`; ambiguous prefix → `ambiguous`
   (the error lists candidates).
+- For a WORKSPACE, `active` is where a new session lands: one created in the foreground (the GUI's New
+  Workspace, or `workspace new` without `--collapsed`) that nothing has been selected in yet, else the
+  selected session's workspace, else the last one. A background create (`workspace new --collapsed`,
+  `session new --create-workspace --no-select`) never takes it. The tree workspace node's `active` flag
+  reads the SELECTED session's workspace only, so right after a foreground create it can name a
+  different workspace than `--target active` resolves to; address by id when the two must agree.
 - **For an agent, `active` is the USER's GUI-selected session, not yours.** Your shell is
   `$AGTERM_SESSION_ID`; the user is usually on a different session while you work. Pass
   `--target "$AGTERM_SESSION_ID"` on any session-scoped command (`overlay open`, `scratch`, `type`,
@@ -191,9 +197,9 @@ All twelve are read-only projections of GUI state.
 - `workspace delete [--target] [--window W]` — keep-at-least-one; deleting the last workspace errors.
 - `workspace select [--target] [--window W]`.
 - `workspace move --to up|down|top|bottom [--target] [--window W]` — reorder among siblings. Missing
-  or invalid `--to` errors. Note: `--target active` resolves to the current workspace, which with no
-  selected session falls back to the last workspace; address a specific workspace by id to step the
-  same one.
+  or invalid `--to` errors. Note: `--target active` resolves to the current workspace — a
+  foreground-created workspace that nothing has been selected in yet, else the selected session's, else
+  the last one; address a specific workspace by id to step the same one.
 - `workspace focus [on|off|toggle|add] [--target] [--window W]` — mark or unmark ONE workspace in the
   sidebar's focus SET; returns the workspace id. The sidebar renders the marked workspaces when the
   filter is applied, all of them when it is not. `on` sets the marked set to just this workspace and

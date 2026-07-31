@@ -155,9 +155,20 @@ public final class AppStore {
         return session(withID: selectedSessionID)
     }
 
-    /// The workspace a new session lands in: the selected session's, else the last (nil when there are none).
-    /// Drives the bottom bar's add actions and File ▸ New Session / Open Directory.
+    /// A workspace created in the FOREGROUND that nothing has been selected in yet, so it can be current
+    /// while a session elsewhere is still selected. Without it a fresh workspace is never current
+    /// (discussion #325): selection does not move on create, so Rename Workspace edited the previous one and the
+    /// next new session landed there too. Cleared by any selecting mutation; a BACKGROUND create
+    /// (`revealNewWorkspace: false`) never sets it, so a script's create cannot steer the GUI's next add.
+    private var freshWorkspaceID: UUID?
+
+    /// The workspace a new session lands in: a freshly created one, else the selected session's, else the
+    /// last (nil when there are none). Drives the bottom bar's add actions, File ▸ New Session / Open
+    /// Directory / Rename Workspace, and resolves `active` for control-channel workspace targets.
     public var currentWorkspaceID: UUID? {
+        if let freshWorkspaceID, workspaces.contains(where: { $0.id == freshWorkspaceID }) {
+            return freshWorkspaceID
+        }
         if let selectedSessionID, let workspace = workspace(forSession: selectedSessionID) {
             return workspace.id
         }
@@ -251,7 +262,10 @@ public final class AppStore {
     public func addWorkspace(name: String, collapsed: Bool = false, revealNewWorkspace: Bool = true) -> Workspace {
         let workspace = Workspace(name: name, isExpanded: !collapsed)
         workspaces.append(workspace)
-        if revealNewWorkspace { revealNewFocusMember(workspace.id) }
+        if revealNewWorkspace {
+            revealNewFocusMember(workspace.id)
+            freshWorkspaceID = workspace.id
+        }
         scheduleTreeChanged()
         save()
         return workspace
@@ -292,6 +306,7 @@ public final class AppStore {
         }
         if select {
             selectedSessionID = session.id
+            freshWorkspaceID = nil
             disableFocusIfSelectionOutsideSet(session.id) // a control-driven add into another workspace must reveal it
             recordRecency()
         }
@@ -312,6 +327,7 @@ public final class AppStore {
         let destinationIndicator = sessionID.flatMap { session(withID: $0)?.agentIndicator }
         let previous = selectedSessionID
         selectedSessionID = sessionID
+        freshWorkspaceID = nil
         if let selectionIDs {
             setSidebarSelection(selectionIDs)
         } else {
@@ -724,6 +740,7 @@ public final class AppStore {
     /// override for this launch. It defaults to false because reopening a closed window mid-process reloads
     /// its store through here, and that RUNTIME caller must not execute anything.
     public func restore(from snapshot: Snapshot, launchRestore: Bool = false) {
+        freshWorkspaceID = nil // live create-time state, never restored from disk
         // fold duplicate workspace ids into the first occurrence and keep only the first snapshot of a
         // repeated session id, else the rest stay unreachable past the first match and get re-saved.
         var seenSessionIDs: Set<UUID> = []
