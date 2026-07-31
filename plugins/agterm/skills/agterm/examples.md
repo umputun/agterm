@@ -353,8 +353,9 @@ which switches the filter off as the set empties. Per-window and persisted; orth
 `sidebar mode`. While the filter is applied, `session go` navigation is scoped to the marked workspaces'
 sessions; suspending it restores stepping over all sessions.
 
-Every mode acts on `--target`, which defaults to `active` — the workspace of the SELECTED session, not
-whatever the previous line addressed, so always name the workspace you mean.
+Every mode acts on `--target`, which defaults to `active` — the CURRENT workspace (a foreground-created
+one first, else the selected session's, else the last), not whatever the previous line addressed, so
+always name the workspace you mean.
 
 **These commands MOVE the selection when they leave it invisible**, selecting the most recently used
 session still visible instead: `workspace focus on`, a narrowing `toggle`, a `workspace focus off` whose
@@ -413,8 +414,8 @@ if [ "$was" = "true" ]; then agtermctl workspace filter on; fi
 
 ## Expand or collapse the sidebar tree
 
-Open every workspace at once, or collapse all but the active one (the workspace of the active session,
-which stays expanded and scrolled into view) to cut clutter. Defaults to the frontmost window; pass
+Open every workspace at once, or collapse all but the current one (the same resolution as
+`--target active`, which stays expanded and scrolled into view) to cut clutter. Defaults to the frontmost window; pass
 `--window` to target any open window. A no-op in flagged mode.
 
 ```bash

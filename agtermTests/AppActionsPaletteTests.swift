@@ -5,7 +5,7 @@ import agtermCore
 
 /// Hosted coverage for the ⌃⇧P palette's "Move Session to X" destinations. The list is built from live
 /// `AppStore` state in the app target, so it needs a window library and a real store; the store-side
-/// resolution it depends on is pinned host-free in `AppStoreTests`.
+/// resolution it depends on is pinned host-free in `AppStoreCurrentWorkspaceTests`.
 @MainActor
 final class AppActionsPaletteTests: XCTestCase {
     private var stateDir: URL!
