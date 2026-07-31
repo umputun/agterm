@@ -165,12 +165,13 @@ public final class AppStore {
         return session(withID: selectedSessionID)
     }
 
-    /// A workspace created in the FOREGROUND that the selection has not moved away from, so it can be current
-    /// while a session elsewhere is still selected. Without it a fresh workspace is never current
-    /// (discussion #325): selection does not move on create, so Rename Workspace edited the previous one and the
-    /// next new session landed there too. Dropped by any selection change (`selectedSessionID`'s observer) and
-    /// by removing the workspace, so a later Undo re-inserting the same id cannot revive it; a BACKGROUND
-    /// create (`revealNewWorkspace: false`) never sets it, so a script's create cannot steer the GUI's next add.
+    /// The workspace that holds the target without owning the selection: a FOREGROUND create, or a
+    /// `selectWorkspace` on an empty one, which has no session to select. Without it a new workspace is never
+    /// current (discussion #325): selection does not move on create, so Rename Workspace edited the previous
+    /// one and the next new session landed there too. Dropped by a selection CHANGE
+    /// (`selectedSessionID`'s observer, so a same-value write keeps it), by removing the workspace, by the
+    /// focus filter hiding it, and by `restore(from:)`. A BACKGROUND create (`revealNewWorkspace: false`)
+    /// never sets it, so a script's create cannot steer the GUI's next add.
     private var freshWorkspaceID: UUID?
 
     /// Drops the fresh-workspace preference when that workspace is the one going away, so an Undo or Reopen
@@ -189,9 +190,13 @@ public final class AppStore {
         if let first = workspace.sessions.first {
             selectSession(first.id)
             freshWorkspaceID = nil
-        } else {
-            freshWorkspaceID = workspaceID
+            return true
         }
+        // an empty workspace the filter hides would be a target with no row: reveal it, the same
+        // auto-reveal `addWorkspace` performs, so what is current is always on screen.
+        revealNewFocusMember(workspaceID)
+        freshWorkspaceID = workspaceID
+        save()
         return true
     }
 
@@ -298,8 +303,8 @@ public final class AppStore {
     /// untouched: a background `session.new --no-select` create must not widen the view. `collapsed: true`
     /// (backing `workspace.new --collapsed`) starts it collapsed against the runtime default of expanded, so
     /// it can be filled with `addSession(select: false)` unopened. `revealNewWorkspace` also decides
-    /// targeting: true makes this workspace `currentWorkspaceID` until the next selection change, false
-    /// leaves the target where it is. `ensureWorkspace(named:revealNewWorkspace:)` forwards both.
+    /// targeting: true makes this workspace `currentWorkspaceID` for as long as `freshWorkspaceID` holds it,
+    /// false leaves the target where it is. `ensureWorkspace(named:revealNewWorkspace:)` forwards both.
     @discardableResult
     public func addWorkspace(name: String, collapsed: Bool = false, revealNewWorkspace: Bool = true) -> Workspace {
         let workspace = Workspace(name: name, isExpanded: !collapsed)

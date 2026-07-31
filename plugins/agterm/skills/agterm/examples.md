@@ -353,10 +353,11 @@ which switches the filter off as the set empties. Per-window and persisted; orth
 `sidebar mode`. While the filter is applied, `session go` navigation is scoped to the marked workspaces'
 sessions; suspending it restores stepping over all sessions.
 
-Every mode acts on `--target`, which defaults to `active` — the CURRENT workspace (a foreground-created
-one still holding the target, else the selected session's, else the last), not whatever the previous line
-addressed, so always name the workspace you mean. Focusing another workspace hides a foreground-created
-one and hands targeting back, so `active` here and `active` a line later can differ.
+Every mode acts on `--target`, which defaults to `active` — the CURRENT workspace: one that holds the
+target because you created it in the foreground or ran `workspace select` on it while it was empty, else
+the selected session's, else the last. That is not whatever the previous line addressed, so always name
+the workspace you mean. Focusing another workspace hides a target-holding one and hands targeting back,
+so `active` here and `active` a line later can differ.
 
 **These commands MOVE the selection when they leave it invisible**, selecting the most recently used
 session still visible instead: `workspace focus on`, a narrowing `toggle`, a `workspace focus off` whose

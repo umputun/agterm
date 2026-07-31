@@ -198,6 +198,36 @@ struct AppStoreCurrentWorkspaceTests {
         #expect(store.currentWorkspaceID == empty.id)
     }
 
+    @Test func selectingAFilteredOutEmptyWorkspaceRevealsIt() throws {
+        let store = makeStore()
+        let work = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        store.selectSession(session.id)
+        let empty = store.addWorkspace(name: "empty", revealNewWorkspace: false)
+        store.setFocusedWorkspace(work.id)
+        #expect(store.visibleWorkspaces.map(\.id) == [work.id])
+
+        #expect(store.selectWorkspace(empty.id))
+        #expect(store.currentWorkspaceID == empty.id)
+        #expect(store.visibleWorkspaces.map(\.id) == [work.id, empty.id], "the target must be on screen")
+    }
+
+    // hard removal records the workspace for Open Recent, so a stale target could come back with it
+    @Test func reopeningAHardRemovedFreshWorkspaceDoesNotReviveTheTarget() throws {
+        let (store, recentClosed, _) = makeStoreWithRecentClosed()
+        let work = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: work.id, cwd: "/a"))
+        store.selectSession(session.id)
+        let fresh = store.addWorkspace(name: "fresh")
+        #expect(store.currentWorkspaceID == fresh.id)
+
+        store.removeWorkspace(fresh.id)
+        #expect(store.restoreRecentClosed(try #require(recentClosed.load().first)))
+        #expect(store.workspaces.map(\.id) == [work.id, fresh.id])
+        #expect(store.selectedSessionID == session.id)
+        #expect(store.currentWorkspaceID == work.id)
+    }
+
     @Test func selectingAnUnknownWorkspaceIsANoOp() {
         let store = makeStore()
         let work = store.addWorkspace(name: "work")

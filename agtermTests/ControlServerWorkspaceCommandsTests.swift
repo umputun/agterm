@@ -71,4 +71,19 @@ final class ControlServerWorkspaceCommandsTests: XCTestCase {
         XCTAssertEqual(store.selectedSessionID, session.id, "an empty workspace has nothing to select")
         XCTAssertEqual(store.currentWorkspaceID, empty.id)
     }
+
+    func testSelectingAFilteredOutEmptyWorkspaceRevealsIt() throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let empty = store.addWorkspace(name: "empty", revealNewWorkspace: false)
+        store.setFocusMembership(owner, member: true)
+        store.setFocusEnabled(true)
+        XCTAssertEqual(store.visibleWorkspaces.map(\.id), [owner])
+
+        let response = server.selectWorkspace(empty.id.uuidString, window: nil)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertEqual(store.currentWorkspaceID, empty.id)
+        XCTAssertEqual(store.visibleWorkspaces.map(\.id), [owner, empty.id], "the target must be on screen")
+    }
 }
