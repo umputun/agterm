@@ -582,11 +582,28 @@ helper on `Open` so the `--pane` forwarding is assertable.
 - Modify: `agtermUITests/ControlOverlaySplitUITests.swift`
 - Modify: `agtermUITests/ControlSurfaceZoomUITests.swift`
 
-- [ ] add a test opening both pane overlays simultaneously and closing them independently
-- [ ] add a test asserting the rejection when the split is hidden
-- [ ] add a test that ⌘W dismisses a pane overlay rather than closing the session
-- [ ] add a zoom test addressing `surface:<id>:overlay-right` and returning to the deck
-- [ ] run `make test-app` — must pass before task 10
+- [x] add a test opening both pane overlays simultaneously and closing them independently
+- [x] add a test asserting the rejection when the split is hidden
+- [x] add a test that ⌘W dismisses a pane overlay rather than closing the session
+- [x] add a zoom test addressing `surface:<id>:overlay-right` and returning to the deck
+- [x] run `make test-app` — must pass before task 10
+- ➕ the hidden-split rejection needs `session.focus left` BEFORE hiding: a hidden split renders whichever
+      pane is focused, and a new split focuses the right one, so hiding alone leaves the RIGHT pane visible
+      and the LEFT one unrendered. The test also opens on the left afterwards, pinning that the guard is
+      per-pane rather than a blanket refusal on a hidden split.
+- ➕ the ⌘W test first probes the right pane with `session.type --pane right` (tolerating
+      `session not realized`, as `typeUntilMarker` does) because the rung reads `focusedOverlayPane`, which
+      resolves `.right` only while `splitSurface` exists — an overlay opened before the pane realized would
+      resolve `.left` and ⌘W would close the session.
+- ✅ Automation Mode is authorized on this host, so every test in this task was EXECUTED and passed:
+      `testBothPaneOverlaysOpenAtOnceAndCloseIndependently` (3.1s),
+      `testPaneOverlayOnHiddenSplitIsRejected` (3.1s),
+      `testCloseSessionShortcutClosesPaneOverlayInsteadOfClosingSession` (4.6s),
+      `ControlSurfaceZoomUITests.testPaneOverlayZoomRoundTrip` (5.4s). Both touched classes ran whole:
+      `ControlOverlaySplitUITests` 31 tests / 0 failures (127.6s) and `ControlSurfaceZoomUITests`
+      8 tests / 0 failures (48.4s), which also RE-RAN Task 6's two tests green
+      (`testPaneOverlayOpenAndCloseKeepSplitRatio` 7.5s, `testPaneOverlayLeavesSiblingPaneInteractive` 10.5s).
+      `swift test` (2156), `make build`, `make lint`, and `make test-app` (91 tests) all pass.
 
 ### Task 10: Update the synchronized documentation surfaces
 
@@ -612,19 +629,71 @@ helper on `Open` so the `--pane` forwarding is assertable.
 
 ### Task 11: Verify acceptance criteria
 
-- [ ] verify all requirements from Overview are implemented
-- [ ] verify every decision in Solution Overview holds in the shipped code, especially: omitting
+**Files:**
+- Modify: `agtermUITests/ControlOverlaySplitUITests.swift` (➕ the two hosted tests closing the
+  behavioral-equivalence coverage hole found by this verification)
+
+- [x] verify all requirements from Overview are implemented — pane scoping with a live sibling
+      (`WindowContentView+Detail.swift:62-63,85,104` and `testPaneOverlayLeavesSiblingPaneInteractive`),
+      independent simultaneous slots (`Session.swift:229-249`,
+      `testBothPaneOverlaysOpenAtOnceAndCloseIndependently`), delivered as `--pane` on the existing
+      commands with the command count unchanged at 71
+- [x] verify every decision in Solution Overview holds in the shipped code, especially: omitting
       `--pane` is byte-for-byte today's behavior; pane overlays reject a size percent; a non-split
       session accepts `--pane left`; ⌘W dismisses before closing
-- [ ] verify the behavioral-equivalence requirement end-to-end on a real pane overlay: it auto-closes on
+      - no-pane CLI: `Close`/`Result` pass `pane.map { … }` into `withWindow`, which returns the base
+        unchanged (`Commands.swift:58-63`), so `args` stays nil exactly as on master; `Open` adds
+        `pane: nil` to `ControlArgs`, which the synthesized encoder omits; the `--block` poll's
+        `resultRequest(id:)` yields master's bare request. Pinned by `sessionOverlayCloseWithPane`,
+        `sessionOverlayResultWithPane`, `sessionOverlayOpenWithoutPane`, `sessionOverlayBlockPollWithoutPane`
+      - no-pane dispatcher/app arms: `ControlDispatcher.swift:565-604` falls to the same `actions.*`
+        calls, and `ControlServer+SessionActions.swift:24-99` keeps the original `openOverlay` /
+        `closeOverlay` / `overlayActive` branches verbatim in the `else` arm;
+        `overlaySpec(for:pane: nil)` (`agtermApp.swift:459-464`) rebuilds the session-wide values and
+        only a pane sets `onFocusChange`. `sessionOverlayCommandsStaySessionWideWithoutPane` pins it
+      - size percent: rejected in `ControlDispatcher.swift:555-557` and again at parse time in
+        `SessionCommands.swift:641-643`; `session.overlay.resize` refuses ANY `--pane`
+        (`ControlDispatcher.swift:570-573`) and exposes no such option
+      - non-split `--pane left`: `Session.rendersPane` returns true for `.left` when neither `isSplit`
+        nor `splitFocused` (`Session.swift:381-385`, `rendersPaneIsLeftOnlyForAPlainSession`)
+      - ⌘W: the pane rung sits between scratch and the session close in `AppActions.swift:232`, proven by
+        `testCloseSessionShortcutClosesPaneOverlayInsteadOfClosingSession`
+- [x] verify the behavioral-equivalence requirement end-to-end on a real pane overlay: it auto-closes on
       program exit, `--wait` holds it open, and `--block` returns the program's own exit status
-- [ ] verify the cross-surface contract in project CLAUDE.md: protocol, dispatcher, CLI, read-back,
-      and protocol/end-to-end tests all exist for the new arguments
-- [ ] verify no overlay surface leaks: grep every `overlaySurface?.teardown()` site and confirm a pane
-      equivalent sits beside it
-- [ ] run full host-free suite: `cd agtermCore && swift test`
-- [ ] run hosted suite: `make test-app`
-- [ ] run `make lint` — zero findings required
+- [x] verify the cross-surface contract in project CLAUDE.md: protocol, dispatcher, CLI, read-back,
+      and protocol/end-to-end tests all exist for the new arguments — protocol `ControlArgs.pane` doc +
+      `ControlSessionNode.paneOverlays` + `PaneOverlayError` (`ControlProtocol.swift:152-156,396-400,753-762`),
+      dispatcher `parseOverlayPane` and the three arms (`ControlDispatcher.swift:425-440,550-604`), CLI
+      `Overlay.validatePane` / `resultRequest` (`SessionCommands.swift:606-613,657-659`), read-back
+      `AppStore.paneOverlays` plus `surfaces[]` from `TerminalZoomSurface.allCases`
+      (`AppStore.swift:267,304-308`), tests in `ControlDispatcherOverlayTests` (7 pane cases),
+      `ControlProtocolTests` (round-trip + nil omission), `CommandsTests` (11 cases),
+      `AppStorePaneTests.controlTreeReportsOpenPaneOverlays`, and 8 hosted tests
+- [x] verify no overlay surface leaks: grep every `overlaySurface?.teardown()` site and confirm a pane
+      equivalent sits beside it — 5 sites; 4 carry `teardownPaneOverlays()` on the next line
+      (`AppStore.swift:433`, `:468`, `AppStore+PendingClose.swift:406`, `WindowAccessor.swift:152`) and
+      the fifth, `closeOverlay` (`AppStore+Panes.swift:208`), correctly has none: it is the session-wide
+      overlay's own close, whose per-pane counterpart is `closePaneOverlay` (`:242`). The pane-only sites
+      add `teardownPaneOverlay(.right)` in `closeSplit` (`:72`) and
+      `teardownPaneOverlay(.left)` + `promotePaneOverlay()` in `closePrimaryPane` (`:128-129`);
+      `closeSplitPane` needs no call of its own because both its branches delegate to `closeSession` or
+      `closeSplit`
+- [x] run full host-free suite: `cd agtermCore && swift test` — 2156 tests in 84 suites, 0 failures
+- [x] run hosted suite: `make test-app` — 91 tests, 0 failures
+- [x] run `make lint` — zero findings
+- ➕ `make build` — BUILD SUCCEEDED. Both pane-overlay XCUITest classes ran whole:
+      `ControlOverlaySplitUITests` 31 tests / 0 failures (127.3s) and `ControlSurfaceZoomUITests`
+      8 tests / 0 failures (48.3s)
+- ➕ the behavioral-equivalence check found the ONE real gap in this branch: auto-close-on-exit,
+      `--wait`, and the app-side `session.overlay.result --pane` arm had no hosted coverage at all —
+      the session-wide `testOverlayAutoClosesWhenCommandExits` / `testOverlayResultReportsExitCode` pair
+      had no pane equivalent, so `recordPaneOverlayExit` and the result arm were reachable only by
+      reading. Closed with `testPaneOverlayAutoClosesOnExitAndReportsItsOwnStatus` (3.5s, also asserting
+      the pane status does NOT leak into the session-wide slot) and
+      `testPaneOverlayWaitHoldsTheSlotAfterItsProgramExits` (11.3s); both pass, keeping
+      `ControlOverlaySplitUITests` at 33 tests. `--block` needs no hosted test: it is CLI-only, no overlay
+      XCUITest drives the binary, and its two moving parts are the pane forwarding
+      (`sessionOverlayBlockPollCarriesPane`) and the `overlay.result --pane` poll now covered above
 
 ### Task 12: [Final] Update documentation
 
