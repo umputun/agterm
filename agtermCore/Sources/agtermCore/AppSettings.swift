@@ -223,6 +223,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// forwards right-/middle-click to libghostty. agterm has no terminal context menu, so paste-or-off is
     /// the whole meaningful choice.
     public var rightClickPaste: Bool?
+    /// Whether clicking anywhere on a workspace row expands or collapses it; nil = on. The disclosure
+    /// triangle toggles regardless of this setting.
+    public var workspaceRowClickExpands: Bool?
     /// Which directory a new (⌘T) session opens in, a `NewSessionDirectory` raw value; nil = `home`. Read
     /// by `AppActions.newSession()` through `resolveNewSessionCwd`.
     public var newSessionDirectory: String?
@@ -264,6 +267,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 inheritGlobalGhosttyConfig: Bool? = nil, attentionButtonEnabled: Bool? = nil,
                 dockBounce: String? = nil, notificationSoundName: String? = nil,
                 blockedStatusSoundName: String? = nil, rightClickPaste: Bool? = nil,
+                workspaceRowClickExpands: Bool? = nil,
                 newSessionDirectory: String? = nil, newSessionCustomDirectory: String? = nil,
                 confirmCloseSession: Bool? = nil, closeGraceUndoEnabled: Bool? = nil,
                 autoFollowAttention: String? = nil,
@@ -298,6 +302,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.notificationSoundName = notificationSoundName
         self.blockedStatusSoundName = blockedStatusSoundName
         self.rightClickPaste = rightClickPaste
+        self.workspaceRowClickExpands = workspaceRowClickExpands
         self.newSessionDirectory = newSessionDirectory
         self.newSessionCustomDirectory = newSessionCustomDirectory
         self.confirmCloseSession = confirmCloseSession

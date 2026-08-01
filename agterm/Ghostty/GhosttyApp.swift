@@ -55,6 +55,10 @@ final class GhosttyApp {
     /// Whether the sidebar draws the red unseen-notification count badge. The sidebar Coordinator reads it
     /// (gating the count to 0 when off); settings-mirrored like `toolbarMode`.
     private(set) var notificationBadgeEnabled: Bool = true
+    /// Whether a click anywhere on a sidebar workspace row toggles its expansion; on by default. The sidebar
+    /// Coordinator reads it in `handleSingleClick`, and the disclosure triangle ignores it because AppKit
+    /// toggles that natively. Settings-mirrored like `toolbarMode`.
+    private(set) var workspaceRowClickExpands: Bool = true
     /// Whether a restored pane re-runs its last clean-quit foreground command; the surface factories read it to
     /// decide whether to feed that command as `initial_input`. Affects only the next restore — no live
     /// re-render notification.
@@ -158,6 +162,10 @@ final class GhosttyApp {
 
     func setNotificationBadgeEnabled(_ enabled: Bool) {
         notificationBadgeEnabled = enabled
+    }
+
+    func setWorkspaceRowClickExpands(_ enabled: Bool) {
+        workspaceRowClickExpands = enabled
     }
 
     func setRestoreRunningCommand(_ enabled: Bool) {

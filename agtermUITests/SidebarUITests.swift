@@ -138,6 +138,32 @@ final class SidebarUITests: XCTestCase {
         XCTAssertTrue(session.waitForExistence(timeout: 5), "expanding the workspace should show its session row again")
     }
 
+    // with `workspaceRowClickExpands` off, only the disclosure triangle stays a toggle.
+    func testWorkspaceRowClickDoesNotToggleWhenSettingIsOff() throws {
+        XCTAssertTrue(app.staticTexts["workspace 1"].waitForExistence(timeout: 20), "seeded workspace should exist")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "seeded session should be visible")
+
+        app.terminate()
+        let settings = try JSONSerialization.data(withJSONObject: ["workspaceRowClickExpands": false])
+        try settings.write(to: stateDir.appendingPathComponent("settings.json"))
+        app = XCUIApplication()
+        app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
+        app.launchForUITest()
+        let ws = app.staticTexts["workspace 1"]
+        XCTAssertTrue(ws.waitForExistence(timeout: 20), "workspace 1 should restore")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "the session row should be visible after relaunch")
+
+        // the toggle would have been deferred by the double-click interval, so poll past it for a collapse
+        // that must never come.
+        ws.click()
+        XCTAssertFalse(pollSessionRowCount(0, timeout: 3), "a row click must not collapse the workspace while the setting is off")
+
+        let triangle = app.disclosureTriangles.firstMatch
+        XCTAssertTrue(triangle.waitForExistence(timeout: 5), "the workspace row should expose its disclosure triangle")
+        triangle.click()
+        XCTAssertTrue(pollSessionRowCount(0, timeout: 8), "the disclosure triangle should collapse regardless of the setting")
+    }
+
     // collapses a workspace whose session is NOT the selected one, so the launch-time reveal of the
     // active session cannot re-expand it.
     func testWorkspaceCollapsePersistsAcrossRelaunch() throws {

@@ -66,6 +66,7 @@ final class SettingsModel {
         applyAgentStatusColors()
         applyAgentStatusShapes()
         applyRestoreRunningCommand()
+        applyWorkspaceRowClickExpands()
         applyAttentionButtonEnabled()
         applyInterfaceElements()
         applyAutoHideSidebarInactiveWindows()
@@ -201,6 +202,8 @@ final class SettingsModel {
     func setMouseScrollMultiplier(_ value: Double?) { settings.mouseScrollMultiplier = value; persistAndApply() }
     // ghostty key (right-click-action): persistAndApply() rewrites the conf and reloads surfaces live.
     func setRightClickPaste(_ value: Bool?) { settings.rightClickPaste = value; persistAndApply() }
+    // sidebar behavior, not a ghostty key; the Coordinator reads the mirror on the next click.
+    func setWorkspaceRowClickExpands(_ value: Bool?) { settings.workspaceRowClickExpands = value; persistAndApply() }
     func setInactivePaneMuteStrength(_ value: Int?) { settings.inactivePaneMuteStrength = value; persistAndApply() }
     func setSidebarBackgroundShift(_ value: Int?) { settings.sidebarBackgroundShift = value; persistAndApply() }
     func setSidebarFontSize(_ value: Double?) { settings.sidebarFontSize = value; persistAndApply() }
@@ -596,6 +599,7 @@ final class SettingsModel {
         applyAgentStatusColors()
         applyAgentStatusShapes()
         applyRestoreRunningCommand()
+        applyWorkspaceRowClickExpands()
         applyAttentionButtonEnabled()
         applyInterfaceElements()
         applyAutoHideSidebarInactiveWindows()
@@ -631,6 +635,10 @@ final class SettingsModel {
 
     private func applyRestoreRunningCommand() {
         GhosttyApp.shared.setRestoreRunningCommand(settings.restoreRunningCommand ?? false)
+    }
+
+    private func applyWorkspaceRowClickExpands() {
+        GhosttyApp.shared.setWorkspaceRowClickExpands(settings.workspaceRowClickExpands ?? true)
     }
 
     private func applyAttentionButtonEnabled() {

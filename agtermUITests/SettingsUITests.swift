@@ -225,6 +225,14 @@ final class SettingsUITests: XCTestCase {
                       "turning confirm-before-closing on should persist confirmCloseSession=true")
     }
 
+    func testWorkspaceRowClickExpandsTogglePersists() throws {
+        let toggle = settingsControl(tab: "General", control: "settings-workspace-row-click-expands")
+        toggle.click() // turn it off (default on)
+
+        XCTAssertTrue(poll { self.settingsBool("workspaceRowClickExpands") == false },
+                      "turning row-click expansion off should persist workspaceRowClickExpands=false")
+    }
+
     func testNewSessionDirectoryPickerPersists() throws {
         let picker = settingsControl(tab: "General", control: "settings-new-session-directory")
         picker.click()
