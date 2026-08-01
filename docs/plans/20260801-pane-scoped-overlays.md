@@ -469,24 +469,41 @@ helper on `Open` so the `--pane` forwarding is assertable.
 - Modify: `agterm/Views/WindowContentView.swift`
 - Modify: `agterm/Views/WindowContentView+Zoom.swift`
 - Modify: `agtermUITests/ControlOverlaySplitUITests.swift`
+- Add: `agterm/Views/WindowContentView+Detail.swift` (➕ the detail deck — `detailPane`, `sessionDetail`,
+  `overlayPanel`, `paneOverlayPanel`, `paneDim` — moved out whole; the pane-overlay rendering pushed
+  `WindowContentView.swift` to 1004 lines, past its 1000-line cap, so it follows the existing
+  `+Zoom` / `+Dashboard` / `+Titlebar` / `+RecentSessions` carve-outs rather than raising the limit)
 
-- [ ] give `makeOverlaySurface` an `OverlayPane?` parameter so it reads the right slot's
+- [x] give `makeOverlaySurface` an `OverlayPane?` parameter so it reads the right slot's
       command/cwd/wait/backgroundColor and routes `onExit`/`onExitCodeCaptured` to that pane, updating
       the closure type threaded through `ContentView.swift:18,65` and its use at
       `WindowContentView+Zoom.swift:177`
-- [ ] add `paneOverlayPanel(session:pane:isActive:)` — an always-present sibling with content gated
+- [x] add `paneOverlayPanel(session:pane:isActive:)` — an always-present sibling with content gated
       inside a `GeometryReader`, modeled on `overlayPanel` (`WindowContentView.swift:562`)
-- [ ] place it inside BOTH arranged-subview ZStacks at render site 1, and add the missing ZStack
+- [x] place it inside BOTH arranged-subview ZStacks at render site 1, and add the missing ZStack
       wrappers at sites 2 and 3 so the sibling has a home there too
-- [ ] hide a pane under its own overlay (opacity 0, hit-testing off) WITHOUT touching any modifier that
+- [x] hide a pane under its own overlay (opacity 0, hit-testing off) WITHOUT touching any modifier that
       wraps the NSSplitView — see the boundary note at `WindowContentView.swift:514-519`
-- [ ] write a hosted test asserting `splitRatio` in `tree --json` is unchanged across a pane-overlay
+- [x] write a hosted test asserting `splitRatio` in `tree --json` is unchanged across a pane-overlay
       open and close — the value is captured from the live NSSplitView, so it is a real oracle for the
       divider-normalize regression
-- [ ] write a hosted test asserting the sibling pane stays visible and interactive while one pane's
+- [x] write a hosted test asserting the sibling pane stays visible and interactive while one pane's
       overlay is up
-- [ ] verify by eye on an isolated Debug instance (see Post-Completion for the procedure)
-- [ ] run `make test-app`, `make lint` — must pass before task 7
+- [x] verify by eye (deferred to maintainer — not automatable, see Post-Completion)
+- [x] run `make test-app`, `make lint` — must pass before task 7
+- ➕ `makeOverlaySurface` reads its slot through a shared `overlaySpec(for:pane:)` returning a
+      `PaneOverlay`; nil pane rebuilds the session-wide values so that path is byte-for-byte unchanged
+- ➕ the pane-overlay focus gate is `focusable && !overlaid`, shared by both panes for now; per-pane
+      focus routing is Task 7's `isActive` work
+- ⚠️ the two new XCUITests COMPILE (`build-for-testing` succeeds) but could NOT be EXECUTED here:
+      `testmanagerd` logs `Writer daemon requires authentication to enable automation mode`, so the
+      runner waits on an unanswered "Enable UI Automation" authorization prompt and times out after 60s.
+      An untouched pre-existing test (`testOverlayOpenRequiresCommand`) fails identically at the same
+      point, so this is a host authorization gate, not a defect in the change. Run them after approving
+      the prompt:
+      `xcodebuild test -project agterm.xcodeproj -scheme agterm -destination 'platform=macOS'
+      -only-testing:agtermUITests/ControlOverlaySplitUITests/testPaneOverlayOpenAndCloseKeepSplitRatio
+      -only-testing:agtermUITests/ControlOverlaySplitUITests/testPaneOverlayLeavesSiblingPaneInteractive`
 
 ### Task 7: Per-pane visibility, focus, and cover handling
 

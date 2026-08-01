@@ -640,6 +640,108 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(empty["ok"] as? Bool, false, "resize with no fraction should fail: \(empty)")
     }
 
+    // the divider-normalize regression guard. A pane overlay renders INSIDE the NSSplitView's arranged
+    // subview, so mounting or freeing one must never re-lay-out the split. `splitRatio` in the tree is
+    // captured off the LIVE NSSplitView by `SplitRatioAccessor`, so a normalize surfaces here as 0.5.
+    func testPaneOverlayOpenAndCloseKeepSplitRatio() throws {
+        let id = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "opening the split should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the split should be up")
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.resize","target":"\#(id)","args":{"ratio":0.3}}"#)["ok"] as? Bool,
+                       true, "setting a non-default divider should succeed")
+        XCTAssertTrue(pollSplitRatio(0.3, timeout: 10), "0.3 should reach the live divider")
+
+        for pane in ["right", "left"] {
+            let marker = markerDir.appendingPathComponent("pane-overlay-\(pane)")
+            let cmd = "sh -c 'printf UP > \(marker.path); cat'"
+            let json = try! JSONSerialization.data(withJSONObject:
+                ["cmd": "session.overlay.open", "target": id, "args": ["command": cmd, "pane": pane]])
+            XCTAssertEqual(try sendCommand(String(data: json, encoding: .utf8)!)["ok"] as? Bool, true,
+                           "opening the \(pane) pane overlay should succeed")
+            // the marker proves the surface REALIZED, so the ratio below is read after whatever layout the
+            // mount caused, not before it.
+            XCTAssertEqual(pollMarker(marker, timeout: 15), "UP", "the \(pane) pane overlay's program should run")
+            XCTAssertTrue(pollPaneOverlays(id: id, contains: pane, timeout: 10),
+                          "the tree should report the \(pane) pane overlay")
+            settle()
+            XCTAssertEqual(try liveSplitRatio(id: id), 0.3, accuracy: 0.02,
+                           "opening the \(pane) pane overlay must not move the divider")
+
+            let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)","args":{"pane":"\#(pane)"}}"#)
+            XCTAssertEqual(close["ok"] as? Bool, true, "closing the \(pane) pane overlay should succeed: \(close)")
+            XCTAssertTrue(pollPaneOverlays(id: id, contains: nil, timeout: 10), "no pane overlay should remain")
+            settle()
+            XCTAssertEqual(try liveSplitRatio(id: id), 0.3, accuracy: 0.02,
+                           "closing the \(pane) pane overlay must not move the divider")
+        }
+    }
+
+    // a pane overlay covers ONE pane, so the sibling stays live and usable. A Metal surface is absent from
+    // the AX tree, so the oracle is `tty`: after focusing the UNCOVERED pane, real keyboard input must land
+    // in that pane's own shell, and the overlay's `read` must capture nothing.
+    func testPaneOverlayLeavesSiblingPaneInteractive() throws {
+        let id = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "opening the split should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the split should be up")
+
+        // injected, so the capture is independent of focus: the identity the keyboard must reach later.
+        let leftTTY = markerDir.appendingPathComponent("left-pane-tty")
+        let leftValue = try XCTUnwrap(typeUntilMarker("tty > '\(leftTTY.path)'\n", target: id, file: leftTTY, select: false),
+                                      "the left pane should report its tty")
+
+        let ovlMarker = markerDir.appendingPathComponent("right-overlay-keys")
+        let ovlCmd = "sh -c 'IFS= read -r x; printf %s \"$x\" > \(ovlMarker.path); cat'"
+        let json = try! JSONSerialization.data(withJSONObject:
+            ["cmd": "session.overlay.open", "target": id, "args": ["command": ovlCmd, "pane": "right"]])
+        XCTAssertEqual(try sendCommand(String(data: json, encoding: .utf8)!)["ok"] as? Bool, true,
+                       "opening the right pane overlay should succeed")
+        XCTAssertTrue(pollPaneOverlays(id: id, contains: "right", timeout: 10), "the right pane overlay should be up")
+        usleep(1_500_000) // let the overlay surface attach and finish its one-shot focus grab
+
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(id)","args":{"pane":"left"}}"#)["ok"] as? Bool,
+                       true, "focusing the uncovered pane should succeed")
+        usleep(500_000) // focusSplitPane's bounded makeFirstResponder retry; no observable signal to poll on
+
+        app.activate()
+        let afterTTY = markerDir.appendingPathComponent("sibling-after-tty")
+        let afterValue = try XCTUnwrap(keyboardTypeUntilMarker("tty > '\(afterTTY.path)'", file: afterTTY),
+                                       "the uncovered pane must accept keyboard input while its sibling is covered")
+        XCTAssertEqual(afterValue, leftValue, "keyboard input must reach the uncovered LEFT pane, not another surface")
+        XCTAssertNil(pollMarker(ovlMarker, timeout: 2),
+                     "the right pane's overlay must not capture input meant for the uncovered pane")
+    }
+
+    /// Drain the run loop for a beat so any SwiftUI relayout the last command triggered — and the
+    /// `didResizeSubviews` capture that would follow it — has landed before a divider read.
+    private func settle() {
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+    }
+
+    /// The session's `splitRatio` from a fresh `tree`. `SplitRatioAccessor` writes it from the LIVE
+    /// NSSplitView, so it reports where the divider actually sits, not merely what was last requested.
+    private func liveSplitRatio(id: String) throws -> Double {
+        try XCTUnwrap(sessionNode(id: id)["splitRatio"] as? Double, "a split session should report a splitRatio")
+    }
+
+    /// Polls `tree` until the session's `paneOverlays` holds `pane` — or, for nil, until the field is absent
+    /// (no pane overlay anywhere).
+    private func pollPaneOverlays(id: String, contains pane: String?, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        repeat {
+            let panes = (try? sessionNodeIfPresent(id: id)?["paneOverlays"] as? [String]) ?? nil
+            if let pane {
+                if panes?.contains(pane) == true { return true }
+            } else if panes == nil {
+                return true
+            }
+            usleep(200_000)
+        } while Date() < deadline
+        return false
+    }
+
     /// Creates a session via `session.new` and returns its id as a `UUID`. `session.new` focuses the new
     /// session, so the returned session becomes the active one.
     private func newSession() throws -> UUID {

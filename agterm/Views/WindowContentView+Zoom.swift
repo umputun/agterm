@@ -174,7 +174,8 @@ extension WindowContentView {
                          isActive: true, deckVisible: true, reportsFocusChange: false)
                 .id("\(session.id.uuidString)-zoom-scratch")
         case .overlay:
-            TerminalView(session: session, surfaceKeyPath: \.overlaySurface, makeSurface: makeOverlaySurface,
+            TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
+                         makeSurface: { makeOverlaySurface($0, nil) },
                          isActive: true, deckVisible: true, reportsFocusChange: false)
                 .id("\(session.id.uuidString)-zoom-overlay")
         }

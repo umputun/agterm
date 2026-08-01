@@ -15,7 +15,9 @@ struct ContentView: View {
     let library: WindowLibrary
     let makeSurface: (Session, AppStore) -> GhosttySurfaceView
     let makeSplitSurface: (Session, AppStore) -> GhosttySurfaceView
-    let makeOverlaySurface: (Session, AppStore) -> GhosttySurfaceView
+    /// The overlay factory, keyed by which slot supplies the command: nil is the session-wide overlay,
+    /// `left`/`right` the pane-scoped one covering that split pane.
+    let makeOverlaySurface: (Session, AppStore, OverlayPane?) -> GhosttySurfaceView
     let makeScratchSurface: (Session, AppStore) -> GhosttySurfaceView
     /// The `AGTERM_*` environment a window's quick terminal exposes (ENABLED + WINDOW_ID + SOCKET), per
     /// window id. Threaded down so `WindowContentView` binds its quick terminal's `envProvider` with its own id.
@@ -62,7 +64,7 @@ struct ContentView: View {
                     library: library,
                     makeSurface: { makeSurface($0, store) },
                     makeSplitSurface: { makeSplitSurface($0, store) },
-                    makeOverlaySurface: { makeOverlaySurface($0, store) },
+                    makeOverlaySurface: { makeOverlaySurface($0, store, $1) },
                     makeScratchSurface: { makeScratchSurface($0, store) },
                     quickTerminalEnv: quickTerminalEnv,
                     actions: actions,

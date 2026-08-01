@@ -79,7 +79,9 @@ struct agtermApp: App {
                         Self.makeSplitSurface(for: $0, store: $1,
                                               env: surfaceEnv(for: $0, pane: .right), library: library)
                     },
-                    makeOverlaySurface: { Self.makeOverlaySurface(for: $0, store: $1, env: surfaceEnv(for: $0)) },
+                    makeOverlaySurface: {
+                        Self.makeOverlaySurface(for: $0, store: $1, pane: $2, env: surfaceEnv(for: $0))
+                    },
                     makeScratchSurface: { session, store in
                         // suppress the scratch's creation autoFocus when a full overlay or this window's quick
                         // terminal is up — each renders above it and owns focus.
@@ -403,28 +405,59 @@ struct agtermApp: App {
     /// Overlay-terminal surface factory: an ephemeral surface running the session's `overlayCommand` in
     /// `overlayCwd` (default the session's current dir). NOT wired to the session (no `view.session`), so its
     /// PWD reports don't clobber the session cwd; on exit `onExit` → `closeOverlay` tears it down and hides it.
+    ///
+    /// `pane` picks WHICH slot supplies the command/cwd/wait/color and receives the exit status: nil is the
+    /// session-wide overlay, `left`/`right` the pane-scoped one covering that split pane alone. The temp
+    /// exit-code file is minted per call, so two pane overlays open at once never share one.
     @MainActor
-    private static func makeOverlaySurface(for session: Session, store: AppStore, env: [String: String]) -> GhosttySurfaceView {
+    private static func makeOverlaySurface(for session: Session, store: AppStore, pane: OverlayPane?,
+                                           env: [String: String]) -> GhosttySurfaceView {
         let sessionID = session.id
+        let spec = Self.overlaySpec(for: session, pane: pane)
         let codeFile = (NSTemporaryDirectory() as NSString).appendingPathComponent("agterm-ovl-\(UUID().uuidString).code")
         var overlayEnv = env
-        overlayEnv[OverlayCapture.cmdEnvKey] = session.overlayCommand ?? ""
+        overlayEnv[OverlayCapture.cmdEnvKey] = spec.command
         overlayEnv[OverlayCapture.codeEnvKey] = codeFile
-        let view = GhosttySurfaceView(workingDirectory: session.overlayCwd ?? session.effectiveCwd,
+        let view = GhosttySurfaceView(workingDirectory: spec.cwd ?? session.effectiveCwd,
                                       fontSize: session.fontSize.map(Float.init), command: overlayExitWrapper,
-                                      waitAfterCommand: session.overlayWait, autoFocus: true, env: overlayEnv)
+                                      waitAfterCommand: spec.wait, autoFocus: true, env: overlayEnv)
         view.overlayCodeFile = codeFile
         // the overlay's own background color (`session.overlay.open --background-color`), applied in
         // createSurface — the overlay is sessionless, so it can't read it off the session there.
-        view.overlayBackgroundColorHex = session.overlayBackgroundColor
+        view.overlayBackgroundColorHex = spec.backgroundColor
         // record the exit status on teardown (always via destroySurface), so it survives a `session.overlay.close`
         // that bypasses onExit; a force-close removes the session first and no-ops here, where it is unqueryable.
-        view.onExitCodeCaptured = { store.recordOverlayExit(sessionID, code: $0) }
-        view.onExit = { store.closeOverlay(sessionID) }
+        view.onExitCodeCaptured = { code in
+            if let pane {
+                store.recordPaneOverlayExit(sessionID, pane: pane, code: code)
+            } else {
+                store.recordOverlayExit(sessionID, code: code)
+            }
+        }
+        view.onExit = {
+            if let pane {
+                store.closePaneOverlay(sessionID, pane: pane)
+            } else {
+                store.closeOverlay(sessionID)
+            }
+        }
         // typing is user activity: resets the auto-follow idle timer so an idle fire can't change the selection
         // (vanishing the overlay) mid-typing. destroySurface nils this, breaking the store->surface->closure cycle.
         view.onUserInput = { store.noteUserActivity() }
         return view
+    }
+
+    /// The four fields the overlay factory reads, from the session-wide slot (`pane == nil`) or that pane's
+    /// slot. `PaneOverlay` carries them for both kinds; the session-wide slot has no such value type and its
+    /// extra `overlaySizePercent` is geometry the factory never reads. An empty command means the slot went
+    /// away between the open and this surface realizing, which the wrapper runs as a no-op.
+    @MainActor
+    private static func overlaySpec(for session: Session, pane: OverlayPane?) -> PaneOverlay {
+        guard let pane else {
+            return PaneOverlay(command: session.overlayCommand ?? "", cwd: session.overlayCwd,
+                               backgroundColor: session.overlayBackgroundColor, wait: session.overlayWait)
+        }
+        return session.paneOverlay(pane) ?? PaneOverlay(command: "")
     }
 
     /// Scratch-terminal surface factory: a third per-session shell, full-overlay rendered. Like the overlay it is
