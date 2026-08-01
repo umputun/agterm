@@ -2,8 +2,6 @@ import Foundation
 import Testing
 @testable import agtermCore
 
-// the `session.overlay.*` dispatcher cases live here because `ControlDispatcherTests.swift` is already
-// at the 2000-line test-file cap; they share its `MockControlActions` (internal for that reason).
 @MainActor
 struct ControlDispatcherOverlayTests {
     @Test func sessionOverlayOpenRejectsInvalidInputsBeforeCallingActions() async {

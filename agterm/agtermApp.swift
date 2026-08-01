@@ -1,9 +1,6 @@
 import agtermCore
 import Foundation
-import os
 import SwiftUI
-
-private let logger = Logger(subsystem: "com.umputun.agterm", category: "agtermApp")
 
 @main
 struct agtermApp: App {
@@ -464,19 +461,15 @@ struct agtermApp: App {
 
     /// The four fields the overlay factory reads, from the session-wide slot (`pane == nil`) or that pane's
     /// slot. `PaneOverlay` carries them for both kinds; the session-wide slot has no such value type and its
-    /// extra `overlaySizePercent` is geometry the factory never reads. An empty command means the slot went
-    /// away between the open and this surface realizing, which the wrapper runs as a no-op.
+    /// extra `overlaySizePercent` is geometry the factory never reads. The empty pane fallback is unreachable
+    /// — every mount site tests the same slot in the pass that reaches this factory — but keeps it total.
     @MainActor
     private static func overlaySpec(for session: Session, pane: OverlayPane?) -> PaneOverlay {
         guard let pane else {
             return PaneOverlay(command: session.overlayCommand ?? "", cwd: session.overlayCwd,
                                backgroundColor: session.overlayBackgroundColor, wait: session.overlayWait)
         }
-        if let overlay = session.paneOverlay(pane) { return overlay }
-        // the slot emptied between the open and this surface realizing; the wrapper runs the empty command as
-        // a no-op, which looks exactly like a program that exited instantly — log so it leaves a trace.
-        logger.warning("pane overlay slot empty at surface realization: \(pane.rawValue, privacy: .public)")
-        return PaneOverlay(command: "")
+        return session.paneOverlay(pane) ?? PaneOverlay(command: "")
     }
 
     /// Scratch-terminal surface factory: a third per-session shell, full-overlay rendered. Like the overlay it is

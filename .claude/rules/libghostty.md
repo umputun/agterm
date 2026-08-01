@@ -81,8 +81,10 @@ paths:
   children and change modifier values freely: a real NSView mounting and unmounting there held the divider
   across repeated toggles, both focus states, and a 0.85 ratio. That is what makes per-pane chrome — the
   pane overlay, `paneDim` before it — possible at all; a wrapper AROUND the split still perturbs it.
-- Keep the detail deck — `detailPane`, `sessionDetail`, `overlayPanel`, `paneOverlayPanel`, `paneDim` — in
-  `WindowContentView+Detail.swift` so `WindowContentView.swift` remains below the 1000-line limit.
+- Keep the detail deck — `detailPane`, `sessionDetail`, `deckPane`, `overlayPanel`, `paneOverlayPanel`,
+  `paneDim` — in `WindowContentView+Detail.swift` so `WindowContentView.swift` remains below the
+  1000-line limit. `sessionDetail` owns the constant-shape statement; every other site cross-references it.
+  One `deckPane` renders each pane, so the split's two arranged subviews are the same view type.
 - Window-level quick terminal, palettes, switcher, and dashboard live in `windowOverlayLayer`, inset by
   `titlebarHeight` below `customTitlebar`. A body overlay's 0.2-opacity black scrim darkens the transparent
   tall titlebar.

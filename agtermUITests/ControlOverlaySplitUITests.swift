@@ -671,7 +671,7 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
 
             let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)","args":{"pane":"\#(pane)"}}"#)
             XCTAssertEqual(close["ok"] as? Bool, true, "closing the \(pane) pane overlay should succeed: \(close)")
-            XCTAssertTrue(pollPaneOverlays(id: id, contains: nil, timeout: 10), "no pane overlay should remain")
+            XCTAssertTrue(pollPaneOverlays(id: id, equals: nil, timeout: 10), "no pane overlay should remain")
             settle()
             XCTAssertEqual(try liveSplitRatio(id: id), 0.3, accuracy: 0.02,
                            "closing the \(pane) pane overlay must not move the divider")
@@ -854,7 +854,7 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertTrue(pollPaneOverlays(id: id, equals: nil, timeout: 12),
                       "the pane overlay should auto-close when its program exits (no press-any-key prompt)")
 
-        XCTAssertEqual(pollPaneOverlayExitCode(id: id, pane: "right", timeout: 15), 7,
+        XCTAssertEqual(pollOverlayExitCode(target: id, pane: "right", timeout: 15), 7,
                        "session.overlay.result --pane right should report the program's own status")
         // discriminating: a pane overlay must not write the session-wide slot, or a script polling one kind
         // would read the other's status.
@@ -898,7 +898,7 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         FileManager.default.createFile(atPath: release.path, contents: Data())
         XCTAssertTrue(pollPaneOverlays(id: id, equals: nil, timeout: 15),
                       "the promoted overlay's own exit must free the slot it now occupies")
-        XCTAssertEqual(pollPaneOverlayExitCode(id: id, pane: "left", timeout: 15), 9,
+        XCTAssertEqual(pollOverlayExitCode(target: id, pane: "left", timeout: 15), 9,
                        "its status must be readable on the pane it was promoted onto")
     }
 
@@ -971,21 +971,6 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(closed["ok"] as? Bool, true, "the held pane overlay should still close on request: \(closed)")
     }
 
-    /// Polls `session.overlay.result --pane <pane>` until the pane overlay's program has exited and its
-    /// status is reported (it errors "overlay still running" while up), returning the code or nil on timeout.
-    private func pollPaneOverlayExitCode(id: String, pane: String, timeout: TimeInterval) -> Int? {
-        let deadline = Date().addingTimeInterval(timeout)
-        while Date() < deadline {
-            if let res = try? sendCommand(
-                #"{"cmd":"session.overlay.result","target":"\#(id)","args":{"pane":"\#(pane)"}}"#),
-               res["ok"] as? Bool == true {
-                return (res["result"] as? [String: Any])?["exitCode"] as? Int
-            }
-            usleep(200_000)
-        }
-        return nil
-    }
-
     /// Drain the run loop for a beat so any SwiftUI relayout the last command triggered — and the
     /// `didResizeSubviews` capture that would follow it — has landed before a divider read.
     private func settle() {
@@ -998,20 +983,9 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         try XCTUnwrap(sessionNode(id: id)["splitRatio"] as? Double, "a split session should report a splitRatio")
     }
 
-    /// Polls `tree` until the session's `paneOverlays` holds `pane` — or, for nil, until the field is absent
-    /// (no pane overlay anywhere).
-    private func pollPaneOverlays(id: String, contains pane: String?, timeout: TimeInterval) -> Bool {
-        let deadline = Date().addingTimeInterval(timeout)
-        repeat {
-            let panes = (try? sessionNodeIfPresent(id: id)?["paneOverlays"] as? [String]) ?? nil
-            if let pane {
-                if panes?.contains(pane) == true { return true }
-            } else if panes == nil {
-                return true
-            }
-            usleep(200_000)
-        } while Date() < deadline
-        return false
+    /// Polls `tree` until the session's `paneOverlays` holds `pane`, whatever else it holds.
+    private func pollPaneOverlays(id: String, contains pane: String, timeout: TimeInterval) -> Bool {
+        poll(until: currentPaneOverlays(id: id)?.contains(pane) == true, timeout: timeout)
     }
 
     /// Polls `tree` until the session's `paneOverlays` equals `expected` exactly, nil asserting the field is
@@ -1022,7 +996,7 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
 
     /// The session's `paneOverlays` from a fresh `tree`; nil when the field is omitted or the session is gone.
     private func currentPaneOverlays(id: String) -> [String]? {
-        ((try? sessionNodeIfPresent(id: id)) ?? nil)?["paneOverlays"] as? [String]
+        (try? sessionNodeIfPresent(id: id))?["paneOverlays"] as? [String]
     }
 
     /// Creates a session via `session.new` and returns its id as a `UUID`. `session.new` focuses the new
@@ -1034,13 +1008,14 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         return try XCTUnwrap(UUID(uuidString: idString), "session.new id should be a UUID: \(idString)")
     }
 
-    /// Polls `session.overlay.result` of `target` until the overlay program has exited and its exit code is
-    /// reported (result errors "overlay still running" while up), returning the code, or nil on timeout.
-    /// A reported exit code proves the overlay's program actually ran (used to assert a background overlay runs).
-    private func pollOverlayExitCode(target: String, timeout: TimeInterval) -> Int? {
+    /// Polls `session.overlay.result` of `target` — the session-wide overlay, or `pane`'s when given — until
+    /// the program has exited and its exit code is reported (result errors "overlay still running" while up),
+    /// returning the code, or nil on timeout. A reported code proves the program actually ran.
+    private func pollOverlayExitCode(target: String, pane: String? = nil, timeout: TimeInterval) -> Int? {
+        let args = pane.map { #","args":{"pane":"\#($0)"}"# } ?? ""
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if let res = try? sendCommand(#"{"cmd":"session.overlay.result","target":"\#(target)"}"#),
+            if let res = try? sendCommand(#"{"cmd":"session.overlay.result","target":"\#(target)"\#(args)}"#),
                res["ok"] as? Bool == true {
                 return (res["result"] as? [String: Any])?["exitCode"] as? Int
             }

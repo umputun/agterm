@@ -28,10 +28,13 @@ extension WindowContentView {
     /// maximized hidden-split pane, plus any overlay. `isActive` gates which pane auto-grabs focus — the
     /// visible deck entry, and within a split the focused pane.
     ///
-    /// While zoom hosts one of these surfaces the entry stays MOUNTED at the SAME shape, only the zoom-owned
-    /// slot swapping to a placeholder (an NSView lives in one host at a time), so a control-opened
-    /// split/scratch/overlay still runs behind it; swapping the entry out would re-host the NSSplitView
-    /// (the titlebar-overrun rule) and orphan those surfaces until zoom exits.
+    /// CONSTANT SHAPE, the rule the rest of this file defers to: no per-session state may add or remove a
+    /// child or a modifier above an arranged subview, or AppKit re-hosts the `NSSplitView` — which
+    /// re-lays-out, normalizes the divider away from the stored ratio, and overruns into the titlebar. The
+    /// boundary is the arranged subview: INSIDE one, a constant-shape ZStack may swap children and vary
+    /// modifier values freely; above one even a value flip is suspect, hence `.allowsHitTesting` below.
+    /// Hence too zoom swaps only its own slot to a placeholder (an NSView lives in one host at a time)
+    /// rather than unmounting the entry, so a control-opened split/scratch/overlay keeps running behind it.
     @ViewBuilder private func sessionDetail(_ session: Session, isActive: Bool) -> some View {
         // a FULL overlay (no size) hides the panes and draws translucent; a FLOATING one leaves them VISIBLE
         // under a smaller opaque framed panel. Either way the pane(s) stay non-interactive while one is up.
@@ -39,11 +42,9 @@ extension WindowContentView {
         // while zoomed OR the dashboard is open (mutually exclusive) the deck stays mounted only to realize
         // surfaces: no focus, no drag targets, no focusable controls behind the full-window modal layer.
         let deckInteractive = terminalZoom.target == nil && !dashboard.isOpen
-        // the scratch is full-coverage too, so `hideForOverlay` hides the panes like a FULL overlay and
-        // `overlaid` (any overlay OR scratch) gates their `isActive`. It stays false for a FLOATING overlay:
-        // this subtree's shape and hit-testing must not change when one opens (NSSplitView overrun).
+        // the scratch is full-coverage too, so it hides the panes like a FULL overlay does. False for a
+        // FLOATING overlay, whose opening must leave the shape alone.
         let hideForOverlay = fullOverlay || session.scratchActive
-        let overlaid = session.overlayActive || session.scratchActive
         // on-screen = selected, not hidden by a full overlay/scratch, not covered by the quick terminal.
         // Shared by BOTH split panes (unlike focus-gated `isActive`), it gates drag-type (un)registration and
         // mouse-cursor tracking (the `deckVisible` note in libghostty.md). Without the quick-terminal term a
@@ -53,97 +54,34 @@ extension WindowContentView {
         // behind it — `updateNSView` would grab focus and send keystrokes to a covered session. Every
         // automatic reselection (`reselectIfSelectionHidden`, auto-follow) reaches this, not just a click.
         let focusable = deckInteractive && isActive && !quickTerminal.isVisible
-        // a pane overlay may claim first responder only where its pane could: the visible deck entry with no
-        // session-wide cover above it, AND only for the FOCUSED pane — one opening on the other pane must not
-        // pull focus away from the live one. Each site ANDs its pane's focus term in.
-        let paneOverlayFocus = focusable && !overlaid
-        // a pane hidden under its OWN overlay is not on screen: it registers no drag types and sets no mouse
-        // cursor (the `deckVisible` note in libghostty.md, issue #225 class), and never takes first responder.
-        let leftCovered = session.leftOverlay != nil
-        let rightCovered = session.rightOverlay != nil
+        let gates = DeckPaneGates(focusable: focusable, overlaid: session.overlayActive || session.scratchActive,
+                                  visible: visible)
         ZStack {
             // the pane(s) stay MOUNTED while an overlay is up so their shells stay alive; a FULL overlay
             // hides them (opacity 0) so its translucency reveals the window backing, not the session.
             Group {
                 if session.isSplit {
                     HSplitView {
-                        // a STABLE ZStack wrapper whose CONTENT swaps between the live TerminalView and the
-                        // zoom placeholder: swapping the arranged subview itself makes NSSplitView re-layout
-                        // and normalize the divider on every zoom toggle, with no stored ratio to restore.
-                        ZStack {
-                            if deckHostsSurface(session: session, surface: .primary) {
-                                TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
-                                             isActive: focusable && !session.splitFocused && !overlaid && !leftCovered,
-                                             deckVisible: visible && !leftCovered)
-                                    .overlay { paneDim(session.splitFocused, session: session) }
-                                    .modifier(PaneOverlayCover(covered: leftCovered))
-                                    .id(primarySurfaceID(session))
-                            } else {
-                                Color.clear
-                                    .id("\(session.id.uuidString)-primary-placeholder")
-                            }
-                            paneOverlayPanel(session: session, pane: .left,
-                                             isActive: paneOverlayFocus && !session.splitFocused, deckVisible: visible)
-                        }
-                        // persists/restores the divider ratio and clips the NSSplitView out of the titlebar
-                        // strip; a background on the stable wrapper (not a third pane, not inside the swapped
-                        // content), so ONE probe survives zoom and suspend/resume flips in place.
-                        .background { SplitRatioAccessor(session: session, titlebarHeight: titlebarHeight, suspended: !deckInteractive, onPersist: { store.save() }) }
-                        ZStack {
-                            if deckHostsSurface(session: session, surface: .split) {
-                                TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
-                                             isActive: focusable && session.splitFocused && !overlaid && !rightCovered,
-                                             deckVisible: visible && !rightCovered)
-                                    .overlay { paneDim(!session.splitFocused, session: session) }
-                                    .modifier(PaneOverlayCover(covered: rightCovered))
-                                    .id("\(session.id.uuidString)-split")
-                            } else {
-                                Color.clear
-                                    .id("\(session.id.uuidString)-split-placeholder")
-                            }
-                            paneOverlayPanel(session: session, pane: .right,
-                                             isActive: paneOverlayFocus && session.splitFocused, deckVisible: visible)
-                        }
+                        deckPane(session, pane: .left, focused: !session.splitFocused, gates: gates)
+                            // persists/restores the divider ratio and clips the NSSplitView out of the
+                            // titlebar strip; a background on the stable pane wrapper (not a third pane, not
+                            // inside its swapped content), so ONE probe survives zoom and suspend/resume.
+                            .background { SplitRatioAccessor(session: session, titlebarHeight: titlebarHeight, suspended: !deckInteractive, onPersist: { store.save() }) }
+                        deckPane(session, pane: .right, focused: session.splitFocused, gates: gates)
                     }
                     // per-session identity: without it SwiftUI reuses one NSSplitView across session
                     // switches and the divider (and arranged subviews) leak between sessions.
                     .id("\(session.id.uuidString)-hsplit")
                 } else if session.splitFocused, session.splitSurface != nil {
-                    // split hidden while the right pane had focus: show that pane maximized. The ZStack is
-                    // this site's home for the always-present pane-overlay sibling, matching the split sites.
-                    ZStack {
-                        if deckHostsSurface(session: session, surface: .split) {
-                            TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,
-                                         isActive: focusable && !overlaid && !rightCovered,
-                                         deckVisible: visible && !rightCovered)
-                                .modifier(PaneOverlayCover(covered: rightCovered))
-                                .id("\(session.id.uuidString)-split")
-                        } else {
-                            Color.clear
-                                .id("\(session.id.uuidString)-split-placeholder")
-                        }
-                        paneOverlayPanel(session: session, pane: .right, isActive: paneOverlayFocus, deckVisible: visible)
-                    }
+                    // split hidden while the right pane had focus: show that pane maximized.
+                    deckPane(session, pane: .right, focused: true, gates: gates)
                 } else {
-                    ZStack {
-                        if deckHostsSurface(session: session, surface: .primary) {
-                            TerminalView(session: session, surfaceKeyPath: \.surface, makeSurface: makeSurface,
-                                         isActive: focusable && !overlaid && !leftCovered,
-                                         deckVisible: visible && !leftCovered)
-                                .modifier(PaneOverlayCover(covered: leftCovered))
-                                .id(primarySurfaceID(session))
-                        } else {
-                            Color.clear
-                                .id("\(session.id.uuidString)-primary-placeholder")
-                        }
-                        paneOverlayPanel(session: session, pane: .left, isActive: paneOverlayFocus, deckVisible: visible)
-                    }
+                    deckPane(session, pane: .left, focused: true, gates: gates)
                 }
             }
             .opacity(hideForOverlay ? 0 : 1)
-            // gate on `hideForOverlay`, NOT `session.overlayActive`: this modifier must not change when a
-            // floating overlay opens, or the NSSplitView re-lays-out and overruns into the titlebar (same
-            // perturbation class as adding a sibling). Floating leaves the panes hit-testable;
+            // gate on `hideForOverlay`, NOT `session.overlayActive`: a floating overlay opening must not
+            // change this modifier (constant shape). Floating leaves the panes hit-testable;
             // `overlayPanel`'s transparent catcher absorbs the clicks around it.
             .allowsHitTesting(deckInteractive && !hideForOverlay)
             // the scratch renders in-deck above the hidden pane(s), BELOW the ephemeral overlay (zIndex 1 vs
@@ -168,34 +106,65 @@ extension WindowContentView {
         }
         // on overlay close refocus the topmost remaining surface via `topmostSurface` — never a pane hidden
         // under the scratch. One makeFirstResponder loses the race with the overlay's teardown/re-host, so
-        // drive the bounded retry the split-collapse survivor uses; only the visible session reclaims focus.
+        // drive the bounded retry the split-collapse survivor uses. Only the visible session reclaims focus:
+        // the quick terminal owns it while it covers the window, and its own hide re-grabs the cover.
         .onChange(of: session.overlayActive) { _, isOpen in
             if !isOpen, deckInteractive, isActive, !quickTerminal.isVisible {
                 (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
             }
         }
-        // show AND hide both need the bounded focus retry: the surface is kept alive across hides, so a
-        // re-show remounts it and `autoFocus`'s one-shot latch won't re-fire (same remount race as the
-        // split-collapse survivor). `topmostSurface` routes either way — the scratch (or a still-open overlay
-        // above it) on show, the overlay-if-up else the pane on hide.
+        // the scratch needs the same retry on SHOW too: its surface is kept alive across hides, so a re-show
+        // remounts it and `autoFocus`'s one-shot latch won't re-fire.
         .onChange(of: session.scratchActive) { _, _ in
-            // the quick terminal owns focus while it covers the window; its own hide re-grabs the scratch.
             guard deckInteractive, isActive, !quickTerminal.isVisible else { return }
             (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
         }
-        // a closing pane overlay un-hides its pane the same way, and its teardown loses the same race, so
-        // drive the same bounded retry — `topmostSurface` picks the remaining cover or the focused pane.
+        // a closing pane overlay un-hides its pane and loses the same race.
         .onChange(of: session.openPaneOverlays) { before, after in
             guard after.count < before.count, deckInteractive, isActive, !quickTerminal.isVisible else { return }
             (session.topmostSurface as? GhosttySurfaceView)?.focusAfterReparent()
         }
     }
 
+    /// ONE pane of a session's deck entry: its terminal — or the `Color.clear` placeholder while zoom or the
+    /// dashboard hosts that surface — under the always-present `paneOverlayPanel` sibling, in the
+    /// constant-shape ZStack `sessionDetail` requires. This is the arranged subview of a shown split, so the
+    /// `.background` probe and any per-session chrome go INSIDE here or on the result, never on a wrapper.
+    ///
+    /// `focused` is this pane's share of split focus: the unfocused side of a SHOWN split, else true, since a
+    /// pane alone on screen always has it. It gates auto-focus for both the pane and its overlay — one
+    /// opening on the other pane must not pull focus off the live one — and doubles as the `paneDim` mute,
+    /// which therefore renders only on the unfocused pane of a shown split.
+    @ViewBuilder private func deckPane(_ session: Session, pane: OverlayPane, focused: Bool,
+                                       gates: DeckPaneGates) -> some View {
+        // a pane hidden under its OWN overlay is not on screen: it registers no drag types and sets no mouse
+        // cursor (the `deckVisible` note in libghostty.md, issue #225 class), and never takes first responder.
+        let covered = session.paneOverlay(pane) != nil
+        let slot: ReferenceWritableKeyPath<Session, (any TerminalSurface)?> =
+            pane == .left ? \.surface : \.splitSurface
+        ZStack {
+            if deckHostsSurface(session: session, surface: pane.paneZoomSurface) {
+                TerminalView(session: session, surfaceKeyPath: slot,
+                             makeSurface: pane == .left ? makeSurface : makeSplitSurface,
+                             isActive: gates.focusable && focused && !gates.overlaid && !covered,
+                             deckVisible: gates.visible && !covered)
+                    .overlay { paneDim(!focused, session: session) }
+                    .modifier(PaneOverlayCover(covered: covered))
+                    .id(pane == .left ? primarySurfaceID(session) : "\(session.id.uuidString)-split")
+            } else {
+                Color.clear
+                    .id("\(session.id.uuidString)-\(pane == .left ? "primary" : "split")-placeholder")
+            }
+            paneOverlayPanel(session: session, pane: pane,
+                             isActive: gates.focusable && !gates.overlaid && focused, deckVisible: gates.visible)
+        }
+    }
+
     /// The overlay — FULL or FLOATING — rendered IN-DECK as ONE ALWAYS-PRESENT sibling of each session's
     /// `sessionDetail` ZStack, its content gated INSIDE the GeometryReader so the child count never changes
-    /// (constant shape = no NSSplitView re-host = no titlebar overrun). Both variants share this one surface
-    /// host, so `session.overlay.resize` switching full<->% only re-flows the frame and never re-parents the
-    /// NSView (which would blank its Metal drawable).
+    /// (the constant-shape rule). Both variants share this one surface host, so `session.overlay.resize`
+    /// switching full<->% only re-flows the frame and never re-parents the NSView (which would blank its
+    /// Metal drawable).
     @ViewBuilder private func overlayPanel(session: Session, isActive: Bool) -> some View {
         GeometryReader { geo in
             ZStack {
@@ -236,7 +205,7 @@ extension WindowContentView {
 
     /// ONE split pane's overlay, always FULL-PANE (no size percent, no framed chrome — a floating variant
     /// exists only at session scope). An ALWAYS-PRESENT sibling INSIDE that pane's ZStack, content gated in
-    /// the GeometryReader, under the arranged-subview boundary `sessionDetail` states.
+    /// the GeometryReader, under the constant-shape rule `sessionDetail` states.
     ///
     /// `isActive` is the FOCUSED-pane gate (auto-focus, first responder), `deckVisible` the on-screen one
     /// (drag types, mouse cursor, clicks): an overlay on the unfocused pane stays visible and clickable —
@@ -277,6 +246,15 @@ extension WindowContentView {
     private func backdropWashActive(session: Session) -> Bool {
         quickTerminal.isVisible || (session.overlayActive && session.overlaySizePercent != nil)
     }
+}
+
+/// The three deck-wide gates every pane of one session's entry renders under, computed once per entry:
+/// `focusable` (may take first responder at all), `overlaid` (a session-wide cover is up), and `visible`
+/// (this entry is the on-screen one). `deckPane` ANDs its own pane terms into them.
+private struct DeckPaneGates {
+    let focusable: Bool
+    let overlaid: Bool
+    let visible: Bool
 }
 
 /// Hides ONE pane beneath its own full-pane overlay: that overlay is chromeless, so under window
