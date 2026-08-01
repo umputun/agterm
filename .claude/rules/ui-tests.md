@@ -97,6 +97,9 @@ These run inside the app, so a mistake can kill the host instead of failing an a
   `wait(for: .notRunning, timeout:)` for restore-command or quit-flush tests; XCUITest auto-skips the
   quit-confirm modal. `MultiWindowUITests` survives hard termination only because structural saves
   already persist the open set. Use a temp file, not unreliable `NSLog`, to instrument the callback.
+- Dismiss Settings by the close button of `app.windows.containing(.any, identifier: <a control on the
+  tab>)`, never ⌘W: that reaches the app's Close Session command and takes the seeded session with it,
+  which a session-row-count oracle reads as a collapse rather than as a closed session.
 - `ghostty_surface_foreground_pid` returns the actual foreground process. Restore skips only a known idle
   shell with no payload arguments except flags; shell scripts and `sh -c` payloads are captured. Use
   blocking `tee <file>` as the e2e marker and prove relaunch by delete/recreate.

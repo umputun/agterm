@@ -26,8 +26,12 @@ extension WorkspaceSidebar.Coordinator {
                btn.convert(btn.bounds, to: sender).contains(point) { return }
         }
         pendingRowToggle?.cancel()
+        // re-read the mirror when the deferred item fires: the setting can be turned off inside the
+        // deferral window, and nothing else cancels an already-scheduled toggle.
         let toggle = DispatchWorkItem { [weak self, weak node] in
-            guard let self, let node, let outline = self.outlineView else { return }
+            guard let self, let node, let outline = self.outlineView,
+                  GhosttyApp.shared.workspaceRowClickExpands else { return }
+            self.pendingRowToggle = nil
             self.toggleExpansion(of: node, in: outline)
         }
         pendingRowToggle = toggle
