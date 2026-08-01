@@ -95,7 +95,7 @@ malformed target and a target that simply is not there.
 | case | behavior |
 |---|---|
 | `dashboard A A:left` | Dedup by `(id, pane)`. `A` yields primary+split, `A:left` adds primary, dedup collapses it. No new validation. |
-| `A:right` on a session with no split | Falls into the existing `unresolved: A:right` note with `ok:true`, same as an unknown id. Consistent with the command's skip-and-report model. |
+| `A:right` on a session with no split | Joins the existing `unresolved: A:right` note, same as an unknown id, and fails the command outright when nothing else resolved. Consistent with the command's skip-and-report model. |
 | Main pane exits, split promoted | An `A:right` member is **rewritten to `A:left`** so the watched agent stays on the grid. |
 
 The promotion rewrite cannot live in `reconcile(existing:)` — that takes a set of currently-valid members
@@ -298,7 +298,7 @@ assertion below is a string change rather than new harness.
 
 - [x] `dashboard A1B2C3D4:left E5F6A7B8:right` produces a two-cell mixed grid
 - [x] a bare id still yields every pane of the session
-- [x] `A A:left` dedups; `A:right` on a non-split session lands in the `unresolved` note with `ok:true`
+- [x] `A A:left` dedups; `A:right` on a non-split session lands in the `unresolved` note, or errors when it is the sole target
 - [x] promoting a split survivor keeps the cell on the grid
 - [x] full suite: `cd agtermCore && swift test`, `make test-app`, `make lint`
 

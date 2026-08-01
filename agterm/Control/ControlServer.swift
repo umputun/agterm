@@ -404,10 +404,14 @@ final class ControlServer {
     /// command (the dispatcher validated the args and built `fontMode`, but does not cap the ids). Resolves
     /// `window ?? frontmost` to an OPEN window's store. `mru` takes up to `DashboardLayout.maxCells` of that
     /// store's most-recently-used sessions (fewer if it has fewer, nothing unresolved); otherwise each id
-    /// resolves within THAT store, deduped by resolved UUID in order, misses reported in `result.text`. Each
-    /// resolved session then EXPANDS in order into pane cells — always `.primary`, plus `.split` when it
-    /// `hasSplit` (both shells alive), so a split shows as TWO cells — and the `maxCells` (9) cap counts
-    /// PANES, applied here after expansion, its drops reported alongside `unresolved` (joined with "; ").
+    /// parses as a `DashboardTarget` and its head resolves within THAT store, misses reported in
+    /// `result.text`. A bare id EXPANDS in order into pane cells — always `.primary`, plus `.split` when it
+    /// `hasSplit` (both shells alive), so a split shows as TWO cells — while a `:left`/`:right` suffix (#331)
+    /// takes that cell alone; a `:right` naming no live pane is a miss, not an error. Cells dedup by
+    /// session+pane, NOT by session, so `A:left A:right` is two cells and `A A:left` is still two. The
+    /// `maxCells` (9) cap counts PANES, applied here after expansion, its drops reported alongside
+    /// `unresolved` (joined with "; "). Emptiness is judged on the expanded CELLS, since a resolved id can
+    /// now contribute none.
     /// Each cell reparents its OWN pane surface (`\.surface` / `\.splitSurface`) app-side in
     /// `WindowContentView`. Opening closes the window's terminal zoom (mutually exclusive); `--close` calls
     /// `close()`. The registry returns nil until `WindowContentView` registers the controller (or while the

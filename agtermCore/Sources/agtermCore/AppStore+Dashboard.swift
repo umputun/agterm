@@ -1,11 +1,6 @@
 import Foundation
 
 extension AppStore {
-    /// Expand session ids into dashboard pane cells — the bare form, where every id takes all of its panes.
-    public func dashboardPaneCells(for ids: [UUID]) -> [DashboardMember] {
-        dashboardPaneCells(for: ids.map { ResolvedDashboardTarget(session: $0, pane: nil) })
-    }
-
     /// Expand resolved targets into dashboard pane cells IN ORDER: a nil `pane` yields the session's
     /// `.primary` cell plus a `.split` cell when it `hasSplit` (both shells alive, shown OR hidden), and an
     /// explicit pane yields that cell alone. Unresolvable ids are skipped and repeated cells collapse, so a

@@ -757,12 +757,14 @@ public struct ControlDispatcher {
 
     /// The dashboard overlay is host-free-validated here: an open needs at least one id (or `--mru`) and at
     /// most one font flag, `--close` takes no id/`--mru`/font flag, a `--font-size` must be finite and
-    /// positive, and `--mru` cannot be combined with explicit ids (but composes with the font flags).
+    /// positive, `--mru` cannot be combined with explicit ids (but composes with the font flags), and every
+    /// id parses as a `DashboardTarget` — a malformed pane suffix fails the whole command here, while a
+    /// well-formed ref naming no live pane is an app-side miss.
     /// The 9-cell cap is NOT applied here — the cell unit is a session+pane, so a split session expands to
     /// two cells and the cap counts PANES, which needs the store. That expansion + cap, the dropped-pane
     /// report, target resolution (incl. the `--mru` recency lookup), the surface reparent, and the
     /// per-window controller all live app-side behind `ControlActions.setDashboard`
-    /// (`ControlServer.setDashboard`); this only forwards the raw ids.
+    /// (`ControlServer.setDashboard`); this forwards the ids as raw strings once their grammar is checked.
     private func dispatchDashboard(_ request: ControlRequest) -> ControlResponse {
         let args = request.args
         let targets = args?.targets ?? []

@@ -65,13 +65,7 @@ final class DashboardUITests: ControlAPITestCase {
     func testSplitSessionOpensTwoCellsAndEnterFocusesSplitPane() throws {
         let ids = try prepareSessions(extra: 0) // just the seeded session
         let id = ids[0]
-        // `split on` focuses the RIGHT pane, so move back to LEFT first or the Enter below asserts nothing.
-        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool,
-                       true, "session.split on should succeed")
-        XCTAssertTrue(try pollSplit(id, timeout: 10), "the session should report a split")
-        XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(id)","args":{"pane":"left"}}"#)["ok"] as? Bool,
-                       true, "session.focus left should succeed")
-        XCTAssertTrue(try pollSplitFocused(id, expected: false, timeout: 10), "focus the left pane before opening")
+        try splitAndFocusLeft(id)
 
         try openDashboard(members: [id])
         XCTAssertTrue(pollCellCount(2, timeout: 15), "a split session opens as two pane cells")

@@ -11,7 +11,7 @@ public struct DashboardTarget: Equatable, Sendable {
     /// excludes those as cells.
     public let pane: TerminalZoomSurface?
 
-    public init(head: String, pane: TerminalZoomSurface?) {
+    init(head: String, pane: TerminalZoomSurface?) {
         self.head = head
         self.pane = pane
     }
