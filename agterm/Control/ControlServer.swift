@@ -73,9 +73,9 @@ final class ControlServer {
         }
     }
 
-    /// 1 MiB cap on a request line, far above any realistic `session.type` payload; over it the line is
-    /// rejected and the connection closed, so a bad client can't grow the buffer unbounded.
-    nonisolated private static let maxLineBytes = 1 << 20
+    /// Cap on a request line, shared with the client via `ControlWire` so the two sides can't drift; over
+    /// it the line is rejected and the connection closed, so a bad client can't grow the buffer unbounded.
+    nonisolated private static let maxLineBytes = ControlWire.maxRequestLineBytes
 
     /// Seconds a blocking client read may stall before timing out (EAGAIN → connection closed), so a stalled
     /// client can't park the serial accept loop forever.

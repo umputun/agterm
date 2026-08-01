@@ -26,11 +26,20 @@ struct SocketClient {
 
     /// Connect, send `request` as one newline-terminated JSON line, read the response line, decode it.
     func send(_ request: ControlRequest) throws -> ControlResponse {
+        var data = try JSONEncoder().encode(request)
+        // the server rejects a request line over the shared cap (newline excluded, matching this count)
+        // and closes the connection; check before writing so the caller gets this error instead of a
+        // write failure against the closing peer.
+        guard data.count <= ControlWire.maxRequestLineBytes else {
+            throw SocketClientError(
+                "request too large (\(data.count) bytes, cap \(ControlWire.maxRequestLineBytes)) — "
+                    + "split the input into smaller requests")
+        }
+        data.append(UInt8(ascii: "\n"))
+
         let fd = try connect()
         defer { close(fd) }
 
-        var data = try JSONEncoder().encode(request)
-        data.append(UInt8(ascii: "\n"))
         try Self.writeAll(fd, data)
 
         guard let line = Self.readLine(fd) else {
@@ -56,6 +65,15 @@ struct SocketClient {
         let fd = socket(AF_UNIX, Int32(SOCK_STREAM.rawValue), 0)
         #endif
         guard fd >= 0 else { throw SocketClientError("socket() failed: \(String(cString: strerror(errno)))") }
+
+        // a write after the server closes the connection (e.g. it rejected an oversized request) would
+        // raise the default-fatal SIGPIPE and kill the process with no output; SO_NOSIGPIPE turns it into
+        // a normal EPIPE write error, mirroring the server side of the socket. Darwin-only (Glibc has no
+        // SO_NOSIGPIPE), and the Glibc build only serves the test suite, which never writes to a dead peer.
+        #if canImport(Darwin)
+        var noSigPipe: Int32 = 1
+        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
+        #endif
 
         addr.sun_family = sa_family_t(AF_UNIX)
         let pathBytes = path.utf8CString

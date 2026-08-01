@@ -78,6 +78,42 @@ struct SocketClientTests {
         #expect(throws: SocketClientError.self) { try client.send(ControlRequest(cmd: .tree)) }
     }
 
+    @Test func oversizedRequestFailsBeforeConnecting() {
+        let missing = NSTemporaryDirectory() + "agterm-missing-\(UUID().uuidString.prefix(8)).sock"
+        let big = String(repeating: "x", count: ControlWire.maxRequestLineBytes + 1)
+        let client = SocketClient(path: missing)
+
+        do {
+            _ = try client.send(ControlRequest(cmd: .sessionType, target: "active", args: ControlArgs(text: big)))
+            Issue.record("expected an oversized request to fail")
+        } catch let error as SocketClientError {
+            // the size check must fire before connect: a connect error would say "is agterm running?"
+            #expect(error.description.hasPrefix("request too large"))
+        } catch {
+            Issue.record("unexpected error: \(error)")
+        }
+    }
+
+    // the server hangs up mid-request when it rejects an oversized line; without SO_NOSIGPIPE the
+    // client's next write raises the default-fatal SIGPIPE and the process dies with no output.
+    @Test func writeToHungUpPeerThrowsInsteadOfDying() throws {
+        let server = HangUpStubServer()
+        try server.start()
+        defer { server.stop() }
+        // under the request cap but far over the socket buffer, so writeAll is mid-write when the close lands
+        let payload = String(repeating: "x", count: 900_000)
+        let client = SocketClient(path: server.path)
+
+        do {
+            _ = try client.send(ControlRequest(cmd: .sessionType, target: "active", args: ControlArgs(text: payload)))
+            Issue.record("expected the write to a hung-up peer to fail")
+        } catch let error as SocketClientError {
+            #expect(error.description.hasPrefix("write failed"))
+        } catch {
+            Issue.record("unexpected error: \(error)")
+        }
+    }
+
     @Test func socketPathLimitMatchesPlatformCapacity() {
         let addr = sockaddr_un()
         let capacity = MemoryLayout.size(ofValue: addr.sun_path)
@@ -848,6 +884,62 @@ private final class StubServer: @unchecked Sendable {
         lock.lock(); stopped = true; lock.unlock()
         wakeAccept(path)                        // unblock a pending accept() so the loop observes `stopped`
         _ = finished.wait(timeout: .now() + 2)  // join the accept loop before freeing the fd
+        close(listenFD); listenFD = -1
+        unlink(path)
+    }
+}
+
+/// A server that accepts one connection and closes it immediately without reading the request — the
+/// shape of the real server rejecting an oversized line. A client mid-write on that connection gets
+/// EPIPE, which is the SIGPIPE hazard `SO_NOSIGPIPE` exists to defuse.
+private final class HangUpStubServer: @unchecked Sendable {
+    let path: String
+    private var listenFD: Int32 = -1
+    private let queue = DispatchQueue(label: "hangup.stub.server")
+    private let finished = DispatchSemaphore(value: 0)
+
+    init() {
+        self.path = NSTemporaryDirectory() + "agterm-hangup-\(UUID().uuidString.prefix(8)).sock"
+    }
+
+    func start() throws {
+        let fd = systemSocket()
+        guard fd >= 0 else { throw SocketClientError("stub socket() failed") }
+        unlink(path)
+
+        var addr = sockaddr_un()
+        addr.sun_family = sa_family_t(AF_UNIX)
+        let pathBytes = path.utf8CString
+        withUnsafeMutablePointer(to: &addr.sun_path) { dst in
+            dst.withMemoryRebound(to: CChar.self, capacity: pathBytes.count) { buf in
+                pathBytes.withUnsafeBufferPointer { src in buf.update(from: src.baseAddress!, count: src.count) }
+            }
+        }
+        let bound = withUnsafePointer(to: &addr) { ptr in
+            ptr.withMemoryRebound(to: sockaddr.self, capacity: 1) { sa in
+                bind(fd, sa, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
+        }
+        guard bound == 0 else {
+            close(fd)
+            throw SocketClientError("stub bind failed: \(String(cString: strerror(errno)))")
+        }
+        guard listen(fd, 1) == 0 else {
+            close(fd)
+            throw SocketClientError("stub listen failed")
+        }
+        listenFD = fd
+        queue.async { [self] in
+            let conn = systemAccept(fd)
+            if conn >= 0 { close(conn) }
+            finished.signal()
+        }
+    }
+
+    func stop() {
+        guard listenFD >= 0 else { unlink(path); return }
+        wakeAccept(path)                        // unblock a still-pending accept() so it can finish
+        _ = finished.wait(timeout: .now() + 2)  // join the accept before freeing the fd
         close(listenFD); listenFD = -1
         unlink(path)
     }
