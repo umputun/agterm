@@ -8,6 +8,7 @@
 // (see the gating notes below). The WRITE path and the settable advertisement are additionally
 // focus-gated (the read-only exposure is not).
 
+import agtermCore
 import AppKit
 
 /// Exposes the Metal-backed terminal surface to the macOS Accessibility (AX) system as an
@@ -25,9 +26,10 @@ import AppKit
 /// This extension reports the minimal shape of an editable text field: role `.textArea`,
 /// focusable, with a settable value. Tools that insert via `AXValue` land in `setAccessibilityValue`;
 /// tools that synthesize keystrokes already flow through `keyDown`. Inline text goes through the same
-/// `NSTextInputClient.insertText` path the physical keyboard and IME use; a multi-line set instead
-/// routes through the bracketed-paste path (`insertPasted`), so newlines can't turn into Return and
-/// submit commands (see `setAccessibilityValue`).
+/// `NSTextInputClient.insertText` path the physical keyboard and IME use; a set carrying ANY line break
+/// (LF, CR or CRLF — see `AccessibilityInsert.needsPasteRouting`) instead routes through the
+/// bracketed-paste path (`insertPasted`), so newlines can't turn into Return and submit commands (see
+/// `setAccessibilityValue`).
 ///
 /// Two deliberate scoping choices keep this from harming non-dictation AX clients:
 ///
@@ -66,11 +68,21 @@ import AppKit
 /// MacWhisper insert incrementally and are unaffected).
 extension GhosttySurfaceView {
     /// True only for the pane that is actually on screen: interactive (`!viewOnly`, so dashboard cells
-    /// are excluded) AND the visible deck pane (`deckVisible`, so eagerly-realized background sessions
-    /// and the hidden pane of an inactive split are excluded). When false, `isAccessibilityElement`
-    /// returns false and the text-area overrides fall through to `super`, so an off-screen surface is
-    /// absent from the a11y tree exactly as before.
-    private var axExposed: Bool { !viewOnly && deckVisible }
+    /// are excluded), the visible deck pane (`deckVisible`, so eagerly-realized background sessions
+    /// and the hidden pane of an inactive split are excluded), AND in a window that is itself on screen
+    /// (`window?.isVisible`). When false, `isAccessibilityElement` returns false and the text-area
+    /// overrides fall through to `super`, so an off-screen surface is absent from the a11y tree exactly
+    /// as before.
+    ///
+    /// The window term is load-bearing because `deckVisible` is pure MODEL state (`TerminalView` sets it
+    /// from the deck's `deckInteractive && isActive && …`); nothing in it reads AppKit window state, so a
+    /// MINIMIZED — or app-hidden — window leaves its pane `deckVisible == true`, and AppKit keeps
+    /// miniaturized windows in the AX tree. Without this term such a pane kept advertising an editable
+    /// "Terminal" text area to a role/label-enumerating client. `NSWindow.isVisible` is false exactly for
+    /// the miniaturized/hidden/not-yet-ordered-in cases and true for a merely occluded or off-Space
+    /// window, which is the wanted semantics. Exposure only — the write path was never reachable here,
+    /// since `liveFocus` requires the key window.
+    private var axExposed: Bool { !viewOnly && deckVisible && window?.isVisible == true }
 
     override func isAccessibilityElement() -> Bool { axExposed }
 
@@ -105,9 +117,13 @@ extension GhosttySurfaceView {
     /// synthesised keystrokes) still lands text. Requires `liveFocus` (key window + first responder), so a
     /// client that enumerated the window's text areas or cached a focused element across a session switch
     /// can't inject into a background pane's pty. Inline text takes the keyboard/IME `insertText` path; a
-    /// multi-line set routes through `insertPasted` (bracketed paste), which — unlike `inject`'s
+    /// set carrying a line break routes through `insertPasted` (bracketed paste), which — unlike `inject`'s
     /// newline→Return — treats the payload as literal text, so embedded newlines don't type Return and run
-    /// commands. The no-submit guarantee tracks the program's bracketed-paste mode 2004: a raw prompt with
+    /// commands. The line-break test is the host-free `AccessibilityInsert.needsPasteRouting` (unit-tested
+    /// in `agtermCore`), NOT an inline `contains("\n") || contains("\r")`: CRLF is a single grapheme
+    /// cluster equal to neither, so the naive pair misses `"\r\n"` — the line ending a browser `<textarea>`
+    /// carries — and lets it through `insertText` unwrapped, where ICRNL runs the line.
+    /// The no-submit guarantee tracks the program's bracketed-paste mode 2004: a raw prompt with
     /// 2004 off still submits a trailing newline, exactly the caveat ⌘V and drop carry (see `insertPasted` /
     /// the libghostty note). `discardMarkedText()` first abandons any in-flight IME/CJK composition on both
     /// branches — otherwise a live marked-text composition survives the AX insert and re-commits on the
@@ -118,7 +134,7 @@ extension GhosttySurfaceView {
         let text = (accessibilityValue as? String) ?? (accessibilityValue as? NSAttributedString)?.string ?? ""
         guard !text.isEmpty else { return }
         inputContext?.discardMarkedText() // abandon any IME/CJK composition so it can't re-commit after the insert
-        if text.contains("\n") || text.contains("\r") {
+        if AccessibilityInsert.needsPasteRouting(text) {
             unmarkText() // clear libghostty's preedit + _markedRange; the keyboard path's insertText does this itself
             insertPasted(text: text)
         } else {

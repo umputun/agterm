@@ -10,9 +10,12 @@ import XCTest
 /// These tests lock down the GATING the review asked for: the surface is exposed ONLY for the on-screen
 /// deck pane(s) — one for a plain session, BOTH for a visible split (`deckVisible` is not focus-gated) —
 /// never for the eagerly-realized background sessions (the deck mounts every session's surface at once)
-/// nor for the view-only dashboard cells. The write path itself (single-line `insertText` vs multiline
-/// `insertPasted`) is not reachable from XCUITest — there is no public API to call `setAccessibilityValue`
-/// on another process's element — so its routing is covered by the manual dev-instance check, not here.
+/// nor for the view-only dashboard cells. The write path itself is not reachable from XCUITest — there is
+/// no public API to call `setAccessibilityValue` on another process's element — but its ROUTING decision
+/// (inline `insertText` vs bracketed-paste `insertPasted`) is not AppKit at all: it is the host-free
+/// `AccessibilityInsert.needsPasteRouting`, unit-tested under `swift test`
+/// (`AccessibilityInsertTests`, incl. the CRLF case). Only the two AppKit insert calls themselves rest on
+/// the manual dev-instance check.
 @MainActor
 final class AccessibilityDictationUITests: ControlAPITestCase {
     // The single seeded, on-screen pane exposes exactly one AX text area, labelled "Terminal", of role
