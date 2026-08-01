@@ -235,6 +235,31 @@ agtermctl session overlay open "make test" --target "$AGTERM_SESSION_ID"   # thi
 agtermctl session overlay result --json   # errors "still running" until it exits, then result.exitCode
 ```
 
+## Cover only your own pane, leaving the user's other pane usable
+
+`--pane left|right` scopes the overlay to ONE split pane instead of the whole session. Your shell
+already knows which pane it runs in, so pass `$AGTERM_PANE` and the overlay lands over YOUR pane while
+the user keeps working in the sibling one:
+
+```bash
+agtermctl session overlay open "revdiff HEAD~3" --target "$AGTERM_SESSION_ID" --pane "$AGTERM_PANE"
+```
+
+This works unchanged on a NON-split session, which reports `AGTERM_PANE=left`, so there is no need to
+check the split state first. Left and right are independent — both may be open at once, each with its
+own `--background-color` — and a pane overlay is always full-pane, so `--size-percent` is rejected with
+it. `--wait`, `--block`, `--cwd` and `--follow` behave exactly as they do for a session-wide overlay;
+`close` and `result` take the same `--pane`:
+
+```bash
+agtermctl session overlay result --target "$AGTERM_SESSION_ID" --pane "$AGTERM_PANE" --json
+agtermctl session overlay close --target "$AGTERM_SESSION_ID" --pane "$AGTERM_PANE"
+```
+
+Read the open panes back from `paneOverlays` in `tree --json`. Opening on a pane that is not on screen
+(`--pane right` while the split is hidden) errors `pane not visible`; hiding the split afterwards is
+fine, the program keeps running and reappears when the split comes back.
+
 ## Show an image inline
 
 To show the user an image (a generated favicon, a chart, a preview), run the bundled

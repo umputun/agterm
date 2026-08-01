@@ -615,17 +615,22 @@ helper on `Open` so the `--pane` forwarding is assertable.
 - Modify: `site/commands.html`
 - Modify: `site/docs.html`
 
-- [ ] document `--pane` on the three overlay commands and the always-full-pane rule in the skill
-- [ ] document the `paneOverlays` tree field and the `overlay-left` / `overlay-right` surface ids
-- [ ] add an examples.md recipe for the agent case (`--pane "$AGTERM_PANE"` against
+- [x] document `--pane` on the three overlay commands and the always-full-pane rule in the skill
+- [x] document the `paneOverlays` tree field and the `overlay-left` / `overlay-right` surface ids
+- [x] add an examples.md recipe for the agent case (`--pane "$AGTERM_PANE"` against
       `"$AGTERM_SESSION_ID"`)
-- [ ] mirror the command, its arguments, and the read-back field into `site/commands.html`, and the
+- [x] mirror the command, its arguments, and the read-back field into `site/commands.html`, and the
       feature into `README.md` + `site/docs.html`
-- [ ] confirm `plugins/agterm/skills/agterm/troubleshooting.md` needs no change (it mentions overlays)
-- [ ] do NOT bump any command count — this adds arguments, not commands, so `SkillInstallTests`'
+- [x] confirm `plugins/agterm/skills/agterm/troubleshooting.md` needs no change (it mentions overlays)
+- [x] do NOT bump any command count — this adds arguments, not commands, so `SkillInstallTests`'
       `Command summary (N commands)` assertion and the count mentions in `site/commands.html` stay put
-- [ ] do NOT touch `CHANGELOG.md` (release-only) or `cookbook/` (not a synchronized surface)
-- [ ] run `cd agtermCore && swift test`, `make lint` — must pass before task 11
+- [x] do NOT touch `CHANGELOG.md` (release-only) or `cookbook/` (not a synchronized surface)
+- [x] run `cd agtermCore && swift test`, `make lint` — must pass before task 11
+- ➕ `troubleshooting.md` confirmed unchanged: its overlay mentions are the Edit Keymap editor overlay
+      and the exit-127 flash-and-vanish, neither of which pane scoping touches.
+- ➕ the skill's `paneOverlays` entry states it is reported independently of the session-wide `overlay`
+      flag, which a pane overlay never sets (`AppStore.controlTree` reads `session.overlayActive` for
+      that field), so a script must not gate one on the other.
 
 ### Task 11: Verify acceptance criteria
 
@@ -697,10 +702,32 @@ helper on `Open` so the `--pane` forwarding is assertable.
 
 ### Task 12: [Final] Update documentation
 
-- [ ] update `README.md` if any behavior drifted from Task 10
-- [ ] update project `CLAUDE.md` / `.claude/rules/libghostty.md` if the per-pane rendering or gating
+- [x] update `README.md` if any behavior drifted from Task 10 — none found. Every claim in the
+      pane-overlay paragraph (`README.md:342`) was re-checked against the shipped code: `--follow` runs
+      through the shared arm after both overlay kinds (`ControlServer+SessionActions.swift:45-47`),
+      `--pane` with `--size-percent` and `--pane` on resize are both refused, `pane not visible` is the
+      literal error, and `close`/`result` take the same `--pane`. Tasks 11 added tests only, no behavior.
+      README deliberately does not enumerate the `overlay-left`/`overlay-right` surface ids — it never
+      enumerates surface ids, pointing at `tree --json` instead (`README.md:291`); the skill and
+      `site/commands.html` own that list.
+- [x] update project `CLAUDE.md` / `.claude/rules/libghostty.md` if the per-pane rendering or gating
       established a new constraint worth pinning
-- [ ] move this plan to `docs/plans/completed/`
+- [x] move this plan to `docs/plans/completed/` (deferred - orchestrator moves it after the review phases)
+- ➕ `.claude/rules/libghostty.md` gained three things and its `paths:` entry widened to
+      `WindowContentView*.swift`, since the deck this rule governs now lives in `+Detail.swift` and the
+      old exact path would not load the rule there: the arranged-subview COMPLEMENT to the existing
+      titlebar-overrun rule (content inside one may change freely, which is what makes per-pane chrome
+      possible), the pane-overlay term added to the `deckVisible` exclusion list and the drag-eligibility
+      enumeration (leaving it out made that enumeration wrong, not merely short), and the `+Detail.swift`
+      carve-out line matching the `+Titlebar` / `+RecentSessions` convention in `settings.md` /
+      `menu-actions.md`.
+- ➕ deliberately NOT pinned: the four-level cover precedence and the `TerminalZoomSurface.isActive`
+      exclusivity/totality invariant. Both are already OWNED by doc comments at the code that enforces
+      them (`Session.topmostSurface:467-472`, `TerminalZoomSurface.isActive:49-51`,
+      `TerminalZoomController.resolveTarget:184-186`) plus the exactly-one property test, so restating
+      them in a rules file would violate "own each contract once". Project `CLAUDE.md` also left
+      untouched: its state-setting read-back list is illustrative, `overlay size` already stands for the
+      overlay family, and the contract itself did not change shape.
 
 ## Post-Completion
 

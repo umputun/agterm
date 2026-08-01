@@ -5,7 +5,7 @@ paths:
   - "agterm/Ghostty/GhosttyCallbacks.swift"
   - "agterm/Ghostty/GhosttyResources.swift"
   - "agterm/ContentView.swift"
-  - "agterm/Views/WindowContentView.swift"
+  - "agterm/Views/WindowContentView*.swift"
   - "agterm/Views/SplitRatioAccessor.swift"
   - "agterm/Views/TerminalView.swift"
   - "agterm/Views/TerminalSearchBar.swift"
@@ -68,8 +68,8 @@ paths:
 
 - Only `deckVisible` surfaces register for file drag. SwiftUI opacity/hit-testing does not stop AppKit
   drag destination lookup, and rejecting in `draggingEntered` does not fall through. Visible split panes
-  both qualify; full overlay and scratch-covered panes do not. This closes the latent background-session
-  target shipped with single-session file drop in #52.
+  both qualify; full overlay, scratch-covered, and self-overlaid panes do not. This closes the latent
+  background-session target shipped with single-session file drop in #52.
 - File drop uses `insertPasted`/`ghostty_surface_text`, preserving bracketed-paste behavior. It may still
   submit a trailing newline when the program disables mode 2004. Do not reuse `inject`, which intentionally
   translates newline/return into Return for `session.type`. `pasteboardText` remains shared with clipboard
@@ -77,6 +77,12 @@ paths:
 - Never change the `sessionDetail` ZStack shape for per-session toggles; doing so rehosts `NSSplitView`
   into the titlebar. Search bar is a `detailPane` top-trailing overlay, above deck, scratch, and overlays.
   Overlay panel stays an always-present `sessionDetail` sibling whose internal content changes.
+- The boundary is the arranged subview, not what it contains. Inside one, a constant-shape ZStack may swap
+  children and change modifier values freely: a real NSView mounting and unmounting there held the divider
+  across repeated toggles, both focus states, and a 0.85 ratio. That is what makes per-pane chrome — the
+  pane overlay, `paneDim` before it — possible at all; a wrapper AROUND the split still perturbs it.
+- Keep the detail deck — `detailPane`, `sessionDetail`, `overlayPanel`, `paneOverlayPanel`, `paneDim` — in
+  `WindowContentView+Detail.swift` so `WindowContentView.swift` remains below the 1000-line limit.
 - Window-level quick terminal, palettes, switcher, and dashboard live in `windowOverlayLayer`, inset by
   `titlebarHeight` below `customTitlebar`. A body overlay's 0.2-opacity black scrim darkens the transparent
   tall titlebar.
@@ -175,7 +181,7 @@ paths:
   activation `cursorUpdate`; setter guards alone leave hidden mouse-report fan-out.
 - On didBecomeKey, `reassertCursorOnActivation` for a visible, key-window, pointer-in-bounds surface because
   AppKit does not update the visible cursor automatically. Every `deckVisible` expression must exclude full
-  overlay, scratch, and persistent quick terminal coverage.
+  overlay, scratch, persistent quick terminal, and that pane's own pane overlay coverage.
 - `deckVisible` answers "am I the on-screen pane?", never "do I own this pixel?". Chrome drawn over a pane
   — the sidebar grab handle, an `NSSplitView` divider, a floating overlay's margin — still gets the pane's
   per-move `NSCursor.set`, which beats chrome setting the cursor on hover entry alone (#324). All four

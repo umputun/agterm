@@ -85,15 +85,16 @@ A **window** is the top level: a named bundle rendered in its own on-screen macO
 holds a tree of **workspaces**, each holding **sessions**. A session has a primary shell and can also
 have: a **split** pane (a second shell side by side), a **scratch** terminal (a third full-coverage
 shell, toggled like the split), and an ephemeral **overlay** (runs one program on top, then vanishes).
-Separately, each window has one **quick terminal** (a scratch overlay at 90% of the window, not part
-of the tree).
+An overlay covers the whole session, or with `--pane left|right` exactly one split pane, leaving the
+sibling pane visible and usable. Separately, each window has one **quick terminal** (a scratch overlay
+at 90% of the window, not part of the tree).
 
 Inspect the live tree any time with `agtermctl tree --json` (workspaces → sessions, each with
 `id`, `name`, `cwd`, `title`, `active`, `split`, `overlay`, `scratch`, `status`, `background`, `surfaces`). `title` is the raw OSC
 terminal title (e.g. a remote host over SSH), omitted when none was reported — read it when a
 session's local `cwd` is stale because it's connected to a remote. `surfaces[].id` is the
-control address for `surface zoom` (`left`, `right`, `scratch`, or `overlay`), including
-hidden-but-alive split/scratch surfaces. The tree object also carries five
+control address for `surface zoom` (`left`, `right`, `scratch`, `overlay`, `overlay-left`, or
+`overlay-right`), including hidden-but-alive split/scratch surfaces. The tree object also carries five
 read-only top-level fields: `idleMs` (ms since the last user input in the window), `autoFollowMs`
 (the Auto-follow timeout in ms, omitted when Disabled), `sidebarVisible` (whether the window's
 sidebar is currently shown — the read side of the write-only `sidebar` command), `sidebarMode`
@@ -165,7 +166,10 @@ seen` — omitted when zero), `commandWait` (whether a `--command` session was c
 hold open after the command exits — the read side of `session new --wait`, omitted for a plain or
 non-holding session), `overlaySizePercent` (an open overlay's floating-panel percent 1–100,
 omitted for a full-pane overlay or no overlay so gate on `overlay` first; the read side of `overlay
-resize` for a record-then-restore zoom), `splitRatio` (the left-pane divider fraction 0.05–0.95 of a
+resize` for a record-then-restore zoom), `paneOverlays` (the panes covered by their own overlay —
+`["left"]`, `["right"]` or `["left","right"]`, omitted when neither is; the read side of `overlay open
+--pane`, independent of the session-wide `overlay` flag),
+`splitRatio` (the left-pane divider fraction 0.05–0.95 of a
 session that has a split — shown or hidden; omitted when there's no split or the ratio was never set (at
 the default 0.5) —
 the read side of `session resize`, record it to restore the exact divider), `splitFocused`
@@ -290,12 +294,20 @@ omitted when expanded).
   terminal background color. Per session; survives restart. `--opacity` 0.0–1.0. (An image/text watermark
   renders the pane opaque, overriding window translucency, so it shows; a `color` takes no opacity and
   honors the Settings window translucency instead.)
-- `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow]` ·
+- `overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right]` ·
   `overlay resize (--size-percent N | --full)` ·
-  `overlay close` ·
-  `overlay result` — run a program on top of a session; `--block` waits and exits with its status.
+  `overlay close [--pane left|right]` ·
+  `overlay result [--pane left|right]` — run a program on top of a session; `--block` waits and exits
+  with its status.
   `overlay resize` changes an ALREADY-OPEN overlay: `--size-percent N` (1-100) makes it a floating panel,
   `--full` switches it back to the full-pane overlay; the program keeps running (no re-spawn).
+  `--pane left|right` scopes the overlay to ONE split pane instead of the whole session, leaving the
+  sibling pane live and interactive; left and right are independent and may both be open at once. A pane
+  overlay is ALWAYS full-pane, so `--pane` cannot combine with `--size-percent` and `overlay resize`
+  takes no `--pane`. Everything else is identical to the session-wide overlay. A non-split session
+  accepts `--pane left` (it reports `AGTERM_PANE=left`), so you can pass `--pane "$AGTERM_PANE"` without checking
+  the split state; a pane that is not currently rendered (`--pane right` while the split is hidden) is
+  refused with `pane not visible`.
   Target with `--target "$AGTERM_SESSION_ID"` for YOUR session (default `active` is the user's selection).
   **By default `overlay open` does NOT switch the user** — full and floating (`--size-percent`) both open
   on `--target` and run their program in the background; the panel appears when the user visits that
@@ -314,7 +326,7 @@ omitted when expanded).
 `toggle`, the id may be omitted so `window minimize on` targets the active window; errors on a full-screen
 window; read back as `minimized` on `window list`).
 
-**surface** — `zoom [show|hide|toggle] [--target surface:<session-id>:left|right|scratch|overlay|quick] [--window W]`
+**surface** — `zoom [show|hide|toggle] [--target surface:<session-id>:left|right|scratch|overlay|overlay-left|overlay-right|quick] [--window W]`
 — zoom a terminal surface to fill the window (sidebar hidden; a slim title-bar strip with an exit
 button remains). Omit `--target` to use the active surface;
 copy an explicit surface id from `tree --json` to address a hidden split/scratch or a background

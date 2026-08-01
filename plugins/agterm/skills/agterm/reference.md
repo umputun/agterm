@@ -116,7 +116,11 @@ exits — the read side of `session new --wait`; omitted for a plain or non-hold
 `overlaySizePercent` (an open overlay's size — the
 floating panel's percent of the pane, 1–100; omitted = a full-pane overlay or no overlay, so gate on
 `overlay` first; the read side of `session overlay resize`, e.g. record it before switching to `--full`
-to restore the exact size), `scratch` (scratch shown), `flagged` (in the
+to restore the exact size),
+`paneOverlays` (the panes covered by their own pane-scoped overlay — `["left"]`, `["right"]` or
+`["left","right"]`, omitted when neither is; the read side of `session overlay open --pane`, reported
+independently of the session-wide `overlay` flag, which a pane overlay never sets),
+`scratch` (scratch shown), `flagged` (in the
 flagged working-set), `status` (the agent-status — `active`|`completed`|`blocked` — omitted when
 idle), `statusPane` (which pane set that status — `left` (main) | `right` (split) | `scratch` — the
 `--pane` value from `session status`, omitted when unset or idle; gated on the same non-idle condition
@@ -142,7 +146,8 @@ the read side of `font --pane`; each omitted when that pane isn't realized. `fon
 default/left target (the main pane, or the promoted split survivor once the primary exits — the same pane
 `font --pane left` writes); only the main pane's size survives a relaunch, so the split/scratch sizes and a
 promoted survivor are live-only — read them back here rather than from the snapshot), and `surfaces` (array
-of `{id, kind, active, visible}` where `kind` is `left`|`right`|`scratch`|`overlay`).
+of `{id, kind, active, visible}` where `kind` is
+`left`|`right`|`scratch`|`overlay`|`overlay-left`|`overlay-right`).
 The surface `id` is the address for `surface zoom`; hidden-but-alive split/scratch surfaces are included
 so a script can zoom them without changing split/scratch visibility first. Caveat: `active`/`visible`
 derive from the session's own flags, not from zoom — and `visible` reads false for a pane behind a
@@ -515,7 +520,7 @@ All twelve are read-only projections of GUI state.
   background-opacity); a `color` instead honors the Settings window translucency. Read the current
   background back from a session's `background` field in `tree --json` (a `{kind, colorHex, …}` object,
   omitted when none).
-- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--target] [--window W]`
+- `session overlay open <command> [--cwd DIR] [--wait] [--block] [--size-percent N] [--background-color #rrggbb] [--follow] [--pane left|right] [--target] [--window W]`
   — run `command` in an ephemeral terminal on top of the session; it closes when the command exits.
   `command` runs through `sh -c` (so shell operators DO work here) but with the app's GUI `PATH` (no
   `/opt/homebrew/bin`), so a bare Homebrew or other non-default binary fails with exit 127 — the overlay
@@ -533,15 +538,32 @@ All twelve are read-only projections of GUI state.
   own output file, not the control channel. Returns the overlay's session id. `--target` defaults to
   `active`, so an automated caller should pass `--target "$AGTERM_SESSION_ID"` — otherwise a (usually
   blocking, full-pane) overlay lands on whatever session is currently active, not the calling one.
+  `--pane left|right` scopes the overlay to ONE split pane rather than the whole session: it covers
+  exactly that pane and leaves the sibling pane visible and interactive. The two panes are independent
+  and may both hold an overlay at once, each with its own `--background-color` and `--cwd`. A pane
+  overlay is ALWAYS full-pane — there is no floating variant, so `--pane` with `--size-percent` is a
+  usage error and `session overlay resize` takes no `--pane`. Everything else matches the session-wide
+  overlay: it closes when the program exits, `--wait` holds it open on the press-any-key prompt,
+  `--block` blocks and exits with the program's status, and `--follow` selects the target. A NON-SPLIT
+  session accepts `--pane left`, because such a session reports `AGTERM_PANE=left` — so an agent can
+  pass `--pane "$AGTERM_PANE"` without first checking whether the session is split. A pane that is not
+  currently rendered is refused with `pane not visible` (notably `--pane right` while the split is
+  hidden, and `--pane left` on a session whose hidden split holds the focus); hiding the split AFTER
+  opening is fine, the program keeps running and reappears when the split is shown again. Opening a
+  second overlay on the same pane errors `pane overlay already open`. A full session-wide overlay and
+  the scratch terminal both cover a pane overlay, and ⌘W dismisses a pane overlay before it would close
+  the session. Read the open panes back from `paneOverlays` in `tree --json`.
 - `session overlay resize (--size-percent N | --full) [--target] [--window W]` — resize an ALREADY-OPEN
   overlay in place. Exactly one of `--size-percent N` (1–100, makes it a floating framed panel) or
   `--full` (switches it back to the full-pane overlay that hides the session) is required; passing both
   or neither, or a percent outside 1–100, is an error. The overlay program keeps running across the
   resize — it is a layout re-flow, never a re-spawn. Errors `no overlay` when none is open. Returns the
-  session id.
-- `session overlay close [--target] [--window W]` — close (destroy) the overlay.
-- `session overlay result [--target] [--window W]` — returns `result.exitCode` once the overlay has
-  closed. Errors `still running` while up, `no result` if none ran.
+  session id. It has no `--pane`: pane overlays are always full-pane, and passing one errors.
+- `session overlay close [--pane left|right] [--target] [--window W]` — close (destroy) the overlay.
+  `--pane` closes that split pane's overlay; omit it for the session-wide one.
+- `session overlay result [--pane left|right] [--target] [--window W]` — returns `result.exitCode` once
+  the overlay has closed. Errors `still running` while up, `no result` if none ran. `--pane` reads that
+  pane's overlay; omit it for the session-wide one.
 
 **Displaying an image inline.** This skill bundles `scripts/show-image.sh`. It opens an overlay (a
 real terminal surface) and renders the image there via the kitty graphics protocol, which ghostty —
@@ -620,7 +642,8 @@ shell (no controlling terminal — `/dev/tty` errors). See examples.md for usage
 terminal surface to fill the window, hiding the sidebar (a slim title-bar strip with the traffic
 lights and an exit button remains). `SURFACE_ID` comes from
 `agtermctl tree --json` at `.result.tree.workspaces[].sessions[].surfaces[].id`, for example
-`surface:<session-id>:right`. Omit `--target` (or pass `active`) to act on the active surface in the
+`surface:<session-id>:right` for the split pane or `surface:<session-id>:overlay-right` for a pane
+overlay covering it. Omit `--target` (or pass `active`) to act on the active surface in the
 frontmost or `--window` window; `quick` addresses a quick-terminal zoom (the id the command itself
 returns when the quick terminal is the zoom target).
 
@@ -982,7 +1005,8 @@ here is app-global and touches only the captured commands, not those overrides.
 
 `notFound` / `ambiguous` (target resolution), `no such session`, `invalid split mode` /
 `invalid scratch mode`, `session has no split` (focus), `no selection` (copy), `overlay already open` /
-`no overlay` / `still running` / `no result` (overlay), `invalid flag mode` (session flag),
+`no overlay` / `still running` / `no result` / `pane overlay already open` / `pane not visible`
+(overlay), `invalid flag mode` (session flag),
 `invalid fit` / `invalid position` / `invalid opacity` / `invalid color` / `text too long` /
 `unsupported image (PNG or JPEG only)` / `no such image file` / `image path must not contain control characters` / `invalid background mode` (session background),
 `invalid sidebar mode` (sidebar),

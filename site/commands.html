@@ -437,6 +437,10 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">splitFocused</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlaySizePercent</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">paneOverlays</span> (the panes covered by their own
+                pane-scoped overlay — <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["left"]</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["right"]</span> or
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">["left","right"]</span>, omitted when neither is),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">scratch</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">flagged</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">status</span>,
@@ -1348,7 +1352,7 @@
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
                 agtermctl session overlay open &lt;command&gt; [--cwd DIR] [--wait] [--block] [--size-percent N]
-                [--background-color #rrggbb] [--follow] [--target T] [--window W]
+                [--background-color #rrggbb] [--follow] [--pane left|right] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.open</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1383,6 +1387,27 @@
                 127 (the overlay flashes open then vanishes). Give an absolute path or wrap in
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #f2b45c; white-space: nowrap">"zsh -lc '…'"</span>.
               </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane left|right</span> scopes the
+                overlay to ONE split pane, leaving the sibling pane visible and interactive. The two panes are independent and may
+                both hold an overlay at once, each with its own
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--background-color</span> and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--cwd</span>. A pane overlay is always full-pane, so
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> cannot combine with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--size-percent</span>; everything
+                else matches the session-wide overlay. A non-split session accepts
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane left</span> (its shell reports
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">AGTERM_PANE=left</span>), so a caller can pass
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane "$AGTERM_PANE"</span> without
+                checking the split state. Errors
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">pane overlay already open</span> on a
+                second open, and <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">pane not visible</span>
+                when that pane is not currently rendered — hiding the split AFTER opening is fine. Read the covered panes back from
+                the session node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">paneOverlays</span>; each one also
+                appears in <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surfaces</span> as
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay-left</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlay-right</span>
+                for <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">surface zoom</span>.
+              </p>
             </div>
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
@@ -1400,20 +1425,26 @@
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 Record the node's <span style="font-family: &quot;JetBrains Mono&quot;, monospace">overlaySizePercent</span> first to
                 restore the exact size after a zoom to <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--full</span>.
+                It takes no <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span>: pane overlays are always
+                full-pane, and passing one errors.
               </p>
             </div>
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session overlay close [--target T] [--window W]
+                agtermctl session overlay close [--pane left|right] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.close</div>
-              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">Close and destroy the overlay.</p>
+              <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
+                Close and destroy the overlay.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> closes that split pane's overlay; omit it
+                for the session-wide one.
+              </p>
             </div>
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl session overlay result [--target T] [--window W]
+                agtermctl session overlay result [--pane left|right] [--target T] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">session.overlay.result</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1421,6 +1452,8 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.exitCode</span> once the overlay has closed.
                 Errors <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">still running</span> while it is up, and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no result</span> if none ran.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> reads that split pane's overlay; omit it
+                for the session-wide one.
               </p>
             </div>
           </section>
@@ -1637,7 +1670,7 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> (or pass
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>) to zoom the active surface — the quick
                 terminal if shown, else the active session's overlay, scratch, focused split, or primary pane. An explicit
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">surface:&lt;session-id&gt;:&lt;left|right|scratch|overlay&gt;</span>
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">surface:&lt;session-id&gt;:&lt;left|right|scratch|overlay|overlay-left|overlay-right&gt;</span>
                 id (from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>'s
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surfaces[].id</span>) zooms that exact surface, including a
                 hidden-but-alive split or scratch; <span style="font-family: &quot;JetBrains Mono&quot;, monospace">quick</span> addresses a
@@ -2444,6 +2477,32 @@
                     white-space: nowrap;
                   "
                   >no result<span style="color: #6b727a; font-family: &quot;IBM Plex Sans&quot;, sans-serif"> (overlay)</span></span
+                >
+                <span
+                  style="
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                    font-size: 12.5px;
+                    color: #cbc6bc;
+                    background: #191d20;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 6px;
+                    padding: 4px 9px;
+                    white-space: nowrap;
+                  "
+                  >pane overlay already open</span
+                >
+                <span
+                  style="
+                    font-family: &quot;JetBrains Mono&quot;, monospace;
+                    font-size: 12.5px;
+                    color: #cbc6bc;
+                    background: #191d20;
+                    border: 1px solid rgba(255, 255, 255, 0.08);
+                    border-radius: 6px;
+                    padding: 4px 9px;
+                    white-space: nowrap;
+                  "
+                  >pane not visible</span
                 >
                 <span
                   style="
