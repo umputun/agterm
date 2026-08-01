@@ -1,6 +1,9 @@
 import agtermCore
 import Foundation
+import os
 import SwiftUI
+
+private let logger = Logger(subsystem: "com.umputun.agterm", category: "agtermApp")
 
 @main
 struct agtermApp: App {
@@ -427,28 +430,31 @@ struct agtermApp: App {
         view.overlayBackgroundColorHex = spec.backgroundColor
         // record the exit status on teardown (always via destroySurface), so it survives a `session.overlay.close`
         // that bypasses onExit; a force-close removes the session first and no-ops here, where it is unqueryable.
-        view.onExitCodeCaptured = { code in
-            if let pane {
-                store.recordPaneOverlayExit(sessionID, pane: pane, code: code)
-            } else {
-                store.recordOverlayExit(sessionID, code: code)
-            }
-        }
-        view.onExit = {
-            if let pane {
-                store.closePaneOverlay(sessionID, pane: pane)
-            } else {
-                store.closeOverlay(sessionID)
-            }
-        }
-        // a PANE overlay tracks its pane's focus like the pane itself does: clicking it moves `splitFocused`,
-        // so the deck's per-pane focus gate keeps it active instead of resigning first responder on the next
-        // update, and `focusedOverlayPane` (⌘W rung, search, `topmostSurface`) agrees with what the user sees.
+        //
+        // the pane arm's callbacks re-resolve their pane from the slot the surface CURRENTLY occupies, never
+        // the captured `pane`: `closePrimaryPane` MOVES a right-pane overlay into the left slot without
+        // rebuilding the view (`TerminalView.makeNSView` reuses a non-nil slot), so a captured `.right` would
+        // close nothing, record the status where `session.overlay.result --pane left` can't read it, and leave
+        // the promoted pane under a dead overlay forever. The captured value is the pre-realization fallback,
+        // for the window between the open and the slot holding this surface.
         if let pane {
+            let livePane: @MainActor () -> OverlayPane = { [weak view] in
+                guard let view else { return pane }
+                return store.session(withID: sessionID)?.paneOverlayRole(of: view) ?? pane
+            }
+            view.onExitCodeCaptured = { store.recordPaneOverlayExit(sessionID, pane: livePane(), code: $0) }
+            view.onExit = { store.closePaneOverlay(sessionID, pane: livePane()) }
+            // a PANE overlay tracks its pane's focus like the pane itself does: clicking it moves
+            // `splitFocused`, so the deck's per-pane focus gate keeps it active instead of resigning first
+            // responder on the next update, and `focusedOverlayPane` (⌘W rung, search, `topmostSurface`)
+            // agrees with what the user sees.
             view.onFocusChange = { focused in
                 guard focused else { return }
-                store.session(withID: sessionID)?.splitFocused = pane == .right
+                store.session(withID: sessionID)?.splitFocused = livePane() == .right
             }
+        } else {
+            view.onExitCodeCaptured = { store.recordOverlayExit(sessionID, code: $0) }
+            view.onExit = { store.closeOverlay(sessionID) }
         }
         // typing is user activity: resets the auto-follow idle timer so an idle fire can't change the selection
         // (vanishing the overlay) mid-typing. destroySurface nils this, breaking the store->surface->closure cycle.
@@ -466,7 +472,11 @@ struct agtermApp: App {
             return PaneOverlay(command: session.overlayCommand ?? "", cwd: session.overlayCwd,
                                backgroundColor: session.overlayBackgroundColor, wait: session.overlayWait)
         }
-        return session.paneOverlay(pane) ?? PaneOverlay(command: "")
+        if let overlay = session.paneOverlay(pane) { return overlay }
+        // the slot emptied between the open and this surface realizing; the wrapper runs the empty command as
+        // a no-op, which looks exactly like a program that exited instantly — log so it leaves a trace.
+        logger.warning("pane overlay slot empty at surface realization: \(pane.rawValue, privacy: .public)")
+        return PaneOverlay(command: "")
     }
 
     /// Scratch-terminal surface factory: a third per-session shell, full-overlay rendered. Like the overlay it is

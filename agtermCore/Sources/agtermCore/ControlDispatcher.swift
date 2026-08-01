@@ -406,36 +406,32 @@ public struct ControlDispatcher {
     }
 
     /// The outcome of parsing a `--pane` selector: the pane (nil when the selector was absent), or the
-    /// rejection response the arm returns as-is.
-    private enum PaneSelection {
-        case pane(StatusPane?)
+    /// rejection response the arm returns as-is. Generic over the pane type, so the role selector and the
+    /// overlay selector differ only in which enum they parse into and which rejection they carry.
+    private enum PaneSelection<Pane> {
+        case pane(Pane?)
         case rejected(ControlResponse)
     }
 
-    /// The shared `--pane` role selector (`session.status`, `session.restore`): nil when absent, the parsed
-    /// pane when valid, and the pinned rejection when the token names no pane.
-    private func parsePane(_ raw: String?) -> PaneSelection {
+    /// The shared `--pane` selector: nil when absent, the parsed pane when `parse` accepts it, and `error`
+    /// as the pinned rejection otherwise. No live session needed either way.
+    private func parsePane<Pane>(_ raw: String?, error: String,
+                                 parse: (String) -> Pane?) -> PaneSelection<Pane> {
         guard let raw else { return .pane(nil) }
-        guard let parsed = StatusPane(rawValue: raw) else {
-            return .rejected(ControlResponse(ok: false, error: "--pane must be left, right, or scratch"))
-        }
+        guard let parsed = parse(raw) else { return .rejected(ControlResponse(ok: false, error: error)) }
         return .pane(parsed)
     }
 
-    private enum OverlayPaneSelection {
-        case pane(OverlayPane?)
-        case rejected(ControlResponse)
+    /// The role selector (`session.status`, `session.restore`), spelled `left|right|scratch`.
+    private func parsePane(_ raw: String?) -> PaneSelection<StatusPane> {
+        parsePane(raw, error: "--pane must be left, right, or scratch") { StatusPane(rawValue: $0) }
     }
 
-    /// The `--pane` selector for `session.overlay.open`/`.close`/`.result`: nil (absent) keeps the
-    /// session-wide overlay, `left`/`right` scopes to one pane, and everything else — `scratch` included —
-    /// is rejected here, no live session needed.
-    private func parseOverlayPane(_ raw: String?) -> OverlayPaneSelection {
-        guard let raw else { return .pane(nil) }
-        guard let parsed = OverlayPane(controlName: raw) else {
-            return .rejected(ControlResponse(ok: false, error: PaneOverlayError.invalidPane))
-        }
-        return .pane(parsed)
+    /// The `session.overlay.open`/`.close`/`.result` selector: absent keeps the session-wide overlay,
+    /// `left`/`right` (and their `primary`/`split` aliases) scope to one pane, `scratch` is rejected — there
+    /// being no scratch pane to cover.
+    private func parseOverlayPane(_ raw: String?) -> PaneSelection<OverlayPane> {
+        parsePane(raw, error: PaneOverlayError.invalidPane) { OverlayPane(controlName: $0) }
     }
 
     private func dispatchSessionMove(targets: [String], window: String?, move: ControlSessionMove) -> ControlResponse {

@@ -253,7 +253,9 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
         let marker = markerDir.appendingPathComponent("zoom-pane-overlay")
         let json = try! JSONSerialization.data(withJSONObject: [
             "cmd": "session.overlay.open", "target": sessionID,
-            "args": ["command": "sh -c 'printf OVERLAYUP > \(marker.path); cat'", "pane": "right"]])
+            // APPENDS: a re-created (rather than re-hosted) surface would spawn a SECOND program and a
+            // truncating `>` would rewrite the same value, hiding the orphan behind a passing assertion.
+            "args": ["command": "sh -c 'printf OVERLAYUP >> \(marker.path); cat'", "pane": "right"]])
         XCTAssertEqual(try sendCommand(String(data: json, encoding: .utf8)!)["ok"] as? Bool, true,
                        "opening the right pane overlay should succeed")
         XCTAssertEqual(pollMarker(marker, timeout: 15), "OVERLAYUP", "the pane overlay's program should run")
@@ -276,6 +278,10 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
         XCTAssertNil(try treeZoomedSurface(), "zoomedSurface should clear on zoom exit")
         XCTAssertEqual(try sessionNode(id: sessionID)["paneOverlays"] as? [String], ["right"],
                        "the pane overlay should still be up in its pane after the zoom round trip")
+        // the discriminating half of the append: exactly one program ran, so zoom RE-HOSTED the surface
+        // rather than building a second one and orphaning the first.
+        XCTAssertEqual(try String(contentsOf: marker, encoding: .utf8), "OVERLAYUP",
+                       "the zoom round trip must re-host the overlay's surface, never re-create it")
     }
 
     /// Polls `window.list` until the window with `id` reports active (frontmost/key) — a window.new/select

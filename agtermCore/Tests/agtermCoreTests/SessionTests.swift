@@ -584,6 +584,64 @@ struct SessionTests {
         #expect(session.focusedOverlayPane == .right)
     }
 
+    // pins the shape `session.split --mode on` leaves before the lazy right surface exists: the right pane is
+    // already laid out and focused, so the cover predicates must agree with what openPaneOverlay accepts.
+    @Test func focusedOverlayPaneFollowsAShownSplitBeforeItsSurfaceRealizes() {
+        let session = Session(initialCwd: "/repo")
+        session.isSplit = true
+        session.hasSplit = true
+        session.splitFocused = true
+        session.rightOverlay = PaneOverlay(command: "revdiff")
+
+        #expect(session.focusedPane == .right)
+        #expect(session.rendersPane(.right))
+        #expect(session.focusedOverlayPane == .right)
+        #expect(session.topmostSurface == nil, "an unrealized covering overlay leaves the retry to re-resolve")
+    }
+
+    @Test func focusedPaneAndRendersPaneNeverDisagreeAboutTheFocusedSide() {
+        let session = Session(initialCwd: "/repo")
+        for combination in 0..<8 {
+            session.isSplit = combination & 1 != 0
+            session.splitFocused = combination & 2 != 0
+            session.splitSurface = combination & 4 != 0 ? FakeSurface() : nil
+            #expect(session.rendersPane(session.focusedPane),
+                    "the focused pane must always be one the deck lays out [\(combination)]")
+        }
+    }
+
+    @Test func paneOverlayRoleResolvesTheSlotASurfaceCurrentlyOccupies() {
+        let session = Session(initialCwd: "/repo")
+        let left = FakeSurface(), right = FakeSurface(), stranger = FakeSurface()
+        #expect(session.paneOverlayRole(of: left) == nil)
+
+        session.leftOverlaySurface = left
+        session.rightOverlaySurface = right
+        #expect(session.paneOverlayRole(of: left) == .left)
+        #expect(session.paneOverlayRole(of: right) == .right)
+        #expect(session.paneOverlayRole(of: stranger) == nil)
+    }
+
+    // the promotion regression: the right pane overlay's surface MOVES into the left slot without being
+    // rebuilt, so its callbacks must resolve `.left` from it or they act on a slot nothing occupies.
+    @Test func promotePaneOverlayRetargetsTheMigratedSurfacesRole() {
+        let session = Session(initialCwd: "/repo")
+        let overlaySurface = FakeSurface()
+        session.rightOverlay = PaneOverlay(command: "revdiff")
+        session.rightOverlaySurface = overlaySurface
+        session.rightOverlayExitCode = nil
+        #expect(session.paneOverlayRole(of: overlaySurface) == .right)
+
+        session.teardownPaneOverlay(.left)
+        session.promotePaneOverlay()
+
+        #expect(session.paneOverlayRole(of: overlaySurface) == .left)
+        #expect(session.paneOverlay(.left)?.command == "revdiff")
+        #expect(session.paneOverlaySurface(.left) === overlaySurface)
+        #expect(session.openPaneOverlays == [.left])
+        #expect(overlaySurface.teardownCount == 0, "promotion must not tear the migrating surface down")
+    }
+
     @Test func focusedOverlayPaneIsLeftAfterAPromotion() {
         // the survivor moves into `surface` while `splitSurface` is nilled, so the migrated overlay reads
         // as the left pane's even before splitFocused settles.
@@ -687,7 +745,8 @@ struct SessionTests {
 
 private final class FakeSurface: TerminalSurface {
     var paneToken: String
+    var teardownCount = 0
     init(paneToken: String = "") { self.paneToken = paneToken }
-    func teardown() {}
+    func teardown() { teardownCount += 1 }
     func promoteToPrimaryPane() {}
 }

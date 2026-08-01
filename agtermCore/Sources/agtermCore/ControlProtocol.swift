@@ -148,9 +148,11 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// `left`/main, parsed to `StatusPane`); and `session.restore` pins (same `StatusPane` spelling, omitted
     /// = `left`/main, `scratch` rejected app-side).
     ///
-    /// `session.overlay.open`/`.close`/`.result` scope to ONE pane with it, parsed to `OverlayPane`:
-    /// `left`|`right` only — `scratch` is rejected, there being no scratch pane to cover. Omitted keeps the
-    /// session-wide overlay, so every existing caller is unaffected. A pane overlay is always full-pane, so
+    /// `session.overlay.open`/`.close`/`.result` scope to ONE pane with it, parsed to `OverlayPane`, which
+    /// takes the `TerminalZoomSurface` spellings minus `scratch` (`left`/`primary`, `right`/`split`);
+    /// `scratch` is rejected, there being no scratch pane to cover, and the rejection names only
+    /// `left or right` as guidance. Omitted keeps the session-wide overlay, so every existing caller is
+    /// unaffected. A pane overlay is always full-pane, so
     /// `--pane` conflicts with `session.overlay.open --size-percent` and `session.overlay.resize` refuses it.
     public var pane: String?
     /// A surface's STABLE spawn token for `session.status --pane-id`/`session.restore --pane-id` (the shell's
@@ -752,11 +754,12 @@ public enum OverlayResultError {
 }
 
 /// Error strings for the pane-scoped (`--pane`) arm of `session.overlay.*`. Shared because the rejections
-/// are split across layers — the first three are host-free in `ControlDispatcher`, the last two need the
-/// live session and fire in `ControlServer` — and the wording must not drift between them.
+/// are split across layers — `alreadyOpen`/`paneNotVisible` need the live session and fire in
+/// `ControlServer`, the rest are host-free in `ControlDispatcher` — and the wording must not drift.
 public enum PaneOverlayError {
     public static let alreadyOpen = "pane overlay already open"
     public static let paneNotVisible = "pane not visible"
+    /// Names the canonical spellings only; `OverlayPane.init?(controlName:)` also takes `primary`/`split`.
     public static let invalidPane = "session.overlay: --pane must be left or right"
     public static let sizePercentConflict = "session.overlay.open: --pane is mutually exclusive with --size-percent"
     public static let resizeUnsupported = "session.overlay.resize: --pane is not supported (pane overlays are always full)"

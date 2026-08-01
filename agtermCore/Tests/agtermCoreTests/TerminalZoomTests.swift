@@ -12,7 +12,13 @@ struct TerminalZoomTests {
         #expect(TerminalZoomController.resolveTarget(store: store, quickTerminalVisible: true) == .quick)
         #expect(TerminalZoomController.resolveTarget(store: store, quickTerminalVisible: false) == .session(session.id, .primary))
 
+        // `splitFocused` alone describes no pane: with neither a shown split nor a split surface the focused
+        // pane is still the primary, matching `rendersPane`/`focusedOverlayPane` and `.split`'s isAvailable.
         session.splitFocused = true
+        #expect(TerminalZoomController.resolveTarget(store: store, quickTerminalVisible: false) == .session(session.id, .primary))
+
+        store.toggleSplit(session.id)
+        session.splitSurface = SpySurface()
         #expect(TerminalZoomController.resolveTarget(store: store, quickTerminalVisible: false) == .session(session.id, .split))
 
         session.scratchActive = true
@@ -155,26 +161,46 @@ struct TerminalZoomTests {
         #expect(!TerminalZoomSurface.overlayRight.isVisible(in: session))
     }
 
-    @Test func atMostOneSurfaceIsActiveAcrossEverySessionShape() {
+    @Test func exactlyOneSurfaceIsActiveAndItIsTheOneTheDeckShowsAcrossEverySessionShape() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
-        let names = ["split", "focusRight", "splitSurface", "scratch", "sessionOverlay", "leftOverlay", "rightOverlay"]
+        let names = ["isSplit", "hasSplit", "focusRight", "splitSurface", "scratch", "sessionOverlay",
+                     "leftOverlay", "rightOverlay"]
 
         for combination in 0..<(1 << names.count) {
             let on: (Int) -> Bool = { combination & (1 << $0) != 0 }
             session.isSplit = on(0)
-            session.hasSplit = on(0)
-            session.splitFocused = on(1)
-            session.splitSurface = on(2) ? SpySurface() : nil
-            session.scratchActive = on(3)
-            session.overlayActive = on(4)
-            session.leftOverlay = on(5) ? PaneOverlay(command: "top") : nil
-            session.rightOverlay = on(6) ? PaneOverlay(command: "top") : nil
+            session.hasSplit = on(1)
+            session.splitFocused = on(2)
+            session.splitSurface = on(3) ? SpySurface() : nil
+            session.scratchActive = on(4)
+            session.overlayActive = on(5)
+            session.leftOverlay = on(6) ? PaneOverlay(command: "top") : nil
+            session.rightOverlay = on(7) ? PaneOverlay(command: "top") : nil
+
+            // derived from the deck's OWN predicates (`focusedPane`, the pane slots), never from `isActive`,
+            // so a wrong-but-unique active case cannot pass by cardinality alone.
+            let focused = session.focusedPane
+            let expected: TerminalZoomSurface
+            if session.overlayActive {
+                expected = .overlay
+            } else if session.scratchActive {
+                expected = .scratch
+            } else {
+                expected = session.paneOverlay(focused) != nil ? focused.zoomSurface : focused.paneZoomSurface
+            }
 
             let active = TerminalZoomSurface.allCases.filter { $0.isActive(in: session) }
             let shape = names.indices.filter { on($0) }.map { names[$0] }.joined(separator: "+")
-            #expect(active.count == 1, "[\(shape.isEmpty ? "bare" : shape)] resolved to \(active)")
+            #expect(active == [expected], "[\(shape.isEmpty ? "bare" : shape)] resolved to \(active)")
+            #expect(TerminalZoomController.resolveTarget(store: store, quickTerminalVisible: false)
+                == .session(session.id, expected), "[\(shape.isEmpty ? "bare" : shape)] wrong zoom target")
+            // a pane overlay is only ever the active target while its own pane is the one on screen.
+            if expected == .overlayLeft || expected == .overlayRight {
+                #expect(session.focusedOverlayPane == focused && session.rendersPane(focused),
+                        "[\(shape)] pane overlay active over a pane the deck does not lay out")
+            }
         }
     }
 

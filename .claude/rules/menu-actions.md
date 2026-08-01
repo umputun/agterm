@@ -74,8 +74,11 @@ paths:
   thin binding-action wrappers; `AppActions` owns GUI needle/navigation/end behavior. The same session
   state and `searchDisplayText` back `session.search`.
 - Scratch is searchable; quick terminal and full overlay are not. `searchTarget` checks a covering scratch
-  before focused-surface fallback so sidebar focus cannot target the hidden pane. Floating overlay leaves
-  pane search available.
+  FIRST, then returns nil when the focused pane sits under its own pane overlay, then falls back to the
+  focused surface. That order is load-bearing: the scratch covers a pane overlay too and is searchable.
+  Keep the pane-overlay rung in `searchTarget` alone; `coverHidesActiveSession` covers only the
+  session-wide blockers, and duplicating the rung there blocks Command-F on the scratch above it.
+  Floating overlay leaves pane search available.
 - On scratch exit, clear search only when `searchSurface === scratchSurface`; pane-owned search survives.
   Split/primary teardown follows the same ownership rule.
 
@@ -105,9 +108,11 @@ paths:
 
 ## Close and reselection
 
-- Command-W first dismisses the frontmost cover: quick terminal, then overlay, then scratch. Only then close
-  the active session. If no cover or session exists, the menu performs window close. Keep the cover check
-  inside `closeActiveSession`, since a sessionless window can still show quick terminal.
+- Command-W first dismisses the frontmost cover: quick terminal, then overlay, then scratch, then the
+  FOCUSED pane's own overlay (`focusedOverlayPane`; one on the sibling pane is not in front of the user and
+  does not intercept). Only then close the active session. If no cover or session exists, the menu performs
+  window close. Keep the cover check inside `closeActiveSession`, since a sessionless window can still show
+  quick terminal.
 - All active-session close paths use host-free `closeReselectionTarget` (Discussion #147). Prefer the most
   recent survivor in three widening scopes: same workspace intersected with `navigableSessions`, all
   navigable sessions, then the whole tree. Build scopes from the post-removal tree; soft close retains

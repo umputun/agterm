@@ -1473,8 +1473,9 @@
               split after opening is fine, the program keeps running and reappears when the split comes back.
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">close</span> and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">result</span> take the same
-              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span>, ⌘W dismisses a pane
-              overlay before it would close the session, and
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">--pane</span>, ⌘W dismisses the
+              focused pane's overlay before it would close the session (one on the other pane is not in front of you, so ⌘W keeps
+              its ordinary meaning), and
               <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">agtermctl tree --json</span> reports the
               covered panes as <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">paneOverlays</span>.
             </p>

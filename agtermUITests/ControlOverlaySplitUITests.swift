@@ -863,6 +863,91 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(sessionWide["error"] as? String, "no overlay result", "\(sessionWide)")
     }
 
+    // `closePrimaryPane` MOVES the right pane's overlay into the LEFT slot without rebuilding its surface, so
+    // that surface's own exit/status callbacks must resolve the slot they NOW sit in. Pinned end-to-end: with
+    // a pane captured at creation the program's exit would close nothing (leaving the promoted pane under a
+    // dead overlay forever) and file the status where `--pane left` cannot read it.
+    func testPromotedPaneOverlayStillAutoClosesAndReportsOnItsNewPane() throws {
+        let id = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "opening the split should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the split should be up")
+
+        // the overlay outlives the promotion by waiting on a file the test creates, so the exit is ordered
+        // AFTER the pane move rather than racing it.
+        let up = markerDir.appendingPathComponent("promoted-overlay-up")
+        let release = markerDir.appendingPathComponent("promoted-overlay-release")
+        let ovlCmd = "sh -c 'printf UP > \(up.path); " +
+            "while [ ! -e \(release.path) ]; do sleep 0.2; done; exit 9'"
+        let json = try! JSONSerialization.data(withJSONObject:
+            ["cmd": "session.overlay.open", "target": id, "args": ["command": ovlCmd, "pane": "right"]])
+        XCTAssertEqual(try sendCommand(String(data: json, encoding: .utf8)!)["ok"] as? Bool, true,
+                       "opening the right pane overlay should succeed")
+        XCTAssertEqual(pollMarker(up, timeout: 15), "UP", "the right pane overlay's program should run")
+
+        // inject rather than type: focus-independent, so the exit drives closePrimaryPane without the covered
+        // pane needing first responder.
+        let typeJSON = try! JSONSerialization.data(withJSONObject:
+            ["cmd": "session.type", "target": id, "args": ["text": "exit\n", "pane": "left"]])
+        XCTAssertEqual(try sendCommand(String(data: typeJSON, encoding: .utf8)!)["ok"] as? Bool, true,
+                       "typing exit into the main pane should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(false, timeout: 12), "the main pane's exit should promote the survivor")
+        XCTAssertTrue(pollPaneOverlays(id: id, equals: ["left"], timeout: 12),
+                      "the surviving pane's overlay should follow it into the left slot")
+
+        FileManager.default.createFile(atPath: release.path, contents: Data())
+        XCTAssertTrue(pollPaneOverlays(id: id, equals: nil, timeout: 15),
+                      "the promoted overlay's own exit must free the slot it now occupies")
+        XCTAssertEqual(pollPaneOverlayExitCode(id: id, pane: "left", timeout: 15), 9,
+                       "its status must be readable on the pane it was promoted onto")
+    }
+
+    // the COVERED side of the per-pane cover gate, the complement of the sibling-interactive test: while a
+    // pane overlay is up the real keyboard must reach the OVERLAY and never the pane underneath it, and on
+    // close the bounded `openPaneOverlays` focus retry must hand the keyboard back to that pane.
+    func testPaneOverlayOwnsTheKeyboardOverItsPaneAndReturnsItOnClose() throws {
+        let id = try activeSessionID()
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "opening the split should succeed")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the split should be up")
+
+        // a fresh split focuses the RIGHT pane; capture its identity by injection, focus-independently.
+        let rightTTY = markerDir.appendingPathComponent("covered-pane-tty")
+        let rightValue = try XCTUnwrap(typeUntilMarker("tty > '\(rightTTY.path)'\n", target: id, file: rightTTY,
+                                                       select: false, pane: "right"),
+                                       "the right pane should report its tty")
+
+        let ovlMarker = markerDir.appendingPathComponent("covering-overlay-keys")
+        let ovlCmd = "sh -c 'IFS= read -r x; printf %s \"$x\" > \(ovlMarker.path); cat'"
+        let json = try! JSONSerialization.data(withJSONObject:
+            ["cmd": "session.overlay.open", "target": id, "args": ["command": ovlCmd, "pane": "right"]])
+        XCTAssertEqual(try sendCommand(String(data: json, encoding: .utf8)!)["ok"] as? Bool, true,
+                       "opening the right pane overlay should succeed")
+        XCTAssertTrue(pollPaneOverlays(id: id, contains: "right", timeout: 10), "the right pane overlay should be up")
+        usleep(1_500_000) // let the overlay surface attach and finish its one-shot focus grab
+
+        // one probe, two oracles: the overlay's `read` capturing the literal text proves it owns the
+        // keyboard, and the redirect target never appearing proves the covered shell never ran it.
+        app.activate()
+        let leaked = markerDir.appendingPathComponent("covered-pane-leak")
+        let probe = "tty > '\(leaked.path)'"
+        app.typeText(probe)
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertEqual(pollMarker(ovlMarker, timeout: 12), probe,
+                       "keyboard input must reach the overlay covering the focused pane")
+        XCTAssertNil(pollMarker(leaked, timeout: 2),
+                     "the pane under its own overlay must not take first responder or run the probe")
+
+        let close = try sendCommand(#"{"cmd":"session.overlay.close","target":"\#(id)","args":{"pane":"right"}}"#)
+        XCTAssertEqual(close["ok"] as? Bool, true, "closing the pane overlay should succeed: \(close)")
+        XCTAssertTrue(pollPaneOverlays(id: id, equals: nil, timeout: 10), "the pane overlay should be gone")
+
+        let afterTTY = markerDir.appendingPathComponent("uncovered-pane-tty")
+        let afterValue = try XCTUnwrap(keyboardTypeUntilMarker("tty > '\(afterTTY.path)'", file: afterTTY),
+                                       "closing the overlay must return the keyboard to its pane")
+        XCTAssertEqual(afterValue, rightValue, "focus must return to the pane the overlay covered, not the sibling")
+    }
+
     // `--wait` holds a pane overlay open after its program exits, exactly as at session scope — libghostty's
     // press-any-key prompt keeps the surface, so the slot must NOT auto-close.
     func testPaneOverlayWaitHoldsTheSlotAfterItsProgramExits() throws {

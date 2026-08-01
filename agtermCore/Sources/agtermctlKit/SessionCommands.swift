@@ -669,7 +669,6 @@ struct Session: ParsableCommand {
                     SocketClient.printResponse(opened, json: options.json)
                     throw ExitCode.failure
                 }
-                // poll session.overlay.result until the program exits.
                 while true {
                     let res = try client.send(resultRequest(id: id))
                     if res.ok {

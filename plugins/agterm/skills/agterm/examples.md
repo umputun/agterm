@@ -246,7 +246,11 @@ agtermctl session overlay open "revdiff HEAD~3" --target "$AGTERM_SESSION_ID" --
 ```
 
 This works unchanged on a NON-split session, which reports `AGTERM_PANE=left`, so there is no need to
-check the split state first. Left and right are independent — both may be open at once, each with its
+check the split state first. Two cases still need care: `$AGTERM_PANE` is `scratch` in the scratch
+terminal, which `--pane` rejects as a usage error, and a shell in the LEFT pane of a session whose split
+is hidden with the RIGHT pane focused reports `left` while only the right pane is on screen, so the open
+is refused with `pane not visible`. Handle both by falling back to a session-wide overlay on error.
+Left and right are independent — both may be open at once, each with its
 own `--background-color` — and a pane overlay is always full-pane, so `--size-percent` is rejected with
 it. `--wait`, `--block`, `--cwd` and `--follow` behave exactly as they do for a session-wide overlay;
 `close` and `result` take the same `--pane`:

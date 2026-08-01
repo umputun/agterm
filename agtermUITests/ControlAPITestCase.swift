@@ -263,13 +263,13 @@ class ControlAPITestCase: XCTestCase {
     /// be dropped — re-injecting once the shell has had time to spawn is the deterministic readiness wait.
     /// The marker file is the readiness signal: when it's non-empty the command actually ran. Returns the
     /// marker contents, or nil if it never appeared across all attempts. Asserts each type request returns ok.
-    func typeUntilMarker(_ command: String, target: String, file: URL, select: Bool,
+    func typeUntilMarker(_ command: String, target: String, file: URL, select: Bool, pane: String? = nil,
                          attempts: Int = 4, perAttempt: TimeInterval = 4) throws -> String? {
         for attempt in 0..<attempts {
             // clear any marker a prior attempt's late injection may have written, so a stale value
             // can't be read as this attempt's success.
             try? FileManager.default.removeItem(at: file)
-            let typed = try sendCommand(typeRequest(text: command, target: target, select: select))
+            let typed = try sendCommand(typeRequest(text: command, target: target, select: select, pane: pane))
             if typed["ok"] as? Bool != true {
                 // `session not realized` is the same readiness race this loop exists to absorb — a background
                 // session's surface is built lazily, so an early probe can arrive before it exists. Any OTHER

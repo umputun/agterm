@@ -8,7 +8,8 @@ public enum OverlayPane: String, CaseIterable, Codable, Sendable {
     case right
 
     /// Accepts the same pane spellings as `TerminalZoomSurface`, minus `scratch`: a pane overlay covers a
-    /// split pane only.
+    /// split pane only. `primary`/`split` are accepted as aliases, so the rejection message naming only
+    /// `left or right` is guidance, not the full accepted set.
     public init?(controlName: String) {
         switch controlName {
         case "left", "primary":
@@ -18,6 +19,31 @@ public enum OverlayPane: String, CaseIterable, Codable, Sendable {
         default:
             return nil
         }
+    }
+
+    /// The three `Session` slots this pane owns, plus its zoom surface — the ONE place the
+    /// `left`↔`leftOverlay*` mapping is written. Every reader and writer goes through these key paths, so a
+    /// transposed ternary can no longer drive the wrong pane from any of the call sites.
+    @MainActor public var overlaySlot: ReferenceWritableKeyPath<Session, PaneOverlay?> {
+        self == .left ? \.leftOverlay : \.rightOverlay
+    }
+
+    @MainActor public var surfaceSlot: ReferenceWritableKeyPath<Session, (any TerminalSurface)?> {
+        self == .left ? \.leftOverlaySurface : \.rightOverlaySurface
+    }
+
+    @MainActor public var exitCodeSlot: ReferenceWritableKeyPath<Session, Int?> {
+        self == .left ? \.leftOverlayExitCode : \.rightOverlayExitCode
+    }
+
+    /// The zoom surface addressing this pane's overlay (`surface:<id>:overlay-left|overlay-right`).
+    public var zoomSurface: TerminalZoomSurface {
+        self == .left ? .overlayLeft : .overlayRight
+    }
+
+    /// The pane itself as a zoom surface, the slot this overlay covers.
+    public var paneZoomSurface: TerminalZoomSurface {
+        self == .left ? .primary : .split
     }
 }
 
@@ -348,31 +374,36 @@ public final class Session: Identifiable {
     public var addressableSurface: (any TerminalSurface)? { surface ?? splitSurface }
 
     /// The pane's overlay, nil when that pane has none.
-    public func paneOverlay(_ pane: OverlayPane) -> PaneOverlay? {
-        pane == .left ? leftOverlay : rightOverlay
-    }
+    public func paneOverlay(_ pane: OverlayPane) -> PaneOverlay? { self[keyPath: pane.overlaySlot] }
 
     /// The pane overlay's surface, nil before the factory realizes it or after teardown.
     public func paneOverlaySurface(_ pane: OverlayPane) -> (any TerminalSurface)? {
-        pane == .left ? leftOverlaySurface : rightOverlaySurface
+        self[keyPath: pane.surfaceSlot]
     }
 
     /// The pane overlay program's exit status, surviving the overlay's close so
     /// `session.overlay.result --pane` can report it; nil until one exits or after the next open on that pane.
-    public func paneOverlayExitCode(_ pane: OverlayPane) -> Int? {
-        pane == .left ? leftOverlayExitCode : rightOverlayExitCode
-    }
+    public func paneOverlayExitCode(_ pane: OverlayPane) -> Int? { self[keyPath: pane.exitCodeSlot] }
 
     /// The panes with an overlay up, ordered left then right — the `paneOverlays` tree read-back source.
     public var openPaneOverlays: [OverlayPane] {
         OverlayPane.allCases.filter { paneOverlay($0) != nil }
     }
 
-    /// The focused pane's overlay pane, nil when that pane's slot is empty. The focused pane is `.right`
-    /// only while the split surface exists (the `activeSurface` idiom), so a promoted survivor that
-    /// momentarily re-raised `splitFocused` still resolves `.left`.
+    /// Which pane owns keyboard focus RIGHT NOW — the single predicate every pane-scoped cover, zoom and
+    /// focus decision derives from, so none of them can disagree about which pane the user is looking at.
+    /// `.right` needs `splitFocused` AND a right pane that exists: shown side-by-side (`isSplit`, whose
+    /// surface may still be unrealized) or hidden-maximized with a live `splitSurface`. Without the second
+    /// term a promoted survivor that momentarily re-raised `splitFocused` would resolve `.right` (the
+    /// `activeSurface` idiom); without `isSplit` a freshly shown split whose lazy surface has not realized
+    /// yet would resolve `.left` while the user's caret sits in the right pane.
+    public var focusedPane: OverlayPane {
+        splitFocused && (isSplit || splitSurface != nil) ? .right : .left
+    }
+
+    /// The focused pane's overlay pane, nil when that pane's slot is empty.
     public var focusedOverlayPane: OverlayPane? {
-        let pane: OverlayPane = splitFocused && splitSurface != nil ? .right : .left
+        let pane = focusedPane
         return paneOverlay(pane) == nil ? nil : pane
     }
 
@@ -380,9 +411,16 @@ public final class Session: Identifiable {
     /// since surfaces defer creation until they get a nonzero backing size. Not `deckHostsSurface`, which
     /// also yields a placeholder while zoom or the dashboard owns the slot.
     public func rendersPane(_ pane: OverlayPane) -> Bool {
-        if isSplit { return true }
-        if splitFocused, splitSurface != nil { return pane == .right }
-        return pane == .left
+        isSplit || pane == focusedPane
+    }
+
+    /// The pane whose overlay slot CURRENTLY holds `surface`, nil when neither does. Derived LIVE from slot
+    /// occupancy, like `paneRole(forToken:)`: `promotePaneOverlay` moves the right pane's overlay surface
+    /// into the LEFT slot without rebuilding it, so its own exit/status/focus callbacks must ask which slot
+    /// they now sit in rather than trust the pane captured when the factory built them — a captured `.right`
+    /// would close nothing, record the status on a dead slot, and leave the promoted pane covered forever.
+    public func paneOverlayRole(of surface: any TerminalSurface) -> OverlayPane? {
+        OverlayPane.allCases.first { paneOverlaySurface($0) === surface }
     }
 
     /// Frees the pane's overlay outright: tears the surface down and clears the slot, the surface, AND the
@@ -391,16 +429,22 @@ public final class Session: Identifiable {
     /// the surface's store-capturing callbacks, breaking the store/session/surface/closure cycle.
     public func teardownPaneOverlay(_ pane: OverlayPane) {
         paneOverlaySurface(pane)?.teardown()
-        switch pane {
-        case .left:
-            leftOverlay = nil
-            leftOverlaySurface = nil
-            leftOverlayExitCode = nil
-        case .right:
-            rightOverlay = nil
-            rightOverlaySurface = nil
-            rightOverlayExitCode = nil
-        }
+        setPaneOverlay(nil, pane: pane)
+        setPaneOverlaySurface(nil, pane: pane)
+        setPaneOverlayExitCode(nil, pane: pane)
+    }
+
+    /// The pane-slot writers, paired with the `paneOverlay*` readers through `OverlayPane`'s key paths.
+    public func setPaneOverlay(_ overlay: PaneOverlay?, pane: OverlayPane) {
+        self[keyPath: pane.overlaySlot] = overlay
+    }
+
+    public func setPaneOverlaySurface(_ surface: (any TerminalSurface)?, pane: OverlayPane) {
+        self[keyPath: pane.surfaceSlot] = surface
+    }
+
+    public func setPaneOverlayExitCode(_ code: Int?, pane: OverlayPane) {
+        self[keyPath: pane.exitCodeSlot] = code
     }
 
     /// Frees BOTH pane overlays; the whole-session form of `teardownPaneOverlay(_:)`, called wherever the
@@ -411,14 +455,15 @@ public final class Session: Identifiable {
 
     /// Moves the right pane's overlay — slot, surface, and exit code together — into the left slot, following
     /// the split survivor `closePrimaryPane` promotes into the primary pane, so the overlay keeps covering the
-    /// same shell. The left slot must already be freed.
+    /// same shell. The left slot must already be freed. The surface MOVES rather than being rebuilt, so its
+    /// callbacks re-resolve their pane through `paneOverlayRole(of:)` instead of a captured one.
     public func promotePaneOverlay() {
-        leftOverlay = rightOverlay
-        leftOverlaySurface = rightOverlaySurface
-        leftOverlayExitCode = rightOverlayExitCode
-        rightOverlay = nil
-        rightOverlaySurface = nil
-        rightOverlayExitCode = nil
+        setPaneOverlay(rightOverlay, pane: .left)
+        setPaneOverlaySurface(rightOverlaySurface, pane: .left)
+        setPaneOverlayExitCode(rightOverlayExitCode, pane: .left)
+        setPaneOverlay(nil, pane: .right)
+        setPaneOverlaySurface(nil, pane: .right)
+        setPaneOverlayExitCode(nil, pane: .right)
     }
 
     /// Resolves a surface's stable spawn token (`TerminalSurface.paneToken`, baked as `AGTERM_PANE_ID` and

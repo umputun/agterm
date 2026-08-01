@@ -551,8 +551,9 @@ All twelve are read-only projections of GUI state.
   hidden, and `--pane left` on a session whose hidden split holds the focus); hiding the split AFTER
   opening is fine, the program keeps running and reappears when the split is shown again. Opening a
   second overlay on the same pane errors `pane overlay already open`. A full session-wide overlay and
-  the scratch terminal both cover a pane overlay, and ⌘W dismisses a pane overlay before it would close
-  the session. Read the open panes back from `paneOverlays` in `tree --json`.
+  the scratch terminal both cover a pane overlay, and ⌘W dismisses the FOCUSED pane's overlay before it
+  would close the session — an overlay on the other pane is not in front of the user, so ⌘W keeps its
+  ordinary meaning there. Read the open panes back from `paneOverlays` in `tree --json`.
 - `session overlay resize (--size-percent N | --full) [--target] [--window W]` — resize an ALREADY-OPEN
   overlay in place. Exactly one of `--size-percent N` (1–100, makes it a floating framed panel) or
   `--full` (switches it back to the full-pane overlay that hides the session) is required; passing both
@@ -562,8 +563,8 @@ All twelve are read-only projections of GUI state.
 - `session overlay close [--pane left|right] [--target] [--window W]` — close (destroy) the overlay.
   `--pane` closes that split pane's overlay; omit it for the session-wide one.
 - `session overlay result [--pane left|right] [--target] [--window W]` — returns `result.exitCode` once
-  the overlay has closed. Errors `still running` while up, `no result` if none ran. `--pane` reads that
-  pane's overlay; omit it for the session-wide one.
+  the overlay has closed. Errors `overlay still running` while up, `no overlay result` if none ran.
+  `--pane` reads that pane's overlay; omit it for the session-wide one.
 
 **Displaying an image inline.** This skill bundles `scripts/show-image.sh`. It opens an overlay (a
 real terminal surface) and renders the image there via the kitty graphics protocol, which ghostty —
@@ -1005,8 +1006,8 @@ here is app-global and touches only the captured commands, not those overrides.
 
 `notFound` / `ambiguous` (target resolution), `no such session`, `invalid split mode` /
 `invalid scratch mode`, `session has no split` (focus), `no selection` (copy), `overlay already open` /
-`no overlay` / `still running` / `no result` / `pane overlay already open` / `pane not visible`
-(overlay), `invalid flag mode` (session flag),
+`no overlay` / `overlay still running` / `no overlay result` / `pane overlay already open` /
+`pane not visible` (overlay), `invalid flag mode` (session flag),
 `invalid fit` / `invalid position` / `invalid opacity` / `invalid color` / `text too long` /
 `unsupported image (PNG or JPEG only)` / `no such image file` / `image path must not contain control characters` / `invalid background mode` (session background),
 `invalid sidebar mode` (sidebar),

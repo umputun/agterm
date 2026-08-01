@@ -3,7 +3,7 @@ import AppKit
 import SwiftUI
 
 /// `WindowContentView`'s detail deck: every session's terminal content — panes, split, scratch, and both
-/// overlay kinds — plus the inactive-pane mute. Split out of the main file for the source-length limit.
+/// overlay kinds — plus the inactive-pane mute.
 extension WindowContentView {
     /// A DECK of EVERY session's terminal, all mounted so each spawns its shell at startup, only the selected
     /// one visible + hit-testable. Switching is a visibility flip; a re-host would invalidate the Metal
@@ -235,26 +235,22 @@ extension WindowContentView {
     }
 
     /// ONE split pane's overlay, always FULL-PANE (no size percent, no framed chrome — a floating variant
-    /// exists only at session scope). Rendered as an ALWAYS-PRESENT sibling INSIDE that pane's ZStack, with
-    /// its content gated inside the GeometryReader so the ZStack's child count never changes. Everything
-    /// stays within the NSSplitView's arranged subview: a modifier WRAPPING the split re-lays it out and
-    /// overruns the titlebar even on a value change (see the boundary note in `sessionDetail`).
+    /// exists only at session scope). An ALWAYS-PRESENT sibling INSIDE that pane's ZStack, content gated in
+    /// the GeometryReader, under the arranged-subview boundary `sessionDetail` states.
     ///
     /// `isActive` is the FOCUSED-pane gate (auto-focus, first responder), `deckVisible` the on-screen one
     /// (drag types, mouse cursor, clicks): an overlay on the unfocused pane stays visible and clickable —
     /// clicking it moves focus through the surface's own `onFocusChange` — without grabbing focus on open.
     @ViewBuilder private func paneOverlayPanel(session: Session, pane: OverlayPane, isActive: Bool,
                                                deckVisible: Bool) -> some View {
-        let zoomSurface: TerminalZoomSurface = pane == .left ? .overlayLeft : .overlayRight
-        let active = session.paneOverlay(pane) != nil && deckHostsSurface(session: session, surface: zoomSurface)
-        let keyPath: ReferenceWritableKeyPath<Session, (any TerminalSurface)?> =
-            pane == .left ? \.leftOverlaySurface : \.rightOverlaySurface
+        let active = session.paneOverlay(pane) != nil
+            && deckHostsSurface(session: session, surface: pane.zoomSurface)
         GeometryReader { geo in
             ZStack {
                 if active {
                     // chromeless and translucent like the full session overlay: libghostty draws only the
                     // terminal, and the pane below is hidden so the window backing shows through.
-                    TerminalView(session: session, surfaceKeyPath: keyPath,
+                    TerminalView(session: session, surfaceKeyPath: pane.surfaceSlot,
                                  makeSurface: { makeOverlaySurface($0, pane) },
                                  isActive: isActive, deckVisible: deckVisible)
                         .id("\(session.id.uuidString)-overlay-\(pane.rawValue)")
@@ -262,8 +258,7 @@ extension WindowContentView {
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
-        // with no overlay up this is an empty full-frame GeometryReader; keep it inert so it never
-        // intercepts clicks meant for the pane it sits on.
+        // inert while empty, like `overlayPanel`.
         .allowsHitTesting(deckVisible && active)
     }
 
@@ -287,9 +282,7 @@ extension WindowContentView {
 /// Hides ONE pane beneath its own full-pane overlay: that overlay is chromeless, so under window
 /// translucency the pane below would show through it, and a hit-testable pane under it would steal the
 /// overlay's first responder. Scoped to the covered pane alone — the sibling stays visible and interactive.
-///
-/// Applied INSIDE the arranged subview, never on a wrapper: the chain is constant and only its values
-/// change, matching `paneDim`, so the NSSplitView is never perturbed.
+/// Applied INSIDE the arranged subview like `paneDim`, never on a wrapper.
 private struct PaneOverlayCover: ViewModifier {
     let covered: Bool
 

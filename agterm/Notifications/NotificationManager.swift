@@ -199,13 +199,15 @@ final class NotificationManager: NSObject, @preconcurrency UNUserNotificationCen
     }
 
     /// Which of the session's surfaces fired, by identity against its slots. A PANE overlay reports its
-    /// PANE's role, not `.overlay` (which is the session-wide one) and not the `.main` fallthrough, so a
-    /// banner click reveals the pane it covers and `focusSplitPane` routes back through the overlay itself;
-    /// the left pane overlay shares `.main` with the pane below it.
+    /// PANE's role, not `.overlay` (which is the session-wide one), so a banner click reveals the pane it
+    /// covers and `focusSplitPane` routes back through the overlay itself; the left pane overlay shares
+    /// `.main` with the pane below it, spelled out so the trailing `.main` stays the "surface I do not
+    /// recognize" answer rather than doubling as a real mapping.
     private func paneRole(of view: GhosttySurfaceView, in session: Session) -> PaneRole {
         if view === (session.splitSurface as? GhosttySurfaceView) { return .split }
         if view === (session.overlaySurface as? GhosttySurfaceView) { return .overlay }
         if view === (session.rightOverlaySurface as? GhosttySurfaceView) { return .split }
+        if view === (session.leftOverlaySurface as? GhosttySurfaceView) { return .main }
         return .main
     }
 

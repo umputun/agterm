@@ -82,15 +82,8 @@ extension ControlServer: ControlActions {
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session")
             }
-            let running: Bool
-            let exitCode: Int?
-            if let pane {
-                running = session.paneOverlay(pane) != nil
-                exitCode = session.paneOverlayExitCode(pane)
-            } else {
-                running = session.overlayActive
-                exitCode = session.overlayExitCode
-            }
+            let (running, exitCode) = pane.map { (session.paneOverlay($0) != nil, session.paneOverlayExitCode($0)) }
+                ?? (session.overlayActive, session.overlayExitCode)
             if running {
                 return ControlResponse(ok: false, error: OverlayResultError.stillRunning)
             }

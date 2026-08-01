@@ -1450,8 +1450,8 @@
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
                 <strong style="color: #bfbab0">Returns</strong>
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">result.exitCode</span> once the overlay has closed.
-                Errors <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">still running</span> while it is up, and
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no result</span> if none ran.
+                Errors <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">overlay still running</span> while it is up, and
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">no overlay result</span> if none ran.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--pane</span> reads that split pane's overlay; omit it
                 for the session-wide one.
               </p>
@@ -1669,7 +1669,7 @@
                 (traffic lights plus an exit button). Omit
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--target</span> (or pass
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>) to zoom the active surface — the quick
-                terminal if shown, else the active session's overlay, scratch, focused split, or primary pane. An explicit
+                terminal if shown, else the active session's overlay, scratch, the focused pane's own overlay, or that pane. An explicit
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">surface:&lt;session-id&gt;:&lt;left|right|scratch|overlay|overlay-left|overlay-right&gt;</span>
                 id (from <span style="font-family: &quot;JetBrains Mono&quot;, monospace">tree</span>'s
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">surfaces[].id</span>) zooms that exact surface, including a
@@ -2463,7 +2463,7 @@
                     padding: 4px 9px;
                     white-space: nowrap;
                   "
-                  >still running<span style="color: #6b727a; font-family: &quot;IBM Plex Sans&quot;, sans-serif"> (overlay)</span></span
+                  >overlay still running</span
                 >
                 <span
                   style="
@@ -2476,7 +2476,7 @@
                     padding: 4px 9px;
                     white-space: nowrap;
                   "
-                  >no result<span style="color: #6b727a; font-family: &quot;IBM Plex Sans&quot;, sans-serif"> (overlay)</span></span
+                  >no overlay result</span
                 >
                 <span
                   style="
@@ -2502,7 +2502,7 @@
                     padding: 4px 9px;
                     white-space: nowrap;
                   "
-                  >pane not visible</span
+                  >pane not visible<span style="color: #6b727a; font-family: &quot;IBM Plex Sans&quot;, sans-serif"> (overlay)</span></span
                 >
                 <span
                   style="

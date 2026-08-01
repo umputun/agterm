@@ -204,6 +204,13 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 - Overlay open runs one shell-wrapped program in a nonpersisted per-session surface. Size nil is full;
   1...100 is floating. Optional color uses shared validated `#rrggbb` surface config and window opacity.
   Background target runs without selection; `--follow` selects. `--wait` retains Ghostty's exit prompt.
+- `--pane left|right` on open/close/result scopes the overlay to ONE split pane, leaving the sibling live.
+  Slots are independent and always full-pane: reject `--pane` with `--size-percent` and on `overlay.resize`.
+  Refuse a pane the deck does not lay out (`pane not visible`) and an occupied slot
+  (`pane overlay already open`). Omitting `--pane` keeps the session-wide overlay byte-for-byte.
+  Promotion moves the right pane's overlay into the left slot without rebuilding its surface, so that
+  surface's callbacks resolve their pane through `Session.paneOverlayRole(of:)`, never a captured one.
+  Read back `paneOverlays`, ordered left-then-right.
 - Both full and floating use one always-present `overlayPanel` at z3. Gate content inside its
   `GeometryReader`; never change the `sessionDetail`/HSplitView shape or pane modifiers on overlay state.
   Full is translucent/chromeless and hides panes; floating is opaque/framed over visible panes with an
@@ -217,9 +224,12 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   output, and exits with captured status.
 - `overlay.resize` requires an open overlay and exactly one valid percent or `--full`; mutate the same
   surface host. Read `overlaySizePercent`, gated by overlay-active because nil means either full or absent.
-- `surface.zoom show|hide|toggle` reparents exactly one surface below a slim titlebar. Active precedence is
-  quick, overlay, scratch, focused split, primary; explicit IDs are
-  `surface:<session-id>:<left|right|scratch|overlay>` or `quick`, including hidden live panes.
+- `surface.zoom show|hide|toggle` reparents exactly one surface below a slim titlebar. Explicit IDs are
+  `surface:<session-id>:<left|right|scratch|overlay|overlay-left|overlay-right>` or `quick`, including
+  hidden live panes. The active target is the single case `TerminalZoomSurface.isActive` accepts: quick,
+  then the session overlay, then scratch, then the focused pane's own overlay, then that pane. Those
+  predicates are mutually exclusive and total, resting on `Session.focusedPane`, so widening one without
+  narrowing its neighbour silently picks the wrong surface.
 - Host-free `TerminalZoomController` owns mode/state. Zoom must not change ratios, focus, sidebar, or pane
   visibility; deck slots remain constant and focus reporting is suppressed. Opening closes palette/search
   and conflicting quick terminal; banner reveal and Command-W exit. Font remains live. Reject quick show
@@ -324,9 +334,9 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 
 ## Tree and window read-back
 
-- Session nodes include foreground/split foreground argv, background spec, overlay size, split ratio,
-  split focus, status fields, flag, unseen, restore pins, and surfaces. Foreground uses the same
-  pid/sysctl/host-free command extraction as restore capture.
+- Session nodes include foreground/split foreground argv, background spec, overlay size, pane overlays,
+  split ratio, split focus, status fields, flag, unseen, restore pins, and surfaces. Foreground uses the
+  same pid/sysctl/host-free command extraction as restore capture.
 - Top-level tree includes idle/auto-follow, live sidebar visibility/mode, workspace filter, quick
   visibility, zoom, dashboard, and picker state. Prefer live tree sidebar state over cached window list.
 - Window nodes include open/active, open-store sidebar/auto-follow, geometry, fullscreen, zoomed, minimized.

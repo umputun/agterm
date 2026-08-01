@@ -777,19 +777,22 @@ final class AppActions {
         }
         // the focused pane hidden under its OWN overlay has no searchable target: the overlay is unsearchable
         // and returning the pane would strand the bar over it. The sibling pane keeps its own ⌘F once focused.
+        // AFTER the scratch rung on purpose: the scratch covers the pane overlays too, and it IS searchable.
         if store?.activeSession?.focusedOverlayPane != nil { return nil }
         if let view = focusedSurface(), view.isSearchable { return view }
         return store?.activeSession?.activeSurface as? GhosttySurfaceView
     }
 
-    /// Whether a cover BLOCKS ⌘F — the frontmost quick terminal, the active session's FULL overlay, or the
-    /// focused pane's own overlay, none searchable, so the bar would strand over a hidden pane. The scratch IS
-    /// searchable, so it never blocks and ⌘F opens the bar over it; the ⌘F-again CLOSE runs regardless.
+    /// Whether a SESSION-WIDE cover BLOCKS ⌘F — the frontmost quick terminal or the active session's FULL
+    /// overlay, neither searchable, so the bar would strand over a hidden pane. The scratch IS searchable, so
+    /// it never blocks and ⌘F opens the bar over it; the ⌘F-again CLOSE runs regardless. A covering PANE
+    /// overlay is NOT a term here — `searchTarget` owns that rung, in the one order that gets the
+    /// scratch-above-a-pane-overlay case right; duplicating it here would block ⌘F on the searchable scratch.
     private var coverHidesActiveSession: Bool {
         if frontmostQuickTerminal?.isVisible == true { return true }
         guard let session = store?.activeSession else { return false }
         // a FLOATING overlay leaves the session visible, so only a FULL overlay hides it (and is not searchable).
-        return session.fullOverlayActive || session.focusedOverlayPane != nil
+        return session.fullOverlayActive
     }
 
     /// Toggle the search bar for the active session; shared by the Find menu item, the palette, and ⌘F.
