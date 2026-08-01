@@ -468,10 +468,15 @@ struct WindowContentView: View {
                                     .id("\(session.id.uuidString)-primary-placeholder")
                             }
                         }
-                        // persists/restores the divider ratio and clips the NSSplitView out of the titlebar
-                        // strip; a background on the stable wrapper (not a third pane, not inside the swapped
-                        // content), so ONE probe survives zoom and suspend/resume flips in place.
-                        .background { SplitRatioAccessor(session: session, titlebarHeight: titlebarHeight, suspended: !deckInteractive, onPersist: { store.save() }) }
+                        // persists/restores the divider ratio, resets it on a divider double-click, and clips
+                        // the NSSplitView out of the titlebar strip; a background on the stable wrapper (not a
+                        // third pane, not inside the swapped content), so ONE probe survives zoom and
+                        // suspend/resume flips in place.
+                        .background {
+                            SplitRatioAccessor(session: session, titlebarHeight: titlebarHeight,
+                                               suspended: !deckInteractive, dividerEligible: visible && !overlaid,
+                                               onPersist: { store.save() })
+                        }
                         ZStack {
                             if deckHostsSurface(session: session, surface: .split) {
                                 TerminalView(session: session, surfaceKeyPath: \.splitSurface, makeSurface: makeSplitSurface,

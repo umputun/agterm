@@ -183,8 +183,9 @@ after/before placement, not `--to up|down|top|bottom`.
 
 ## Resize the split divider from a keybinding
 
-The divider is otherwise mouse-drag only — there is no built-in resize action, so bind keys to the CLI
-with `command "<name>" <chord> <shell…>` custom actions in `keymap.conf` (then `agtermctl keymap reload`):
+The mouse can only drag the divider (or double-click it for an even split) — there is no built-in resize
+action, so bind keys to the CLI with `command "<name>" <chord> <shell…>` custom actions in `keymap.conf`
+(then `agtermctl keymap reload`):
 
 ```conf
 # grow/shrink the left pane by 5% per press; cmd+ctrl+0 resets to an even split

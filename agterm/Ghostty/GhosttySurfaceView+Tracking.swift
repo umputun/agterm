@@ -1,6 +1,17 @@
 import AppKit
 import GhosttyKit
 
+/// Issue #324's ownership rule: hit-test `point` (window coordinates) against the window content view and
+/// decline for CHROME only — the sidebar's grab handle, an `NSSplitView` divider, a floating overlay's
+/// margin. `host` itself, any descendant, and a sibling pane stacked at the same frame in the eager deck all
+/// count as owned, so a hit test that cannot see through the deck can never silence the visible terminal.
+/// Shared by the pane cursor writers (`ownsPointer`) and the split-divider gesture, which must answer the
+/// same question about the same pixel.
+func terminalOwnsHit(_ point: NSPoint, host: NSView) -> Bool {
+    guard let hit = host.window?.contentView?.hitTest(point) else { return true }
+    return hit.isDescendant(of: host) || hit is GhosttySurfaceView
+}
+
 extension GhosttySurfaceView {
     /// Only the on-screen deck pane tracks the pointer. Every session's surface is eagerly realized, and
     /// AppKit tracking areas ignore SwiftUI's `.opacity(0)` and sibling overlap exactly like drag-destination
@@ -44,15 +55,9 @@ extension GhosttySurfaceView {
     /// re-asserts its shape into the process-global `NSCursor` on every move — beating chrome that sets the
     /// cursor once on hover entry (issue #324). Hit-testing resolves ownership the same way the drag that
     /// starts in that band already does, so no per-divider width has to be guessed and later chrome is
-    /// covered without touching this file.
-    ///
-    /// Declines for chrome ONLY: a hit landing on any surface — this one, a descendant, or a sibling pane
-    /// stacked at the same frame in the eager deck — keeps the pre-#324 behavior, so a hit test that cannot
-    /// see through the deck can never silence the visible terminal.
+    /// covered without touching this file. `terminalOwnsHit` owns the rule itself.
     func ownsPointer(at point: NSPoint) -> Bool {
-        guard let hit = window?.contentView?.hitTest(point) else { return true }
-        if hit === self || hit.isDescendant(of: self) { return true }
-        return hit is GhosttySurfaceView
+        terminalOwnsHit(point, host: self)
     }
 
     /// `ownsPointer(at:)` for the callers with no event in hand (`applyMouseShape`, activation), reading the

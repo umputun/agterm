@@ -349,6 +349,40 @@ final class SplitUITests: XCTestCase {
                       "exiting a non-split session closes it")
     }
 
+    /// The divider is the one part of the split with a real AX element (`NSSplitView` publishes a
+    /// Splitter), so the gesture is driven with real mouse events and read back from the persisted
+    /// left-pane fraction — which only moves when the LIVE divider does.
+    func testDoubleClickDividerRestoresEvenSplit() throws {
+        let row = app.staticTexts["session-row"]
+        XCTAssertTrue(row.waitForExistence(timeout: 20), "seeded session should exist")
+        row.click()
+        usleep(800_000)
+        let splitButton = app.buttons["split-toggle"]
+        XCTAssertTrue(splitButton.waitForExistence(timeout: 5), "split toolbar button should exist")
+        splitButton.click()
+
+        let divider = app.splitters.firstMatch
+        XCTAssertTrue(divider.waitForExistence(timeout: 8), "the split should publish a divider")
+        let start = divider.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        start.click(forDuration: 0.7, thenDragTo: start.withOffset(CGVector(dx: 120, dy: 0)),
+                    withVelocity: 180, thenHoldForDuration: 0.25)
+        XCTAssertTrue(poll(until: (splitRatio() ?? 0.5) > 0.55, timeout: 8),
+                      "dragging the divider right should grow the left pane: \(String(describing: splitRatio()))")
+
+        divider.doubleClick()
+        XCTAssertTrue(poll(until: abs((splitRatio() ?? 0) - 0.5) < 0.01, timeout: 8),
+                      "double-clicking the divider should restore the even split: \(String(describing: splitRatio()))")
+    }
+
+    /// The persisted left-pane fraction of the single seeded session, nil until one is stored.
+    private func splitRatio() -> Double? {
+        guard let data = try? Data(contentsOf: stateDir.windowSnapshotFile()),
+              let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let workspaces = obj["workspaces"] as? [[String: Any]],
+              let sessions = workspaces.first?["sessions"] as? [[String: Any]] else { return nil }
+        return sessions.first?["splitRatio"] as? Double
+    }
+
     /// Types `tty > <markerDir>/<name>` into the focused terminal and returns the tty the
     /// shell wrote (trimmed), or nil if nothing was written within the timeout.
     private func ttyAfterCommand(named name: String) -> String? {
