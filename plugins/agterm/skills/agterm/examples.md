@@ -653,11 +653,13 @@ agtermctl dashboard --mru --auto-size
 # a bare id still takes every pane, and the suffix works on any head (`active:left`, a unique prefix).
 agtermctl dashboard "$a:left" "$b:right" --auto-size
 
-# the payoff for an agent fleet: keep only the pane running the agent, whichever side it sits on
+# the payoff for an agent fleet: keep only the pane running the agent, whichever side it sits on.
+# `foreground`/`splitForeground` are argv ARRAYS (and null when the pane is at a bare prompt), so join
+# before matching — a bare `test` on them errors with "array cannot be matched".
 agtermctl dashboard --auto-size $(agtermctl tree --json | jq -r '
-  .result.tree.windows[].workspaces[].sessions[]
-  | if (.foreground // "" | test("claude|codex")) then "\(.id):left"
-    elif (.splitForeground // "" | test("claude|codex")) then "\(.id):right"
+  .result.tree.workspaces[].sessions[]
+  | if ((.foreground // []) | join(" ") | test("claude|codex")) then "\(.id):left"
+    elif ((.splitForeground // []) | join(" ") | test("claude|codex")) then "\(.id):right"
     else empty end')
 
 # an absolute cell font in points instead of --auto-size (the two are mutually exclusive)
