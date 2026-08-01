@@ -70,6 +70,13 @@ struct DashboardTargetTests {
         #expect(DashboardTarget(rawValue: "\(uuid):\(suffix)") == nil)
     }
 
+    // the pane-overlay zoom surfaces parse as TerminalZoomSurface; the allowlist here must keep refusing them
+    @Test(arguments: ["overlay-left", "overlay-right"])
+    func paneOverlaySurfacesAreRejected(_ suffix: String) {
+        #expect(TerminalZoomSurface(controlName: suffix) != nil)
+        #expect(DashboardTarget(rawValue: "\(uuid):\(suffix)") == nil)
+    }
+
     // the surface.zoom form must fail outright, not resolve to a head of "surface"
     @Test func surfaceZoomFormIsRejected() {
         #expect(DashboardTarget(rawValue: "surface:\(uuid):left") == nil)

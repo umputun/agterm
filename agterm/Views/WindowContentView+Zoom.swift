@@ -178,6 +178,16 @@ extension WindowContentView {
                          makeSurface: { makeOverlaySurface($0, nil) },
                          isActive: true, deckVisible: true, reportsFocusChange: false)
                 .id("\(session.id.uuidString)-zoom-overlay")
+        case .overlayLeft:
+            TerminalView(session: session, surfaceKeyPath: \.leftOverlaySurface,
+                         makeSurface: { makeOverlaySurface($0, .left) },
+                         isActive: true, deckVisible: true, reportsFocusChange: false)
+                .id("\(session.id.uuidString)-zoom-overlay-left")
+        case .overlayRight:
+            TerminalView(session: session, surfaceKeyPath: \.rightOverlaySurface,
+                         makeSurface: { makeOverlaySurface($0, .right) },
+                         isActive: true, deckVisible: true, reportsFocusChange: false)
+                .id("\(session.id.uuidString)-zoom-overlay-right")
         }
     }
 
@@ -194,6 +204,8 @@ extension WindowContentView {
         case .split: session.splitSurface
         case .scratch: session.scratchSurface
         case .overlay: session.overlaySurface
+        case .overlayLeft: session.leftOverlaySurface
+        case .overlayRight: session.rightOverlaySurface
         }
         if let view = target as? GhosttySurfaceView {
             // suppress the focus report BEFORE the first grab: this runs from the target onChange, which can

@@ -245,7 +245,8 @@ extension WindowContentView {
     /// clicking it moves focus through the surface's own `onFocusChange` — without grabbing focus on open.
     @ViewBuilder private func paneOverlayPanel(session: Session, pane: OverlayPane, isActive: Bool,
                                                deckVisible: Bool) -> some View {
-        let active = session.paneOverlay(pane) != nil
+        let zoomSurface: TerminalZoomSurface = pane == .left ? .overlayLeft : .overlayRight
+        let active = session.paneOverlay(pane) != nil && deckHostsSurface(session: session, surface: zoomSurface)
         let keyPath: ReferenceWritableKeyPath<Session, (any TerminalSurface)?> =
             pane == .left ? \.leftOverlaySurface : \.rightOverlaySurface
         GeometryReader { geo in

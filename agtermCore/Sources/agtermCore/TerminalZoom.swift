@@ -6,6 +6,8 @@ public enum TerminalZoomSurface: String, CaseIterable, Codable, Equatable, Senda
     case split = "right"
     case scratch
     case overlay
+    case overlayLeft = "overlay-left"
+    case overlayRight = "overlay-right"
 
     public init?(controlName: String) {
         switch controlName {
@@ -17,6 +19,10 @@ public enum TerminalZoomSurface: String, CaseIterable, Codable, Equatable, Senda
             self = .scratch
         case "overlay":
             self = .overlay
+        case "overlay-left":
+            self = .overlayLeft
+        case "overlay-right":
+            self = .overlayRight
         default:
             return nil
         }
@@ -35,33 +41,55 @@ public enum TerminalZoomSurface: String, CaseIterable, Codable, Equatable, Senda
             return session.scratchActive || session.scratchSurface != nil
         case .overlay:
             return session.overlayActive
+        case .overlayLeft:
+            return session.paneOverlay(.left) != nil
+        case .overlayRight:
+            return session.paneOverlay(.right) != nil
         }
     }
 
+    /// MUTUALLY EXCLUSIVE across cases, which `resolveTarget` relies on: it takes the FIRST active case as
+    /// the zoom target. A pane and its own pane overlay are separated by that pane's slot being nil, so
+    /// widening either one without narrowing the other silently picks the wrong target.
     @MainActor public func isActive(in session: Session) -> Bool {
         switch self {
         case .primary:
-            return !session.overlayActive && !session.scratchActive && !session.splitFocused
+            return !session.overlayActive && !session.scratchActive && !session.splitFocused && session.leftOverlay == nil
         case .split:
-            return !session.overlayActive && !session.scratchActive && session.splitFocused
+            return !session.overlayActive && !session.scratchActive && session.splitFocused && session.rightOverlay == nil
         case .scratch:
             return !session.overlayActive && session.scratchActive
         case .overlay:
             return session.overlayActive
+        case .overlayLeft:
+            return !session.overlayActive && !session.scratchActive && !session.splitFocused && session.leftOverlay != nil
+        case .overlayRight:
+            return !session.overlayActive && !session.scratchActive && session.splitFocused && session.rightOverlay != nil
         }
     }
 
     @MainActor public func isVisible(in session: Session) -> Bool {
         switch self {
         case .primary:
-            return !session.overlayActive && !session.scratchActive && (!session.splitFocused || session.isSplit)
+            // a pane renders at opacity 0 under its OWN overlay, so the overlay case takes the visibility.
+            return paneVisible(.left, in: session) && session.leftOverlay == nil
         case .split:
-            return !session.overlayActive && !session.scratchActive && (session.isSplit || session.splitFocused)
+            return paneVisible(.right, in: session) && session.rightOverlay == nil
         case .scratch:
             return !session.overlayActive && session.scratchActive
         case .overlay:
             return session.overlayActive
+        case .overlayLeft:
+            return paneVisible(.left, in: session) && session.leftOverlay != nil
+        case .overlayRight:
+            return paneVisible(.right, in: session) && session.rightOverlay != nil
         }
+    }
+
+    /// Whether the detail pane shows that pane at all, ignoring any pane overlay covering it.
+    @MainActor private func paneVisible(_ pane: OverlayPane, in session: Session) -> Bool {
+        guard !session.overlayActive, !session.scratchActive else { return false }
+        return pane == .left ? (!session.splitFocused || session.isSplit) : (session.isSplit || session.splitFocused)
     }
 }
 

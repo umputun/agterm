@@ -554,20 +554,27 @@ helper on `Open` so the `--pane` forwarding is assertable.
 **Files:**
 - Modify: `agtermCore/Sources/agtermCore/TerminalZoom.swift`
 - Modify: `agterm/Views/WindowContentView+Zoom.swift`
+- Modify: `agterm/Views/WindowContentView+Detail.swift` (➕ `paneOverlayPanel` is the CALLER that has to
+  consult `deckHostsSurface` for the new slots; the predicate itself needed no change)
 - Modify: `agtermCore/Tests/agtermCoreTests/TerminalZoomTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/DashboardTargetTests.swift`
 
-- [ ] add `overlayLeft` / `overlayRight` cases with their `controlName` spellings
-- [ ] implement `isAvailable` / `isActive` / `isVisible` for both, and NARROW `.primary` / `.split` per
+- [x] add `overlayLeft` / `overlayRight` cases with their `controlName` spellings
+- [x] implement `isAvailable` / `isActive` / `isVisible` for both, and NARROW `.primary` / `.split` per
       the table in Technical Details
-- [ ] update BOTH exhaustive switches in `WindowContentView+Zoom.swift` — `zoomedSessionTerminal`
+- [x] update BOTH exhaustive switches in `WindowContentView+Zoom.swift` — `zoomedSessionTerminal`
       (`:163`) and `focusZoomedSessionSurface` (`:191-196`) — and claim the slot in `deckHostsSurface`
-- [ ] write a property test asserting AT MOST ONE case satisfies `isActive` across a matrix of session
+- [x] write a property test asserting AT MOST ONE case satisfies `isActive` across a matrix of session
       states (split on/off, focus left/right, scratch on/off, session overlay on/off, each pane overlay
       on/off) — this is the exclusivity guarantee `resolveTarget` relies on
-- [ ] write tests for `TerminalSurfaceID` round-tripping `surface:<uuid>:overlay-left` and `-right`
-- [ ] write a regression test that `DashboardTarget` still refuses `overlay-left` / `overlay-right`
-- [ ] run `cd agtermCore && swift test`, `make lint` — must pass before task 9
+- [x] write tests for `TerminalSurfaceID` round-tripping `surface:<uuid>:overlay-left` and `-right`
+- [x] write a regression test that `DashboardTarget` still refuses `overlay-left` / `overlay-right`
+- [x] run `cd agtermCore && swift test`, `make lint` — must pass before task 9
+- ➕ the exclusivity property test asserts EXACTLY one active case, not just at most one: the narrowed
+      predicates stay total, which is what makes `resolveTarget`'s `?? .primary` fallback unreachable
+- ➕ `isVisible`'s four pane cases share a `paneVisible(_:in:)` helper so the pane and its overlay cannot
+      drift apart; `surfaces[]` in `controlTree` picks the new cases up from `allCases` with no change
+- ✅ `make test-app` runs again on this host (Automation Mode authorized since Task 7): 91 tests, 0 failures
 
 ### Task 9: Hosted UI coverage
 
