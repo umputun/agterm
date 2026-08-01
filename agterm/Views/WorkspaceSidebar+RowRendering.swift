@@ -36,10 +36,8 @@ extension WorkspaceSidebar.Coordinator {
         field.isEditable = false
         field.isBordered = false
         field.drawsBackground = false
-        // a recycled cell may carry the prior row's badge/hover state; reset before use. The status glyph is
-        // NOT reset here: both branches below assign it in full, and the idle round-trip would tear down and
-        // re-add the blink animation on every reload, restarting the fade at full opacity — a row whose
-        // terminal title animates (a spinner in the title) then strobes instead of pulsing.
+        // a recycled cell may carry the prior row's badge/hover state; reset before use. NOT the status
+        // glyph: each branch assigns it in full, and an idle round-trip restarts the blink on reload.
         applyBadge(toCell: cell, count: 0)
         cell.setAddButtonVisible(false)
         switch node.kind {
@@ -67,7 +65,6 @@ extension WorkspaceSidebar.Coordinator {
             field.setAccessibilityLabel(nil)
             let session = store.session(withID: node.id)
             applyBadge(toCell: cell, count: effectiveUnseen(session?.unseenCount ?? 0))
-            // gate the agent-status glyph: hidden for the frontmost window's selected session.
             cell.statusIcon.apply(effectiveIndicator(forSession: node.id))
             // the split-rectangle icon (matching the toolbar split button) shows in BOTH modes so a split
             // stays distinguishable at a glance, and `hasSplit` keeps it while merely hidden. Only the

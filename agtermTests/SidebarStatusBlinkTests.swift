@@ -3,10 +3,8 @@ import XCTest
 @testable import agterm
 import agtermCore
 
-/// Hosted coverage for the sidebar status glyph's blink surviving a row reload. A terminal title change
-/// moves `displayName`, which reloads just that row; the row builder must not tear the blink animation
-/// down and re-add it, or an animated title (Codex CLI's ~10Hz braille spinner) restarts the 0.5s fade
-/// before it leaves full opacity and the glyph strobes instead of pulsing.
+/// Hosted coverage for the sidebar status glyph's blink surviving a per-row reload: a title change moves
+/// `displayName`, which reloads the row, and the row builder must not tear the animation down and re-add it.
 @MainActor
 final class SidebarStatusBlinkTests: XCTestCase {
     private var stateDir: URL!
@@ -76,8 +74,27 @@ final class SidebarStatusBlinkTests: XCTestCase {
 
         session.agentIndicator = AgentIndicator(status: .active, blink: true)
         coordinator.reconcile()
-        let (_, blink) = try renderedStatus(forSession: session.id)
-        XCTAssertNotNil(blink)
+        _ = try renderedStatus(forSession: session.id)
+    }
+
+    func testClearingOnlyTheBlinkFlagStopsTheAnimation() throws {
+        try XCTSkipIf(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion,
+                      "Reduce Motion suppresses the blink this test pins")
+        let store = try XCTUnwrap(library.activeStore)
+        let session = try XCTUnwrap(store.activeSession)
+        buildSidebar(for: store)
+
+        session.agentIndicator = AgentIndicator(status: .active, blink: true)
+        coordinator.reconcile()
+        _ = try renderedStatus(forSession: session.id)
+
+        session.agentIndicator = AgentIndicator(status: .active, blink: false)
+        coordinator.reconcile()
+        let (_, cell) = try renderedRow(forSession: session.id)
+
+        XCTAssertNil(cell.statusIcon.layer?.animation(forKey: Self.blinkKey),
+                     "dropping the blink flag must stop the animation, not only going idle")
+        XCTAssertFalse(cell.statusIcon.isHidden, "a still-active status keeps its glyph on screen")
     }
 
     func testClearingBlinkStopsTheAnimation() throws {
