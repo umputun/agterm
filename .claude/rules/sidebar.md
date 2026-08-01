@@ -40,7 +40,10 @@ paths:
   is enabled.
 - A workspace-row click toggles expansion through the outline action, excluding the disclosure frame.
   Defer by `NSEvent.doubleClickInterval` and cancel on double-click so rename does not flicker through a
-  toggle. This click routing is keep-in-sync exempt. Control expansion instead persists through
+  toggle. This click routing is keep-in-sync exempt. `GhosttyApp.workspaceRowClickExpands` (default on)
+  gates the whole-row target only; the disclosure triangle toggles natively and stays unconditional.
+  The deferred item re-reads that mirror when it fires, so turning the setting off inside the deferral
+  window cancels the pending toggle. Control expansion instead persists through
   `AppActions.setWorkspaceExpanded`, then posts `.agtermSetWorkspaceExpanded` to synchronize a live outline.
 - A session-row click selects, then asynchronously calls `revealActiveBlockedPane` with the captured
   pre-reset indicator. Blocked/completed pane tags reveal split, scratch, or primary; idle and active use

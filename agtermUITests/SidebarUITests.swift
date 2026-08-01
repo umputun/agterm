@@ -138,6 +138,87 @@ final class SidebarUITests: XCTestCase {
         XCTAssertTrue(session.waitForExistence(timeout: 5), "expanding the workspace should show its session row again")
     }
 
+    // with `workspaceRowClickExpands` off, only the disclosure triangle stays a toggle.
+    func testWorkspaceRowClickDoesNotToggleWhenSettingIsOff() throws {
+        XCTAssertTrue(app.staticTexts["workspace 1"].waitForExistence(timeout: 20), "seeded workspace should exist")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "seeded session should be visible")
+
+        app.terminate()
+        let settings = try JSONSerialization.data(withJSONObject: ["workspaceRowClickExpands": false])
+        try settings.write(to: stateDir.appendingPathComponent("settings.json"))
+        app = XCUIApplication()
+        app.launchEnvironment["AGTERM_STATE_DIR"] = stateDir.path
+        app.launchForUITest()
+        let ws = app.staticTexts["workspace 1"]
+        XCTAssertTrue(ws.waitForExistence(timeout: 20), "workspace 1 should restore")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "the session row should be visible after relaunch")
+
+        // the toggle would have been deferred by the double-click interval, so poll past it for a collapse
+        // that must never come.
+        ws.click()
+        XCTAssertFalse(pollSessionRowCount(0, timeout: 3), "a row click must not collapse the workspace while the setting is off")
+
+        let triangle = app.disclosureTriangles.firstMatch
+        XCTAssertTrue(triangle.waitForExistence(timeout: 5), "the workspace row should expose its disclosure triangle")
+        triangle.click()
+        XCTAssertTrue(pollSessionRowCount(0, timeout: 8), "the disclosure triangle should collapse regardless of the setting")
+    }
+
+    // the `persistAndApply()` mirror leg: the seeded-file test above covers only the launch-time one, so
+    // without this a missing live mirror would leave the toggle needing a relaunch and the suite green.
+    func testWorkspaceRowClickStopsTogglingAfterLiveSettingsFlip() throws {
+        let ws = app.staticTexts["workspace 1"]
+        XCTAssertTrue(ws.waitForExistence(timeout: 20), "seeded workspace should exist")
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "seeded session should be visible")
+
+        settingsControl(tab: "General", control: "settings-workspace-row-click-expands").click() // default on
+        XCTAssertTrue(pollSettingsFalse("workspaceRowClickExpands", timeout: 5),
+                      "clicking the toggle should persist workspaceRowClickExpands=false")
+        // close Settings by its own close button: ⌘W would reach the app's Close Session command and take
+        // the seeded session with it, which reads as a collapse to the row-count oracle below.
+        let settingsWindow = app.windows.containing(.any, identifier: "settings-workspace-row-click-expands").firstMatch
+        settingsWindow.buttons[XCUIIdentifierCloseWindow].click()
+
+        XCTAssertTrue(pollSessionRowCount(1, timeout: 10), "closing Settings must leave the seeded session in place")
+        XCTAssertTrue(ws.waitForHittable(timeout: 10), "the sidebar row should be reachable after closing Settings")
+        ws.click()
+        XCTAssertFalse(pollSessionRowCount(0, timeout: 3),
+                       "a row click must not collapse the workspace after the setting is flipped off live")
+    }
+
+    /// Polls the isolated `settings.json` until `key` is persisted as false.
+    private func pollSettingsFalse(_ key: String, timeout: TimeInterval) -> Bool {
+        let file = stateDir.appendingPathComponent("settings.json")
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if let data = try? Data(contentsOf: file),
+               let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               (object[key] as? NSNumber)?.boolValue == false { return true }
+            usleep(150_000)
+        }
+        return false
+    }
+
+    /// The Settings control with `control`, opening Settings and switching to `tab` as needed — reopen can
+    /// leave a non-key window that swallows the first tab click, so both steps retry until it is hittable.
+    private func settingsControl(tab: String, control: String, timeout: TimeInterval = 12,
+                                 file: StaticString = #filePath, line: UInt = #line) -> XCUIElement {
+        let target = app.descendants(matching: .any).matching(identifier: control).firstMatch
+        let tabButton = app.buttons[tab].firstMatch
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if target.exists, target.isHittable { return target }
+            if tabButton.exists, tabButton.isHittable {
+                tabButton.click()
+            } else {
+                app.typeKey(",", modifierFlags: .command) // settings not open yet (or lost) — (re)open
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.25))
+        }
+        XCTFail("Settings '\(tab)' control '\(control)' never became hittable", file: file, line: line)
+        return target
+    }
+
     // collapses a workspace whose session is NOT the selected one, so the launch-time reveal of the
     // active session cannot re-expand it.
     func testWorkspaceCollapsePersistsAcrossRelaunch() throws {

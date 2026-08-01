@@ -21,7 +21,8 @@ paths:
   traffic lights but leaves an invisible roughly 3-point drag strip above the first row at padding 6.
   `effectiveToolbarMode` falls back through legacy `compactToolbar` (`false` = normal, nil/true = compact);
   writing a mode clears the legacy field.
-- Default-on nil fields are `notificationsEnabled`, `notificationBadgeEnabled`, and `rightClickPaste`.
+- Default-on nil fields are `notificationsEnabled`, `notificationBadgeEnabled`, `rightClickPaste`, and
+  `workspaceRowClickExpands`, whose mirror gates the sidebar row-click toggle only ([[sidebar]]).
   Default-off nil fields include attention button, Dock bounce, restore commands, global config
   inheritance, close confirmation, auto-follow, hidden inactive sidebars, and interface hiding.
 - `sidebarFontSize` is 9...20, default 13; row height is clamped size + 15, so 13 gives 28. Icons/status

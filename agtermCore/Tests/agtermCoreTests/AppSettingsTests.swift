@@ -220,6 +220,17 @@ struct AppSettingsTests {
         #expect(AppSettings(confirmCloseSession: true).ghosttyConfigLines() == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
     }
 
+    @Test func workspaceRowClickExpandsDefaultsOnAndIsNotAConfigLine() throws {
+        #expect(AppSettings().workspaceRowClickExpands == nil)
+        let decoded = try JSONDecoder().decode(AppSettings.self,
+                                               from: JSONEncoder().encode(AppSettings(workspaceRowClickExpands: false)))
+        #expect(decoded.workspaceRowClickExpands == false)
+        let legacy = try JSONDecoder().decode(AppSettings.self, from: Data(#"{"theme":"Nord"}"#.utf8))
+        #expect(legacy.workspaceRowClickExpands == nil)
+        #expect(AppSettings(workspaceRowClickExpands: false).ghosttyConfigLines()
+            == ["mouse-scroll-multiplier = 3", "right-click-action = paste"])
+    }
+
     @Test func notificationSoundNameRoundTripsAndIsNotAConfigLine() throws {
         let decoded = try JSONDecoder().decode(AppSettings.self, from: JSONEncoder().encode(AppSettings(notificationSoundName: "Glass")))
         #expect(decoded.notificationSoundName == "Glass")
