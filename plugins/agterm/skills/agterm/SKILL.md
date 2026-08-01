@@ -346,10 +346,14 @@ means no input, not no process effect. The most-recently-used grid also has a GU
 TOGGLE the frontmost window's MRU dashboard auto-sized (identical to `dashboard --mru --auto-size`); no new
 control command, the socket `dashboard` command is unchanged.
 
-**pick**: `pick [--prompt TEXT] [--allow-custom] [--follow] [--window W] [--no-block]` reads choices
-from stdin and opens the target window's native fuzzy picker. Supply nonblank lines (each line is both
-the id and label) or a JSON array of `{id,label,subtitle?}` items. The default blocks until the user
-chooses or cancels and prints the bare JSON result. `--no-block` prints the picker id instead;
+**pick**: `pick [--prompt TEXT] [--query TEXT] [--allow-custom] [--follow] [--window W] [--no-block]` reads
+choices from stdin and opens the target window's native fuzzy picker. Supply nonblank lines (each line is
+both the id and label) or a JSON array of `{id,label,subtitle?}` items; typing matches labels only, and an
+empty query keeps the supplied order, so the caller's first item is the one Return runs. `--query` prefills
+the field and filters on open, which re-ranks and drops that order. An empty item list is accepted only with
+`--allow-custom`, giving a plain text prompt; stdin is read either way, so an itemless call needs
+`< /dev/null` or it blocks. The default blocks until the user chooses or cancels and prints the bare JSON
+result. `--no-block` prints the picker id instead;
 `pick result ID [--window W]` reads it later, and `pick cancel ID [--window W]` cancels it.
 Only one picker may be pending per window. It opens without raising a background target unless
 `--follow` is set. Read the live picker id from the tree's top-level `pickPending` field.

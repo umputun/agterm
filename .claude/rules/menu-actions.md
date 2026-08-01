@@ -146,11 +146,16 @@ paths:
 ## Palettes, rename, and switcher
 
 - `PaletteController`/`CommandPalette` consume `paletteActions`, `paletteSessions`, and host-free
-  `fuzzyScore`. Store the visible results in state on query/mode changes so rendering and Enter target
-  cannot diverge; sort by score then title. Ctrl-P opens sessions; Ctrl-Shift-P opens actions.
+  `fuzzyScore`/`paletteSearchKeys`. Store the visible results in state on query/mode changes so rendering
+  and Enter target cannot diverge; sort by score then title. Built-in palettes match label plus subtitle;
+  caller-supplied pickers match the label only, so subtitle consequence text cannot filter a safe row out
+  and leave a destructive one preselected. Ctrl-P opens sessions; Ctrl-Shift-P opens actions.
+- An empty query skips ranking in two cases: attention mode and a caller-supplied picker. Both keep their
+  source order, because every row scores 0 and the tie-break would re-sort A→Z and replace the row Return
+  runs. Every other palette lists everything A→Z.
 - Attention mode lists every non-idle session, ordered blocked, active, completed and then newest
   `statusChangedAt`, with nil last. Palette items carry status plus per-call color/shape, resolved by the
-  same helpers as sidebar glyphs. Empty query preserves this order; typed queries use fuzzy score.
+  same helpers as sidebar glyphs. Typed queries use fuzzy score.
 - Open attention through `show_attention` (Ctrl-Shift-I), Navigate > Go to Attention, or Show Attention
   in the action palette. The titlebar bell opens a popover, not this palette. Palette opening is
   keep-in-sync exempt.

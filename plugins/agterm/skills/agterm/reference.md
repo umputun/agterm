@@ -697,20 +697,30 @@ Invalid invocations error (rejected at the CLI and re-checked server-side): `--f
 
 ## pick
 
-`agtermctl pick [--prompt TEXT] [--allow-custom] [--follow] [--window W] [--no-block]` reads choices
-from stdin and opens a native fuzzy picker in the target window. `pick` defaults to the open subcommand,
-so `agtermctl pick open` is not required.
+`agtermctl pick [--prompt TEXT] [--query TEXT] [--allow-custom] [--follow] [--window W] [--no-block]`
+reads choices from stdin and opens a native fuzzy picker in the target window. `pick` defaults to the open
+subcommand, so `agtermctl pick open` is not required. Stdin is read unconditionally, so a call that supplies
+no items needs `< /dev/null` or it blocks.
 
 The first non-whitespace input byte selects the format. `[` starts a JSON array of objects with required
 `id` and `label` strings plus an optional `subtitle`; any other input is split into lines, blank and
 whitespace-only lines are dropped, and each remaining line becomes both the id and label. Item ids must
 be unique, labels must not be empty, labels and subtitles may not contain control characters, and a
-picker accepts at most 1,000 items. An empty list is rejected.
+picker accepts at most 1,000 items. An empty list is rejected with `pick.open requires at least one item`
+unless `--allow-custom` is set, which accepts it and opens a plain text prompt. Omitting `items` altogether
+is rejected with `pick.open requires items`, reachable only over the raw protocol: the CLI always sends the
+list it parsed, empty or not.
 
-`--prompt` sets the query field's placeholder text. `--allow-custom` adds a row for a nonmatching query and
-returns it as a custom result. A background `--window` target is not raised by default; `--follow`
-raises it. Only one picker can be pending in a window, and a second open fails with
-`pick already pending`.
+The query matches item labels only; a subtitle is displayed but never searched, so consequence text on one
+row cannot filter out its safer neighbour. An empty query lists the items in the order the caller supplied
+them, so the first item is the one Return runs on open.
+
+`--prompt` sets the query field's placeholder text. `--query` prefills it and filters on open, which ranks
+by match score and so does not preserve the supplied order. `--allow-custom` adds a row for a nonmatching
+query and returns it as a custom result; with an empty item list that row is the only possible one, and it
+appears as soon as the query is nonblank, prefilled or typed; whitespace and newlines are trimmed first.
+A background `--window` target is not raised by default; `--follow` raises it. Only one picker can be
+pending in a window, and a second open fails with `pick already pending`.
 
 The default call polls until the user answers and prints one bare JSON result:
 

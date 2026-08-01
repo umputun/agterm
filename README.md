@@ -219,9 +219,16 @@ Each command targets a session or workspace by its UUID, a unique prefix of that
 Input can be nonblank lines or a JSON array of objects with `id`, `label`, and an optional `subtitle`.
 The default call blocks and prints terminal-result JSON: picked item, custom query, or cancellation.
 Use `--allow-custom` to accept a query that does not match an item, `--window` to target another open window, and `--follow` to raise that window.
+Typing matches item labels only; a subtitle is shown but never searched, so consequence text on one row cannot filter out its safer neighbour.
+An empty query lists the items in the order they were supplied, so the caller's first item is the one Return runs on open.
+`--query TEXT` prefills the field and filters immediately, which ranks by match score and therefore does not preserve that supplied order.
+With `--allow-custom` the item list may be empty, which turns the picker into a plain text prompt: the custom row appears as soon as the query is nonblank, whether prefilled by `--query` or typed.
+An itemless call still reads stdin, so redirect it (`< /dev/null`) or it blocks.
 
 ```sh
 printf '%s\n' staging production | agtermctl pick --prompt "Deploy where?"
+
+agtermctl pick --allow-custom --query "$name" --prompt "Rename to" < /dev/null
 
 pick_id=$(printf '%s\n' alpha beta | agtermctl pick --no-block | jq -r '.id')
 agtermctl pick result "$pick_id"      # bare JSON result; exit 1 while pending, 2 when cancelled

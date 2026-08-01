@@ -245,9 +245,18 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   Arrows navigate ragged `ceil(sqrt(n))` grid, Enter closes then selects/focuses exact pane, Esc closes.
   It is reciprocal with zoom. Read live `dashboardMembers`, highlighted member, applied font size, and
   `auto|fixed|untouched` mode. See [[libghostty]] for reparent, input gates, and transient font.
-- `pick.open` accepts 1...1000 unique ID items with nonempty labels, optional subtitle/prompt/custom/follow.
-  Reject duplicates and control characters host-free. One picker may be pending per window. Background
-  remains background unless follow raises and publishes frontmost.
+- `pick.open` accepts 1...1000 unique ID items with nonempty labels, or an empty list when `allowCustom`
+  is set, which makes it a text prompt. Absent items return `pick.open requires items`; an empty list
+  without `allowCustom` returns `pick.open requires at least one item`.
+  Optional subtitle/prompt/query/custom/follow; `query` prefills the field so the picker opens filtered.
+  Reject duplicate IDs and control characters host-free; `prompt` and `query` stay unvalidated free text.
+  One picker may be pending per window. Background remains background unless follow raises and publishes
+  frontmost.
+- Caller-supplied rows match on their label only. Subtitles are displayed but never searched, so
+  consequence text cannot filter a safe row out and leave a destructive one preselected. An empty query
+  preserves caller item order; a prefilled `query` re-ranks and drops that order. The palette trims
+  whitespace and newlines before deciding, so a blank `query` counts as empty — `fuzzyScore` consumes a
+  newline the trim would otherwise keep, scoring every row 0 and losing the order to the A→Z tie-break.
 - Global picker ID pins result/cancel to its owner across frontmost changes; explicit window must match.
   Results are pending, picked with ID/label/index, custom with query, or cancelled. Cancel is idempotent
   after terminal state. Tree exposes `pickPending`.

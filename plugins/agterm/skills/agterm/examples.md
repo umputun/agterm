@@ -718,6 +718,22 @@ jq -n '[
 ]' | agtermctl pick --prompt "Deploy target" --allow-custom
 ```
 
+Typing matches labels only, so consequence text in a subtitle cannot filter one row out and leave its riskier
+neighbour alone and preselected. An empty query keeps the order the items were supplied in, so the intended
+default can be listed first.
+
+With `--allow-custom` the item list may be empty, which is a rename prompt: `--query` seeds the current
+value and the answer comes back as a custom result. `pick` reads stdin unconditionally, so redirect it or
+the call blocks:
+
+```bash
+agtermctl pick --allow-custom --prompt "Rename to" --query "$current" < /dev/null |
+  jq -r 'select(.result == "custom") | .query'
+```
+
+The seeded value is offered as the custom row on open; without `--query` nothing is listed until the user
+types, since that row needs a nonblank query. Esc cancels.
+
 Open without blocking when another process owns the lifecycle. The picker id reads back from the target
 window's tree as `pickPending`; poll the same window, or cancel by exact id:
 

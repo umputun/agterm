@@ -1750,7 +1750,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl pick [--prompt TEXT] [--allow-custom] [--follow] [--window W] [--no-block]
+                agtermctl pick [--prompt TEXT] [--query TEXT] [--allow-custom] [--follow] [--window W] [--no-block]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">pick.open</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1758,10 +1758,18 @@
                 the label. Input whose first non-whitespace byte is
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">[</span> is a JSON array of
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">{id,label,subtitle?}</span> objects. Item ids must be
-                unique, labels must not be empty, and the list is capped at 1,000 items.
+                unique, labels must not be empty, and the list is capped at 1,000 items. The list may be empty only with
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--allow-custom</span>, which turns the picker into a
+                plain text prompt.
+              </p>
+              <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
+                Typing matches item labels only; a subtitle is displayed but never searched. An empty query lists the items in the
+                order the caller supplied them, so the first item is the one Return runs on open.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--prompt</span> sets the query field placeholder.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--query</span> prefills it and filters on open, which
+                ranks by match score and so does not preserve the supplied order.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--allow-custom</span> accepts a nonmatching query.
                 A background <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--window</span> target stays in the
                 background unless <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--follow</span> raises it. The
@@ -1776,7 +1784,9 @@
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <strong style="color: #bfbab0">Errors:</strong>
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick.open requires at least one item</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick.open requires items</span> (none supplied),
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick.open requires at least one item</span> (empty list
+                without <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--allow-custom</span>),
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">too many items (max 1000)</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick item label must not be empty</span>,
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">pick item ids must be unique</span>, or
