@@ -633,7 +633,8 @@ ratios, sidebar state, focus, or split/scratch visibility. Surface ids come from
 
 The dashboard shows several sessions' live output in one view-only grid — for watching several agents or
 builds at once. The cell unit is a session+pane: a non-split session is one cell, and a SPLIT session
-shows as TWO cells (its left/primary and right/split panes), capped at 9 cells total. No cell takes input:
+shows as TWO cells (its left/primary and right/split panes) unless the id names one with a `:left`/`:right`
+suffix, capped at 9 cells total. No cell takes input:
 the keyboard navigates a highlight (arrows), Enter jumps into the highlighted session AND focuses that
 exact pane then closes, Esc closes. Open it over the socket with explicit session ids, or with `--mru` to
 pull the window's most-recently-used sessions automatically. The most-recently-used grid also has a built-in
@@ -647,6 +648,17 @@ agtermctl dashboard "$a" "$b" "$c" --auto-size
 
 # no ids: fill the grid from the window's most-recently-used sessions (up to 9, fewer if fewer)
 agtermctl dashboard --mru --auto-size
+
+# name ONE pane of a split session with a :left/:right suffix, so the pane you don't want costs no cell.
+# a bare id still takes every pane, and the suffix works on any head (`active:left`, a unique prefix).
+agtermctl dashboard "$a:left" "$b:right" --auto-size
+
+# the payoff for an agent fleet: keep only the pane running the agent, whichever side it sits on
+agtermctl dashboard --auto-size $(agtermctl tree --json | jq -r '
+  .result.tree.windows[].workspaces[].sessions[]
+  | if (.foreground // "" | test("claude|codex")) then "\(.id):left"
+    elif (.splitForeground // "" | test("claude|codex")) then "\(.id):right"
+    else empty end')
 
 # an absolute cell font in points instead of --auto-size (the two are mutually exclusive)
 agtermctl dashboard "$a" "$b" --font-size 12

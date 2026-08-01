@@ -221,4 +221,72 @@ struct DashboardControllerTests {
         registry.unregister(id)
         #expect(registry.controller(for: id) == nil)
     }
+
+    // pins #331: a grid built from `<id>:right` must survive `closePrimaryPane` promoting that pane
+    @Test func promoteRewritesALoneSplitMemberToPrimary() {
+        let controller = DashboardController()
+        let a = UUID()
+        controller.open(members: [split(a)])
+
+        controller.promoteSplitMember(session: a)
+
+        #expect(controller.members == [primary(a)])
+        #expect(controller.highlighted == primary(a))
+        #expect(controller.isOpen)
+    }
+
+    @Test func promoteCollapsesIntoAnExistingPrimaryMember() {
+        let controller = DashboardController()
+        let a = UUID()
+        let b = UUID()
+        controller.open(members: [primary(a), split(a), primary(b)])
+
+        controller.promoteSplitMember(session: a)
+
+        #expect(controller.members == [primary(a), primary(b)])
+    }
+
+    @Test func promoteMovesTheHighlightOffTheRewrittenCell() {
+        let controller = DashboardController()
+        let a = UUID()
+        controller.open(members: [primary(a), split(a)], highlighted: DashboardMember(session: a, surface: .split))
+
+        controller.promoteSplitMember(session: a)
+
+        #expect(controller.members == [primary(a)])
+        #expect(controller.highlighted == primary(a))
+    }
+
+    @Test func promoteLeavesAnUnhighlightedSiblingHighlightAlone() {
+        let controller = DashboardController()
+        let a = UUID()
+        let b = UUID()
+        controller.open(members: [split(a), primary(b)], highlighted: DashboardMember(session: b, surface: .primary))
+
+        controller.promoteSplitMember(session: a)
+
+        #expect(controller.members == [primary(a), primary(b)])
+        #expect(controller.highlighted == primary(b))
+    }
+
+    @Test func promoteIsANoOpWithoutASplitMember() {
+        let controller = DashboardController()
+        let a = UUID()
+        controller.open(members: [primary(a)])
+
+        controller.promoteSplitMember(session: a)
+
+        #expect(controller.members == [primary(a)])
+    }
+
+    // the other teardown path: the split's OWN shell exiting must still drop the cell, not rewrite it
+    @Test func reconcileStillPrunesASplitMemberWhenTheSplitItselfClosed() {
+        let controller = DashboardController()
+        let a = UUID()
+        controller.open(members: [primary(a), split(a)])
+
+        controller.reconcile(existing: [primary(a)])
+
+        #expect(controller.members == [primary(a)])
+    }
 }

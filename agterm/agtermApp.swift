@@ -221,7 +221,7 @@ struct agtermApp: App {
         let sessionID = session.id
         view.onExit = { [weak view] in
             guard let view else { return }
-            Self.handlePaneExit(view, store: store, sessionID: sessionID)
+            Self.handlePaneExit(view, store: store, sessionID: sessionID, library: library)
         }
         view.onFocusChange = { focused in
             guard focused else { return }
@@ -248,7 +248,8 @@ struct agtermApp: App {
     /// run `closePrimaryPane`, or a re-split then a main-pane exit fires the stale `closeSplitPane` — its guard now
     /// passes with both slots live — tearing down the fresh right pane, stranding the session on the dead left.
     @MainActor
-    private static func handlePaneExit(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID) {
+    private static func handlePaneExit(_ view: GhosttySurfaceView, store: AppStore, sessionID: UUID,
+                                       library: WindowLibrary) {
         if view.isSplitPane {
             store.closeSplitPane(sessionID)
         } else {
@@ -257,6 +258,12 @@ struct agtermApp: App {
             // its own cmd +/-. no-op when the session closed instead (`surface` nil).
             if let promoted = store.session(withID: sessionID)?.surface as? GhosttySurfaceView {
                 promoted.onFontSizeChange = { store.setFontSize(sessionID, $0) }
+                // the same "session survived ⇒ its split was promoted" test, for a dashboard holding this
+                // session by `<id>:right`. synchronous, so it lands before the reconcile onChange prunes the
+                // cell; this is the only place that can tell promotion from the split's own shell exiting.
+                library.windowID(for: store)
+                    .flatMap { DashboardControllerRegistry.shared.controller(for: $0) }?
+                    .promoteSplitMember(session: sessionID)
             }
         }
         // focus the surviving (now maximized) pane, else the session reselected to; the collapse/switch re-hosts
@@ -368,7 +375,7 @@ struct agtermApp: App {
         let sessionID = session.id
         view.onExit = { [weak view] in
             guard let view else { return }
-            Self.handlePaneExit(view, store: store, sessionID: sessionID)
+            Self.handlePaneExit(view, store: store, sessionID: sessionID, library: library)
         }
         view.onFocusChange = { [weak view] focused in
             guard focused else { return }

@@ -793,6 +793,13 @@ public struct ControlDispatcher {
         guard !targets.isEmpty else {
             return ControlResponse(ok: false, error: "dashboard requires at least one session id")
         }
+        // grammar only: a malformed pane suffix fails the command here, while a well-formed ref that
+        // resolves to nothing is app-side and joins the `unresolved` note instead.
+        if let malformed = targets.first(where: { DashboardTarget(rawValue: $0) == nil }) {
+            return ControlResponse(
+                ok: false,
+                error: "dashboard: invalid session id '\(malformed)' — use <id>, <id>:left, or <id>:right")
+        }
         return actions.setDashboard(targets: targets, window: args?.window, close: false, fontMode: fontMode, mru: false)
     }
 }

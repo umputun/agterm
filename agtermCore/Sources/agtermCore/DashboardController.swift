@@ -129,6 +129,28 @@ public final class DashboardController {
         focusRevision &+= 1
     }
 
+    /// promoteSplitMember follows a promoted split survivor: `AppStore.closePrimaryPane` moves the split's
+    /// shell into the primary slot, so a `.split` cell for that session now points at a pane that no longer
+    /// exists even though its shell is alive. Rewriting it to `.primary` keeps a grid built from
+    /// `<id>:right` watching the same shell; without this, reconcile prunes the cell and the watched
+    /// program silently leaves the dashboard.
+    ///
+    /// Must run BEFORE reconcile: `closeSplit` (the split's own shell exiting) and `closePrimaryPane` both
+    /// end with `hasSplit == false`, so the valid-member set looks identical and only the caller knows a
+    /// promotion happened. Collapses into an existing `.primary` cell rather than duplicating it — a bare
+    /// id contributes both — and carries the highlight across. No-op without a `.split` member.
+    public func promoteSplitMember(session: UUID) {
+        let promoted = DashboardMember(session: session, surface: .split)
+        let destination = DashboardMember(session: session, surface: .primary)
+        guard let index = members.firstIndex(of: promoted) else { return }
+        if members.contains(destination) {
+            members.remove(at: index)
+        } else {
+            members[index] = destination
+        }
+        if highlighted == promoted { highlighted = destination }
+    }
+
     /// reconcile drops any member pane absent from `existing` (a member session or split pane closed while
     /// the dashboard is open — e.g. over the control socket), preserving order. Closes the dashboard when no
     /// member survives, and moves the highlight to the first survivor when the highlighted one vanished. A

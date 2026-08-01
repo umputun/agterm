@@ -91,6 +91,100 @@ final class DashboardUITests: ControlAPITestCase {
                       "Enter on the split cell focuses the RIGHT pane (splitFocused flips to true)")
     }
 
+    // MARK: - pane refs (#331)
+
+    func testPaneRefOpensOnlyTheNamedPane() throws {
+        let ids = try prepareSessions(extra: 0)
+        let id = ids[0]
+        try splitAndFocusLeft(id)
+
+        try openDashboard(members: ["\(id):right"])
+        XCTAssertTrue(pollCellCount(1, timeout: 15), "a pane ref opens one cell where a bare id opens two")
+        XCTAssertEqual(dashMembers()?.map { $0.lowercased() }, ["\(id.lowercased()):right"],
+                       "the single cell is the session's RIGHT pane")
+
+        settle(0.5)
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertTrue(dashboardOverlay.waitForNonExistence(timeout: 10), "Enter closes the dashboard")
+        XCTAssertTrue(try pollSplitFocused(id, expected: true, timeout: 10),
+                      "Enter on a lone right-pane cell focuses the RIGHT pane")
+    }
+
+    // the issue's headline case: without refs these two split sessions would fill four of the nine cells.
+    func testMixedPaneRefsPlaceOneCellPerSession() throws {
+        let ids = try prepareSessions(extra: 1)
+        for id in ids { try splitAndFocusLeft(id) }
+
+        try openDashboard(members: ["\(ids[0]):left", "\(ids[1]):right"])
+        XCTAssertTrue(pollCellCount(2, timeout: 15), "two split sessions contribute one cell each")
+        XCTAssertEqual(dashMembers()?.map { $0.lowercased() },
+                       ["\(ids[0].lowercased()):left", "\(ids[1].lowercased()):right"],
+                       "members keep request order and carry the requested pane per session")
+    }
+
+    func testActiveResolvesWithAPaneSuffix() throws {
+        let id = try prepareSessions(extra: 0)[0]
+
+        try openDashboard(members: ["active:left"])
+        XCTAssertTrue(pollCellCount(1, timeout: 15), "active resolves while carrying a pane suffix")
+        XCTAssertEqual(dashMembers()?.map { $0.lowercased() }, ["\(id.lowercased()):left"],
+                       "active:left places the active session's main pane")
+    }
+
+    // the empty guard is on the EXPANDED members, not the resolved ids: `:right` on an unsplit session
+    // resolves its id but yields no cell, and must not tear down a grid that is already up.
+    func testPaneRefForAMissingPaneFailsAndLeavesAnOpenGridAlone() throws {
+        let ids = try prepareSessions(extra: 1)
+        try openDashboard(members: [ids[0]])
+        XCTAssertTrue(pollCellCount(1, timeout: 15), "the first grid is up")
+
+        let response = try sendCommand(#"{"cmd":"dashboard","args":{"targets":["\#(ids[1]):right"]}}"#)
+        XCTAssertEqual(response["ok"] as? Bool, false,
+                       "a right-pane ref to a session with no split resolves no cell: \(response)")
+        XCTAssertTrue(dashboardOverlay.exists, "the failed open must not close the live dashboard")
+        XCTAssertEqual(dashMembers()?.map { $0.lowercased() }, ["\(ids[0].lowercased()):left"],
+                       "the live grid keeps its own member")
+    }
+
+    // pins the promotion wiring in `agtermApp.handlePaneExit`: the unit tests reach only the controller
+    // method, and without the rewrite reconcile prunes this cell and the watched program leaves the grid.
+    func testPromotedSplitKeepsItsCellOnTheGrid() throws {
+        let ids = try prepareSessions(extra: 0)
+        let id = ids[0]
+        try splitAndFocusLeft(id)
+
+        try openDashboard(members: ["\(id):right"])
+        XCTAssertTrue(pollCellCount(1, timeout: 15), "the grid holds the right pane alone")
+
+        // the MAIN shell exiting promotes the split survivor into the primary slot
+        _ = try sendCommand(typeRequest(text: "exit\n", target: id, select: false, pane: "left"))
+        XCTAssertTrue(pollDashMembers(["\(id):left"], timeout: 15),
+                      "the cell follows the promoted pane instead of being pruned")
+        XCTAssertTrue(dashboardOverlay.exists, "the dashboard stays open across the promotion")
+    }
+
+    /// Split `id` and leave the LEFT pane focused — `split on` focuses the right pane, which would make a
+    /// later `splitFocused` assertion vacuous.
+    private func splitAndFocusLeft(_ id: String) throws {
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.split","target":"\#(id)","args":{"mode":"on"}}"#)["ok"] as? Bool,
+                       true, "session.split on should succeed")
+        XCTAssertTrue(try pollSplit(id, timeout: 10), "the session should report a split")
+        XCTAssertEqual(try sendCommand(#"{"cmd":"session.focus","target":"\#(id)","args":{"pane":"left"}}"#)["ok"] as? Bool,
+                       true, "session.focus left should succeed")
+        XCTAssertTrue(try pollSplitFocused(id, expected: false, timeout: 10), "focus the left pane before opening")
+    }
+
+    /// Polls `tree.dashboardMembers` until it equals `refs` exactly (case-insensitive, order-sensitive).
+    private func pollDashMembers(_ refs: [String], timeout: TimeInterval) -> Bool {
+        let wanted = refs.map { $0.lowercased() }
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if dashMembers()?.map({ $0.lowercased() }) == wanted { return true }
+            usleep(200_000)
+        }
+        return dashMembers()?.map { $0.lowercased() } == wanted
+    }
+
     // `acceptsFirstResponder=false` blocks only NEW grabs, never a HELD one, so the focused split surface
     // carries first responder across the reparent unless viewOnly resigns it.
     // Deliberately does NOT use `openDashboard`: its post-open cell click forces a key-catcher re-grab that

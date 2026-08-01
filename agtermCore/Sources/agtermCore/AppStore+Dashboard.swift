@@ -1,16 +1,30 @@
 import Foundation
 
 extension AppStore {
-    /// Expand session ids into dashboard pane cells IN ORDER: each resolved id yields its `.primary` cell,
-    /// plus a `.split` cell when the session `hasSplit` (both shells alive, shown OR hidden). Unresolvable
-    /// ids are skipped. UNCAPPED — the caller caps and reports the dropped-pane count, so the expansion has
-    /// exactly ONE implementation, shared by `ControlServer.setDashboard` and `AppActions.toggleDashboard`.
+    /// Expand session ids into dashboard pane cells — the bare form, where every id takes all of its panes.
     public func dashboardPaneCells(for ids: [UUID]) -> [DashboardMember] {
+        dashboardPaneCells(for: ids.map { ResolvedDashboardTarget(session: $0, pane: nil) })
+    }
+
+    /// Expand resolved targets into dashboard pane cells IN ORDER: a nil `pane` yields the session's
+    /// `.primary` cell plus a `.split` cell when it `hasSplit` (both shells alive, shown OR hidden), and an
+    /// explicit pane yields that cell alone. Unresolvable ids are skipped and repeated cells collapse, so a
+    /// bare id alongside a pane ref for the same session cannot double-host one surface. UNCAPPED — the
+    /// caller caps and reports the dropped-pane count, so the expansion has exactly ONE implementation,
+    /// shared by `ControlServer.setDashboard` and `AppActions.toggleDashboard`.
+    ///
+    /// An explicit pane is trusted to exist: `ControlServer` checks availability first so it can name the
+    /// offending token in its `unresolved` note, which this cannot.
+    public func dashboardPaneCells(for targets: [ResolvedDashboardTarget]) -> [DashboardMember] {
         var members: [DashboardMember] = []
-        for id in ids {
-            guard let session = session(withID: id) else { continue }
-            members.append(DashboardMember(session: id, surface: .primary))
-            if session.hasSplit { members.append(DashboardMember(session: id, surface: .split)) }
+        var seen = Set<DashboardMember>()
+        for target in targets {
+            guard let session = session(withID: target.session) else { continue }
+            var cells = [DashboardMember(session: target.session, surface: target.pane ?? .primary)]
+            if target.pane == nil, session.hasSplit {
+                cells.append(DashboardMember(session: target.session, surface: .split))
+            }
+            for cell in cells where seen.insert(cell).inserted { members.append(cell) }
         }
         return members
     }
@@ -20,7 +34,14 @@ extension AppStore {
     /// control `dashboard` command and the GUI `toggleDashboard`; `dropped` feeds the control path's
     /// "dropped N pane(s) beyond the N-cell limit" note.
     public func dashboardMembers(for ids: [UUID], limit: Int) -> (members: [DashboardMember], dropped: Int) {
-        let expanded = dashboardPaneCells(for: ids)
+        dashboardMembers(for: ids.map { ResolvedDashboardTarget(session: $0, pane: nil) }, limit: limit)
+    }
+
+    /// The resolved-target form of `dashboardMembers(for:limit:)` — the control `dashboard` path, where a
+    /// target may name one pane.
+    public func dashboardMembers(for targets: [ResolvedDashboardTarget],
+                                 limit: Int) -> (members: [DashboardMember], dropped: Int) {
+        let expanded = dashboardPaneCells(for: targets)
         let capped = Array(expanded.prefix(limit))
         return (capped, expanded.count - capped.count)
     }

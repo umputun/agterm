@@ -325,7 +325,11 @@ enters/exits only this zoom mode, not macOS window zoom.
 showing the named sessions' live panes; `dashboard --mru [--font-size N | --auto-size] [--window W]`
 opens the window's most-recently-used sessions instead of naming ids; `dashboard --close [--window W]`
 closes it. The cell unit is a session+pane: a non-split session is one cell, and a SPLIT session shows as
-TWO cells (its left/primary pane and its right/split pane). View-only: no cell takes input — the keyboard
+TWO cells (its left/primary pane and its right/split pane) — unless the id carries a `:left`/`:right` pane
+suffix (`dashboard <a>:left <b>:right`), which places THAT PANE ALONE; the suffix is the same form
+`dashboardMembers` reports, composes with `active` and prefixes, and accepts only `left`/`right` (any other
+suffix fails the command, while `:right` on a session with no split is reported unresolved). Cells are
+deduped by session+pane. View-only: no cell takes input — the keyboard
 drives it (arrows move the highlight, Enter jumps into the highlighted session AND focuses that exact pane
 then closes, Esc closes). `--font-size N` sets an absolute cell font in points; `--auto-size` sizes cells
 relative to the Settings default font, shrinking as the grid grows (the two are mutually exclusive; a

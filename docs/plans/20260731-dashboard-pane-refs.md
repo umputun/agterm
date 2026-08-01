@@ -145,15 +145,15 @@ yields `unresolved: A:left`, which is today's behavior.
 - Create: `agtermCore/Sources/agtermCore/DashboardTarget.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/DashboardTargetTests.swift`
 
-- [ ] add `DashboardTarget` with a failable parse from a raw target string
-- [ ] no colon → bare target, `pane == nil`, always valid
-- [ ] split on the FIRST colon; the suffix must lowercase to exactly `left` or `right`, else the parse fails
-- [ ] reject empty head, empty pane, and every other suffix — including `primary`/`split` (accepted by
+- [x] add `DashboardTarget` with a failable parse from a raw target string
+- [x] no colon → bare target, `pane == nil`, always valid
+- [x] split on the FIRST colon; the suffix must lowercase to exactly `left` or `right`, else the parse fails
+- [x] reject empty head, empty pane, and every other suffix — including `primary`/`split` (accepted by
       `TerminalZoomSurface(controlName:)` but not a spelling this command emits) and `scratch`/`overlay`
-- [ ] write tests: bare id, `active:left`, prefix+suffix (`A1B2:right`), uppercase `:LEFT`, full-UUID forms
-- [ ] write tests for rejects: `:left`, `A:`, `A:lft`, `A:scratch`, `A:overlay`, `A:primary`, `A:split`,
+- [x] write tests: bare id, `active:left`, prefix+suffix (`A1B2:right`), uppercase `:LEFT`, full-UUID forms
+- [x] write tests for rejects: `:left`, `A:`, `A:lft`, `A:scratch`, `A:overlay`, `A:primary`, `A:split`,
       and `surface:<uuid>:left` (head `surface`, suffix `<uuid>:left` — a hard reject, not a half-resolve)
-- [ ] run `cd agtermCore && swift test` — must pass before task 2
+- [x] run `cd agtermCore && swift test` — 16 tests pass
 
 ### Task 2: Dispatcher-side grammar validation
 
@@ -161,13 +161,13 @@ yields `unresolved: A:left`, which is today's behavior.
 - Modify: `agtermCore/Sources/agtermCore/ControlDispatcher.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherDashboardTests.swift`
 
-- [ ] in `dispatchDashboard`, parse every target through `DashboardTarget` and reject an invalid suffix
+- [x] in `dispatchDashboard`, parse every target through `DashboardTarget` and reject an invalid suffix
       with a clear error naming the offending token
-- [ ] keep the existing flag-combination checks and their messages unchanged
-- [ ] confirm the fallback switch gains no validation (`.claude/rules/control-api.md`)
-- [ ] write tests: valid suffixed targets pass through; each reject form produces the error
-- [ ] write tests: bare-id requests are byte-identical to today
-- [ ] run `cd agtermCore && swift test` — must pass before task 3
+- [x] keep the existing flag-combination checks and their messages unchanged
+- [x] confirm the fallback switch gains no validation (`.claude/rules/control-api.md`)
+- [x] write tests: valid suffixed targets pass through; each reject form produces the error
+- [x] write tests: bare-id requests are byte-identical to today
+- [x] run `cd agtermCore && swift test` — 22 tests pass across both suites
 
 ### Task 3: Pane-aware expansion in `agtermCore`
 
@@ -175,27 +175,32 @@ yields `unresolved: A:left`, which is today's behavior.
 - Modify: `agtermCore/Sources/agtermCore/AppStore+Dashboard.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStore+DashboardTests.swift`
 
-- [ ] add a `DashboardMember`-yielding expansion that takes resolved `(UUID, TerminalZoomSurface?)` pairs
-- [ ] keep `dashboardPaneCells(for: [UUID])` for the MRU and GUI paths
-- [ ] a nil pane expands to primary + split as today; an explicit pane yields that cell only
-- [ ] dedup at member level, preserving first-seen order
-- [ ] keep the expansion pure — it never receives an impossible pair, because task 4 checks pane
+- [x] add a `DashboardMember`-yielding expansion that takes resolved `(UUID, TerminalZoomSurface?)` pairs
+      — modelled as `ResolvedDashboardTarget` beside `DashboardTarget`, so the pair is named and Equatable
+- [x] keep `dashboardPaneCells(for: [UUID])` for the MRU and GUI paths — it now delegates to the
+      resolved-target form, so there is still exactly one expansion
+- [x] a nil pane expands to primary + split as today; an explicit pane yields that cell only
+- [x] dedup at member level, preserving first-seen order
+- [x] keep the expansion pure — it never receives an impossible pair, because task 4 checks pane
       availability before calling it (avoids splitting the availability rule across two layers, where the
       expansion drops silently and `ControlServer` has to re-derive which token vanished)
-- [ ] write tests: mixed bare/suffixed input, `A A:left` dedup, explicit-pane expansion, cap and
+- [x] write tests: mixed bare/suffixed input, `A A:left` dedup, explicit-pane expansion, cap and
       dropped-pane count still correct
-- [ ] run `cd agtermCore && swift test` — must pass before task 4
+- [x] run `cd agtermCore && swift test` — full suite green, 2088 tests
 
 ### Task 4: Resolution in `ControlServer.setDashboard`
 
 **Files:**
 - Modify: `agterm/Control/ControlServer.swift`
 
-- [ ] parse each target into `DashboardTarget`, resolve the head via `ControlResolve.resolve`
-- [ ] check the requested pane exists via `TerminalZoomSurface.isAvailable(in:)` (`TerminalZoom.swift:24-38`);
-      a resolved head whose pane does not exist joins `unresolved` with the original token
-- [ ] replace the `Set<UUID>` dedup with the member-level dedup from task 3
-- [ ] **change the empty guard from `sessionIDs` to the expanded members.** `ControlServer.swift:448`
+- [x] parse each target into `DashboardTarget`, resolve the head via `ControlResolve.resolve`
+- [x] check the requested pane exists; a resolved head whose pane does not exist joins `unresolved` with
+      the original token. ➕ used `session.hasSplit` rather than the planned
+      `TerminalZoomSurface.isAvailable(in:)` — `isAvailable` rejects `.primary` when the primary surface is
+      nil, which `dashboardValidMembers` still counts as a valid cell, so the two would disagree and admit
+      or refuse cells reconcile then contradicts. `hasSplit` is exactly what reconcile tests
+- [x] replace the `Set<UUID>` dedup with the member-level dedup from task 3
+- [x] **change the empty guard from `sessionIDs` to the expanded members.** `ControlServer.swift:448`
       currently guards `!sessionIDs.isEmpty`. Today that is equivalent to a non-empty grid, because every
       resolved session yields at least a `.primary` cell — with pane refs it is not. `dashboard A:right`
       on a non-split A resolves A but expands to zero members, and the current guard would let it through
@@ -203,9 +208,9 @@ yields `unresolved: A:left`, which is today's behavior.
       `isOpen == false` (`DashboardController.swift:78`). Net effect: silently closes an already-open
       dashboard, drops that window's zoom, and reports `ok:true`. The GUI path already guards this
       (`AppActions.swift:737`)
-- [ ] leave the `--mru` branch on the UUID path unchanged
-- [ ] keep the existing `unresolved` / dropped-pane note format and its `;` join
-- [ ] run `make test-app` — must pass before task 5 (behavioral coverage for this task lands in task 7)
+- [x] leave the `--mru` branch on the UUID path unchanged
+- [x] keep the existing `unresolved` / dropped-pane note format and its `;` join
+- [x] run `make test-app` — TEST SUCCEEDED, 87 hosted tests (behavioral coverage for this task lands in task 7)
 
 ### Task 5: Keep a promoted pane on the grid
 
@@ -215,25 +220,25 @@ yields `unresolved: A:left`, which is today's behavior.
 - Modify: `agterm/Views/DashboardView.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/DashboardControllerTests.swift`
 
-- [ ] add a controller method that rewrites a session's `.split` member to `.primary`, deduping if the
+- [x] add a controller method that rewrites a session's `.split` member to `.primary`, deduping if the
       session already has a `.primary` member, and moves the highlight with it
-- [ ] drive it from `handlePaneExit` in `agterm/agtermApp.swift`, immediately after the
+- [x] drive it from `handlePaneExit` in `agterm/agtermApp.swift`, immediately after the
       `store.closePrimaryPane(sessionID)` call, reusing the "session still exists ⇒ it promoted" test the
       adjacent line already performs. This is the only place that knows a promotion happened:
       `closeSplit` and `closePrimaryPane` both end with `hasSplit == false`, so `dashboardValidMembers`
       looks identical for both and `reconcile(existing:)` cannot tell them apart
-- [ ] thread `library` into `handlePaneExit` to reach the window's controller —
+- [x] thread `library` into `handlePaneExit` to reach the window's controller —
       `DashboardControllerRegistry` exposes only `controller(for:)` with no enumeration, so it needs
       `library.windowID(for: store)`. Both call sites already hold `library`, so this is a one-parameter change
-- [ ] verify the rewrite lands before the prune: `closePrimaryPane` is synchronous and reconcile is a
+- [x] verify the rewrite lands before the prune: `closePrimaryPane` is synchronous and reconcile is a
       SwiftUI `.onChange(of: dashboardValidMembers)`, so a synchronous rewrite runs first
-- [ ] verify `closeSplit` (split shell exits) still prunes rather than rewrites
-- [ ] update the `DashboardView.swift:155-165` comment, whose premise this changes
-- [ ] write tests: `A:split`-only member survives promotion as `A:primary`; both-member case dedups;
+- [x] verify `closeSplit` (split shell exits) still prunes rather than rewrites
+- [x] update the `DashboardView.swift:155-165` comment, whose premise this changes
+- [x] write tests: `A:split`-only member survives promotion as `A:primary`; both-member case dedups;
       highlight follows; `closeSplit` still prunes
-- [ ] ⚠️ unit tests reach the controller method only, not the `agtermApp.swift` wiring — the end-to-end
+- [x] ⚠️ unit tests reach the controller method only, not the `agtermApp.swift` wiring — the end-to-end
       assertion for that lives in task 7 and must not be skipped
-- [ ] run `cd agtermCore && swift test` and `make test-app` — must pass before task 6
+- [x] run `cd agtermCore && swift test` and `make test-app` — must pass before task 6
 
 ### Task 6: CLI surface
 
@@ -241,11 +246,11 @@ yields `unresolved: A:left`, which is today's behavior.
 - Modify: `agtermCore/Sources/agtermctlKit/MiscCommands.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/CommandsTests.swift`
 
-- [ ] extend the `ids` argument help and the discussion block with the pane-ref forms
-- [ ] add a discussion line for the mixed example `dashboard A:left B:right`
-- [ ] keep parse-time `validate()` rejecting the same flag combinations as today
-- [ ] write tests: suffixed ids reach `ControlArgs.targets` verbatim; `--mru` with suffixed ids still rejected
-- [ ] run `cd agtermCore && swift test` — must pass before task 7
+- [x] extend the `ids` argument help and the discussion block with the pane-ref forms
+- [x] add a discussion line for the mixed example `dashboard A:left B:right`
+- [x] keep parse-time `validate()` rejecting the same flag combinations as today
+- [x] write tests: suffixed ids reach `ControlArgs.targets` verbatim; `--mru` with suffixed ids still rejected
+- [x] run `cd agtermCore && swift test` — must pass before task 7
 
 ### Task 7: End-to-end coverage
 
@@ -264,7 +269,14 @@ assertion below is a string change rather than new harness.
       dashboard untouched (covers the task 4 empty-guard bug)
 - [ ] assert the task 5 wiring end to end: hold a session on the grid by `:right`, exit its primary
       shell, and confirm `dashboardMembers` becomes `["<id>:left"]` rather than dropping the cell
-- [ ] run `make test-app` — must pass before task 8
+- [x] run the five tests — **all pass**, 34.6s (`Executed 5 tests, with 0 failures`).
+      `testPromotedSplitKeepsItsCellOnTheGrid` is the executed coverage for task 5's `agtermApp` wiring,
+      which the controller unit tests cannot reach.
+- ➕ The first two attempts died before any test body ran: `Failed to initialize for UI testing: Timed out
+      while enabling automation mode`, reproduced on the untouched
+      `testDashboardOpensWithMemberCellsAndClosesClean` as a control. It cleared on retry — the runner
+      binary under a fresh worktree's `build/DerivedData` needs a macOS automation grant on first use.
+      Retry before investigating; do NOT reach for `tccutil`.
 
 ### Task 8: Documentation mirrors
 
@@ -274,21 +286,21 @@ assertion below is a string change rather than new harness.
   `plugins/agterm/skills/agterm/examples.md`
 - Modify: `.claude/rules/control-api.md`
 
-- [ ] README dashboard section and cheat sheet: document the pane-ref form
-- [ ] `site/docs.html` mirrors README; `site/commands.html` dashboard usage line and argument prose
-- [ ] bundled skill: `SKILL.md` dashboard entry, `reference.md` dashboard block (the `ids` argument and
+- [x] README dashboard section and cheat sheet: document the pane-ref form
+- [x] `site/docs.html` mirrors README; `site/commands.html` dashboard usage line and argument prose
+- [x] bundled skill: `SKILL.md` dashboard entry, `reference.md` dashboard block (the `ids` argument and
       the `unresolved:` note both live there), and `examples.md` dashboard examples
-- [ ] `.claude/rules/control-api.md` dashboard bullets: pane refs, dedup key, promotion rewrite
-- [ ] verify the command count stays 71 everywhere it appears
-- [ ] run `make lint` — zero findings
+- [x] `.claude/rules/control-api.md` dashboard bullets: pane refs, dedup key, promotion rewrite
+- [x] verify the command count stays 71 everywhere it appears
+- [x] run `make lint` — zero findings
 
 ### Task 9: Verify acceptance criteria
 
-- [ ] `dashboard A1B2C3D4:left E5F6A7B8:right` produces a two-cell mixed grid
-- [ ] a bare id still yields every pane of the session
-- [ ] `A A:left` dedups; `A:right` on a non-split session lands in the `unresolved` note with `ok:true`
-- [ ] promoting a split survivor keeps the cell on the grid
-- [ ] full suite: `cd agtermCore && swift test`, `make test-app`, `make lint`
+- [x] `dashboard A1B2C3D4:left E5F6A7B8:right` produces a two-cell mixed grid
+- [x] a bare id still yields every pane of the session
+- [x] `A A:left` dedups; `A:right` on a non-split session lands in the `unresolved` note with `ok:true`
+- [x] promoting a split survivor keeps the cell on the grid
+- [x] full suite: `cd agtermCore && swift test`, `make test-app`, `make lint`
 
 ### Task 10: [Final] Close out
 

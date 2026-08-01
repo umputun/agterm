@@ -156,7 +156,9 @@ struct DashboardView: View {
     /// A per-instance identity token for the member's resolved slot surface, folded into the cell `.id`; a
     /// nil slot keeps a stable `"none"` suffix. When a shown session's PRIMARY shell exits,
     /// `AppStore.closePrimaryPane` PROMOTES the split survivor into `session.surface` (a DIFFERENT instance)
-    /// and nils `splitSurface`, and reconcile drops the `.split` cell but keeps `.primary`;
+    /// and nils `splitSurface`. The surviving cell is `.primary` either way — reconcile drops a `.split`
+    /// cell that sits beside one, and `DashboardController.promoteSplitMember` rewrites a lone `.split`
+    /// cell (a grid built from `<id>:right`) into it rather than letting it be pruned;
     /// `TerminalView.updateNSView` never re-resolves `session[keyPath:]`, so without the surface identity in
     /// the id SwiftUI keeps hosting the torn-down old primary (a blank cell) while the live survivor stays
     /// unhosted. `ObjectIdentifier` changes ONLY on a genuine swap, forcing a re-mount whose `makeNSView`
@@ -185,7 +187,9 @@ struct DashboardView: View {
     }
 
     /// The caption's pane marker: `▶` for a split (right) cell, `◀` for the primary (left) cell of a SPLIT
-    /// session (both cells present, so they need distinguishing), nothing for a non-split session.
+    /// session, nothing for a non-split session. It marks which pane the cell hosts, not that its sibling
+    /// is on the grid — a `<id>:left` request puts a lone `◀` cell up, which still says the session has
+    /// another pane you are not watching.
     private func paneIndicator(for member: DashboardMember, session: Session) -> String {
         if member.surface == .split { return " ▶" }
         return session.hasSplit ? " ◀" : ""

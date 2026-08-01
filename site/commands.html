@@ -1681,7 +1681,7 @@
 
             <div style="background: #22272b; border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 11px; padding: 18px 20px; margin-bottom: 12px">
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 13.5px; color: #6d82f3; line-height: 1.6; word-break: break-word">
-                agtermctl dashboard &lt;ids…&gt; [--mru] [--font-size N | --auto-size] [--close] [--window W]
+                agtermctl dashboard &lt;ids[:left|:right]…&gt; [--mru] [--font-size N | --auto-size] [--close] [--window W]
               </div>
               <div style="font-family: &quot;JetBrains Mono&quot;, monospace; font-size: 11.5px; color: #6b727a; margin-top: 6px">dashboard</div>
               <p style="font-size: 15px; line-height: 1.65; color: #cbc6bc; margin: 10px 0 0">
@@ -1690,7 +1690,15 @@
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--close</span> the open one. The cell unit is a session+pane: a
                 non-split session is one cell, and a split session shows as two — its left/primary and right/split panes — so the
                 9-cell cap counts <em>panes</em> (laid out ceil(√n)). Positional ids are session addresses (id / unique prefix /
-                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>), deduped by resolved session; unresolved ids are
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">active</span>), each optionally carrying a
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">:left</span>/<span style="font-family: &quot;JetBrains Mono&quot;, monospace">:right</span>
+                pane suffix — the same form <span style="font-family: &quot;JetBrains Mono&quot;, monospace">dashboardMembers</span> reports — which
+                places that pane alone, so
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">dashboard A:left B:right</span> grids one pane per
+                session while a bare id still takes all of them. Cells are deduped by session+pane, so a bare id beside a pane ref for the
+                same session collapses. Any other suffix (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">:scratch</span>,
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">:primary</span>, a typo) is rejected outright; unresolved ids — including
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">:right</span> on a session with no split — are
                 dropped and any panes beyond 9 are trimmed, both reported in the response text.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--mru</span> is mutually exclusive with ids and
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--close</span>, composes with the font flags and

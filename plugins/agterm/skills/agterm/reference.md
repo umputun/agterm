@@ -644,14 +644,26 @@ grid of the named sessions' live panes; `agtermctl dashboard --mru [--font-size 
 [--window W]` opens the window's most-recently-used sessions instead of naming ids; `agtermctl dashboard
 --close [--window W]` closes the open one. The cell unit is a session+pane: a non-split session is ONE
 cell, and a SPLIT session shows as TWO cells — its left/primary pane and its right/split pane. The
-positional ids are session addresses (id / unique prefix / `active`); unresolved ids are dropped and ids
-are deduped by resolved session. The 9-cell cap counts PANES (laid out `ceil(sqrt(n))`), applied after
+positional ids are session addresses (id / unique prefix / `active`), each of which may carry a
+`:left`/`:right` pane suffix to place THAT PANE ALONE — the same form `dashboardMembers` reports back, so
+`dashboard <a>:left <b>:right` grids one pane per session while a bare id still takes every pane of its
+session. The suffix composes with any head, so `active:left` and `<prefix>:right` both work, and it is
+case-insensitive. Only `left`/`right` are accepted: any other suffix (`:scratch`, `:overlay`, `:primary`,
+`:split`, a typo like `:lft`, or a pasted `surface:<id>:left` zoom address) is REJECTED and fails the whole
+command. Unresolved ids are dropped — including `:right` on a session with no split, which parses fine but
+names no pane — and cells are deduped by session+pane, so a bare id beside a pane ref for the same session
+collapses instead of double-hosting a surface. A grid that expands to no cells at all is an error and
+leaves any open dashboard untouched. The 9-cell cap counts PANES (laid out `ceil(sqrt(n))`), applied after
 each session expands into its pane cells: if the panes exceed 9 the first 9 are kept and the dropped-pane
 count is reported in the response text (`dropped N pane(s) beyond the 9-cell limit`, appended to any
 `unresolved:` note with `; `). `--window` targets a specific window's dashboard (default: the frontmost).
 `--mru` draws its members from the window's recency (most-recent first); it is mutually exclusive with
 explicit ids and `--close`, composes with the font flags and `--window`, and errors with `no recent
 sessions` when the window has none.
+
+A cell placed by a `:right` ref FOLLOWS its pane through promotion: when a split session's main shell
+exits, agterm promotes the survivor into the primary slot, and the grid rewrites that cell to `<id>:left`
+rather than dropping it, so a dashboard built to watch an agent in the split pane keeps watching it.
 
 The most-recently-used grid also has a GUI opener — **⌘⇧D** (the `dashboard` built-in action, rebindable
 in `keymap.conf`), **Navigate ▸ Dashboard**, and the command palette's **Dashboard** entry all TOGGLE the

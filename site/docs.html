@@ -754,7 +754,11 @@
                   session and focuses that exact pane, and Esc closes. Opened over the control channel with
                   <code style="color: #e6e1d7">agtermctl dashboard &lt;ids…&gt;</code>, or
                   <code style="color: #e6e1d7">agtermctl dashboard --mru</code> to fill it from the window's most-recently-used
-                  sessions instead of naming ids. The most-recently-used grid also has a built-in opener —
+                  sessions instead of naming ids. An id may carry a <code style="color: #e6e1d7">:left</code>/<code style="color: #e6e1d7">:right</code>
+                  suffix to place one pane instead of the whole session — the same form
+                  <code style="color: #e6e1d7">tree --json</code> reports in <code style="color: #e6e1d7">dashboardMembers</code> — so
+                  <code style="color: #e6e1d7">agtermctl dashboard "$a:left" "$b:right"</code> keeps the panes you did not ask for
+                  out of the nine-cell budget. The most-recently-used grid also has a built-in opener —
                   <strong>⌘⇧D</strong> (or <strong>Navigate ▸ Dashboard</strong>, the command palette's Dashboard, or the
                   title-bar grid button) opens it auto-sized. Cell fonts size absolutely
                   (<code style="color: #e6e1d7">--font-size</code>) or scale to the grid

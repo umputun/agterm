@@ -996,6 +996,26 @@ struct CommandsTests {
         #expect(try request(["dashboard", "--close"]) == ControlRequest(cmd: .dashboard, args: ControlArgs(close: true)))
     }
 
+    @Test func dashboardForwardsPaneRefsVerbatim() throws {
+        let expected = ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ["s1:left", "s2:right", "s3"]))
+        #expect(try request(["dashboard", "s1:left", "s2:right", "s3"]) == expected)
+    }
+
+    @Test func dashboardForwardsAPaneRefOnActive() throws {
+        let expected = ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ["active:left"]))
+        #expect(try request(["dashboard", "active:left"]) == expected)
+    }
+
+    // grammar is the dispatcher's call, not the CLI's — a bad suffix must still reach the socket
+    @Test func dashboardDoesNotValidatePaneGrammarLocally() throws {
+        let expected = ControlRequest(cmd: .dashboard, args: ControlArgs(targets: ["s1:nope"]))
+        #expect(try request(["dashboard", "s1:nope"]) == expected)
+    }
+
+    @Test func dashboardRejectsMruWithPaneRefs() {
+        #expect(validationMessage(["dashboard", "s1:left", "--mru"]) == "--mru cannot be combined with session ids")
+    }
+
     @Test func dashboardRejectsFontSizeWithAutoSize() {
         #expect(validationMessage(["dashboard", "s1", "--font-size", "12", "--auto-size"])
             == "--font-size is mutually exclusive with --auto-size")
