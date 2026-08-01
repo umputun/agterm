@@ -142,6 +142,8 @@ struct TerminalZoomTests {
         store.toggleSplit(session.id)
         session.splitSurface = SpySurface()
         #expect(store.openPaneOverlay(session.id, pane: .right, command: "top") == nil)
+        // realized, so hiding its pane below only unmounts it — an unrealized slot is retired instead.
+        session.rightOverlaySurface = SpySurface()
 
         #expect(TerminalZoomSurface.overlayRight.isVisible(in: session))
         #expect(!TerminalZoomSurface.split.isVisible(in: session))

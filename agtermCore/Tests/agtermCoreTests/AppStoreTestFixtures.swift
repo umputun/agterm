@@ -22,6 +22,9 @@ final class SpySurface: TerminalSurface {
     var teardownCount = 0
     var promotedCount = 0
     var paneToken: String
+    /// Defaults to a live terminal, the state a surface parked in a session slot reaches a beat later; the
+    /// stranded-slot cases set it false.
+    var isRealized = true
     init(paneToken: String = "") { self.paneToken = paneToken }
     func teardown() { teardownCount += 1 }
     func promoteToPrimaryPane() { promotedCount += 1 }

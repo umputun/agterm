@@ -49,14 +49,9 @@ final class ControlSurfaceZoomUITests: ControlAPITestCase {
 
         // Prove the future survivor's shell is ready before the one-shot primary exit.
         let survivorReady = markerDir.appendingPathComponent("zoom-survivor-ready")
-        var survivorValue: String?
-        for _ in 0..<4 where survivorValue == nil {
-            let typed = try sendCommand(typeRequest(
-                text: "printf ZOOMSURVIVOR > '\(survivorReady.path)'\n",
-                target: sessionID, select: false, pane: "right"))
-            XCTAssertEqual(typed["ok"] as? Bool, true, "typing to the split survivor should succeed: \(typed)")
-            survivorValue = pollMarker(survivorReady, timeout: 3)
-        }
+        let survivorValue = try typeUntilMarker("printf ZOOMSURVIVOR > '\(survivorReady.path)'\n",
+                                                target: sessionID, file: survivorReady, select: false,
+                                                pane: "right", perAttempt: 3)
         XCTAssertEqual(survivorValue, "ZOOMSURVIVOR", "the split survivor should be reading commands")
 
         let leftSurface = try activeSurfaceID(kind: "left")

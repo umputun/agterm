@@ -753,6 +753,7 @@ final class DockMenuTests: XCTestCase {
 @MainActor
 private final class DockMenuTestSurface: TerminalSurface {
     let paneToken = ""
+    let isRealized = true
 
     func teardown() {}
     func promoteToPrimaryPane() {}

@@ -542,6 +542,126 @@ struct SessionTests {
         #expect(session.rendersPane(.right) == false)
     }
 
+    @Test func renderedPanesFollowsTheShapeTheDeckBranchesOn() {
+        let session = Session(initialCwd: "/repo")
+        #expect(session.renderedPanes == [.left])
+        session.isSplit = true
+        session.hasSplit = true
+        session.splitSurface = FakeSurface()
+        #expect(session.renderedPanes == [.left, .right])
+        session.splitFocused = true
+        session.isSplit = false
+        #expect(session.renderedPanes == [.right])
+    }
+
+    @Test func dropUnrealizedPaneOverlaysRetiresOnlyTheStrandedSlot() {
+        let session = Session(initialCwd: "/repo")
+        let realized = FakeSurface()
+        session.hasSplit = true
+        session.splitSurface = FakeSurface()
+        session.leftOverlay = PaneOverlay(command: "revdiff")   // its pane is rendered
+        session.rightOverlay = PaneOverlay(command: "htop")     // un-rendered, never realized
+        session.dropUnrealizedPaneOverlays()
+        #expect(session.openPaneOverlays == [.left])
+
+        // a REALIZED overlay on an un-rendered pane keeps its program: the surface unmounts and a re-show
+        // remounts it.
+        session.rightOverlay = PaneOverlay(command: "htop")
+        session.rightOverlaySurface = realized
+        session.dropUnrealizedPaneOverlays()
+        #expect(session.openPaneOverlays == [.left, .right])
+        #expect(realized.teardownCount == 0)
+    }
+
+    // the focus flip is the non-store way a pane stops being laid out: `session.focus left` on a hidden
+    // split un-renders the right pane, and an overlay opened there before its surface realized would sit
+    // active with no program forever.
+    @Test func dropUnrealizedPaneOverlaysCoversAFocusFlipOnAHiddenSplit() {
+        let session = Session(initialCwd: "/repo")
+        session.hasSplit = true
+        session.splitSurface = FakeSurface()
+        session.splitFocused = true
+        session.rightOverlay = PaneOverlay(command: "htop")
+        session.dropUnrealizedPaneOverlays()
+        #expect(session.rightOverlay?.command == "htop")
+
+        session.splitFocused = false
+        session.dropUnrealizedPaneOverlays()
+        #expect(session.rightOverlay == nil)
+    }
+
+    // the deck parks its view in the surface slot BEFORE libghostty creates the terminal, so an occupied slot
+    // is no proof a program started: that gap left `overlay result --pane` answering "overlay still running"
+    // forever.
+    @Test func dropUnrealizedPaneOverlaysRetiresASlotWhoseTerminalWasNeverCreated() {
+        let session = Session(initialCwd: "/repo")
+        let parked = FakeSurface()
+        parked.isRealized = false
+        session.hasSplit = true
+        session.splitSurface = FakeSurface()
+        session.splitFocused = true
+        session.rightOverlay = PaneOverlay(command: "htop")
+        session.rightOverlaySurface = parked
+
+        session.splitFocused = false
+        session.dropUnrealizedPaneOverlays()
+        #expect(session.rightOverlay == nil)
+        #expect(session.rightOverlaySurface == nil)
+        #expect(parked.teardownCount == 1)
+    }
+
+    // the deck is not the only host: `overlay open --pane right` then `surface zoom show --target
+    // surface:<id>:overlay-right` then focusing away tore the SELECTED zoom target down before the zoom
+    // layer could mount and realize it, breaking the surfaces[]/surface zoom contract.
+    @Test func dropUnrealizedPaneOverlaysSparesASlotTerminalZoomIsHosting() {
+        let session = Session(initialCwd: "/repo")
+        let windowID = UUID()
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(windowID) }
+        session.hasSplit = true
+        session.splitSurface = FakeSurface()
+        session.splitFocused = true
+        session.rightOverlay = PaneOverlay(command: "htop")
+        zoom.set(.on, target: .session(session.id, .overlayRight))
+
+        session.splitFocused = false
+        #expect(session.rendersPane(.right) == false)
+        #expect(session.paneOverlayHosted(.right))
+        session.dropUnrealizedPaneOverlays()
+        #expect(session.rightOverlay?.command == "htop")
+
+        // leaving zoom takes the last host away, so the still-unrealized slot is retired then.
+        zoom.clear()
+        #expect(session.paneOverlayHosted(.right) == false)
+        session.dropUnrealizedPaneOverlays()
+        #expect(session.rightOverlay == nil)
+    }
+
+    @Test func dropUnrealizedPaneOverlaysRetiresASlotZoomIsNotTargeting() {
+        let session = Session(initialCwd: "/repo")
+        let windowID = UUID()
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(windowID) }
+        session.hasSplit = true
+        session.splitSurface = FakeSurface()
+        session.splitFocused = true
+        session.rightOverlay = PaneOverlay(command: "htop")
+        // the PANE, not that pane's overlay, and another session's overlay slot: neither hosts this one.
+        zoom.set(.on, target: .session(session.id, .split))
+        session.splitFocused = false
+        session.dropUnrealizedPaneOverlays()
+        #expect(session.rightOverlay == nil)
+
+        session.splitFocused = true
+        session.rightOverlay = PaneOverlay(command: "htop")
+        zoom.set(.on, target: .session(UUID(), .overlayRight))
+        session.splitFocused = false
+        session.dropUnrealizedPaneOverlays()
+        #expect(session.rightOverlay == nil)
+    }
+
     @Test func paneOverlayAccessorsReadEachSlotIndependently() {
         let session = Session(initialCwd: "/repo")
         let leftSurface = FakeSurface(), rightSurface = FakeSurface()
@@ -746,6 +866,9 @@ struct SessionTests {
 private final class FakeSurface: TerminalSurface {
     var paneToken: String
     var teardownCount = 0
+    /// Defaults to a live terminal, the state a surface parked in a session slot reaches a beat later; the
+    /// stranded-slot cases set it false.
+    var isRealized = true
     init(paneToken: String = "") { self.paneToken = paneToken }
     func teardown() { teardownCount += 1 }
     func promoteToPrimaryPane() {}

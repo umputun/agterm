@@ -261,8 +261,9 @@ agtermctl session overlay close --target "$AGTERM_SESSION_ID" --pane "$AGTERM_PA
 ```
 
 Read the open panes back from `paneOverlays` in `tree --json`. Opening on a pane that is not on screen
-(`--pane right` while the split is hidden) errors `pane not visible`; hiding the split afterwards is
-fine, the program keeps running and reappears when the split comes back.
+errors `pane not visible` — a shown split renders both panes, a hidden one only the focused pane, so the
+refused one is the pane without focus; hiding the split afterwards is fine, the program keeps running and
+reappears when the split comes back.
 
 ## Show an image inline
 

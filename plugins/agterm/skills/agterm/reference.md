@@ -547,8 +547,9 @@ All twelve are read-only projections of GUI state.
   `--block` blocks and exits with the program's status, and `--follow` selects the target. A NON-SPLIT
   session accepts `--pane left`, because such a session reports `AGTERM_PANE=left` — so an agent can
   pass `--pane "$AGTERM_PANE"` without first checking whether the session is split. A pane that is not
-  currently rendered is refused with `pane not visible` (notably `--pane right` while the split is
-  hidden, and `--pane left` on a session whose hidden split holds the focus); hiding the split AFTER
+  currently rendered is refused with `pane not visible`: a SHOWN split renders both panes, a HIDDEN one
+  renders only the FOCUSED pane, so the refused one is the pane without focus — `--pane left` on a
+  session whose hidden split holds it, `--pane right` when the main pane does; hiding the split AFTER
   opening is fine, the program keeps running and reappears when the split is shown again. Opening a
   second overlay on the same pane errors `pane overlay already open`. A full session-wide overlay and
   the scratch terminal both cover a pane overlay, and ⌘W dismisses the FOCUSED pane's overlay before it

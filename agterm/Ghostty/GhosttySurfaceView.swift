@@ -651,6 +651,11 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         destroySurface()
     }
 
+    /// `TerminalSurface.isRealized`: the libghostty surface — and with it the spawned program — exists. False
+    /// while `createSurface` is still deferred on a zero backing size (`pendingSurfaceCreation`) and after
+    /// `destroySurface`, both of which leave `surface` nil.
+    var isRealized: Bool { surface != nil }
+
     // MARK: - Window / size
 
     override func viewDidMoveToWindow() {

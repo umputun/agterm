@@ -409,6 +409,85 @@ struct AppStoreTests {
         #expect(store.pendingCloseSummary == nil)
     }
 
+    // a stillborn slot terminal zoom was sparing outlives its last host: the zoom layer drops a target whose
+    // session left the tree, and the unmounted deck entry never re-runs its reconcile on the undo's remount.
+    @Test func undoingASessionCloseRetiresAPaneOverlayLeftWithoutAHost() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        let windowID = UUID()
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(windowID) }
+        session.isSplit = true
+        session.hasSplit = true
+        session.splitSurface = SpySurface()
+        #expect(store.openPaneOverlay(session.id, pane: .right, command: "htop") == nil)
+        let parked = SpySurface()
+        parked.isRealized = false
+        session.rightOverlaySurface = parked
+        zoom.set(.on, target: .session(session.id, .overlayRight))
+        store.toggleSplit(session.id)
+        #expect(session.rightOverlay?.command == "htop")
+
+        #expect(store.softCloseSession(session.id, grace: 60))
+        zoom.clear()
+        #expect(store.undoPendingClose())
+
+        #expect(session.rightOverlay == nil)
+        #expect(session.rightOverlaySurface == nil)
+        #expect(parked.teardownCount == 1)
+    }
+
+    @Test func undoingASessionCloseKeepsARealizedPaneOverlayRunning() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = try #require(store.addSession(toWorkspace: ws.id, cwd: "/a"))
+        session.isSplit = true
+        session.hasSplit = true
+        session.splitSurface = SpySurface()
+        #expect(store.openPaneOverlay(session.id, pane: .right, command: "htop") == nil)
+        let right = SpySurface()
+        session.rightOverlaySurface = right
+        store.toggleSplit(session.id)
+
+        #expect(store.softCloseSession(session.id, grace: 60))
+        #expect(store.undoPendingClose())
+
+        #expect(session.rightOverlay?.command == "htop")
+        #expect(session.rightOverlaySurface === right)
+        #expect(right.teardownCount == 0)
+    }
+
+    @Test func undoingAWorkspaceCloseRetiresAPaneOverlayLeftWithoutAHost() throws {
+        let store = makeStore()
+        _ = store.addWorkspace(name: "keep")
+        let doomed = store.addWorkspace(name: "doomed")
+        let session = try #require(store.addSession(toWorkspace: doomed.id, cwd: "/a"))
+        let windowID = UUID()
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(windowID) }
+        session.isSplit = true
+        session.hasSplit = true
+        session.splitSurface = SpySurface()
+        #expect(store.openPaneOverlay(session.id, pane: .right, command: "htop") == nil)
+        let parked = SpySurface()
+        parked.isRealized = false
+        session.rightOverlaySurface = parked
+        zoom.set(.on, target: .session(session.id, .overlayRight))
+        store.toggleSplit(session.id)
+
+        #expect(store.softRemoveWorkspace(doomed.id, grace: 60))
+        zoom.clear()
+        #expect(store.undoPendingClose())
+
+        #expect(store.workspaces.last?.sessions.first === session)
+        #expect(session.rightOverlay == nil)
+        #expect(session.rightOverlaySurface == nil)
+        #expect(parked.teardownCount == 1)
+    }
+
     @Test func softCloseSessionsWithOneTargetKeepsSingleSessionSummary() throws {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

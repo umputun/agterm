@@ -347,6 +347,12 @@ extension AppStore {
         }
         let insertAt = max(0, min(close.sessionIndex, workspaces[workspaceIndex].sessions.count))
         workspaces[workspaceIndex].sessions.insert(close.session, at: insertAt)
+        // the deck's `dropUnrealizedPaneOverlays` watchers are unmounted while the session sits outside the
+        // tree, and `.onChange` does not fire on the remount, so the last host of a pane overlay can go away
+        // unobserved: the zoom layer clears a target whose session it can no longer resolve, and a stillborn
+        // slot that target was sparing comes back marked open with no surface and no program. Reconcile the
+        // SAME object being reinserted; a snapshot rebuild (`session(from:)`) carries no pane overlays.
+        close.session.dropUnrealizedPaneOverlays()
         emitSessionCreated(close.session, workspace: close.workspaceID)
     }
 
@@ -381,11 +387,17 @@ extension AppStore {
             let live = Set(workspaces.flatMap(\.sessions).map(\.id))
             let restored = close.workspace.sessions.filter { !live.contains($0.id) }
             workspaces[existing].sessions.append(contentsOf: restored)
-            for session in restored { emitSessionCreated(session, workspace: workspaces[existing].id) }
+            for session in restored {
+                session.dropUnrealizedPaneOverlays() // reinserted live objects, as in `restorePendingSession`
+                emitSessionCreated(session, workspace: workspaces[existing].id)
+            }
         } else {
             let insertAt = max(0, min(close.workspaceIndex, workspaces.count))
             workspaces.insert(close.workspace, at: insertAt)
-            for session in close.workspace.sessions { emitSessionCreated(session, workspace: close.workspace.id) }
+            for session in close.workspace.sessions {
+                session.dropUnrealizedPaneOverlays() // as above
+                emitSessionCreated(session, workspace: close.workspace.id)
+            }
             if close.workspace.sessions.isEmpty { scheduleTreeChanged() }
         }
         // re-mark BEFORE the reselect below, so a restored member is inside the set when

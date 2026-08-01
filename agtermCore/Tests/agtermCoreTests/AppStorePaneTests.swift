@@ -796,6 +796,64 @@ struct AppStorePaneTests {
         #expect(store.openPaneOverlay(session.id, pane: .right, command: "htop") == nil)
     }
 
+    // the open guard only proves the pane renders at REQUEST time; the deck realizes the surface later, so a
+    // hide in between leaves the slot active with no surface and no program — `overlay result --pane right`
+    // would answer "overlay still running" forever and `--block` would never return.
+    @Test func hidingTheSplitRetiresAPaneOverlayThatNeverRealized() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.isSplit = true
+        session.hasSplit = true
+        session.splitSurface = SpySurface()
+        #expect(store.openPaneOverlay(session.id, pane: .left, command: "revdiff") == nil)
+        #expect(store.openPaneOverlay(session.id, pane: .right, command: "htop") == nil)
+        store.toggleSplit(session.id) // hidden with the LEFT pane focused: the right pane stops rendering
+        #expect(session.rightOverlay == nil)
+        #expect(session.openPaneOverlays == [.left]) // the pane still laid out keeps its unrealized slot
+        #expect(session.rightOverlayExitCode == nil)
+    }
+
+    @Test func hidingTheSplitKeepsARealizedPaneOverlayRunning() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.isSplit = true
+        session.hasSplit = true
+        session.splitSurface = SpySurface()
+        store.openPaneOverlay(session.id, pane: .right, command: "htop")
+        let right = SpySurface()
+        session.rightOverlaySurface = right
+        store.toggleSplit(session.id)
+        #expect(session.rightOverlay?.command == "htop")
+        #expect(session.rightOverlaySurface === right)
+        #expect(right.teardownCount == 0)
+        // and showing the split again leaves it exactly as it was.
+        store.toggleSplit(session.id)
+        #expect(session.openPaneOverlays == [.right])
+    }
+
+    // `surface zoom show --target surface:<id>:overlay-right` claims the slot the deck hands over, so hiding
+    // the split must not retire it just because the deck stopped laying that pane out.
+    @Test func hidingTheSplitKeepsAPaneOverlayTerminalZoomIsHosting() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let windowID = UUID()
+        let zoom = TerminalZoomController()
+        TerminalZoomRegistry.shared.register(windowID, controller: zoom)
+        defer { TerminalZoomRegistry.shared.unregister(windowID) }
+        session.isSplit = true
+        session.hasSplit = true
+        session.splitSurface = SpySurface()
+        #expect(store.openPaneOverlay(session.id, pane: .right, command: "htop") == nil)
+        zoom.set(.on, target: .session(session.id, .overlayRight))
+
+        store.toggleSplit(session.id)
+        #expect(session.rightOverlay?.command == "htop")
+        #expect(TerminalZoomSurface.overlayRight.isAvailable(in: session))
+    }
+
     @Test func openPaneOverlayUnknownSessionFails() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

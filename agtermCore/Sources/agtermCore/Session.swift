@@ -414,6 +414,42 @@ public final class Session: Identifiable {
         isSplit || pane == focusedPane
     }
 
+    /// The panes the detail pane lays out RIGHT NOW, ordered left then right. Derived from the observed
+    /// `isSplit`/`splitFocused`, so the deck can watch it for the moment a pane stops being laid out.
+    public var renderedPanes: [OverlayPane] {
+        OverlayPane.allCases.filter(rendersPane)
+    }
+
+    /// Whether ANY host is claiming this pane's overlay slot: the deck lays the pane out, or terminal zoom
+    /// targets that overlay surface. The deck is not the only host — while zoom owns a slot `deckHostsSurface`
+    /// deliberately returns false for it and the zoom layer mounts the surface instead — and the zoom target
+    /// is a claim from the moment it is set, before SwiftUI mounts that layer. `overlay-left`/`overlay-right`
+    /// are advertised zoomable as soon as the slot exists (`TerminalZoomSurface.isAvailable`), so a selected
+    /// zoom target with a pending host must count.
+    public func paneOverlayHosted(_ pane: OverlayPane) -> Bool {
+        rendersPane(pane) || TerminalZoomRegistry.shared.targets(sessionID: id, surface: pane.zoomSurface)
+    }
+
+    /// Drops a pane overlay that can never come to life: NO host claims its slot AND its terminal was never
+    /// realized, so no program was ever started and nothing would ever close the slot —
+    /// `session.overlay.result --pane` would answer "overlay still running" forever and `--block` would hang
+    /// on it. `openPaneOverlay` only proves the pane renders at REQUEST time; the surface is realized later
+    /// by whichever host mounts it, and the pane can stop rendering in between. A REALIZED overlay is left
+    /// alone: unmounting its surface keeps the program running and a re-show remounts it. Called wherever
+    /// `renderedPanes` or the zoom target can change, so the bad state is torn down instead of described.
+    ///
+    /// The test is `TerminalSurface.isRealized`, NOT an occupied surface slot: the deck parks the view in the
+    /// slot before its terminal is created, and creation defers until the view is sized, so a slot filled in
+    /// that gap holds a view with no libghostty surface and no process. `teardownPaneOverlay` frees that
+    /// stillborn view too, since a later open on the pane would otherwise reuse it — it is baked with the
+    /// RETIRED overlay's command, cwd, and colors.
+    public func dropUnrealizedPaneOverlays() {
+        for pane in OverlayPane.allCases
+        where paneOverlay(pane) != nil && paneOverlaySurface(pane)?.isRealized != true && !paneOverlayHosted(pane) {
+            teardownPaneOverlay(pane)
+        }
+    }
+
     /// The pane whose overlay slot CURRENTLY holds `surface`, nil when neither does. Derived LIVE from slot
     /// occupancy, like `paneRole(forToken:)`: `promotePaneOverlay` moves the right pane's overlay surface
     /// into the LEFT slot without rebuilding it, so its own exit/status/focus callbacks must ask which slot

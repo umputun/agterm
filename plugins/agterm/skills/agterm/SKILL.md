@@ -306,8 +306,9 @@ omitted when expanded).
   overlay is ALWAYS full-pane, so `--pane` cannot combine with `--size-percent` and `overlay resize`
   takes no `--pane`. Everything else is identical to the session-wide overlay. A non-split session
   accepts `--pane left` (it reports `AGTERM_PANE=left`), so you can pass `--pane "$AGTERM_PANE"` without checking
-  the split state; a pane that is not currently rendered (`--pane right` while the split is hidden) is
-  refused with `pane not visible`.
+  the split state; a pane that is not currently rendered is refused with `pane not visible` — a SHOWN
+  split renders both panes, a HIDDEN one renders only the FOCUSED pane, so the refused one is the pane
+  that does not have focus.
   Target with `--target "$AGTERM_SESSION_ID"` for YOUR session (default `active` is the user's selection).
   **By default `overlay open` does NOT switch the user** — full and floating (`--size-percent`) both open
   on `--target` and run their program in the background; the panel appears when the user visits that

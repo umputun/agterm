@@ -222,4 +222,13 @@ public final class TerminalZoomRegistry {
         guard let id else { return nil }
         return controllers[id]
     }
+
+    /// Whether SOME window's zoom currently targets this session surface — a CLAIM on the slot that stands
+    /// from the moment the target is set, before SwiftUI mounts the zoom layer that hosts it. Scanned rather
+    /// than looked up: a store carries no window id, and a session is open in exactly one window, so at most
+    /// one controller can match. `Session.paneOverlayHosted` reads it, since the deck deliberately hands the
+    /// zoomed slot over (`deckHostsSurface`) and is therefore not the whole answer to "who hosts this".
+    public func targets(sessionID: UUID, surface: TerminalZoomSurface) -> Bool {
+        controllers.values.contains { $0.target == .session(sessionID, surface) }
+    }
 }

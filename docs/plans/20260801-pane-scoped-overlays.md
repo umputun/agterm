@@ -762,6 +762,25 @@ Address its CLI with the Debug binary's full path and the same `AGTERM_STATE_DIR
 - GUI / keymap exposure for pane overlays (this change is control-native only, like the session overlay;
   the ⌘W rung in Task 7 protects an existing binding rather than adding one)
 
+## Known issues (pre-existing, out of scope)
+
+**A failed `ghostty_surface_new` strands an overlay slot forever.**
+`GhosttySurfaceView.createSurface()` (`agterm/Ghostty/GhosttySurfaceView.swift:502`) ends its allocation with
+`guard let surface else { return }`, returning silently after `TerminalView.makeNSView` has already parked
+the view in the session's overlay slot. Nothing reports the failure and nothing retires the slot, so it stays
+occupied with `isRealized == false` on a still-rendered pane: `session.overlay.result --pane` answers
+`overlay still running` for good and `--block` never returns. `dropUnrealizedPaneOverlays`
+(`agtermCore/Sources/agtermCore/Session.swift`) does not reach it — that slot's pane is still laid out, which
+is a legitimate host.
+This is not introduced by this branch. On `origin/master` `AppStore.openOverlay`
+(`agtermCore/Sources/agtermCore/AppStore+Panes.swift:159-171`) sets `session.overlayActive = true` the same
+way, `TerminalSurface.isRealized` does not exist there at all, and no test on master pins realization — so a
+failed allocation already strands the shipped SESSION-WIDE overlay identically. Fixing it for pane overlays
+alone would leave the two overlay kinds inconsistent; the real fix is to surface every surface kind's
+creation failure (report it out of `createSurface`, then close the slot that owns the view and record a
+failure status the `overlay.result` arms can return) rather than returning silently, which is a change
+outside this branch's scope.
+
 ---
 
 Smells pre-check: skipped — non-Go project

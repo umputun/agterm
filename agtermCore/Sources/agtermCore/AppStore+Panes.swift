@@ -25,6 +25,9 @@ extension AppStore {
             session.hasSplit = true
             if isNewSplit { session.splitFocused = true }
         }
+        // hiding the split un-renders a pane, so an overlay opened on it that has not realized yet would sit
+        // active with no surface and no program forever.
+        session.dropUnrealizedPaneOverlays()
         save()
     }
 
