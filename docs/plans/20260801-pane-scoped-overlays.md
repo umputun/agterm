@@ -339,18 +339,18 @@ helper on `Open` so the `--pane` forwarding is assertable.
 - Modify: `agtermCore/Sources/agtermCore/Session.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/SessionTests.swift`
 
-- [ ] add `OverlayPane` (with `init?(controlName:)`) and `PaneOverlay` to `Session.swift`
-- [ ] add the six paired slots (`leftOverlay`/`rightOverlay`, their surfaces, their exit codes) with the
+- [x] add `OverlayPane` (with `init?(controlName:)`) and `PaneOverlay` to `Session.swift`
+- [x] add the six paired slots (`leftOverlay`/`rightOverlay`, their surfaces, their exit codes) with the
       observed vs `@ObservationIgnored` split documented on the surface fields
-- [ ] add `paneOverlay(_:)`, `paneOverlaySurface(_:)`, `openPaneOverlays`, and `focusedOverlayPane`
-- [ ] add `rendersPane(_:)` implementing the three-case table in Technical Details
-- [ ] write tests for `OverlayPane.init?(controlName:)` (left/primary/right/split accepted, `scratch`
+- [x] add `paneOverlay(_:)`, `paneOverlaySurface(_:)`, `openPaneOverlays`, and `focusedOverlayPane`
+- [x] add `rendersPane(_:)` implementing the three-case table in Technical Details
+- [x] write tests for `OverlayPane.init?(controlName:)` (left/primary/right/split accepted, `scratch`
       and unknown rejected)
-- [ ] write tests for `rendersPane` across all three session shapes, including the hidden-split-focused
+- [x] write tests for `rendersPane` across all three session shapes, including the hidden-split-focused
       case and a session with no split surface
-- [ ] write tests for `focusedOverlayPane` (nil when the focused pane's slot is empty, `.right` only
+- [x] write tests for `focusedOverlayPane` (nil when the focused pane's slot is empty, `.right` only
       when `splitFocused` AND `splitSurface != nil`, `.left` after a promotion)
-- [ ] run `cd agtermCore && swift test` — must pass before task 2
+- [x] run `cd agtermCore && swift test` — must pass before task 2
 
 ### Task 2: Add store open / close / exit-record for pane overlays
 
@@ -358,45 +358,51 @@ helper on `Open` so the `--pane` forwarding is assertable.
 - Modify: `agtermCore/Sources/agtermCore/AppStore+Panes.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStorePaneTests.swift`
 
-- [ ] add `openPaneOverlay(_:pane:command:cwd:wait:backgroundColor:)` returning a typed failure reason
+- [x] add `openPaneOverlay(_:pane:command:cwd:wait:backgroundColor:)` returning a typed failure reason
       (already open / pane not visible) rather than a bare `Bool`, so the caller can pick the error string
-- [ ] add `closePaneOverlay(_:pane:)` — tears the surface down and clears the slot, leaving the exit code
-- [ ] add `recordPaneOverlayExit(_:pane:code:)`
-- [ ] verify opening clears that pane's stale exit code, and that closing does NOT
-- [ ] write tests for open success on both panes, including left and right open simultaneously and
+- [x] add `closePaneOverlay(_:pane:)` — tears the surface down and clears the slot, leaving the exit code
+- [x] add `recordPaneOverlayExit(_:pane:code:)`
+- [x] verify opening clears that pane's stale exit code, and that closing does NOT
+- [x] write tests for open success on both panes, including left and right open simultaneously and
       independent of a session-wide overlay
-- [ ] write tests for both rejection paths (already open, pane not rendered)
-- [ ] write tests for close + exit-code retention and for the next-open reset
-- [ ] write a test that `wait` round-trips into the stored `PaneOverlay`, so the factory can apply
+- [x] write tests for both rejection paths (already open, pane not rendered)
+- [x] write tests for close + exit-code retention and for the next-open reset
+- [x] write a test that `wait` round-trips into the stored `PaneOverlay`, so the factory can apply
       `waitAfterCommand` and `--wait` is not silently dropped
-- [ ] write a test that two pane overlays open at once hold INDEPENDENT `backgroundColor` and `cwd`
+- [x] write a test that two pane overlays open at once hold INDEPENDENT `backgroundColor` and `cwd`
       values, so neither slot can shadow the other
-- [ ] run `cd agtermCore && swift test` — must pass before task 3
+- [x] run `cd agtermCore && swift test` — must pass before task 3
 
 ### Task 3: Free pane overlays at every teardown site
 
 **Files:**
+- Modify: `agtermCore/Sources/agtermCore/Session.swift` (➕ the shared `teardownPaneOverlay(_:)` /
+  `teardownPaneOverlays()` / `promotePaneOverlay()` helpers the five sites call)
 - Modify: `agtermCore/Sources/agtermCore/AppStore+Panes.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore+PendingClose.swift`
 - Modify: `agterm/Views/WindowAccessor.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStorePaneTests.swift`
 
-- [ ] `closeSplit` tears down the right pane overlay and clears its slot and exit code
-- [ ] `closePrimaryPane` MIGRATES the right pane overlay (slot, surface, exit code) into the left slot
+- [x] `closeSplit` tears down the right pane overlay and clears its slot and exit code
+- [x] `closePrimaryPane` MIGRATES the right pane overlay (slot, surface, exit code) into the left slot
       alongside the promoted survivor, and tears down the dying left one — following the
       `restoreCommand`/`splitRestoreCommand` migration at the same site (`AppStore+Panes.swift:108`)
-- [ ] `closeSplitPane` frees the right slot
-- [ ] free both slots at `AppStore.closeSession` (`:425`), `AppStore.removeWorkspace` (`:459`),
+- [x] `closeSplitPane` frees the right slot
+- [x] free both slots at `AppStore.closeSession` (`:425`), `AppStore.removeWorkspace` (`:459`),
       `AppStore+PendingClose.hardFinalizePendingSession` (`:405`), and `WindowAccessor` window close
       (`:151`) — each alongside the existing `overlaySurface?.teardown()` call
-- [ ] confirm store-capturing callbacks are nilled on teardown so no store→session→surface→closure cycle
-      survives, per `.claude/rules/libghostty.md`
-- [ ] confirm `clearIndicatorOwnedByPane` and `clearSearch` interactions are unaffected
-- [ ] write tests for promotion migrating a right overlay to left with its exit code intact
-- [ ] write tests for `closeSplit` tearing down only the right overlay, leaving a left one alive
-- [ ] write tests that session close, workspace removal, and pending-close finalization each free both slots
-- [ ] run `cd agtermCore && swift test`, `make lint` — must pass before task 4
+- [x] confirm store-capturing callbacks are nilled on teardown so no store→session→surface→closure cycle
+      survives, per `.claude/rules/libghostty.md` — `teardown()` routes to
+      `GhosttySurfaceView.destroySurface`, which nils `onExit` / `onExitCodeCaptured` and the rest after
+      handing off the captured exit status
+- [x] confirm `clearIndicatorOwnedByPane` and `clearSearch` interactions are unaffected — both key off
+      `StatusPane` / `searchSurface`, neither of which a pane overlay surface can occupy yet (search
+      targeting is Task 7)
+- [x] write tests for promotion migrating a right overlay to left with its exit code intact
+- [x] write tests for `closeSplit` tearing down only the right overlay, leaving a left one alive
+- [x] write tests that session close, workspace removal, and pending-close finalization each free both slots
+- [x] run `cd agtermCore && swift test`, `make lint` — must pass before task 4
 
 ### Task 4: Extend the control protocol and dispatcher
 

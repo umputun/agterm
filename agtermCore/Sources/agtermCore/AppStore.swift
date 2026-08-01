@@ -423,6 +423,7 @@ public final class AppStore {
         removed.surface?.teardown()
         removed.splitSurface?.teardown()
         removed.overlaySurface?.teardown()
+        removed.teardownPaneOverlays()
         removed.scratchSurface?.teardown()
         WatermarkStorage.removeRenderedText(sessionID: sessionID) // drop any rendered .text PNG; the session is gone
         sessionRecency.remove(sessionID)
@@ -457,6 +458,7 @@ public final class AppStore {
             session.surface?.teardown()
             session.splitSurface?.teardown()
             session.overlaySurface?.teardown()
+            session.teardownPaneOverlays()
             session.scratchSurface?.teardown()
             WatermarkStorage.removeRenderedText(sessionID: session.id) // drop any rendered .text PNG; the session is gone
             sessionRecency.remove(session.id)

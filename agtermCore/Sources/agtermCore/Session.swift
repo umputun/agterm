@@ -1,6 +1,50 @@
 import Foundation
 import Observation
 
+/// Which pane a pane-scoped overlay covers. Two cases rather than `StatusPane` so a scratch overlay is
+/// not representable and no call site needs a scratch guard.
+public enum OverlayPane: String, CaseIterable, Codable, Sendable {
+    case left
+    case right
+
+    /// Accepts the same pane spellings as `TerminalZoomSurface`, minus `scratch`: a pane overlay covers a
+    /// split pane only.
+    public init?(controlName: String) {
+        switch controlName {
+        case "left", "primary":
+            self = .left
+        case "right", "split":
+            self = .right
+        default:
+            return nil
+        }
+    }
+}
+
+/// One pane's ephemeral overlay — the session-scoped overlay's fields minus the size percent, which a
+/// pane overlay never has (it is always full-pane). The surface lives beside this in
+/// `leftOverlaySurface`/`rightOverlaySurface`, not inside, because `TerminalView` writes that slot back
+/// during view update and an observed write there would loop.
+public struct PaneOverlay: Equatable, Sendable {
+    /// The command the overlay runs as its process, read by the overlay factory at creation.
+    public var command: String
+    /// The overlay's working directory, or nil to inherit `effectiveCwd`.
+    public var cwd: String?
+    /// The overlay's own solid background as `#rrggbb`, nil for the theme default. Per-surface, so two
+    /// pane overlays open at once may carry different colors.
+    public var backgroundColor: String?
+    /// Whether the overlay holds its surface after the command exits (libghostty's "press any key to
+    /// close"), instead of closing.
+    public var wait: Bool
+
+    public init(command: String, cwd: String? = nil, backgroundColor: String? = nil, wait: Bool = false) {
+        self.command = command
+        self.cwd = cwd
+        self.backgroundColor = backgroundColor
+        self.wait = wait
+    }
+}
+
 /// One shell, backed by a single libghostty surface.
 ///
 /// `@MainActor`, so implicitly `Sendable` via isolation — never make it an `actor`. `surface` is
@@ -182,6 +226,27 @@ public final class Session: Identifiable {
     /// `fullOverlayActive` and not a cover. Read by the detail pane to gate the floating panel.
     public var floatingOverlayActive: Bool { overlayActive && overlaySizePercent != nil }
 
+    /// The left pane's overlay, covering that pane only and leaving the sibling live; nil means none is up,
+    /// so the slot itself IS the "active" signal. Observed, ephemeral, control-channel only.
+    public var leftOverlay: PaneOverlay?
+
+    /// The left pane overlay's surface, created on open and torn down when its command exits or the slot is
+    /// closed. `@ObservationIgnored` because `TerminalView` assigns it during view update.
+    @ObservationIgnored public var leftOverlaySurface: (any TerminalSurface)?
+
+    /// The left pane overlay program's exit status, kept OUTSIDE `PaneOverlay` so `session.overlay.result`
+    /// can still read it after the slot goes nil. Reset on the next open; in-memory only.
+    @ObservationIgnored public var leftOverlayExitCode: Int?
+
+    /// The right pane's overlay, the split-pane analogue of `leftOverlay`.
+    public var rightOverlay: PaneOverlay?
+
+    /// The right pane overlay's surface (see `leftOverlaySurface`).
+    @ObservationIgnored public var rightOverlaySurface: (any TerminalSurface)?
+
+    /// The right pane overlay program's exit status (see `leftOverlayExitCode`).
+    @ObservationIgnored public var rightOverlayExitCode: Int?
+
     /// Whether the scratch terminal covers this session (full single-pane size, like a full overlay); the
     /// detail pane shows/hides it. A third per-session shell that, unlike the ephemeral overlay, behaves like
     /// the split: hiding it keeps the shell alive, so a re-show reuses it. Not persisted.
@@ -281,6 +346,74 @@ public final class Session: Identifiable {
     /// `activeSurface`: a shown split still addresses the main pane, so `session.selectall` and its
     /// `session.copy` read-back stay on one surface.
     public var addressableSurface: (any TerminalSurface)? { surface ?? splitSurface }
+
+    /// The pane's overlay, nil when that pane has none.
+    public func paneOverlay(_ pane: OverlayPane) -> PaneOverlay? {
+        pane == .left ? leftOverlay : rightOverlay
+    }
+
+    /// The pane overlay's surface, nil before the factory realizes it or after teardown.
+    public func paneOverlaySurface(_ pane: OverlayPane) -> (any TerminalSurface)? {
+        pane == .left ? leftOverlaySurface : rightOverlaySurface
+    }
+
+    /// The panes with an overlay up, ordered left then right — the `paneOverlays` tree read-back source.
+    public var openPaneOverlays: [OverlayPane] {
+        OverlayPane.allCases.filter { paneOverlay($0) != nil }
+    }
+
+    /// The focused pane's overlay pane, nil when that pane's slot is empty. The focused pane is `.right`
+    /// only while the split surface exists (the `activeSurface` idiom), so a promoted survivor that
+    /// momentarily re-raised `splitFocused` still resolves `.left`.
+    public var focusedOverlayPane: OverlayPane? {
+        let pane: OverlayPane = splitFocused && splitSurface != nil ? .right : .left
+        return paneOverlay(pane) == nil ? nil : pane
+    }
+
+    /// Whether the detail pane LAYS THIS PANE OUT at all — the precondition for realizing a surface in it,
+    /// since surfaces defer creation until they get a nonzero backing size. Not `deckHostsSurface`, which
+    /// also yields a placeholder while zoom or the dashboard owns the slot.
+    public func rendersPane(_ pane: OverlayPane) -> Bool {
+        if isSplit { return true }
+        if splitFocused, splitSurface != nil { return pane == .right }
+        return pane == .left
+    }
+
+    /// Frees the pane's overlay outright: tears the surface down and clears the slot, the surface, AND the
+    /// exit code. Used where the PANE ITSELF goes away, unlike `AppStore.closePaneOverlay`, which keeps the
+    /// exit code readable by `session.overlay.result`; here no pane survives to be asked. `teardown()` nils
+    /// the surface's store-capturing callbacks, breaking the store/session/surface/closure cycle.
+    public func teardownPaneOverlay(_ pane: OverlayPane) {
+        paneOverlaySurface(pane)?.teardown()
+        switch pane {
+        case .left:
+            leftOverlay = nil
+            leftOverlaySurface = nil
+            leftOverlayExitCode = nil
+        case .right:
+            rightOverlay = nil
+            rightOverlaySurface = nil
+            rightOverlayExitCode = nil
+        }
+    }
+
+    /// Frees BOTH pane overlays; the whole-session form of `teardownPaneOverlay(_:)`, called wherever the
+    /// session is discarded alongside the `overlaySurface?.teardown()` for the session-wide overlay.
+    public func teardownPaneOverlays() {
+        OverlayPane.allCases.forEach { teardownPaneOverlay($0) }
+    }
+
+    /// Moves the right pane's overlay — slot, surface, and exit code together — into the left slot, following
+    /// the split survivor `closePrimaryPane` promotes into the primary pane, so the overlay keeps covering the
+    /// same shell. The left slot must already be freed.
+    public func promotePaneOverlay() {
+        leftOverlay = rightOverlay
+        leftOverlaySurface = rightOverlaySurface
+        leftOverlayExitCode = rightOverlayExitCode
+        rightOverlay = nil
+        rightOverlaySurface = nil
+        rightOverlayExitCode = nil
+    }
 
     /// Resolves a surface's stable spawn token (`TerminalSurface.paneToken`, baked as `AGTERM_PANE_ID` and
     /// forwarded by the agent-status hook as `session.status --pane-id`) to the slot it CURRENTLY occupies.
