@@ -210,8 +210,9 @@ struct Surface: ParsableCommand {
 // MARK: - dashboard
 
 /// Opens a view-only grid of the named sessions (max 9), or of the window's most-recently-used sessions
-/// with `--mru`; `--close` closes the open one. The dispatcher caps ids at 9, dedups, and reports any drop.
-/// An id may carry a `:left`/`:right` pane suffix to place one pane of a split session (#331).
+/// with `--mru`; `--close` closes the open one. An id may carry a `:left`/`:right` pane suffix to place one
+/// pane of a split session (#331). The dispatcher validates flags and pane grammar; the 9-cell cap, the
+/// session+pane dedup, and the drop report are app-side, since expanding an id into cells needs the store.
 struct Dashboard: RequestCommand {
     static let configuration = CommandConfiguration(
         abstract: "Open a view-only grid of live sessions, or --close the open one.",
