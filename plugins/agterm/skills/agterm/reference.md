@@ -716,7 +716,8 @@ row cannot filter out its safer neighbour. An empty query lists the items in the
 them, so the first item is the one Return runs on open.
 
 `--prompt` sets the query field's placeholder text. `--query` prefills it and filters on open, which ranks
-by match score and so does not preserve the supplied order. `--allow-custom` adds a row for a nonmatching
+by match score and so does not preserve the supplied order; the seeded text opens selected, so the first
+keystroke replaces it rather than appending. `--allow-custom` adds a row for a nonmatching
 query and returns it as a custom result; with an empty item list that row is the only possible one, and it
 appears as soon as the query is nonblank, prefilled or typed; whitespace and newlines are trimmed first.
 A background `--window` target is not raised by default; `--follow` raises it. Only one picker can be

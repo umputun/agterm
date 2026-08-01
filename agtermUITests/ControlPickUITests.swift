@@ -185,6 +185,24 @@ final class ControlPickUITests: ControlAPITestCase {
         XCTAssertEqual(result["query"] as? String, "old name")
     }
 
+    func testTypingIntoAPrefilledQueryReplacesTheSeededText() throws {
+        let pickID = try resultID(openPick([], query: "old name", allowCustom: true))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10))
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the picker query field should exist")
+        XCTAssertEqual(field.value as? String, "old name")
+
+        app.typeText("x")
+        XCTAssertEqual(field.value as? String, "x",
+                       "the seeded text opens selected, so the first keystroke replaces it rather than appending")
+
+        app.typeKey(.return, modifierFlags: [])
+
+        let result = try awaitTerminalResult(id: pickID)
+        XCTAssertEqual(result["result"] as? String, "custom")
+        XCTAssertEqual(result["query"] as? String, "x", "the committed answer is the replacement, not old name + x")
+    }
+
     // `query` is deliberately unvalidated, so `--query $'name\n'` reaches the field; the committed answer
     // used to keep the newline the row label had already dropped.
     func testPrefilledQueryCommitsExactlyWhatTheCustomRowShows() throws {
