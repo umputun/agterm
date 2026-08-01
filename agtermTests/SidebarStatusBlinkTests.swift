@@ -3,8 +3,8 @@ import XCTest
 @testable import agterm
 import agtermCore
 
-/// Hosted coverage for the sidebar status glyph's blink surviving a per-row reload: a title change moves
-/// `displayName`, which reloads the row, and the row builder must not tear the animation down and re-add it.
+/// Hosted coverage for the sidebar status glyph's blink lifecycle: it starts and stops with the indicator,
+/// and survives a per-row reload, which a terminal title change triggers through `displayName`.
 @MainActor
 final class SidebarStatusBlinkTests: XCTestCase {
     private var stateDir: URL!
