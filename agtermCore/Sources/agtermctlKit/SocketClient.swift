@@ -68,8 +68,8 @@ struct SocketClient {
 
         // a write after the server closes the connection (e.g. it rejected an oversized request) would
         // raise the default-fatal SIGPIPE and kill the process with no output; SO_NOSIGPIPE turns it into
-        // a normal EPIPE write error, mirroring the server side of the socket. Darwin-only (Glibc has no
-        // SO_NOSIGPIPE), and the Glibc build only serves the test suite, which never writes to a dead peer.
+        // a normal EPIPE write error, mirroring the server side of the socket. Darwin-only — Glibc has no
+        // SO_NOSIGPIPE.
         #if canImport(Darwin)
         var noSigPipe: Int32 = 1
         setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
