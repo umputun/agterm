@@ -357,6 +357,12 @@ public final class Session: Identifiable {
         pane == .left ? leftOverlaySurface : rightOverlaySurface
     }
 
+    /// The pane overlay program's exit status, surviving the overlay's close so
+    /// `session.overlay.result --pane` can report it; nil until one exits or after the next open on that pane.
+    public func paneOverlayExitCode(_ pane: OverlayPane) -> Int? {
+        pane == .left ? leftOverlayExitCode : rightOverlayExitCode
+    }
+
     /// The panes with an overlay up, ordered left then right — the `paneOverlays` tree read-back source.
     public var openPaneOverlays: [OverlayPane] {
         OverlayPane.allCases.filter { paneOverlay($0) != nil }

@@ -730,6 +730,26 @@ struct ControlProtocolTests {
         #expect(decoded.overlaySizePercent == nil)
     }
 
+    @Test func treeSessionNodeRoundTripsWithPaneOverlays() throws {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true,
+                                         paneOverlays: ["left", "right"])
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.paneOverlays == ["left", "right"])
+    }
+
+    @Test func treeSessionNodeOmitsPaneOverlaysWhenNone() throws {
+        // a session-wide overlay must not imply a pane one: the two kinds are independent.
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false,
+                                         overlay: true)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("paneOverlays"), "no pane overlay must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.paneOverlays == nil)
+    }
+
     @Test func treeSessionNodeRoundTripsWithRestoreCommand() throws {
         let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: true,
                                          restoreCommand: "claude --resume abc",

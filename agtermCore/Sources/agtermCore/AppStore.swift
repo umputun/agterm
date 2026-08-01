@@ -264,6 +264,7 @@ public final class AppStore {
                                           splitFocused: session.hasSplit ? session.splitFocused : nil,
                                           overlay: session.overlayActive,
                                           overlaySizePercent: session.overlayActive ? session.overlaySizePercent : nil,
+                                          paneOverlays: paneOverlays(session),
                                           scratch: session.scratchActive, flagged: session.flagged,
                                           commandWait: (session.initialCommand != nil && session.commandWait) ? true : nil,
                                           foreground: foreground(session),
@@ -298,6 +299,12 @@ public final class AppStore {
                            dashboardFontSize: dashboardFontSize(),
                            dashboardFontMode: dashboardFontMode(),
                            pickPending: pickPending())
+    }
+
+    /// The tree's `paneOverlays`: the panes covered by their own overlay, omitted when neither is.
+    private func paneOverlays(_ session: Session) -> [String]? {
+        let panes = session.openPaneOverlays.map(\.rawValue)
+        return panes.isEmpty ? nil : panes
     }
 
     /// Creates a workspace and appends it. With `revealNewWorkspace` (the default) and the filter ON, the new

@@ -410,26 +410,33 @@ helper on `Open` so the `--pane` forwarding is assertable.
 - Modify: `agtermCore/Sources/agtermCore/ControlProtocol.swift`
 - Modify: `agtermCore/Sources/agtermCore/ControlDispatcher.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore.swift`
+- Modify: `agtermCore/Sources/agtermCore/Session.swift` (➕ the `paneOverlayExitCode(_:)` accessor the
+  `overlay.result --pane` arm reads)
 - Modify: `agterm/Control/ControlServer+SessionActions.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/MockControlActions.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlProtocolTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlDispatcherTests.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/AppStorePaneTests.swift` (➕ the `controlTree` population test,
+  which needs a live store)
+- Add: `agtermCore/Tests/agtermCoreTests/ControlDispatcherOverlayTests.swift` (➕ `ControlDispatcherTests`
+  was at 1960 of its 2000-line cap, so the `session.overlay.*` family moved out whole, following the
+  existing `ControlDispatcherDashboardTests` / `…PickTests` / `…WorkspaceTests` carve-outs)
 
-- [ ] add the five new error strings beside the existing overlay error constants
-- [ ] extend the `ControlArgs.pane` doc comment (`ControlProtocol.swift:146-152`) to name the overlay
+- [x] add the five new error strings beside the existing overlay error constants
+- [x] extend the `ControlArgs.pane` doc comment (`ControlProtocol.swift:146-152`) to name the overlay
       commands and their `left|right`-only semantics
-- [ ] add `paneOverlays: [String]?` to `ControlSessionNode`, populated from `openPaneOverlays` in
+- [x] add `paneOverlays: [String]?` to `ControlSessionNode`, populated from `openPaneOverlays` in
       `AppStore.controlTree` (`AppStore.swift:252` area)
-- [ ] add `pane` to `ControlSessionOverlayOpenOptions` and to the `closeSessionOverlay` /
+- [x] add `pane` to `ControlSessionOverlayOpenOptions` and to the `closeSessionOverlay` /
       `sessionOverlayResult` signatures on `ControlActions`, updating `MockControlActions`
-- [ ] put host-free validation in `ControlDispatcher` (invalid pane, `--pane` with `--size-percent`,
+- [x] put host-free validation in `ControlDispatcher` (invalid pane, `--pane` with `--size-percent`,
       `--pane` on resize) and session-dependent rejections (already open, pane not visible) in
       `ControlServer+SessionActions.swift` — never in the app-side fallback switch
-- [ ] write dispatcher tests for each host-free rejection asserting the exact error strings, including
+- [x] write dispatcher tests for each host-free rejection asserting the exact error strings, including
       `--pane` on `session.overlay.resize`
-- [ ] write tests for `paneOverlays` read-back — omitted when none, both panes when both open
-- [ ] write tests that omitting `--pane` still drives the session-wide overlay unchanged
-- [ ] run `cd agtermCore && swift test`, `make lint` — must pass before task 5
+- [x] write tests for `paneOverlays` read-back — omitted when none, both panes when both open
+- [x] write tests that omitting `--pane` still drives the session-wide overlay unchanged
+- [x] run `cd agtermCore && swift test`, `make lint` — must pass before task 5
 
 ### Task 5: Add --pane to agtermctl
 

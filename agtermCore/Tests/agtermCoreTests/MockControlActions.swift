@@ -59,9 +59,9 @@ final class MockControlActions: ControlActions {
         case sessionSelectAll(target: String?, window: String?)
         case sessionSearch(target: String?, window: String?, text: String?, to: String?)
         case overlayOpen(target: String?, window: String?, ControlSessionOverlayOpenOptions)
-        case overlayClose(target: String?, window: String?)
+        case overlayClose(target: String?, window: String?, pane: OverlayPane?)
         case overlayResize(target: String?, window: String?, sizePercent: Int?)
-        case overlayResult(target: String?, window: String?)
+        case overlayResult(target: String?, window: String?, pane: OverlayPane?)
         case sessionBackground(target: String?, window: String?, ControlSessionBackgroundOptions)
         case sessionText(target: String?, window: String?, ControlSessionTextOptions)
         case windowNew(String?, minimized: Bool)
@@ -408,8 +408,8 @@ final class MockControlActions: ControlActions {
         return nextOverlayOpenResponse
     }
 
-    func closeSessionOverlay(_ target: String?, window: String?) -> ControlResponse {
-        calls.append(.overlayClose(target: target, window: window))
+    func closeSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse {
+        calls.append(.overlayClose(target: target, window: window, pane: pane))
         return nextOverlayCloseResponse
     }
 
@@ -418,8 +418,8 @@ final class MockControlActions: ControlActions {
         return nextOverlayResizeResponse
     }
 
-    func sessionOverlayResult(_ target: String?, window: String?) -> ControlResponse {
-        calls.append(.overlayResult(target: target, window: window))
+    func sessionOverlayResult(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse {
+        calls.append(.overlayResult(target: target, window: window, pane: pane))
         return nextOverlayResultResponse
     }
 

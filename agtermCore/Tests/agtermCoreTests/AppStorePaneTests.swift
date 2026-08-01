@@ -926,6 +926,23 @@ struct AppStorePaneTests {
         #expect(session.leftOverlayExitCode == nil)
     }
 
+    @Test func controlTreeReportsOpenPaneOverlays() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.isSplit = true
+        session.hasSplit = true
+        session.splitSurface = SpySurface()
+        #expect(store.controlTree().workspaces[0].sessions[0].paneOverlays == nil)
+        store.openPaneOverlay(session.id, pane: .right, command: "htop")
+        #expect(store.controlTree().workspaces[0].sessions[0].paneOverlays == ["right"])
+        store.openPaneOverlay(session.id, pane: .left, command: "revdiff")
+        #expect(store.controlTree().workspaces[0].sessions[0].paneOverlays == ["left", "right"])
+        store.closePaneOverlay(session.id, pane: .left)
+        store.closePaneOverlay(session.id, pane: .right)
+        #expect(store.controlTree().workspaces[0].sessions[0].paneOverlays == nil)
+    }
+
     @Test func closeSessionFreesBothPaneOverlays() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")

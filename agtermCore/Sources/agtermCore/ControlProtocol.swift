@@ -147,6 +147,11 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// (`left`|`right`, omitted = left/main); set `session.status` (`left`|`right`|`scratch`, omitted =
     /// `left`/main, parsed to `StatusPane`); and `session.restore` pins (same `StatusPane` spelling, omitted
     /// = `left`/main, `scratch` rejected app-side).
+    ///
+    /// `session.overlay.open`/`.close`/`.result` scope to ONE pane with it, parsed to `OverlayPane`:
+    /// `left`|`right` only — `scratch` is rejected, there being no scratch pane to cover. Omitted keeps the
+    /// session-wide overlay, so every existing caller is unaffected. A pane overlay is always full-pane, so
+    /// `--pane` conflicts with `session.overlay.open --size-percent` and `session.overlay.resize` refuses it.
     public var pane: String?
     /// A surface's STABLE spawn token for `session.status --pane-id`/`session.restore --pane-id` (the shell's
     /// baked `AGTERM_PANE_ID`, forwarded by the agent-status hook). Resolving it against the session's live
@@ -389,6 +394,11 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// An OPEN overlay's size (`overlay == true`): nil/omitted = FULL-pane, else the floating panel's percent
     /// of the pane (1...100); absent with no overlay. The read side of `session.overlay.resize`.
     public let overlaySizePercent: Int?
+    /// The panes covered by their OWN overlay, ordered left then right (`["left"]`, `["right"]`,
+    /// `["left","right"]`); nil/omitted when neither has one. Independent of `overlay`, the session-wide
+    /// one — both kinds can be up at once. The read side of `session.overlay.open --pane`; those overlays
+    /// are always full-pane, so there is no per-pane size to report.
+    public let paneOverlays: [String]?
     public let scratch: Bool
     public let flagged: Bool
     /// For a `--command` session, whether it HOLDS its surface after the command exits (`session.new
@@ -447,7 +457,8 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
 
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 splitRatio: Double? = nil, splitFocused: Bool? = nil,
-                overlay: Bool = false, overlaySizePercent: Int? = nil, scratch: Bool = false, flagged: Bool = false,
+                overlay: Bool = false, overlaySizePercent: Int? = nil, paneOverlays: [String]? = nil,
+                scratch: Bool = false, flagged: Bool = false,
                 commandWait: Bool? = nil,
                 foreground: [String]? = nil, splitForeground: [String]? = nil,
                 restoreCommand: String? = nil, splitRestoreCommand: String? = nil, status: String? = nil,
@@ -466,6 +477,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.splitFocused = splitFocused
         self.overlay = overlay
         self.overlaySizePercent = overlaySizePercent
+        self.paneOverlays = paneOverlays
         self.scratch = scratch
         self.flagged = flagged
         self.commandWait = commandWait
@@ -737,6 +749,17 @@ public struct ControlResult: Codable, Sendable, Equatable {
 public enum OverlayResultError {
     public static let stillRunning = "overlay still running"
     public static let noResult = "no overlay result"
+}
+
+/// Error strings for the pane-scoped (`--pane`) arm of `session.overlay.*`. Shared because the rejections
+/// are split across layers — the first three are host-free in `ControlDispatcher`, the last two need the
+/// live session and fire in `ControlServer` — and the wording must not drift between them.
+public enum PaneOverlayError {
+    public static let alreadyOpen = "pane overlay already open"
+    public static let paneNotVisible = "pane not visible"
+    public static let invalidPane = "session.overlay: --pane must be left or right"
+    public static let sizePercentConflict = "session.overlay.open: --pane is mutually exclusive with --size-percent"
+    public static let resizeUnsupported = "session.overlay.resize: --pane is not supported (pane overlays are always full)"
 }
 
 /// Advisory text `notify` returns in `result.text` when the banner toggle is off. The command still succeeds
