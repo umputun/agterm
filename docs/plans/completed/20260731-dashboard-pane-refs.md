@@ -260,14 +260,14 @@ yields `unresolved: A:left`, which is today's behavior.
 `openDashboard(members: [String])` (`DashboardUITests.swift:456`) already takes raw strings, so every
 assertion below is a string change rather than new harness.
 
-- [ ] add a test opening a split session by `<id>:right` and asserting exactly one cell
-- [ ] assert `dashboardMembers` reads back `["<id>:right"]`
-- [ ] assert Enter focuses that exact pane (`splitFocused` flips)
-- [ ] assert the issue's headline case: `A:left B:right` yields a two-cell mixed grid in that order
-- [ ] assert `active:left` resolves, so the suffix composes with non-UUID heads
-- [ ] assert `A:right` on a non-split session reports the token in `unresolved` and leaves any open
+- [x] add a test opening a split session by `<id>:right` and asserting exactly one cell
+- [x] assert `dashboardMembers` reads back `["<id>:right"]`
+- [x] assert Enter focuses that exact pane (`splitFocused` flips)
+- [x] assert the issue's headline case: `A:left B:right` yields a two-cell mixed grid in that order
+- [x] assert `active:left` resolves, so the suffix composes with non-UUID heads
+- [x] assert `A:right` on a non-split session reports the token in `unresolved` and leaves any open
       dashboard untouched (covers the task 4 empty-guard bug)
-- [ ] assert the task 5 wiring end to end: hold a session on the grid by `:right`, exit its primary
+- [x] assert the task 5 wiring end to end: hold a session on the grid by `:right`, exit its primary
       shell, and confirm `dashboardMembers` becomes `["<id>:left"]` rather than dropping the cell
 - [x] run the five tests — **all pass**, 34.6s (`Executed 5 tests, with 0 failures`).
       `testPromotedSplitKeepsItsCellOnTheGrid` is the executed coverage for task 5's `agtermApp` wiring,
@@ -304,8 +304,8 @@ assertion below is a string change rather than new harness.
 
 ### Task 10: [Final] Close out
 
-- [ ] confirm README, site, skill, and rules all describe the shipped grammar
-- [ ] move this plan to `docs/plans/completed/`
+- [x] confirm README, site, skill, and rules all describe the shipped grammar
+- [x] move this plan to `docs/plans/completed/`
 
 ## Post-Completion
 
