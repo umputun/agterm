@@ -43,6 +43,20 @@ struct PickTests {
         #expect(controller.result(for: "second") == nil)
     }
 
+    @Test func pendingPickCarriesQueryAndDefaultsItToNil() {
+        let controller = PickController()
+        let prefilled = PendingPick(
+            id: "prefilled",
+            items: [ControlPickItem(id: "one", label: "One")],
+            query: "current name"
+        )
+
+        #expect(controller.open(prefilled))
+
+        #expect(controller.pending?.query == "current name")
+        #expect(makePick(id: "plain").query == nil)
+    }
+
     @Test func resultReturnsNilForUnknownID() {
         let controller = PickController()
         #expect(controller.open(makePick(id: "known")))

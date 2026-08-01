@@ -28,7 +28,7 @@ struct ControlProtocolTests {
             ControlRequest(
                 cmd: .pickOpen,
                 args: ControlArgs(follow: true, items: items, prompt: "Choose one",
-                                  allowCustom: true, window: "window-id")
+                                  query: "prefilled", allowCustom: true, window: "window-id")
             ),
             ControlRequest(cmd: .pickResult, target: "pick-id"),
             ControlRequest(cmd: .pickCancel, target: "pick-id"),
@@ -67,6 +67,24 @@ struct ControlProtocolTests {
 
         #expect(!json.contains("pickPending"), "a nil pending picker must be omitted from the JSON; got \(json)")
         #expect(try JSONDecoder().decode(ControlTree.self, from: Data(json.utf8)).pickPending == nil)
+    }
+
+    @Test func controlArgsDistinguishesEmptyItemsFromAbsentItems() throws {
+        let empty = String(decoding: try JSONEncoder().encode(ControlArgs(items: [])), as: UTF8.self)
+        let absent = String(decoding: try JSONEncoder().encode(ControlArgs(allowCustom: true)), as: UTF8.self)
+
+        #expect(empty.contains("\"items\":[]"), "an empty list must survive as an empty array; got \(empty)")
+        #expect(!absent.contains("items"), "absent items must be omitted from the JSON; got \(absent)")
+        #expect(try JSONDecoder().decode(ControlArgs.self, from: Data(empty.utf8)).items == [])
+        #expect(try JSONDecoder().decode(ControlArgs.self, from: Data(absent.utf8)).items == nil)
+    }
+
+    @Test func controlArgsQueryOmitsWhenNil() throws {
+        let args = ControlArgs(items: [ControlPickItem(id: "first", label: "First choice")])
+        let json = String(decoding: try JSONEncoder().encode(args), as: UTF8.self)
+
+        #expect(!json.contains("query"), "a nil query must be omitted from the JSON; got \(json)")
+        #expect(try JSONDecoder().decode(ControlArgs.self, from: Data(json.utf8)).query == nil)
     }
 
     @Test func controlPickItemSubtitleOmitsWhenNil() throws {

@@ -67,6 +67,39 @@ final class PaletteUITests: XCTestCase {
         XCTAssertTrue(poll { self.selectedID() == first }, "Go to Session → zeta should select the first session")
     }
 
+    /// Pins the half of `paletteSearchKeys` a caller-supplied picker gives up: a built-in palette still
+    /// matches its "<workspace> · <detail>" subtitle, the only place the owning workspace is searchable.
+    func testSessionPaletteMatchesItsSubtitleNotOnlyTheLabel() throws {
+        renameActiveSession(to: "zeta")
+        XCTAssertTrue(poll { self.firstSessionName() == "zeta" })
+        let first = try XCTUnwrap(firstSessionID())
+
+        openPalette("Go to Session")
+        typeIntoPalette("workspace") // leads the subtitle, "workspace 1 · …", and is absent from the label
+
+        XCTAssertTrue(app.paletteRow(first).waitForExistence(timeout: 5),
+                      "a built-in palette row must survive a query that only its subtitle matches")
+    }
+
+    func testSessionPaletteListsAlphabeticallyOnAnEmptyQuery() throws {
+        renameActiveSession(to: "zulu")
+        XCTAssertTrue(poll { self.firstSessionName() == "zulu" })
+        addSession(named: "mike")
+        addSession(named: "yankee")
+        let ids = sessionIDs()
+        XCTAssertEqual(sessionNames(), ["zulu", "mike", "yankee"],
+                       "the three renamed sessions should persist in creation order")
+        XCTAssertEqual(ids.count, 3, "every persisted session should carry an id")
+        XCTAssertEqual(selectedID(), ids.last, "the last created session should be selected")
+
+        openPalette("Go to Session")
+        XCTAssertTrue(app.paletteRow(ids[1]).waitForExistence(timeout: 5), "every session should be listed")
+        app.typeKey(.return, modifierFlags: [])
+
+        XCTAssertTrue(poll { self.selectedID() == ids[1] },
+                      "an empty query must still sort a built-in palette A→Z, so Return runs mike, not zulu")
+    }
+
     func testThemePickerCommitsOnEnterAndRevertsOnEsc() throws {
         // the live recolor is a Metal-surface visual, so settings.json is the oracle; "Dracula" differs
         // from the seeded agterm default, so persisting it proves a change.
@@ -199,6 +232,16 @@ final class PaletteUITests: XCTestCase {
         field.typeText(text)
     }
 
+    /// Adds a session through File ▸ New Session and renames the (now selected) row.
+    private func addSession(named name: String) {
+        let before = sessionCount()
+        app.menuBars.menuBarItems["File"].click()
+        app.menuItems["New Session"].click()
+        XCTAssertTrue(poll { self.sessionCount() == before + 1 }, "New Session should add a session")
+        renameActiveSession(to: name)
+        XCTAssertTrue(poll { self.sessionNames().contains(name) }, "the new session should take the name \(name)")
+    }
+
     /// Renames the active session via File ▸ Rename Session (the menu-triggered inline edit).
     private func renameActiveSession(to name: String) {
         app.menuBars.menuBarItems["File"].click()
@@ -229,8 +272,11 @@ final class PaletteUITests: XCTestCase {
 
     private func workspaces() -> [[String: Any]] { snapshot()?["workspaces"] as? [[String: Any]] ?? [] }
     private func workspaceCount() -> Int { workspaces().count }
-    private func sessionCount() -> Int { workspaces().reduce(0) { $0 + (($1["sessions"] as? [[String: Any]])?.count ?? 0) } }
+    private func sessionCount() -> Int { sessions().count }
     private func selectedID() -> String? { snapshot()?["selectedSessionID"] as? String }
+    private func sessions() -> [[String: Any]] { workspaces().flatMap { ($0["sessions"] as? [[String: Any]]) ?? [] } }
+    private func sessionIDs() -> [String] { sessions().compactMap { $0["id"] as? String } }
+    private func sessionNames() -> [String] { sessions().compactMap { $0["customName"] as? String } }
     private func firstSession() -> [String: Any]? { (workspaces().first?["sessions"] as? [[String: Any]])?.first }
     private func firstSessionID() -> String? { firstSession()?["id"] as? String }
     private func firstSessionName() -> String? { firstSession()?["customName"] as? String }

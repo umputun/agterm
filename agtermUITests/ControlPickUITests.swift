@@ -3,7 +3,8 @@ import XCTest
 /// End-to-end coverage for the native control picker. The control socket opens, polls, and cancels
 /// real per-window `PickController` state, while XCUITest verifies the SwiftUI `pick-palette` and its
 /// supplied rows. The background-window case keeps its target minimized so an implementation that
-/// silently ignores `--window` is guaranteed to mutate the visible front window instead.
+/// silently ignores `--window` is guaranteed to mutate the visible front window instead. The `.attention`
+/// palette is covered here too: it shares the empty-query order bypass these pickers rely on.
 @MainActor
 final class ControlPickUITests: ControlAPITestCase {
     func testPickRendersRowsSelectsItemAndReportsTreeState() throws {
@@ -14,8 +15,8 @@ final class ControlPickUITests: ControlAPITestCase {
         let pickID = try resultID(opened)
 
         XCTAssertTrue(pickPalette.waitForExistence(timeout: 10), "pick.open should present the native picker")
-        XCTAssertTrue(paletteRow("alpha").waitForExistence(timeout: 5), "the supplied Alpha row should appear")
-        XCTAssertTrue(paletteRow("beta").waitForExistence(timeout: 5), "the supplied Beta row should appear")
+        XCTAssertTrue(app.paletteRow("alpha").waitForExistence(timeout: 5), "the supplied Alpha row should appear")
+        XCTAssertTrue(app.paletteRow("beta").waitForExistence(timeout: 5), "the supplied Beta row should appear")
         XCTAssertTrue(app.staticTexts["Alpha"].exists, "the first supplied label should be visible")
         XCTAssertTrue(app.staticTexts["Beta"].exists, "the second supplied label should be visible")
         XCTAssertEqual(try treePickPending(), pickID, "tree should expose the live picker id")
@@ -46,8 +47,8 @@ final class ControlPickUITests: ControlAPITestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5), "the picker query field should exist")
         field.click()
         field.typeText("gam")
-        XCTAssertTrue(paletteRow("gamma").waitForExistence(timeout: 5), "the query should keep the matching row")
-        XCTAssertTrue(paletteRow("alpha").waitForNonExistence(timeout: 5),
+        XCTAssertTrue(app.paletteRow("gamma").waitForExistence(timeout: 5), "the query should keep the matching row")
+        XCTAssertTrue(app.paletteRow("alpha").waitForNonExistence(timeout: 5),
                       "the query should drop the non-matching rows, leaving the match alone on screen")
 
         clickPaletteRow("gamma")
@@ -57,6 +58,207 @@ final class ControlPickUITests: ControlAPITestCase {
         XCTAssertEqual(result["id"] as? String, "gamma")
         XCTAssertEqual(result["index"] as? Int, 2,
                        "the index must be the caller's array position, not the filtered row position 0")
+    }
+
+    // pins the empty-query A→Z tie-break that ran the alphabetical row instead of the caller's first.
+    func testEmptyQueryEnterPicksTheCallerSuppliedFirstItem() throws {
+        let pickID = try resultID(openPick([
+            ["id": "zebra", "label": "Zebra"],
+            ["id": "alpha", "label": "Alpha"],
+        ]))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10), "pick.open should present the picker")
+        XCTAssertTrue(app.paletteRow("zebra").waitForExistence(timeout: 5), "the caller's first row should be listed")
+        XCTAssertTrue(app.paletteRow("alpha").waitForExistence(timeout: 5), "the caller's second row should be listed")
+
+        app.typeKey(.return, modifierFlags: [])
+
+        let result = try awaitTerminalResult(id: pickID)
+        XCTAssertEqual(result["result"] as? String, "picked")
+        XCTAssertEqual(result["id"] as? String, "zebra", "Enter without typing must run the caller's first row")
+        XCTAssertEqual(result["index"] as? Int, 0, "the caller's first row is index 0, not the A→Z winner")
+    }
+
+    /// Pins the trim: `query` is unvalidated, and a newline survived the old whitespace-only trim while
+    /// `fuzzyScore` still consumed it, so every row scored 0 and the A→Z tie-break replaced the caller's
+    /// first row with the one Return runs.
+    func testBlankQueryWithANewlineKeepsCallerSuppliedOrder() throws {
+        let pickID = try resultID(openPick([
+            ["id": "zebra", "label": "Zebra"],
+            ["id": "alpha", "label": "Alpha"],
+        ], query: " \n "))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10), "pick.open should present the picker")
+        XCTAssertTrue(app.paletteRow("zebra").waitForExistence(timeout: 5), "the caller's first row should be listed")
+        XCTAssertTrue(app.paletteRow("alpha").waitForExistence(timeout: 5), "the caller's second row should be listed")
+
+        app.typeKey(.return, modifierFlags: [])
+
+        let result = try awaitTerminalResult(id: pickID)
+        XCTAssertEqual(result["result"] as? String, "picked")
+        XCTAssertEqual(result["id"] as? String, "zebra", "a blank query must count as empty and keep caller order")
+        XCTAssertEqual(result["index"] as? Int, 0, "the caller's first row is index 0, not the A→Z winner")
+    }
+
+    func testNonEmptyQueryStillRanksCallerSuppliedRows() throws {
+        let pickID = try resultID(openPick([
+            ["id": "zebra", "label": "Zebra"],
+            ["id": "alpha", "label": "Alpha"],
+        ]))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10), "pick.open should present the picker")
+
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the picker query field should exist")
+        field.click()
+        field.typeText("a")
+        XCTAssertTrue(app.paletteRow("alpha").waitForExistence(timeout: 5), "the better match should stay listed")
+        XCTAssertTrue(app.paletteRow("zebra").waitForExistence(timeout: 5), "the weaker match should stay listed too")
+
+        app.typeKey(.return, modifierFlags: [])
+
+        let result = try awaitTerminalResult(id: pickID)
+        XCTAssertEqual(result["result"] as? String, "picked")
+        XCTAssertEqual(result["id"] as? String, "alpha", "a typed query must rank by score, not by caller order")
+        XCTAssertEqual(result["index"] as? Int, 1, "the reported index stays the caller's array position")
+    }
+
+    // pins the same tie-break in the .attention palette: Return on open ran the active row, not the blocked one.
+    func testAttentionPaletteEnterKeepsStatusOrderOnEmptyQuery() throws {
+        let blocked = try namedSession("zebra")
+        let active = try namedSession("alpha")
+        try setStatus("blocked", target: blocked)
+        try setStatus("active", target: active)
+        XCTAssertTrue(poll(until: isActiveSession(active), timeout: 8),
+                      "the last created session should start selected")
+
+        app.menuBars.menuBarItems["Navigate"].click()
+        let item = app.menuItems["Go to Attention…"]
+        XCTAssertTrue(item.waitForExistence(timeout: 5), "Navigate should offer Go to Attention…")
+        item.click()
+        XCTAssertTrue(app.descendants(matching: .any).matching(identifier: "command-palette")
+            .firstMatch.waitForExistence(timeout: 5), "the attention palette should open")
+        XCTAssertTrue(app.paletteRow(blocked).waitForExistence(timeout: 5), "the blocked session should be listed")
+        XCTAssertTrue(app.paletteRow(active).waitForExistence(timeout: 5), "the active session should be listed")
+
+        app.typeKey(.return, modifierFlags: [])
+
+        XCTAssertTrue(poll(until: isActiveSession(blocked), timeout: 8),
+                      "Return on open must select the blocked session, not the alphabetically-first one")
+    }
+
+    func testPrefilledQueryOpensPopulatedAndFiltered() throws {
+        let pickID = try resultID(openPick([
+            ["id": "alpha", "label": "Alpha"],
+            ["id": "beta", "label": "Beta"],
+            ["id": "gamma", "label": "Gamma"],
+        ], query: "gam"))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10), "pick.open should present the picker")
+        XCTAssertTrue(app.paletteRow("gamma").waitForExistence(timeout: 5), "the prefilled query should keep its match")
+        XCTAssertTrue(app.paletteRow("alpha").waitForNonExistence(timeout: 5),
+                      "the prefilled query must filter on open, with nothing typed")
+
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the picker query field should exist")
+        XCTAssertEqual(field.value as? String, "gam", "the field should open carrying the caller's query")
+
+        app.typeKey(.return, modifierFlags: [])
+
+        let result = try awaitTerminalResult(id: pickID)
+        XCTAssertEqual(result["result"] as? String, "picked")
+        XCTAssertEqual(result["id"] as? String, "gamma", "Return should run the prefiltered list's only row")
+        XCTAssertEqual(result["index"] as? Int, 2, "the reported index stays the caller's array position")
+    }
+
+    func testEmptyItemsWithAllowCustomActAsAPrefilledPrompt() throws {
+        let pickID = try resultID(openPick([], query: "old name", allowCustom: true))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10),
+                      "an empty item list with --allow-custom should still present the picker")
+        XCTAssertTrue(app.paletteRow("pick-custom").waitForExistence(timeout: 5),
+                      "with no items to match, the prefilled query should offer the custom row")
+
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the picker query field should exist")
+        XCTAssertEqual(field.value as? String, "old name", "the prompt should open carrying the caller's value")
+
+        app.typeKey(.return, modifierFlags: [])
+
+        let result = try awaitTerminalResult(id: pickID)
+        XCTAssertEqual(result["result"] as? String, "custom", "an itemless picker can only resolve as custom")
+        XCTAssertEqual(result["query"] as? String, "old name")
+    }
+
+    // `query` is deliberately unvalidated, so `--query $'name\n'` reaches the field; the committed answer
+    // used to keep the newline the row label had already dropped.
+    func testPrefilledQueryCommitsExactlyWhatTheCustomRowShows() throws {
+        let pickID = try resultID(openPick([], query: "old name\n", allowCustom: true))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10))
+        XCTAssertTrue(app.paletteRow("pick-custom").waitForExistence(timeout: 5),
+                      "the seeded query should offer the custom row")
+        XCTAssertTrue(app.staticTexts["Use \"old name\""].waitForExistence(timeout: 5),
+                      "the custom row should display the trimmed value")
+
+        app.typeKey(.return, modifierFlags: [])
+
+        let result = try awaitTerminalResult(id: pickID)
+        XCTAssertEqual(result["result"] as? String, "custom")
+        XCTAssertEqual(result["query"] as? String, "old name",
+                       "the committed answer must be the value the row displayed")
+    }
+
+    func testEmptyItemsWithoutQueryListsNothingUntilTyped() throws {
+        let pickID = try resultID(openPick([], allowCustom: true))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10),
+                      "an itemless picker without a query should still present the panel")
+        XCTAssertFalse(app.paletteRow("pick-custom").waitForExistence(timeout: 2),
+                       "an empty query offers no custom row, so the panel opens with nothing selectable")
+
+        app.typeKey(.return, modifierFlags: [])
+        XCTAssertFalse(pickPalette.waitForNonExistence(timeout: 2),
+                       "Return on an empty panel must leave the picker open for the whole settle window")
+        XCTAssertEqual(try pickResult(id: pickID)["result"] as? String, "pending",
+                       "Return on an empty panel must not resolve the picker")
+
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the picker query field should exist")
+        field.click()
+        field.typeText("typed name")
+        XCTAssertTrue(app.paletteRow("pick-custom").waitForExistence(timeout: 5),
+                      "the first keystrokes should offer the custom row")
+
+        app.typeKey(.return, modifierFlags: [])
+
+        let result = try awaitTerminalResult(id: pickID)
+        XCTAssertEqual(result["result"] as? String, "custom")
+        XCTAssertEqual(result["query"] as? String, "typed name")
+    }
+
+    /// Pins the confirm-row trap: the subtitle `cannot be undone` matched the refusal query `no`, leaving
+    /// the destructive row alone and preselected for Return.
+    func testRefusalQueryLeavesNoRowInACallerSuppliedConfirm() throws {
+        let pickID = try resultID(openPick([
+            ["id": "confirm", "label": "Confirm", "subtitle": "cannot be undone"],
+            ["id": "cancel", "label": "Cancel"],
+        ]))
+        XCTAssertTrue(pickPalette.waitForExistence(timeout: 10), "pick.open should present the picker")
+        XCTAssertTrue(app.paletteRow("confirm").waitForExistence(timeout: 5), "the confirm row should start listed")
+
+        let field = app.textFields.firstMatch
+        XCTAssertTrue(field.waitForExistence(timeout: 5), "the picker query field should exist")
+        field.click()
+        field.typeText("no")
+
+        XCTAssertTrue(app.paletteRow("confirm").waitForNonExistence(timeout: 5),
+                      "a subtitle must not match a refusal query and leave the destructive row alone")
+        XCTAssertTrue(app.paletteRow("cancel").waitForNonExistence(timeout: 5),
+                      "Cancel does not match the query either, so the whole list should be empty")
+
+        app.typeKey(.return, modifierFlags: [])
+
+        XCTAssertFalse(pickPalette.waitForNonExistence(timeout: 2),
+                       "Return on an empty list must leave the picker open for the whole settle window")
+        XCTAssertEqual(try pickResult(id: pickID)["result"] as? String, "pending",
+                       "Return on an empty list must not resolve the picker")
+
+        XCTAssertEqual(try sendCommand(request(command: "pick.cancel", target: pickID))["ok"] as? Bool, true)
+        XCTAssertEqual(try awaitTerminalResult(id: pickID)["result"] as? String, "cancelled")
     }
 
     func testPickCancelReportsCancelled() throws {
@@ -109,7 +311,7 @@ final class ControlPickUITests: ControlAPITestCase {
         XCTAssertTrue(pickPalette.waitForExistence(timeout: 10))
         app.typeText(query)
 
-        XCTAssertTrue(paletteRow("pick-custom").waitForExistence(timeout: 5),
+        XCTAssertTrue(app.paletteRow("pick-custom").waitForExistence(timeout: 5),
                       "palette-close focus retries must not send picker input to the terminal")
         app.typeKey(.return, modifierFlags: [])
         XCTAssertEqual(try awaitTerminalResult(id: pickID)["query"] as? String, query)
@@ -171,7 +373,7 @@ final class ControlPickUITests: ControlAPITestCase {
                       "the old window's built-in palette must not remount under the picker")
 
         app.typeText(query)
-        XCTAssertTrue(paletteRow("pick-custom").waitForExistence(timeout: 5),
+        XCTAssertTrue(app.paletteRow("pick-custom").waitForExistence(timeout: 5),
                       "the visible picker must retain keyboard focus after the window handoff")
         XCTAssertEqual(try sendCommand(request(command: "pick.cancel", target: pickID))["ok"] as? Bool, true)
         XCTAssertEqual(try awaitTerminalResult(id: pickID)["result"] as? String, "cancelled")
@@ -208,7 +410,7 @@ final class ControlPickUITests: ControlAPITestCase {
         XCTAssertTrue(field.waitForExistence(timeout: 5), "the picker query field should exist")
         field.click()
         field.typeText(query)
-        XCTAssertTrue(paletteRow("pick-custom").waitForExistence(timeout: 5),
+        XCTAssertTrue(app.paletteRow("pick-custom").waitForExistence(timeout: 5),
                       "a non-matching query should offer the custom row")
         app.typeKey(.return, modifierFlags: [])
 
@@ -284,15 +486,10 @@ final class ControlPickUITests: ControlAPITestCase {
         app.descendants(matching: .any).matching(identifier: "pick-palette").firstMatch
     }
 
-    private func paletteRow(_ id: String) -> XCUIElement {
-        app.descendants(matching: .any).matching(identifier: "palette-item-\(id)").firstMatch
-    }
-
-    /// `PaletteRow` carries its identifier on the row, and SwiftUI propagates it to every text child with
-    /// none of its own, so a row WITH a subtitle answers to it twice — and the title child is not hittable,
+    /// The title child of a row WITH a subtitle answers to the row's identifier but is not hittable,
     /// because the row itself owns the tap target. Click the first HITTABLE match rather than whichever the
-    /// query returns first. This stays separate from `paletteRow` because resolving the matches is eager:
-    /// doing it inside the existence waits, which run before the row exists, breaks them.
+    /// query returns first. This stays separate from `XCUIApplication.paletteRow` because resolving the
+    /// matches is eager: doing it inside the existence waits, which run before the row exists, breaks them.
     private func clickPaletteRow(_ id: String) {
         let matches = app.descendants(matching: .any).matching(identifier: "palette-item-\(id)")
         (matches.allElementsBoundByIndex.first { $0.isHittable } ?? matches.firstMatch).click()
@@ -301,11 +498,13 @@ final class ControlPickUITests: ControlAPITestCase {
     private func openPick(
         _ items: [[String: Any]],
         prompt: String? = nil,
+        query: String? = nil,
         allowCustom: Bool = false,
         window: String? = nil
     ) throws -> [String: Any] {
         var args: [String: Any] = ["items": items]
         if let prompt { args["prompt"] = prompt }
+        if let query { args["query"] = query }
         if allowCustom { args["allowCustom"] = true }
         if let window { args["window"] = window }
         return try sendCommand(request(command: "pick.open", args: args))
@@ -315,6 +514,13 @@ final class ControlPickUITests: ControlAPITestCase {
         XCTAssertEqual(response["ok"] as? Bool, true, "pick.open should succeed: \(response)")
         return try XCTUnwrap((response["result"] as? [String: Any])?["id"] as? String,
                              "pick.open should return its id")
+    }
+
+    private func pickResult(id: String) throws -> [String: Any] {
+        let response = try sendCommand(request(command: "pick.result", target: id))
+        XCTAssertEqual(response["ok"] as? Bool, true, "pick.result should succeed: \(response)")
+        return try XCTUnwrap((response["result"] as? [String: Any])?["pick"] as? [String: Any],
+                             "pick.result should carry a pick result")
     }
 
     private func awaitTerminalResult(
@@ -340,6 +546,28 @@ final class ControlPickUITests: ControlAPITestCase {
         let result = try XCTUnwrap(latest, "pick.result should carry a pick result")
         XCTAssertNotEqual(result["result"] as? String, "pending", "picker should resolve before timeout")
         return result
+    }
+
+    // MARK: - Attention helpers
+
+    /// Creates a session and renames it, so the `.attention` palette rows carry distinct, orderable titles.
+    private func namedSession(_ name: String) throws -> String {
+        let created = try sendCommand(#"{"cmd":"session.new"}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true, "session.new should succeed: \(created)")
+        let id = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String,
+                               "session.new should return the new id")
+        let renamed = try sendCommand(#"{"cmd":"session.rename","target":"\#(id)","args":{"name":"\#(name)"}}"#)
+        XCTAssertEqual(renamed["ok"] as? Bool, true, "session.rename should succeed: \(renamed)")
+        return id
+    }
+
+    private func setStatus(_ status: String, target: String) throws {
+        let response = try sendCommand(#"{"cmd":"session.status","target":"\#(target)","args":{"status":"\#(status)"}}"#)
+        XCTAssertEqual(response["ok"] as? Bool, true, "session.status \(status) should succeed: \(response)")
+    }
+
+    private func isActiveSession(_ id: String) -> Bool {
+        (try? sessionNodeIfPresent(id: id))??["active"] as? Bool == true
     }
 
     // MARK: - Tree and window helpers

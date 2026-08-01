@@ -90,20 +90,23 @@ struct CommandPalette: View {
     /// continue to close through `PaletteController`; a pick uses it to resolve cancellation.
     let onDismiss: (() -> Void)?
 
-    @State private var query = ""
+    @State private var query: String
     @State private var selection = 0
     /// The visible, filtered result list. Held in `@State` so the rendered rows and the Enter target are
     /// one array — a computed property could be evaluated out of sync between the list and the handler.
     @State private var filtered: [PaletteItem] = []
     @FocusState private var fieldFocused: Bool
 
+    /// `initialQuery` seeds the search field for an explicit picker: the caller's `--query` opens the
+    /// palette already filtered, since `.onAppear` runs the first `updateFiltered()` against it.
     init(controller: PaletteController, actions: AppActions, items: [PaletteItem]? = nil,
-         prompt: String? = nil, allowCustom: Bool = false, onCustom: ((String) -> Void)? = nil,
-         onDismiss: (() -> Void)? = nil) {
+         prompt: String? = nil, initialQuery: String? = nil, allowCustom: Bool = false,
+         onCustom: ((String) -> Void)? = nil, onDismiss: (() -> Void)? = nil) {
         self.controller = controller
         self.actions = actions
         self.explicitItems = items
         self.prompt = prompt
+        _query = State(initialValue: initialQuery ?? "")
         self.allowCustom = allowCustom
         self.onCustom = onCustom
         self.onDismiss = onDismiss
@@ -121,25 +124,27 @@ struct CommandPalette: View {
         }
     }
 
-    /// Recomputes `filtered`: items whose title or subtitle matches, best score first then alphabetically
-    /// by title, so an empty query lists everything A→Z and equal scores are ordered predictably.
+    /// Recomputes `filtered`: items whose search keys match (`paletteSearchKeys` — label only for a
+    /// caller-supplied picker, label plus subtitle for a built-in palette), best score first then
+    /// alphabetically by title so equal scores are ordered predictably. An empty query lists a built-in
+    /// palette A→Z, but leaves a caller-supplied picker and `.attention` in their source order. The query is
+    /// trimmed of whitespace AND newlines first: `fuzzyScore` splits on both, so a blank query that kept a
+    /// newline would score every row 0 and lose the source order to the tie-break.
     private func updateFiltered() {
-        let q = query.trimmingCharacters(in: .whitespaces)
-        // the attention palette's empty-query order is `paletteAttention()`'s ranking
-        // (blocked→active→completed, newest change first), preserved verbatim: every row scores 0, so the
-        // tie-break below would re-sort A→Z and Return would jump to the alphabetically-first session.
-        if explicitItems == nil, controller.mode == .attention, q.isEmpty {
+        let q = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        // skipping the rank is what preserves the source order: every row scores 0 on an empty query and the
+        // tie-break below would re-sort A→Z, replacing the intended first row — the one Return runs.
+        if q.isEmpty, explicitItems != nil || controller.mode == .attention {
             filtered = allItems
             selection = filtered.isEmpty ? 0 : min(selection, filtered.count - 1)
             return
         }
         filtered = fuzzyRank(query: q, items: allItems) { item in
-            item.subtitle.map { [item.title, $0] } ?? [item.title]
+            paletteSearchKeys(title: item.title, subtitle: item.subtitle, callerSupplied: explicitItems != nil)
         }
         if explicitItems != nil,
            let label = pickCustomRowLabel(query: q, filteredCount: filtered.count, allowCustom: allowCustom) {
-            let value = q
-            filtered = [PaletteItem(id: "pick-custom", title: label) { onCustom?(value) }]
+            filtered = [PaletteItem(id: "pick-custom", title: label) { onCustom?(q) }]
         }
         selection = filtered.isEmpty ? 0 : min(selection, filtered.count - 1)
     }

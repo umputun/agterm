@@ -210,6 +210,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var items: [ControlPickItem]?
     /// Optional placeholder text for `pick.open`'s query field.
     public var prompt: String?
+    /// Initial text in `pick.open`'s query field; a non-empty value opens the picker already filtered.
+    public var query: String?
     /// Whether `pick.open` accepts the current query as a custom result.
     public var allowCustom: Bool?
     /// Target window whose tree a session/workspace/tree/font command operates on: id / prefix / `active`
@@ -260,7 +262,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 text: String? = nil, select: Bool? = nil, mode: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
                 follow: Bool? = nil, items: [ControlPickItem]? = nil, prompt: String? = nil,
-                allowCustom: Bool? = nil, window: String? = nil,
+                query: String? = nil, allowCustom: Bool? = nil, window: String? = nil,
                 pane: String? = nil, paneID: String? = nil, to: String? = nil,
                 after: String? = nil, before: String? = nil, run: String? = nil,
                 kinds: [String]? = nil, limit: Int? = nil,
@@ -292,6 +294,7 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.follow = follow
         self.items = items
         self.prompt = prompt
+        self.query = query
         self.allowCustom = allowCustom
         self.window = window
         self.pane = pane

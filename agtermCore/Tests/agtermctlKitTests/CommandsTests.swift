@@ -934,14 +934,14 @@ struct CommandsTests {
 
     @Test func pickOpenMapsEveryOptionToRequest() throws {
         let command = try Pick.Open.parse([
-            "--prompt", "Choose one", "--allow-custom", "--follow",
+            "--prompt", "Choose one", "--query", "on", "--allow-custom", "--follow",
             "--window", "w1", "--no-block"
         ])
         let items = [ControlPickItem(id: "One", label: "One")]
         let expected = ControlRequest(
             cmd: .pickOpen,
             args: ControlArgs(
-                follow: true, items: items, prompt: "Choose one",
+                follow: true, items: items, prompt: "Choose one", query: "on",
                 allowCustom: true, window: "w1"
             )
         )
@@ -957,6 +957,15 @@ struct CommandsTests {
         #expect(try command.makeRequest(input: Data("One\n".utf8)) ==
             ControlRequest(cmd: .pickOpen, args: ControlArgs(items: items)))
         #expect(!command.noBlock)
+    }
+
+    @Test func pickOpenComposesTheItemlessRenameRequest() throws {
+        let command = try Pick.Open.parse(["--allow-custom", "--query", "old name"])
+
+        #expect(try command.makeRequest(input: Data()) == ControlRequest(
+            cmd: .pickOpen,
+            args: ControlArgs(items: [], query: "old name", allowCustom: true)
+        ))
     }
 
     @Test func pickResultMapsIDAndWindow() throws {

@@ -22,6 +22,15 @@ extension XCUIApplication {
         launchEnvironment["AGTERM_UITEST_FORCE_SIDEBAR_VISIBLE"] = "1"
         launchForeground(file: file, line: line)
     }
+
+    /// A palette or picker row by item id, shared by every palette test. `PaletteRow` carries its
+    /// identifier on the row and SwiftUI propagates it to every text child with none of its own, so a row
+    /// WITH a subtitle answers to it twice. This stays lazy — `firstMatch` resolves when the query runs,
+    /// while eager resolution before the row exists breaks the existence waits. A test that must CLICK the
+    /// row needs the hittable match instead; see `ControlPickUITests.clickPaletteRow`.
+    func paletteRow(_ id: String) -> XCUIElement {
+        descendants(matching: .any).matching(identifier: "palette-item-\(id)").firstMatch
+    }
 }
 
 extension XCUIElement {

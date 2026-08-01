@@ -291,6 +291,8 @@ struct Pick: ParsableCommand {
         )
 
         @Option(name: .long, help: "Placeholder text shown in the picker query field.") var prompt: String?
+        @Option(name: .long, help: "Initial text for the picker query field; it opens already filtered.")
+        var query: String?
         @Flag(name: .long, help: "Accept the current query as a custom result.") var allowCustom = false
         @Flag(name: .long, help: "Raise the target window when the picker opens.") var follow = false
         @Flag(name: .long, help: "Print the picker id and return without waiting for a result.") var noBlock = false
@@ -306,6 +308,7 @@ struct Pick: ParsableCommand {
                 follow: follow ? true : nil,
                 items: try Self.parseItems(input),
                 prompt: prompt,
+                query: query,
                 allowCustom: allowCustom ? true : nil
             )
             return ControlRequest(cmd: .pickOpen, args: options.withWindow(args))

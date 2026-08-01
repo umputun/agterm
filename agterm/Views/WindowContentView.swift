@@ -817,6 +817,7 @@ struct WindowContentView: View {
                     }
                 },
                 prompt: pending.prompt,
+                initialQuery: pending.query,
                 allowCustom: pending.allowCustom,
                 onCustom: { query in
                     pick.resolve(ControlPickResult(result: .custom, query: query))

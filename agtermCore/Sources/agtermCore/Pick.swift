@@ -6,12 +6,16 @@ public struct PendingPick: Equatable, Sendable {
     public let id: String
     public let items: [ControlPickItem]
     public let prompt: String?
+    /// Text the query field opens with; a non-empty value filters immediately.
+    public let query: String?
     public let allowCustom: Bool
 
-    public init(id: String, items: [ControlPickItem], prompt: String? = nil, allowCustom: Bool = false) {
+    public init(id: String, items: [ControlPickItem], prompt: String? = nil, query: String? = nil,
+                allowCustom: Bool = false) {
         self.id = id
         self.items = items
         self.prompt = prompt
+        self.query = query
         self.allowCustom = allowCustom
     }
 }
