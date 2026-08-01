@@ -465,13 +465,27 @@ public final class Session: Identifiable {
     }
 
     /// The surface on top and owning keyboard focus: an active overlay (full OR floating), else the scratch,
-    /// else the active pane. The overlay renders above the scratch, and a full overlay or the scratch covers
-    /// the panes, so session-focus helpers route through this to keep first responder off a covered surface —
-    /// except `TerminalView.focusIfNeeded`, which targets its own deck slot, already gated by `isActive`.
+    /// else the focused pane's own overlay, else the active pane. The overlay renders above the scratch, and a
+    /// full overlay or the scratch covers the panes (INCLUDING their pane overlays), so session-focus helpers
+    /// route through this to keep first responder off a covered surface — except `TerminalView.focusIfNeeded`,
+    /// which targets its own deck slot, already gated by `isActive`. nil while a pane overlay's slot is open
+    /// but its surface has not realized yet; the bounded focus retries re-resolve a beat later.
     public var topmostSurface: (any TerminalSurface)? {
         if overlayActive { return overlaySurface }
         if scratchActive { return scratchSurface }
+        if let pane = focusedOverlayPane { return paneOverlaySurface(pane) }
         return activeSurface
+    }
+
+    /// Where pane-focus moves first responder when asked for `wantSplit`: under a session-wide cover the
+    /// requested pane is hidden, so stay on `topmostSurface`; else the pane's OWN overlay when one covers it,
+    /// so `session.focus right` cannot make a covered pane first responder; else the pane itself. Returns nil
+    /// for a covering pane overlay whose surface has not realized yet, leaving the retry to re-resolve.
+    public func focusTarget(wantSplit: Bool) -> (any TerminalSurface)? {
+        if overlayActive || scratchActive { return topmostSurface }
+        let pane: OverlayPane = wantSplit ? .right : .left
+        if paneOverlay(pane) != nil { return paneOverlaySurface(pane) }
+        return wantSplit ? splitSurface : surface
     }
 
     /// The pane-or-scratch surface actually ON SCREEN: the scratch when it covers the panes with no overlay up,

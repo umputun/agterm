@@ -139,9 +139,10 @@ extension AppActions {
 
     /// Move first responder to the split (right) pane on open, or the primary on close, re-asserting over a
     /// short window because the split surface materializes a beat after the toggle and the HSplitView
-    /// collapse churns the primary view. Under a full-coverage surface (scratch or overlay) the requested
-    /// pane is hidden, so keep first responder on the visible `topmostSurface` — the caller has already set
-    /// `splitFocused`, so the correct pane shows once the cover is dismissed.
+    /// collapse churns the primary view. `Session.focusTarget(wantSplit:)` owns the cover routing: a
+    /// full-coverage scratch/overlay keeps focus on the visible `topmostSurface`, and a pane overlay takes it
+    /// for the pane it covers. Either way the caller's `splitFocused` stands, so the right pane shows once
+    /// the cover is gone.
     func focusSplitPane(_ session: Session, wantSplit: Bool, attempt: Int = 0, generation: Int? = nil) {
         // each fresh call SUPERSEDES any in-flight retry loop in the SAME WINDOW: otherwise two calls with
         // opposite targets each run their own 12x30ms `makeFirstResponder` loop, ping-ponging first responder
@@ -178,10 +179,7 @@ extension AppActions {
         }
         // the quick terminal is a window-level cover that owns focus; its own hide restores the session.
         if quickTerminalActive(for: session) { return }
-        let target: (any TerminalSurface)? = (session.overlayActive || session.scratchActive)
-            ? session.topmostSurface
-            : (wantSplit ? session.splitSurface : session.surface)
-        if let view = target as? GhosttySurfaceView, let window = view.window {
+        if let view = session.focusTarget(wantSplit: wantSplit) as? GhosttySurfaceView, let window = view.window {
             window.makeFirstResponder(view)
         }
         guard attempt < 12 else { return }

@@ -508,32 +508,46 @@ helper on `Open` so the `--pane` forwarding is assertable.
 ### Task 7: Per-pane visibility, focus, and cover handling
 
 **Files:**
-- Modify: `agterm/Views/WindowContentView.swift`
+- Modify: `agterm/Views/WindowContentView+Detail.swift` (➕ the detail deck moved here in Task 6, so the
+  per-pane `deckVisible`/`isActive` work lands here rather than in `WindowContentView.swift`)
 - Modify: `agterm/AppActions.swift`
 - Modify: `agterm/AppActions+Focus.swift`
 - Modify: `agterm/Notifications/NotificationManager.swift`
+- Modify: `agterm/agtermApp.swift` (➕ the pane overlay's `onFocusChange`, which moves `splitFocused` the
+  way its pane's own surface does)
 - Modify: `agtermCore/Sources/agtermCore/Session.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/SessionTests.swift`
-- Modify: `agtermCore/Tests/agtermCoreTests/AppStoreFocusTests.swift`
 
-- [ ] make the pane's `deckVisible` and `isActive` each account for that pane's own overlay, so a
+- [x] make the pane's `deckVisible` and `isActive` each account for that pane's own overlay, so a
       covered pane registers no drag types and sets no mouse cursor (the issue #225 class)
-- [ ] update `topmostSurface` to the four-level precedence in Technical Details
-- [ ] pass `isActive` to the pane overlay so one opening on the UNFOCUSED pane does not pull focus, and
+- [x] update `topmostSurface` to the four-level precedence in Technical Details
+- [x] pass `isActive` to the pane overlay so one opening on the UNFOCUSED pane does not pull focus, and
       drive the bounded focus retry on close as `session.overlayActive`'s `onChange` does
-- [ ] route `focusSplitPane` (`AppActions+Focus.swift:181`) through the pane's overlay when one is up,
+- [x] route `focusSplitPane` (`AppActions+Focus.swift:181`) through the pane's overlay when one is up,
       so `session.focus right` cannot make a covered pane first responder
-- [ ] extend `searchTarget` (`AppActions.swift:771`) and `coverHidesActiveSession` so ⌘F does not open
+- [x] extend `searchTarget` (`AppActions.swift:771`) and `coverHidesActiveSession` so ⌘F does not open
       the bar over a pane hidden by its own overlay
-- [ ] insert a pane-overlay rung into the `closeActiveSession` cover ladder
+- [x] insert a pane-overlay rung into the `closeActiveSession` cover ladder
       (`AppActions.swift:229-230`), between scratch and closing the session, so ⌘W dismisses the overlay
       instead of closing the session
-- [ ] map a pane-overlay surface in `NotificationManager.paneRole` (`:202-206`) so banner-click reveal
+- [x] map a pane-overlay surface in `NotificationManager.paneRole` (`:202-206`) so banner-click reveal
       focuses the right surface instead of falling through to `.main`
-- [ ] write tests for `topmostSurface` across the precedence matrix (session overlay, scratch, focused
+- [x] write tests for `topmostSurface` across the precedence matrix (session overlay, scratch, focused
       pane overlay, unfocused pane overlay, bare pane)
-- [ ] write tests for focus routing with a pane overlay on the focused and unfocused pane
-- [ ] run `cd agtermCore && swift test`, `make test-app`, `make lint` — must pass before task 8
+- [x] write tests for focus routing with a pane overlay on the focused and unfocused pane
+- [x] run `cd agtermCore && swift test`, `make test-app`, `make lint` — must pass before task 8
+- ➕ `focusSplitPane`'s cover routing moved into host-free `Session.focusTarget(wantSplit:)`, so the pane
+      rung is testable in `SessionTests` (`AppStoreFocusTests` owns the sidebar focus FILTER, not pane focus)
+- ➕ a pane overlay's `onFocusChange` writes `splitFocused` like its pane's surface does; without it a
+      click on the unfocused pane's overlay would be undone by the next `updateNSView` resigning it
+- ⚠️ `make test-app` could NOT be executed: `automationmodetool` reports "Automation Mode is disabled.
+      This device requires user authentication to enable Automation Mode", so testmanagerd refuses
+      xcodebuild's `XCTestManager_IDEInterface` channel and the host hangs in
+      `-[XCTestDriver _prepareTestConfigurationAndIDESession]` (verified with `sample`: no agterm frames
+      on the stack) until `The test runner hung before establishing connection`. Reproduced twice; the
+      gate engaged when Task 6's XCUITest run requested Automation Mode, minutes after the last passing
+      `make test-app`. `swift test` (2151), `make build`, and `make lint` all pass. Re-run after
+      authorizing Automation Mode.
 
 ### Task 8: Add the zoom surface cases and restore predicate exclusivity
 

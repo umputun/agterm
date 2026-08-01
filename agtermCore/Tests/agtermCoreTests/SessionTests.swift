@@ -600,6 +600,80 @@ struct SessionTests {
         #expect(session.focusedOverlayPane == .left)
     }
 
+    @Test func topmostSurfaceRanksTheFocusedPaneOverlayBelowScratchAndTheSessionOverlay() {
+        let session = Session(initialCwd: "/repo")
+        let primary = FakeSurface(), scratch = FakeSurface(), overlay = FakeSurface(), leftOverlay = FakeSurface()
+        session.surface = primary
+        session.scratchSurface = scratch
+        session.overlaySurface = overlay
+        session.leftOverlay = PaneOverlay(command: "revdiff")
+        session.leftOverlaySurface = leftOverlay
+        #expect(session.topmostSurface === leftOverlay)
+        session.scratchActive = true
+        #expect(session.topmostSurface === scratch)
+        session.overlayActive = true
+        #expect(session.topmostSurface === overlay)
+        session.overlayActive = false
+        session.scratchActive = false
+        session.leftOverlay = nil
+        #expect(session.topmostSurface === primary)
+    }
+
+    @Test func topmostSurfaceIgnoresAnOverlayOnTheUnfocusedPane() {
+        let session = Session(initialCwd: "/repo")
+        let primary = FakeSurface(), split = FakeSurface(), rightOverlay = FakeSurface()
+        session.surface = primary
+        session.splitSurface = split
+        session.isSplit = true
+        session.rightOverlay = PaneOverlay(command: "lazygit")
+        session.rightOverlaySurface = rightOverlay
+        #expect(session.topmostSurface === primary)
+        session.splitFocused = true
+        #expect(session.topmostSurface === rightOverlay)
+    }
+
+    @Test func topmostSurfaceIsNilWhileACoveringPaneOverlayHasNotRealized() {
+        let session = Session(initialCwd: "/repo")
+        session.surface = FakeSurface()
+        session.leftOverlay = PaneOverlay(command: "revdiff")
+        #expect(session.topmostSurface == nil)
+    }
+
+    @Test func focusTargetRoutesThroughTheRequestedPanesOwnOverlay() {
+        let session = Session(initialCwd: "/repo")
+        let primary = FakeSurface(), split = FakeSurface(), rightOverlay = FakeSurface()
+        session.surface = primary
+        session.splitSurface = split
+        session.isSplit = true
+        session.rightOverlay = PaneOverlay(command: "lazygit")
+        session.rightOverlaySurface = rightOverlay
+        #expect(session.focusTarget(wantSplit: true) === rightOverlay)
+        #expect(session.focusTarget(wantSplit: false) === primary)
+    }
+
+    @Test func focusTargetKeepsASessionWideCoverOverAPaneOverlay() {
+        let session = Session(initialCwd: "/repo")
+        let primary = FakeSurface(), split = FakeSurface(), scratch = FakeSurface(), leftOverlay = FakeSurface()
+        session.surface = primary
+        session.splitSurface = split
+        session.isSplit = true
+        session.scratchSurface = scratch
+        session.leftOverlay = PaneOverlay(command: "revdiff")
+        session.leftOverlaySurface = leftOverlay
+        session.scratchActive = true
+        #expect(session.focusTarget(wantSplit: false) === scratch)
+        #expect(session.focusTarget(wantSplit: true) === scratch)
+    }
+
+    @Test func focusTargetIsNilWhileTheRequestedPanesOverlayHasNotRealized() {
+        let session = Session(initialCwd: "/repo")
+        session.surface = FakeSurface()
+        session.splitSurface = FakeSurface()
+        session.isSplit = true
+        session.rightOverlay = PaneOverlay(command: "lazygit")
+        #expect(session.focusTarget(wantSplit: true) == nil)
+    }
+
     @Test func takePendingRestoreOverrideNeverReadsThePersistedValue() {
         // a persisted override with nothing armed (a mid-process window reload, a socket write during this
         // run) must not fire — the factory path can only reach the transient payload.

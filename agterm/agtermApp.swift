@@ -441,6 +441,15 @@ struct agtermApp: App {
                 store.closeOverlay(sessionID)
             }
         }
+        // a PANE overlay tracks its pane's focus like the pane itself does: clicking it moves `splitFocused`,
+        // so the deck's per-pane focus gate keeps it active instead of resigning first responder on the next
+        // update, and `focusedOverlayPane` (⌘W rung, search, `topmostSurface`) agrees with what the user sees.
+        if let pane {
+            view.onFocusChange = { focused in
+                guard focused else { return }
+                store.session(withID: sessionID)?.splitFocused = pane == .right
+            }
+        }
         // typing is user activity: resets the auto-follow idle timer so an idle fire can't change the selection
         // (vanishing the overlay) mid-typing. destroySurface nils this, breaking the store->surface->closure cycle.
         view.onUserInput = { store.noteUserActivity() }
