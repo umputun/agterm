@@ -827,6 +827,76 @@ struct CommandsTests {
         }
     }
 
+    @Test func sessionOverlayOpenWithPane() throws {
+        let left = ControlRequest(cmd: .sessionOverlayOpen, target: "active",
+                                  args: ControlArgs(command: "revdiff", pane: "left"))
+        #expect(try request(["session", "overlay", "open", "revdiff", "--pane", "left"]) == left)
+        let right = ControlRequest(cmd: .sessionOverlayOpen, target: "9f3c",
+                                   args: ControlArgs(command: "htop", pane: "right"))
+        #expect(try request(["session", "overlay", "open", "htop", "--pane", "right", "--target", "9f3c"]) == right)
+    }
+
+    @Test func sessionOverlayOpenPaneWithTheOtherFlags() throws {
+        let expected = ControlRequest(cmd: .sessionOverlayOpen, target: "active",
+                                      args: ControlArgs(cwd: "/b", command: "revdiff", wait: true, follow: true,
+                                                        pane: "right", color: "#2a1a3a"))
+        #expect(try request(["session", "overlay", "open", "revdiff", "--pane", "right", "--cwd", "/b",
+                             "--wait", "--follow", "--background-color", "#2a1a3a"]) == expected)
+    }
+
+    @Test func sessionOverlayOpenWithoutPane() throws {
+        #expect(try request(["session", "overlay", "open", "revdiff"]).args?.pane == nil)
+    }
+
+    @Test func sessionOverlayPaneRejectsScratch() {
+        #expect(validationMessage(["session", "overlay", "open", "cmd", "--pane", "scratch"])
+            == "--pane must be left or right")
+        #expect(validationMessage(["session", "overlay", "close", "--pane", "scratch"]) == "--pane must be left or right")
+        #expect(validationMessage(["session", "overlay", "result", "--pane", "scratch"]) == "--pane must be left or right")
+        #expect(validationMessage(["session", "overlay", "open", "cmd", "--pane", "middle"]) == "--pane must be left or right")
+    }
+
+    @Test func sessionOverlayOpenRejectsPaneWithSizePercent() {
+        #expect(validationMessage(["session", "overlay", "open", "cmd", "--pane", "left", "--size-percent", "70"])
+            == "--pane cannot be combined with --size-percent (pane overlays are always full)")
+    }
+
+    @Test func sessionOverlayCloseWithPane() throws {
+        let expected = ControlRequest(cmd: .sessionOverlayClose, target: "active", args: ControlArgs(pane: "left"))
+        #expect(try request(["session", "overlay", "close", "--pane", "left"]) == expected)
+        #expect(try request(["session", "overlay", "close"]).args == nil)
+    }
+
+    @Test func sessionOverlayResultWithPane() throws {
+        let expected = ControlRequest(cmd: .sessionOverlayResult, target: "9f3c", args: ControlArgs(pane: "right"))
+        #expect(try request(["session", "overlay", "result", "--pane", "right", "--target", "9f3c"]) == expected)
+        #expect(try request(["session", "overlay", "result"]).args == nil)
+    }
+
+    @Test func sessionOverlayResizeHasNoPaneOption() {
+        #expect(throws: (any Error).self) {
+            try Agtermctl.parseAsRoot(["session", "overlay", "resize", "--full", "--pane", "left"])
+        }
+    }
+
+    @Test func sessionOverlayBlockPollCarriesPane() throws {
+        let parsed = try Agtermctl.parseAsRoot(["session", "overlay", "open", "revdiff", "--block", "--pane", "right"])
+        let open = try #require(parsed as? agtermctlKit.Session.Overlay.Open)
+        #expect(open.resultRequest(id: "9f3c")
+            == ControlRequest(cmd: .sessionOverlayResult, target: "9f3c", args: ControlArgs(pane: "right")))
+    }
+
+    @Test func sessionOverlayBlockPollWithoutPane() throws {
+        let parsed = try Agtermctl.parseAsRoot(["session", "overlay", "open", "revdiff", "--block"])
+        let open = try #require(parsed as? agtermctlKit.Session.Overlay.Open)
+        #expect(open.resultRequest(id: "9f3c") == ControlRequest(cmd: .sessionOverlayResult, target: "9f3c"))
+    }
+
+    @Test func sessionOverlayPaneBlockStillRejectsWait() {
+        #expect(validationMessage(["session", "overlay", "open", "cmd", "--pane", "left", "--block", "--wait"])
+            == "--block cannot be combined with --wait")
+    }
+
     @Test func quickDefaultsToggle() throws {
         #expect(try request(["quick"]) == ControlRequest(cmd: .quick, args: ControlArgs(mode: "toggle")))
     }

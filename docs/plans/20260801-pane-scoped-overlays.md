@@ -444,19 +444,22 @@ helper on `Open` so the `--pane` forwarding is assertable.
 - Modify: `agtermCore/Sources/agtermctlKit/SessionCommands.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/CommandsTests.swift`
 
-- [ ] add `--pane` to `overlay open`, `overlay close`, and `overlay result` with help text stating pane
+- [x] add `--pane` to `overlay open`, `overlay close`, and `overlay result` with help text stating pane
       overlays are always full-pane
-- [ ] add an overlay-specific `left|right` validator — do NOT reuse the shared `validatePaneArgument`
+- [x] add an overlay-specific `left|right` validator — do NOT reuse the shared `validatePaneArgument`
       (`SessionCommands.swift:9`), which also accepts `scratch`
-- [ ] extract `resultRequest(id:)` on `Open` so the `--block` poll request is reachable from tests, and
+- [x] extract `resultRequest(id:)` on `Open` so the `--block` poll request is reachable from tests, and
       forward `--pane` through it
-- [ ] leave `overlay resize` without a `--pane` option
-- [ ] write tests for request construction from each flag combination
-- [ ] write a test that `--pane scratch` fails as a CLI usage error before any socket round-trip
-- [ ] write a test that `--block` forwards `--pane` into the poll request — without it the poll queries
+- [x] leave `overlay resize` without a `--pane` option
+- [x] write tests for request construction from each flag combination
+- [x] write a test that `--pane scratch` fails as a CLI usage error before any socket round-trip
+- [x] write a test that `--block` forwards `--pane` into the poll request — without it the poll queries
       the session-wide slot and blocks forever
-- [ ] write a test that `--block` with `--wait` is still rejected at parse time when `--pane` is given
-- [ ] run `cd agtermCore && swift test`, `make lint` — must pass before task 6
+- [x] write a test that `--block` with `--wait` is still rejected at parse time when `--pane` is given
+- [x] run `cd agtermCore && swift test`, `make lint` — must pass before task 6
+- ➕ `Open.validate()` also rejects `--pane` with `--size-percent` at parse time, matching the file's
+      convention of catching mutually-exclusive combos before the socket; the dispatcher still re-checks it
+      for raw socket clients
 
 ### Task 6: Render pane overlays at all three sites
 
