@@ -74,7 +74,7 @@ private struct SettingHint: View {
 
 /// General tab: Mouse (scroll speed, right-click-pastes, workspace-row click), Sessions (new-session
 /// directory, restore running commands) and the inherit-global-ghostty-config toggle; visual and
-/// notification settings have own tabs.
+/// notification settings have their own tabs.
 private struct GeneralSettingsView: View {
     let model: SettingsModel
 
