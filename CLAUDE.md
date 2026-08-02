@@ -22,6 +22,15 @@ concurrency before changing the bridge.
   Set only a short `/tmp` `AGTERM_STATE_DIR` so app and inherited CLI derive the same socket.
   Prepend the Debug app's `Contents/MacOS` to PATH for custom commands; login shells may restore the
   deployed CLI, so manual commands should use the Debug binary's full path.
+- A fresh isolated state dir reads as a first launch and opens the welcome alert.
+  `mkdir -p "$AGTERM_STATE_DIR/windows"` before launching to skip it: `FirstRunWelcome.hasPriorState`
+  looks for `settings.json`, `workspaces.json`, or `windows` before the app writes anything.
+  Leave the marker out only when the welcome itself is under test.
+- The control socket binds from the window scene's task, so a backgrounded `open -n -g` can leave the app
+  running with no socket until a window renders. Activate the instance when the socket never appears.
+- `agtermctl` never reads `AGTERM_SOCKET`; it resolves `--socket`, then `AGTERM_STATE_DIR`, then
+  `~/Library/Application Support/agterm`. A shell inside the live terminal therefore defaults onto the
+  live socket, and exporting a short `AGTERM_STATE_DIR` is what keeps inherited commands off it.
 - After launching an instance for manual testing, do not touch it. For an assisted experiment, announce
   every action. Ask before acting when unclear.
 - Put nontrivial work in an isolated worktree and remove it after merge. See the build section for artifact
