@@ -31,9 +31,11 @@ enum ForegroundProcess {
     /// job in its own group, so the leader IS the program. A pane with no job-control shell (a
     /// `--command` session) runs its program as a child of setuid-root `login`, whose argv
     /// `KERN_PROCARGS2` refuses for a non-root caller — so without the descent every such pane reads as
-    /// idle. A setuid leader under a job-control shell (`top`, `sudo`) still reads as idle, because the
-    /// descent takes only the leader's own children: `sudo`'s child runs as root and stays unreadable,
-    /// and a pipeline's other elements are children of the shell rather than of the leader.
+    /// idle. A setuid leader under a job-control shell (`top`, `sudo`) still reads as idle while it is
+    /// alive, because the descent takes only the leader's own children: `sudo`'s child runs as root and
+    /// stays unreadable, and a pipeline's other elements are children of the shell rather than of the
+    /// leader. Once the leader is reaped there is no parentage to test and every survivor qualifies, so a
+    /// pipeline that outlives its `sudo` does report — see `groupDescentCandidates`.
     @MainActor
     static func running(for view: GhosttySurfaceView, shellBasename: String?) -> [String]? {
         guard let pgid = view.foregroundPid() else { return nil }
