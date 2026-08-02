@@ -191,9 +191,12 @@ struct SplitRatioAccessor: NSViewRepresentable {
         }
 
         /// Join the probes the click monitor asks, installing that monitor with the first split and dropping
-        /// it with the last, so a window with no split has no app-wide mouse monitor at all. ONE monitor for
-        /// the whole app, like `PaneShortcuts` — never one per probe, which would run N predicates per click
-        /// and leak a monitor on every re-attach. Adding is idempotent; `layout()` re-claims after a re-host.
+        /// it once the last probe leaves its window, so an app that never splits installs none. ONE monitor
+        /// for the whole app, like `PaneShortcuts` — never one per probe, which would run N predicates per
+        /// click and leak a monitor on every re-attach. Adding is idempotent; `layout()` re-claims after a
+        /// re-host. A probe freed without `viewWillMove(toWindow:)` leaves the monitor installed, which costs
+        /// nothing: `claimants` is weak, so the handler finds it empty and passes every event through
+        /// untouched. Removing it from inside its own dispatch is not worth that.
         private static func addClaimant(_ probe: SplitProbeView) {
             claimants.add(probe)
             guard clickMonitor == nil else { return }

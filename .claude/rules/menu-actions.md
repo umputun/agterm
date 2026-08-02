@@ -100,7 +100,9 @@ paths:
 - Double-clicking the divider restores `splitRatioDefault` through the same `applyRatio` path as
   `session.resize`, persisting immediately rather than through the drag debounce. AppKit offers no hook:
   `NSSplitView`'s own double-click collapses a pane through the delegate SwiftUI owns. One shared
-  `SplitProbeView` monitor, installed with the first split and removed with the last, sees the second click
+  `SplitProbeView` monitor, installed with the first split and removed once the last probe leaves its window
+  (a probe freed without that callback leaves it installed, passing every event through an empty weak
+  claimant table), sees the second click
   after the first one's drag-tracking loop ends, so dragging is unaffected; consume that press and its
   release so neither starts a drag nor reports a phantom button-up. The target is `dividerOwns`, the band
   already used for the resize cursor, so the gesture claims no pixel that could have selected a word.
