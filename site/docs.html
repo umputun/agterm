@@ -192,6 +192,7 @@
             <a href="#navigation" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Navigation</a>
             <a href="#windows" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Windows</a>
             <a href="#notifications" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Notifications</a>
+            <a href="#accessibility" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Accessibility</a>
             <a href="#settings" style="color: #bfbab0; padding: 7px 12px; border-radius: 7px" class="hv9">Customization</a>
             <div style="height: 16px"></div>
             <span style="color: #4a5158; font-size: 11px; letter-spacing: 0.12em; padding: 4px 12px">SCRIPTING</span>
@@ -1018,6 +1019,38 @@
               bounce for a background notification (off, once, or until you focus agterm) and an optional notification
               sound (a system sound attached to each delivered banner; None by default, silenced by Do Not Disturb). For a coding agent that just needs to say it is
               waiting, <a href="#status" style="color: #6d82f3">agent status</a> is usually the better fit.
+            </p>
+          </section>
+
+          <!-- ACCESSIBILITY -->
+          <section id="accessibility" style="scroll-margin-top: 88px; padding-top: 56px">
+            <h2
+              style="
+                font-family: &quot;JetBrains Mono&quot;, monospace;
+                font-weight: 700;
+                font-size: 28px;
+                letter-spacing: -0.02em;
+                margin: 0 0 16px;
+                padding-bottom: 12px;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+              "
+            >
+              Accessibility
+            </h2>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 0">
+              Voice dictation tools that probe for a focused text field — the system Dictation, MacWhisper, and similar
+              assistive apps — engage over the terminal: the on-screen pane advertises itself to the accessibility system as
+              an editable text area, so a hold-to-dictate widget anchors to it and dictated text lands at the prompt. Text
+              arrives at the cursor the same way typing does, and a multi-line or tab-carrying insert goes in as a bracketed
+              paste, so it lands as literal text instead of running the line.
+            </p>
+            <p style="font-size: 16px; line-height: 1.7; color: #cbc6bc; margin: 16px 0 0">
+              Two limits are worth knowing. The scrollback is deliberately not mirrored, so the exposed pane reads to a
+              screen reader as an empty text area named "Terminal" rather than as the terminal's contents — mirroring the
+              grid is a separate, much larger piece of work. And because the terminal appends at the cursor with nothing to
+              read back, a dictation tool that re-sends its whole transcription on every revision (rather than only the new
+              words) will concatenate its drafts at the prompt; tools that insert incrementally, MacWhisper among them, are
+              unaffected.
             </p>
           </section>
 

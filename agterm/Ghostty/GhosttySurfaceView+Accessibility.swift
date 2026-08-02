@@ -31,7 +31,9 @@ import AppKit
 /// bracketed-paste path (`insertPasted`), so newlines can't turn into Return and submit commands (see
 /// `setAccessibilityValue`).
 ///
-/// Two deliberate scoping choices keep this from harming non-dictation AX clients:
+/// Two deliberate scoping choices bound WHICH panes a non-dictation AX client sees. They do not bound
+/// what it is TOLD about an exposed pane — see the screen-reader and replace-semantics limitations below,
+/// both of which are real and accepted, not closed by the gating:
 ///
 /// - **Only the on-screen pane(s) are exposed** (`axExposed`, below). The deck eagerly realizes
 ///   every session's surface, so gating merely on `!viewOnly` would advertise one editable "Terminal"
@@ -61,11 +63,22 @@ import AppKit
 /// client can't reach a non-key window (`AXFocusedUIElement` is nil when agterm isn't key), so only a
 /// role/label-enumerating client hits it, the same class as the split case above.
 ///
-/// Contract note: a terminal is **append-at-cursor** — there is no addressable document value to
-/// replace, so `accessibilityValue` reports empty and a set inserts at the cursor rather than replacing.
-/// The value is still advertised settable because AX-based inserters require it; a client that expects
-/// full replace semantics (set-then-read-back-to-verify) is not supported here (dictation tools such as
-/// MacWhisper insert incrementally and are unaffected).
+/// Known limitation (SCREEN READERS): because the value is not mirrored, an exposed pane reads to
+/// VoiceOver as a text area named "Terminal" holding zero characters — it now announces an EMPTY editable
+/// field where before this file the surface was absent from the tree and VO moved past it to the sidebar.
+/// That is a real regression for VO users, traded knowingly for dictation working at all: the honest fix
+/// is mirroring the grid (upstream ghostty 1.2's read-only integration, a much larger undertaking and the
+/// better home for it), not narrowing the exposure, which would take dictation with it. Do not read the
+/// gating above as covering this.
+///
+/// Known limitation (REPLACE SEMANTICS): a terminal is **append-at-cursor** — there is no addressable
+/// document value to replace, so `accessibilityValue` reports empty and a set inserts at the cursor
+/// rather than replacing. The value is still advertised settable because AX-based inserters require it.
+/// A client that DIFFS its intended text against the field before writing therefore reads empty every
+/// time and re-sends its whole hypothesis on each revision, concatenating it ("list", "list all", "list
+/// all files" → `listlist alllist all files`). Incremental inserters (MacWhisper, and any client that
+/// sends only the delta) are unaffected, which is the common case; a set-then-read-back-to-verify client
+/// is not supported here. Closing this needs the same content mirroring the screen-reader case does.
 extension GhosttySurfaceView {
     /// True only for the pane that is actually on screen: interactive (`!viewOnly`, so dashboard cells
     /// are excluded), the visible deck pane (`deckVisible`, so eagerly-realized background sessions
@@ -82,7 +95,15 @@ extension GhosttySurfaceView {
     /// the miniaturized/hidden/not-yet-ordered-in cases and true for a merely occluded or off-Space
     /// window, which is the wanted semantics. Exposure only — the write path was never reachable here,
     /// since `liveFocus` requires the key window.
-    private var axExposed: Bool { !viewOnly && deckVisible && window?.isVisible == true }
+    ///
+    /// The `surface != nil` term covers the other end of the lifecycle: `createSurface` DEFERS creation
+    /// while the backing size is still zero (`pendingSurfaceCreation`), and `acceptsFirstResponder` only
+    /// checks `viewOnly`, so a pane in a window still being presented can be first responder with no
+    /// libghostty surface behind it. Without the term it advertised a settable "Terminal" whose write
+    /// `insertText`/`insertPasted` then dropped on their own `surface` guards — the first dictated phrase
+    /// after opening a window vanishing with no feedback. Absent from the tree until the surface exists is
+    /// the honest answer.
+    private var axExposed: Bool { !viewOnly && deckVisible && surface != nil && window?.isVisible == true }
 
     override func isAccessibilityElement() -> Bool { axExposed }
 
@@ -125,15 +146,102 @@ extension GhosttySurfaceView {
     /// carries — and lets it through `insertText` unwrapped, where ICRNL runs the line.
     /// The no-submit guarantee tracks the program's bracketed-paste mode 2004: a raw prompt with
     /// 2004 off still submits a trailing newline, exactly the caveat ⌘V and drop carry (see `insertPasted` /
-    /// the libghostty note). `discardMarkedText()` first abandons any in-flight IME/CJK composition on both
-    /// branches — otherwise a live marked-text composition survives the AX insert and re-commits on the
-    /// next keystroke; the paste branch additionally `unmarkText()`s to clear libghostty's own preedit
-    /// (`insertText` does that itself).
+    /// the libghostty note). Any in-flight IME/CJK composition is COMMITTED first on both branches (see
+    /// `commitOrDiscardComposition`) — otherwise it either survives the AX insert and re-commits on the
+    /// next keystroke, or is thrown away along with the characters the user already typed; the paste
+    /// branch additionally `unmarkText()`s to clear libghostty's own preedit (`insertText` does that
+    /// itself).
     override func setAccessibilityValue(_ accessibilityValue: Any?) {
         guard axExposed, liveFocus else { return super.setAccessibilityValue(accessibilityValue) }
         let text = (accessibilityValue as? String) ?? (accessibilityValue as? NSAttributedString)?.string ?? ""
         guard !text.isEmpty else { return }
-        inputContext?.discardMarkedText() // abandon any IME/CJK composition so it can't re-commit after the insert
+        insertFromAccessibility(text)
+    }
+
+    /// Tell AX that this element's presence in the tree changed, because `axExposed` just flipped.
+    ///
+    /// A client resolves the "Terminal" element once and then keeps writing to it. Nothing in the AX
+    /// contract makes it re-resolve on its own, so when the user switches sessions (or opens the
+    /// dashboard, or minimizes the window) the pane it cached silently stops accepting writes: the
+    /// setter's `axExposed, liveFocus` guard fails and falls through to `super.setAccessibilityValue`,
+    /// which stores the string as an inert AX attribute and reports SUCCESS — the dictated sentence is
+    /// lost with no error the client can see. `layoutChanged` is the notification for "the set of
+    /// elements here changed"; posting it on the window makes a client re-resolve and land on the pane
+    /// that is actually live.
+    ///
+    /// Posted from `deckVisible`'s `didSet` (`GhosttySurfaceView`), the one flag whose flip drives
+    /// exposure at runtime — `viewOnly` flips only on the dashboard reparent, which flips `deckVisible`
+    /// with it, and the window/surface terms bracket the view's whole lifetime.
+    func postAccessibilityExposureChange() {
+        guard let window else { return }
+        NSAccessibility.post(element: window, notification: .layoutChanged)
+    }
+
+    /// Tell AX the focused element moved, because `isAccessibilityFocused` (= `liveFocus`) just changed.
+    ///
+    /// The companion to `postAccessibilityExposureChange` for the FOCUS half: a client that anchors on
+    /// `AXFocusedUIElement` (MacWhisper, system Dictation) needs to hear the focus leave one pane for
+    /// another — a split-pane switch or a window key change moves it without any element appearing or
+    /// disappearing. Posted from `updateGhosttyFocus`, which every focus path already funnels through
+    /// (become/resign first responder, the window key observers, reparent and surface creation), so the
+    /// AX notification can't drift from what libghostty was told.
+    func postAccessibilityFocusChange() {
+        let focused = axExposed && liveFocus
+        guard focused != axPostedFocus else { return }
+        axPostedFocus = focused
+        guard focused, let window else { return } // announce the GAIN; the losing pane's post would race it
+        NSAccessibility.post(element: window, notification: .focusedUIElementChanged)
+    }
+
+    /// The OTHER conventional AX insertion route: a client that reads `AXSelectedTextRange` and then sets
+    /// `AXSelectedText` to the replacement, rather than setting `AXValue`. Both land in the same place.
+    ///
+    /// The selection this element reports is the empty range `{0, 0}`, so "replace the selection" IS
+    /// "insert at the cursor" — the append-at-cursor contract the value setter already documents, with no
+    /// second semantics to maintain. Advertised settable under the SAME first-responder gate as `AXValue`
+    /// (see `isAccessibilitySelectorAllowed`) so an unfocused pane never claims a writability it would
+    /// then drop. Without this, a client following the selected-text protocol found the attribute present
+    /// but not settable and silently landed nothing, while the widget still anchored — the element looked
+    /// editable and simply ate the dictation.
+    override func setAccessibilitySelectedText(_ accessibilitySelectedText: String?) {
+        guard axExposed, liveFocus else { return super.setAccessibilitySelectedText(accessibilitySelectedText) }
+        guard let text = accessibilitySelectedText, !text.isEmpty else { return }
+        insertFromAccessibility(text)
+    }
+
+    /// End any in-flight IME composition before an AX insert — by COMMITTING it, not throwing it away.
+    ///
+    /// The composition is text the user has already typed. `discardMarkedText()` alone abandons the
+    /// conversion session without committing, so a CJK user mid-word when a dictation insert arrives lost
+    /// those characters outright, with the dictated text landing in their place. AppKit's own behaviour
+    /// when a field gives up an active composition (a click away, a focus change) is to commit it, so
+    /// that is what this does: send our copy of the marked string through the ordinary `insertText` path
+    /// first, THEN `discardMarkedText()` so the input context drops its now-committed session and cannot
+    /// re-commit the same characters on the next keystroke. Exactly once, either way.
+    ///
+    /// The copy is needed because libghostty owns the preedit for rendering and hands nothing back, and
+    /// `attributedSubstring(forProposedRange:)` returns nil — `_markedText` (maintained beside
+    /// `_markedRange` by the three `NSTextInputClient` methods) is the only source for it.
+    private func commitOrDiscardComposition() {
+        if hasMarkedText(), !_markedText.isEmpty {
+            insertText(_markedText, replacementRange: NSRange(location: NSNotFound, length: 0))
+        }
+        inputContext?.discardMarkedText()
+    }
+
+    /// The shared AX insert: fire the input-side hooks `keyDown` fires, then route to the pty.
+    ///
+    /// Dictation IS typing, so it owes the same two side effects every keystroke has — without them a
+    /// dictating user counts as idle (`onUserInput` is what resets the window's auto-follow timer, so
+    /// auto-follow would yank the selection to a blocked session MID-sentence and deliver the rest of the
+    /// text to the wrong terminal) and a session's stale agent-status glyph survives a dictated reply
+    /// (`onUserInputClearsStatus`). `isInterrupt` is always false: an AX insert carries text, never the
+    /// Escape/Ctrl-C keystroke that clears an ACTIVE glyph, so it clears blocked/completed only — the same
+    /// answer `isInterruptKeystroke` gives for an ordinary printable key.
+    private func insertFromAccessibility(_ text: String) {
+        onUserInput?()
+        onUserInputClearsStatus?(false)
+        commitOrDiscardComposition()
         if AccessibilityInsert.needsPasteRouting(text) {
             unmarkText() // clear libghostty's preedit + _markedRange; the keyboard path's insertText does this itself
             insertPasted(text: text)
@@ -154,7 +262,7 @@ extension GhosttySurfaceView {
     /// `setAccessibilityValue(_:)`, and AppKit's default can report a getter/setter pair settable, which
     /// would leak AXValueSettable = YES onto the unfocused pane and defeat the gate.
     override func isAccessibilitySelectorAllowed(_ selector: Selector) -> Bool {
-        if selector == #selector(setAccessibilityValue(_:)) {
+        if selector == #selector(setAccessibilityValue(_:)) || selector == #selector(setAccessibilitySelectedText(_:)) {
             return axExposed && window?.firstResponder === self
         }
         return super.isAccessibilitySelectorAllowed(selector)

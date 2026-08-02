@@ -174,7 +174,9 @@ The same recently-used history decides where you land when you close the session
 
 ## Accessibility
 
-Voice dictation tools that probe for a focused text field — the system Dictation, MacWhisper, and similar assistive apps — now engage over the terminal: the on-screen pane advertises itself to the accessibility system as an editable text area, so a hold-to-dictate widget anchors to it and dictated text lands at the prompt. Only the on-screen pane(s) are exposed, and the scrollback is deliberately not mirrored to screen readers.
+Voice dictation tools that probe for a focused text field — the system Dictation, MacWhisper, and similar assistive apps — now engage over the terminal: the on-screen pane advertises itself to the accessibility system as an editable text area, so a hold-to-dictate widget anchors to it and dictated text lands at the prompt. Text arrives at the cursor the same way typing does, and a multi-line or tab-carrying insert goes in as a bracketed paste, so it lands as literal text instead of running the line.
+
+Two limits are worth knowing. The scrollback is deliberately not mirrored, so the exposed pane reads to a screen reader as an empty text area named "Terminal" rather than as the terminal's contents — mirroring the grid is a separate, much larger piece of work. And because the terminal appends at the cursor with nothing to read back, a dictation tool that re-sends its whole transcription on every revision (rather than only the new words) will concatenate its drafts at the prompt; tools that insert incrementally, MacWhisper among them, are unaffected.
 
 ## Settings
 

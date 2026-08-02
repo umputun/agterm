@@ -28,6 +28,15 @@ struct AccessibilityInsertTests {
         #expect(AccessibilityInsert.needsPasteRouting("one\r\ntwo"))
     }
 
+    // A tab reaches the shell as a completion keypress on the `insertText` path, so it belongs on the
+    // bracketed-paste path exactly as a newline does — as does every other C0 control character.
+    @Test func controlCharactersRouteToPaste() {
+        #expect(AccessibilityInsert.needsPasteRouting("git\tcommit -m x"))
+        #expect(AccessibilityInsert.needsPasteRouting("\u{1B}[A")) // ESC
+        #expect(AccessibilityInsert.needsPasteRouting("a\u{00}b")) // NUL
+        #expect(AccessibilityInsert.needsPasteRouting("a\u{7F}b")) // DEL
+    }
+
     @Test func otherUnicodeLineBreaksRouteToPaste() {
         #expect(AccessibilityInsert.needsPasteRouting("a\u{0B}b")) // VT
         #expect(AccessibilityInsert.needsPasteRouting("a\u{0C}b")) // FF

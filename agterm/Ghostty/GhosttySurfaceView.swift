@@ -191,6 +191,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
             guard deckVisible != oldValue else { return }
             updateDropRegistration()
             updatePointerTracking()
+            postAccessibilityExposureChange() // this flips `axExposed`; tell AX the element came or went
         }
     }
 
@@ -250,6 +251,17 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     // IME composition state shared with GhosttySurfaceView+Input.swift (stored properties can't live in an extension).
     var _markedRange = NSRange(location: NSNotFound, length: 0)
     var _selectedRange = NSRange(location: NSNotFound, length: 0)
+    /// The in-flight composition's text. libghostty owns the preedit for RENDERING (`ghostty_surface_preedit`)
+    /// and hands nothing back, so the only way to COMMIT a live composition instead of throwing it away is to
+    /// keep our own copy — which the AX insert path does (`commitOrDiscardComposition`). Maintained by the
+    /// three `NSTextInputClient` methods that own `_markedRange`, and always cleared with it.
+    var _markedText = ""
+
+    /// The `isAccessibilityFocused` value last announced to AX, so `postAccessibilityFocusChange` posts on
+    /// TRANSITIONS only. Every surface re-runs `updateGhosttyFocus` on any window's key change (the
+    /// `didBecomeKey`/`didResignKey` observers use `object: nil`), so an ungated post would fire once per
+    /// realized surface per key change — N notifications for one focus move.
+    var axPostedFocus = false
     var keyTextAccumulator: [String] = []
     var currentKeyEvent: NSEvent?
 
@@ -345,6 +357,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     func updateGhosttyFocus() {
         guard let surface else { return }
         ghostty_surface_set_focus(surface, liveFocus)
+        postAccessibilityFocusChange() // `isAccessibilityFocused` mirrors `liveFocus`; AX must hear it move
     }
 
     @available(*, unavailable)

@@ -356,6 +356,7 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
         let text = (string as? String) ?? (string as? NSAttributedString)?.string ?? ""
         guard !text.isEmpty else { return }
         _markedRange = NSRange(location: NSNotFound, length: 0)
+        _markedText = ""
         if let surface { ghostty_surface_preedit(surface, nil, 0) }
         if currentKeyEvent != nil {
             keyTextAccumulator.append(text)
@@ -373,6 +374,7 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
         guard let surface else { return }
         let text = (string as? String) ?? (string as? NSAttributedString)?.string ?? ""
         _markedRange = text.isEmpty ? NSRange(location: NSNotFound, length: 0) : NSRange(location: 0, length: text.count)
+        _markedText = text
         _selectedRange = selectedRange
         text.withCString { ghostty_surface_preedit(surface, $0, UInt(text.count)) }
     }
@@ -380,6 +382,7 @@ extension GhosttySurfaceView: @preconcurrency NSTextInputClient {
     func unmarkText() {
         guard let surface else { return }
         _markedRange = NSRange(location: NSNotFound, length: 0)
+        _markedText = ""
         ghostty_surface_preedit(surface, nil, 0)
     }
 
