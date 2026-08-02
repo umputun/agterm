@@ -97,6 +97,20 @@ final class SplitRatioAccessorTests: XCTestCase {
         XCTAssertEqual(NSCursor.current, NSCursor.arrow)
     }
 
+    /// The real split is inset by the sidebar and the titlebar, and `hitTest` takes the point in the
+    /// receiver's SUPERVIEW space, so an origin-zero split cannot tell a correct conversion from a missing one.
+    func testPaintsAtTheRightPlaceWhenTheSplitIsInset() throws {
+        split.frame = NSRect(x: 40, y: 10, width: 360, height: 180)
+        split.layoutSubtreeIfNeeded()
+        probe.layout()
+        NSCursor.arrow.set()
+        try move(toX: 40 + 200 + split.dividerThickness / 2)
+        XCTAssertEqual(NSCursor.current, NSCursor.resizeLeftRight)
+        NSCursor.arrow.set()
+        try move(toX: 200) // where the divider would be if the inset were dropped
+        XCTAssertEqual(NSCursor.current, NSCursor.arrow)
+    }
+
     /// A palette scrim, the search bar or the compact titlebar strip covers the band without touching the
     /// deck's own gates.
     func testLeavesTheCursorAloneUnderChrome() throws {
