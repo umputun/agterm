@@ -1927,6 +1927,27 @@
               (<span style="font-family: &quot;JetBrains Mono&quot;, monospace">agtermctl session overlay open</span>) or a scratch
               terminal, which have a real TTY. A non-zero exit posts a notification banner.
             </div>
+            <div
+              style="
+                background: rgba(242, 180, 92, 0.07);
+                border: 1px solid rgba(242, 180, 92, 0.22);
+                border-radius: 10px;
+                padding: 16px 18px;
+                margin: 20px 0 0;
+                font-size: 14px;
+                color: #e2c79a;
+                line-height: 1.65;
+              "
+            >
+              <strong style="color: #f2b45c; font-family: &quot;JetBrains Mono&quot;, monospace">GUI PATH</strong> — a custom
+              command resolves its binaries against the app's GUI
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">PATH</span>: the launchd default, with nothing
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">path_helper</span> or your shell profile adds, no
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">/opt/homebrew/bin</span> — so a bare non-default
+              binary fails with exit 127. Give an absolute path or wrap the line in
+              <span style="font-family: &quot;JetBrains Mono&quot;, monospace">zsh -lc '…'</span>. The same applies to the program
+              an overlay or scratch terminal runs.
+            </div>
             <p style="font-size: 15px; line-height: 1.65; color: #949ba4; margin: 20px 0 0">
               Open the file with <strong style="color: #e6e1d7">File ▸ Edit Keymap…</strong> (or the ⌃⇧P palette): it opens in a
               95% overlay running <span style="font-family: &quot;JetBrains Mono&quot;, monospace; color: #cbc6bc">$VISUAL</span>/<span
