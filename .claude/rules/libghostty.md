@@ -206,8 +206,9 @@ paths:
 - Chrome that paints its own cursor must re-assert per move and per drag tick, then again on the next
   runloop turn re-reading live hover state: a replacement lands after a synchronous `.set()` returns, and a
   deferred pass that captured hover instead strands the shape over live terminal.
-- Reproduce manually with stacked sessions and `printf '\033]22;crosshair\007'`. Cursor shape has no
-  automated coverage; verify by eye.
+- Reproduce manually with stacked sessions and `printf '\033]22;crosshair\007'`. What libghostty asks for
+  is verified by eye. The divider writer is not: `SplitRatioAccessorTests` drives `mouseMoved` and asserts
+  `NSCursor.current`, so its gates are pinned and must stay that way.
 
 ## OSC 52 clipboard
 

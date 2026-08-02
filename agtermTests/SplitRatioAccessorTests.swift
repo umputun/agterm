@@ -97,6 +97,17 @@ final class SplitRatioAccessorTests: XCTestCase {
         XCTAssertEqual(NSCursor.current, NSCursor.arrow)
     }
 
+    /// A palette scrim, the search bar or the compact titlebar strip covers the band without touching the
+    /// deck's own gates.
+    func testLeavesTheCursorAloneUnderChrome() throws {
+        probe.layout()
+        let chrome = NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 200))
+        window.contentView?.addSubview(chrome)
+        NSCursor.arrow.set()
+        try moveOverDivider()
+        XCTAssertEqual(NSCursor.current, NSCursor.arrow)
+    }
+
     func testLeavesTheCursorAloneWhileSuspended() throws {
         probe.layout()
         probe.suspended = true

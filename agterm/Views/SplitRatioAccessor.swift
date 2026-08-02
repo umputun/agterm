@@ -160,14 +160,18 @@ struct SplitRatioAccessor: NSViewRepresentable {
             }
         }
 
-        /// Whether THIS split's grab band owns the window point, which is what its own drag resolves from, so
-        /// no width is guessed. Asked of the split itself: every session's split is mounted at the full frame,
-        /// so a window-down hit answers for whichever the deck stacked last. `deckVisible` carries the cover
-        /// instead — it is false for a background session and for every panel that hides or overlays the
-        /// panes.
+        /// Whether THIS split's grab band owns the window point. The band is asked of the split itself, which
+        /// is what its own drag resolves from, so no width is guessed — a window-down hit would answer for
+        /// whichever session's split the deck stacked last, since all of them are mounted at the full frame.
+        ///
+        /// The cover is a separate question, and the window-down hit is what answers it, under `ownsPointer`'s
+        /// chrome-only rule: another surface above means only invisible deck content covers the band, while a
+        /// palette scrim, the search bar or the compact-mode titlebar strip means real chrome does.
         private func dividerOwns(_ pointInWindow: NSPoint) -> Bool {
             guard deckVisible, !suspended, let split = splitView, let parent = split.superview else { return false }
-            return split.hitTest(parent.convert(pointInWindow, from: nil)) === split
+            guard split.hitTest(parent.convert(pointInWindow, from: nil)) === split else { return false }
+            guard let hit = split.window?.contentView?.hitTest(pointInWindow) else { return true }
+            return hit === split || hit.isDescendant(of: split) || hit is GhosttySurfaceView || hit is NSSplitView
         }
 
         /// Move the live divider to the session's stored `splitRatio` (set by `session.resize` just before
