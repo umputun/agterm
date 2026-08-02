@@ -352,7 +352,11 @@ public final class AppStore {
     public func addSession(toWorkspace workspaceID: UUID, cwd: String, command: String? = nil,
                            name: String? = nil, wait: Bool = false, at index: Int? = nil, select: Bool = true) -> Session? {
         guard let wsIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
-        let session = Session(initialCwd: cwd, customName: name?.trimmedOrNil)
+        // Both seed values reach a custom-command token that expands unquoted into /bin/sh -c: cwd via
+        // initialCwd → effectiveCwd → {AGT_SESSION_PWD} until OSC 7 reports, and name via customName →
+        // {AGT_SESSION_NAME}. Strip control characters the same way the OSC path does. See TerminalText.
+        let session = Session(initialCwd: TerminalText.sanitized(cwd),
+                              customName: name.map(TerminalText.sanitized)?.trimmedOrNil)
         session.initialCommand = command
         session.commandWait = wait
         if let index {
