@@ -66,20 +66,26 @@ enum ForegroundProcess {
     }
 
     /// Every member of `pgid`'s process group via `sysctl(KERN_PROC_PGRP)`, with each one's parent; empty
-    /// on any syscall failure. The count comes from the second call, because the group can change between
-    /// the two: a shrink leaves fewer entries than the buffer holds, and a growth past the first call's
-    /// margin returns ENOMEM with the buffer full of whole, valid entries — the kernel never copies a
-    /// partial one — so ENOMEM keeps what landed instead of discarding the whole read and reporting the
-    /// pane as idle.
+    /// on any syscall failure. The count comes from the second call, because the group can shrink between
+    /// the two and leave fewer entries than the buffer holds.
+    ///
+    /// A group that GROWS past the sizing call's slop (a fixed handful of entries) returns ENOMEM, and
+    /// macOS reports `oldlen` 0 there, so nothing can be salvaged from the buffer however full it is.
+    /// Retry with a widening margin instead, rather than reporting a busy pane as idle.
     private static func processGroup(pgid: pid_t) -> [CommandRestore.ProcessGroupMember] {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PGRP, pgid]
-        var size = 0
-        guard sysctl(&mib, u_int(mib.count), nil, &size, nil, 0) == 0, size > 0 else { return [] }
         let stride = MemoryLayout<kinfo_proc>.stride
-        var procs = [kinfo_proc](repeating: kinfo_proc(), count: size / stride)
-        guard !procs.isEmpty else { return [] }
-        size = procs.count * stride
-        guard sysctl(&mib, u_int(mib.count), &procs, &size, nil, 0) == 0 || errno == ENOMEM else { return [] }
-        return procs.prefix(size / stride).map { .init(pid: $0.kp_proc.p_pid, ppid: $0.kp_eproc.e_ppid) }
+        for margin in [0, 32, 256] {
+            var size = 0
+            guard sysctl(&mib, u_int(mib.count), nil, &size, nil, 0) == 0, size > 0 else { return [] }
+            var procs = [kinfo_proc](repeating: kinfo_proc(), count: size / stride + margin)
+            guard !procs.isEmpty else { return [] }
+            size = procs.count * stride
+            if sysctl(&mib, u_int(mib.count), &procs, &size, nil, 0) == 0 {
+                return procs.prefix(size / stride).map { .init(pid: $0.kp_proc.p_pid, ppid: $0.kp_eproc.e_ppid) }
+            }
+            if errno != ENOMEM { return [] }
+        }
+        return []
     }
 }

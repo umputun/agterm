@@ -346,9 +346,11 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   restore capture's pid/sysctl/host-free extraction but adds one step the capture must never take.
   libghostty's foreground pid is `tcgetpgrp`, a process GROUP id, and a pane with no job-control shell
   leaves its program in the group led by setuid-root `login`, whose argv `KERN_PROCARGS2` refuses. The tree
-  read (`ForegroundProcess.running`) descends the group to the first readable member, so a `--command` pane
-  reports what it runs; the capture (`.command`) stays leader-only, because a non-nil capture sets
-  `hadForeground`, which preempts `initialCommand` in `restorePlan` and would drop the exec path.
+  read (`ForegroundProcess.running`) descends to the leader's own CHILDREN, lowest pid first, so a
+  `--command` pane reports what it runs while a pipeline sibling under `sudo` and a post-pid-wrap
+  grandchild stay out; a group whose leader already exited has no parentage to test, so every survivor
+  qualifies. The capture (`.command`) stays leader-only, because a non-nil capture sets `hadForeground`,
+  which preempts `initialCommand` in `restorePlan` and would drop the exec path.
 - Top-level tree includes idle/auto-follow, live sidebar visibility/mode, workspace filter, quick
   visibility, zoom, dashboard, and picker state. Prefer live tree sidebar state over cached window list.
 - Window nodes include open/active, open-store sidebar/auto-follow, geometry, fullscreen, zoomed, minimized.

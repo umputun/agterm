@@ -67,8 +67,11 @@ struct CommandRestoreTests {
         // the setuid leader is not the pane's foreground.
         #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [m(100, 9), m(101, 9)]).isEmpty)
         // a grandchild that took a low pid after the 99999 wrap must not outrank its own parent.
-        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [m(99500, 100), m(500, 99500)])
+        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [m(100, 9), m(99500, 100), m(500, 99500)])
             == [99500])
+        // a reaped leader (`cat f | less`) leaves nothing to check parentage against, so survivors qualify.
+        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [m(101, 9)]) == [101])
+        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [m(102, 9), m(101, 9)]) == [101, 102])
     }
 
     @Test func isIdleShellSkipsBarePromptButNotScripts() {
