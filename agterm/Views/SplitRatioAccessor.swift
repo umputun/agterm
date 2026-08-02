@@ -17,9 +17,9 @@ extension NSView {
 
 /// Bridges to the AppKit `NSSplitView` under SwiftUI's `HSplitView` to (1) persist and restore the split
 /// divider ratio — no public SwiftUI API exposes the divider position — (2) clip the split's divider out
-/// of the titlebar strip, and (3) paint the divider's own resize cursor, which nothing else writes.
-/// Attached as a `.background` on the primary pane so its `NSView` lives inside the split's view tree
-/// without becoming a third arranged pane.
+/// of the titlebar strip, (3) paint the divider's own resize cursor, which nothing else writes, and
+/// (4) restore an even split on a divider double-click. Attached as a `.background` on the primary pane so
+/// its `NSView` lives inside the split's view tree without becoming a third arranged pane.
 ///
 /// (1) Once the split has a real width it restores `session.splitRatio` via `setPosition`; on each divider
 /// resize it writes the current left-pane fraction back to the session, which the next `save()` (or the
@@ -34,13 +34,18 @@ extension NSView {
 /// reflowing the terminal grid (a SwiftUI `.mask`/`.clipped()` here scrolled the top row away), the empty
 /// strip is harmless to clip, and it composes with translucency (revealing the window backing, never an
 /// opaque color over the titlebar).
+///
+/// (4) A drag can't land exactly on 50/50, and `NSSplitView`'s own double-click gesture only collapses a
+/// pane through the delegate SwiftUI owns, so the reset is recognized from a shared mouse monitor instead.
+/// It sees the second click after the first one's divider-drag tracking loop ends, leaving dragging intact.
 struct SplitRatioAccessor: NSViewRepresentable {
     let session: Session
     let titlebarHeight: CGFloat
     let suspended: Bool
     /// On screen and uncovered: the deck's `visible` minus any overlay or scratch over the panes. Gates (3)
-    /// alone — a background session's split is still laid out at the full frame with its tracking area
-    /// armed, so its divider column would paint over whatever session IS on screen.
+    /// and (4) — a background session's split is still laid out at the full frame with its tracking area
+    /// armed, so its divider column would paint over, and answer clicks meant for, whatever session IS on
+    /// screen.
     let deckVisible: Bool
     let onPersist: () -> Void
 
@@ -73,6 +78,10 @@ struct SplitRatioAccessor: NSViewRepresentable {
                 needsLayout = true
             }
         }
+        /// The probes a divider click is offered to, weak so a torn-down one drops out on its own. Every
+        /// attached probe joins; `dividerOwns` then decides which single one actually holds that pixel.
+        private static let claimants = NSHashTable<SplitProbeView>.weakObjects()
+        private static var clickMonitor: Any?
         nonisolated(unsafe) private var resizeObserver: NSObjectProtocol?
         nonisolated(unsafe) private var applyObserver: NSObjectProtocol?
         nonisolated(unsafe) private var saveWorkItem: DispatchWorkItem?
@@ -80,6 +89,10 @@ struct SplitRatioAccessor: NSViewRepresentable {
         private var dividerClipMask: CALayer?
         private var dividerTracking: NSTrackingArea?
         private var restored = false
+        /// Left-pane width at the previous in-band press, nil when that press missed the band.
+        private var lastPressLeftWidth: CGFloat?
+        /// A press was swallowed and its release is still to come.
+        private var swallowedPress = false
 
         init(session: Session) {
             self.session = session
@@ -90,11 +103,13 @@ struct SplitRatioAccessor: NSViewRepresentable {
         required init?(coder _: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
         /// Hand the tracking area back before the split outlives this probe: `NSTrackingArea` does not retain
-        /// its owner, so a stale one would message a freed view on the next move. `layout()` reinstalls it if
-        /// the probe is re-hosted.
+        /// its owner, so a stale one would message a freed view on the next move. `layout()` reinstalls it,
+        /// and re-claims divider clicks, if the probe is re-hosted.
         override func viewWillMove(toWindow newWindow: NSWindow?) {
             super.viewWillMove(toWindow: newWindow)
-            guard newWindow == nil, let dividerTracking else { return }
+            guard newWindow == nil else { return }
+            Self.dropClaimant(self)
+            guard let dividerTracking else { return }
             splitView?.removeTrackingArea(dividerTracking)
             self.dividerTracking = nil
         }
@@ -103,6 +118,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
             super.layout()
             attachIfNeeded()
             updateDividerTracking()
+            Self.addClaimant(self)
             updateDividerClip() // keep the titlebar-strip clip sized to the current split bounds
             guard !suspended else { return }
             guard !restored, let split = splitView else { return }
@@ -172,6 +188,63 @@ struct SplitRatioAccessor: NSViewRepresentable {
             guard split.hitTest(parent.convert(pointInWindow, from: nil)) === split else { return false }
             guard let hit = split.window?.contentView?.hitTest(pointInWindow) else { return true }
             return hit === split || hit.isDescendant(of: split) || hit is GhosttySurfaceView || hit is NSSplitView
+        }
+
+        /// Join the probes the click monitor asks, installing that monitor with the first split and dropping
+        /// it with the last, so a window with no split has no app-wide mouse monitor at all. ONE monitor for
+        /// the whole app, like `PaneShortcuts` — never one per probe, which would run N predicates per click
+        /// and leak a monitor on every re-attach. Adding is idempotent; `layout()` re-claims after a re-host.
+        private static func addClaimant(_ probe: SplitProbeView) {
+            claimants.add(probe)
+            guard clickMonitor == nil else { return }
+            clickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .leftMouseUp]) { event in
+                for claimant in claimants.allObjects where claimant.consumes(event) { return nil }
+                return event
+            }
+        }
+
+        private static func dropClaimant(_ probe: SplitProbeView) {
+            claimants.remove(probe)
+            guard claimants.allObjects.isEmpty, let monitor = clickMonitor else { return }
+            NSEvent.removeMonitor(monitor)
+            clickMonitor = nil
+        }
+
+        /// Whether this probe takes the event: a double-click on its divider, which restores the even split,
+        /// or the release pairing with a press it already took — an unpaired release would otherwise reach
+        /// whatever sits under the swallowed press.
+        ///
+        /// The target is `dividerOwns`, the same band the resize cursor is painted over and the same one the
+        /// split's own drag already starts in, so the gesture takes no pixel the terminal could have used for
+        /// a word selection. A press counts as a double-click only if the divider has not MOVED since the
+        /// previous one: macOS reports `clickCount == 2` for a re-grab that lands close enough in time and
+        /// space to the last press, so fine-tuning with a nudge-drag and grabbing again would otherwise throw
+        /// the adjustment away and eat the second drag.
+        func consumes(_ event: NSEvent) -> Bool {
+            guard let split = splitView, event.window === split.window else { return false }
+            if event.type == .leftMouseUp {
+                defer { swallowedPress = false }
+                return swallowedPress
+            }
+            guard split.arrangedSubviews.count == 2 else { return false }
+            let onDivider = dividerOwns(event.locationInWindow)
+            let leftWidth = split.arrangedSubviews[0].frame.width
+            defer { lastPressLeftWidth = onDivider ? leftWidth : nil }
+            guard onDivider, event.clickCount == 2,
+                  let previous = lastPressLeftWidth, abs(previous - leftWidth) < 1 else { return false }
+            resetToEvenSplit()
+            swallowedPress = true
+            return true
+        }
+
+        /// Restore the even split through the `session.resize` path, so the model and the live divider move
+        /// exactly as they do for a control-driven ratio. Persist straight away: this is one discrete action,
+        /// not the drag stream `capture()` debounces.
+        private func resetToEvenSplit() {
+            session.splitRatio = AppStore.splitRatioDefault
+            applyRatio()
+            saveWorkItem?.cancel()
+            onPersist?()
         }
 
         /// Move the live divider to the session's stored `splitRatio` (set by `session.resize` just before

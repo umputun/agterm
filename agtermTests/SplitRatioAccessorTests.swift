@@ -8,6 +8,7 @@ import XCTest
 final class SplitRatioAccessorTests: XCTestCase {
     private var window: NSWindow!
     private var split: NSSplitView!
+    private var session: Session!
     private var probe: SplitRatioAccessor.SplitProbeView!
 
     override func setUp() async throws {
@@ -21,7 +22,8 @@ final class SplitRatioAccessorTests: XCTestCase {
             split.addArrangedSubview(NSView(frame: NSRect(x: 0, y: 0, width: 200, height: 200)))
             split.addArrangedSubview(NSView(frame: NSRect(x: 201, y: 0, width: 199, height: 200)))
             window.contentView?.addSubview(split)
-            probe = SplitRatioAccessor.SplitProbeView(session: Session(initialCwd: NSTemporaryDirectory()))
+            session = Session(initialCwd: NSTemporaryDirectory())
+            probe = SplitRatioAccessor.SplitProbeView(session: session)
             split.arrangedSubviews[0].addSubview(probe)
         }
     }
@@ -29,6 +31,7 @@ final class SplitRatioAccessorTests: XCTestCase {
     override func tearDown() async throws {
         await MainActor.run {
             probe = nil
+            session = nil
             split = nil
             window.orderOut(nil)
             window = nil
@@ -128,5 +131,116 @@ final class SplitRatioAccessorTests: XCTestCase {
         NSCursor.arrow.set()
         try moveOverDivider()
         XCTAssertEqual(NSCursor.current, NSCursor.arrow)
+    }
+
+    private func press(atX x: CGFloat, count: Int, y: CGFloat = 100, windowNumber: Int? = nil) throws -> Bool {
+        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .leftMouseDown, location: NSPoint(x: x, y: y),
+                                                     modifierFlags: [], timestamp: 0,
+                                                     windowNumber: windowNumber ?? window.windowNumber,
+                                                     context: nil, eventNumber: 0, clickCount: count, pressure: 1))
+        return probe.consumes(event)
+    }
+
+    private func dividerX() throws -> CGFloat {
+        try XCTUnwrap(split.arrangedSubviews.first).frame.maxX + split.dividerThickness / 2
+    }
+
+    private func doubleClickDivider() throws -> Bool {
+        _ = try press(atX: dividerX(), count: 1)
+        return try press(atX: dividerX(), count: 2)
+    }
+
+    private func leftWidth() -> CGFloat { split.arrangedSubviews[0].frame.width }
+
+    /// Off-center starting point for the gesture, standing in for a user's drag.
+    private func offsetDivider(to position: CGFloat) {
+        split.setPosition(position, ofDividerAt: 0)
+        split.layoutSubtreeIfNeeded()
+        probe.layout()
+    }
+
+    func testDoubleClickOnTheDividerRestoresTheEvenSplit() throws {
+        probe.layout()
+        offsetDivider(to: 300)
+        XCTAssertTrue(try doubleClickDivider())
+        XCTAssertEqual(leftWidth(), 200, accuracy: 1)
+        XCTAssertEqual(try XCTUnwrap(session.splitRatio), AppStore.splitRatioDefault, accuracy: 0.01)
+    }
+
+    func testSingleClickOnTheDividerIsLeftToTheSplitsOwnDrag() throws {
+        probe.layout()
+        offsetDivider(to: 300)
+        XCTAssertFalse(try press(atX: dividerX(), count: 1))
+        XCTAssertEqual(leftWidth(), 300, accuracy: 1)
+    }
+
+    func testDoubleClickOverAPaneIsLeftToTheTerminal() throws {
+        probe.layout()
+        offsetDivider(to: 300)
+        _ = try press(atX: 50, count: 1)
+        XCTAssertFalse(try press(atX: 50, count: 2))
+        XCTAssertEqual(leftWidth(), 300, accuracy: 1)
+    }
+
+    /// macOS reports `clickCount == 2` for a re-grab close enough in time and space to the last press, so
+    /// nudging the divider and grabbing it again must keep the adjustment instead of throwing it away.
+    func testRegrabAfterANudgeDragKeepsTheAdjustment() throws {
+        probe.layout()
+        offsetDivider(to: 300)
+        _ = try press(atX: dividerX(), count: 1)
+        offsetDivider(to: 320) // the nudge-drag that first press started
+        XCTAssertFalse(try press(atX: dividerX(), count: 2))
+        XCTAssertEqual(leftWidth(), 320, accuracy: 1)
+    }
+
+    func testLeavesDividerClicksAloneWhileOffScreen() throws {
+        probe.layout()
+        offsetDivider(to: 300)
+        probe.deckVisible = false
+        XCTAssertFalse(try doubleClickDivider())
+        XCTAssertEqual(leftWidth(), 300, accuracy: 1)
+    }
+
+    func testLeavesDividerClicksAloneUnderChrome() throws {
+        probe.layout()
+        offsetDivider(to: 300)
+        window.contentView?.addSubview(NSView(frame: NSRect(x: 0, y: 0, width: 400, height: 200)))
+        XCTAssertFalse(try doubleClickDivider())
+        XCTAssertEqual(leftWidth(), 300, accuracy: 1)
+    }
+
+    func testLeavesDividerClicksAloneWhileSuspended() throws {
+        probe.layout()
+        offsetDivider(to: 300)
+        probe.suspended = true
+        XCTAssertFalse(try doubleClickDivider())
+        XCTAssertEqual(leftWidth(), 300, accuracy: 1)
+    }
+
+    /// Compact toolbar mode: the split spans the full window height and its divider is masked out of the top
+    /// strip, which the titlebar row's own full-width `WindowControlArea` covers. A press up there belongs to
+    /// the titlebar, while the divider below the strip still resets — the band is partly covered, not gone.
+    func testCompactTitlebarStripDeclinesWhileTheRestOfTheDividerResets() throws {
+        probe.titlebarHeight = 30
+        probe.layout()
+        offsetDivider(to: 300)
+        window.contentView?.addSubview(NSView(frame: NSRect(x: 0, y: 170, width: 400, height: 30)))
+
+        _ = try press(atX: dividerX(), count: 1, y: 185)
+        XCTAssertFalse(try press(atX: dividerX(), count: 2, y: 185))
+        XCTAssertEqual(leftWidth(), 300, accuracy: 1)
+
+        XCTAssertTrue(try doubleClickDivider())
+        XCTAssertEqual(leftWidth(), 200, accuracy: 1)
+    }
+
+    /// The monitor is shared by every split in the app, so a probe must decline an event that did not come
+    /// from its own split's window.
+    func testDeclinesAnEventFromAnotherWindow() throws {
+        probe.layout()
+        offsetDivider(to: 300)
+        XCTAssertFalse(try press(atX: dividerX(), count: 1, windowNumber: 0))
+        XCTAssertFalse(try press(atX: dividerX(), count: 2, windowNumber: 0))
+        XCTAssertEqual(leftWidth(), 300, accuracy: 1)
     }
 }

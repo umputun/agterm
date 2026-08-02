@@ -97,6 +97,15 @@ paths:
 - Persist each pane cwd and the 0...1 left-pane `splitRatio`. `SplitRatioAccessor` is an unconditional
   background representable on primary, introspects `NSSplitView`, retries until width exists, observes
   `didResizeSubviews`, and debounces save by about 0.4 seconds. Regular saves and quit flush also persist it.
+- Double-clicking the divider restores `splitRatioDefault` through the same `applyRatio` path as
+  `session.resize`, persisting immediately rather than through the drag debounce. AppKit offers no hook:
+  `NSSplitView`'s own double-click collapses a pane through the delegate SwiftUI owns. One shared
+  `SplitProbeView` monitor, installed with the first split and removed with the last, sees the second click
+  after the first one's drag-tracking loop ends, so dragging is unaffected; consume that press and its
+  release so neither starts a drag nor reports a phantom button-up. The target is `dividerOwns`, the band
+  already used for the resize cursor, so the gesture claims no pixel that could have selected a word.
+  `clickCount == 2` also matches a re-grab after a nudge-drag, so require the divider not to have moved
+  since the previous press.
 - `SplitRatioAccessor` masks only the compact-titlebar divider overrun. At 30pt compact height, SwiftUI
   padding lies inside the safe-area band and AppKit expands `NSSplitView` full height; normal 48px mode is
   already bounded. Compute the live overrun and apply a CALayer mask, removing it at zero.

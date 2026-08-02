@@ -294,7 +294,8 @@ extension ControlServer: ControlActions {
         }
     }
 
-    /// Resize a split's divider (control-native — the GUI only drags it). `ratio` is an absolute left-pane
+    /// Resize a split's divider (control-native — the GUI only drags it, or double-clicks it for an even
+    /// split). `ratio` is an absolute left-pane
     /// fraction, `delta` a signed nudge (positive grows the left pane) on the current fraction (0.5 when
     /// never moved); exactly one must be set. `applySplitRatio` clamps + persists, then
     /// `.agtermApplySplitRatio` pokes the session's `SplitProbeView` to move the live divider — a no-op

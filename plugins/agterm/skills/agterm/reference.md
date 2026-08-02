@@ -403,8 +403,9 @@ All twelve are read-only projections of GUI state.
   split panes (`other` toggles, the default). Errors when the session has no split. Works whether the
   split is shown side-by-side or hidden (maximized) — when hidden, focusing a pane swaps which one shows.
 - `session resize (--split-ratio R | --grow-left D | --grow-right D) [--target] [--window W]` — move the
-  split DIVIDER (the divider is otherwise mouse-drag only; there is no GUI/menu/keymap action, so bind a
-  key by mapping a `command "agtermctl session resize …"` custom action). Provide exactly one form:
+  split DIVIDER (the divider is otherwise mouse-only: drag it, or double-click it for an even split. No
+  GUI/menu/keymap action reaches any other fraction, so bind a key by mapping a
+  `command "agtermctl session resize …"` custom action). Provide exactly one form:
   `--split-ratio` sets the absolute left-pane fraction (`0..1`); `--grow-left D` / `--grow-right D` nudge
   it by the fraction `D` (grow-left shrinks the right pane and vice-versa). The result is clamped to
   `0.05..0.95` and persisted, and the applied (clamped) fraction is printed (and returned as `result.ratio`

@@ -640,6 +640,24 @@ final class ControlOverlaySplitUITests: ControlAPITestCase {
         XCTAssertEqual(empty["ok"] as? Bool, false, "resize with no fraction should fail: \(empty)")
     }
 
+    // the GUI half of session.resize. Real mouse events are the point: the gesture is recognized from a
+    // shared local event monitor, which only sees the second press once the first one's divider-drag
+    // tracking loop has ended, and nothing below the app can stand in for that.
+    func testDoubleClickOnDividerRestoresEvenSplit() throws {
+        let split = try sendCommand(#"{"cmd":"session.split","target":"active","args":{"mode":"on"}}"#)
+        XCTAssertEqual(split["ok"] as? Bool, true, "split on should succeed: \(split)")
+        XCTAssertTrue(pollActiveSessionSplit(true, timeout: 10), "the active session should report split:true")
+
+        let offset = try sendCommand(#"{"cmd":"session.resize","target":"active","args":{"ratio":0.7}}"#)
+        XCTAssertEqual(offset["ok"] as? Bool, true, "absolute resize should succeed: \(offset)")
+        XCTAssertTrue(pollSplitRatio(0.7, timeout: 10), "the divider should start off center")
+
+        let divider = app.splitters.firstMatch
+        XCTAssertTrue(divider.waitForExistence(timeout: 8), "the split should publish a divider")
+        divider.doubleClick()
+        XCTAssertTrue(pollSplitRatio(0.5, timeout: 10), "double-clicking the divider should restore the even split")
+    }
+
     // the divider-normalize regression guard. A pane overlay renders INSIDE the NSSplitView's arranged
     // subview, so mounting or freeing one must never re-lay-out the split. `splitRatio` in the tree is
     // captured off the LIVE NSSplitView by `SplitRatioAccessor`, so a normalize surfaces here as 0.5.
