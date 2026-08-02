@@ -57,6 +57,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
         nonisolated(unsafe) private var saveWorkItem: DispatchWorkItem?
         private weak var splitView: NSSplitView?
         private var dividerClipMask: CALayer?
+        private var dividerTracking: NSTrackingArea?
         private var restored = false
 
         init(session: Session) {
@@ -67,9 +68,20 @@ struct SplitRatioAccessor: NSViewRepresentable {
         @available(*, unavailable)
         required init?(coder _: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
+        /// Hand the tracking area back before the split outlives this probe: `NSTrackingArea` does not retain
+        /// its owner, so a stale one would message a freed view on the next move. `layout()` reinstalls it if
+        /// the probe is re-hosted.
+        override func viewWillMove(toWindow newWindow: NSWindow?) {
+            super.viewWillMove(toWindow: newWindow)
+            guard newWindow == nil, let dividerTracking else { return }
+            splitView?.removeTrackingArea(dividerTracking)
+            self.dividerTracking = nil
+        }
+
         override func layout() {
             super.layout()
             attachIfNeeded()
+            updateDividerTracking()
             updateDividerClip() // keep the titlebar-strip clip sized to the current split bounds
             guard !suspended else { return }
             guard !restored, let split = splitView else { return }
@@ -98,6 +110,41 @@ struct SplitRatioAccessor: NSViewRepresentable {
                 forName: .agtermApplySplitRatio, object: session, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated { self?.applyRatio() }
             }
+        }
+
+        /// Arm the split for `mouseMoved`/`cursorUpdate`. `.inVisibleRect` keeps it sized across divider and
+        /// window resizes, so this only has to survive a re-host.
+        private func updateDividerTracking() {
+            guard let split = splitView else { return }
+            if let dividerTracking, split.trackingAreas.contains(dividerTracking) { return }
+            let area = NSTrackingArea(rect: .zero, options: [.mouseMoved, .cursorUpdate, .activeInKeyWindow, .inVisibleRect],
+                                      owner: self)
+            split.addTrackingArea(area)
+            dividerTracking = area
+        }
+
+        /// Paint ↔ over the divider. Nothing else does once a second session is mounted: the pane declines the
+        /// band (`ownsPointer`) and AppKit's own divider cursor never fires there, leaving the arrow. Per move
+        /// plus one deferred re-assert, as the cursor section of `.claude/rules/libghostty.md` requires.
+        override func mouseMoved(with event: NSEvent) { paintDividerCursor(at: event.locationInWindow) }
+        override func cursorUpdate(with event: NSEvent) { paintDividerCursor(at: event.locationInWindow) }
+
+        private func paintDividerCursor(at pointInWindow: NSPoint) {
+            guard dividerOwns(pointInWindow) else { return }
+            NSCursor.resizeLeftRight.set()
+            DispatchQueue.main.async { [weak self] in
+                guard let self, let window, window.isKeyWindow,
+                      dividerOwns(window.mouseLocationOutsideOfEventStream) else { return }
+                NSCursor.resizeLeftRight.set()
+            }
+        }
+
+        /// Whether the split claims this window point — AppKit's own answer for the grab band, the same one the
+        /// divider drag and `ownsPointer` resolve from, so no band width is guessed. False while suspended: a
+        /// zoom/dashboard layer covers the split, and its panes are not on screen to resize.
+        private func dividerOwns(_ pointInWindow: NSPoint) -> Bool {
+            guard !suspended, let split = splitView, let parent = split.superview else { return false }
+            return split.hitTest(parent.convert(pointInWindow, from: nil)) === split
         }
 
         /// Move the live divider to the session's stored `splitRatio` (set by `session.resize` just before

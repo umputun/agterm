@@ -46,9 +46,9 @@ extension GhosttySurfaceView {
     /// starts in that band already does, so no per-divider width has to be guessed and later chrome is
     /// covered without touching this file.
     ///
-    /// Declines for chrome ONLY: a hit landing on any surface — this one, a descendant, or a sibling pane
-    /// stacked at the same frame in the eager deck — keeps the pre-#324 behavior, so a hit test that cannot
-    /// see through the deck can never silence the visible terminal.
+    /// Declines for chrome ONLY: a hit landing on any surface — this one, a descendant, or a split's other
+    /// pane — keeps the pre-#324 behavior, so it can never silence a visible terminal. Only an on-screen
+    /// surface answers at all; `hitTest` refuses for a hidden deck entry, which is stacked over the divider.
     func ownsPointer(at point: NSPoint) -> Bool {
         guard let hit = window?.contentView?.hitTest(point) else { return true }
         if hit === self || hit.isDescendant(of: self) { return true }

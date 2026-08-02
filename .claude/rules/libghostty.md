@@ -188,8 +188,14 @@ paths:
   — the sidebar grab handle, an `NSSplitView` divider, a floating overlay's margin — still gets the pane's
   per-move `NSCursor.set`, which beats chrome setting the cursor on hover entry alone (#324). All four
   writers also gate on `ownsPointer`, a hit test against the window content view; it declines for chrome
-  only, treating a hit on any surface as ownership so a hit test that cannot see through the eager deck
-  can never silence the visible terminal. Do not replace either gate with the other.
+  only, treating a hit on any surface as ownership so it can never silence the visible terminal. Do not
+  replace either gate with the other.
+- That hit test only reaches the chrome because an off-screen surface refuses hits (`hitTest`, alongside
+  `viewOnly`). Otherwise a hidden deck entry, stacked at the same frame, answers for the divider drawn over
+  it and hands ownership back to the visible pane — the #324 flicker returns for every multi-session window.
+- Both dividers paint ↔ themselves: the sidebar handle from `onContinuousHover`, the split from
+  `SplitProbeView`'s tracking area over the split, keyed on `split.hitTest` claiming the pixel. AppKit's own
+  divider cursor stops firing once a second session is mounted, so nothing else writes it.
 - Chrome that paints its own cursor must re-assert per move and per drag tick, then again on the next
   runloop turn re-reading live hover state: a replacement lands after a synchronous `.set()` returns, and a
   deferred pass that captured hover instead strands the shape over live terminal.
