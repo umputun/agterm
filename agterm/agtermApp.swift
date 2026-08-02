@@ -21,6 +21,11 @@ struct agtermApp: App {
     @State private var appearanceObserver: SystemAppearanceObserver
     @State private var accessibilityObserver: SystemAccessibilityObserver
 
+    /// Whether this launch owes the user the first-run welcome. Decided in `init()`, because the first
+    /// launch writes its own window snapshot moments after the scene appears and that write would read back
+    /// as prior state.
+    private let welcomeDue: Bool
+
     /// The plain `WindowGroup`'s scene id, used by `openWindow(id:)` to spawn additional windows.
     private static let windowGroupID = "terminal"
 
@@ -35,16 +40,22 @@ struct agtermApp: App {
     }
 
     init() {
+        let stateDirectory = ProcessInfo.processInfo.environment["AGTERM_STATE_DIR"]
+            .map { URL(fileURLWithPath: $0, isDirectory: true) } ?? PersistenceStore.defaultDirectory
+        // FIRST, before anything reads or writes the state directory: `WindowLibrary`'s bootstrap seeds a
+        // window and saves it, which a later read would see as evidence of an earlier launch.
+        let hadPriorState = FirstRunWelcome.hasPriorState(in: stateDirectory)
         let library = agtermApp.restoredLibrary()
         _library = State(initialValue: library)
         let actions = AppActions(library: library)
         _actions = State(initialValue: actions)
         // settings persist alongside the workspace snapshot (same AGTERM_STATE_DIR override); built before the
         // control server so it can drive `keymap.reload`, safe since both need only the library.
-        let settingsStore = ProcessInfo.processInfo.environment["AGTERM_STATE_DIR"]
-            .map { SettingsStore(directory: URL(fileURLWithPath: $0, isDirectory: true)) } ?? SettingsStore()
+        let settingsStore = SettingsStore(directory: stateDirectory)
         let settingsModel = SettingsModel(library: library, settingsStore: settingsStore)
         _settingsModel = State(initialValue: settingsModel)
+        welcomeDue = FirstRunWelcome.isDue(welcomeShown: settingsModel.settings.welcomeShown,
+                                           hasPriorState: hadPriorState)
         let controlServer = ControlServer(library: library, actions: actions, settingsModel: settingsModel)
         _controlServer = State(initialValue: controlServer)
         _sessionSwitcher = State(initialValue: SessionSwitcher(library: library, canSwitch: { actions.uiActionsEnabled }))
@@ -163,6 +174,9 @@ struct agtermApp: App {
                         appearanceObserver.start()
                         // consumers read current accessibility values at first render; this handles live flips.
                         accessibilityObserver.start()
+                        // last: a modal here blocks the rest of the task, and the window behind it should be
+                        // fully wired before it opens. `presentOnce` latches, so the per-window .task is safe.
+                        if welcomeDue { WelcomeAlert.presentOnce(settingsModel: settingsModel) }
                     }
             }
         }

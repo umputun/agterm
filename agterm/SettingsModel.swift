@@ -262,6 +262,8 @@ final class SettingsModel {
     func setConfirmCloseSession(_ value: Bool?) { settings.confirmCloseSession = value; try? settingsStore.save(settings) }
     /// Persist whether GUI closes use the short undo grace period. nil = on; false = close immediately.
     func setCloseGraceUndoEnabled(_ value: Bool?) { settings.closeGraceUndoEnabled = value; try? settingsStore.save(settings) }
+    /// Persist that the first-run welcome has been shown, so it never appears again on this state directory.
+    func setWelcomeShown(_ value: Bool?) { settings.welcomeShown = value; try? settingsStore.save(settings) }
     /// Persist the user-idle auto-follow timeout (nil = off) and push it into every open window's `AppStore`
     /// (a newly opened window seeds itself via `applyAutoFollow(to:)`).
     func setAutoFollowAttention(_ value: String?) {

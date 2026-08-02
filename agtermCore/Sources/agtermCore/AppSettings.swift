@@ -253,6 +253,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// collapses its own; nil = off. Visibility then follows window focus, so a manual per-window hide is
     /// transient — the frontmost window re-shows its sidebar on refocus.
     public var autoHideSidebarInactiveWindows: Bool?
+    /// Whether the first-launch pointer at the Help menu extras has been shown; nil/false = not yet.
+    /// Written once, by the launch that shows it. See `FirstRunWelcome`.
+    public var welcomeShown: Bool?
 
     public init(fontFamily: String? = nil, fontSize: Double? = nil, theme: String? = nil,
                 darkTheme: String? = nil, followSystemAppearance: Bool? = nil,
@@ -273,7 +276,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
                 autoFollowAttention: String? = nil,
                 autoFollowStayOnActive: Bool? = nil, sidebarFontSize: Double? = nil,
                 hiddenInterfaceElements: [String]? = nil,
-                autoHideSidebarInactiveWindows: Bool? = nil) {
+                autoHideSidebarInactiveWindows: Bool? = nil, welcomeShown: Bool? = nil) {
         self.fontFamily = fontFamily
         self.fontSize = fontSize
         self.theme = theme
@@ -312,6 +315,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.sidebarFontSize = sidebarFontSize
         self.hiddenInterfaceElements = hiddenInterfaceElements
         self.autoHideSidebarInactiveWindows = autoHideSidebarInactiveWindows
+        self.welcomeShown = welcomeShown
     }
 
     /// The hidden chrome elements, unknown (future-written) raw names dropped. The single read point.

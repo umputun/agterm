@@ -145,5 +145,11 @@ paths:
   sidebars, even when frontmost id was pre-set. Enabling applies immediately. While on, manual hide is
   transient and refocus shows it; turning off leaves current hidden states. Persisted visibility changes
   already refresh the window-list cache.
+- `welcomeShown` records that the first-run Help-extras alert has been shown; the launch that shows it
+  writes true before running any installer. `FirstRunWelcome.isDue` also requires no prior-launch state
+  (`settings.json`, `workspaces.json`, `windows/`) in the state directory, so an upgrading user whose
+  settings predate the flag never sees it. Decide it in `agtermApp.init()`: the first launch saves its own
+  window within a second of the scene appearing, which would read back as prior state.
+  `WelcomeAlert` suppresses itself under XCUITest unless `AGTERM_UITEST_SHOW_WELCOME` is set.
 - These settings are GUI-only unless the control catalog explicitly says otherwise. Do not add settings
   commands merely to mirror chrome; user actions already have control coverage.

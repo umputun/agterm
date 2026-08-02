@@ -339,7 +339,7 @@ extension agtermApp {
             }
             CommandGroup(replacing: .help) {
                 Button("Developer Documentation…") {
-                    if let url = URL(string: "https://github.com/umputun/agterm#scripting-agterm") {
+                    if let url = URL(string: "https://agterm.com/docs#agtermctl") {
                         NSWorkspace.shared.open(url)
                     }
                 }
