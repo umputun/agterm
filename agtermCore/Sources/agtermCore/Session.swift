@@ -167,9 +167,9 @@ public final class Session: Identifiable {
 
     /// A command to run as the session's process instead of the login shell (kitty's `launch <cmd>`, ghostty's
     /// `command`), set via `session.new --command`. The surface factory reads it once; the session closes when
-    /// the command exits. Persisted, so a command session — e.g. an `ssh …` shortcut, which exec-replaces the
-    /// shell and so escapes the foreground-pid capture — re-runs it on restore when `restoreRunningCommand` is
-    /// on (via `wasRestored`); a fresh session always runs it.
+    /// the command exits. Persisted, so a command session — e.g. an `ssh …` shortcut, which escapes the
+    /// foreground-pid capture because that pane's group is led by unreadable setuid-root `login` — re-runs it
+    /// on restore when `restoreRunningCommand` is on (via `wasRestored`); a fresh session always runs it.
     @ObservationIgnored public var initialCommand: String?
 
     /// Whether a `--command` session HOLDS its surface after the command exits — libghostty's "press any key

@@ -55,11 +55,20 @@ struct CommandRestoreTests {
         #expect(CommandRestore.stripLoginDash(["-"]) == [""])
     }
 
-    @Test func groupDescentCandidatesDropTheLeader() {
-        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [100, 102, 101]) == [101, 102])
-        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [100]).isEmpty)
+    @Test func groupDescentCandidatesKeepOnlyTheLeadersChildren() {
+        func m(_ pid: Int32, _ ppid: Int32) -> CommandRestore.ProcessGroupMember { .init(pid: pid, ppid: ppid) }
+        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [m(100, 9), m(102, 100), m(101, 100)])
+            == [101, 102])
+        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [m(100, 9)]).isEmpty)
         #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: []).isEmpty)
-        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [0, -1, 100, 101]) == [101])
+        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [m(0, 100), m(-1, 100), m(101, 100)])
+            == [101])
+        // a pipeline parents every element to the SHELL while the group leads on the first, so a sibling of
+        // the setuid leader is not the pane's foreground.
+        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [m(100, 9), m(101, 9)]).isEmpty)
+        // a grandchild that took a low pid after the 99999 wrap must not outrank its own parent.
+        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [m(99500, 100), m(500, 99500)])
+            == [99500])
     }
 
     @Test func isIdleShellSkipsBarePromptButNotScripts() {

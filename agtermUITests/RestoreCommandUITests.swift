@@ -95,8 +95,10 @@ final class RestoreCommandUITests: XCTestCase {
                       "an idle login-shell pane must not be captured as a foreground command, got \(capturedForegroundCommands())")
     }
 
-    // `tee <marker>` as the command exec-replaces the shell, so libghostty reports no foreground and
-    // NOTHING is captured — the re-run can only come from the persisted `initialCommand`.
+    // the quit-time capture reads the pane's process-GROUP leader, which for a command session is unreadable
+    // setuid-root `login`, so NOTHING is captured and the re-run can only come from `initialCommand`. This
+    // does not pin that split on its own: were the capture to descend, it would type `tee <marker>` into the
+    // login shell, recreating the marker this asserts on.
     func testRestoreReRunsCommandSession() throws {
         seedRestoreFlag(true)
         app.launchForUITest()

@@ -108,6 +108,24 @@ final class ControlAPIUITests: ControlAPITestCase {
         XCTAssertNil(sessionNode(after, id: idleID)?["status"], "an idle session should omit the status key")
     }
 
+    // a --command pane has no job-control shell, so its process GROUP is led by setuid-root `login` and only
+    // the descent to login's own child can name the program. Pins the `.running` wiring: reverting the tree
+    // to `ForegroundProcess.command` reports null here while every other gate stays green.
+    func testTreeExposesForegroundOfCommandSession() throws {
+        let marker = markerDir.appendingPathComponent("cmdfg-\(UUID().uuidString)").path
+        let created = try sendCommand(#"{"cmd":"session.new","args":{"command":"tee \#(marker)"}}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true, "session.new --command should succeed: \(created)")
+        let newID = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String, "should return an id")
+
+        var fg: [String]?
+        for _ in 0..<40 {
+            let resp = try sendCommand(#"{"cmd":"tree"}"#)
+            if let f = sessionNode(resp, id: newID)?["foreground"] as? [String], f.first == "tee" { fg = f; break }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        XCTAssertEqual(fg, ["tee", marker], "tree should expose a --command session's live foreground")
+    }
+
     /// The session node matching `id` (case-insensitive) anywhere in a `tree` response, or nil.
     private func sessionNode(_ response: [String: Any], id: String) -> [String: Any]? {
         guard let result = response["result"] as? [String: Any],

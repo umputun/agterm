@@ -125,9 +125,10 @@ public struct SessionSnapshot: Codable, Equatable, Sendable {
     public var foregroundCommand: [String]?
     /// The split (right) pane's foreground command (full argv), the split analogue of `foregroundCommand`.
     public var splitForegroundCommand: [String]?
-    /// The command the session was created with (`session.new --command`); it exec-replaces the login shell
-    /// and so is invisible to libghostty's foreground pid, hence persisted separately so a command session
-    /// re-runs it on restore instead of coming back a plain shell. A live `foregroundCommand` wins.
+    /// The command the session was created with (`session.new --command`); the quit-time capture cannot see
+    /// it — the pane's foreground process GROUP is led by setuid-root `login`, whose argv is unreadable, and
+    /// the capture deliberately does not descend — hence persisted separately so a command session re-runs
+    /// it on restore instead of coming back a plain shell. A live `foregroundCommand` wins.
     public var initialCommand: String?
     /// Whether a `--command` session holds its surface after the command exits (`--wait`), so a restored
     /// command session holds again instead of vanishing. nil (missing key) decodes as false.

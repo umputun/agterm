@@ -29,10 +29,11 @@ enum ForegroundProcess {
     ///
     /// libghostty's `foreground_pid` is `tcgetpgrp`, a process GROUP id. An interactive shell puts each
     /// job in its own group, so the leader IS the program. A pane with no job-control shell (a
-    /// `--command` session) leaves its program in the group led by setuid-root `login`, whose argv
+    /// `--command` session) runs its program as a child of setuid-root `login`, whose argv
     /// `KERN_PROCARGS2` refuses for a non-root caller — so without the descent every such pane reads as
-    /// idle. A leader running setuid under a job-control shell (`top`, `sudo`) still reads as idle: it is
-    /// alone in its group, so there is nothing to descend to.
+    /// idle. A setuid leader under a job-control shell (`top`, `sudo`) still reads as idle, because the
+    /// descent takes only the leader's own children: `sudo`'s child runs as root and stays unreadable,
+    /// and a pipeline's other elements are children of the shell rather than of the leader.
     @MainActor
     static func running(for view: GhosttySurfaceView, shellBasename: String?) -> [String]? {
         guard let pgid = view.foregroundPid() else { return nil }
@@ -64,15 +65,21 @@ enum ForegroundProcess {
         return CommandRestore.parseProcArgs(Data(buffer[0..<size]))
     }
 
-    /// Every pid in `pgid`'s process group via `sysctl(KERN_PROC_PGRP)`; empty on any syscall failure. The
-    /// size is re-read from the second call because the group can shrink between the two.
-    private static func processGroup(pgid: pid_t) -> [Int32] {
+    /// Every member of `pgid`'s process group via `sysctl(KERN_PROC_PGRP)`, with each one's parent; empty
+    /// on any syscall failure. The count comes from the second call, because the group can change between
+    /// the two: a shrink leaves fewer entries than the buffer holds, and a growth past the first call's
+    /// margin returns ENOMEM with the buffer full of whole, valid entries — the kernel never copies a
+    /// partial one — so ENOMEM keeps what landed instead of discarding the whole read and reporting the
+    /// pane as idle.
+    private static func processGroup(pgid: pid_t) -> [CommandRestore.ProcessGroupMember] {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PGRP, pgid]
         var size = 0
         guard sysctl(&mib, u_int(mib.count), nil, &size, nil, 0) == 0, size > 0 else { return [] }
         let stride = MemoryLayout<kinfo_proc>.stride
         var procs = [kinfo_proc](repeating: kinfo_proc(), count: size / stride)
-        guard sysctl(&mib, u_int(mib.count), &procs, &size, nil, 0) == 0 else { return [] }
-        return procs.prefix(size / stride).map(\.kp_proc.p_pid)
+        guard !procs.isEmpty else { return [] }
+        size = procs.count * stride
+        guard sysctl(&mib, u_int(mib.count), &procs, &size, nil, 0) == 0 || errno == ENOMEM else { return [] }
+        return procs.prefix(size / stride).map { .init(pid: $0.kp_proc.p_pid, ppid: $0.kp_eproc.e_ppid) }
     }
 }

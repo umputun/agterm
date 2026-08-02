@@ -47,12 +47,28 @@ public enum CommandRestore {
         return result
     }
 
-    /// The pids to try when a process group's LEADER argv is unreadable, lowest pid first. A pane with no
-    /// job-control shell (a `--command` session) leaves its program in the group led by setuid-root
-    /// `login`, whose argv `KERN_PROCARGS2` refuses for a non-root caller, so the program one hop down is
-    /// the real answer. The leader itself is dropped: it is the pid that already failed.
-    public static func groupDescentCandidates(pgid: Int32, members: [Int32]) -> [Int32] {
-        members.filter { $0 != pgid && $0 > 0 }.sorted()
+    /// One process-group member as `KERN_PROC_PGRP` reports it: its own pid and its parent's.
+    public struct ProcessGroupMember: Equatable, Sendable {
+        public let pid: Int32
+        public let ppid: Int32
+        public init(pid: Int32, ppid: Int32) {
+            self.pid = pid
+            self.ppid = ppid
+        }
+    }
+
+    /// The pids to try when a process group's LEADER argv is unreadable: the leader's own children, lowest
+    /// pid first. A pane with no job-control shell (a `--command` session) runs its program as a child of
+    /// setuid-root `login`, whose argv `KERN_PROCARGS2` refuses for a non-root caller, so that child is the
+    /// real answer.
+    ///
+    /// Only DIRECT children qualify, and parentage rather than pid order is what decides. A pipeline under
+    /// a job-control shell puts every element in one group led by the first, while parenting them all to
+    /// the shell — so `sudo tail … | grep …` must not report `grep`, which is a sibling of the leader
+    /// rather than its child. Ordering on pid alone would also pick the wrong process once macOS recycles
+    /// pids past 99999, where a freshly forked grandchild sorts below the program that spawned it.
+    public static func groupDescentCandidates(pgid: Int32, members: [ProcessGroupMember]) -> [Int32] {
+        members.filter { $0.ppid == pgid && $0.pid != pgid && $0.pid > 0 }.map(\.pid).sorted()
     }
 
     /// Whether a captured argv should be re-run on restore: false for an empty argv or one whose
