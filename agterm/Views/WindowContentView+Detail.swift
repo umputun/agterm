@@ -33,8 +33,9 @@ extension WindowContentView {
     /// re-lays-out, normalizes the divider away from the stored ratio, and overruns into the titlebar. The
     /// boundary is the arranged subview: INSIDE one, a constant-shape ZStack may swap children and vary
     /// modifier values freely; above one even a value flip is suspect, hence `.allowsHitTesting` below.
-    /// Hence too zoom swaps only its own slot to a placeholder (an NSView lives in one host at a time)
-    /// rather than unmounting the entry, so a control-opened split/scratch/overlay keeps running behind it.
+    /// For the same reason zoom swaps only its own slot to a placeholder (an NSView lives in one host at
+    /// a time) rather than unmounting the entry, so a control-opened split/scratch/overlay keeps running
+    /// behind it.
     @ViewBuilder private func sessionDetail(_ session: Session, isActive: Bool) -> some View {
         // a FULL overlay (no size) hides the panes and draws translucent; a FLOATING one leaves them VISIBLE
         // under a smaller opaque framed panel. Either way the pane(s) stay non-interactive while one is up.
