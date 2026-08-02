@@ -67,7 +67,7 @@ A full grid needs a second rule. The grid holds nine cells and drops the rest, s
 
 Nothing here closes a session, kills a shell, or changes a flag. The grid is an overlay that comes and goes, and everything it shows keeps running whether it is on screen or not.
 
-A pane counts as busy only when agterm can read its foreground command, and there are cases where it cannot. A session started with `session new --command` runs its program under `login` and reports no foreground, so it is treated as idle and left off the grid even while it works. The same applies to a setuid or setgid program such as `sudo` or `top`, whose argv macOS will not expose. Start the program by typing it in a session, or from a shell wrapper, and it reports normally.
+A pane counts as busy only when agterm can read its foreground command, and a setuid or setgid program such as `sudo` or `top` will not expose its argv to be read. A pane running one of those is treated as idle and left off the grid even while it works.
 
 Membership is fixed when the grid opens. A command that finishes while you are watching leaves its pane on the grid, now sitting at a prompt, and a pane that starts working is not added. Press the chord again to rebuild the set.
 

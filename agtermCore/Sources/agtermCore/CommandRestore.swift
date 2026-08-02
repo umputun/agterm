@@ -37,6 +37,24 @@ public enum CommandRestore {
         return !argv.dropFirst().contains { !$0.hasPrefix("-") }
     }
 
+    /// Drop the leading `-` macOS dash-marks a login process's argv[0] with, so the argv names a program
+    /// that can actually be rendered and re-run (`-sleep` → `sleep`). Only argv[0] carries the mark, and
+    /// only the mark is removed: a path form (`-/bin/zsh`) keeps the rest of the path.
+    public static func stripLoginDash(_ argv: [String]) -> [String] {
+        guard let first = argv.first, first.hasPrefix("-") else { return argv }
+        var result = argv
+        result[0] = String(first.dropFirst())
+        return result
+    }
+
+    /// The pids to try when a process group's LEADER argv is unreadable, lowest pid first. A pane with no
+    /// job-control shell (a `--command` session) leaves its program in the group led by setuid-root
+    /// `login`, whose argv `KERN_PROCARGS2` refuses for a non-root caller, so the program one hop down is
+    /// the real answer. The leader itself is dropped: it is the pid that already failed.
+    public static func groupDescentCandidates(pgid: Int32, members: [Int32]) -> [Int32] {
+        members.filter { $0 != pgid && $0 > 0 }.sorted()
+    }
+
     /// Whether a captured argv should be re-run on restore: false for an empty argv or one whose
     /// `argv[0]` basename is in `denylist`, true otherwise. The denylist is the user-editable
     /// `restore-denylist.conf` (no built-in entries) — `parseDenylist` builds it.

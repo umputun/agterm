@@ -501,12 +501,12 @@ final class ControlServer {
         return store.controlTree(
             foreground: { session in
                 (session.surface as? GhosttySurfaceView).flatMap {
-                    ForegroundProcess.command(for: $0, shellBasename: shellBasename)
+                    ForegroundProcess.running(for: $0, shellBasename: shellBasename)
                 }
             },
             splitForeground: { session in
                 (session.splitSurface as? GhosttySurfaceView).flatMap {
-                    ForegroundProcess.command(for: $0, shellBasename: shellBasename)
+                    ForegroundProcess.running(for: $0, shellBasename: shellBasename)
                 }
             },
             fontSize: { ($0.addressableSurface as? GhosttySurfaceView)?.currentFontSize() },

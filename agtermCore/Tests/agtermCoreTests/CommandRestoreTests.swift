@@ -46,6 +46,22 @@ struct CommandRestoreTests {
         #expect(!CommandRestore.isKnownShell("", extra: ""))
     }
 
+    @Test func stripLoginDashDropsOnlyTheMark() {
+        #expect(CommandRestore.stripLoginDash(["-sleep", "900"]) == ["sleep", "900"])
+        #expect(CommandRestore.stripLoginDash(["-/bin/zsh"]) == ["/bin/zsh"])
+        #expect(CommandRestore.stripLoginDash(["sleep", "900"]) == ["sleep", "900"])
+        #expect(CommandRestore.stripLoginDash(["git", "-C", "/tmp", "status"]) == ["git", "-C", "/tmp", "status"])
+        #expect(CommandRestore.stripLoginDash([]) == [])
+        #expect(CommandRestore.stripLoginDash(["-"]) == [""])
+    }
+
+    @Test func groupDescentCandidatesDropTheLeader() {
+        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [100, 102, 101]) == [101, 102])
+        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [100]).isEmpty)
+        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: []).isEmpty)
+        #expect(CommandRestore.groupDescentCandidates(pgid: 100, members: [0, -1, 100, 101]) == [101])
+    }
+
     @Test func isIdleShellSkipsBarePromptButNotScripts() {
         #expect(CommandRestore.isIdleShell(argv: ["-zsh"]))
         #expect(CommandRestore.isIdleShell(argv: ["/bin/zsh"]))
