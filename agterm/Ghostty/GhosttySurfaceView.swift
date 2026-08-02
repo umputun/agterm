@@ -721,11 +721,15 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
 
     override var acceptsFirstResponder: Bool { !viewOnly }
 
-    /// A surface that renders nothing answers for nothing: AppKit routes hits here regardless of
-    /// `.allowsHitTesting(false)`, so a view-only cell would reach `mouseDown` under the dashboard grid, and
-    /// an off-screen deck entry stacked over a split divider would claim it in `ownsPointer` (issue #324).
+    /// In view-only mode refuse hit-testing, so a click passes THROUGH to the SwiftUI cell overlay instead of
+    /// reaching `mouseDown` — AppKit routes clicks here regardless of `.allowsHitTesting(false)`.
+    ///
+    /// `deckVisible` deliberately does NOT gate this. Refusing while off-screen only promotes the hidden deck
+    /// entry's own container — its `NSSplitView` or pane view — to answer in its place, and that is not a
+    /// `GhosttySurfaceView`, so `ownsPointer` then declines across the whole visible terminal and it loses
+    /// every cursor shape it paints.
     override func hitTest(_ point: NSPoint) -> NSView? {
-        viewOnly || !deckVisible ? nil : super.hitTest(point)
+        viewOnly ? nil : super.hitTest(point)
     }
 
     /// Deliver the LEFT click that reactivates a background window straight to the surface (a "first mouse")

@@ -60,21 +60,31 @@ final class SplitRatioAccessorTests: XCTestCase {
         XCTAssertEqual(trackingAreasOwnedByProbe(), 1)
     }
 
-    private func moveOverDivider() throws {
+    private func move(toX x: CGFloat) throws {
         split.setPosition(200, ofDividerAt: 0)
         split.layoutSubtreeIfNeeded()
-        let location = NSPoint(x: 200 + split.dividerThickness / 2, y: 100)
-        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .mouseMoved, location: location, modifierFlags: [],
-                                                     timestamp: 0, windowNumber: window.windowNumber, context: nil,
+        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .mouseMoved, location: NSPoint(x: x, y: 100),
+                                                     modifierFlags: [], timestamp: 0,
+                                                     windowNumber: window.windowNumber, context: nil,
                                                      eventNumber: 0, clickCount: 0, pressure: 0))
         probe.mouseMoved(with: event)
     }
+
+    private func moveOverDivider() throws { try move(toX: 200 + split.dividerThickness / 2) }
 
     func testPaintsTheResizeCursorOverItsOwnDivider() throws {
         probe.layout()
         NSCursor.arrow.set()
         try moveOverDivider()
         XCTAssertEqual(NSCursor.current, NSCursor.resizeLeftRight)
+    }
+
+    /// The tracking area covers the whole split, not the band, so every move over a pane arrives here too.
+    func testLeavesTheCursorAloneOverAPane() throws {
+        probe.layout()
+        NSCursor.arrow.set()
+        try move(toX: 50)
+        XCTAssertEqual(NSCursor.current, NSCursor.arrow)
     }
 
     /// A background session's split is laid out at the full frame and its tracking area still fires, so its

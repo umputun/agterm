@@ -46,13 +46,25 @@ extension GhosttySurfaceView {
     /// starts in that band already does, so no per-divider width has to be guessed and later chrome is
     /// covered without touching this file.
     ///
-    /// Declines for chrome ONLY: a hit landing on any surface — this one, a descendant, or a split's other
-    /// pane — keeps the pre-#324 behavior, so it can never silence a visible terminal. Only an on-screen
-    /// surface answers at all; `hitTest` refuses for a hidden deck entry, which is stacked over the divider.
+    /// Declines for chrome ONLY: a hit landing on any surface — this one, a descendant, or a sibling pane
+    /// stacked at the same frame in the eager deck — keeps the pre-#324 behavior, so a hit test that cannot
+    /// see through the deck can never silence the visible terminal.
+    ///
+    /// The window-down hit cannot see the split divider for that same reason, so the divider is answered
+    /// first and by the split itself: every session's split is mounted at the full frame, and asking the
+    /// window which one is on top reaches whichever the deck stacked last, not this pane's.
     func ownsPointer(at point: NSPoint) -> Bool {
+        if overOwnSplitDivider(at: point) { return false }
         guard let hit = window?.contentView?.hitTest(point) else { return true }
         if hit === self || hit.isDescendant(of: self) { return true }
         return hit is GhosttySurfaceView
+    }
+
+    /// Whether the point lies in the grab band of the split THIS pane is arranged in — the band that split's
+    /// own drag resolves from, so no width is guessed and a hidden session's split cannot answer for it.
+    private func overOwnSplitDivider(at pointInWindow: NSPoint) -> Bool {
+        guard let split = enclosingSplitView(), let parent = split.superview else { return false }
+        return split.hitTest(parent.convert(pointInWindow, from: nil)) === split
     }
 
     /// `ownsPointer(at:)` for the callers with no event in hand (`applyMouseShape`, activation), reading the

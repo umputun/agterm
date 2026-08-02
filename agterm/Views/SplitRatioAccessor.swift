@@ -2,6 +2,19 @@ import agtermCore
 import AppKit
 import SwiftUI
 
+extension NSView {
+    /// The `NSSplitView` this view is arranged inside, nil when it is not in a split. Shared by the probe
+    /// and by `GhosttySurfaceView.ownsPointer`, which both answer the divider from the split itself.
+    func enclosingSplitView() -> NSSplitView? {
+        var view: NSView? = superview
+        while let current = view {
+            if let split = current as? NSSplitView { return split }
+            view = current.superview
+        }
+        return nil
+    }
+}
+
 /// Bridges to the AppKit `NSSplitView` under SwiftUI's `HSplitView` to (1) persist and restore the split
 /// divider ratio — no public SwiftUI API exposes the divider position — (2) clip the split's divider out
 /// of the titlebar strip, and (3) paint the divider's own resize cursor, which nothing else writes.
@@ -25,8 +38,9 @@ struct SplitRatioAccessor: NSViewRepresentable {
     let session: Session
     let titlebarHeight: CGFloat
     let suspended: Bool
-    /// The deck's own `visible`: this session is the on-screen one. Gates (3) alone — a background
-    /// session's split is still laid out at the full frame, and its tracking area still fires.
+    /// On screen and uncovered: the deck's `visible` minus any overlay or scratch over the panes. Gates (3)
+    /// alone — a background session's split is still laid out at the full frame with its tracking area
+    /// armed, so its divider column would paint over whatever session IS on screen.
     let deckVisible: Bool
     let onPersist: () -> Void
 
@@ -146,16 +160,14 @@ struct SplitRatioAccessor: NSViewRepresentable {
             }
         }
 
-        /// Whether THIS split's grab band owns the window point. Three answers, none of them a guessed width:
-        /// the session is the on-screen one (a background split is laid out at the full frame, its tracking
-        /// area fires, and its divider column falls over whatever IS on screen); the split claims the point,
-        /// which is what its own drag resolves from; and nothing but a split is drawn over it, `ownsPointer`'s
-        /// chrome-only rule read from the window down, since a bottom-up hit cannot see its own cover.
+        /// Whether THIS split's grab band owns the window point, which is what its own drag resolves from, so
+        /// no width is guessed. Asked of the split itself: every session's split is mounted at the full frame,
+        /// so a window-down hit answers for whichever the deck stacked last. `deckVisible` carries the cover
+        /// instead — it is false for a background session and for every panel that hides or overlays the
+        /// panes.
         private func dividerOwns(_ pointInWindow: NSPoint) -> Bool {
-            guard deckVisible, !suspended, let split = splitView, let parent = split.superview,
-                  let content = split.window?.contentView else { return false }
-            guard split.hitTest(parent.convert(pointInWindow, from: nil)) === split else { return false }
-            return content.hitTest(pointInWindow) is NSSplitView
+            guard deckVisible, !suspended, let split = splitView, let parent = split.superview else { return false }
+            return split.hitTest(parent.convert(pointInWindow, from: nil)) === split
         }
 
         /// Move the live divider to the session's stored `splitRatio` (set by `session.resize` just before
@@ -224,15 +236,6 @@ struct SplitRatioAccessor: NSViewRepresentable {
             let work = DispatchWorkItem { [weak self] in self?.onPersist?() }
             saveWorkItem = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4, execute: work)
-        }
-
-        private func enclosingSplitView() -> NSSplitView? {
-            var view: NSView? = superview
-            while let current = view {
-                if let split = current as? NSSplitView { return split }
-                view = current.superview
-            }
-            return nil
         }
 
         deinit {

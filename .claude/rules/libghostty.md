@@ -190,16 +190,19 @@ paths:
   writers also gate on `ownsPointer`, a hit test against the window content view; it declines for chrome
   only, treating a hit on any surface as ownership so it can never silence the visible terminal. Do not
   replace either gate with the other.
-- That hit test only reaches the chrome because an off-screen surface refuses hits (`hitTest`, alongside
-  `viewOnly`). Otherwise a hidden deck entry, stacked at the same frame, answers for the divider drawn over
-  it and hands ownership back to the visible pane — the #324 flicker returns for every multi-session window.
+- The split divider is decided BEFORE that hit test, by asking the pane's own `NSSplitView` whether the
+  point is in its grab band. Every session's split is mounted at the full frame, so a window-down hit
+  answers for whichever the deck stacked last, not this pane's — and a hidden entry's split reaches the
+  divider column of the session that is on screen.
+- Never gate `GhosttySurfaceView.hitTest` on `deckVisible` to fix that. Refusing while off-screen only
+  promotes the hidden entry's own container, an `NSSplitView` or a pane view, to answer in its place: an
+  `NSSplitView` whose subviews decline returns itself for its whole frame, `ownsPointer` sees a non-surface
+  and declines everywhere, and the visible terminal loses every shape it paints. `alphaValue = 0` does not
+  suppress hit testing and the deck never sets `isHidden`.
 - Both dividers paint ↔ themselves: the sidebar handle from `onContinuousHover`, the split from
-  `SplitProbeView`'s tracking area over the split. AppKit's own divider cursor stops firing once a second
-  session is mounted, so nothing else writes it.
-- A background session's split is still laid out at the full frame and its tracking area still fires, so
-  that writer gates on the deck's `visible` before anything else, then on `split.hitTest` for the grab band
-  and a window-down hit for its cover. A bottom-up hit test answers for pixels drawn over it, which is how
-  a hidden session's divider column came to paint ↔ across the visible session's text.
+  `SplitProbeView`'s tracking area over the split, which covers both panes, so it repaints only inside the
+  band and gates on the deck's `visible` minus any overlay or scratch. AppKit's own divider cursor stops
+  firing once a second session is mounted, so nothing else writes it.
 - Chrome that paints its own cursor must re-assert per move and per drag tick, then again on the next
   runloop turn re-reading live hover state: a replacement lands after a synchronous `.set()` returns, and a
   deferred pass that captured hover instead strands the shape over live terminal.

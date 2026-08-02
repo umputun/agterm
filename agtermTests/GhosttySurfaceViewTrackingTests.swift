@@ -79,6 +79,33 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
         XCTAssertTrue(surface.ownsPointer(at: NSPoint(x: 10, y: 100)))
     }
 
+    /// Arrange `surface` inside a real split, leaving its frame at zero so no libghostty surface is created.
+    private func arrangeInSplit() -> NSSplitView {
+        let split = NSSplitView(frame: NSRect(x: 0, y: 0, width: 320, height: 200))
+        split.isVertical = true
+        for _ in 0..<2 { split.addArrangedSubview(NSView(frame: NSRect(x: 0, y: 0, width: 160, height: 200))) }
+        content.addSubview(split)
+        split.setPosition(160, ofDividerAt: 0)
+        split.layoutSubtreeIfNeeded()
+        surface.removeFromSuperview()
+        split.arrangedSubviews[0].addSubview(surface)
+        return split
+    }
+
+    /// The divider outranks the window-down hit, which reaches whichever session's split the deck stacked
+    /// last rather than this pane's own.
+    func testDeclinesOverItsOwnSplitDividerEvenWhenTheHitIsItself() {
+        let split = arrangeInSplit()
+        content.hitResult = surface
+        XCTAssertFalse(surface.ownsPointer(at: NSPoint(x: 160 + split.dividerThickness / 2, y: 100)))
+    }
+
+    func testOwnsThePointInsideItsOwnSplitAwayFromTheDivider() {
+        _ = arrangeInSplit()
+        content.hitResult = surface
+        XCTAssertTrue(surface.ownsPointer(at: NSPoint(x: 40, y: 100)))
+    }
+
     func testOwnsThePointWhenDetachedFromAnyWindow() {
         let detached = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
         XCTAssertTrue(detached.ownsPointer(at: NSPoint(x: 10, y: 100)))
