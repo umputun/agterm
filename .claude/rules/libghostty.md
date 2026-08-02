@@ -194,8 +194,12 @@ paths:
   `viewOnly`). Otherwise a hidden deck entry, stacked at the same frame, answers for the divider drawn over
   it and hands ownership back to the visible pane — the #324 flicker returns for every multi-session window.
 - Both dividers paint ↔ themselves: the sidebar handle from `onContinuousHover`, the split from
-  `SplitProbeView`'s tracking area over the split, keyed on `split.hitTest` claiming the pixel. AppKit's own
-  divider cursor stops firing once a second session is mounted, so nothing else writes it.
+  `SplitProbeView`'s tracking area over the split. AppKit's own divider cursor stops firing once a second
+  session is mounted, so nothing else writes it.
+- A background session's split is still laid out at the full frame and its tracking area still fires, so
+  that writer gates on the deck's `visible` before anything else, then on `split.hitTest` for the grab band
+  and a window-down hit for its cover. A bottom-up hit test answers for pixels drawn over it, which is how
+  a hidden session's divider column came to paint ↔ across the visible session's text.
 - Chrome that paints its own cursor must re-assert per move and per drag tick, then again on the next
   runloop turn re-reading live hover state: a replacement lands after a synchronous `.set()` returns, and a
   deferred pass that captured hover instead strands the shape over live terminal.

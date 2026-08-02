@@ -67,7 +67,7 @@ extension WindowContentView {
                             // persists/restores the divider ratio and clips the NSSplitView out of the
                             // titlebar strip; a background on the stable pane wrapper (not a third pane, not
                             // inside its swapped content), so ONE probe survives zoom and suspend/resume.
-                            .background { SplitRatioAccessor(session: session, titlebarHeight: titlebarHeight, suspended: !deckInteractive, onPersist: { store.save() }) }
+                            .background { SplitRatioAccessor(session: session, titlebarHeight: titlebarHeight, suspended: !deckInteractive, deckVisible: gates.visible, onPersist: { store.save() }) }
                         deckPane(session, pane: .right, focused: session.splitFocused, gates: gates)
                     }
                     // per-session identity: without it SwiftUI reuses one NSSplitView across session

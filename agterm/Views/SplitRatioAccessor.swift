@@ -3,9 +3,10 @@ import AppKit
 import SwiftUI
 
 /// Bridges to the AppKit `NSSplitView` under SwiftUI's `HSplitView` to (1) persist and restore the split
-/// divider ratio — no public SwiftUI API exposes the divider position — and (2) clip the split's divider
-/// out of the titlebar strip. Attached as a `.background` on the primary pane so its `NSView` lives inside
-/// the split's view tree without becoming a third arranged pane.
+/// divider ratio — no public SwiftUI API exposes the divider position — (2) clip the split's divider out
+/// of the titlebar strip, and (3) paint the divider's own resize cursor, which nothing else writes.
+/// Attached as a `.background` on the primary pane so its `NSView` lives inside the split's view tree
+/// without becoming a third arranged pane.
 ///
 /// (1) Once the split has a real width it restores `session.splitRatio` via `setPosition`; on each divider
 /// resize it writes the current left-pane fraction back to the session, which the next `save()` (or the
@@ -24,6 +25,9 @@ struct SplitRatioAccessor: NSViewRepresentable {
     let session: Session
     let titlebarHeight: CGFloat
     let suspended: Bool
+    /// The deck's own `visible`: this session is the on-screen one. Gates (3) alone — a background
+    /// session's split is still laid out at the full frame, and its tracking area still fires.
+    let deckVisible: Bool
     let onPersist: () -> Void
 
     func makeNSView(context _: Context) -> SplitProbeView {
@@ -31,12 +35,14 @@ struct SplitRatioAccessor: NSViewRepresentable {
         view.onPersist = onPersist
         view.titlebarHeight = titlebarHeight
         view.suspended = suspended
+        view.deckVisible = deckVisible
         return view
     }
     func updateNSView(_ nsView: SplitProbeView, context _: Context) {
         nsView.onPersist = onPersist
         nsView.titlebarHeight = titlebarHeight // re-clip on a toolbar-mode change (changes titlebarHeight)
         nsView.suspended = suspended
+        nsView.deckVisible = deckVisible
     }
 
     final class SplitProbeView: NSView {
@@ -44,6 +50,7 @@ struct SplitRatioAccessor: NSViewRepresentable {
         var onPersist: (() -> Void)?
         /// Top strip (in points) to clip the split's divider out of; updated on a toolbar-mode change.
         var titlebarHeight: CGFloat = 0 { didSet { if titlebarHeight != oldValue { updateDividerClip() } } }
+        var deckVisible: Bool = true
         var suspended: Bool = false {
             didSet {
                 guard suspended != oldValue else { return }
@@ -139,12 +146,16 @@ struct SplitRatioAccessor: NSViewRepresentable {
             }
         }
 
-        /// Whether the split claims this window point — AppKit's own answer for the grab band, the same one the
-        /// divider drag and `ownsPointer` resolve from, so no band width is guessed. False while suspended: a
-        /// zoom/dashboard layer covers the split, and its panes are not on screen to resize.
+        /// Whether THIS split's grab band owns the window point. Three answers, none of them a guessed width:
+        /// the session is the on-screen one (a background split is laid out at the full frame, its tracking
+        /// area fires, and its divider column falls over whatever IS on screen); the split claims the point,
+        /// which is what its own drag resolves from; and nothing but a split is drawn over it, `ownsPointer`'s
+        /// chrome-only rule read from the window down, since a bottom-up hit cannot see its own cover.
         private func dividerOwns(_ pointInWindow: NSPoint) -> Bool {
-            guard !suspended, let split = splitView, let parent = split.superview else { return false }
-            return split.hitTest(parent.convert(pointInWindow, from: nil)) === split
+            guard deckVisible, !suspended, let split = splitView, let parent = split.superview,
+                  let content = split.window?.contentView else { return false }
+            guard split.hitTest(parent.convert(pointInWindow, from: nil)) === split else { return false }
+            return content.hitTest(pointInWindow) is NSSplitView
         }
 
         /// Move the live divider to the session's stored `splitRatio` (set by `session.resize` just before

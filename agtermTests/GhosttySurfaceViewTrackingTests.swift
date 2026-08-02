@@ -65,9 +65,7 @@ final class GhosttySurfaceViewTrackingTests: XCTestCase {
         XCTAssertTrue(surface.ownsPointer(at: NSPoint(x: 10, y: 100)))
     }
 
-    /// The eager deck stacks every session at one frame, so a hit can resolve to a sibling pane. That is
-    /// `deckVisible`'s question, not this one: keeping it "owned" degrades to the pre-#324 behavior rather
-    /// than leaving the visible terminal with no cursor writer at all.
+    /// A split's other pane is on screen too, so owning the point keeps its own cursor writer alive.
     func testOwnsThePointWhenTheHitIsASiblingSurface() {
         let sibling = GhosttySurfaceView(workingDirectory: NSTemporaryDirectory())
         content.addSubview(sibling)

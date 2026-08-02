@@ -59,4 +59,39 @@ final class SplitRatioAccessorTests: XCTestCase {
         probe.layout()
         XCTAssertEqual(trackingAreasOwnedByProbe(), 1)
     }
+
+    private func moveOverDivider() throws {
+        split.setPosition(200, ofDividerAt: 0)
+        split.layoutSubtreeIfNeeded()
+        let location = NSPoint(x: 200 + split.dividerThickness / 2, y: 100)
+        let event = try XCTUnwrap(NSEvent.mouseEvent(with: .mouseMoved, location: location, modifierFlags: [],
+                                                     timestamp: 0, windowNumber: window.windowNumber, context: nil,
+                                                     eventNumber: 0, clickCount: 0, pressure: 0))
+        probe.mouseMoved(with: event)
+    }
+
+    func testPaintsTheResizeCursorOverItsOwnDivider() throws {
+        probe.layout()
+        NSCursor.arrow.set()
+        try moveOverDivider()
+        XCTAssertEqual(NSCursor.current, NSCursor.resizeLeftRight)
+    }
+
+    /// A background session's split is laid out at the full frame and its tracking area still fires, so its
+    /// divider column sits over whatever session IS on screen.
+    func testLeavesTheCursorAloneWhileOffScreen() throws {
+        probe.layout()
+        probe.deckVisible = false
+        NSCursor.arrow.set()
+        try moveOverDivider()
+        XCTAssertEqual(NSCursor.current, NSCursor.arrow)
+    }
+
+    func testLeavesTheCursorAloneWhileSuspended() throws {
+        probe.layout()
+        probe.suspended = true
+        NSCursor.arrow.set()
+        try moveOverDivider()
+        XCTAssertEqual(NSCursor.current, NSCursor.arrow)
+    }
 }
