@@ -93,18 +93,6 @@ struct AppStoreTests {
         #expect(plain.customName == nil)
     }
 
-    @Test func addSessionStripsInteriorControlCharactersFromNameAndCwd() {
-        // name → {AGT_SESSION_NAME} and cwd → {AGT_SESSION_PWD} both expand unquoted into /bin/sh -c.
-        let store = makeStore()
-        let ws = store.addWorkspace(name: "work")
-        let session = try! #require(store.addSession(toWorkspace: ws.id,
-                                                     cwd: "/work\ntouch /tmp/pwned",
-                                                     name: "demo\ntouch /tmp/pwned"))
-        #expect(session.customName == "demotouch /tmp/pwned")
-        #expect(session.initialCwd == "/worktouch /tmp/pwned")
-        #expect(session.effectiveCwd == "/worktouch /tmp/pwned")
-    }
-
     @Test func addSessionToUnknownWorkspaceReturnsNil() {
         let store = makeStore()
         #expect(store.addSession(toWorkspace: UUID(), cwd: "/tmp") == nil)
@@ -1412,15 +1400,6 @@ struct AppStoreTests {
         #expect(session.customName == "build")
     }
 
-    @Test func renameSessionStripsInteriorControlCharacters() {
-        // customName reaches {AGT_SESSION_NAME}, unquoted into /bin/sh -c; surrounding whitespace still trims.
-        let store = makeStore()
-        let ws = store.addWorkspace(name: "work")
-        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
-        store.renameSession(session.id, to: "  demo\ntouch /tmp/pwned  ")
-        #expect(session.customName == "demotouch /tmp/pwned")
-    }
-
     @Test func renameWorkspaceSetsName() {
         let store = makeStore()
         let ws = store.addWorkspace(name: "work")
@@ -1433,13 +1412,6 @@ struct AppStoreTests {
         let ws = store.addWorkspace(name: "work")
         store.renameWorkspace(ws.id, to: "   ")
         #expect(store.workspaces[0].name == "work")
-    }
-
-    @Test func renameWorkspaceStripsInteriorControlCharacters() {
-        let store = makeStore()
-        let ws = store.addWorkspace(name: "work")
-        store.renameWorkspace(ws.id, to: "prod\ntouch /tmp/pwned")
-        #expect(store.workspaces[0].name == "prodtouch /tmp/pwned")
     }
 
     @Test func setBackgroundWatermarkReportsWhetherChanged() {

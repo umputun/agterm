@@ -454,6 +454,13 @@ final class WindowLibraryTests {
         #expect(info.name == "window 2")
     }
 
+    @Test func newWindowStripsInteriorControlCharactersFromName() {
+        // {AGT_WINDOW_NAME} expands unquoted into /bin/sh -c; `window new --name` must not store the newline.
+        let library = WindowLibrary(directory: directory)
+        let info = library.newWindow(name: "prod\ntouch /tmp/pwned")
+        #expect(info.name == "prodtouch /tmp/pwned")
+    }
+
     @Test func renameWindowUpdatesNameAndIgnoresBlank() {
         let library = WindowLibrary(directory: directory)
         let id = library.windows[0].id

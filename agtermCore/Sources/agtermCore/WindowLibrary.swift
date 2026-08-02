@@ -317,7 +317,8 @@ public final class WindowLibrary {
     /// Defaults the name to "window N".
     @discardableResult
     public func newWindow(name: String? = nil) -> WindowInfo {
-        let info = WindowInfo(name: name?.trimmedOrNil ?? defaultWindowName)
+        // {AGT_WINDOW_NAME} expands unquoted into /bin/sh -c; strip control chars as the OSC path does (TerminalText).
+        let info = WindowInfo(name: name.map(TerminalText.sanitized)?.trimmedOrNil ?? defaultWindowName)
         let store = makeStore(for: info.id, persistence: persistenceStore(for: info.id))
         let workspace = store.addWorkspace(name: "workspace 1")
         store.addSession(toWorkspace: workspace.id, cwd: FileManager.default.homeDirectoryForCurrentUser.path)

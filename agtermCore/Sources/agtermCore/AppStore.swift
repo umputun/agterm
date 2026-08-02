@@ -317,7 +317,8 @@ public final class AppStore {
     /// false leaves the target where it is. `ensureWorkspace(named:revealNewWorkspace:)` forwards both.
     @discardableResult
     public func addWorkspace(name: String, collapsed: Bool = false, revealNewWorkspace: Bool = true) -> Workspace {
-        let workspace = Workspace(name: name, isExpanded: !collapsed)
+        // {AGT_WORKSPACE_NAME} expands unquoted into /bin/sh -c; strip control chars as the OSC path does (TerminalText).
+        let workspace = Workspace(name: TerminalText.sanitized(name), isExpanded: !collapsed)
         workspaces.append(workspace)
         if revealNewWorkspace {
             revealNewFocusMember(workspace.id)
@@ -331,7 +332,9 @@ public final class AppStore {
     /// The first workspace whose name exactly equals `name` (case-sensitive, trimmed); nil when none matches
     /// or `name` is blank. Backs `session.new --workspace-name` (addressing by sidebar label, not id).
     public func workspace(named name: String) -> Workspace? {
-        guard let needle = name.trimmedOrNil else { return nil }
+        // sanitize the needle like the stored names, so a raw control-char lookup still finds its workspace
+        // (session.new --workspace-name without --create-workspace calls this directly).
+        guard let needle = TerminalText.sanitized(name).trimmedOrNil else { return nil }
         return workspaces.first { $0.name == needle }
     }
 
@@ -339,7 +342,9 @@ public final class AppStore {
     /// is forwarded to `addWorkspace` on the create path. Nil only when blank. Backs `--workspace-name --create-workspace`.
     @discardableResult
     public func ensureWorkspace(named name: String, revealNewWorkspace: Bool = true) -> Workspace? {
-        guard let needle = name.trimmedOrNil else { return nil }
+        // sanitize before the blank check: a control-char-only name must read as blank, not create an
+        // unmatchable empty-named workspace on every call.
+        guard let needle = TerminalText.sanitized(name).trimmedOrNil else { return nil }
         return workspace(named: needle) ?? addWorkspace(name: needle, revealNewWorkspace: revealNewWorkspace)
     }
 
