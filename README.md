@@ -350,11 +350,11 @@ By default an overlay opens on its `--target` without switching the active sessi
 
 By default the overlay fills the pane, drawn translucent, hiding the session beneath it. Pass `--size-percent N` (1–100) for a *floating* variant instead: an opaque, framed panel sized to N% of the pane in both dimensions and centered in it, with the session still visible around it. Useful for a small auxiliary program (a picker, a monitor) that you want floating over — not replacing — the terminal you're working in. It composes with `--block` (a blocking floating overlay). Like a full overlay it opens in the background and runs even when the target is not active; pass `--follow` to switch the user to the target as it opens.
 
-A session's terminal surface is created lazily — it does not exist until the session has been shown at least once. Injecting text into a never-shown session therefore fails with `session not realized` unless you pass `--select`, which selects the session (realizing its surface) before injecting:
+Every session's terminal is mounted whether or not it has been shown, so `session type` reaches a background session without selecting it. A session created a moment ago is the one exception: its surface needs a layout pass before it can take input, so `session type` waits briefly for it rather than failing, and a script can create and type back to back. Pass `--select` to select the session first — it only moves your selection when the surface is not ready yet — and `session not realized` is left for a surface that never comes up:
 
 ```sh
-id=$(agtermctl session new --cwd ~/src/agterm)
-agtermctl session type --target "$id" --select $'echo hello\n'
+id=$(agtermctl session new --cwd ~/src/agterm --no-select)
+agtermctl session type --target "$id" $'echo hello\n'   # no focus change
 ```
 
 `agtermctl window` drives the named windows. `window list` prints `id  name  [open]  [active]` (raw with `--json`); the other subcommands take a window id, a unique prefix, or `active` (the frontmost):

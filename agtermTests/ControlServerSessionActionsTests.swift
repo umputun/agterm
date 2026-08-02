@@ -88,6 +88,44 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(store.currentWorkspaceID, owner)
     }
 
+    // pins #349. A store-only session never gets a view, so its surface stays nil and the poll always runs
+    // to exhaustion — which is what makes this deterministic where the e2e version is not. The pre-#349 code
+    // returned "session not realized; use select" immediately; both the wire string and the elapsed time
+    // discriminate, so restoring the `guard select` fails on the string and dropping the sleep fails on time.
+    // The target is created unselected and a SECOND session holds the selection, so making the select
+    // unconditional fails the last assertion; the companion below pins the other side of that branch.
+    func testTypeWithoutSelectPollsInsteadOfDemandingSelect() async throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let target = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory(), select: false))
+        let other = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        store.selectSession(other.id)
+
+        let started = Date()
+        let response = await server.injectText("ls\n", into: target.id, store: store, select: false, pane: nil)
+        let elapsed = Date().timeIntervalSince(started)
+
+        XCTAssertFalse(response.ok, "a surface that never comes up must not report a false ok")
+        XCTAssertEqual(response.error, "session not realized", "the no-select path no longer tells callers to select")
+        XCTAssertGreaterThan(elapsed, 0.3, "it should ride out the full 12 x 30ms realize poll, not fast-fail")
+        XCTAssertEqual(store.selectedSessionID, other.id, "typing without select must leave the selection where it was")
+    }
+
+    // the true side of that branch: deleting the body of `if select` leaves every other test green while
+    // `--select` silently stops selecting, so this asserts the move itself rather than the typed text.
+    func testTypeWithSelectStillSelectsWhenTheSurfaceIsNotReady() async throws {
+        let store = try XCTUnwrap(library.activeStore)
+        let owner = try XCTUnwrap(store.currentWorkspaceID)
+        let target = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory(), select: false))
+        let other = try XCTUnwrap(store.addSession(toWorkspace: owner, cwd: NSHomeDirectory()))
+        store.selectSession(other.id)
+
+        let response = await server.injectText("ls\n", into: target.id, store: store, select: true, pane: nil)
+
+        XCTAssertFalse(response.ok, "a store-only session never realizes, so the poll still runs out")
+        XCTAssertEqual(store.selectedSessionID, target.id, "--select must select the target when its surface is not up")
+    }
+
     // the two pane rejections come back from the store as an enum this arm maps to wire strings; without
     // asserting both here, swapping the arms of `paneOverlayFailure` leaves every other test green.
     func testPaneOverlayOpenReportsEachRejectionByItsOwnError() throws {

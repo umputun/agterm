@@ -191,7 +191,7 @@ struct Session: ParsableCommand {
         static let configuration = CommandConfiguration(commandName: "type", abstract: "Inject text into a session.")
         @Argument(help: "Text to inject (omit with --stdin).") var text: String?
         @Flag(name: .long, help: "Read the text from stdin instead of an argument.") var stdin = false
-        @Flag(name: .long, help: "Select (and realize) a never-shown session before injecting (main pane only; a split pane must already exist).") var select = false
+        @Flag(name: .long, help: "Select the session first if its surface is not ready (main pane only; a split pane must already exist).") var select = false
         @Option(name: .long, help: "Which pane to type into: left (main), right (split), or scratch (the session's scratch terminal, even when hidden). Defaults to the left pane.") var pane: String?
         @OptionGroup var target: TargetOptions
         @OptionGroup var options: ClientOptions

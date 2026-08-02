@@ -165,8 +165,10 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
 ## Surface input, output, and search
 
 - `session.type --pane left|right|scratch` defaults to main for compatibility, not focused/on-screen.
-  Hidden live scratch is addressable; missing panes error. Main alone may select and bounded-poll a newly
-  unrealized session.
+  Hidden live scratch is addressable; missing panes error. Main alone bounded-polls (12 × 30ms) a newly
+  unrealized session, with or without `select`, so `session.new --no-select` plus an immediate type does
+  not race the mount+layout gap (#349). The probe precedes every sleep, so a realized session pays nothing
+  and `select` moves selection only when the surface was not ready. `right`/`scratch` still fail fast.
 - `inject` emits Ghostty key events and Return keycode 36 for newline/CR/CRLF. Never replace it with
   `ghostty_surface_text`, whose bracketed paste suppresses Return and can expose `\e[200~`/`\e[201~`
   markers under rapid use.

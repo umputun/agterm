@@ -1190,7 +1190,7 @@ struct ControlDispatcherTests {
     @Test func sessionTypeRoutesParsedOptionsAndEchoesActionResponse() async {
         let actions = MockControlActions()
         let dispatcher = ControlDispatcher(actions: actions)
-        actions.nextSessionTypeResponse = ControlResponse(ok: false, error: "session not realized; use select")
+        actions.nextSessionTypeResponse = ControlResponse(ok: false, error: "session not realized")
 
         let response = await dispatcher.dispatch(ControlRequest(
             cmd: .sessionType,
@@ -1198,7 +1198,7 @@ struct ControlDispatcherTests {
             args: ControlArgs(text: "ls\n", select: true, window: "win", pane: "scratch")
         ))
 
-        #expect(response == ControlResponse(ok: false, error: "session not realized; use select"))
+        #expect(response == ControlResponse(ok: false, error: "session not realized"))
         #expect(actions.calls == [
             .sessionType(target: "session", window: "win",
                          ControlSessionTypeOptions(text: "ls\n", select: true, pane: "scratch"))

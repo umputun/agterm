@@ -706,6 +706,22 @@ final class ControlAPIUITests: ControlAPITestCase {
                         "session.type without select reaches the eagerly-realized, non-selected session")
     }
 
+    // #349 end to end: create in the background, then type once with no retry. This does NOT discriminate
+    // the realize poll — over two socket round-trips the surface has always come up by the time the type
+    // lands, so it stays green against the pre-#349 fast-fail too. `ControlServerSessionActionsTests`
+    // .testTypeWithoutSelectPollsInsteadOfDemandingSelect is what pins the poll.
+    func testSessionTypeAfterNoSelectCreateLands() throws {
+        let created = try sendCommand(#"{"cmd":"session.new","args":{"noSelect":true}}"#)
+        XCTAssertEqual(created["ok"] as? Bool, true, "session.new --no-select should succeed: \(created)")
+        let id = try XCTUnwrap((created["result"] as? [String: Any])?["id"] as? String,
+                               "session.new should carry the new id")
+
+        let file = markerDir.appendingPathComponent("noselect-race")
+        let typed = try sendCommand(typeRequest(text: "tty > '\(file.path)'\n", target: id, select: false))
+        XCTAssertEqual(typed["ok"] as? Bool, true, "session.type into a background session should land: \(typed)")
+        XCTAssertNotNil(pollMarker(file, timeout: 8), "the typed command should run in the new session")
+    }
+
     // the with-selection path needs a real Metal-surface selection, verified by hand.
     func testSessionCopyWithoutSelectionErrors() throws {
         let created = try sendCommand(#"{"cmd":"session.new"}"#)

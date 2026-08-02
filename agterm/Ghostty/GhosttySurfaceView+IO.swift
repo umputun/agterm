@@ -12,8 +12,9 @@ extension GhosttySurfaceView {
     /// suppresses command execution and leaks `\e[200~`/`\e[201~` markers when fired rapidly. Every line ending
     /// (`\n`, `\r`, `\r\n`) becomes a real Return keypress, so a trailing newline submits and a multi-line
     /// payload runs line by line; `withCString` means no buffer outlives the call. Returns `false` when the
-    /// surface is not created yet, so a caller injecting into a pane with no realize/select path
-    /// (`right`/`scratch`) reports `session not realized`, not a false ok; the main pane realizes via select+poll.
+    /// surface is not created yet, so a caller injecting into a pane with no realize path
+    /// (`right`/`scratch`) reports `session not realized`, not a false ok; the main pane instead feeds this
+    /// false return into a bounded poll, selecting only when `select` was passed.
     @discardableResult
     func inject(text: String) -> Bool {
         guard let surface else { return false }

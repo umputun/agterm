@@ -1343,8 +1343,8 @@
                 ># route to a pane: left (default) | right (split) | scratch (even when hidden)</span
               ><br />agtermctl session type --pane right <span style="color: #f2b45c">$'ls\n'</span><br /><br /><span
                 style="color: #6b727a"
-                ># a never-shown session needs --select to realize its surface first</span
-              ><br />agtermctl session type --target <span style="color: #f2b45c">"$id"</span> --select
+                ># type into a background session without changing focus</span
+              ><br />agtermctl session type --target <span style="color: #f2b45c">"$id"</span>
               <span style="color: #f2b45c">$'echo hi\n'</span><br /><br /><span style="color: #6b727a"
                 ># read a pane's selection (does not touch the clipboard) or its output</span
               ><br /><span style="color: #6d82f3">sel</span>=$(agtermctl session copy --target 9f3c)<br />agtermctl session text

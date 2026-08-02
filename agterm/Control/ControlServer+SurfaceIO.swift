@@ -291,18 +291,25 @@ extension ControlServer {
                                                                count: session.searchTotal))
     }
 
-    /// Injects `text` into session `id`'s surface. A surface is created lazily (deferred until it has a
-    /// non-zero backing size, so a never-shown session has `surface == nil`). `inject(text:)` sends the text
-    /// as `ghostty_surface_key` keystrokes (NOT `ghostty_surface_text` — see its doc for why), which write to
-    /// the child pty; the kernel buffers the pty, so text is never lost even before the first prompt.
+    /// Injects `text` into session `id`'s surface. The deck mounts every session, but realization still
+    /// needs a SwiftUI pass plus an AppKit layout pass (`createSurface` defers on a zero backing size), so a
+    /// session created moments ago is briefly unrealized whether or not it is selected. `inject(text:)` sends
+    /// the text as `ghostty_surface_key` keystrokes (NOT `ghostty_surface_text` — see its doc for why), which
+    /// write to the child pty; the kernel buffers the pty, so text is never lost even before the first prompt.
     /// `pane` follows `session.text` (`left`|`right`|`scratch`, no `other`): omitted/`left` is the main pane,
     /// NOT the focused one — the pre-pane behavior, so existing automation is unaffected; `scratch` is
     /// typable while hidden since its surface is kept alive. Selecting never creates a split pane, so the
     /// realize/select path below is main-pane only and `right`/`scratch` inject or error.
-    /// - already realized → inject immediately, ok.
-    /// - never realized, `select:true` → select it, then poll (bounded: 12 × 0.03 s, the `focusSplitPane`
-    ///   idiom) and inject on the first realized attempt; still unrealized → error, never a false ok.
-    /// - never realized, no select → an immediate "use select" error.
+    /// - already realized → inject immediately, ok, and `select` does NOT move the user's selection.
+    /// - unrealized → optionally select, then poll (bounded: 12 × 0.03 s, the `focusSplitPane` idiom) and
+    ///   inject on the first realized attempt; still unrealized → error, never a false ok.
+    ///
+    /// The poll runs WITHOUT `select` too (#349): a background `session.new --no-select` replies from a
+    /// synchronous store mutation, so a back-to-back `session.type` raced the mount and failed, and the
+    /// documented workaround (select, then re-select) tears down the workspace focus filter, consumes the
+    /// previous session's auto-reset indicator, and rewrites recency. `quick.type` polls after `quick show`
+    /// for the same reason. A call that succeeds on the first probe pays no wait at all; the sleeps below are
+    /// only reached once that probe has already failed.
     func injectText(_ text: String, into id: UUID, store: AppStore, select: Bool, pane: String?) async -> ControlResponse {
         switch pane {
         case nil, "left":
@@ -332,18 +339,16 @@ extension ControlServer {
             return ControlResponse(ok: false, error: "invalid pane: \(value)")
         }
         // main pane: inject if realized; a false return (view exists, libghostty surface not up yet) falls
-        // through to the select/poll path rather than returning a silent-drop false ok.
+        // through to the poll rather than returning a silent-drop false ok. This probe precedes the select
+        // below, so `--select` on a realized session leaves the user's selection alone.
         if let surface = store.session(withID: id)?.surface as? GhosttySurfaceView, surface.inject(text: text) {
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
-        guard select else {
-            return ControlResponse(ok: false, error: "session not realized; use select")
-        }
-        store.selectSession(id)
+        if select { store.selectSession(id) }
         for _ in 0..<12 {
             try? await Task.sleep(nanoseconds: 30_000_000)
-            // poll for the surface AND its realization (a false inject keeps polling), so a just-selected
-            // session isn't reported ok before its libghostty surface is up.
+            // poll for the surface AND its realization (a false inject keeps polling), so a just-created or
+            // just-selected session isn't reported ok before its libghostty surface is up.
             if let surface = store.session(withID: id)?.surface as? GhosttySurfaceView, surface.inject(text: text) {
                 return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
             }

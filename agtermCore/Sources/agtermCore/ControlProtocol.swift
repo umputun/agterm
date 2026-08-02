@@ -114,7 +114,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var noSelect: Bool?
     /// Text to inject for `session.type` / `quick.type`; the search needle for `session.search`.
     public var text: String?
-    /// Whether `session.type` may select a never-shown session to realize its surface.
+    /// Whether `session.type` may select the session first when its surface is not ready (main pane only).
+    /// Realization itself no longer depends on it: the main pane polls with or without `select`.
     public var select: Bool?
     /// Mode for `session.split` (`on|off|toggle`), `quick`/`surface.zoom` (`show|hide|toggle`),
     /// `session.flag` (`on|off|toggle|clear`), `sidebar.mode` (`tree|flagged|toggle`),

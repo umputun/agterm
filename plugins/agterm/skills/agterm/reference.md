@@ -346,8 +346,11 @@ All twelve are read-only projections of GUI state.
   counting only sessions whose position/workspace changed.
 - `session type <text> [--stdin] [--select] [--pane left|right|scratch] [--target] [--window W]` — inject text
   as real keystrokes (printable runs plus Return for each newline; no bracketed-paste markers).
-  `--stdin` reads the text from stdin instead of the argument. `--select` selects (and realizes) a
-  never-shown session before injecting. Any realized session is normally typable without `--select`.
+  `--stdin` reads the text from stdin instead of the argument. Any session is typable without `--select`,
+  including a background one and one created moments ago: the main pane bounded-polls (12 × 30ms) for the
+  surface, so `session new --no-select` followed straight away by `session type` does not race the mount.
+  `--select` selects the session first, and only when its surface is not ready — a realized session is typed
+  into without moving the user's selection. A surface that never comes up → `session not realized`.
   `--pane left` types into the main pane (the default when omitted), `--pane right` into the split pane
   (errors with `session has no split pane` when the session has no split), `--pane scratch` into the
   session's scratch terminal even while it is hidden (`session has no scratch terminal` when none opened);

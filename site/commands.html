@@ -969,8 +969,11 @@
                 Inject text as real keystrokes — printable runs plus a Return for each newline, with no bracketed-paste markers. So a
                 trailing newline submits the command.
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--stdin</span> reads the text from stdin instead of the
-                argument. <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--select</span> selects and realizes a
-                never-shown session first (the main pane only); any realized session is normally typable without it.
+                argument. Any session is typable without
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--select</span>, including one created moments ago: the main
+                pane waits briefly for its surface, so creating and typing back to back does not race.
+                <span style="font-family: &quot;JetBrains Mono&quot;, monospace">--select</span> selects the session first, and only when its
+                surface is not ready yet.
               </p>
               <p style="font-size: 13.5px; line-height: 1.6; color: #949ba4; margin: 8px 0 0">
                 <span style="font-family: &quot;JetBrains Mono&quot;, monospace; white-space: nowrap">--pane left</span> is the main pane (the default),
