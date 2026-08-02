@@ -97,6 +97,10 @@ paths:
 - Because those two leave a live terminal around the panel, their tap-catcher also paints the
   `inactivePaneMuteStrength` wash. Fill the existing catcher; never add a sibling scrim. Suppress `paneDim`
   while a backdrop wash is up or the covered inactive pane takes both.
+- Anything that HIDES a pane in place takes the wash with it, so the cover must carry `paneDim` itself:
+  `paneOverlayPanel` washes an overlay opened on the unfocused pane, or split focus stops reading.
+  Wash a cover against ITS OWN background, not `washColor(for:)`. An overlay surface is sessionless and
+  never inherits the session background, so the session color would shift the background it blends into.
 - The wash is neutral only at full window opacity. Below it the wash color is opaque while the backing is
   not, so the body rises to `m + p(1-m)` against a title bar left at `p`; scaling by the rendered opacity
   shrinks that gap but no fill closes it. Scale by what the window actually renders at, not the saved
