@@ -108,8 +108,9 @@ paths:
   bare tokens, but bind as `shift+=`/`shift+.`. `increase_font_size`'s stored `Chord(key:"+")` cannot
   round-trip and prints `(not expressible)` in the starter file. Ctrl-Tab and Ctrl-1/2 are reserved,
   monitor-driven, and not rebindable. Palette custom hints use raw kitty syntax, not macOS glyphs.
-- **`{AGT_X}` interpolation is intentionally raw and unquoted.** Selection, OSC title, and OSC 7 pwd can
-  inject visible shell metacharacters. `TerminalText.sanitized` strips control characters, not `;`,
+- **`{AGT_X}` interpolation is intentionally raw and unquoted.** Selection, OSC title, OSC 7 pwd, and the
+  session/workspace/window names and `--cwd` a caller supplies over control or the GUI can all inject
+  visible shell metacharacters. `TerminalText.sanitized` strips control characters, not `;`,
   `$()`, or backticks. Prefer quoted exported `"$AGT_X"` variables for untrusted text. Do not add quoting
   to `CommandContext.expand`.
 - File > Reload Keymap, the palette entry, and `keymap.reload` all call

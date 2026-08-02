@@ -454,6 +454,12 @@ final class WindowLibraryTests {
         #expect(info.name == "window 2")
     }
 
+    @Test func newWindowStripsInteriorControlCharactersFromName() {
+        let library = WindowLibrary(directory: directory)
+        let info = library.newWindow(name: "prod\ntouch /tmp/pwned")
+        #expect(info.name == "prodtouch /tmp/pwned")
+    }
+
     @Test func renameWindowUpdatesNameAndIgnoresBlank() {
         let library = WindowLibrary(directory: directory)
         let id = library.windows[0].id
@@ -461,6 +467,13 @@ final class WindowLibraryTests {
         #expect(library.windows[0].name == "personal")
         library.renameWindow(id, to: "  ")
         #expect(library.windows[0].name == "personal")
+    }
+
+    @Test func renameWindowStripsInteriorControlCharacters() {
+        let library = WindowLibrary(directory: directory)
+        let id = library.windows[0].id
+        library.renameWindow(id, to: "prod\ntouch /tmp/pwned")
+        #expect(library.windows[0].name == "prodtouch /tmp/pwned")
     }
 
     @Test func removeWindowDropsEntryStoreAndFile() throws {

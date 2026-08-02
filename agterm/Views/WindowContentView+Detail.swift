@@ -168,7 +168,7 @@ extension WindowContentView {
                 Color.clear
                     .id("\(session.id.uuidString)-\(pane == .left ? "primary" : "split")-placeholder")
             }
-            paneOverlayPanel(session: session, pane: pane,
+            paneOverlayPanel(session: session, pane: pane, focused: focused,
                              isActive: gates.focusable && !gates.overlaid && focused, deckVisible: gates.visible)
         }
     }
@@ -223,7 +223,9 @@ extension WindowContentView {
     /// `isActive` is the FOCUSED-pane gate (auto-focus, first responder), `deckVisible` the on-screen one
     /// (drag types, mouse cursor, clicks): an overlay on the unfocused pane stays visible and clickable —
     /// clicking it moves focus through the surface's own `onFocusChange` — without grabbing focus on open.
-    @ViewBuilder private func paneOverlayPanel(session: Session, pane: OverlayPane, isActive: Bool,
+    /// It therefore carries `focused`'s `paneDim` too: the overlay replaces the pane the wash would have
+    /// marked, so without it the unfocused side of a split reads as live.
+    @ViewBuilder private func paneOverlayPanel(session: Session, pane: OverlayPane, focused: Bool, isActive: Bool,
                                                deckVisible: Bool) -> some View {
         let active = session.paneOverlay(pane) != nil
             && deckHostsSurface(session: session, surface: pane.zoomSurface)
@@ -235,6 +237,7 @@ extension WindowContentView {
                     TerminalView(session: session, surfaceKeyPath: pane.surfaceSlot,
                                  makeSurface: { makeOverlaySurface($0, pane) },
                                  isActive: isActive, deckVisible: deckVisible)
+                        .overlay { paneDim(!focused, session: session, color: overlayWashColor(session, pane: pane)) }
                         .id("\(session.id.uuidString)-overlay-\(pane.rawValue)")
                 }
             }
@@ -244,15 +247,27 @@ extension WindowContentView {
         .allowsHitTesting(deckVisible && active)
     }
 
-    /// Mutes the inactive split pane's TEXT without darkening the background: a translucent wash of the
-    /// terminal background, so background pixels blend bg→bg and text pixels text→bg. Strength 0 renders
-    /// nothing; clicks pass through, so it stays focusable. Suppressed while a floating panel washes the
-    /// whole backdrop, which already covers this pane — the two would stack to a stronger mute here than on
-    /// the pane beside it.
-    @ViewBuilder private func paneDim(_ dimmed: Bool, session: Session) -> some View {
+    /// Mutes the inactive split pane — or the overlay covering it — by fading its TEXT without darkening the
+    /// background: a translucent wash of the terminal background, so background pixels blend bg→bg and text
+    /// pixels text→bg. Strength 0 renders nothing; clicks pass through, so it stays focusable. Suppressed
+    /// while a floating panel washes the whole backdrop, which already covers this pane — the two would
+    /// stack to a stronger mute here than on the pane beside it. `color` overrides the blend target for a
+    /// surface that does not render the session's background; the pane itself takes the default.
+    @ViewBuilder private func paneDim(_ dimmed: Bool, session: Session, color: Color? = nil) -> some View {
         if dimmed, muteWashOpacity > 0, !backdropWashActive(session: session) {
-            washColor(for: session).opacity(muteWashOpacity).allowsHitTesting(false)
+            (color ?? washColor(for: session)).opacity(muteWashOpacity).allowsHitTesting(false)
         }
+    }
+
+    /// The blend target for a PANE OVERLAY's wash: its own `--background-color` when it set one, else the
+    /// theme. An overlay surface is sessionless and never inherits the session's background — only the
+    /// scratch does, through `watermarkSession` — so `washColor(for:)` would blend bg→OTHER-bg and shift
+    /// the background instead of fading the text. Gated on the renderer's own hex predicate, so the wash
+    /// tracks exactly what `applyOverlayBackgroundColor` painted rather than a value it rejected.
+    private func overlayWashColor(_ session: Session, pane: OverlayPane) -> Color {
+        guard let hex = session.paneOverlay(pane)?.backgroundColor, WatermarkConfig.isValidColorHex(hex),
+              let nsColor = NSColor(agtermHex: hex) else { return terminalColor }
+        return Color(nsColor: nsColor)
     }
 
     /// Whether a floating panel is washing the whole backdrop of this session's detail pane.

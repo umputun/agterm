@@ -317,7 +317,8 @@ public final class AppStore {
     /// false leaves the target where it is. `ensureWorkspace(named:revealNewWorkspace:)` forwards both.
     @discardableResult
     public func addWorkspace(name: String, collapsed: Bool = false, revealNewWorkspace: Bool = true) -> Workspace {
-        let workspace = Workspace(name: name, isExpanded: !collapsed)
+        // the name feeds {AGT_WORKSPACE_NAME}; see TerminalText.
+        let workspace = Workspace(name: TerminalText.sanitized(name), isExpanded: !collapsed)
         workspaces.append(workspace)
         if revealNewWorkspace {
             revealNewFocusMember(workspace.id)
@@ -331,7 +332,8 @@ public final class AppStore {
     /// The first workspace whose name exactly equals `name` (case-sensitive, trimmed); nil when none matches
     /// or `name` is blank. Backs `session.new --workspace-name` (addressing by sidebar label, not id).
     public func workspace(named name: String) -> Workspace? {
-        guard let needle = name.trimmedOrNil else { return nil }
+        // the needle sanitizes like the stored names, or a raw control-char lookup misses its own workspace.
+        guard let needle = TerminalText.sanitized(name).trimmedOrNil else { return nil }
         return workspaces.first { $0.name == needle }
     }
 
@@ -339,7 +341,9 @@ public final class AppStore {
     /// is forwarded to `addWorkspace` on the create path. Nil only when blank. Backs `--workspace-name --create-workspace`.
     @discardableResult
     public func ensureWorkspace(named name: String, revealNewWorkspace: Bool = true) -> Workspace? {
-        guard let needle = name.trimmedOrNil else { return nil }
+        // sanitize before the blank check, so a control-char-only name reads as blank instead of appending
+        // an unmatchable empty-named workspace on every call.
+        guard let needle = TerminalText.sanitized(name).trimmedOrNil else { return nil }
         return workspace(named: needle) ?? addWorkspace(name: needle, revealNewWorkspace: revealNewWorkspace)
     }
 
@@ -352,7 +356,10 @@ public final class AppStore {
     public func addSession(toWorkspace workspaceID: UUID, cwd: String, command: String? = nil,
                            name: String? = nil, wait: Bool = false, at index: Int? = nil, select: Bool = true) -> Session? {
         guard let wsIndex = workspaces.firstIndex(where: { $0.id == workspaceID }) else { return nil }
-        let session = Session(initialCwd: cwd, customName: name?.trimmedOrNil)
+        // cwd feeds {AGT_SESSION_PWD} through initialCwd → effectiveCwd until OSC 7 reports; name feeds
+        // {AGT_SESSION_NAME}. See TerminalText.
+        let session = Session(initialCwd: TerminalText.sanitized(cwd),
+                              customName: name.map(TerminalText.sanitized)?.trimmedOrNil)
         session.initialCommand = command
         session.commandWait = wait
         if let index {
