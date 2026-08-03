@@ -394,11 +394,22 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 - Modify: `agtermCore/Sources/agtermCore/TerminalZoom.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/TerminalZoomTests.swift`
 
-- [ ] narrow the `.overlay` case so a HUD is not the active zoom target **and** widen `uncovered` (`:56-62`) for the HUD case — narrowing alone leaves no case active and falls through to the `?? .primary` fallback the code documents as unreachable
-- [ ] decide once whether the explicit `surface:<id>:overlay` address resolves a HUD or is refused, and pin it
-- [ ] verify Command-W dismisses a HUD through the existing cover ladder, and that `coverHidesActiveSession` and `searchTarget` need no change (a floating cover leaves pane search available)
-- [ ] write tests asserting mutual exclusivity across all five `isActive` cases with a HUD up, plus the explicit-address decision
-- [ ] run `swift test --filter TerminalZoomTests` — must pass before task 10
+- [x] narrow the `.overlay` case so a HUD is not the active zoom target **and** widen `uncovered` (`:56-62`) for the HUD case — narrowing alone leaves no case active and falls through to the `?? .primary` fallback the code documents as unreachable
+- [x] decide once whether the explicit `surface:<id>:overlay` address resolves a HUD or is refused, and pin it
+      — REFUSED: `isAvailable` reads `programOverlayActive`, so `surface.zoom` answers the existing
+      "surface not available" and `tree` lists no overlay surface node while a HUD is up
+- [x] verify Command-W dismisses a HUD through the existing cover ladder, and that `coverHidesActiveSession` and `searchTarget` need no change (a floating cover leaves pane search available)
+- [x] write tests asserting mutual exclusivity across all five `isActive` cases with a HUD up, plus the explicit-address decision
+- [x] run `swift test --filter TerminalZoomTests` — must pass before task 10
+- [x] ➕ `isVisible` and `paneVisible` took the same substitution as `isActive`: they feed the `surfaces`
+      read-back, and a HUD leaves the panes lit and clickable, so reporting them invisible would contradict
+      Task 4's deck exemptions inside the same `tree` response
+- [x] ⚠️ verification found ONE divergence, routed to Task 10 rather than fixed here: `Session.topmostSurface`
+      (`Session.swift:583`) still returns `overlaySurface` for a HUD, so the ~8 app focus-routing sites that
+      read it (sidebar click, session selection, `focusTarget`, overlay-close refocus) would make the HUD
+      helper first responder — the same class as Task 4's deck exemptions, in a different layer. ⌘W itself
+      is correct (`AppActions.swift:230` closes the slot and Task 3 clears the HUD state) and
+      `coverHidesActiveSession` is correct (`fullOverlayActive` excludes a HUD), so neither needs a change
 
 ### Task 10: Overlay-command interplay (app-side)
 
@@ -410,6 +421,12 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 - [ ] assert `session.overlay.close` closes a HUD as a courtesy — free once Task 3 clears HUD state in `closeOverlay`, but pin it
 - [ ] decide and pin `session.overlay.resize` against a HUD — allow it (same field, documented) and assert the HUD survives
 - [ ] write tests for all three interactions
+- [ ] ➕ ⚠️ from Task 9: make `Session.topmostSurface` skip a HUD (`overlayActive` → `programOverlayActive`,
+      `Session.swift:583`, and the same term in `focusTarget(wantSplit:)` at `:595`) so sidebar clicks,
+      session selection, pane focus, and overlay-close refocus cannot hand first responder to the HUD
+      helper. Audit `AppActions.searchTarget`'s scratch rung (`AppActions.swift:775`) in the same pass —
+      it reads BOTH `!session.overlayActive` and `topmostSurface`, so a HUD over a shown scratch strands ⌘F.
+      Modify `agtermCore/.../Session.swift`, `agterm/AppActions.swift`, `agtermCore/Tests/.../SessionTests.swift`
 - [ ] run via `-only-testing:` — must pass before task 11
 
 ### Task 11: agtermctl `session hud`

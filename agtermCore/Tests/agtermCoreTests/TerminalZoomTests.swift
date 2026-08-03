@@ -168,7 +168,7 @@ struct TerminalZoomTests {
         let ws = store.addWorkspace(name: "work")
         let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
         let names = ["isSplit", "hasSplit", "focusRight", "splitSurface", "scratch", "sessionOverlay",
-                     "leftOverlay", "rightOverlay"]
+                     "leftOverlay", "rightOverlay", "hud"]
 
         for combination in 0..<(1 << names.count) {
             let on: (Int) -> Bool = { combination & (1 << $0) != 0 }
@@ -180,12 +180,13 @@ struct TerminalZoomTests {
             session.overlayActive = on(5)
             session.leftOverlay = on(6) ? PaneOverlay(command: "top") : nil
             session.rightOverlay = on(7) ? PaneOverlay(command: "top") : nil
+            session.hudSpec = on(8) ? HudSpec(message: "gathering options") : nil
 
             // derived from the deck's OWN predicates (`focusedPane`, the pane slots), never from `isActive`,
             // so a wrong-but-unique active case cannot pass by cardinality alone.
             let focused = session.focusedPane
             let expected: TerminalZoomSurface
-            if session.overlayActive {
+            if session.programOverlayActive {
                 expected = .overlay
             } else if session.scratchActive {
                 expected = .scratch
@@ -204,6 +205,72 @@ struct TerminalZoomTests {
                         "[\(shape)] pane overlay active over a pane the deck does not lay out")
             }
         }
+    }
+
+    @Test func aHudLeavesThePaneActiveAndIsNotAddressableAsTheOverlaySurface() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+
+        #expect(store.openHud(session.id, command: "/bin/sh /hud.sh", spec: HudSpec(message: "gathering options"),
+                              file: "/tmp/agterm-hud.txt", sizePercent: 30))
+
+        #expect(TerminalZoomSurface.allCases.filter { $0.isActive(in: session) } == [.primary])
+        #expect(TerminalZoomSurface.primary.isVisible(in: session))
+        #expect(TerminalZoomController.resolveTarget(store: store, quickTerminalVisible: false)
+            == .session(session.id, .primary))
+
+        #expect(!TerminalZoomSurface.overlay.isAvailable(in: session))
+        #expect(!TerminalZoomSurface.overlay.isVisible(in: session))
+        #expect(!TerminalZoomController.isTargetValid(.session(session.id, .overlay), in: store,
+                                                     quickTerminalVisible: false))
+
+        // the refusal is about the HUD, not the slot: a program taking the same slot is addressable again.
+        #expect(store.openOverlay(session.id, command: "top"))
+        #expect(TerminalZoomSurface.overlay.isAvailable(in: session))
+        #expect(TerminalZoomSurface.allCases.filter { $0.isActive(in: session) } == [.overlay])
+        #expect(TerminalZoomController.isTargetValid(.session(session.id, .overlay), in: store,
+                                                    quickTerminalVisible: false))
+    }
+
+    @Test func aHudLeavesTheScratchAndPaneOverlayTargetsIntact() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.surface = SpySurface()
+
+        #expect(store.openHud(session.id, command: "/bin/sh /hud.sh", spec: HudSpec(message: "working"),
+                              file: "/tmp/agterm-hud.txt", sizePercent: 30))
+
+        store.toggleScratch(session.id)
+        #expect(TerminalZoomSurface.allCases.filter { $0.isActive(in: session) } == [.scratch])
+        #expect(TerminalZoomSurface.scratch.isVisible(in: session))
+        #expect(TerminalZoomController.resolveTarget(store: store, quickTerminalVisible: false)
+            == .session(session.id, .scratch))
+        store.toggleScratch(session.id)
+
+        #expect(store.openPaneOverlay(session.id, pane: .left, command: "top") == nil)
+        #expect(TerminalZoomSurface.allCases.filter { $0.isActive(in: session) } == [.overlayLeft])
+        #expect(TerminalZoomSurface.overlayLeft.isVisible(in: session))
+        #expect(TerminalZoomController.resolveTarget(store: store, quickTerminalVisible: false)
+            == .session(session.id, .overlayLeft))
+    }
+
+    @Test func closingAHudRestoresTheOverlaySurfaceAddressForTheNextProgram() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+
+        #expect(store.openHud(session.id, command: "/bin/sh /hud.sh", spec: HudSpec(message: "working"),
+                              file: "/tmp/agterm-hud.txt", sizePercent: 30))
+        // ⌘W's cover ladder takes the HUD through the ordinary overlay teardown.
+        #expect(store.closeOverlay(session.id))
+        #expect(session.hudSpec == nil)
+        #expect(!TerminalZoomSurface.overlay.isAvailable(in: session))
+
+        #expect(store.openOverlay(session.id, command: "top", sizePercent: 40))
+        #expect(TerminalZoomSurface.overlay.isAvailable(in: session))
+        #expect(TerminalZoomSurface.allCases.filter { $0.isActive(in: session) } == [.overlay])
     }
 
     @Test func surfaceIDsRoundTripControlNames() throws {

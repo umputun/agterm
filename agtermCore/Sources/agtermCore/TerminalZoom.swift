@@ -40,7 +40,11 @@ public enum TerminalZoomSurface: String, CaseIterable, Codable, Equatable, Senda
         case .scratch:
             return session.scratchActive || session.scratchSurface != nil
         case .overlay:
-            return session.overlayActive
+            // a HUD is NOT addressable: it takes no input, so there is nothing to zoom into, and `tree`
+            // already reports the slot as `overlay: false` while one is up — advertising
+            // `surface:<id>:overlay` would contradict the same response. `surface.zoom` on it answers
+            // "surface not available" through `isTargetValid`.
+            return session.programOverlayActive
         case .overlayLeft:
             return session.paneOverlay(.left) != nil
         case .overlayRight:
@@ -53,17 +57,20 @@ public enum TerminalZoomSurface: String, CaseIterable, Codable, Equatable, Senda
     /// `uncovered` (no session-wide cover) separates the four pane cases from `.overlay`/`.scratch`, and
     /// `session.focusedPane` picks exactly one side — leaving each pane separated from its OWN overlay by
     /// that pane's slot alone. Widening either one without narrowing the other silently picks the wrong target.
+    /// A HUD holds the overlay slot but covers nothing — the session stays focusable under it — so every term
+    /// reads `programOverlayActive`. Narrowing `.overlay` alone would leave NO case active with a HUD up and
+    /// fall through to the `?? .primary` fallback `resolveTarget` documents as unreachable.
     @MainActor public func isActive(in session: Session) -> Bool {
-        let uncovered = !session.overlayActive && !session.scratchActive
+        let uncovered = !session.programOverlayActive && !session.scratchActive
         switch self {
         case .primary:
             return uncovered && session.focusedPane == .left && session.leftOverlay == nil
         case .split:
             return uncovered && session.focusedPane == .right && session.rightOverlay == nil
         case .scratch:
-            return !session.overlayActive && session.scratchActive
+            return !session.programOverlayActive && session.scratchActive
         case .overlay:
-            return session.overlayActive
+            return session.programOverlayActive
         case .overlayLeft:
             return uncovered && session.focusedPane == .left && session.leftOverlay != nil
         case .overlayRight:
@@ -79,9 +86,9 @@ public enum TerminalZoomSurface: String, CaseIterable, Codable, Equatable, Senda
         case .split:
             return Self.paneVisible(.right, in: session) && session.rightOverlay == nil
         case .scratch:
-            return !session.overlayActive && session.scratchActive
+            return !session.programOverlayActive && session.scratchActive
         case .overlay:
-            return session.overlayActive
+            return session.programOverlayActive
         case .overlayLeft:
             return Self.paneVisible(.left, in: session) && session.leftOverlay != nil
         case .overlayRight:
@@ -90,9 +97,10 @@ public enum TerminalZoomSurface: String, CaseIterable, Codable, Equatable, Senda
     }
 
     /// Whether the detail pane shows that pane at all, ignoring any pane overlay covering it: the layout
-    /// question `Session.rendersPane` owns, minus the session-wide covers that hide both panes.
+    /// question `Session.rendersPane` owns, minus the session-wide covers that hide both panes. A HUD is not
+    /// one: the deck leaves the panes lit and clickable around the panel.
     @MainActor private static func paneVisible(_ pane: OverlayPane, in session: Session) -> Bool {
-        guard !session.overlayActive, !session.scratchActive else { return false }
+        guard !session.programOverlayActive, !session.scratchActive else { return false }
         return session.rendersPane(pane)
     }
 }
