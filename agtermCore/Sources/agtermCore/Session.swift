@@ -263,6 +263,11 @@ public final class Session: Identifiable {
     /// disagree about which is up.
     public var hudActive: Bool { overlayActive && hudSpec != nil }
 
+    /// Whether the overlay slot runs a CALLER'S PROGRAM, either coverage variant. The deck's "a session-wide
+    /// cover is up" question: a program overlay owns first responder and mutes the panes under it, a HUD does
+    /// neither, so every passivity exemption reads this rather than the raw slot state.
+    public var programOverlayActive: Bool { overlayActive && !hudActive }
+
     /// Whether a FULL-coverage PROGRAM overlay is up: `overlayActive` with no size percent. It hides
     /// everything beneath — the pane(s) AND a shown scratch — so its translucent background reveals the
     /// window backing, never a covered surface: under window translucency every surface renders fully

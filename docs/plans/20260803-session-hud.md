@@ -268,22 +268,29 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 
 **Files:**
 - Modify: `agterm/Views/WindowContentView+Detail.swift`
+- Modify: `agtermCore/Sources/agtermCore/Session.swift` (added during Task 4: `programOverlayActive`)
+- Modify: `agtermCore/Tests/agtermCoreTests/SessionTests.swift`
 - Create: `agtermTests/HudDeckGatesTests.swift`
 
-- [ ] exempt a HUD from `gates.overlaid` (`:58`) so the session's pane stays `isActive` and keeps first responder — without this `TerminalView.updateNSView` resigns it and typing goes nowhere
-- [ ] exempt a HUD from the floating click catcher (`:187-190`) so clicks reach the panes underneath
-- [ ] exempt a HUD from `backdropWashActive` (`:275`) so the session is not dimmed behind a message
-- [ ] place the panel vertically from `HudSpec.position` inside `overlayPanel`'s `GeometryReader` (`:181+`): `center` as today, `top`/`bottom` offset by `HudPosition.edgeMarginPercent` of the pane height. Program overlays stay centered — do not change their geometry
-- [ ] give the HUD its own chrome parameters in the SAME modifier chain (`:201-208`): opaque backing kept, `shadow(radius: 0)` instead of 24 so it does not read as a window hovering over the session, a stronger border (~0.30 versus 0.18, since neither shadow nor backdrop wash separates it from the text behind), and a tighter corner radius. Flip parameters only — the chain stays constant, per the rule the code states there
-- [ ] ➕ append `session.overlaySlotGeneration` to `overlayPanel`'s `.id("\(session.id.uuidString)-overlay")`
+- [x] exempt a HUD from `gates.overlaid` (`:58`) so the session's pane stays `isActive` and keeps first responder — without this `TerminalView.updateNSView` resigns it and typing goes nowhere
+- [x] exempt a HUD from the floating click catcher (`:187-190`) so clicks reach the panes underneath
+- [x] exempt a HUD from `backdropWashActive` (`:275`) so the session is not dimmed behind a message
+- [x] place the panel vertically from `HudSpec.position` inside `overlayPanel`'s `GeometryReader` (`:181+`): `center` as today, `top`/`bottom` offset by `HudPosition.edgeMarginPercent` of the pane height. Program overlays stay centered — do not change their geometry
+- [x] give the HUD its own chrome parameters in the SAME modifier chain (`:201-208`): opaque backing kept, `shadow(radius: 0)` instead of 24 so it does not read as a window hovering over the session, a stronger border (~0.30 versus 0.18, since neither shadow nor backdrop wash separates it from the text behind), and a tighter corner radius. Flip parameters only — the chain stays constant, per the rule the code states there
+- [x] ➕ append `session.overlaySlotGeneration` to `overlayPanel`'s `.id("\(session.id.uuidString)-overlay")`
   (`:209`) — Task 3 made the store bump it on every slot open, and a replacement (HUD→HUD, HUD→program) keeps
   `overlayActive` true across the swap, so without it `makeNSView` never re-runs and `updateNSView` hits a
   torn-down view with `overlaySurface` nil. Only the `.id` VALUE changes; the chain stays constant
-- [ ] keep every change a **value flip**: `sessionDetail`/HSplitView shape and pane modifiers must not change on HUD state, per `.claude/rules/control-api.md`
-- [ ] write hosted tests for all three exemptions (gates computed with a HUD vs a program overlay vs scratch)
-- [ ] write tests for the three vertical placements, including that a `top`/`bottom` panel stays fully inside the pane when the message is at `maxSizePercent`
-- [ ] write tests for the chrome parameters: a HUD gets no shadow and the stronger border, a program overlay keeps 24 and 0.18
-- [ ] run `xcodegen generate`, then the new class via `-only-testing:` — must pass before task 5
+- [x] ➕ exempt a HUD from the SCRATCH's focus gate (`:101`, `isActive: focusable && !session.overlayActive`)
+  — a fourth exemption of the same class the plan missed: with the scratch shown it owns first responder, and
+  an unexempted HUD resigns it exactly as `gates.overlaid` would have for the panes
+- [x] ➕ add `Session.programOverlayActive` (`overlayActive && !hudActive`) as the one predicate all four
+  exemptions read, so "a caller's program occupies the slot" cannot be spelled two ways that disagree
+- [x] keep every change a **value flip**: `sessionDetail`/HSplitView shape and pane modifiers must not change on HUD state, per `.claude/rules/control-api.md`
+- [x] write hosted tests for all three exemptions (gates computed with a HUD vs a program overlay vs scratch)
+- [x] write tests for the three vertical placements, including that a `top`/`bottom` panel stays fully inside the pane when the message is at `maxSizePercent`
+- [x] write tests for the chrome parameters: a HUD gets no shadow and the stronger border, a program overlay keeps 24 and 0.18
+- [x] run `xcodegen generate`, then the new class via `-only-testing:` — must pass before task 5
 
 ### Task 5: Protocol commands, arguments, read-back, and server routing
 

@@ -55,7 +55,7 @@ extension WindowContentView {
         // behind it — `updateNSView` would grab focus and send keystrokes to a covered session. Every
         // automatic reselection (`reselectIfSelectionHidden`, auto-follow) reaches this, not just a click.
         let focusable = deckInteractive && isActive && !quickTerminal.isVisible
-        let gates = DeckPaneGates(focusable: focusable, overlaid: session.overlayActive || session.scratchActive,
+        let gates = DeckPaneGates(focusable: focusable, overlaid: DeckPaneGates.coverActive(session),
                                   visible: visible)
         ZStack {
             // the pane(s) stay MOUNTED while an overlay is up so their shells stay alive; a FULL overlay
@@ -98,7 +98,7 @@ extension WindowContentView {
                 // a full overlay renders above the scratch, so it gates focus on top of `focusable` (matching
                 // makeScratchSurface's autoFocus suppression); `deckVisible` keeps drops to an on-screen one.
                 TerminalView(session: session, surfaceKeyPath: \.scratchSurface, makeSurface: makeScratchSurface,
-                             isActive: focusable && !session.overlayActive,
+                             isActive: focusable && !session.programOverlayActive,
                              deckVisible: deckInteractive && isActive && !fullOverlay && !quickTerminal.isVisible)
                     .opacity(fullOverlay ? 0 : 1)
                     .allowsHitTesting(!fullOverlay)
@@ -173,47 +173,56 @@ extension WindowContentView {
         }
     }
 
-    /// The overlay — FULL or FLOATING — rendered IN-DECK as ONE ALWAYS-PRESENT sibling of each session's
-    /// `sessionDetail` ZStack, its content gated INSIDE the GeometryReader so the child count never changes
-    /// (the constant-shape rule). Both variants share this one surface host, so `session.overlay.resize`
+    /// The overlay — FULL, FLOATING, or a HUD — rendered IN-DECK as ONE ALWAYS-PRESENT sibling of each
+    /// session's `sessionDetail` ZStack, its content gated INSIDE the GeometryReader so the child count never
+    /// changes (the constant-shape rule). All three share this one surface host, so `session.overlay.resize`
     /// switching full<->% only re-flows the frame and never re-parents the NSView (which would blank its
-    /// Metal drawable).
+    /// Metal drawable). `OverlayPanelStyle` supplies every per-occupant parameter, so the chain below is the
+    /// same chain whichever one is up.
     @ViewBuilder private func overlayPanel(session: Session, isActive: Bool) -> some View {
+        let style = OverlayPanelStyle.resolve(session)
+        // a HUD is passive: it neither takes first responder nor absorbs the clicks around it, so the panel
+        // stays inert as a whole and the session underneath keeps both.
+        let live = isActive && style.interactive
         GeometryReader { geo in
             ZStack {
                 if session.overlayActive, deckHostsSurface(session: session, surface: .overlay) {
-                    let floating = session.overlaySizePercent != nil
-                    let fraction = session.overlaySizePercent.map { CGFloat($0) / 100 } ?? 1
                     // absorbs clicks AROUND a floating panel so they can't reach the hit-testable panes and
                     // steal the overlay's first responder (the full variant hides the panes anyway), and
                     // carries the backdrop mute: a floating panel leaves the session live behind it, so the
                     // same wash `paneDim` puts on an inactive split pane marks it inactive here. Full stays
                     // clear — its panes are already hidden, and a wash would tint the window backing.
-                    (floating ? washColor(for: session).opacity(muteWashOpacity) : Color.clear)
+                    (style.backdrop ? washColor(for: session).opacity(muteWashOpacity) : Color.clear)
                         .contentShape(Rectangle())
                     TerminalView(session: session, surfaceKeyPath: \.overlaySurface,
                                  makeSurface: { makeOverlaySurface($0, nil) },
-                                 isActive: isActive, deckVisible: isActive)
-                        .frame(width: geo.size.width * fraction, height: geo.size.height * fraction)
+                                 isActive: live, deckVisible: live)
+                        .frame(width: geo.size.width * style.fraction,
+                               height: geo.size.height * style.fraction)
                         // floating = opaque backing + frame + shadow so it reads as a distinct window over the
                         // still-visible session; full = translucent and chromeless (libghostty draws only the
-                        // terminal, so the window backing shows through). The CHAIN is constant across both,
-                        // only the parameters going inert for full.
-                        .background(floating ? terminalColor : Color.clear)
-                        .clipShape(RoundedRectangle(cornerRadius: floating ? 12 : 0))
+                        // terminal, so the window backing shows through); a HUD keeps the backing but drops
+                        // the shadow for a stronger border, so it reads as part of the terminal. The CHAIN is
+                        // constant across all three, only the parameters change.
+                        .background(style.framed ? terminalColor : Color.clear)
+                        .clipShape(RoundedRectangle(cornerRadius: style.cornerRadius))
                         .overlay(
-                            RoundedRectangle(cornerRadius: floating ? 12 : 0)
-                                .strokeBorder(floating ? Color.white.opacity(0.18) : Color.clear, lineWidth: 1)
+                            RoundedRectangle(cornerRadius: style.cornerRadius)
+                                .strokeBorder(Color.white.opacity(style.borderOpacity), lineWidth: 1)
                         )
-                        .shadow(radius: floating ? 24 : 0)
-                        .id("\(session.id.uuidString)-overlay")
+                        .shadow(radius: style.shadowRadius)
+                        .offset(y: style.verticalOffset(paneHeight: geo.size.height))
+                        // a replacement (HUD→HUD, HUD→program) keeps `overlayActive` true across the swap, so
+                        // without the generation SwiftUI reuses the host: `makeNSView` never re-runs and
+                        // `updateNSView` hits a torn-down view with `overlaySurface` nil.
+                        .id("\(session.id.uuidString)-overlay-\(session.overlaySlotGeneration)")
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
         // with no overlay up this is an empty full-frame GeometryReader; keep it inert so it never
         // intercepts clicks meant for the pane(s).
-        .allowsHitTesting(isActive && session.overlayActive && deckHostsSurface(session: session, surface: .overlay))
+        .allowsHitTesting(live && session.overlayActive && deckHostsSurface(session: session, surface: .overlay))
     }
 
     /// ONE split pane's overlay, always FULL-PANE (no size percent, no framed chrome — a floating variant
@@ -270,19 +279,77 @@ extension WindowContentView {
         return Color(nsColor: nsColor)
     }
 
-    /// Whether a floating panel is washing the whole backdrop of this session's detail pane.
+    /// Whether a floating panel is washing the whole backdrop of this session's detail pane. Reads the same
+    /// `backdrop` flag `overlayPanel` paints from, so the wash and its `paneDim` suppression cannot disagree
+    /// about a HUD, which paints none.
     private func backdropWashActive(session: Session) -> Bool {
-        quickTerminal.isVisible || (session.overlayActive && session.overlaySizePercent != nil)
+        quickTerminal.isVisible || OverlayPanelStyle.resolve(session).backdrop
     }
 }
 
 /// The three deck-wide gates every pane of one session's entry renders under, computed once per entry:
 /// `focusable` (may take first responder at all), `overlaid` (a session-wide cover is up), and `visible`
 /// (this entry is the on-screen one). `deckPane` ANDs its own pane terms into them.
-private struct DeckPaneGates {
+struct DeckPaneGates {
     let focusable: Bool
     let overlaid: Bool
     let visible: Bool
+
+    /// Whether a session-wide cover is up: a caller's PROGRAM in the overlay slot, or the scratch. A HUD is
+    /// exempt — it is a message, not a program, and the session under it must keep first responder and stay
+    /// clickable, which is the whole difference between the two occupants of that slot.
+    @MainActor static func coverActive(_ session: Session) -> Bool {
+        session.programOverlayActive || session.scratchActive
+    }
+}
+
+/// Every per-occupant parameter `overlayPanel` renders one session's overlay slot with — geometry, chrome,
+/// backdrop, and interactivity — resolved from whether the slot holds a HUD, a floating program overlay, or
+/// a full one. A value type so the deck flips PARAMETERS only and the modifier chain stays constant, per the
+/// rule `sessionDetail` states.
+struct OverlayPanelStyle: Equatable {
+    /// pane fraction the panel occupies in both dimensions; 1 for a full overlay.
+    let fraction: CGFloat
+    /// opaque backing: both framed variants, never the chromeless full overlay.
+    let framed: Bool
+    let cornerRadius: CGFloat
+    let borderOpacity: Double
+    let shadowRadius: CGFloat
+    /// whether the margin around the panel washes the session behind it and counts as a backdrop mute.
+    let backdrop: Bool
+    /// whether the panel takes clicks and first responder at all.
+    let interactive: Bool
+    /// where the panel sits vertically in the pane; program overlays are always centered.
+    let position: HudPosition
+
+    /// A HUD keeps the opaque backing but drops the shadow for a stronger border and a tighter radius:
+    /// neither a shadow nor a backdrop wash separates it from the text behind, so the border does that work
+    /// alone and the panel reads as part of the terminal rather than a window hovering over it.
+    @MainActor static func resolve(_ session: Session) -> OverlayPanelStyle {
+        let fraction = session.overlaySizePercent.map { CGFloat($0) / 100 } ?? 1
+        guard session.hudActive else {
+            let floating = session.overlaySizePercent != nil
+            return OverlayPanelStyle(fraction: fraction, framed: floating, cornerRadius: floating ? 12 : 0,
+                                     borderOpacity: floating ? 0.18 : 0, shadowRadius: floating ? 24 : 0,
+                                     backdrop: floating, interactive: true, position: .center)
+        }
+        return OverlayPanelStyle(fraction: fraction, framed: true, cornerRadius: 8, borderOpacity: 0.30,
+                                 shadowRadius: 0, backdrop: false, interactive: false,
+                                 position: session.hudSpec?.position ?? .center)
+    }
+
+    /// The panel's offset from the pane's center, positive downward. `top`/`bottom` hold
+    /// `HudPosition.edgeMarginPercent` of the pane clear at that edge; a panel too large for the margin to
+    /// fit stays centered rather than overhanging the pane.
+    func verticalOffset(paneHeight: CGFloat) -> CGFloat {
+        let margin = CGFloat(HudPosition.edgeMarginPercent) / 100
+        let free = max(0, paneHeight * ((1 - fraction) / 2 - margin))
+        switch position {
+        case .center: return 0
+        case .top: return -free
+        case .bottom: return free
+        }
+    }
 }
 
 /// Hides ONE pane beneath its own full-pane overlay: that overlay is chromeless, so under window

@@ -433,6 +433,21 @@ struct SessionTests {
         #expect(session.floatingOverlayActive == false)
     }
 
+    @Test func programOverlayActiveSpansBothCoverageVariantsButNeverAHud() {
+        let session = Session(initialCwd: "/repo")
+        #expect(session.programOverlayActive == false)
+        session.overlayActive = true
+        #expect(session.programOverlayActive == true)
+        session.overlaySizePercent = 40
+        #expect(session.programOverlayActive == true)
+        session.hudSpec = HudSpec(message: "gathering options")
+        #expect(session.programOverlayActive == false)
+        session.hudSpec = nil
+        #expect(session.programOverlayActive == true)
+        session.overlayActive = false
+        #expect(session.programOverlayActive == false)
+    }
+
     @Test func paneRoleResolvesTokenToItsCurrentSlot() {
         let session = Session(initialCwd: "/repo")
         session.surface = FakeSurface(paneToken: "main-tok")
