@@ -574,14 +574,20 @@ public final class Session: Identifiable {
         pendingSplitRestoreCommand = nil
     }
 
-    /// The surface on top and owning keyboard focus: an active overlay (full OR floating), else the scratch,
-    /// else the focused pane's own overlay, else the active pane. The overlay renders above the scratch, and a
-    /// full overlay or the scratch covers the panes (INCLUDING their pane overlays), so session-focus helpers
-    /// route through this to keep first responder off a covered surface — except `TerminalView.focusIfNeeded`,
-    /// which targets its own deck slot, already gated by `isActive`. nil while a pane overlay's slot is open
-    /// but its surface has not realized yet; the bounded focus retries re-resolve a beat later.
+    /// The surface on top and owning keyboard focus: an active PROGRAM overlay (full OR floating), else the
+    /// scratch, else the focused pane's own overlay, else the active pane. The overlay renders above the
+    /// scratch, and a full overlay or the scratch covers the panes (INCLUDING their pane overlays), so
+    /// session-focus helpers route through this to keep first responder off a covered surface — except
+    /// `TerminalView.focusIfNeeded`, which targets its own deck slot, already gated by `isActive`. nil while a
+    /// pane overlay's slot is open but its surface has not realized yet; the bounded focus retries re-resolve
+    /// a beat later.
+    ///
+    /// A HUD in the slot is SKIPPED, which is what keeps it passive: roughly eight app focus-routing sites
+    /// read this (sidebar click, session selection, overlay-close refocus), and handing any of them the HUD
+    /// helper would take first responder off the session the message is about — the deck's exemptions one
+    /// layer down.
     public var topmostSurface: (any TerminalSurface)? {
-        if overlayActive { return overlaySurface }
+        if programOverlayActive { return overlaySurface }
         if scratchActive { return scratchSurface }
         if let pane = focusedOverlayPane { return paneOverlaySurface(pane) }
         return activeSurface
@@ -591,18 +597,20 @@ public final class Session: Identifiable {
     /// requested pane is hidden, so stay on `topmostSurface`; else the pane's OWN overlay when one covers it,
     /// so `session.focus right` cannot make a covered pane first responder; else the pane itself. Returns nil
     /// for a covering pane overlay whose surface has not realized yet, leaving the retry to re-resolve.
+    /// A HUD is no cover, so the requested pane stays reachable while one is up.
     public func focusTarget(wantSplit: Bool) -> (any TerminalSurface)? {
-        if overlayActive || scratchActive { return topmostSurface }
+        if programOverlayActive || scratchActive { return topmostSurface }
         let pane: OverlayPane = wantSplit ? .right : .left
         if paneOverlay(pane) != nil { return paneOverlaySurface(pane) }
         return wantSplit ? splitSurface : surface
     }
 
-    /// The pane-or-scratch surface actually ON SCREEN: the scratch when it covers the panes with no overlay up,
-    /// else the focused pane — so `session.text` (no `--pane`) and `session.search` hit the scratch, not the
-    /// pane beneath. An overlay routes via `topmostSurface`; this stays pane-vs-scratch, like `searchTarget`.
+    /// The pane-or-scratch surface actually ON SCREEN: the scratch when it covers the panes with no program
+    /// overlay up, else the focused pane — so `session.text` (no `--pane`) and `session.search` hit the
+    /// scratch, not the pane beneath. A program overlay routes via `topmostSurface`; this stays
+    /// pane-vs-scratch, like `searchTarget`, and a HUD leaves the scratch on screen underneath it.
     public var onScreenSurface: (any TerminalSurface)? {
-        scratchActive && !overlayActive ? topmostSurface : activeSurface
+        scratchActive && !programOverlayActive ? topmostSurface : activeSurface
     }
 
     /// The match counter for the search bar and `session.search`: empty before a query runs, `"no matches"` at

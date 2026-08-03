@@ -94,13 +94,14 @@ struct agtermApp: App {
                         Self.makeOverlaySurface(for: $0, store: $1, pane: $2, env: surfaceEnv(for: $0))
                     },
                     makeScratchSurface: { session, store in
-                        // suppress the scratch's creation autoFocus when a full overlay or this window's quick
-                        // terminal is up — each renders above it and owns focus.
+                        // suppress the scratch's creation autoFocus when a caller's program overlay or this
+                        // window's quick terminal is up — each renders above it and owns focus. A HUD renders
+                        // above it too but owns nothing, so it must not hold focus off a scratch just shown.
                         let qtVisible = library.windowID(forSession: session.id)
                             .flatMap { QuickTerminalRegistry.shared.controller(for: $0) }?.isVisible ?? false
                         return Self.makeScratchSurface(for: session, store: store,
                                                        env: surfaceEnv(for: session, pane: .scratch),
-                                                       suppressAutoFocus: session.overlayActive || qtVisible,
+                                                       suppressAutoFocus: session.programOverlayActive || qtVisible,
                                                        library: library)
                     },
                     quickTerminalEnv: { quickTerminalEnv(for: $0) },

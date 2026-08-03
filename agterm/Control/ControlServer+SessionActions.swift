@@ -58,18 +58,29 @@ extension ControlServer: ControlActions {
         }
     }
 
+    /// Closes a HUD too, as a courtesy: the slot is shared, so `closeOverlay` tears either occupant down and
+    /// clears the HUD state with it. Its body file is removed here for the same reason `closeHud` does it —
+    /// a HUD whose surface never realized has no teardown to run.
     func closeSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
+            let hudFile = pane == nil ? store.session(withID: id)?.hudFile : nil
             let closed = pane.map { store.closePaneOverlay(id, pane: $0) } ?? store.closeOverlay(id)
             guard closed else {
                 return ControlResponse(ok: false, error: "no overlay")
             }
+            if let hudFile { try? FileManager.default.removeItem(atPath: hudFile) }
             return ControlResponse(ok: true, result: ControlResult(id: id.uuidString))
         }
     }
 
+    /// A HUD resizes like any floating panel — one slot, one size field — but never to FULL, which would
+    /// make the message cover the session it is about. The helper keeps centering on the box in its body
+    /// file, so the text re-centers on the next `session.hud.update` rather than on the resize.
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse {
         resolver.resolveSession(target, window: window) { store, id in
+            if sizePercent == nil, store.session(withID: id)?.hudActive == true {
+                return ControlResponse(ok: false, error: OverlayHudError.fullResize)
+            }
             guard store.resizeOverlay(id, sizePercent: sizePercent) else {
                 return ControlResponse(ok: false, error: "no overlay")
             }
@@ -81,6 +92,11 @@ extension ControlServer: ControlActions {
         resolver.resolveSession(target, window: window) { store, id in
             guard let session = store.session(withID: id) else {
                 return ControlResponse(ok: false, error: "no such session")
+            }
+            // the app's painter is not the caller's program: without this the shared slot would answer
+            // "overlay still running" for a HUD that will never report a status.
+            if pane == nil, session.hudActive {
+                return ControlResponse(ok: false, error: OverlayHudError.noResult)
             }
             let (running, exitCode) = pane.map { (session.paneOverlay($0) != nil, session.paneOverlayExitCode($0)) }
                 ?? (session.overlayActive, session.overlayExitCode)

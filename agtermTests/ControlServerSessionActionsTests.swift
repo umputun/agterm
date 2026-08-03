@@ -295,4 +295,57 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertEqual(bodyText(session), HudLayout.renderedBody(for: second))
         XCTAssertGreaterThan(session.overlaySlotGeneration, generation, "a replacement must remount the panel")
     }
+
+    // MARK: - session.overlay.* against a hud
+
+    // the slot is shared, so `overlayActive` alone answers "overlay still running" for a panel that will
+    // never report a status; the refusal has to name the hud.
+    func testOverlayResultRefusesAHudByName() throws {
+        let (store, session) = try makeHudSession()
+        XCTAssertTrue(server.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "working")).ok)
+
+        let response = server.sessionOverlayResult(session.id.uuidString, window: nil, pane: nil)
+
+        XCTAssertFalse(response.ok)
+        XCTAssertEqual(response.error, "no overlay result: the slot holds a hud")
+        XCTAssertTrue(session.hudActive, "a refused result must leave the panel up")
+        // the pane-scoped arm reads its own slots, so a session hud must not colour its answer
+        XCTAssertEqual(server.sessionOverlayResult(session.id.uuidString, window: nil, pane: .left).error,
+                       "no overlay result")
+        XCTAssertTrue(store.closeHud(session.id))
+        XCTAssertEqual(server.sessionOverlayResult(session.id.uuidString, window: nil, pane: nil).error,
+                       "no overlay result", "a closed hud records no exit code either")
+    }
+
+    func testOverlayCloseClosesAHudAndRemovesItsBody() throws {
+        let (_, session) = try makeHudSession()
+        XCTAssertTrue(server.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "working")).ok)
+        let file = try XCTUnwrap(session.hudFile)
+
+        let response = server.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil)
+
+        XCTAssertTrue(response.ok, response.error ?? "")
+        XCTAssertNil(session.hudSpec)
+        XCTAssertFalse(session.overlayActive)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: file), "the body file must not outlive the hud")
+        XCTAssertEqual(server.closeSessionOverlay(session.id.uuidString, window: nil, pane: nil).error, "no overlay")
+    }
+
+    // a hud resizes like any floating panel but never to full: it must not cover the session it is about.
+    func testOverlayResizeMovesAHudPanelButRefusesFull() throws {
+        let (_, session) = try makeHudSession()
+        XCTAssertTrue(server.openHud(session.id.uuidString, window: nil, spec: HudSpec(message: "working")).ok)
+        let spec = try XCTUnwrap(session.hudSpec)
+
+        let resized = server.resizeSessionOverlay(session.id.uuidString, window: nil, sizePercent: 35)
+        XCTAssertTrue(resized.ok, resized.error ?? "")
+        XCTAssertEqual(session.overlaySizePercent, 35)
+        XCTAssertEqual(session.hudSpec, spec, "a resize must not disturb the message")
+        XCTAssertTrue(session.hudActive)
+
+        let full = server.resizeSessionOverlay(session.id.uuidString, window: nil, sizePercent: nil)
+        XCTAssertFalse(full.ok)
+        XCTAssertEqual(full.error, "a hud is always floating: pass --size-percent, not --full")
+        XCTAssertEqual(session.overlaySizePercent, 35, "a refused resize must leave the panel where it was")
+    }
 }

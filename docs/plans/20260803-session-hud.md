@@ -416,18 +416,32 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 **Files:**
 - Modify: `agterm/Control/ControlServer+SessionActions.swift`
 - Modify: `agtermTests/ControlServerSessionActionsTests.swift`
+- Modify: `agtermCore/Sources/agtermCore/Session.swift`, `ControlProtocol.swift` (added during Task 10:
+  `OverlayHudError`)
+- Modify: `agterm/AppActions.swift`, `agterm/agtermApp.swift`
+- Modify: `agtermCore/Tests/agtermCoreTests/SessionTests.swift`
 
-- [ ] make `session.overlay.result` error with a clear message when the slot holds a HUD (`:80`, where store state is known — the host-free dispatcher cannot see slot occupancy)
-- [ ] assert `session.overlay.close` closes a HUD as a courtesy — free once Task 3 clears HUD state in `closeOverlay`, but pin it
-- [ ] decide and pin `session.overlay.resize` against a HUD — allow it (same field, documented) and assert the HUD survives
-- [ ] write tests for all three interactions
-- [ ] ➕ ⚠️ from Task 9: make `Session.topmostSurface` skip a HUD (`overlayActive` → `programOverlayActive`,
+- [x] make `session.overlay.result` error with a clear message when the slot holds a HUD (`:80`, where store state is known — the host-free dispatcher cannot see slot occupancy)
+- [x] assert `session.overlay.close` closes a HUD as a courtesy — free once Task 3 clears HUD state in `closeOverlay`, but pin it
+- [x] decide and pin `session.overlay.resize` against a HUD — allow it (same field, documented) and assert the HUD survives
+- [x] write tests for all three interactions
+- [x] ➕ ⚠️ from Task 9: make `Session.topmostSurface` skip a HUD (`overlayActive` → `programOverlayActive`,
       `Session.swift:583`, and the same term in `focusTarget(wantSplit:)` at `:595`) so sidebar clicks,
       session selection, pane focus, and overlay-close refocus cannot hand first responder to the HUD
       helper. Audit `AppActions.searchTarget`'s scratch rung (`AppActions.swift:775`) in the same pass —
       it reads BOTH `!session.overlayActive` and `topmostSurface`, so a HUD over a shown scratch strands ⌘F.
       Modify `agtermCore/.../Session.swift`, `agterm/AppActions.swift`, `agtermCore/Tests/.../SessionTests.swift`
-- [ ] run via `-only-testing:` — must pass before task 11
+- [x] ➕ the same audit caught two more raw-slot reads of the same class, both fixed with
+      `programOverlayActive`: `Session.onScreenSurface` (`:605`), which sends `session.text` and
+      `session.search` to the pane hidden under a scratch while a HUD is up, and the scratch factory's
+      `suppressAutoFocus` (`agtermApp.swift:103`), which would withhold focus from a scratch just shown
+- [x] ➕ ⚠️ `session.overlay.result` did NOT refuse a HUD for free, contrary to the Task 8 note: the slot's
+      `overlayActive` made it answer "overlay still running", not "no overlay result". Now
+      `OverlayHudError.noResult` names the HUD
+- [x] ➕ `session.overlay.resize --full` is REFUSED against a HUD (`OverlayHudError.fullResize`); a percent
+      is allowed and the HUD survives. `--full` would make the opaque panel cover the whole pane, breaking
+      the invariant `AppStore.openHud` already states — a HUD must never cover the session it is about
+- [x] run via `-only-testing:` — must pass before task 11
 
 ### Task 11: agtermctl `session hud`
 
@@ -468,6 +482,9 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 - [ ] update the count from 71 to 74 in: `SKILL.md:147`, `README.md:187`, `site/commands.html` (four mentions — lines 9, 21, 33, 239), `site/docs.html:1147`, `.claude/rules/control-api.md:86`, and `SkillInstallTests.swift:26`. Search the count pattern rather than assuming these are the only hits
 - [ ] add the HUD paragraphs to `control-api.md` under "Overlay, zoom, dashboard, and picker": the deck exemptions, the HUD-replaces/overlay-refuses rule, the zoom narrowing, and the explicit no-GUI-trigger exemption
 - [ ] add the three commands to the public catalog list in `control-api.md`
+- [ ] ➕ from Task 10: document the two `session.overlay.*` rejections a HUD adds — `overlay result` returns
+      `no overlay result: the slot holds a hud`, and `overlay resize --full` is refused while a percent is
+      allowed — plus `overlay close` closing a HUD as a courtesy
 - [ ] decide whether `site/index.html` needs the feature (CLAUDE.md lists it as reflecting major features) and either update it or state the exemption here
 - [ ] run `swift test --filter SkillInstallTests` — must pass before task 14
 

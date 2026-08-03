@@ -820,6 +820,17 @@ public enum OverlayResultError {
     public static let noResult = "no overlay result"
 }
 
+/// Error strings for `session.overlay.*` aimed at a session whose overlay slot holds a HUD. The slot is
+/// shared, so these rejections need the live session and fire in `ControlServer`, not the dispatcher.
+/// `session.overlay.close` is deliberately absent: closing a HUD is a courtesy the shared teardown gives.
+public enum OverlayHudError {
+    /// A HUD runs the app's painter, not the caller's program, so there is no status to report — and
+    /// `overlayActive` alone would otherwise answer the misleading "overlay still running".
+    public static let noResult = "no overlay result: the slot holds a hud"
+    /// A HUD is always floating (`AppStore.openHud`): it must never cover the session it is a message about.
+    public static let fullResize = "a hud is always floating: pass --size-percent, not --full"
+}
+
 /// Error strings for the pane-scoped (`--pane`) arm of `session.overlay.*`. Shared because the rejections
 /// are split across layers — `alreadyOpen`/`paneNotVisible` need the live session and fire in
 /// `ControlServer`, the rest are host-free in `ControlDispatcher` — and the wording must not drift.
