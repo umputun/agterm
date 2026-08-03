@@ -257,9 +257,13 @@ side, and reads `lastAppliedIsDark` when bare. Refuse it outside XCUITest; provi
   `position` and `spinner` always report the effective value, defaults included. HUD state is poll-only.
   `openOverlay`/`closeOverlay` emit no `scheduleTreeChanged()` and neither does a HUD, so document no event.
 - The panel is a pty running bundled `Resources/hud/hud.sh`, spawned `autoFocus: false` with only
-  `AGTERM_HUD_FILE` and capturing no exit code. Box and spinner ride the body file's HEADER line and are
-  re-read every tick, so `hud.update` repaints in place with no respawn; write that file atomically. It is
-  per SESSION, so an update rewrites the path the running helper already opened.
+  `AGTERM_HUD_FILE` and capturing no exit code. Box, spinner and the APP'S PID ride the body file's HEADER
+  line and are re-read every tick, so `hud.update` repaints in place with no respawn; write that file
+  atomically. It is per SESSION, so an update rewrites the path the running helper already opened.
+- The helper stops on either the file disappearing or a builtin `kill -0` on that pid failing. The pid is
+  the only stop a HARD-killed app has: `destroySurface` never runs, so the body file survives, and no SIGHUP
+  arrives because the pty's session leader is the surviving `login`. Without it every crash, `kill -9` and
+  XCUITest `terminate()` leaves a 2-10 Hz repaint loop running forever.
 - `surface.zoom show|hide|toggle` reparents exactly one surface below a slim titlebar. Explicit IDs are
   `surface:<session-id>:<left|right|scratch|overlay|overlay-left|overlay-right>` or `quick`, including
   hidden live panes. The active target is the single case `TerminalZoomSurface.isActive` accepts: quick,

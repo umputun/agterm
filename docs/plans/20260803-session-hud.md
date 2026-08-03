@@ -202,8 +202,10 @@ covering this session" cannot mistake a HUD for a running program; the HUD's siz
 **Helper contract** (`agterm/Resources/hud/hud.sh`), one environment variable and one file:
 
 - `AGTERM_HUD_FILE` — path to the rendered body (`HudLayout.renderedBody`), read every tick.
-- The body's FIRST line is `<columns> <rows> <spinner>`: the box the app computed, so centering needs no
-  `stty`/`tput`, and `1` in the third field enables the frame counter and the faster tick.
+- The body's FIRST line is `<columns> <rows> <spinner> <pid>`: the box the app computed, so centering needs
+  no `stty`/`tput`; `1` in the third field enables the frame counter and the faster tick; the fourth is the
+  app's own pid, and a builtin `kill -0` on it is the second stop (Task 14), the only one a hard-killed app
+  has.
 - The remaining lines are the wrapped message, one empty line, and the dimmed detail.
 
 Everything an update may change therefore rides in the file, not the environment (which a running process
@@ -476,13 +478,18 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 - [x] ➕ the class overrides `tearDown` to close the HUD before `super` terminates the app: XCUITest's
       `terminate()` is a hard kill that never runs surface teardown, so a HUD left up leaves `hud.sh`
       spinning forever on a body file nothing deletes (see the ⚠️ below)
-- [ ] ⚠️ for Task 14: a HARD-KILLED app (crash, `kill -9`, XCUITest `terminate()`) leaks its HUD painter.
+- [x] ⚠️ for Task 14: a HARD-KILLED app (crash, `kill -9`, XCUITest `terminate()`) leaks its HUD painter.
       The pty's session leader is `login`, which survives the app, so no SIGHUP reaches the helper, and the
       body file under the app's temp dir is only removed by `destroySurface`, which never ran. The helper
       then loops at 2 Hz (10 Hz with a spinner) indefinitely — measured at ~2% CPU per orphan. A program
       overlay leaks the same way today, so this is not new to the HUD, but a busy-looping painter is a
       worse consequence than a blocked reader. Decide in Task 14 whether the helper should self-terminate
       (e.g. bound the loop on its parent) or whether the existing overlay behavior is accepted as-is
+      — FIXED in Task 14 at the helper level: the header line gained a FOURTH field, the pid of the process
+      that wrote the body, and each tick ends with a builtin `kill -0` on it. The parent pid could not be
+      used (the helper's parent is the pty's shell chain, not the app), and the check is fork-free, so the
+      tick is unchanged. Verified both ways against a dead owner: the pre-fix script keeps looping, the
+      shipped one exits
 
 ### Task 13: Documentation surfaces and command count
 
@@ -517,15 +524,44 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 
 ### Task 14: Verify acceptance criteria
 
-- [ ] a HUD posted on a background session appears without stealing selection or focus, and the user can type into the session while it is up
-- [ ] the session is neither dimmed nor click-blocked while a HUD is up
-- [ ] all three positions place the panel correctly and stay inside the pane at the largest allowed size; an omitted position centers
-- [ ] `hud update` changes the text with no visible respawn and resizes the panel when the message grows
-- [ ] `overlay open`, `hud` again, `hud close`, Command-W, and session close all tear it down cleanly with no leftover temp file, and the replacing overlay actually renders
-- [ ] `tree` never reports a HUD as a program overlay
-- [ ] run the full host-free suite: `cd agtermCore && swift test`
-- [ ] run `make test-app`
-- [ ] run `make lint` — zero findings required
+- [x] ➕ ⚠️ from Task 12: FIXED the hard-kill painter leak at the helper level. `renderedBody` gained an
+      `ownerPid` argument that becomes the header's fourth field, `ControlServer.writeBody` passes the app's
+      own pid, and `hud.sh` ends each tick with `[ -n "$owner" ] && ! kill -0 "$owner" && exit 0` — a shell
+      builtin, so no fork and no change to the tick. A header naming no owner keeps painting, so the body
+      file stays the primary stop. Covered by `exitsWhenTheOwningProcessIsGone` (starts the helper against a
+      pid that then exits and asserts it exits on its own) and `keepsPaintingWhenTheHeaderNamesNoOwner`.
+      Modify `agterm/Resources/hud/hud.sh`, `agtermCore/Sources/agtermCore/Hud.swift`,
+      `agterm/Control/ControlServer+Hud.swift`, `agtermCore/Tests/agtermCoreTests/{HudTests,HudHelperTests}.swift`,
+      `agtermTests/ControlServerSessionActionsTests.swift`, `.claude/rules/control-api.md`
+- [x] a HUD posted on a background session appears without stealing selection or focus, and the user can type into the session while it is up
+      — the focus half is pinned by `HudDeckGatesTests.testHudLeavesTheSessionUncovered` (the gate
+      `TerminalView` resigns first responder on) plus the `autoFocus: false` spawn; the on-screen appearance
+      is (manual - deferred to maintainer)
+- [x] the session is neither dimmed nor click-blocked while a HUD is up
+      — `testHudPanelIsInertAndPaintsNoBackdrop` against
+      `testFloatingProgramOverlayCatchesClicksAndWashesTheBackdrop`
+- [x] all three positions place the panel correctly and stay inside the pane at the largest allowed size; an omitted position centers
+      — `testCenterPlacementIsUnoffset`, `testTopPlacementHoldsTheEdgeMarginClear`,
+      `testBottomPlacementMirrorsTop`, `testLargestAllowedPanelStaysInsideThePane`, and the decode default in
+      `HudTests`; the rendered placement is (manual - deferred to maintainer)
+- [x] `hud update` changes the text with no visible respawn and resizes the panel when the message grows
+      — `testHudUpdateRewritesTheBodyInPlaceWithoutRespawning` pins the unchanged slot generation and the
+      rewritten header, and `picksUpARewrittenBodyWithoutRespawning` /
+      `rewritingWithANewBoxRecentersWithoutRespawning` pin the live helper; the absence of a visible blink is
+      (manual - deferred to maintainer)
+- [x] `overlay open`, `hud` again, `hud close`, Command-W, and session close all tear it down cleanly with no leftover temp file, and the replacing overlay actually renders
+      — `openOverlayReplacesAHudButRefusesAProgram`, `secondOpenHudReplacesTheFirst`,
+      `closeHudTearsDownAndClearsTheSlot`, and `closeOverlayClearsHudState` (the one path Command-W and
+      session close both take); the temp file goes with `GhosttySurfaceView.hudBodyFile` on every teardown
+      plus `testHudCloseClearsTheSlotAndRemovesTheBodyFile`; the remount rests on
+      `overlaySlotGeneration` moving. That the replacement renders is (manual - deferred to maintainer)
+- [x] `tree` never reports a HUD as a program overlay
+      — `AppStoreHudTests.controlTreeNeverReportsAHudAsAProgramOverlay` and the e2e `ControlHudUITests`
+- [x] run the full host-free suite: `cd agtermCore && swift test` — 2303 tests, 91 suites, passed
+- [x] run `make test-app` — 146 tests, 0 failures
+- [x] run `-only-testing:agtermUITests/ControlHudUITests` — 5 tests passed, and the run left ZERO new
+      orphaned painters where Task 12's runs left seven
+- [x] run `make lint` — zero findings required
 
 ### Task 15: [Final] Update documentation
 

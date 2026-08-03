@@ -28,13 +28,15 @@ struct HudHelperTests {
         private let outFile: URL
         private let proc = Process()
 
-        init(_ body: String, cols: Int, rows: Int, spinner: Bool = false) throws {
+        init(_ body: String, cols: Int, rows: Int, spinner: Bool = false,
+             ownerPid: Int32 = ProcessInfo.processInfo.processIdentifier) throws {
             let fm = FileManager.default
             dir = URL(fileURLWithPath: NSTemporaryDirectory()).appendingPathComponent("agterm-hud-\(UUID().uuidString)")
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
             bodyFile = dir.appendingPathComponent("body")
             outFile = dir.appendingPathComponent("out")
-            try Run.write(body, cols: cols, rows: rows, spinner: spinner, to: bodyFile)
+            try Run.write(body, header: Run.header(cols: cols, rows: rows, spinner: spinner, owner: ownerPid),
+                          to: bodyFile)
             fm.createFile(atPath: outFile.path, contents: nil)
 
             proc.executableURL = URL(fileURLWithPath: "/bin/sh")
@@ -45,16 +47,21 @@ struct HudHelperTests {
             try proc.run()
         }
 
-        private static func write(_ body: String, cols: Int, rows: Int, spinner: Bool, to file: URL) throws {
-            let header = "\(cols) \(rows) \(spinner ? 1 : 0)\n"
+        private static func header(cols: Int, rows: Int, spinner: Bool, owner: Int32) -> String {
+            "\(cols) \(rows) \(spinner ? 1 : 0) \(owner)\n"
+        }
+
+        private static func write(_ body: String, header: String, to file: URL) throws {
             try (header + body).write(to: file, atomically: true, encoding: .utf8)
         }
 
         var painted: String { (try? String(contentsOf: outFile, encoding: .utf8)) ?? "" }
         var running: Bool { proc.isRunning }
 
-        func rewrite(_ body: String, cols: Int = 40, rows: Int = 7, spinner: Bool = false) throws {
-            try Run.write(body, cols: cols, rows: rows, spinner: spinner, to: bodyFile)
+        func rewrite(_ body: String, cols: Int = 40, rows: Int = 7, spinner: Bool = false,
+                     ownerPid: Int32 = ProcessInfo.processInfo.processIdentifier) throws {
+            try Run.write(body, header: Run.header(cols: cols, rows: rows, spinner: spinner, owner: ownerPid),
+                          to: bodyFile)
         }
         func removeBody() throws { try FileManager.default.removeItem(at: bodyFile) }
 
@@ -188,6 +195,34 @@ struct HudHelperTests {
         run.wait { $0.contains("bye") }
         try run.removeBody()
         #expect(run.waitForExit())
+    }
+
+    // pins the fix for the orphan a HARD-killed app used to leave: no teardown deletes the body file and no
+    // SIGHUP reaches the pty (its session leader is `login`), so the pid in the header is the only stop.
+    @Test func exitsWhenTheOwningProcessIsGone() throws {
+        let owner = Process()
+        owner.executableURL = URL(fileURLWithPath: "/bin/sh")
+        owner.arguments = ["-c", "while :; do sleep 0.2; done"]
+        try owner.run()
+
+        let run = try Run("bye\n", cols: 40, rows: 7, spinner: true, ownerPid: owner.processIdentifier)
+        defer { run.stop() }
+        run.wait { $0.contains("bye") }
+        #expect(run.running)
+
+        owner.terminate()
+        owner.waitUntilExit()   // reaps it: kill -0 succeeds on a zombie, which still has a process entry
+
+        #expect(run.waitForExit())
+    }
+
+    @Test func keepsPaintingWhenTheHeaderNamesNoOwner() throws {
+        let run = try Run("", cols: 21, rows: 5)
+        defer { run.stop() }
+        try "40 7 0\nstill here\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
+
+        #expect(run.wait { $0.contains("still here") }.contains("still here"))
+        #expect(run.running)
     }
 
     @Test func hidesTheCursorAndRestoresItOnExit() throws {

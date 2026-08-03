@@ -83,8 +83,9 @@ public enum HudLayout {
     public static let minSizePercent = 10
 
     /// The ONLY variable the app puts in the helper's environment: the path to the body file. Everything
-    /// that an update may change — the box, the spinner — rides in that file's header line instead, since
-    /// a running process cannot see its environment change and re-spawning would blink the panel.
+    /// that an update may change — the box, the spinner, the owning pid — rides in that file's header line
+    /// instead, since a running process cannot see its environment change and re-spawning would blink the
+    /// panel.
     public static let fileEnvKey = "AGTERM_HUD_FILE"
 
     /// Frame padding in cells, applied on both sides of the content.
@@ -110,14 +111,18 @@ public enum HudLayout {
         return min(max(max(width, height), minSizePercent), maxSizePercent)
     }
 
-    /// renderedBody returns the bytes written to `fileEnvKey`'s file: a `<columns> <rows> <spinner>` header
-    /// line, then the wrapped message block, a single empty line, and the wrapped detail block. Content
-    /// lines are never empty, so that one empty line is what tells the helper where the dimmed detail
-    /// starts. The header is what lets an update change the box or the spinner without a re-spawn — the
-    /// helper re-reads this file every tick and never consults its own environment for either.
-    public static func renderedBody(for spec: HudSpec) -> String {
+    /// renderedBody returns the bytes written to `fileEnvKey`'s file: a `<columns> <rows> <spinner> <pid>`
+    /// header line, then the wrapped message block, a single empty line, and the wrapped detail block.
+    /// Content lines are never empty, so that one empty line is what tells the helper where the dimmed
+    /// detail starts. The header is what lets an update change the box or the spinner without a re-spawn —
+    /// the helper re-reads this file every tick and never consults its own environment for either.
+    ///
+    /// `ownerPid` is the pid of the process WRITING the file, and it is how a hard-killed app (crash,
+    /// `kill -9`) stops its painter: that path runs no surface teardown, so the file survives and no SIGHUP
+    /// reaches the helper, whose pty session leader is `login` rather than the app.
+    public static func renderedBody(for spec: HudSpec, ownerPid: Int32) -> String {
         let box = box(for: spec)
-        let header = "\(box.columns) \(box.rows) \(spec.spinner ? 1 : 0)\n"
+        let header = "\(box.columns) \(box.rows) \(spec.spinner ? 1 : 0) \(ownerPid)\n"
         return header + bodyLines(for: spec).map { $0 + "\n" }.joined()
     }
 

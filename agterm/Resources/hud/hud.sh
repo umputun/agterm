@@ -3,7 +3,8 @@
 #
 # One environment variable, AGTERM_HUD_FILE, points at the rendered body the app writes:
 #
-#   <columns> <rows> <spinner>   the box the app sized the slot to; spinner 1 shows the glyph, ticks faster
+#   <columns> <rows> <spinner> <pid>   the box the app sized the slot to; spinner 1 shows the glyph and
+#                                      ticks faster; pid is the app process that owns this panel
 #   message lines                wrapped by HudLayout
 #   (one empty line)             the separator HudLayout guarantees, when a detail follows
 #   detail lines                 rendered dimmed
@@ -13,7 +14,9 @@
 # is never measured here — no stty, tput, $COLUMNS or SIGWINCH — because the app computed it from the
 # terminal font and sized the slot to match; measuring would race that resize and disagree.
 #
-# Removing the file is how every teardown path stops the loop.
+# Removing the file is how every teardown path stops the loop. The pid is the second stop, and the only one
+# a HARD-killed app has: no teardown deletes the file, and no SIGHUP arrives either, because the pty's
+# session leader is the surviving `login`, not the app. Without it the loop repaints forever.
 set -uf
 
 file=${AGTERM_HUD_FILE:-}
@@ -44,6 +47,7 @@ while [ -f "$file" ]; do
     rows=5
     spinner=0
     interval=0.5
+    owner=''
 
     block=''
     sep=''
@@ -59,6 +63,7 @@ while [ -f "$file" ]; do
             case ${1:-} in ''|*[!0-9]*) ;; *) cols=$1 ;; esac
             case ${2:-} in ''|*[!0-9]*) ;; *) rows=$2 ;; esac
             case ${3:-} in 1) spinner=1; interval=0.1 ;; esac
+            case ${4:-} in ''|0|*[!0-9]*) ;; *) owner=$4 ;; esac
             continue
         fi
         count=$(( count + 1 ))
@@ -79,6 +84,12 @@ while [ -f "$file" ]; do
         fi
         block="$block$attr$pre$line"
     done 2>/dev/null < "$file"
+
+    # kill is a shell builtin, so the liveness check costs no fork and does not slow the tick. A header
+    # naming no owner keeps painting, which is what leaves the file the only stop.
+    if [ -n "$owner" ] && ! kill -0 "$owner" 2>/dev/null; then
+        exit 0
+    fi
 
     top=$(( (rows - count) / 2 ))
     pad=''

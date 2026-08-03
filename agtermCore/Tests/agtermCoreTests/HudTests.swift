@@ -15,7 +15,7 @@ struct HudTests {
 
         #expect(box.columns == 1 + HudLayout.horizontalPadding * 2)
         #expect(box.rows == 1 + HudLayout.verticalPadding * 2)
-        #expect(HudLayout.renderedBody(for: HudSpec(message: "")) == "5 3 0\n")
+        #expect(HudLayout.renderedBody(for: HudSpec(message: ""), ownerPid: 4242) == "5 3 0 4242\n")
     }
 
     @Test func longSingleWordIsBrokenAtMaxColumns() {
@@ -44,30 +44,31 @@ struct HudTests {
     @Test func detailFollowsMessageAfterASingleEmptyLine() {
         let spec = HudSpec(message: "gathering options", detail: "scanning 4 repositories")
 
-        let body = HudLayout.renderedBody(for: spec)
+        let body = HudLayout.renderedBody(for: spec, ownerPid: 4242)
         let box = HudLayout.box(for: spec)
 
-        #expect(body == "27 5 0\ngathering options\n\nscanning 4 repositories\n")
+        #expect(body == "27 5 0 4242\ngathering options\n\nscanning 4 repositories\n")
         #expect(box.columns == 23 + HudLayout.horizontalPadding * 2)
         #expect(box.rows == 3 + HudLayout.verticalPadding * 2)
     }
 
     @Test func emptyDetailAddsNoSeparator() {
-        let body = HudLayout.renderedBody(for: HudSpec(message: "working", detail: "   "))
+        let body = HudLayout.renderedBody(for: HudSpec(message: "working", detail: "   "), ownerPid: 4242)
 
-        #expect(body == "11 3 0\nworking\n")
+        #expect(body == "11 3 0 4242\nworking\n")
     }
 
     // the header is the whole reason `session.hud.update` can grow the panel or start the spinner without
-    // re-spawning the helper, which reads its environment once and would keep the box it started with.
-    @Test func theHeaderCarriesTheBoxAndTheSpinnerFlag() {
+    // re-spawning the helper, which reads its environment once and would keep the box it started with. The
+    // pid is the helper's second stop, for the teardown a hard-killed app never runs.
+    @Test func theHeaderCarriesTheBoxTheSpinnerFlagAndTheOwningPid() {
         let spec = HudSpec(message: "working", spinner: true)
         let box = HudLayout.box(for: spec)
 
-        let body = HudLayout.renderedBody(for: spec)
+        let body = HudLayout.renderedBody(for: spec, ownerPid: 4242)
 
-        #expect(body.hasPrefix("\(box.columns) \(box.rows) 1\n"))
-        #expect(body == "13 3 1\nworking\n")
+        #expect(body.hasPrefix("\(box.columns) \(box.rows) 1 4242\n"))
+        #expect(body == "13 3 1 4242\nworking\n")
     }
 
     @Test func embeddedNewlinesBecomeHardBreaksWithNoBlankLines() {

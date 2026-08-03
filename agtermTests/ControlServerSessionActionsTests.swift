@@ -190,6 +190,10 @@ final class ControlServerSessionActionsTests: XCTestCase {
         try? String(contentsOfFile: ControlServer.bodyFile(for: session.id), encoding: .utf8)
     }
 
+    /// The pid the helper watches. These tests run inside the app process, so asserting against it is what
+    /// pins that the header names the WRITER — a pid from anywhere else would never die with the app.
+    private static var ownerPid: Int32 { ProcessInfo.processInfo.processIdentifier }
+
     func testHudOpenPointsTheSlotAtTheBundledHelperAndWritesTheBody() throws {
         let (_, session) = try makeHudSession()
         let spec = HudSpec(message: "gathering options", detail: "scanning 4 repositories", spinner: true)
@@ -199,7 +203,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertTrue(response.ok, response.error ?? "")
         XCTAssertEqual(session.hudSpec, spec)
         XCTAssertEqual(session.hudFile, ControlServer.bodyFile(for: session.id))
-        XCTAssertEqual(bodyText(session), HudLayout.renderedBody(for: spec))
+        XCTAssertEqual(bodyText(session), HudLayout.renderedBody(for: spec, ownerPid: Self.ownerPid))
         // the command is eval'd by the overlay wrapper, so the bundled path must arrive shell-escaped
         let command = try XCTUnwrap(session.overlayCommand)
         XCTAssertEqual(command, ControlServer.helperCommand())
@@ -236,11 +240,11 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertTrue(response.ok, response.error ?? "")
         XCTAssertEqual(session.overlaySlotGeneration, generation, "an update must not re-open the slot")
         XCTAssertEqual(session.hudFile, file)
-        XCTAssertEqual(bodyText(session), HudLayout.renderedBody(for: update))
+        XCTAssertEqual(bodyText(session), HudLayout.renderedBody(for: update, ownerPid: Self.ownerPid))
         XCTAssertEqual(session.overlaySizePercent, 40)
         // the box rides in the body's header line, which is what lets a running helper re-centre
         XCTAssertEqual(bodyText(session)?.split(separator: "\n").first.map(String.init),
-                       "\(HudLayout.box(for: update).columns) \(HudLayout.box(for: update).rows) 0")
+                       "\(HudLayout.box(for: update).columns) \(HudLayout.box(for: update).rows) 0 \(Self.ownerPid)")
     }
 
     func testHudCloseClearsTheSlotAndRemovesTheBodyFile() throws {
@@ -292,7 +296,7 @@ final class ControlServerSessionActionsTests: XCTestCase {
         XCTAssertTrue(server.openHud(session.id.uuidString, window: nil, spec: second).ok)
 
         XCTAssertEqual(session.hudSpec, second)
-        XCTAssertEqual(bodyText(session), HudLayout.renderedBody(for: second))
+        XCTAssertEqual(bodyText(session), HudLayout.renderedBody(for: second, ownerPid: Self.ownerPid))
         XCTAssertGreaterThan(session.overlaySlotGeneration, generation, "a replacement must remount the panel")
     }
 

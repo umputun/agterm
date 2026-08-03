@@ -120,9 +120,10 @@ extension ControlServer {
     }
 
     /// Writes the rendered body ATOMICALLY (temp file plus rename): the helper re-reads it every tick with
-    /// no locking, so a partial write would paint half a message.
+    /// no locking, so a partial write would paint half a message. The header carries THIS process's pid,
+    /// which is the only stop a painter has when the app is hard-killed and runs no teardown.
     private static func writeBody(_ spec: HudSpec, to path: String) -> Bool {
-        let body = Data(HudLayout.renderedBody(for: spec).utf8)
+        let body = Data(HudLayout.renderedBody(for: spec, ownerPid: ProcessInfo.processInfo.processIdentifier).utf8)
         return (try? body.write(to: URL(fileURLWithPath: path), options: .atomic)) != nil
     }
 }
