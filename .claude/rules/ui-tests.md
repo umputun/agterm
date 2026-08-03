@@ -100,7 +100,10 @@ These run inside the app, so a mistake can kill the host instead of failing an a
 - Dismiss Settings by the close button of `app.windows.containing(.any, identifier: <a control on the
   tab>)`, never ⌘W: that reaches the app's Close Session command and takes the seeded session with it,
   which a session-row-count oracle reads as a collapse rather than as a closed session.
-- `ghostty_surface_foreground_pid` returns the actual foreground process. Restore skips only a known idle
+- `ghostty_surface_foreground_pid` is `tcgetpgrp`, so it returns the foreground process GROUP id. Under a
+  job-control shell that leader IS the program; a `--command` pane has no such shell and its leader is
+  unreadable setuid-root `login`, which is why the tree read descends to the leader's children and the
+  restore capture does not (see [[control-api]]). Restore skips only a known idle
   shell with no payload arguments except flags; shell scripts and `sh -c` payloads are captured. Use
   blocking `tee <file>` as the e2e marker and prove relaunch by delete/recreate.
   `RestoreCommandUITests.testRestoreReRunsShellScriptWrapper` uses `sh -c 'tee ...; true'` so `sh` remains
