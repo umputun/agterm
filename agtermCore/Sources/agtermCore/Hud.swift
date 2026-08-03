@@ -11,6 +11,10 @@ public struct HudSpec: Codable, Equatable, Sendable {
     public let sizePercent: Int?
     public let position: HudPosition
 
+    /// Cap on `message` and `detail` each, enforced by the dispatcher. The panel wraps at
+    /// `HudLayout.maxColumns` and is clamped to `HudLayout.maxSizePercent`, so longer text cannot be shown.
+    public static let maxTextLength = 256
+
     public init(message: String, detail: String? = nil, spinner: Bool = false, backgroundColor: String? = nil,
                 sizePercent: Int? = nil, position: HudPosition = .center) {
         self.message = message

@@ -94,6 +94,26 @@ extension ControlServer: ControlActions {
         }
     }
 
+    /// The HUD's host half needs the bundled helper's resolved path and the measured pane metrics that size
+    /// the panel; neither is resolvable in the app yet, so the effects are refused rather than half-applied.
+    func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
+        hudUnavailable(target, window: window)
+    }
+
+    func updateHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
+        hudUnavailable(target, window: window)
+    }
+
+    func closeHud(_ target: String?, window: String?) -> ControlResponse {
+        hudUnavailable(target, window: window)
+    }
+
+    private func hudUnavailable(_ target: String?, window: String?) -> ControlResponse {
+        resolver.resolveSession(target, window: window) { _, _ in
+            ControlResponse(ok: false, error: "hud is not available in this build")
+        }
+    }
+
     /// Destination addressing is mutually exclusive: `workspace` (id / unique prefix / `active`, the
     /// default) or `workspaceName` (the sidebar label) plus optional `createWorkspace` — create needs a
     /// name, there is nothing to create by id. cwd/command/name are applied in `makeSessionResponse`.

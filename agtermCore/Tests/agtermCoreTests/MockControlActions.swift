@@ -62,6 +62,9 @@ final class MockControlActions: ControlActions {
         case overlayClose(target: String?, window: String?, pane: OverlayPane?)
         case overlayResize(target: String?, window: String?, sizePercent: Int?)
         case overlayResult(target: String?, window: String?, pane: OverlayPane?)
+        case hudOpen(target: String?, window: String?, HudSpec)
+        case hudUpdate(target: String?, window: String?, HudSpec)
+        case hudClose(target: String?, window: String?)
         case sessionBackground(target: String?, window: String?, ControlSessionBackgroundOptions)
         case sessionText(target: String?, window: String?, ControlSessionTextOptions)
         case windowNew(String?, minimized: Bool)
@@ -120,6 +123,9 @@ final class MockControlActions: ControlActions {
     var nextOverlayCloseResponse = ControlResponse(ok: true)
     var nextOverlayResizeResponse = ControlResponse(ok: true)
     var nextOverlayResultResponse = ControlResponse(ok: true)
+    var nextHudOpenResponse = ControlResponse(ok: true)
+    var nextHudUpdateResponse = ControlResponse(ok: true)
+    var nextHudCloseResponse = ControlResponse(ok: true)
     var nextSessionBackgroundResponse = ControlResponse(ok: true)
     var nextSessionTextResponse = ControlResponse(ok: true)
     var nextSurfaceZoomResponse = ControlResponse(ok: true)
@@ -421,6 +427,21 @@ final class MockControlActions: ControlActions {
     func sessionOverlayResult(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse {
         calls.append(.overlayResult(target: target, window: window, pane: pane))
         return nextOverlayResultResponse
+    }
+
+    func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
+        calls.append(.hudOpen(target: target, window: window, spec))
+        return nextHudOpenResponse
+    }
+
+    func updateHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse {
+        calls.append(.hudUpdate(target: target, window: window, spec))
+        return nextHudUpdateResponse
+    }
+
+    func closeHud(_ target: String?, window: String?) -> ControlResponse {
+        calls.append(.hudClose(target: target, window: window))
+        return nextHudCloseResponse
     }
 
     func setSessionBackground(_ target: String?, window: String?,

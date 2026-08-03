@@ -61,7 +61,8 @@ extension ControlDispatcher {
         }
     }
 
-    private func containsControlCharacters(_ text: String) -> Bool {
+    /// Shared by every arm that forwards caller text into a terminal surface or a rendered file.
+    func containsControlCharacters(_ text: String) -> Bool {
         text.unicodeScalars.contains { $0.value < 0x20 || $0.value == 0x7f }
     }
 }

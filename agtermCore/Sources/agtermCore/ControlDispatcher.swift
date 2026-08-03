@@ -68,6 +68,14 @@ public protocol ControlActions {
     func closeSessionOverlay(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse
     func resizeSessionOverlay(_ target: String?, window: String?, sizePercent: Int?) -> ControlResponse
     func sessionOverlayResult(_ target: String?, window: String?, pane: OverlayPane?) -> ControlResponse
+    /// Post a message panel over the session, occupying the same overlay slot a program overlay uses. The
+    /// dispatcher validated the text, color, percent, and position; the host measures the terminal font,
+    /// renders the message to a file, and drives the store.
+    func openHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse
+    /// Replace a live panel's text in place — same surface, no respawn. `spec.backgroundColor` cannot change
+    /// here, the surface having read it once at creation.
+    func updateHud(_ target: String?, window: String?, spec: HudSpec) -> ControlResponse
+    func closeHud(_ target: String?, window: String?) -> ControlResponse
     func setSessionBackground(_ target: String?, window: String?,
                               options: ControlSessionBackgroundOptions) -> ControlResponse
     func readSessionText(_ target: String?, window: String?, options: ControlSessionTextOptions) -> ControlResponse
@@ -190,7 +198,7 @@ public struct ControlDispatcher {
         case .pickOpen, .pickResult, .pickCancel:
             return dispatchPickCommand(request)
         case .sessionHudOpen, .sessionHudUpdate, .sessionHudClose:
-            return nil
+            return dispatchHudCommand(request)
         }
     }
 

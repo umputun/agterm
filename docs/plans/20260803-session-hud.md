@@ -320,15 +320,24 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 - Create: `agtermCore/Sources/agtermCore/ControlDispatcher+Hud.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/ControlDispatcherHudTests.swift`
 - Modify: `agtermCore/Sources/agtermCore/ControlDispatcher.swift`
+- Modify: `agtermCore/Sources/agtermCore/Hud.swift` (added during Task 6: `HudSpec.maxTextLength`)
+- Modify: `agtermCore/Sources/agtermCore/ControlDispatcher+Pick.swift` (added during Task 6: shared control-character check)
+- Modify: `agterm/Control/ControlServer+SessionActions.swift` (added during Task 6: refusing conformance stubs)
 - Modify: `agtermCore/Tests/agtermCoreTests/MockControlActions.swift`
 
-- [ ] add `openHud`/`updateHud`/`closeHud` to the `ControlActions` protocol and to `MockControlActions`
-- [ ] create `dispatchHudCommand` mirroring `ControlDispatcher+Pick.swift`: require a non-empty message on open, reject control characters in message and detail, cap length, validate `sizePercent` 1...100 and `color` through the shared `#rrggbb` validator, and validate `position` against `HudPosition.allCases` (absent means `center`, per the `StatusShape` precedent)
-- [ ] reject `session.hud.update` with no message; route `session.hud.close` with no extra arguments
-- [ ] wire the three cases into `ControlDispatcher`'s routing — never into the fallback switch
-- [ ] write tests for every validation branch (empty message, control characters, oversized message, bad percent, bad color, unknown position, update without message)
-- [ ] write tests asserting the dispatcher calls the right action with the parsed spec
-- [ ] run `swift test --filter ControlDispatcherHudTests` — must pass before task 7
+- [x] add `openHud`/`updateHud`/`closeHud` to the `ControlActions` protocol and to `MockControlActions`
+- [x] create `dispatchHudCommand` mirroring `ControlDispatcher+Pick.swift`: require a non-empty message on open, reject control characters in message and detail, cap length, validate `sizePercent` 1...100 and `color` through the shared `#rrggbb` validator, and validate `position` against `HudPosition.allCases` (absent means `center`, per the `StatusShape` precedent)
+- [x] reject `session.hud.update` with no message; route `session.hud.close` with no extra arguments
+- [x] wire the three cases into `ControlDispatcher`'s routing — never into the fallback switch
+- [x] write tests for every validation branch (empty message, control characters, oversized message, bad percent, bad color, unknown position, update without message)
+- [x] write tests asserting the dispatcher calls the right action with the parsed spec
+- [x] ➕ add `HudSpec.maxTextLength` (256, matching `WatermarkConfig.maxTextLength`) as the shared message/detail
+  cap, and drop `private` from `ControlDispatcher+Pick.swift`'s `containsControlCharacters` so the HUD arm
+  reuses it instead of adding a fourth copy of the predicate
+- [x] ➕ add three refusing `openHud`/`updateHud`/`closeHud` stubs to `ControlServer+SessionActions.swift` —
+  the new required protocol members break the app target's `ControlActions` conformance, and Task 8 replaces
+  the bodies with the real effects
+- [x] run `swift test --filter ControlDispatcherHudTests` — must pass before task 7
 
 ### Task 7: Bundled helper script
 
