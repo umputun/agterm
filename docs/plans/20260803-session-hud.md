@@ -223,16 +223,16 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 - Create: `agtermCore/Sources/agtermCore/Hud.swift`
 - Create: `agtermCore/Tests/agtermCoreTests/HudTests.swift`
 
-- [ ] create `HudSpec` (message, detail, spinner, backgroundColor, sizePercent, position) as a `Codable`, `Sendable` value, defaulting `position` to `.center`
-- [ ] create `HudPosition` (`top`/`center`/`bottom`, `CaseIterable` so validation and CLI help derive from it) with the `edgeMarginPercent` constant
-- [ ] create `PaneMetrics` with Double-backed cell and pane dimensions — no CoreGraphics types cross the module boundary
-- [ ] add `HudLayout.box(for:)` — wrap message and detail at `maxColumns`, add the padding frame, return columns/rows
-- [ ] add `HudLayout.sizePercent(box:pane:)` — cell box to pane percentage, clamped to `minSizePercent...maxSizePercent`
-- [ ] add `HudLayout.renderedBody(for:)` — the exact bytes the app writes to `AGTERM_HUD_FILE`
-- [ ] write tests for wrapping (short message, long single word, message plus detail, embedded newlines)
-- [ ] write tests for the percent conversion (typical pane, tiny pane clamping to min, huge message clamping to max, zero-size pane)
-- [ ] write tests for the position default (omitted decodes to `center`) and that every `HudPosition` case round-trips
-- [ ] run `cd agtermCore && swift test --filter HudTests` — must pass before task 2
+- [x] create `HudSpec` (message, detail, spinner, backgroundColor, sizePercent, position) as a `Codable`, `Sendable` value, defaulting `position` to `.center`
+- [x] create `HudPosition` (`top`/`center`/`bottom`, `CaseIterable` so validation and CLI help derive from it) with the `edgeMarginPercent` constant
+- [x] create `PaneMetrics` with Double-backed cell and pane dimensions — no CoreGraphics types cross the module boundary
+- [x] add `HudLayout.box(for:)` — wrap message and detail at `maxColumns`, add the padding frame, return columns/rows
+- [x] add `HudLayout.sizePercent(box:pane:)` — cell box to pane percentage, clamped to `minSizePercent...maxSizePercent`
+- [x] add `HudLayout.renderedBody(for:)` — the exact bytes the app writes to `AGTERM_HUD_FILE`
+- [x] write tests for wrapping (short message, long single word, message plus detail, embedded newlines)
+- [x] write tests for the percent conversion (typical pane, tiny pane clamping to min, huge message clamping to max, zero-size pane)
+- [x] write tests for the position default (omitted decodes to `center`) and that every `HudPosition` case round-trips
+- [x] run `cd agtermCore && swift test --filter HudTests` — must pass before task 2
 
 ### Task 2: Session state for the HUD slot
 
