@@ -1,10 +1,12 @@
 import Foundation
 import Testing
+@testable import agtermCore
 
 // Tests the shipped panel painter `agterm/Resources/hud/hud.sh` by running it against a temp body file and
 // reading the escape stream it writes. It reaches the app target's resource on purpose: the script is the
-// rendering half of the agtermCore `HudLayout` model, and the two contracts (the rendered body's empty-line
-// separator, the app-supplied box) only hold if both halves are pinned together.
+// rendering half of the agtermCore `HudLayout` model, and the three contracts (the header line, the
+// rendered body's empty-line separator, the file as the ONLY changing input) only hold if both halves are
+// pinned together.
 struct HudHelperTests {
     private static var helper: String {
         URL(fileURLWithPath: #filePath)      // …/agtermCore/Tests/agtermCoreTests/HudHelperTests.swift
@@ -32,22 +34,28 @@ struct HudHelperTests {
             try fm.createDirectory(at: dir, withIntermediateDirectories: true)
             bodyFile = dir.appendingPathComponent("body")
             outFile = dir.appendingPathComponent("out")
-            try body.write(to: bodyFile, atomically: true, encoding: .utf8)
+            try Run.write(body, cols: cols, rows: rows, spinner: spinner, to: bodyFile)
             fm.createFile(atPath: outFile.path, contents: nil)
 
             proc.executableURL = URL(fileURLWithPath: "/bin/sh")
             proc.arguments = [HudHelperTests.helper]
-            proc.environment = ["AGTERM_HUD_FILE": bodyFile.path, "AGTERM_HUD_COLS": String(cols),
-                                "AGTERM_HUD_ROWS": String(rows), "AGTERM_HUD_SPINNER": spinner ? "1" : "0"]
+            proc.environment = [HudLayout.fileEnvKey: bodyFile.path]
             proc.standardOutput = try FileHandle(forWritingTo: outFile)
             proc.standardError = FileHandle.nullDevice
             try proc.run()
         }
 
+        private static func write(_ body: String, cols: Int, rows: Int, spinner: Bool, to file: URL) throws {
+            let header = "\(cols) \(rows) \(spinner ? 1 : 0)\n"
+            try (header + body).write(to: file, atomically: true, encoding: .utf8)
+        }
+
         var painted: String { (try? String(contentsOf: outFile, encoding: .utf8)) ?? "" }
         var running: Bool { proc.isRunning }
 
-        func rewrite(_ body: String) throws { try body.write(to: bodyFile, atomically: true, encoding: .utf8) }
+        func rewrite(_ body: String, cols: Int = 40, rows: Int = 7, spinner: Bool = false) throws {
+            try Run.write(body, cols: cols, rows: rows, spinner: spinner, to: bodyFile)
+        }
         func removeBody() throws { try FileManager.default.removeItem(at: bodyFile) }
 
         @discardableResult
@@ -80,7 +88,7 @@ struct HudHelperTests {
         #expect(run.wait { $0.contains("gathering options") }.contains("gathering options"))
     }
 
-    @Test func placesTheMessageInTheBoxTheEnvironmentGave() throws {
+    @Test func placesTheMessageInTheBoxTheHeaderGave() throws {
         // cols 41 / "abc" leaves 19 columns to the left, rows 9 / 1 line leaves 4 rows above
         let run = try Run("abc\n", cols: 41, rows: 9)
         defer { run.stop() }
@@ -109,7 +117,7 @@ struct HudHelperTests {
         let run = try Run("first\n", cols: 40, rows: 7, spinner: true)
         defer { run.stop() }
         run.wait { $0.contains("first") }
-        try run.rewrite("second\n")
+        try run.rewrite("second\n", spinner: true)
         #expect(run.wait { $0.contains("second") }.contains("second"))
         #expect(run.running)
     }
@@ -118,9 +126,43 @@ struct HudHelperTests {
         let run = try Run("abc\n", cols: 41, rows: 9, spinner: true)
         defer { run.stop() }
         run.wait { $0.contains("abc") }
-        try run.rewrite("abcdefg\n")
+        try run.rewrite("abcdefg\n", cols: 41, rows: 9, spinner: true)
         // 41 - 7 content - 2 spinner leaves 16 to the left, versus 18 for the shorter message
         #expect(run.wait { $0.contains("\(Self.esc)[16C") }.contains("\(Self.esc)[16C"))
+    }
+
+    // the header is what makes `session.hud.update` able to grow the panel: a running helper cannot see its
+    // environment change, so a box carried there would leave the text centred in the box it spawned with.
+    @Test func rewritingWithANewBoxRecentersWithoutRespawning() throws {
+        let run = try Run("abc\n", cols: 41, rows: 9)
+        defer { run.stop() }
+        let e = Self.esc
+        run.wait { $0.contains("\(e)[19Cabc") }
+        try run.rewrite("abc\n", cols: 21, rows: 5)
+        // 21 - 3 leaves 9 to the left, and 5 rows - 1 line leaves 2 rows above
+        let frame = "\(e)[H\(e)[J\(e)[E\(e)[E\(e)[9Cabc"
+        #expect(run.wait { $0.contains(frame) }.contains(frame))
+        #expect(run.running)
+    }
+
+    @Test func rewritingTurnsTheSpinnerOnWithoutRespawning() throws {
+        let run = try Run("busy\n", cols: 40, rows: 7)
+        defer { run.stop() }
+        run.wait { $0.contains("busy") }
+        #expect(!run.painted.contains("| busy"))
+        try run.rewrite("busy\n", spinner: true)
+        #expect(run.wait { $0.contains("| busy") }.contains("| busy"))
+        #expect(run.running)
+    }
+
+    // line one is always the header; a body whose header is not numbers paints in the built-in box instead
+    // of arithmetic on garbage.
+    @Test func aMalformedHeaderFallsBackToTheDefaultBox() throws {
+        let run = try Run("", cols: 21, rows: 5)
+        defer { run.stop() }
+        try "not a header\nvisible\n".write(to: run.bodyFile, atomically: true, encoding: .utf8)
+        // the default 40-column box leaves 16 to the left of a 7-character line, where 21 would leave 7
+        #expect(run.wait { $0.contains("\(Self.esc)[16Cvisible") }.contains("\(Self.esc)[16Cvisible"))
     }
 
     @Test func spinnerPrefixesTheFirstLineAndAdvances() throws {

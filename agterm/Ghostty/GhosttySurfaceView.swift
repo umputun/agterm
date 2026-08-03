@@ -65,6 +65,12 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
     /// (always 0). `destroySurface` reads then deletes it on every teardown path — no registry or sweep.
     var overlayCodeFile: String?
 
+    /// For a HUD surface: the body file the bundled helper re-reads every tick, nil otherwise. Deleted on
+    /// every teardown path like `overlayCodeFile`, which both removes the temp file and is how the helper
+    /// learns to stop. `session.hud.open` writes it AFTER the store call, so a replacement's teardown
+    /// cannot delete the body the incoming HUD just wrote at the same per-session path.
+    var hudBodyFile: String?
+
     /// For an OVERLAY surface: its own solid `#rrggbb` background (`session.overlay.open --background-color`),
     /// nil for the theme background. Applied in `createSurface`, which the session-watermark path skips
     /// because the overlay is sessionless.
@@ -354,6 +360,7 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
         ownedConfigs.forEach { ghostty_config_free($0) }
         ownedConfigs = []
         if let f = overlayCodeFile { try? FileManager.default.removeItem(atPath: f) }
+        if let f = hudBodyFile { try? FileManager.default.removeItem(atPath: f) }
     }
 
     // MARK: - Callback entry points
@@ -629,6 +636,11 @@ final class GhosttySurfaceView: NSView, TerminalSurface {
             }
             try? FileManager.default.removeItem(atPath: f)
             overlayCodeFile = nil
+        }
+        // the HUD's body file has no status to read: deleting it IS the teardown, on every path.
+        if let f = hudBodyFile {
+            try? FileManager.default.removeItem(atPath: f)
+            hudBodyFile = nil
         }
         // nil the store-capturing callbacks last to break the store -> session -> surface -> closure -> store
         // retain cycle. MUST stay after the onExitCodeCaptured?(code) call above, which niling earlier would

@@ -15,7 +15,7 @@ struct HudTests {
 
         #expect(box.columns == 1 + HudLayout.horizontalPadding * 2)
         #expect(box.rows == 1 + HudLayout.verticalPadding * 2)
-        #expect(HudLayout.renderedBody(for: HudSpec(message: "")).isEmpty)
+        #expect(HudLayout.renderedBody(for: HudSpec(message: "")) == "5 3 0\n")
     }
 
     @Test func longSingleWordIsBrokenAtMaxColumns() {
@@ -47,7 +47,7 @@ struct HudTests {
         let body = HudLayout.renderedBody(for: spec)
         let box = HudLayout.box(for: spec)
 
-        #expect(body == "gathering options\n\nscanning 4 repositories\n")
+        #expect(body == "27 5 0\ngathering options\n\nscanning 4 repositories\n")
         #expect(box.columns == 23 + HudLayout.horizontalPadding * 2)
         #expect(box.rows == 3 + HudLayout.verticalPadding * 2)
     }
@@ -55,7 +55,19 @@ struct HudTests {
     @Test func emptyDetailAddsNoSeparator() {
         let body = HudLayout.renderedBody(for: HudSpec(message: "working", detail: "   "))
 
-        #expect(body == "working\n")
+        #expect(body == "11 3 0\nworking\n")
+    }
+
+    // the header is the whole reason `session.hud.update` can grow the panel or start the spinner without
+    // re-spawning the helper, which reads its environment once and would keep the box it started with.
+    @Test func theHeaderCarriesTheBoxAndTheSpinnerFlag() {
+        let spec = HudSpec(message: "working", spinner: true)
+        let box = HudLayout.box(for: spec)
+
+        let body = HudLayout.renderedBody(for: spec)
+
+        #expect(body.hasPrefix("\(box.columns) \(box.rows) 1\n"))
+        #expect(body == "13 3 1\nworking\n")
     }
 
     @Test func embeddedNewlinesBecomeHardBreaksWithNoBlankLines() {

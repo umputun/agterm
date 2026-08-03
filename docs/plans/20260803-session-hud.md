@@ -199,13 +199,16 @@ reports the effective value, including the `center` default, so a script never h
 `overlay` field reports **false** and `overlaySizePercent` stays omitted, so a script polling "is a program
 covering this session" cannot mistake a HUD for a running program; the HUD's size is reported inside `hud`.
 
-**Helper contract** (`agterm/Resources/hud/hud.sh`), driven entirely by environment:
+**Helper contract** (`agterm/Resources/hud/hud.sh`), one environment variable and one file:
 
-- `AGTERM_HUD_FILE` — path to the rendered message file (message and detail, newline separated).
-- `AGTERM_HUD_COLS` / `AGTERM_HUD_ROWS` — the box the app computed, so centering needs no `stty`/`tput`.
-- `AGTERM_HUD_SPINNER` — `1` enables the frame counter and the faster tick.
+- `AGTERM_HUD_FILE` — path to the rendered body (`HudLayout.renderedBody`), read every tick.
+- The body's FIRST line is `<columns> <rows> <spinner>`: the box the app computed, so centering needs no
+  `stty`/`tput`, and `1` in the third field enables the frame counter and the faster tick.
+- The remaining lines are the wrapped message, one empty line, and the dimmed detail.
 
-The helper re-reads the file and the box every tick, so an update needs no signal. It exits when the file
+Everything an update may change therefore rides in the file, not the environment (which a running process
+cannot see change), so `hud update` repaints in place with no re-spawn and no blink. The app writes that
+file atomically (temp plus rename), since the helper re-reads it unlocked. It exits when the file
 disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 
 **Lifecycle**: HUDs are live-only. Nothing persists across restart, matching overlays.
@@ -346,32 +349,44 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 - Modify: `project.yml`
 - Create: `agtermCore/Tests/agtermCoreTests/HudHelperTests.swift`
 
-- [x] write `hud.sh`: each tick read `AGTERM_HUD_FILE` plus `AGTERM_HUD_COLS`/`AGTERM_HUD_ROWS`, clear, print the message centered in that box with the detail line dimmed, sleep ~500ms (~100ms and advance the spinner frame when `AGTERM_HUD_SPINNER=1`), exit when the file disappears
-- [x] keep it POSIX `sh` with nothing beyond `printf`/`sleep` — the box comes from the environment, so no `stty`, `tput`, `$COLUMNS`, or SIGWINCH trap
+- [x] write `hud.sh`: each tick read `AGTERM_HUD_FILE`, take the box and spinner flag from its header line, clear, print the message centered in that box with the detail line dimmed, sleep ~500ms (~100ms and advance the spinner frame with the spinner on), exit when the file disappears
+- [x] keep it POSIX `sh` with nothing beyond `printf`/`sleep` — the box comes from the body file, so no `stty`, `tput`, `$COLUMNS`, or SIGWINCH trap
 - [x] add `agterm/Resources/hud` to the `agterm` target's `sources.excludes` (`project.yml:53` pattern) **and** as a folder-reference resource entry (`:78-82` pattern), landing at `Contents/Resources/hud`
 - [x] write tests that run the script against a temp file and assert it renders the message, picks up a rewritten file, honors the box, and exits when the file is removed
 - [x] run the new tests and `xcodegen generate` — must pass before task 8
-- [x] ⚠️ the box is delivered by environment variables, which a running process cannot see change, so it is
-  read once at startup rather than each tick. Task 8 must therefore treat a box change as a respawn: when
-  `updateHud`'s recomputed box differs from the spawned one, re-open the slot (`openHud`) instead of only
-  rewriting the file, or the text stays centered in the old box
-- [x] ⚠️ the helper re-reads the body file on every tick with no locking, so Task 8 must write it atomically
-  (temp file plus rename) or a repaint can catch a half-written body
+- [x] ⚠️ the box was delivered by environment variables, which a running process cannot see change, so an
+  update would have left the text centered in the spawned box. RESOLVED in Task 8 by moving the box and the
+  spinner flag into the body file's header line — the helper re-reads them every tick, so no respawn and no
+  blink. `AGTERM_HUD_COLS`/`_ROWS`/`_SPINNER` no longer exist; `AGTERM_HUD_FILE` is the whole environment
+- [x] ⚠️ the helper re-reads the body file on every tick with no locking. RESOLVED in Task 8: the app writes
+  it with `Data.write(options: .atomic)` (temp file plus rename), so a repaint sees the old body or the new
 
 ### Task 8: App wiring — font measurement, non-focusing surface, temp-file lifecycle
 
 **Files:**
 - Modify: `agterm/agtermApp.swift`
-- Modify: `agterm/Control/ControlServer+SessionActions.swift`
+- Modify: `agterm/Ghostty/GhosttySurfaceView.swift` (added during Task 8: `hudBodyFile`)
+- Modify: `agterm/Control/ControlServer+SessionActions.swift` (stubs removed)
+- Create: `agterm/Control/ControlServer+Hud.swift` (added during Task 8, see below)
+- Modify: `agtermCore/Sources/agtermCore/Hud.swift` (added during Task 8: `fileEnvKey`, header line)
+- Modify: `agterm/Resources/hud/hud.sh` and `agtermCore/Tests/agtermCoreTests/{HudTests,HudHelperTests}.swift`
 - Modify: `agtermTests/ControlServerSessionActionsTests.swift`
 
-- [ ] measure the configured terminal font (name + size) with CTFont advance to build `PaneMetrics`, and derive the pane's live size from the session's surface bounds
-- [ ] in `makeOverlaySurface`, spawn a HUD slot with `autoFocus: false` and the HUD environment (`AGTERM_HUD_FILE`, `AGTERM_HUD_COLS`, `AGTERM_HUD_ROWS`, `AGTERM_HUD_SPINNER`), leaving program overlays byte-for-byte unchanged
-- [ ] resolve the bundled helper path and shell-escape it through `ShellEscape` into the existing `overlayExitWrapper`
-- [ ] implement `openHud`/`updateHud`/`closeHud` in `ControlServer+SessionActions.swift`: write/rewrite the temp file, compute the size via `HudLayout`, honor an explicit `sizePercent` override, and delete the temp file on teardown
-- [ ] make the exit-code capture path ignore HUD surfaces so a HUD never records an `overlayExitCode`
-- [ ] write tests for environment and command composition, size computation from measured metrics, and temp-file cleanup on close
-- [ ] run via `-only-testing:` — must pass before task 9
+- [x] measure the configured terminal font (name + size) with CTFont advance to build `PaneMetrics`, and derive the pane's live size from the session's surface bounds
+- [x] in `makeOverlaySurface`, spawn a HUD slot with `autoFocus: false` and the HUD environment (`AGTERM_HUD_FILE` — see the Task 7 ⚠️: the box and spinner moved into the body file's header line, so no other variable exists), leaving program overlays byte-for-byte unchanged
+- [x] resolve the bundled helper path and shell-escape it through `ShellEscape` into the existing `overlayExitWrapper`
+- [x] implement `openHud`/`updateHud`/`closeHud`: write/rewrite the temp file, compute the size via `HudLayout`, honor an explicit `sizePercent` override, and delete the temp file on teardown
+- [x] make the exit-code capture path ignore HUD surfaces so a HUD never records an `overlayExitCode`
+- [x] write tests for environment and command composition, size computation from measured metrics, and temp-file cleanup on close
+- [x] run via `-only-testing:` — must pass before task 9
+- [x] ➕ the effects went into a NEW `agterm/Control/ControlServer+Hud.swift` rather than growing the
+  759-line `ControlServer+SessionActions.swift`, following the `ControlServer+Pick.swift` split: the host
+  half is font measurement, pane geometry, bundle resolution, and temp-file IO, none of which the
+  target-resolution file owns. The three refusing stubs Task 6 added were deleted with it
+- [x] ➕ the body file is per SESSION (`agterm-hud-<id>.txt`), not per open, so an update rewrites the path
+  the running helper already opened. `GhosttySurfaceView.hudBodyFile` deletes it on every teardown path
+  beside `overlayCodeFile`, which is also how a torn-down helper learns to exit; `session.hud.close` deletes
+  it too, for a HUD whose surface never realized
 
 ### Task 9: Zoom resolution
 

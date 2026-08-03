@@ -1,30 +1,23 @@
 #!/bin/sh
 # hud.sh — the panel painter agterm runs in a session's overlay slot for `session.hud.*`.
 #
-# Driven entirely by the environment the app injects at spawn:
-#   AGTERM_HUD_FILE        rendered body — wrapped message lines, ONE empty line, wrapped detail lines
-#   AGTERM_HUD_COLS/_ROWS  the cell box the app sized the slot to
-#   AGTERM_HUD_SPINNER=1   show the spinner and tick faster
+# One environment variable, AGTERM_HUD_FILE, points at the rendered body the app writes:
 #
-# The box is never measured here — no stty, tput, $COLUMNS or SIGWINCH — because the app computed it
-# from the terminal font and sized the slot to match; measuring would race that resize and disagree.
-# A box change therefore needs a respawn, not a file rewrite.
+#   <columns> <rows> <spinner>   the box the app sized the slot to; spinner 1 shows the glyph, ticks faster
+#   message lines                wrapped by HudLayout
+#   (one empty line)             the separator HudLayout guarantees, when a detail follows
+#   detail lines                 rendered dimmed
 #
-# HudLayout.wrap drops blank lines, so the body's single empty line unambiguously starts the detail
-# block, which renders dimmed. Removing the file is how every teardown path stops the loop.
-set -u
+# Everything an update may change lives in that file, re-read every tick, so `session.hud.update` repaints
+# in place: a process cannot see its own environment change, and a re-spawn would blink the panel. The box
+# is never measured here — no stty, tput, $COLUMNS or SIGWINCH — because the app computed it from the
+# terminal font and sized the slot to match; measuring would race that resize and disagree.
+#
+# Removing the file is how every teardown path stops the loop.
+set -uf
 
 file=${AGTERM_HUD_FILE:-}
 [ -n "$file" ] || exit 0
-
-cols=${AGTERM_HUD_COLS:-40}
-rows=${AGTERM_HUD_ROWS:-5}
-spinner=0
-interval=0.5
-if [ "${AGTERM_HUD_SPINNER:-}" = "1" ]; then
-    spinner=1
-    interval=0.1
-fi
 
 esc=$(printf '\033')
 csi="$esc["
@@ -46,12 +39,28 @@ while [ -f "$file" ]; do
     esac
     frame=$(( (frame + 1) % 4 ))
 
+    # every tick starts from the built-in box, so a frame depends only on the file it just read
+    cols=40
+    rows=5
+    spinner=0
+    interval=0.5
+
     block=''
     sep=''
     attr=''
     count=0
     first=1
+    header=1
     while IFS= read -r line || [ -n "$line" ]; do
+        if [ "$header" = 1 ]; then
+            header=0
+            # word splitting is the parse here; globbing is off (set -f), so a malformed header cannot expand
+            set -- $line
+            case ${1:-} in ''|*[!0-9]*) ;; *) cols=$1 ;; esac
+            case ${2:-} in ''|*[!0-9]*) ;; *) rows=$2 ;; esac
+            case ${3:-} in 1) spinner=1; interval=0.1 ;; esac
+            continue
+        fi
         count=$(( count + 1 ))
         block="$block$sep"
         sep="$down"

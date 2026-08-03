@@ -82,6 +82,11 @@ public enum HudLayout {
     public static let maxSizePercent = 80
     public static let minSizePercent = 10
 
+    /// The ONLY variable the app puts in the helper's environment: the path to the body file. Everything
+    /// that an update may change — the box, the spinner — rides in that file's header line instead, since
+    /// a running process cannot see its environment change and re-spawning would blink the panel.
+    public static let fileEnvKey = "AGTERM_HUD_FILE"
+
     /// Frame padding in cells, applied on both sides of the content.
     static let horizontalPadding = 2
     static let verticalPadding = 1
@@ -105,13 +110,15 @@ public enum HudLayout {
         return min(max(max(width, height), minSizePercent), maxSizePercent)
     }
 
-    /// renderedBody returns the bytes written to `AGTERM_HUD_FILE`: the wrapped message block, then a single
-    /// empty line, then the wrapped detail block. Content lines are never empty, so that one empty line is
-    /// what tells the helper where the dimmed detail starts.
+    /// renderedBody returns the bytes written to `fileEnvKey`'s file: a `<columns> <rows> <spinner>` header
+    /// line, then the wrapped message block, a single empty line, and the wrapped detail block. Content
+    /// lines are never empty, so that one empty line is what tells the helper where the dimmed detail
+    /// starts. The header is what lets an update change the box or the spinner without a re-spawn — the
+    /// helper re-reads this file every tick and never consults its own environment for either.
     public static func renderedBody(for spec: HudSpec) -> String {
-        let lines = bodyLines(for: spec)
-        guard !lines.isEmpty else { return "" }
-        return lines.joined(separator: "\n") + "\n"
+        let box = box(for: spec)
+        let header = "\(box.columns) \(box.rows) \(spec.spinner ? 1 : 0)\n"
+        return header + bodyLines(for: spec).map { $0 + "\n" }.joined()
     }
 
     static func bodyLines(for spec: HudSpec) -> [String] {
