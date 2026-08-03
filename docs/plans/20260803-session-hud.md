@@ -241,12 +241,12 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 - Modify: `agtermCore/Tests/agtermCoreTests/SessionTests.swift`
 - Modify: `agtermCore/Tests/agtermCoreTests/SnapshotRoundTripTests.swift`
 
-- [ ] add `hudSpec: HudSpec?` and `hudFile: String?` to `Session`, both non-persisted (live-only, like overlay state)
-- [ ] add `hudActive` (derived: `overlayActive && hudSpec != nil`) and audit `fullOverlayActive`/`floatingOverlayActive` call sites so program-overlay questions stay program-only
-- [ ] confirm no persistence path in `Snapshot.swift` picks up the new fields
-- [ ] write tests in `SessionTests.swift` for the derived flags across four states (no cover, program overlay, HUD, HUD replaced by overlay)
-- [ ] write a test in `SnapshotRoundTripTests.swift` that a snapshot round-trip drops HUD state
-- [ ] run both filters — must pass before task 3
+- [x] add `hudSpec: HudSpec?` and `hudFile: String?` to `Session`, both non-persisted (live-only, like overlay state)
+- [x] add `hudActive` (derived: `overlayActive && hudSpec != nil`) and audit `fullOverlayActive`/`floatingOverlayActive` call sites so program-overlay questions stay program-only
+- [x] confirm no persistence path in `Snapshot.swift` picks up the new fields
+- [x] write tests in `SessionTests.swift` for the derived flags across four states (no cover, program overlay, HUD, HUD replaced by overlay)
+- [x] write a test in `SnapshotRoundTripTests.swift` that a snapshot round-trip drops HUD state
+- [x] run both filters — must pass before task 3
 
 ### Task 3: Store lifecycle and replacement semantics
 

@@ -392,6 +392,47 @@ struct SessionTests {
         #expect(session.fullOverlayActive == false)
     }
 
+    @Test func coverFlagsAcrossTheFourOverlaySlotStates() {
+        let session = Session(initialCwd: "/repo")
+        #expect(session.hudActive == false)
+        #expect(session.fullOverlayActive == false)
+        #expect(session.floatingOverlayActive == false)
+
+        session.overlayActive = true
+        session.overlaySizePercent = 40
+        #expect(session.hudActive == false)
+        #expect(session.floatingOverlayActive == true)
+
+        session.hudSpec = HudSpec(message: "gathering options")
+        #expect(session.hudActive == true)
+        #expect(session.fullOverlayActive == false)
+        #expect(session.floatingOverlayActive == false)
+
+        session.hudSpec = nil
+        session.overlaySizePercent = nil
+        #expect(session.hudActive == false)
+        #expect(session.fullOverlayActive == true)
+        #expect(session.floatingOverlayActive == false)
+    }
+
+    @Test func hudFlagsNeedTheSlotOccupied() {
+        let session = Session(initialCwd: "/repo")
+        session.hudSpec = HudSpec(message: "stale")
+        #expect(session.hudActive == false)
+        #expect(session.fullOverlayActive == false)
+    }
+
+    @Test func aSizelessHudStillCoversNothing() {
+        // openHud always sets a percent; the defensive term keeps a HUD out of the full-cover path anyway,
+        // since hiding the panes behind a message would defeat the passivity the whole feature is for.
+        let session = Session(initialCwd: "/repo")
+        session.overlayActive = true
+        session.hudSpec = HudSpec(message: "working")
+        #expect(session.hudActive == true)
+        #expect(session.fullOverlayActive == false)
+        #expect(session.floatingOverlayActive == false)
+    }
+
     @Test func paneRoleResolvesTokenToItsCurrentSlot() {
         let session = Session(initialCwd: "/repo")
         session.surface = FakeSurface(paneToken: "main-tok")

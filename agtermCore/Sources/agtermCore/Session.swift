@@ -242,15 +242,32 @@ public final class Session: Identifiable {
     /// still VISIBLE behind it (full instead hides it and draws translucent). Cleared on close, never persisted.
     public var overlaySizePercent: Int?
 
-    /// Whether a FULL-coverage overlay is up: `overlayActive` with no size percent. It hides everything
-    /// beneath — the pane(s) AND a shown scratch — so its translucent background reveals the window backing,
-    /// never a covered surface: under window translucency every surface renders fully transparent, so anything
-    /// left visible below would bleed through. A floating (sized) overlay is not a cover.
-    public var fullOverlayActive: Bool { overlayActive && overlaySizePercent == nil }
+    /// The HUD occupying the overlay slot, nil when the slot is empty or runs a caller's program. Observed:
+    /// the deck reads it to keep the session focusable and to place the panel. Ephemeral, never persisted —
+    /// a HUD is a message about work in flight and means nothing after a relaunch.
+    public var hudSpec: HudSpec?
 
-    /// Whether a FLOATING overlay is up: `overlayActive` WITH a size percent, the complement of
-    /// `fullOverlayActive` and not a cover. Read by the detail pane to gate the floating panel.
-    public var floatingOverlayActive: Bool { overlayActive && overlaySizePercent != nil }
+    /// Path to the rendered-message file the HUD helper re-reads each tick (`AGTERM_HUD_FILE`); the app owns
+    /// the file and deletes it on teardown. `@ObservationIgnored`: only the surface factory reads it.
+    @ObservationIgnored public var hudFile: String?
+
+    /// Whether the overlay slot holds a HUD rather than a caller's program. The one predicate separating the
+    /// two occupants, so the deck's passivity exemptions and the program-overlay questions below cannot
+    /// disagree about which is up.
+    public var hudActive: Bool { overlayActive && hudSpec != nil }
+
+    /// Whether a FULL-coverage PROGRAM overlay is up: `overlayActive` with no size percent. It hides
+    /// everything beneath — the pane(s) AND a shown scratch — so its translucent background reveals the
+    /// window backing, never a covered surface: under window translucency every surface renders fully
+    /// transparent, so anything left visible below would bleed through. A floating (sized) overlay is not a
+    /// cover. `!hudActive` keeps it a question about a running program even if a HUD ever reaches the slot
+    /// without a size percent; a HUD covers nothing and must never hide the session behind it.
+    public var fullOverlayActive: Bool { overlayActive && !hudActive && overlaySizePercent == nil }
+
+    /// Whether a FLOATING PROGRAM overlay is up: `overlayActive` WITH a size percent, the complement of
+    /// `fullOverlayActive` over the same program-only domain. The deck gates the floating panel on the raw
+    /// slot state instead, since a HUD renders through the same panel.
+    public var floatingOverlayActive: Bool { overlayActive && !hudActive && overlaySizePercent != nil }
 
     /// The left pane's overlay, covering that pane only and leaving the sibling live; nil means none is up,
     /// so the slot itself IS the "active" signal. Observed, ephemeral, control-channel only.

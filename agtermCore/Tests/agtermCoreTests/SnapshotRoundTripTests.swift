@@ -291,6 +291,29 @@ struct SnapshotRoundTripTests {
         #expect(store.focusedWorkspaceIDs.isEmpty && !store.focusEnabled)
     }
 
+    @Test func hudStateNeverReachesTheSnapshot() throws {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        session.overlayActive = true
+        session.overlaySizePercent = 30
+        session.hudSpec = HudSpec(message: "gathering options", detail: "scanning /a", spinner: true)
+        session.hudFile = "/tmp/agterm-hud-test.txt"
+
+        let snap = store.snapshot()
+        let json = String(decoding: try JSONEncoder().encode(snap), as: UTF8.self)
+        #expect(!json.contains("hud"))
+        #expect(!json.contains("gathering options"))
+
+        let restored = makeStore()
+        restored.restore(from: snap)
+        let r = restored.workspaces[0].sessions[0]
+        #expect(r.hudSpec == nil)
+        #expect(r.hudFile == nil)
+        #expect(r.hudActive == false)
+        #expect(r.overlayActive == false)
+    }
+
     @Test func sessionSnapshotDecodesWithoutSplitRatio() throws {
         let json = "{\"id\":\"\(UUID().uuidString)\",\"cwd\":\"/a\"}"
         let snap = try JSONDecoder().decode(SessionSnapshot.self, from: Data(json.utf8))
