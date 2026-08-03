@@ -133,6 +133,14 @@ concurrency before changing the bridge.
   `ghostty_app_tick`; RENDER calls `renderNow`. Never restore the rejected continuous 120Hz poll or use
   `assumeIsolated`.
 - `close_surface_cb` only recovers the view and dispatches; it never frees synchronously.
+- The session-wide overlay slot holds either a caller's program or a HUD. Raw `overlayActive` answers only
+  "the slot is occupied"; every layer asking "is a program covering this session" reads
+  `Session.programOverlayActive` instead. Deck gates, focus routing, zoom, and scratch focus all turn on
+  that distinction, so never spell the predicate inline. `control-api.md` lists the sites.
+- A long-lived process spawned into a surface needs a stop condition of its own. A hard-killed app runs no
+  teardown, and no SIGHUP reaches the process because the pty's session leader is the surviving `login`, so
+  it outlives the app in whatever loop it was in. `hud.sh` takes the app's pid through its input file and
+  exits on a builtin `kill -0`.
 
 ## Cross-surface contracts
 

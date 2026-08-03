@@ -565,9 +565,20 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 
 ### Task 15: [Final] Update documentation
 
-- [ ] update `README.md` if the feature needs more than the command-reference line
-- [ ] update `CLAUDE.md` only if a new pattern was discovered worth recording
-- [ ] move this plan to `docs/plans/completed/`
+- [x] update `README.md` if the feature needs more than the command-reference line
+      — NO further change. Task 13 already gave the feature a Concepts sentence on the Overlay paragraph
+      (`:143`) and a `session hud` block under Scripting agterm (`:353`) covering the default subcommand,
+      `--position` and the `center` default, measured-versus-explicit sizing, in-place update replacing the
+      whole spec, the replacement rules against a program overlay, and the poll-only `tree` read-back.
+      That is everything a README owes a control-only feature; the per-argument detail is the command
+      reference's job
+- [x] update `CLAUDE.md` only if a new pattern was discovered worth recording
+      — TWO bullets added under "Module and callback boundaries", both cross-cutting and neither restating
+      `control-api.md`: the overlay slot now has two occupant kinds, so raw `overlayActive` means only
+      "occupied" and "a program is covering this session" is `Session.programOverlayActive`; and a
+      long-lived process spawned into a surface needs its own stop condition, because a hard-killed app
+      runs no teardown and the pty's session leader is the surviving `login`, so no SIGHUP arrives
+- [x] move this plan to `docs/plans/completed/` (deferred to orchestrator after review phases)
 
 ## Post-Completion
 
