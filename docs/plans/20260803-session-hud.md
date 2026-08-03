@@ -467,12 +467,22 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 **Files:**
 - Create: `agtermUITests/ControlHudUITests.swift`
 
-- [ ] following `ControlPickUITests.swift`'s isolation and socket setup, open a HUD and assert `tree` reports `hud` with the message and `overlay` false
-- [ ] assert `position` reads back as `center` when omitted and as the requested value when set
-- [ ] update the HUD and assert the read-back changes
-- [ ] close it and assert both `hud` and `overlay` are gone
-- [ ] assert `overlay result` against a HUD errors
-- [ ] run `xcodegen generate`, then only this class via `-only-testing:agtermUITests/ControlHudUITests` — must pass before task 13
+- [x] following `ControlPickUITests.swift`'s isolation and socket setup, open a HUD and assert `tree` reports `hud` with the message and `overlay` false
+- [x] assert `position` reads back as `center` when omitted and as the requested value when set
+- [x] update the HUD and assert the read-back changes
+- [x] close it and assert both `hud` and `overlay` are gone
+- [x] assert `overlay result` against a HUD errors
+- [x] run `xcodegen generate`, then only this class via `-only-testing:agtermUITests/ControlHudUITests` — must pass before task 13
+- [x] ➕ the class overrides `tearDown` to close the HUD before `super` terminates the app: XCUITest's
+      `terminate()` is a hard kill that never runs surface teardown, so a HUD left up leaves `hud.sh`
+      spinning forever on a body file nothing deletes (see the ⚠️ below)
+- [ ] ⚠️ for Task 14: a HARD-KILLED app (crash, `kill -9`, XCUITest `terminate()`) leaks its HUD painter.
+      The pty's session leader is `login`, which survives the app, so no SIGHUP reaches the helper, and the
+      body file under the app's temp dir is only removed by `destroySurface`, which never ran. The helper
+      then loops at 2 Hz (10 Hz with a spinner) indefinitely — measured at ~2% CPU per orphan. A program
+      overlay leaks the same way today, so this is not new to the HUD, but a busy-looping painter is a
+      worse consequence than a blocked reader. Decide in Task 14 whether the helper should self-terminate
+      (e.g. bound the loop on its parent) or whether the existing overlay behavior is accepted as-is
 
 ### Task 13: Documentation surfaces and command count
 
