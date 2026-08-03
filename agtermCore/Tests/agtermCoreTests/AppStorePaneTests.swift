@@ -721,6 +721,176 @@ struct AppStorePaneTests {
         #expect(overlay.teardownCount == 1)
     }
 
+    // MARK: - hud
+
+    @Test func openHudOccupiesTheSlotAndMarksItAHud() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let spec = HudSpec(message: "gathering options", detail: "scanning", backgroundColor: "#101820")
+        #expect(store.openHud(session.id, command: "hud.sh", spec: spec, file: "/tmp/h", sizePercent: 30) == true)
+        #expect(session.overlayActive == true)
+        #expect(session.hudActive == true)
+        #expect(session.overlayCommand == "hud.sh")
+        #expect(session.hudSpec == spec)
+        #expect(session.hudFile == "/tmp/h")
+        #expect(session.overlaySizePercent == 30)
+        // the spec's color reaches the slot the factory reads, and a HUD is never a PROGRAM overlay.
+        #expect(session.overlayBackgroundColor == "#101820")
+        #expect(session.fullOverlayActive == false)
+        #expect(session.floatingOverlayActive == false)
+        // out-of-range percents clamp like any overlay's, so a HUD can never be sizeless (full-coverage).
+        store.closeHud(session.id)
+        store.openHud(session.id, command: "hud.sh", spec: spec, file: "/tmp/h", sizePercent: 400)
+        #expect(session.overlaySizePercent == 100)
+    }
+
+    @Test func updateHudRewritesInPlaceWithoutRespawning() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "one"), file: "/tmp/a", sizePercent: 20)
+        let surface = SpySurface()
+        session.overlaySurface = surface
+        let generation = session.overlaySlotGeneration
+        let next = HudSpec(message: "two", detail: "still working", spinner: true, position: .top)
+        #expect(store.updateHud(session.id, spec: next, file: "/tmp/b", sizePercent: 44) == true)
+        #expect(session.hudSpec == next)
+        #expect(session.hudFile == "/tmp/b")
+        #expect(session.overlaySizePercent == 44)
+        // the helper re-reads the file, so nothing re-spawns: same surface, same view identity.
+        #expect(surface.teardownCount == 0)
+        #expect(session.overlaySurface === surface)
+        #expect(session.overlaySlotGeneration == generation)
+        // the size clamp is the overlay's own.
+        #expect(store.updateHud(session.id, spec: next, file: "/tmp/b", sizePercent: 0) == true)
+        #expect(session.overlaySizePercent == 1)
+    }
+
+    @Test func updateHudRefusesWithoutAHud() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        let spec = HudSpec(message: "hello")
+        #expect(store.updateHud(session.id, spec: spec, file: "/tmp/a", sizePercent: 20) == false)
+        // a caller's program in the slot is not a HUD's to rewrite.
+        store.openOverlay(session.id, command: "htop", sizePercent: 60)
+        #expect(store.updateHud(session.id, spec: spec, file: "/tmp/a", sizePercent: 20) == false)
+        #expect(session.hudSpec == nil)
+        #expect(session.overlaySizePercent == 60)
+    }
+
+    @Test func closeHudTearsDownAndClearsTheSlot() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "one"), file: "/tmp/a", sizePercent: 20)
+        let surface = SpySurface()
+        session.overlaySurface = surface
+        #expect(store.closeHud(session.id) == true)
+        #expect(surface.teardownCount == 1)
+        #expect(session.overlayActive == false)
+        #expect(session.hudActive == false)
+        #expect(session.hudSpec == nil)
+        #expect(session.hudFile == nil)
+        #expect(session.overlaySizePercent == nil)
+        #expect(store.closeHud(session.id) == false)
+    }
+
+    @Test func closeHudRefusesAProgramOverlay() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openOverlay(session.id, command: "htop", sizePercent: 60)
+        #expect(store.closeHud(session.id) == false)
+        #expect(session.overlayActive == true)
+        #expect(session.overlayCommand == "htop")
+    }
+
+    @Test func closeOverlayClearsHudState() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "one"), file: "/tmp/a", sizePercent: 20)
+        // the courtesy path (`session.overlay.close`, ⌘W) clears the HUD as thoroughly as `closeHud` does.
+        #expect(store.closeOverlay(session.id) == true)
+        #expect(session.hudSpec == nil)
+        #expect(session.hudFile == nil)
+        #expect(session.hudActive == false)
+    }
+
+    @Test func secondOpenHudReplacesTheFirst() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "one"), file: "/tmp/a", sizePercent: 20)
+        let first = SpySurface()
+        session.overlaySurface = first
+        let generation = session.overlaySlotGeneration
+        let next = HudSpec(message: "two", position: .bottom)
+        #expect(store.openHud(session.id, command: "hud.sh", spec: next, file: "/tmp/b", sizePercent: 35) == true)
+        #expect(session.hudSpec == next)
+        #expect(session.hudFile == "/tmp/b")
+        #expect(session.overlaySizePercent == 35)
+        // an open is a fresh panel: the old surface is gone and the identity moves, so the deck re-mounts.
+        #expect(first.teardownCount == 1)
+        #expect(session.overlaySurface == nil)
+        #expect(session.overlaySlotGeneration > generation)
+    }
+
+    @Test func openOverlayReplacesAHudButRefusesAProgram() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "one"), file: "/tmp/a", sizePercent: 20)
+        let hud = SpySurface()
+        session.overlaySurface = hud
+        let generation = session.overlaySlotGeneration
+        #expect(store.openOverlay(session.id, command: "htop") == true)
+        #expect(session.hudSpec == nil)
+        #expect(session.hudFile == nil)
+        #expect(session.hudActive == false)
+        #expect(session.overlayCommand == "htop")
+        #expect(session.fullOverlayActive == true)
+        // the HUD's surface is torn down and the identity moves, so the program actually mounts.
+        #expect(hud.teardownCount == 1)
+        #expect(session.overlaySurface == nil)
+        #expect(session.overlaySlotGeneration > generation)
+        // a RUNNING program still owns the slot against everything.
+        #expect(store.openOverlay(session.id, command: "other") == false)
+        #expect(store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "x"), file: "/tmp/c",
+                              sizePercent: 20) == false)
+        #expect(session.overlayCommand == "htop")
+        #expect(session.hudSpec == nil)
+    }
+
+    @Test func overlaySlotGenerationTracksOpensOnly() {
+        let store = makeStore()
+        let ws = store.addWorkspace(name: "work")
+        let session = store.addSession(toWorkspace: ws.id, cwd: "/a")!
+        #expect(session.overlaySlotGeneration == 0)
+        store.openOverlay(session.id, command: "htop", sizePercent: 60)
+        #expect(session.overlaySlotGeneration == 1)
+        // a resize keeps the same surface mounted, so the identity must hold still.
+        store.resizeOverlay(session.id, sizePercent: 30)
+        #expect(session.overlaySlotGeneration == 1)
+        // a refused open must not move it either, or the deck re-mounts the running program.
+        #expect(store.openOverlay(session.id, command: "other") == false)
+        #expect(session.overlaySlotGeneration == 1)
+        store.closeOverlay(session.id)
+        #expect(session.overlaySlotGeneration == 1)
+        store.openHud(session.id, command: "hud.sh", spec: HudSpec(message: "one"), file: "/tmp/a", sizePercent: 20)
+        #expect(session.overlaySlotGeneration == 2)
+    }
+
+    @Test func openHudUnknownSessionFails() {
+        let store = makeStore()
+        #expect(store.openHud(UUID(), command: "hud.sh", spec: HudSpec(message: "x"), file: "/tmp/a",
+                              sizePercent: 20) == false)
+        #expect(store.updateHud(UUID(), spec: HudSpec(message: "x"), file: "/tmp/a", sizePercent: 20) == false)
+        #expect(store.closeHud(UUID()) == false)
+    }
+
     // MARK: - pane overlays
 
     @Test func openPaneOverlayStoresSlotAndClearsStaleExitCode() {

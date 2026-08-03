@@ -242,6 +242,13 @@ public final class Session: Identifiable {
     /// still VISIBLE behind it (full instead hides it and draws translucent). Cleared on close, never persisted.
     public var overlaySizePercent: Int?
 
+    /// Bumped on every overlay-slot OPEN so the deck can key the panel's view identity on it. A HUD is
+    /// REPLACED in place — `closeOverlay` then `openOverlay` inside one store call — so `overlayActive`
+    /// never dips to false where SwiftUI can see it. Without a changing identity `makeNSView` is therefore
+    /// never re-invoked and `updateNSView` runs against the torn-down view with `overlaySurface` nil.
+    /// Observed (the deck reads it while building the panel), ephemeral, never persisted.
+    public var overlaySlotGeneration: Int = 0
+
     /// The HUD occupying the overlay slot, nil when the slot is empty or runs a caller's program. Observed:
     /// the deck reads it to keep the session focusable and to place the panel. Ephemeral, never persisted —
     /// a HUD is a message about work in flight and means nothing after a relaunch.

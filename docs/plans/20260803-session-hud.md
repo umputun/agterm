@@ -252,16 +252,17 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 
 **Files:**
 - Modify: `agtermCore/Sources/agtermCore/AppStore+Panes.swift`
+- Modify: `agtermCore/Sources/agtermCore/Session.swift` (added during Task 3: `overlaySlotGeneration`)
 - Modify: `agtermCore/Tests/agtermCoreTests/AppStorePaneTests.swift`
 
-- [ ] add `openHud(_:spec:file:sizePercent:)` — sets the overlay slot to the helper command, stores `hudSpec`/`hudFile`, sets `overlaySizePercent`, marks the slot active
-- [ ] add `updateHud(_:spec:file:sizePercent:)` — rewrites spec/size in place without touching the surface (no respawn)
-- [ ] add `closeHud(_:)` — delegates to `closeOverlay`, and clear the HUD fields inside `closeOverlay` so every teardown path (explicit close, Command-W, session close) clears them
-- [ ] change `openOverlay` so an active **HUD** is closed first and the open proceeds, while an active **program overlay** still returns false — a HUD is replaceable, a running program is not
-- [ ] make a second `openHud` replace an existing HUD rather than failing
-- [ ] pin the surface swap for HUD→program overlay: `overlayPanel`'s representable identity must change (or the re-open must be deferred), or `makeNSView` is never re-invoked and `updateNSView` runs against a torn-down view with `overlaySurface` nil
-- [ ] write tests for open/update/close, HUD-replaces-HUD, overlay-replaces-HUD, HUD refused over a live program overlay, and that `closeOverlay` clears `hudSpec`/`hudFile`
-- [ ] run `swift test --filter AppStorePaneTests` — must pass before task 4
+- [x] add `openHud(_:spec:file:sizePercent:)` — sets the overlay slot to the helper command, stores `hudSpec`/`hudFile`, sets `overlaySizePercent`, marks the slot active
+- [x] add `updateHud(_:spec:file:sizePercent:)` — rewrites spec/size in place without touching the surface (no respawn)
+- [x] add `closeHud(_:)` — delegates to `closeOverlay`, and clear the HUD fields inside `closeOverlay` so every teardown path (explicit close, Command-W, session close) clears them
+- [x] change `openOverlay` so an active **HUD** is closed first and the open proceeds, while an active **program overlay** still returns false — a HUD is replaceable, a running program is not
+- [x] make a second `openHud` replace an existing HUD rather than failing
+- [x] pin the surface swap for HUD→program overlay: `overlayPanel`'s representable identity must change (or the re-open must be deferred), or `makeNSView` is never re-invoked and `updateNSView` runs against a torn-down view with `overlaySurface` nil
+- [x] write tests for open/update/close, HUD-replaces-HUD, overlay-replaces-HUD, HUD refused over a live program overlay, and that `closeOverlay` clears `hudSpec`/`hudFile`
+- [x] run `swift test --filter AppStorePaneTests` — must pass before task 4
 
 ### Task 4: Deck exemptions — make the HUD actually passive
 
@@ -274,6 +275,10 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 - [ ] exempt a HUD from `backdropWashActive` (`:275`) so the session is not dimmed behind a message
 - [ ] place the panel vertically from `HudSpec.position` inside `overlayPanel`'s `GeometryReader` (`:181+`): `center` as today, `top`/`bottom` offset by `HudPosition.edgeMarginPercent` of the pane height. Program overlays stay centered — do not change their geometry
 - [ ] give the HUD its own chrome parameters in the SAME modifier chain (`:201-208`): opaque backing kept, `shadow(radius: 0)` instead of 24 so it does not read as a window hovering over the session, a stronger border (~0.30 versus 0.18, since neither shadow nor backdrop wash separates it from the text behind), and a tighter corner radius. Flip parameters only — the chain stays constant, per the rule the code states there
+- [ ] ➕ append `session.overlaySlotGeneration` to `overlayPanel`'s `.id("\(session.id.uuidString)-overlay")`
+  (`:209`) — Task 3 made the store bump it on every slot open, and a replacement (HUD→HUD, HUD→program) keeps
+  `overlayActive` true across the swap, so without it `makeNSView` never re-runs and `updateNSView` hits a
+  torn-down view with `overlaySurface` nil. Only the `.id` VALUE changes; the chain stays constant
 - [ ] keep every change a **value flip**: `sessionDetail`/HSplitView shape and pane modifiers must not change on HUD state, per `.claude/rules/control-api.md`
 - [ ] write hosted tests for all three exemptions (gates computed with a HUD vs a program overlay vs scratch)
 - [ ] write tests for the three vertical placements, including that a `top`/`bottom` panel stays fully inside the pane when the message is at `maxSizePercent`
