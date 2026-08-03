@@ -185,6 +185,49 @@ struct ControlProtocolTests {
         #expect(!json.contains("follow"), "a nil follow must be omitted from the JSON; got \(json)")
     }
 
+    @Test func sessionHudCommandsRoundTrip() throws {
+        let cases: [ControlRequest] = [
+            ControlRequest(cmd: .sessionHudOpen, target: "9f3c", args: ControlArgs(message: "gathering options")),
+            ControlRequest(cmd: .sessionHudOpen, target: "9f3c",
+                           args: ControlArgs(sizePercent: 40, message: "gathering options",
+                                             detail: "scanning 400 files", spinner: true,
+                                             window: "win", color: "#2a1a3a", position: "top")),
+            ControlRequest(cmd: .sessionHudUpdate, target: "9f3c",
+                           args: ControlArgs(message: "almost there", detail: "12 left", position: "bottom")),
+            ControlRequest(cmd: .sessionHudClose, target: "9f3c"),
+        ]
+        for request in cases {
+            #expect(try roundTrip(request) == request)
+        }
+    }
+
+    @Test func sessionHudRawStringsMapToCommands() throws {
+        #expect(Command(rawValue: "session.hud.open") == .sessionHudOpen)
+        #expect(Command(rawValue: "session.hud.update") == .sessionHudUpdate)
+        #expect(Command(rawValue: "session.hud.close") == .sessionHudClose)
+    }
+
+    @Test func sessionHudOpenOmitsUnsetArgs() throws {
+        let request = ControlRequest(cmd: .sessionHudOpen, target: "9f3c", args: ControlArgs(message: "working"))
+        let decoded = try roundTrip(request)
+        #expect(decoded == request)
+        #expect(decoded.args?.detail == nil)
+        #expect(decoded.args?.spinner == nil)
+        #expect(decoded.args?.position == nil)
+        #expect(decoded.args?.sizePercent == nil)
+        let json = String(data: try JSONEncoder().encode(request), encoding: .utf8) ?? ""
+        for key in ["detail", "spinner", "position", "sizePercent", "color"] {
+            #expect(!json.contains(key), "an unset \(key) must be omitted from the JSON; got \(json)")
+        }
+    }
+
+    @Test func sessionHudSpinnerRoundTripsBothWays() throws {
+        let on = ControlRequest(cmd: .sessionHudOpen, target: "9f3c", args: ControlArgs(message: "x", spinner: true))
+        let off = ControlRequest(cmd: .sessionHudOpen, target: "9f3c", args: ControlArgs(message: "x", spinner: false))
+        #expect(try roundTrip(on).args?.spinner == true)
+        #expect(try roundTrip(off).args?.spinner == false)
+    }
+
     @Test func sessionTextRoundTripsWithAllLinesAndPane() throws {
         let request = ControlRequest(cmd: .sessionText, target: "9f3c",
                                      args: ControlArgs(pane: "left", all: true, lines: 50))
@@ -748,6 +791,44 @@ struct ControlProtocolTests {
         #expect(!json.contains("paneOverlays"), "no pane overlay must be omitted from the JSON; got \(json)")
         let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
         #expect(decoded.paneOverlays == nil)
+    }
+
+    @Test func treeSessionNodeRoundTripsWithHud() throws {
+        let hud = ControlHudNode(message: "gathering options", detail: "scanning 400 files", spinner: true,
+                                 backgroundColor: "#2a1a3a", sizePercent: 35, position: "top")
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false, hud: hud)
+        let response = ControlResponse(ok: true, result: ControlResult(tree: ControlTree(
+            workspaces: [ControlWorkspaceNode(id: "w1", name: "work", active: true, sessions: [session])])))
+        let decoded = try roundTrip(response)
+        #expect(decoded == response)
+        #expect(decoded.result?.tree?.workspaces.first?.sessions.first?.hud == hud)
+    }
+
+    @Test func treeSessionNodeOmitsHudWhenNil() throws {
+        let session = ControlSessionNode(id: "s1", name: "shell", cwd: "/tmp", active: true, split: false, overlay: true)
+        let json = String(data: try JSONEncoder().encode(session), encoding: .utf8) ?? ""
+        #expect(!json.contains("hud"), "no HUD must be omitted from the JSON; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlSessionNode.self, from: Data(json.utf8))
+        #expect(decoded.hud == nil)
+    }
+
+    @Test func controlHudNodeOmitsUnsetFieldsButAlwaysReportsPosition() throws {
+        let hud = ControlHudNode(message: "working", position: "center")
+        let json = String(data: try JSONEncoder().encode(hud), encoding: .utf8) ?? ""
+        #expect(!json.contains("detail"), "a nil detail must be omitted from the JSON; got \(json)")
+        #expect(!json.contains("backgroundColor"), "a nil background must be omitted from the JSON; got \(json)")
+        #expect(!json.contains("sizePercent"), "a nil size must be omitted from the JSON; got \(json)")
+        #expect(json.contains("\"position\":\"center\""), "the effective position must always be emitted; got \(json)")
+        #expect(json.contains("\"spinner\":false"), "the effective spinner must always be emitted; got \(json)")
+        let decoded = try JSONDecoder().decode(ControlHudNode.self, from: Data(json.utf8))
+        #expect(decoded == hud)
+    }
+
+    @Test func treeSessionNodeToleratesMissingHud() throws {
+        // a pre-`session.hud.open` server omits the key entirely, so it must decode as nil.
+        let raw = #"{"id":"s1","name":"shell","cwd":"/tmp","active":true,"split":false,"# +
+            #""overlay":false,"scratch":false,"flagged":false}"#
+        #expect(try JSONDecoder().decode(ControlSessionNode.self, from: Data(raw.utf8)).hud == nil)
     }
 
     @Test func treeSessionNodeRoundTripsWithRestoreCommand() throws {

@@ -262,9 +262,11 @@ public final class AppStore {
                                           split: session.isSplit,
                                           splitRatio: session.hasSplit ? session.splitRatio : nil,
                                           splitFocused: session.hasSplit ? session.splitFocused : nil,
-                                          overlay: session.overlayActive,
-                                          overlaySizePercent: session.overlayActive ? session.overlaySizePercent : nil,
+                                          overlay: session.programOverlayActive,
+                                          overlaySizePercent: session.programOverlayActive
+                                              ? session.overlaySizePercent : nil,
                                           paneOverlays: paneOverlays(session),
+                                          hud: hudNode(session),
                                           scratch: session.scratchActive, flagged: session.flagged,
                                           commandWait: (session.initialCommand != nil && session.commandWait) ? true : nil,
                                           foreground: foreground(session),
@@ -305,6 +307,15 @@ public final class AppStore {
     private func paneOverlays(_ session: Session) -> [String]? {
         let panes = session.openPaneOverlays.map(\.rawValue)
         return panes.isEmpty ? nil : panes
+    }
+
+    /// The tree's `hud`: the live panel's spec carrying the slot's EFFECTIVE size and the effective position,
+    /// omitted when no HUD occupies the slot.
+    private func hudNode(_ session: Session) -> ControlHudNode? {
+        guard session.hudActive, let spec = session.hudSpec else { return nil }
+        return ControlHudNode(message: spec.message, detail: spec.detail, spinner: spec.spinner,
+                              backgroundColor: spec.backgroundColor, sizePercent: session.overlaySizePercent,
+                              position: spec.position.rawValue)
     }
 
     /// Creates a workspace and appends it. With `revealNewWorkspace` (the default) and the filter ON, the new

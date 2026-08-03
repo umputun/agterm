@@ -189,6 +189,8 @@ public struct ControlDispatcher {
             return nil
         case .pickOpen, .pickResult, .pickCancel:
             return dispatchPickCommand(request)
+        case .sessionHudOpen, .sessionHudUpdate, .sessionHudClose:
+            return nil
         }
     }
 

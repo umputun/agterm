@@ -298,18 +298,21 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 - Modify: `agtermCore/Sources/agtermCore/ControlProtocol.swift`
 - Modify: `agtermCore/Sources/agtermCore/AppStore.swift`
 - Modify: `agterm/Control/ControlServer.swift`
+- Modify: `agtermCore/Sources/agtermCore/ControlDispatcher.swift` (added during Task 5: the exhaustive routing switch)
 - Modify: `agtermCore/Tests/agtermCoreTests/ControlProtocolTests.swift`
-- Modify: `agtermCore/Tests/agtermCoreTests/AppStoreTests.swift`
+- Create: `agtermCore/Tests/agtermCoreTests/AppStoreHudTests.swift` (replaced `AppStoreTests.swift`, see below)
 
-- [ ] add `Command` cases `sessionHudOpen = "session.hud.open"`, `sessionHudUpdate = "session.hud.update"`, `sessionHudClose = "session.hud.close"`
-- [ ] add `message`, `detail`, `spinner`, `position` to `ControlArgs`; reuse the existing `sizePercent` and `color` — do NOT add a `backgroundColor` field
-- [ ] add the `hud` node type and field to `ControlSessionNode` (`:387`)
-- [ ] populate `hud` in `AppStore.swift:259-285`, and make `overlay`/`overlaySizePercent` report false/omitted while a HUD occupies the slot
-- [ ] add the three cases to `ControlServer.swift:336-356` — the switch is exhaustive with no `default`, and these are dispatcher-handled, so they belong on the `preconditionFailure` arm alongside the pick commands
-- [ ] ⚠️ `AppStore.swift` is 982 lines against SwiftLint's 1000-line warning and `make lint` requires zero findings. If this task crosses it, STOP and ask the maintainer before splitting the file or touching the limit
-- [ ] write round-trip tests for the three commands and their arguments
-- [ ] write population tests in `AppStoreTests.swift`: `hud` present with every field, omitted when absent, and `overlay` false while a HUD is up
-- [ ] run both filters — must pass before task 6
+- [x] add `Command` cases `sessionHudOpen = "session.hud.open"`, `sessionHudUpdate = "session.hud.update"`, `sessionHudClose = "session.hud.close"`
+- [x] add `message`, `detail`, `spinner`, `position` to `ControlArgs`; reuse the existing `sizePercent` and `color` — do NOT add a `backgroundColor` field (`position` already existed for `session.background`, so only its doc grew)
+- [x] add the `hud` node type and field to `ControlSessionNode` (`:387`)
+- [x] populate `hud` in `AppStore.swift:259-285`, and make `overlay`/`overlaySizePercent` report false/omitted while a HUD occupies the slot
+- [x] add the three cases to `ControlServer.swift:336-356` — the switch is exhaustive with no `default`, and these are dispatcher-handled, so they belong on the `preconditionFailure` arm alongside the pick commands
+- [x] ➕ add the three cases to `ControlDispatcher.dispatch`'s equally exhaustive switch, returning nil until Task 6 routes them to `dispatchHudCommand` — without it `agtermCore` does not build
+- [x] ⚠️ `AppStore.swift` is 982 lines against SwiftLint's 1000-line warning and `make lint` requires zero findings. Resolved at 993 lines: the population is one flipped argument plus an 8-line `hudNode` helper, so no split was needed
+- [x] ➕ `AppStoreTests.swift` was 1972 lines against the 2000-line test limit, so the population tests went into a new `AppStoreHudTests.swift`, following the existing `AppStore<Concern>Tests.swift` split
+- [x] write round-trip tests for the three commands and their arguments
+- [x] write population tests: `hud` present with every field, omitted when absent, and `overlay` false while a HUD is up
+- [x] run both filters — must pass before task 6
 
 ### Task 6: Dispatcher validation and control actions
 

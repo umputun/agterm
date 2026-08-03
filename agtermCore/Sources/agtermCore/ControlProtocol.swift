@@ -41,6 +41,9 @@ public enum Command: String, Codable, Sendable {
     case sessionOverlayClose = "session.overlay.close"
     case sessionOverlayResize = "session.overlay.resize"
     case sessionOverlayResult = "session.overlay.result"
+    case sessionHudOpen = "session.hud.open"
+    case sessionHudUpdate = "session.hud.update"
+    case sessionHudClose = "session.hud.close"
     case quick
     case quickType = "quick.type"
     case quickText = "quick.text"
@@ -128,8 +131,10 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// The `#rrggbb` color for `session.background`: the mode-`text` tint (nil = terminal foreground) or the
     /// mode-`color` solid background (required, no opacity — it honors the Settings window translucency).
     /// Also `session.overlay.open`'s own background, independent of the session's (nil = the default theme
-    /// background, same translucency), and `session.status`'s per-call glyph tint, riding the ephemeral
-    /// indicator so it lasts only to the next `session.status` without a color (nil = the Settings color).
+    /// background, same translucency), `session.hud.open`'s panel background (same rules; `session.hud.update`
+    /// cannot change it, the surface reading it once at creation), and `session.status`'s per-call glyph tint,
+    /// riding the ephemeral indicator so it lasts only to the next `session.status` without a color
+    /// (nil = the Settings color).
     public var color: String?
     /// The per-call glyph-SILHOUETTE override for `session.status`: a `StatusShape` raw value
     /// (`circle|square|triangle|diamond|capsule|star`), dispatcher-validated. Rides the ephemeral indicator,
@@ -139,7 +144,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var opacity: Double?
     /// The `background-image-fit` for `session.background` (`contain|cover|stretch|none`); nil = `contain`.
     public var fit: String?
-    /// The `background-image-position` for `session.background` (`center` + 8 anchors); nil = `center`.
+    /// The `background-image-position` for `session.background` (`center` + 8 anchors); nil = `center`. Also
+    /// the HUD panel's VERTICAL placement in the pane for `session.hud.open`/`.update` — a `HudPosition` raw
+    /// value (`top|center|bottom`), nil = `center`, which the read-back reports either way.
     public var position: String?
     /// The `background-image-repeat` flag for `session.background`; nil = false.
     public var repeats: Bool?
@@ -204,7 +211,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     public var wait: Bool?
     /// For `session.overlay.open`, the percent of the pane (1...100) a *floating* overlay panel occupies in
     /// both dimensions; omitted gives the default full-pane overlay. Also the new size for
-    /// `session.overlay.resize` (mutually exclusive with `full`).
+    /// `session.overlay.resize` (mutually exclusive with `full`), and the caller's OVERRIDE of the HUD panel's
+    /// app-measured size for `session.hud.open`/`.update` — a HUD is always floating, so omitting it sizes the
+    /// panel from the message rather than covering the pane.
     public var sizePercent: Int?
     /// For `session.overlay.resize`, requests the full-pane (translucent, session-hidden) overlay — the way
     /// to switch a floating overlay back to full. Mutually exclusive with `sizePercent`.
@@ -212,6 +221,14 @@ public struct ControlArgs: Codable, Sendable, Equatable {
     /// For `session.overlay.open`, whether to select the target after opening; omitted/false opens in the
     /// background without changing the active session (the default for full and floating overlays alike).
     public var follow: Bool?
+    /// The HUD panel's headline for `session.hud.open`/`.update` — required and non-empty on both, since an
+    /// update with nothing to say is a close. Wrapped app-side; control characters are rejected.
+    public var message: String?
+    /// The HUD panel's dim second line, wrapped below the message; nil/omitted leaves the panel one block.
+    public var detail: String?
+    /// Whether the HUD panel animates a spinner glyph (and ticks faster to drive it); nil/omitted = static.
+    /// The box reserves the glyph's cells either way, so toggling it cannot rewrap the message.
+    public var spinner: Bool?
     /// The finished caller-provided choices for `pick.open`.
     public var items: [ControlPickItem]?
     /// Optional placeholder text for `pick.open`'s query field.
@@ -267,7 +284,8 @@ public struct ControlArgs: Codable, Sendable, Equatable {
                 noSelect: Bool? = nil,
                 text: String? = nil, select: Bool? = nil, mode: String? = nil,
                 command: String? = nil, wait: Bool? = nil, sizePercent: Int? = nil, full: Bool? = nil,
-                follow: Bool? = nil, items: [ControlPickItem]? = nil, prompt: String? = nil,
+                follow: Bool? = nil, message: String? = nil, detail: String? = nil, spinner: Bool? = nil,
+                items: [ControlPickItem]? = nil, prompt: String? = nil,
                 query: String? = nil, allowCustom: Bool? = nil, window: String? = nil,
                 pane: String? = nil, paneID: String? = nil, to: String? = nil,
                 after: String? = nil, before: String? = nil, run: String? = nil,
@@ -298,6 +316,9 @@ public struct ControlArgs: Codable, Sendable, Equatable {
         self.sizePercent = sizePercent
         self.full = full
         self.follow = follow
+        self.message = message
+        self.detail = detail
+        self.spinner = spinner
         self.items = items
         self.prompt = prompt
         self.query = query
@@ -383,6 +404,36 @@ public struct ControlSurfaceNode: Codable, Sendable, Equatable {
     }
 }
 
+/// The HUD panel occupying a session's overlay slot, as projected into the `tree` response. Present only
+/// while a HUD is up, and the session node's `overlay` reads FALSE beside it, so a script polling "is a
+/// program covering this session" can never mistake a message for a running program. The read side of
+/// `session.hud.open`/`.update`; HUD state is poll-only, no event announces it.
+public struct ControlHudNode: Codable, Sendable, Equatable {
+    public let message: String
+    /// The dim second line; nil/omitted when the caller set none.
+    public let detail: String?
+    public let spinner: Bool
+    /// The panel's own `#rrggbb` background; nil/omitted when it keeps the session's terminal background.
+    public let backgroundColor: String?
+    /// The EFFECTIVE share of the pane (1...100) the panel occupies — the app's measurement, or the caller's
+    /// `sizePercent` override. Reported here because the node's `overlaySizePercent` stays omitted for a HUD;
+    /// nil/omitted only when `session.overlay.resize --full` stripped the slot's percent.
+    public let sizePercent: Int?
+    /// The EFFECTIVE vertical placement, a `HudPosition` raw value (`top`|`center`|`bottom`). Always present,
+    /// including the `center` default, so a caller who omitted it never has to know what the default is.
+    public let position: String
+
+    public init(message: String, detail: String? = nil, spinner: Bool = false, backgroundColor: String? = nil,
+                sizePercent: Int? = nil, position: String) {
+        self.message = message
+        self.detail = detail
+        self.spinner = spinner
+        self.backgroundColor = backgroundColor
+        self.sizePercent = sizePercent
+        self.position = position
+    }
+}
+
 /// A session as projected into the `tree` response.
 public struct ControlSessionNode: Codable, Sendable, Equatable {
     public let id: String
@@ -401,15 +452,21 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     /// For a session that HAS a split (shown or hidden), which pane holds keyboard focus: `true` = split
     /// (right), `false` = main (left); nil/omitted with no split. The read side of `session.focus`.
     public let splitFocused: Bool?
+    /// Whether a caller's PROGRAM occupies the session-wide overlay slot. False while a HUD holds it — the
+    /// HUD is a message, not a running program, and it reports itself in `hud` instead.
     public let overlay: Bool
     /// An OPEN overlay's size (`overlay == true`): nil/omitted = FULL-pane, else the floating panel's percent
-    /// of the pane (1...100); absent with no overlay. The read side of `session.overlay.resize`.
+    /// of the pane (1...100); absent with no overlay AND while a HUD holds the slot, whose size is `hud`'s.
+    /// The read side of `session.overlay.resize`.
     public let overlaySizePercent: Int?
     /// The panes covered by their OWN overlay, ordered left then right (`["left"]`, `["right"]`,
     /// `["left","right"]`); nil/omitted when neither has one. Independent of `overlay`, the session-wide
     /// one — both kinds can be up at once. The read side of `session.overlay.open --pane`; those overlays
     /// are always full-pane, so there is no per-pane size to report.
     public let paneOverlays: [String]?
+    /// The HUD panel occupying the session-wide overlay slot; nil/omitted when none is up. Mutually exclusive
+    /// with `overlay` — one slot, and whichever holds it is the one that reports.
+    public let hud: ControlHudNode?
     public let scratch: Bool
     public let flagged: Bool
     /// For a `--command` session, whether it HOLDS its surface after the command exits (`session.new
@@ -469,7 +526,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
     public init(id: String, name: String, cwd: String, title: String? = nil, active: Bool, split: Bool,
                 splitRatio: Double? = nil, splitFocused: Bool? = nil,
                 overlay: Bool = false, overlaySizePercent: Int? = nil, paneOverlays: [String]? = nil,
-                scratch: Bool = false, flagged: Bool = false,
+                hud: ControlHudNode? = nil, scratch: Bool = false, flagged: Bool = false,
                 commandWait: Bool? = nil,
                 foreground: [String]? = nil, splitForeground: [String]? = nil,
                 restoreCommand: String? = nil, splitRestoreCommand: String? = nil, status: String? = nil,
@@ -489,6 +546,7 @@ public struct ControlSessionNode: Codable, Sendable, Equatable {
         self.overlay = overlay
         self.overlaySizePercent = overlaySizePercent
         self.paneOverlays = paneOverlays
+        self.hud = hud
         self.scratch = scratch
         self.flagged = flagged
         self.commandWait = commandWait
