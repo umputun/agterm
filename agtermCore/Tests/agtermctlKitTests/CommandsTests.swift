@@ -897,6 +897,103 @@ struct CommandsTests {
             == "--block cannot be combined with --wait")
     }
 
+    @Test func sessionHudOpenIsTheDefaultSubcommand() throws {
+        let expected = ControlRequest(cmd: .sessionHudOpen, target: "active",
+                                      args: ControlArgs(message: "gathering options"))
+        #expect(try request(["session", "hud", "gathering options"]) == expected)
+    }
+
+    @Test func sessionHudOpenWithEveryOption() throws {
+        // --background-color maps to ControlArgs.color, as the overlay group does.
+        let expected = ControlRequest(cmd: .sessionHudOpen, target: "9f3c",
+                                      args: ControlArgs(sizePercent: 40, message: "building index",
+                                                        detail: "3 of 12 repos", spinner: true, window: "w1",
+                                                        color: "#2a1a3a", position: "top"))
+        #expect(try request(["session", "hud", "building index", "--detail", "3 of 12 repos", "--spinner",
+                             "--position", "top", "--background-color", "#2a1a3a", "--size-percent", "40",
+                             "--target", "9f3c", "--window", "w1"]) == expected)
+    }
+
+    @Test func sessionHudOpenVerbPostsAMessageNamedLikeASubcommand() throws {
+        let expected = ControlRequest(cmd: .sessionHudOpen, target: "active", args: ControlArgs(message: "close"))
+        #expect(try request(["session", "hud", "open", "close"]) == expected)
+    }
+
+    @Test(arguments: HudPosition.allCases)
+    func sessionHudOpenAcceptsEveryPosition(_ position: HudPosition) throws {
+        let expected = ControlRequest(cmd: .sessionHudOpen, target: "active",
+                                      args: ControlArgs(message: "wait", position: position.rawValue))
+        #expect(try request(["session", "hud", "wait", "--position", position.rawValue]) == expected)
+    }
+
+    @Test func sessionHudOpenOmitsUnsetFlags() throws {
+        let built = try request(["session", "hud", "wait"])
+        #expect(built.args?.spinner == nil)
+        #expect(built.args?.detail == nil)
+        #expect(built.args?.position == nil)
+        #expect(built.args?.sizePercent == nil)
+        #expect(built.args?.color == nil)
+    }
+
+    @Test func sessionHudRejectsBadPosition() {
+        #expect(validationMessage(["session", "hud", "wait", "--position", "middle"])
+            == "position must be one of: top, center, bottom")
+        #expect(validationMessage(["session", "hud", "update", "wait", "--position", "middle"])
+            == "position must be one of: top, center, bottom")
+    }
+
+    @Test func sessionHudRejectsBadSizePercent() {
+        #expect(validationMessage(["session", "hud", "wait", "--size-percent", "0"])
+            == "--size-percent must be between 1 and 100")
+        #expect(validationMessage(["session", "hud", "wait", "--size-percent", "150"])
+            == "--size-percent must be between 1 and 100")
+        #expect(validationMessage(["session", "hud", "update", "wait", "--size-percent", "101"])
+            == "--size-percent must be between 1 and 100")
+    }
+
+    @Test func sessionHudOpenRejectsBadBackgroundColor() {
+        #expect(validationMessage(["session", "hud", "wait", "--background-color", "purple"])
+            == "background-color must be a #rrggbb hex value")
+    }
+
+    @Test func sessionHudOpenRequiresAMessage() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "hud", "open"]) }
+    }
+
+    @Test func sessionHudUpdate() throws {
+        let expected = ControlRequest(cmd: .sessionHudUpdate, target: "9f3c",
+                                      args: ControlArgs(message: "ready", detail: "12 repos", position: "bottom"))
+        #expect(try request(["session", "hud", "update", "ready", "--detail", "12 repos",
+                             "--position", "bottom", "--target", "9f3c"]) == expected)
+    }
+
+    @Test func sessionHudUpdateWithSpinnerAndSizePercent() throws {
+        let expected = ControlRequest(cmd: .sessionHudUpdate, target: "active",
+                                      args: ControlArgs(sizePercent: 25, message: "still working", spinner: true))
+        #expect(try request(["session", "hud", "update", "still working", "--spinner",
+                             "--size-percent", "25"]) == expected)
+    }
+
+    @Test func sessionHudUpdateRequiresAMessage() {
+        #expect(throws: (any Error).self) { try Agtermctl.parseAsRoot(["session", "hud", "update"]) }
+    }
+
+    @Test func sessionHudUpdateHasNoBackgroundColorOption() {
+        #expect(throws: (any Error).self) {
+            try Agtermctl.parseAsRoot(["session", "hud", "update", "ready", "--background-color", "#2a1a3a"])
+        }
+    }
+
+    @Test func sessionHudClose() throws {
+        #expect(try request(["session", "hud", "close"]) == ControlRequest(cmd: .sessionHudClose, target: "active"))
+        #expect(try request(["session", "hud", "close"]).args == nil)
+    }
+
+    @Test func sessionHudCloseWithTargetAndWindow() throws {
+        let expected = ControlRequest(cmd: .sessionHudClose, target: "9f3c", args: ControlArgs(window: "w1"))
+        #expect(try request(["session", "hud", "close", "--target", "9f3c", "--window", "w1"]) == expected)
+    }
+
     @Test func quickDefaultsToggle() throws {
         #expect(try request(["quick"]) == ControlRequest(cmd: .quick, args: ControlArgs(mode: "toggle")))
     }

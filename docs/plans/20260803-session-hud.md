@@ -449,12 +449,18 @@ disappears. POSIX `sh`, nothing beyond `printf` and `sleep`.
 - Modify: `agtermCore/Sources/agtermctlKit/SessionCommands.swift`
 - Modify: `agtermCore/Tests/agtermctlKitTests/CommandsTests.swift`
 
-- [ ] add a `hud` subcommand group next to `overlay`: `hud <message> [--detail T] [--spinner] [--position top|center|bottom] [--background-color #rrggbb] [--size-percent N] [--target T] [--window W]`, mapping `--background-color` to `ControlArgs.color` as the overlay group does (`:648`) and deriving the position help text from `HudPosition.allCases`
-- [ ] add `hud update <message> [--detail T] [--position P]` and `hud close`, matching the overlay group's shape
-- [ ] validate locally what can be validated locally (mutually exclusive arguments, percent range); leave semantic validation to the dispatcher
-- [ ] write parsing tests for every flag combination and the rejected ones
-- [ ] write tests asserting the emitted request shape for open, update, and close
-- [ ] run `swift test --filter CommandsTests` — must pass before task 12
+- [x] add a `hud` subcommand group next to `overlay`: `hud <message> [--detail T] [--spinner] [--position top|center|bottom] [--background-color #rrggbb] [--size-percent N] [--target T] [--window W]`, mapping `--background-color` to `ControlArgs.color` as the overlay group does (`:648`) and deriving the position help text from `HudPosition.allCases`
+- [x] add `hud update <message> [--detail T] [--position P]` and `hud close`, matching the overlay group's shape
+- [x] validate locally what can be validated locally (mutually exclusive arguments, percent range); leave semantic validation to the dispatcher
+- [x] write parsing tests for every flag combination and the rejected ones
+- [x] write tests asserting the emitted request shape for open, update, and close
+- [x] run `swift test --filter CommandsTests` — must pass before task 12
+- [x] ➕ `Open` is the group's `defaultSubcommand`, so posting is `session hud "…"` (the `pick` precedent at
+      `MiscCommands.swift:285`); a message that is literally `update`/`close` needs the explicit `hud open` verb
+- [x] ➕ `hud update` also takes `--spinner` and `--size-percent`, beyond the plan's `--detail`/`--position`:
+      an update replaces the whole spec, so without `--spinner` the CLI could not keep a running spinner alive
+      across an update. `--background-color` is deliberately absent — `AppStore.updateHud` documents that the
+      surface reads it once at creation, so only a fresh `hud` can change it
 
 ### Task 12: End-to-end UI test
 

@@ -20,7 +20,7 @@ struct Session: ParsableCommand {
         subcommands: [New.self, Duplicate.self, Close.self, Select.self, Go.self, Rename.self, Reveal.self, Move.self, TypeText.self,
                       Split.self, Scratch.self, Focus.self, Resize.self, Copy.self, Paste.self, SelectAll.self,
                       Text.self, Status.self, Restore.self, FlagCommand.self,
-                      Seen.self, Search.self, Background.self, Overlay.self]
+                      Seen.self, Search.self, Background.self, Overlay.self, Hud.self]
     )
 
     struct New: RequestCommand {
@@ -740,6 +740,101 @@ struct Session: ParsableCommand {
             func makeRequest() throws -> ControlRequest {
                 ControlRequest(cmd: .sessionOverlayResult, target: target.target,
                                args: options.withWindow(pane.map { ControlArgs(pane: $0) }))
+            }
+        }
+    }
+
+    /// The passive message panel. `Open` is the default subcommand, so posting one is
+    /// `agtermctl session hud "gathering options…"`; a message that is literally `update` or `close` needs
+    /// the explicit `hud open` verb. Message length and control characters are the dispatcher's to reject —
+    /// only what needs no socket is checked here.
+    struct Hud: ParsableCommand {
+        static let configuration = CommandConfiguration(
+            abstract: "Post, update, or close a passive message panel over a session.",
+            subcommands: [Open.self, Update.self, Close.self],
+            defaultSubcommand: Open.self
+        )
+
+        /// `--position` help and validation both derive from `HudPosition`, so a new case reaches each.
+        static func validatePosition(_ position: String?) throws {
+            if let position, HudPosition(rawValue: position) == nil {
+                throw ValidationError("position must be one of: \(HudPosition.validNamesPhrase)")
+            }
+        }
+
+        static func validateSizePercent(_ sizePercent: Int?) throws {
+            if let sizePercent, !(1...100).contains(sizePercent) {
+                throw ValidationError("--size-percent must be between 1 and 100")
+            }
+        }
+
+        struct Open: RequestCommand {
+            static let configuration = CommandConfiguration(
+                abstract: "Post a message panel over the session; the session keeps focus and stays typable.")
+            @Argument(help: "Message shown in the panel.") var message: String
+            @Option(name: .long, help: "Dim second line under the message (e.g. what the caller is waiting on).") var detail: String?
+            @Flag(name: .long, help: "Animate a spinner glyph in the panel.") var spinner = false
+            @Option(name: .long, help: """
+                Vertical placement: \(HudPosition.validNamesPhrase) (default: center). \
+                top and bottom hold a fixed margin at the pane's edge.
+                """)
+            var position: String?
+            @Option(name: .long, help: "Solid background color (#rrggbb) for the panel, independent of the session's own.") var backgroundColor: String?
+            @Option(name: .long, help: "Size the panel at PERCENT (1-100) of the pane instead of measuring the message.") var sizePercent: Int?
+            @OptionGroup var target: TargetOptions
+            @OptionGroup var options: ClientOptions
+
+            func validate() throws {
+                if let backgroundColor, !WatermarkConfig.isValidColorHex(backgroundColor) {
+                    throw ValidationError("background-color must be a #rrggbb hex value")
+                }
+                try Hud.validatePosition(position)
+                try Hud.validateSizePercent(sizePercent)
+            }
+
+            func makeRequest() throws -> ControlRequest {
+                ControlRequest(cmd: .sessionHudOpen, target: target.target,
+                               args: options.withWindow(ControlArgs(sizePercent: sizePercent, message: message,
+                                                                     detail: detail, spinner: spinner ? true : nil,
+                                                                     color: backgroundColor, position: position)))
+            }
+        }
+
+        /// Repaints the live panel in place. An update replaces the whole message, so every argument it
+        /// accepts must be repeated to survive — including `--spinner`. `--background-color` is deliberately
+        /// absent: the surface reads it once at creation, so only a fresh `hud` can change it.
+        struct Update: RequestCommand {
+            static let configuration = CommandConfiguration(
+                abstract: "Replace the panel's text in place (no re-spawn, no blink).")
+            @Argument(help: "New message; it replaces the old one entirely.") var message: String
+            @Option(name: .long, help: "Dim second line under the message; omit to drop the old one.") var detail: String?
+            @Flag(name: .long, help: "Keep (or start) the spinner glyph; omit to stop it.") var spinner = false
+            @Option(name: .long, help: "Move the panel to \(HudPosition.validNamesPhrase) (default: center).") var position: String?
+            @Option(name: .long, help: "Resize the panel to PERCENT (1-100) of the pane instead of measuring the message.") var sizePercent: Int?
+            @OptionGroup var target: TargetOptions
+            @OptionGroup var options: ClientOptions
+
+            func validate() throws {
+                try Hud.validatePosition(position)
+                try Hud.validateSizePercent(sizePercent)
+            }
+
+            func makeRequest() throws -> ControlRequest {
+                ControlRequest(cmd: .sessionHudUpdate, target: target.target,
+                               args: options.withWindow(ControlArgs(sizePercent: sizePercent, message: message,
+                                                                     detail: detail, spinner: spinner ? true : nil,
+                                                                     position: position)))
+            }
+        }
+
+        struct Close: RequestCommand {
+            static let configuration = CommandConfiguration(
+                abstract: "Take the message panel down (a program overlay in the same slot is left alone).")
+            @OptionGroup var target: TargetOptions
+            @OptionGroup var options: ClientOptions
+
+            func makeRequest() throws -> ControlRequest {
+                ControlRequest(cmd: .sessionHudClose, target: target.target, args: options.withWindow())
             }
         }
     }
